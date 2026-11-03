@@ -1055,6 +1055,8 @@ egui-pop-files-documents = Documents
 
 egui-pop-files-downloads = Downloads
 
+egui-pop-files-entries-of = Files in { $folder }
+
 egui-pop-files-exposure = Exposure
 
 egui-pop-files-filter = Filter, or type a path
@@ -1070,6 +1072,8 @@ egui-pop-files-folder-name = Folder name
 egui-pop-files-folder-name-empty = Type a name for the folder
 
 egui-pop-files-folder-name-invalid = { $name } cannot name a folder: type a single name, without a path
+
+egui-pop-files-folder-opened = { $folder }, entries: { $count }
 
 egui-pop-files-folder-read-only = These files are read-only: no folder can be created here
 

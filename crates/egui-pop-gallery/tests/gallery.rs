@@ -2961,13 +2961,15 @@ fn the_files_page_selects_several_and_says_what_a_folder_selected_means() {
     h.get_by_label("Open several…").click();
     settle_picker(&mut h);
     // A click selects the folder; Enter goes in.
-    h.get_by_role_and_label(Role::Button, "Photos/").click();
+    h.get_by_role_and_label(Role::ListBoxOption, "Photos/")
+        .click();
     settle_picker(&mut h);
     h.key_press(Key::Enter);
     settle_picker(&mut h);
-    h.get_by_role_and_label(Role::Button, "harbour.png").click();
+    h.get_by_role_and_label(Role::ListBoxOption, "harbour.png")
+        .click();
     settle_picker(&mut h);
-    h.get_by_role_and_label(Role::Button, "notes.txt")
+    h.get_by_role_and_label(Role::ListBoxOption, "notes.txt")
         .click_modifiers(Modifiers::COMMAND);
     settle_picker(&mut h);
     assert!(
@@ -2990,7 +2992,8 @@ fn the_files_page_selects_several_and_says_what_a_folder_selected_means() {
     settle_picker(&mut h);
     h.get_by_label("Choose a folder…").click();
     settle_picker(&mut h);
-    h.get_by_role_and_label(Role::Button, "Photos/").click();
+    h.get_by_role_and_label(Role::ListBoxOption, "Photos/")
+        .click();
     settle_picker(&mut h);
     assert!(
         h.query_by_role_and_label(

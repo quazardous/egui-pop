@@ -526,6 +526,7 @@ egui-pop-files-devices 3a9b15217ec0d856
 egui-pop-files-dimensions 9448f1438bcf86c6
 egui-pop-files-documents c901a6cd9405fa95
 egui-pop-files-downloads fa6341d7af74e884
+egui-pop-files-entries-of e5c2774d984bd70d
 egui-pop-files-exposure 4a9a022c75d279d6
 egui-pop-files-filter 629d424a814e621a
 egui-pop-files-focal-length a1b22c0663955b34
@@ -534,6 +535,7 @@ egui-pop-files-folder-failed 619403ff2c5abe26
 egui-pop-files-folder-name a65e586f86af8432
 egui-pop-files-folder-name-empty 22d4c9c552b8dd7b
 egui-pop-files-folder-name-invalid 6e15dee20c0f8d05
+egui-pop-files-folder-opened d8224dfed5de8544
 egui-pop-files-folder-read-only d0186d5a53c8ebd6
 egui-pop-files-folder-selected ebe811749503bdda
 egui-pop-files-folder-shown 7bf55a39375ef73b

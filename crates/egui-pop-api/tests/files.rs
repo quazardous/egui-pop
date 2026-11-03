@@ -1430,9 +1430,11 @@ fn without_a_purpose_the_request_and_the_recent_places_decide() {
 
 // Selecting: a click selects, a double click or Enter opens.
 
-/// A row of the list: the preview pane may repeat its name, as a label.
+/// A row of the list (an option of its list box), or a button: the preview
+/// pane may repeat a name, as a label.
 fn row<'a>(h: &'a Harness<'static, App>, name: &'a str) -> egui_kittest::Node<'a> {
-    h.get_by_role_and_label(Role::Button, name)
+    h.query_by_role_and_label(Role::ListBoxOption, name)
+        .unwrap_or_else(|| h.get_by_role_and_label(Role::Button, name))
 }
 
 fn click(h: &mut Harness<'static, App>, name: &str, modifiers: Modifiers) {
@@ -1797,7 +1799,7 @@ fn tab_through_the_rows_moves_the_highlight_and_the_keys_answer_there() {
         FileRequest::open_many("Many").directory(root.join("photos")),
     );
     let stop = walk::reach(&mut h, walk::TAB, "a.png", 40).expect("Tab reaches the rows");
-    assert_eq!(stop.role, Role::Button);
+    assert_eq!(stop.role, Role::ListBoxOption);
     settle(&mut h);
     assert_eq!(highlighted(&h), "a.png");
     // Space clicks the row: it selects, and the focus stays.
@@ -2075,7 +2077,7 @@ fn tab_reaches_a_cell_and_the_focus_follows_the_arrows_through_a_long_grid() {
     let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
     settle_thumbnails(&mut h);
     let stop = walk::reach(&mut h, walk::TAB, "IMG_00000.cr3", 60).expect("Tab reaches the cells");
-    assert_eq!(stop.role, Role::Button);
+    assert_eq!(stop.role, Role::ListBoxOption);
     settle_thumbnails(&mut h);
     assert_eq!(highlighted(&h), "IMG_00000.cr3");
     press(&mut h, Key::ArrowRight, Modifiers::NONE);
@@ -3985,4 +3987,39 @@ fn the_picker_on_its_own_reads_its_keys_itself() {
     );
     h.run();
     assert!(h.state().show_hidden);
+}
+
+#[test]
+fn the_entries_are_a_list_box_and_a_new_folder_is_said() {
+    let root = tree("listbox");
+    let mut h = harness(None);
+    let _p = choose(
+        &mut h,
+        FileRequest::open_many("Many").directory(root.join("photos")),
+    );
+    // A list box named by the folder, several selectable, its entries options.
+    let list = h.get_by_role_and_label(Role::ListBox, "Files in photos");
+    assert!(list.accesskit_node().is_multiselectable());
+    assert!(
+        h.query_by_role_and_label(Role::ListBoxOption, "a.png")
+            .is_some()
+    );
+    // The highlighted entry is its current one.
+    key(&mut h, Key::ArrowDown, Modifiers::NONE);
+    let list = h.get_by_role_and_label(Role::ListBox, "Files in photos");
+    let current = list.accesskit_node().active_descendant().map(|n| n.label());
+    assert_eq!(current, Some(Some(highlighted(&h))));
+    // The preview pane is named.
+    assert!(h.query_by_role_and_label(Role::Group, "Preview").is_some());
+    // Another folder is said, with its count.
+    double_click(&mut h, "2026/");
+    settle(&mut h);
+    assert!(
+        a11y::announcements(&h.ctx)
+            .iter()
+            .any(|a| a.text == "2026, entries: 0"),
+        "{:?}",
+        a11y::announcements(&h.ctx)
+    );
+    let _ = std::fs::remove_dir_all(root);
 }

@@ -2367,6 +2367,14 @@ fn keys_tip(keys: &[String]) -> String {
     keys.join(", ")
 }
 
+/// An entry of the list or the grid, as assistive technology reads it: an
+/// option of the list box, selected as its row says.
+fn as_option(ui: &Ui, r: &egui::Response) {
+    ui.ctx().accesskit_node_builder(r.id, |node| {
+        node.set_role(egui::accesskit::Role::ListBoxOption);
+    });
+}
+
 /// Where the file's own name starts in a name or a typed path.
 fn file_part(text: &str) -> usize {
     text.rfind(['/', std::path::MAIN_SEPARATOR])
@@ -2544,6 +2552,8 @@ pub struct FilePicker {
     anchor: Option<PathBuf>,
     /// What the selection line said last: a change is announced.
     said: Option<String>,
+    /// The folder last announced: another one is.
+    said_dir: Option<PathBuf>,
     /// The list's rows as last drawn: holding the focus, they leave the
     /// picker's keys to the picker.
     row_ids: Vec<egui::Id>,
@@ -2654,6 +2664,7 @@ impl FilePicker {
             declared_keys: false,
             anchor: None,
             said: None,
+            said_dir: None,
             row_ids: Vec::new(),
             proposed,
             confirm_overwrite: request.confirm_overwrite,
@@ -4025,7 +4036,16 @@ impl FilePicker {
                         .id_salt("egui_pop.files.pane")
                         .max_height(list_height)
                         .auto_shrink([false, true])
-                        .show(ui, |ui| self.preview_pane(ui));
+                        .show(ui, |ui| {
+                            // Named, for a screen reader to find it.
+                            let name = strings::tr(ui.ctx(), &txt::FILES_PREVIEW);
+                            ui.scope_builder(
+                                egui::UiBuilder::new()
+                                    .accessibility_role(egui::accesskit::Role::Group)
+                                    .accessibility_label(name),
+                                |ui| self.preview_pane(ui),
+                            );
+                        });
                 });
             }
         });
@@ -4048,6 +4068,19 @@ impl FilePicker {
         let footer_top = ui.cursor().min.y;
         if let Some(e) = &self.error {
             ui.colored_label(t.status.danger, e);
+        }
+        // A folder shown anew is said, with how many entries it shows.
+        if self.said_dir.as_ref() != Some(&self.dir) {
+            if self.said_dir.is_some() {
+                let count = self.visible().len().to_string();
+                let said = strings::tr_args(
+                    ui.ctx(),
+                    &txt::FILES_FOLDER_OPENED,
+                    &[("folder", &folder_name(&self.dir)), ("count", &count)],
+                );
+                a11y::announce(ui.ctx(), said, Politeness::Polite);
+            }
+            self.said_dir = Some(self.dir.clone());
         }
         let line = self.selection_line();
         if let Some(line) = &line {
@@ -4769,14 +4802,54 @@ impl FilePicker {
         let cell = vec2(width, row_height(ui));
         self.row_ids.clear();
         self.columns = 1;
-        ThumbnailGrid::new(shown.len(), cell)
-            .id_salt("egui_pop.files.entries")
-            .max_height(height)
-            .reveal(reveal.then_some(highlight))
-            .show(ui, |ui, n| {
-                let r = self.list_row(ui, &shown[n], n, columns);
-                self.row_input(ui, &r, n, shown, modifiers, pointer, answer);
-            });
+        self.entries_box(ui, |picker, ui| {
+            let mut current = None;
+            ThumbnailGrid::new(shown.len(), cell)
+                .id_salt("egui_pop.files.entries")
+                .max_height(height)
+                .reveal(reveal.then_some(highlight))
+                .show(ui, |ui, n| {
+                    let r = picker.list_row(ui, &shown[n], n, columns);
+                    as_option(ui, &r);
+                    if n == highlight {
+                        current = Some(r.id);
+                    }
+                    picker.row_input(ui, &r, n, shown, modifiers, pointer, answer);
+                });
+            current
+        });
+    }
+
+    /// The entries as a list box for assistive technology, named by the folder,
+    /// several selectable when choosing several, the highlighted entry its
+    /// current one (`add` gives its id, if drawn).
+    fn entries_box(
+        &mut self,
+        ui: &mut Ui,
+        add: impl FnOnce(&mut FilePicker, &mut Ui) -> Option<egui::Id>,
+    ) {
+        let name = strings::tr_args(
+            ui.ctx(),
+            &txt::FILES_ENTRIES_OF,
+            &[("folder", &folder_name(&self.dir))],
+        );
+        let many = self.kind == ChooseKind::OpenMany;
+        ui.scope_builder(
+            egui::UiBuilder::new()
+                .accessibility_role(egui::accesskit::Role::ListBox)
+                .accessibility_label(name),
+            |ui| {
+                let current = add(self, ui);
+                ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+                    if many {
+                        node.set_multiselectable();
+                    }
+                    if let Some(id) = current {
+                        node.set_active_descendant(id.accesskit_id());
+                    }
+                });
+            },
+        );
     }
 
     /// Draws row `n`: a selectable row, named by the entry's name, its other
@@ -4969,14 +5042,24 @@ impl FilePicker {
         let modifiers = ui.input(|i| i.modifiers);
         let mut in_view = Vec::new();
         self.row_ids.clear();
-        self.columns = ThumbnailGrid::new(shown.len(), cell)
-            .id_salt("egui_pop.files.grid")
-            .max_height(height)
-            .reveal(reveal.then_some(highlight))
-            .show(ui, |ui, n| {
-                let r = self.grid_cell(ui, n, shown, cell, &mut in_view);
-                self.cell_input(ui, &r, n, shown, modifiers, pointer, answer);
-            });
+        let mut columns = 1;
+        self.entries_box(ui, |picker, ui| {
+            let mut current = None;
+            columns = ThumbnailGrid::new(shown.len(), cell)
+                .id_salt("egui_pop.files.grid")
+                .max_height(height)
+                .reveal(reveal.then_some(highlight))
+                .show(ui, |ui, n| {
+                    let r = picker.grid_cell(ui, n, shown, cell, &mut in_view);
+                    as_option(ui, &r);
+                    if n == highlight {
+                        current = Some(r.id);
+                    }
+                    picker.cell_input(ui, &r, n, shown, modifiers, pointer, answer);
+                });
+            current
+        });
+        self.columns = columns;
         if !in_view.is_empty() || self.asked_thumbnails {
             self.want_thumbnails(ui.ctx(), &in_view);
         }

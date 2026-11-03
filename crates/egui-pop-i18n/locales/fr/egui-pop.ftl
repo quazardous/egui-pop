@@ -836,6 +836,8 @@ egui-pop-files-rename-bookmark = Renommer…
 egui-pop-files-move-up = Monter
 egui-pop-files-move-down = Descendre
 egui-pop-files-bookmark-name = Nom du favori
+egui-pop-files-folder-opened = { $folder }, entrées : { $count }
+egui-pop-files-entries-of = Fichiers de { $folder }
 
 egui-pop-files-items = Éléments
 
