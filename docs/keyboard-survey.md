@@ -297,7 +297,8 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
   overlay: `tab_hides_and_shows_the_palettes_but_not_a_pinned_one`. It is
   documented and rebindable. **[walk]** `overlayOpen` reads egui-pop's
   overlay stack, and egui's menus are not on it: with a menu open and
-  nothing focused, Tab hides the palettes behind it.
+  nothing focused, Tab hid the palettes behind it. Fixed by item 15:
+  an open egui popup counts as an overlay.
 - **[read] Key bindings beat focused widgets.** The dispatcher consumes a
   key that resolves before anything is drawn. A global plain key therefore
   beats Space on a focused button or an arrow on a focused slider.
@@ -768,8 +769,11 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
     a key repeat, does not click a focused plain button unless bound. Done in
     the dispatcher's pass for widgets that only sense clicks; an upstream issue
     with it, from the reproduction first. Size: S.
-15. **`overlayOpen` sees egui's popups.** Tab behind an open menu no longer
-    hides the palettes. Size: S.
+15. **Done: `overlayOpen` sees egui's popups.** The context key is true while
+    egui-pop's overlay stack holds anything or any egui popup is open (a menu,
+    a combo box's list), so Tab behind an open menu no longer hides the
+    palettes, and Escape there closes the menu rather than leave zen mode or
+    pop a mode.
 16. **Arrows stay in the region.** A plain arrow that would take the focus out
     of its `focus::scope` is undone, so that the cone cannot jump panels. Size:
     S to M; confirm with the walk first.
@@ -884,7 +888,7 @@ compositor.
 |---|---|---|---|---|
 | 12 | Alt and a letter, Down, Tab, Escape | Down nothing, Tab from the top, Escape closes | As said; File's first item is 3 Tabs away, since item 8 two. Nothing focused afterwards | yes |
 | 13 | Menu from its focused button, arrows | the focus can leave | Second Down goes to the side list behind the menu | yes |
-| 14 | Tab with a menu open and a floating palette | the palette hides | It hides | yes |
+| 14 | Tab with a menu open and a floating palette | the palette hides | It hides; since item 15, it stays | yes |
 | 15 | Status popover, Tab past its last stop | (open) | Goes on through the window behind, popover still open; Escape returns to the item; since item 22, back to its first stop | new (item 22) |
 | 16 | Confirm dialog, danger on and off: first focus, Tab round | as `dialogs.rs` | Action first, Cancel for a danger, Tab wraps, F6 stays. **Also** Enter from the opening button answered a dialog at once (item 20, fixed), Escape left nothing focused (item 21, fixed) | yes, and two bugs |
 
@@ -937,7 +941,7 @@ The order to follow for egui-pop now, by the same measure:
 7. **Done: item 8, no stops that show nothing,** with the menu's frame.
 8. **Done: item 5, F6 through the shell.** After 3 as planned. A terminal is not
    the risk it was read to be.
-9. **Done: item 22, a popover's end;** then **item 15.** Small, confirmed.
+9. **Done: item 22, a popover's end;** then **done: item 15.** Small, confirmed.
 10. **Item 4, a focus you can see,** down from fourth: a plain button does show
     the focus, the gap is telling it from a press and from the pointer's, and the
     stops that show nothing are item 8's.
