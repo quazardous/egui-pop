@@ -428,8 +428,12 @@ The bridge has one caller identity: every command it runs is
 - **Steps.** Every step's before-hooks see its arguments and may veto
   it; steps that carry an `origin` (`dialog.answer`, `terminal.input`
   among them) let a hook refuse agents only.
-- **The host.** Every command dispatched to the host carries its origin
-  (`Dispatch::origin`): a host may refuse agents there, in one place.
+- **The host.** Every command goes through the host's dispatch with its
+  origin (`Dispatch::origin`), those that run in the interface too
+  (`Dispatch::deferred`): a host may refuse agents there, in one place.
+  An agent's undo, redo, jump, restore or out-of-order undo, through
+  `edit.undo` or `history.*`, is held to the values' writers as a write
+  is, all or nothing.
 
 ### Keeping an action off the agent surface
 
@@ -445,10 +449,12 @@ The bridge has one caller identity: every command it runs is
 - When a step does the work, veto it from a before-hook for agents
   (the origin is in the arguments when the step carries it).
 - In the host's `dispatch`, refuse `Origin::Agent` for the commands it
-  should never run for one. This does not cover the commands run in the
-  interface without the host's dispatch (undo and redo, `history.*`,
-  the context stack's commands, the clipboard's), which take the two
-  ways above.
+  should never run for one. Every command goes through it, undo and
+  redo, `history.*`, the context stack's and the clipboard's commands
+  included: their handler calls the host itself, so it runs once the
+  dispatch has approved it (`Dispatch::deferred`; the dispatch's
+  `run_local` answers `null` at once). A host refuses one by answering
+  an error without calling `run_local`.
 
 ```rust
 use egui_pop::api::dialogs::STEP_ANSWER;
@@ -554,10 +560,11 @@ What is not protected today. None of these is fixed by documenting it.
   types into the user's shell without a confirmation, unless the
   application vetoes `terminal.input` for agents. Every new command is
   offered until it says `.no_agent()`.
-- **The host's dispatch does not see every command.** Undo, redo,
-  `history.*`, the context stack's commands and the clipboard's run in
-  the interface without `Host::dispatch`, so a guard there does not see
-  them.
+- **What is not a command does not reach the host's dispatch.**
+  Collector actions (`store.set`, `contexts.hold`... the `debug.call`
+  step covers them), code calling a step or `AppHandle::undo` directly
+  (the step's hooks cover it), and a text field's own undo inside egui
+  are not dispatched.
 - **Snapshots are not redacted.** Every value in the store, the file
   choices and their folders, the terminal steps with their arguments
   (`terminal_io`), the journal's arguments and results are readable

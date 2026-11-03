@@ -129,10 +129,12 @@ pub const CMD_REDO: CommandId = CommandId::from_static("edit.redo");
 pub const STEP_UNDO: StepId = StepId::from_static("edit.undo");
 pub const STEP_REDO: StepId = StepId::from_static("edit.redo");
 
-/// Commands that run in the interface rather than through the host's
-/// dispatch: their run calls the host itself (undo, redo and the
-/// agents' `history.*` call `Host::history`, the context stack's
-/// commands `Host::contexts`, which a dispatch would hold).
+/// Commands whose run calls the host itself: undo, redo and the agents'
+/// `history.*` call `Host::history`, the context stack's commands
+/// `Host::contexts`, the clipboard's `Host::clipboard`, which a dispatch
+/// holds. They go through the host's dispatch all the same (a guard
+/// there sees them), and their handler runs once it returns
+/// (`Dispatch::deferred`).
 const IN_INTERFACE: &[CommandId] = &[
     CMD_UNDO,
     CMD_REDO,
@@ -5182,7 +5184,44 @@ impl App {
             json!({ "command": command, "args": args }),
         );
         let owner = self.reg.commands.owner(command).cloned();
-        if IN_INTERFACE.contains(command) {
+        // A command whose run calls the host itself (undo, `history.*`,
+        // the context stack's and the clipboard's commands) still goes
+        // through the host's dispatch, so a guard there sees it; its
+        // handler cannot run inside the dispatch, which holds the host.
+        // The dispatch gets a stand-in that approves it (`run_local`
+        // answers `null` at once, `Dispatch::deferred` says so), and the
+        // handler runs once the host is back.
+        let deferred = IN_INTERFACE.contains(command);
+        let approved = Rc::new(std::cell::Cell::new(false));
+        let stand_in: Option<CommandFn> = (deferred && handler.is_some()).then(|| {
+            let approved = approved.clone();
+            Rc::new(move |_: &Call<'_>| {
+                approved.set(true);
+                Ok(Json::Null)
+            }) as CommandFn
+        });
+        let local = if deferred {
+            stand_in.as_ref()
+        } else {
+            handler.as_ref()
+        };
+        let mut host = self
+            .handle
+            .0
+            .host
+            .borrow_mut()
+            .take()
+            .expect("a command dispatched from inside a dispatch is queued (AppHandle::run)");
+        let acting = ActingFor::new(&self.handle, &origin);
+        let reply = host.dispatch(
+            &Dispatch::new(command, &args, &origin, cx, seq, &self.handle, local)
+                .owned_by(owner.as_ref())
+                .deferring(deferred),
+        );
+        drop(acting);
+        *self.handle.0.host.borrow_mut() = Some(host);
+        if deferred && approved.get() {
+            // The host let it run in the interface: its handler now.
             let result = match &handler {
                 Some(h) => {
                     let _scope = owner.as_ref().map(egui_pop_model::values::enter_scope);
@@ -5198,28 +5237,6 @@ impl App {
             self.finish(command, &args, &origin, seq, result.clone());
             return Reply::Done(result);
         }
-        let mut host = self
-            .handle
-            .0
-            .host
-            .borrow_mut()
-            .take()
-            .expect("a command dispatched from inside a dispatch is queued (AppHandle::run)");
-        let acting = ActingFor::new(&self.handle, &origin);
-        let reply = host.dispatch(
-            &Dispatch::new(
-                command,
-                &args,
-                &origin,
-                cx,
-                seq,
-                &self.handle,
-                handler.as_ref(),
-            )
-            .owned_by(owner.as_ref()),
-        );
-        drop(acting);
-        *self.handle.0.host.borrow_mut() = Some(host);
         match reply {
             Reply::Done(result) => {
                 self.finish(command, &args, &origin, seq, result.clone());

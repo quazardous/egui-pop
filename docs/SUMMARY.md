@@ -96,6 +96,7 @@
   - [0020: Answers carry their caller](adr/0020-answers-carry-their-caller.md)
   - [0021: The origin along the chain](adr/0021-origin-along-the-chain.md)
   - [0022: Sections and toolbars in egui_stack](adr/0022-sections-and-toolbars-in-egui-stack.md)
+  - [0023: Every command through the host](adr/0023-every-command-through-the-host.md)
 - [Micro-indicators, the design](design/indicators.md)
 - [Icons: an inventory](icons.md)
 - [Pointer gestures, a study](design/pointer-gestures.md)

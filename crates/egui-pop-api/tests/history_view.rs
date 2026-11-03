@@ -18,7 +18,9 @@ fn agent() -> Origin {
     Origin::Agent("helper".into())
 }
 
-/// An application with the plugin and three steps on `doc/n` (1, 2, 3).
+/// An application with the plugin and three steps on `doc/n` (1, 2, 3),
+/// a value the agent `helper` may write (an agent's undo is held to the
+/// writers).
 fn app() -> App {
     let app = App::builder()
         .plugin(HistoryPlugin::default())
@@ -26,8 +28,12 @@ fn app() -> App {
         .unwrap();
     let store = app.handle().store();
     let mut s = lock(&store);
-    s.declare(&OwnerId::USER, N, Descriptor::int("N", 0, 9, 0))
-        .unwrap();
+    s.declare(
+        &OwnerId::USER,
+        N,
+        Descriptor::int("N", 0, 9, 0).writers(&[agent().writer()]),
+    )
+    .unwrap();
     for n in 1..=3 {
         s.set(Set::new(N, Change::To(Value::Int(n)), Origin::User))
             .unwrap();
@@ -72,6 +78,21 @@ fn an_agent_reads_and_lists_the_histories() {
 #[test]
 fn an_agent_undoes_redoes_and_jumps_with_if_rev_and_dry_run() {
     let mut app = app();
+    // An agent the value does not name is refused, as its write would be.
+    let stranger = app
+        .run(
+            &CommandId::from_static("history.undo"),
+            json!({ "scope": "app" }),
+            Origin::Agent("stranger".into()),
+        )
+        .now()
+        .expect("answered now");
+    assert!(
+        stranger
+            .as_ref()
+            .is_err_and(|e| e.contains("agent:stranger")),
+        "{stranger:?}"
+    );
     let read = run(&mut app, "history.read", json!({ "scope": "app" })).unwrap();
     let rev = read["rev"].as_u64().unwrap();
     // A dry run says what it would undo and changes nothing.
@@ -257,8 +278,12 @@ fn an_agent_undoes_one_step_out_of_order_when_nothing_later_touched_it() {
     {
         let store = app.handle().store();
         let mut s = lock(&store);
-        s.declare(&OwnerId::USER, "doc/m", Descriptor::int("M", 0, 9, 0))
-            .unwrap();
+        s.declare(
+            &OwnerId::USER,
+            "doc/m",
+            Descriptor::int("M", 0, 9, 0).writers(&[agent().writer()]),
+        )
+        .unwrap();
         s.set(Set::new("doc/m", Change::To(Value::Int(5)), Origin::User))
             .unwrap();
         s.seal();

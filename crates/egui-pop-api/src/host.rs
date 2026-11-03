@@ -275,6 +275,7 @@ pub struct Dispatch<'a> {
     local: Option<&'a CommandFn>,
     /// Who declared it: the scope its in-process handler writes as.
     owner: Option<&'a OwnerId>,
+    deferred: bool,
 }
 
 impl fmt::Debug for Dispatch<'_> {
@@ -308,7 +309,26 @@ impl<'a> Dispatch<'a> {
             app,
             local,
             owner: None,
+            deferred: false,
         }
+    }
+
+    /// Its handler runs after the dispatch.
+    pub(crate) fn deferring(mut self, deferred: bool) -> Self {
+        self.deferred = deferred;
+        self
+    }
+
+    /// Whether this command's in-process handler runs after the dispatch
+    /// returns rather than inside it: its run calls the host itself
+    /// (undo and redo, `history.*`, the context stack's and the
+    /// clipboard's commands), which the dispatch holds. `run_local`
+    /// approves it and answers `null` at once; the interface then runs
+    /// the handler and the command's result is the handler's. A host
+    /// refuses such a command as any other, by answering an error
+    /// without calling `run_local`.
+    pub fn deferred(&self) -> bool {
+        self.deferred
     }
 
     /// Who declared it.
