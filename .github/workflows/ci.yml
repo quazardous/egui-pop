@@ -290,8 +290,15 @@ jobs:
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
       # Every published crate packages with its metadata, in dependency
-      # order; nothing is uploaded.
-      - run: cargo publish --workspace --dry-run --no-verify --locked
+      # order; nothing is uploaded. Temporary: egui_stack is not on
+      # crates.io yet (issue #145), so egui-pop-api and the crates over
+      # it cannot be packaged; the others still are. Back to the whole
+      # workspace once egui_stack is released.
+      - run: >-
+          cargo publish --workspace --dry-run --no-verify --locked
+          --exclude egui-pop-api --exclude egui-pop-test --exclude egui-pop-i18n
+          --exclude egui-pop-platform --exclude egui-pop-views --exclude egui-pop-editors
+          --exclude egui-pop-imaging --exclude egui-pop
 
   # A pull request changing a published crate adds a changeset, unless it
   # is labelled internal; the pending changesets are consistent
