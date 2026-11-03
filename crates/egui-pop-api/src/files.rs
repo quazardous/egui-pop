@@ -182,6 +182,17 @@ pub const CMD_TOGGLE_SELECTION: CommandId = CommandId::from_static("file.toggle_
 /// The open in-app picker's folder goes into its field, as a path to edit
 /// (Ctrl+L). Saving, the name stays at its end.
 pub const CMD_EDIT_PATH: CommandId = CommandId::from_static("file.edit_path");
+/// The open in-app picker shows or hides hidden files (Ctrl+H, as GTK and KDE).
+pub const CMD_TOGGLE_HIDDEN: CommandId = CommandId::from_static("file.toggle_hidden");
+/// The open in-app picker reads its folder again (F5).
+pub const CMD_RELOAD: CommandId = CommandId::from_static("file.reload");
+/// The open in-app picker goes back to the folder it showed before (Alt+Left).
+pub const CMD_BACK: CommandId = CommandId::from_static("file.back");
+/// The open in-app picker goes forward again after going back (Alt+Right).
+pub const CMD_FORWARD: CommandId = CommandId::from_static("file.forward");
+/// The in-app picker's preview pane is shown or hidden (Alt+P, as the Windows
+/// file explorer's), and kept so.
+pub const CMD_TOGGLE_PREVIEW: CommandId = CommandId::from_static("file.toggle_preview");
 
 /// The context key: an open in-app picker can be asked for a new folder
 /// (saving, or choosing a folder).
@@ -192,6 +203,9 @@ const WHEN_SELECT_ALL: &str = "filePickerSelectAll";
 const WHEN_SELECTS: &str = "filePickerSelects";
 /// The context key: an in-app picker is open, and not waiting for an answer.
 const WHEN_EDIT_PATH: &str = "filePickerEditPath";
+/// That, in a modal (as the picker's own and a dialog are): where `Alt+Left` is
+/// not the context stack's back (`nav.back`).
+const WHEN_IN_MODAL: &str = "modalOpen && filePickerEditPath";
 
 /// The setting: use the system's chooser when there is one.
 pub const SETTING_NATIVE: SettingId = SettingId::from_static("files.native");
@@ -230,6 +244,8 @@ pub const GROUPED: &str = "settings/files.grouped";
 /// `[purpose, folder]` pairs, newest first). See [`FileRequest::purpose`].
 pub const LAST_FOLDERS: &str = "settings/files.last_folders";
 
+/// How many folders the in-app picker goes back through.
+const HISTORY_KEPT: usize = 64;
 /// How many recent places are kept.
 pub const RECENT_KEPT: usize = 8;
 /// How many purposes keep a last folder: the one chosen in the longest ago
@@ -1467,6 +1483,63 @@ impl Plugin for FilesPlugin {
                 })
             },
         )?;
+        // Literal titles and descriptions: the catalogue's extractor reads them.
+        let keyed = |spec: CommandSpec, keys: &str, id: CommandId| {
+            let f = files.clone();
+            let spec = spec.key_with(keys, BindOptions::global().through_modal());
+            (spec, move |call: &crate::app::Call<'_>| {
+                f.select_on(call.app, |p| {
+                    p.run_key(&id);
+                    Ok(())
+                })
+            })
+        };
+        let (spec, run) = keyed(
+            CommandSpec::new(CMD_TOGGLE_HIDDEN, "Show or hide hidden files", "File")
+                .description("Shows or hides the hidden files of the open in-app file picker.")
+                .when(WHEN_EDIT_PATH),
+            "Ctrl+H",
+            CMD_TOGGLE_HIDDEN,
+        );
+        ctx.command(spec, run)?;
+        let (spec, run) = keyed(
+            CommandSpec::new(CMD_RELOAD, "Reload the folder", "File")
+                .description("Reads the folder of the open in-app file picker again.")
+                .when(WHEN_EDIT_PATH),
+            "F5",
+            CMD_RELOAD,
+        );
+        ctx.command(spec, run)?;
+        let (spec, run) = keyed(
+            CommandSpec::new(CMD_BACK, "Back", "File").description(
+                "The open in-app file picker goes back to the folder it showed before; nothing when there is none.",
+            )
+            // In a modal only: outside one, Alt+Left is the context stack's back.
+            .when(WHEN_IN_MODAL),
+            "Alt+Left",
+            CMD_BACK,
+        );
+        ctx.command(spec, run)?;
+        let (spec, run) = keyed(
+            CommandSpec::new(CMD_FORWARD, "Forward", "File").description(
+                "The open in-app file picker goes forward to the folder it went back from; nothing when there is none.",
+            )
+            .when(WHEN_IN_MODAL),
+            "Alt+Right",
+            CMD_FORWARD,
+        );
+        ctx.command(spec, run)?;
+        ctx.command(
+            CommandSpec::new(CMD_TOGGLE_PREVIEW, "Show or hide the preview", "File")
+                .description("Shows or hides the preview pane of the in-app file picker, kept for the next one (the `files.preview` setting).")
+                .when(WHEN_EDIT_PATH)
+                .key_with("Alt+P", BindOptions::global().through_modal()),
+            move |call| {
+                want_preview(call.app, !preview_wanted(call.app));
+                call.app.egui().request_repaint();
+                Ok(Json::Null)
+            },
+        )?;
         let f = files.clone();
         ctx.command(
             CommandSpec::new(CMD_REPLACE, "Replace the file", "File")
@@ -1860,6 +1933,8 @@ fn load_view(app: &AppHandle, picker: &mut FilePicker) {
         picker.refocus = true;
     }
     picker.new_folder_keys = app.keys_for(&CMD_NEW_FOLDER);
+    picker.hidden_keys = app.keys_for(&CMD_TOGGLE_HIDDEN);
+    picker.preview_keys = app.keys_for(&CMD_TOGGLE_PREVIEW);
     picker.declared_keys = true;
     picker.show_preview = preview_wanted(app);
     if !picker.pane_dragging {
@@ -2287,6 +2362,11 @@ pub enum PickerAnswer {
     MoveBookmark(PathBuf, usize),
 }
 
+/// The keys a tip says: `Ctrl+H`, or `Ctrl+H, F8` when bound twice.
+fn keys_tip(keys: &[String]) -> String {
+    keys.join(", ")
+}
+
 /// Where the file's own name starts in a name or a typed path.
 fn file_part(text: &str) -> usize {
     text.rfind(['/', std::path::MAIN_SEPARATOR])
@@ -2450,6 +2530,13 @@ pub struct FilePicker {
     naming_focus: bool,
     /// The keys of the new folder command, as the button's tip says them.
     new_folder_keys: Vec<String>,
+    /// The keys of the hidden files and preview commands, as their check
+    /// boxes' tips say them.
+    hidden_keys: Vec<String>,
+    preview_keys: Vec<String>,
+    /// The folders shown before, and those gone back from.
+    back: Vec<PathBuf>,
+    forward: Vec<PathBuf>,
     /// The selection's keys are commands ([`Files`] draws this picker);
     /// drawn on its own, it has no keymap and reads them itself.
     declared_keys: bool,
@@ -2560,6 +2647,10 @@ impl FilePicker {
             naming: None,
             naming_focus: false,
             new_folder_keys: Vec::new(),
+            hidden_keys: vec!["Ctrl+H".into()],
+            preview_keys: vec!["Alt+P".into()],
+            back: Vec::new(),
+            forward: Vec::new(),
             declared_keys: false,
             anchor: None,
             said: None,
@@ -2672,7 +2763,21 @@ impl FilePicker {
 
     /// Shows another folder; the selection stays behind.
     pub fn go(&mut self, dir: PathBuf) {
-        self.dir = without_dots(&dir);
+        let dir = without_dots(&dir);
+        if dir != self.dir {
+            self.back
+                .push(std::mem::replace(&mut self.dir, dir.clone()));
+            if self.back.len() > HISTORY_KEPT {
+                self.back.remove(0);
+            }
+            self.forward.clear();
+        }
+        self.show_dir(dir);
+    }
+
+    /// Shows `dir`, the history left as it is.
+    fn show_dir(&mut self, dir: PathBuf) {
+        self.dir = dir;
         self.highlight = 0;
         self.reveal_cell = true;
         self.error = None;
@@ -2680,6 +2785,48 @@ impl FilePicker {
         self.anchor = None;
         if self.kind != ChooseKind::Save {
             self.text.clear();
+        }
+    }
+
+    /// Goes back to the folder shown before; says whether there was one.
+    pub fn go_back(&mut self) -> bool {
+        let Some(dir) = self.back.pop() else {
+            return false;
+        };
+        self.forward
+            .push(std::mem::replace(&mut self.dir, dir.clone()));
+        self.show_dir(dir);
+        true
+    }
+
+    /// Goes forward to the folder gone back from; says whether there was one.
+    pub fn go_forward(&mut self) -> bool {
+        let Some(dir) = self.forward.pop() else {
+            return false;
+        };
+        self.back
+            .push(std::mem::replace(&mut self.dir, dir.clone()));
+        self.show_dir(dir);
+        true
+    }
+
+    /// Reads the folder again, and the facts of its files.
+    pub fn reload(&mut self) {
+        self.listing = None;
+        // A file changed is previewed again: its time is in the cache's key.
+        lock(&self.metas).clear();
+    }
+
+    /// What a key of the picker's commands does to it.
+    fn run_key(&mut self, id: &CommandId) {
+        if *id == CMD_TOGGLE_HIDDEN {
+            self.show_hidden = !self.show_hidden;
+        } else if *id == CMD_RELOAD {
+            self.reload();
+        } else if *id == CMD_BACK {
+            self.go_back();
+        } else if *id == CMD_FORWARD {
+            self.go_forward();
         }
     }
 
@@ -3620,18 +3767,30 @@ impl FilePicker {
                 )
             })
         };
-        // Alt+P, as the preview pane of the Windows file explorer.
-        if !waiting
-            && self.previews.is_some()
-            && ui.input_mut(|i| i.consume_key(Modifiers::ALT, Key::P))
-        {
-            self.show_preview = !self.show_preview;
+        // Drawn on its own, the picker reads its commands' keys itself.
+        if !waiting && !self.declared_keys {
+            // Alt+P, as the preview pane of the Windows file explorer.
+            if self.previews.is_some() && ui.input_mut(|i| i.consume_key(Modifiers::ALT, Key::P)) {
+                self.show_preview = !self.show_preview;
+            }
+            for (modifiers, key, id) in [
+                (Modifiers::COMMAND, Key::H, CMD_TOGGLE_HIDDEN),
+                (Modifiers::NONE, Key::F5, CMD_RELOAD),
+                (Modifiers::ALT, Key::ArrowLeft, CMD_BACK),
+                (Modifiers::ALT, Key::ArrowRight, CMD_FORWARD),
+            ] {
+                if ui.input_mut(|i| i.consume_key(modifiers, key)) {
+                    self.run_key(&id);
+                }
+            }
         }
         let preview_on = self.show_preview && self.previews.is_some();
         let bookmarked = places.bookmarks.contains(&self.dir);
         let mut crumbs_below = false;
         ui.horizontal(|ui| {
-            let r = ui.button(strings::tr(ui.ctx(), &txt::PICKER_UP));
+            let r = ui
+                .button(strings::tr(ui.ctx(), &txt::PICKER_UP))
+                .on_hover_text(keys_tip(&["Alt+Up".into()]));
             if r.clicked() {
                 self.up();
                 self.refocus |= by_pointer(&r);
@@ -3940,7 +4099,8 @@ impl FilePicker {
                 ui,
                 &mut self.show_hidden,
                 strings::tr(ui.ctx(), &txt::FILES_HIDDEN),
-            );
+            )
+            .on_hover_text(keys_tip(&self.hidden_keys));
             let mut folders_first = self.folders_first;
             widgets::checkbox(
                 ui,
@@ -3954,7 +4114,7 @@ impl FilePicker {
                     &mut self.show_preview,
                     strings::tr(ui.ctx(), &txt::FILES_PREVIEW),
                 )
-                .on_hover_text("Alt+P");
+                .on_hover_text(keys_tip(&self.preview_keys));
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let verb = match self.kind {

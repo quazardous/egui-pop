@@ -257,9 +257,17 @@ command-editor-write =
     .description = Changes the text through `edit.change`: the whole `text`; or `text` between `from` and `to` (`{"{"}line, col{"}"}` from 0); or a list of `changes`. One undo step.
     .title = Write the text
 
+command-file-back =
+    .description = The open in-app file picker goes back to the folder it showed before; nothing when there is none.
+    .title = Back
+
 command-file-edit-path =
     .description = Puts the folder of the open in-app file picker into its field, as a path to edit; saving, the name stays at its end. A path already typed stays as it is.
     .title = Edit the folder's path
+
+command-file-forward =
+    .description = The open in-app file picker goes forward to the folder it went back from; nothing when there is none.
+    .title = Forward
 
 command-file-new-folder =
     .description = A new folder in the open in-app file picker, which then shows it: asks its name, or makes it at once with `name`. Refused on a file system that cannot make one (the web build's, in memory), the reason shown in the picker.
@@ -269,6 +277,10 @@ command-file-preview =
     .description = A file's or a folder's preview metadata (`path`), as the in-app picker shows it: whether it is a folder, its size and modification time, the provider, the kind of preview, dimensions, pages, a folder's counts, the provider's facts, or why there is none; no pixels and no text.
     .title = Preview a file
 
+command-file-reload =
+    .description = Reads the folder of the open in-app file picker again.
+    .title = Reload the folder
+
 command-file-replace =
     .description = The answer to the question before replacing a file: ends the choice `id` with `path`.
     .title = Replace the file
@@ -276,6 +288,14 @@ command-file-replace =
 command-file-select-all =
     .description = Selects every file shown in the open in-app file picker, choosing several. Refused, the reason shown in the picker, when none is shown.
     .title = Select all files
+
+command-file-toggle-hidden =
+    .description = Shows or hides the hidden files of the open in-app file picker.
+    .title = Show or hide hidden files
+
+command-file-toggle-preview =
+    .description = Shows or hides the preview pane of the in-app file picker, kept for the next one (the `files.preview` setting).
+    .title = Show or hide the preview
 
 command-file-toggle-selection =
     .description = Selects or unselects the highlighted entry of the open in-app file picker, choosing several files or a folder. A folder among files is not selected: the picker says so.

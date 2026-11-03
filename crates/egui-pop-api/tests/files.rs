@@ -3894,3 +3894,95 @@ fn a_photo_s_facts_show_in_one_order_with_its_rating() {
     assert_eq!(photo["rating"], 3);
     egui_pop_test::assert_all_named(&h);
 }
+
+#[test]
+fn the_picker_s_keys_hide_reload_and_go_back_and_forward() {
+    let root = tree("parity");
+    std::fs::write(root.join("photos/.hidden"), b"x").unwrap();
+    let mut h = harness(None);
+    let app = h.state().handle().clone();
+    // Commands of the keymap, so they can be rebound.
+    for (cmd, keys) in [
+        (&files::CMD_TOGGLE_HIDDEN, "Ctrl+H"),
+        (&files::CMD_RELOAD, "F5"),
+        (&files::CMD_BACK, "Alt+Left"),
+        (&files::CMD_FORWARD, "Alt+Right"),
+        (&files::CMD_TOGGLE_PREVIEW, "Alt+P"),
+    ] {
+        assert_eq!(app.keys_for(cmd), [keys], "{cmd:?}");
+    }
+    let _p = choose(&mut h, FileRequest::open("Open").directory(&root));
+    let dir = |h: &Harness<'static, App>| {
+        let f = h.state().handle().service(&FILES).unwrap();
+        f.picker(f.open_ids()[0]).unwrap().dir
+    };
+    double_click(&mut h, "photos/");
+    settle(&mut h);
+    double_click(&mut h, "2026/");
+    settle(&mut h);
+    assert_eq!(dir(&h), root.join("photos/2026"));
+    // Back twice, forward once.
+    key(&mut h, Key::ArrowLeft, Modifiers::ALT);
+    key(&mut h, Key::ArrowLeft, Modifiers::ALT);
+    assert_eq!(dir(&h), root);
+    key(&mut h, Key::ArrowRight, Modifiers::ALT);
+    assert_eq!(dir(&h), root.join("photos"));
+    // Ctrl+H shows the hidden file, and hides it again.
+    assert!(h.query_by_label(".hidden").is_none());
+    key(&mut h, Key::H, Modifiers::COMMAND);
+    assert!(h.query_by_label(".hidden").is_some());
+    key(&mut h, Key::H, Modifiers::COMMAND);
+    assert!(h.query_by_label(".hidden").is_none());
+    // A file made since the folder was read shows after F5.
+    std::fs::write(root.join("photos/new.png"), b"x").unwrap();
+    settle(&mut h);
+    assert!(h.query_by_label("new.png").is_none());
+    key(&mut h, Key::F5, Modifiers::NONE);
+    assert!(h.query_by_label("new.png").is_some());
+    // Alt+P, kept.
+    let before = files::preview_wanted(&app);
+    key(&mut h, Key::P, Modifiers::ALT);
+    assert_eq!(files::preview_wanted(&app), !before);
+    // The check boxes' tips say the keys.
+    h.get_by_label("Hidden files").hover();
+    settle(&mut h);
+    assert!(h.query_by_label("Ctrl+H").is_some());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn the_picker_on_its_own_reads_its_keys_itself() {
+    let picker = files::FilePicker::new_in(
+        &FileRequest::open("Open").directory("/top/sub"),
+        crumbs_fs(),
+    );
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 600.0))
+        .build_ui_state(
+            |ui, p: &mut files::FilePicker| {
+                p.show(ui, &files::Places::default());
+            },
+            picker,
+        );
+    h.run();
+    h.state_mut().up();
+    h.run();
+    assert_eq!(h.state().dir, Path::new("/top"));
+    for (modifiers, key, dir) in [
+        (Modifiers::ALT, Key::ArrowLeft, "/top/sub"),
+        (Modifiers::ALT, Key::ArrowRight, "/top"),
+    ] {
+        walk::press(&mut h, Press { modifiers, key });
+        h.run();
+        assert_eq!(h.state().dir, Path::new(dir));
+    }
+    walk::press(
+        &mut h,
+        Press {
+            modifiers: Modifiers::COMMAND,
+            key: Key::H,
+        },
+    );
+    h.run();
+    assert!(h.state().show_hidden);
+}
