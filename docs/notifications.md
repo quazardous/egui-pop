@@ -8,7 +8,7 @@ shows none. The facade re-exports them with the `platform` feature (or
 `platform-notify` alone):
 
 ```toml
-egui-pop = { version = "0.1", features = ["platform-notify"] }
+egui-pop = { version = "0.3", features = ["platform-notify"] }
 ```
 
 ## Showing one

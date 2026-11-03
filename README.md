@@ -282,6 +282,7 @@ which move only when their code does.
 |---|---|---|
 | 0.1.x | 0.36 | 1.95 |
 | 0.2.x | 0.36 | 1.95 |
+| 0.3.x | 0.36 | 1.95 |
 
 ## How quality is held
 

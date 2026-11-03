@@ -10,7 +10,7 @@ desktop; the facade re-exports it with the `platform` feature (or
 `platform-keys` alone):
 
 ```toml
-egui-pop = { version = "0.1", features = ["platform-keys"] }
+egui-pop = { version = "0.3", features = ["platform-keys"] }
 ```
 
 ## Declaring one

@@ -14,7 +14,7 @@ same answers are read in the process, and followed while the
 application runs:
 
 ```toml
-egui-pop = { version = "0.1", features = ["platform-focus"] }
+egui-pop = { version = "0.3", features = ["platform-focus"] }
 ```
 
 ```rust,no_run

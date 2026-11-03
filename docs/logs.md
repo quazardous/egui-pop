@@ -6,7 +6,7 @@ The facade re-exports it with the `platform` feature (or
 `platform-logs` alone):
 
 ```toml
-egui-pop = { version = "0.1", features = ["platform-logs"] }
+egui-pop = { version = "0.3", features = ["platform-logs"] }
 ```
 
 ## Logs
