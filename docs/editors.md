@@ -523,13 +523,40 @@ terminal that last had the focus:
 | Command | Arguments | Result |
 |---|---|---|
 | `terminal.read` | `terminal`, `from_line`, `to_line` (from 0, end excluded), or `screen` | `text` (scrollback then screen, one line per row), `lines`, `cursor`, `rows`, `cols`, `running`, `exit_code`... |
-| `terminal.send` | `terminal`, `text`, `enter` | `bytes` (through `terminal.input`, `kind` `agent`: hooks apply) |
+| `terminal.send` | `terminal`, `text`, `enter` | `bytes` (through `terminal.input`, `kind` `agent`: hooks apply); not offered to agents unless the application offers it (below) |
 | `terminal.clear` | `terminal` | clears the screen and the scrollback (Ctrl+Shift+K) |
 | `terminal.copy` | `terminal` | `copied`: the selection, put on the clipboard |
 | `terminal.close`, `terminal.restart` | `terminal` | the state (through `terminal.exit`, `terminal.spawn`) |
 
 The same from code: `TerminalState::text`, `lines`, `screen_text`,
 `send`, `clear`, `close`, `restart`, `describe`.
+
+**Letting an agent type.** `terminal.send` writes to the terminal's
+program as if typed: in a shell in a pseudo-terminal (the `pty`
+feature), that is any command the user could run, with the user's
+rights, files and credentials, and no confirmation. So it is not offered
+to agents (`no_agent`): an agent's `terminal.send` is refused
+("not offered to agents", `command.refused` on the journal), the user's
+(keys, the palette, code with `Origin::User`) works. An application
+whose agent should type offers it, knowing that risk:
+
+```rust
+use egui_pop::prelude::*;
+use egui_pop::editors::TerminalPlugin;
+use egui_pop::editors::terminal::steps::CMD_SEND;
+
+let app = App::builder()
+    .plugin(TerminalPlugin)
+    .offer_command_to_agents(CMD_SEND)
+    .build(&egui_pop::egui::Context::default())
+    .unwrap();
+assert!(app.handle().commands().iter().any(|(c, _)| c.id == CMD_SEND && c.agent));
+```
+
+The input still goes through `terminal.input` with `kind` `agent` and
+the agent's `origin`: a before-hook there can narrow what an offered
+agent may type (one terminal, a read-only console, an allowed list of
+commands) or veto it.
 
 ## Gaps
 

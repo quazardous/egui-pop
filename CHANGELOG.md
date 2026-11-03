@@ -1110,6 +1110,17 @@ publishes.
 
 ### Changed
 
+- **Breaking (terminal, agents):** `terminal.send` is no longer offered to agents
+  (egui-pop-editors, egui-pop-api; `docs/editors.md`, `docs/agents.md`). It types
+  into the terminal's program, in a PTY shell any command the user could run; an
+  agent's `terminal.send` is now refused (`command.refused` on the journal), the
+  user's works as before, through `terminal.input`. An application offers a command
+  kept from agents with the new `AppBuilder::offer_command_to_agents` (a command not
+  declared is reported, `agent-offer-unknown`). **Migration:** an application whose
+  agent typed into terminals adds
+  `.offer_command_to_agents(egui_pop::editors::terminal::steps::CMD_SEND)`, and may
+  narrow what it types with a before-hook on `terminal.input` (`kind` `agent`).
+
 - **Breaking (host, undo):** every command goes through `Host::dispatch`, and history
   walks are held to the writers (egui-pop-api, egui-pop-model; `docs/agents.md`, ADR
   0023). The 29 commands whose handler calls the host itself (`edit.undo`,

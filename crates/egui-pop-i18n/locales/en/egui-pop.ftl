@@ -518,7 +518,7 @@ command-terminal-restart =
     .title = Restart
 
 command-terminal-send =
-    .description = Sends `text` to the program through `terminal.input` (with `enter`, followed by Enter).
+    .description = Sends `text` to the program through `terminal.input` (with `enter`, followed by Enter). Not offered to agents unless the application offers it (`AppBuilder::offer_command_to_agents`): in a shell, it runs what it types.
     .title = Send input
 
 command-theme-counterpart =

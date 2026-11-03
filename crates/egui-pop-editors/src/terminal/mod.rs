@@ -13,9 +13,9 @@
 //! - every key to the program while focused, Escape included:
 //!   Shift+Escape leaves (see [`Terminal`]);
 //! - steps `terminal.spawn`, `terminal.input` and `terminal.exit`,
-//!   commands for agents (`terminal.read`, `terminal.send`,
-//!   `terminal.clear`...) and collectors, declared by
-//!   [`TerminalPlugin`];
+//!   commands for agents (`terminal.read`, `terminal.clear`...;
+//!   `terminal.send` only when the application offers it, since it types
+//!   into the program) and collectors, declared by [`TerminalPlugin`];
 //! - each job's log console in the jobs centre, as a terminal
 //!   ([`jobs::JobConsolesPlugin`]).
 

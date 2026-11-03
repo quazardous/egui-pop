@@ -261,19 +261,23 @@ impl WithApp {
     }
 }
 
+/// The terminals in an application whose agents may type
+/// (`terminal.send` offered: the agent tests below are that agent).
 fn with_app(terminals: Vec<TerminalState>) -> Harness<'static, WithApp> {
+    with_app_offering(terminals, true)
+}
+
+fn with_app_offering(terminals: Vec<TerminalState>, offer: bool) -> Harness<'static, WithApp> {
     Harness::builder()
         .with_size(egui::vec2(600.0, 500.0))
         .build_ui_state(
-            |ui, w: &mut WithApp| {
+            move |ui, w: &mut WithApp| {
                 if w.app.is_none() {
-                    w.app = Some(
-                        App::builder()
-                            .plugin(TerminalPlugin)
-                            .plugin(Hooks)
-                            .build(ui.ctx())
-                            .unwrap(),
-                    );
+                    let mut b = App::builder().plugin(TerminalPlugin).plugin(Hooks);
+                    if offer {
+                        b = b.offer_command_to_agents(CMD_SEND);
+                    }
+                    w.app = Some(b.build(ui.ctx()).unwrap());
                 }
                 let h = w.handle();
                 for t in &w.terminals {
@@ -397,4 +401,83 @@ fn a_console_whose_terminal_is_not_drawn_keeps_its_latest_output_only() {
         "{:?}",
         &text[text.len().saturating_sub(300)..]
     );
+}
+
+#[test]
+fn an_agent_may_not_type_unless_the_application_offers_it() {
+    let echo = Echo::default();
+    let mut h = with_app_offering(vec![TerminalState::new("shell", echo.clone())], false);
+    h.run();
+    let app = h.state().handle();
+    let before = app.last_event();
+    // The agent's `terminal.send`: refused, journaled, nothing typed.
+    let refused = h.state_mut().run(
+        &CMD_SEND,
+        json!({ "terminal": "shell", "text": "rm -rf ~", "enter": true }),
+    );
+    assert_eq!(
+        refused,
+        Err("`terminal.send` is not offered to agents".into())
+    );
+    assert_eq!(echo.received(), "");
+    let journal = app.events_since(before);
+    let e = journal
+        .iter()
+        .find(|e| e.name == "command.refused")
+        .expect("journaled");
+    assert_eq!(e.source, "agent:t");
+    assert_eq!(e.data["command"], "terminal.send");
+    // Nor through the bridge.
+    let f = h.state_mut().app.as_mut().unwrap().debug_call(
+        "commands",
+        "run",
+        &json!({ "id": "terminal.send", "args": { "terminal": "shell", "text": "ls" } }),
+    );
+    assert!(
+        !f.ok && f.message.contains("not offered to agents"),
+        "{f:?}"
+    );
+    assert_eq!(echo.received(), "");
+    // The user's goes through `terminal.input` as the user's.
+    let sent = h
+        .state_mut()
+        .app
+        .as_mut()
+        .unwrap()
+        .run(
+            &CMD_SEND,
+            json!({ "terminal": "shell", "text": "ls", "enter": true }),
+            Origin::User,
+        )
+        .now()
+        .unwrap()
+        .unwrap();
+    assert_eq!(sent["bytes"], 3);
+    assert_eq!(echo.received(), "LS\r");
+    let input = h
+        .state()
+        .handle()
+        .step_traces()
+        .into_iter()
+        .rfind(|t| t.step == TERMINAL_INPUT)
+        .unwrap();
+    assert_eq!(input.args["origin"], "user");
+    // Offered, the agent types (`with_app`, as in the test above).
+    let echo = Echo::default();
+    let mut h = with_app(vec![TerminalState::new("shell", echo.clone())]);
+    h.run();
+    let sent = h
+        .state_mut()
+        .run(&CMD_SEND, json!({ "terminal": "shell", "text": "ls" }))
+        .unwrap();
+    assert_eq!(sent["bytes"], 2);
+    let input = h
+        .state()
+        .handle()
+        .step_traces()
+        .into_iter()
+        .rfind(|t| t.step == TERMINAL_INPUT)
+        .unwrap();
+    assert_eq!(input.args["origin"], "agent:t");
+    assert_eq!(input.args["kind"], "agent");
 }

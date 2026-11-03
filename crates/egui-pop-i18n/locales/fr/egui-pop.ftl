@@ -545,7 +545,7 @@ command-terminal-restart =
     .title = Redémarrer
 
 command-terminal-send =
-    .description = Envoie `text` au programme par `terminal.input` (avec `enter`, suivi d’Entrée).
+    .description = Envoie `text` au programme par `terminal.input` (avec `enter`, suivi d’Entrée). Pas proposée aux agents sauf si l’application la leur propose (`AppBuilder::offer_command_to_agents`) : dans un shell, elle exécute ce qu’elle tape.
     .title = Envoyer une saisie
 
 command-theme-counterpart =
