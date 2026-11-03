@@ -26,12 +26,12 @@ use std::time::Duration;
 /// workspace packages it needs at build time (dev-dependencies are
 /// stripped from published manifests, so they do not order anything).
 #[derive(Debug, PartialEq)]
-struct Package {
-    name: String,
-    version: String,
+pub(crate) struct Package {
+    pub(crate) name: String,
+    pub(crate) version: String,
     /// The crate's folder, relative to the workspace's root.
-    dir: String,
-    needs: BTreeSet<String>,
+    pub(crate) dir: String,
+    pub(crate) needs: BTreeSet<String>,
 }
 
 pub fn publish(args: &[String]) -> Result<(), String> {
@@ -143,7 +143,7 @@ fn cargo() -> String {
 }
 
 /// The workspace's publishable packages, from `cargo metadata`.
-fn packages() -> Result<Vec<Package>, String> {
+pub(crate) fn packages() -> Result<Vec<Package>, String> {
     let out = Command::new(cargo())
         .args(["metadata", "--no-deps", "--format-version", "1"])
         .current_dir(super::root())
@@ -221,7 +221,7 @@ fn order(packages: &[Package]) -> Result<Vec<&Package>, String> {
 }
 
 /// Whether crates.io has this version of the crate.
-fn published(name: &str, version: &str) -> Result<bool, String> {
+pub(crate) fn published(name: &str, version: &str) -> Result<bool, String> {
     let url = format!("https://crates.io/api/v1/crates/{name}/{version}");
     let out = Command::new("curl")
         .args(["-s", "-o", "/dev/null", "-w", "%{http_code}"])
