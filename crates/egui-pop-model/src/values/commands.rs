@@ -1,7 +1,9 @@
 //! `value.list`, `value.get`, `value.set`, `value.reset`, `value.undo` and
 //! `value.redo`: the store as commands, what menus, keys, scripts and
 //! agents run alike. Values are plain JSON (a number, a bool, a string,
-//! an array), typed by the path's descriptor.
+//! an array), typed by the path's descriptor. They write as their caller
+//! (`Origin::writer`): the user through the framework, anyone else as
+//! itself, held to each value's declared writers.
 
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -67,9 +69,10 @@ fn set(store: &Mutex<Store>, args: &Json, origin: &Origin, reset: bool) -> Resul
     } else {
         change_of(&store, path, args)?
     };
-    // The commands act for whoever runs them, as the settings form does:
-    // the framework writes.
-    let mut s = Set::new(path, change, origin.clone()).by(&OwnerId::FRAMEWORK);
+    // The commands write for whoever runs them: a person through the
+    // framework, as the settings form does; anyone else (an agent, a
+    // script) as itself, held to the value's declared writers.
+    let mut s = Set::new(path, change, origin.clone()).by(&origin.writer());
     s.force = args.get("force").and_then(Json::as_bool) == Some(true);
     s.if_seq = args.get("if_seq").and_then(Json::as_u64);
     match store.set(s) {
@@ -169,7 +172,7 @@ pub fn register_with<H>(
             let undone = s
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
-                .undo(origin)
+                .undo_by(origin, &origin.writer())
                 .map_err(|r| r.to_string())?;
             Ok(json!({ "undone": undone }))
         })),
@@ -184,7 +187,7 @@ pub fn register_with<H>(
             let redone = s
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
-                .redo(origin)
+                .redo_by(origin, &origin.writer())
                 .map_err(|r| r.to_string())?;
             Ok(json!({ "redone": redone }))
         })),

@@ -1096,6 +1096,24 @@ publishes.
 
 ### Changed
 
+- **Breaking (debug bridge, value store):** collector actions and value writes act as
+  their caller (egui-pop-model, egui-pop-core, egui-pop-api; `docs/agents.md`, ADR
+  0019). `Collector::call` takes the call's origin; `FnCollector::action_as` gives it
+  to an action (`FnCollector::action` keeps the old closure). `commands.run` runs the
+  command as its caller, no longer always as `debug-bridge`: the user (devtools,
+  `debug_call_as(.., Origin::User)`) runs it as the user, a command kept from agents
+  included. `store.set`, `store.undo` and the `value.set`, `value.reset`,
+  `value.undo` and `value.redo` commands write as `Origin::writer()`: the framework
+  for the user, as before, and the caller itself for anyone else
+  (`agent:debug-bridge`, `script:<name>`...), held to the value's declared writers
+  (ADR 0016). An undo or redo by a writer is checked for every path of its step
+  (`Store::undo_by`, `Store::redo_by`). **Migration:** an agent that wrote values it
+  does not own is now refused (`not_writer`): name it among the value's writers
+  (`Descriptor::writers(&[Origin::Agent("debug-bridge".into()).writer()])`), or let
+  anyone write it (`any_writer`). A `Collector` implemented by hand adds the
+  `origin` argument to `call`. Code that relied on `commands.run` from devtools
+  running as the agent now gets the user.
+
 - **Breaking (debug bridge):** every collector action says whether agents may call
   it, and the bridge's calls are the agent's (egui-pop-core, egui-pop-api,
   egui-pop-gallery; `docs/agents.md`, `docs/debugging.md`, ADR 0018). `ActionSpec`

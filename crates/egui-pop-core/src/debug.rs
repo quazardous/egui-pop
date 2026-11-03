@@ -86,13 +86,22 @@ pub trait Collector {
         Vec::new()
     }
     fn snapshot(&self, ctx: &Context) -> Json;
-    fn call(&mut self, _ctx: &Context, action: &str, _args: &Json) -> Result<Json, String> {
+    /// Runs an action for `origin`, who called it: an action that acts
+    /// does so as its caller (writes a value, runs a command, answers a
+    /// dialog).
+    fn call(
+        &mut self,
+        _ctx: &Context,
+        action: &str,
+        _args: &Json,
+        _origin: &Origin,
+    ) -> Result<Json, String> {
         Err(format!("no action `{action}`"))
     }
 }
 
 type SnapshotFn = Box<dyn Fn(&Context) -> Json>;
-type ActionFn = Box<dyn FnMut(&Context, &Json) -> Result<Json, String>>;
+type ActionFn = Box<dyn FnMut(&Context, &Json, &Origin) -> Result<Json, String>>;
 
 /// A collector made of closures.
 pub struct FnCollector {
@@ -125,12 +134,26 @@ impl FnCollector {
         self
     }
 
+    /// Adds an action that does not need to know who called it.
     pub fn action(
+        self,
+        name: &str,
+        description: &str,
+        mutates: bool,
+        mut f: impl FnMut(&Context, &Json) -> Result<Json, String> + 'static,
+    ) -> Self {
+        self.action_as(name, description, mutates, move |ctx, args, _| f(ctx, args))
+    }
+
+    /// Adds an action that acts as its caller: `f` gets the origin of
+    /// the call (`Origin::User` from devtools, the bridge's agent...), to
+    /// run a command, write a value or answer a dialog as that caller.
+    pub fn action_as(
         mut self,
         name: &str,
         description: &str,
         mutates: bool,
-        f: impl FnMut(&Context, &Json) -> Result<Json, String> + 'static,
+        f: impl FnMut(&Context, &Json, &Origin) -> Result<Json, String> + 'static,
     ) -> Self {
         self.actions.push((
             ActionSpec {
@@ -182,9 +205,15 @@ impl Collector for FnCollector {
         (self.snapshot)(ctx)
     }
 
-    fn call(&mut self, ctx: &Context, action: &str, args: &Json) -> Result<Json, String> {
+    fn call(
+        &mut self,
+        ctx: &Context,
+        action: &str,
+        args: &Json,
+        origin: &Origin,
+    ) -> Result<Json, String> {
         match self.actions.iter_mut().find(|(s, _)| s.name == action) {
-            Some((_, f)) => f(ctx, args),
+            Some((_, f)) => f(ctx, args, origin),
             None => Err(format!("no action `{action}`")),
         }
     }
@@ -402,7 +431,7 @@ impl DebugBridge {
                     },
                     Some(spec) => {
                         let mutates = spec.mutates;
-                        match c.call(ctx, action, args) {
+                        match c.call(ctx, action, args, origin) {
                             Ok(data) => Feedback {
                                 ok: true,
                                 collector: collector.into(),
@@ -691,11 +720,11 @@ pub fn store_collector(store: SharedStore) -> FnCollector {
         },
     )
     .args(json!({ "path": "settings/x" }))
-    .action(
+    .action_as(
         "set",
-        "Writes a value (`path`, `value`), marked as the debug bridge's; for the user only (agents run the `value.set` command).",
+        "Writes a value (`path`, `value`) as its caller: the user through the framework, anyone else as itself, held to the value's writers (`Origin::writer`); for the user only unless offered (agents run the `value.set` command).",
         true,
-        move |_, args| {
+        move |_, args, origin| {
             use egui_pop_model::values::{Change, Set, Value};
             let path = args
                 .get("path")
@@ -711,22 +740,21 @@ pub fn store_collector(store: SharedStore) -> FnCollector {
             let value = Value::from_json(ty, v)?;
             let a = s
                 .set(
-                    Set::new(path, Change::To(value), agent())
-                    // The agent acts as a person would, through the
-                    // framework.
-                    .by(&egui_pop_model::ids::OwnerId::FRAMEWORK),
+                    Set::new(path, Change::To(value), origin.clone()).by(&origin.writer()),
                 )
                 .map_err(|r| r.to_string())?;
             Ok(json!({ "value": a.value.to_json(), "clamped": a.clamped, "changed": a.changed }))
         },
     )
     .args(json!({ "path": "settings/x", "value": 1 }))
-    .action(
+    .action_as(
         "undo",
-        "Undoes the last change of values; for the user only (agents run the `value.undo` command).",
+        "Undoes the last change of values as its caller, refused when it may not write one of them; for the user only unless offered (agents run the `value.undo` command).",
         true,
-        move |_, _| {
-            let label = lock(&s4).undo(&agent()).map_err(|r| r.to_string())?;
+        move |_, _, origin| {
+            let label = lock(&s4)
+                .undo_by(origin, &origin.writer())
+                .map_err(|r| r.to_string())?;
             Ok(json!({ "undone": label }))
         },
     )

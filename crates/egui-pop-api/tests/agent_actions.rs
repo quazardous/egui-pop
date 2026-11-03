@@ -9,8 +9,9 @@ use egui_pop_api::devtools::{self, DevtoolsPlugin, SETTING_DEVTOOLS};
 use egui_pop_api::jobs::JobsPlugin;
 use egui_pop_api::steps::{Before, Outcome};
 use egui_pop_api::{App, AppBuilder, Ctx, DefaultPlugins, Plugin, PluginError};
-use egui_pop_model::commands::Origin;
-use egui_pop_model::ids::{PluginId, StepId};
+use egui_pop_model::commands::{CommandSpec, Origin};
+use egui_pop_model::ids::{CommandId, OwnerId, PluginId, SettingId, StepId};
+use egui_pop_model::values::Descriptor;
 use serde_json::{Value as Json, json};
 
 /// Vetoes every call of the `journal` collector, by anyone.
@@ -296,4 +297,151 @@ fn the_step_is_declared() {
     let step = steps.iter().find(|s| s.spec.id == STEP_DEBUG_CALL).unwrap();
     assert_eq!(step.owner, egui_pop_model::ids::OwnerId::FRAMEWORK);
     assert_eq!(STEP_DEBUG_CALL, StepId::from_static("debug.call"));
+}
+
+/// Records who ran its commands; a setting anyone may write.
+struct Recorder(std::rc::Rc<std::cell::RefCell<Vec<Origin>>>);
+
+impl Plugin for Recorder {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("recorder")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        let runs = self.0.clone();
+        ctx.command(
+            CommandSpec::new(CommandId::from_static("recorder.mark"), "Mark", "Test"),
+            move |call| {
+                runs.borrow_mut().push(call.origin.clone());
+                Ok(Json::Null)
+            },
+        )?;
+        let runs = self.0.clone();
+        ctx.command(
+            CommandSpec::new(
+                CommandId::from_static("recorder.private"),
+                "Private",
+                "Test",
+            )
+            .no_agent(),
+            move |call| {
+                runs.borrow_mut().push(call.origin.clone());
+                Ok(Json::Null)
+            },
+        )?;
+        ctx.setting(
+            SettingId::from_static("recorder.open"),
+            Descriptor::int("Open", 0, 10, 0).any_writer(),
+        )?;
+        Ok(())
+    }
+}
+
+fn entry(app: &App, path: &str) -> (Json, Option<OwnerId>, Option<Origin>) {
+    let store = app.handle().store();
+    let s = egui_pop_core::lock(&store);
+    let e = s.get(path).unwrap();
+    (e.value.to_json(), e.writer.clone(), e.origin.clone())
+}
+
+#[test]
+fn an_agent_offered_store_set_is_held_to_the_values_writers() {
+    let mut app = build(
+        builder()
+            .offer_to_agents("store.set")
+            .offer_to_agents("store.undo")
+            .plugin(Recorder(Default::default())),
+    );
+    let devtools = format!("settings/{SETTING_DEVTOOLS}");
+    // Its writers are its owner alone: the agent is refused, as itself.
+    let f = app.debug_call("store", "set", &json!({ "path": devtools, "value": true }));
+    assert!(!f.ok, "{f:?}");
+    assert!(f.message.contains("agent:debug-bridge"), "{}", f.message);
+    assert!(!devtools_on(&app));
+    // The `value.set` command an agent runs is held the same way.
+    let f = app.debug_call(
+        "commands",
+        "run",
+        &json!({ "id": "value.set", "args": { "path": devtools, "value": true } }),
+    );
+    assert!(!f.ok && f.message.contains("not_writer"), "{f:?}");
+    assert!(!devtools_on(&app));
+    // A value anyone may write takes the agent's write, under its name.
+    let f = app.debug_call(
+        "store",
+        "set",
+        &json!({ "path": "settings/recorder.open", "value": 4 }),
+    );
+    assert!(f.ok, "{f:?}");
+    let (value, writer, origin) = entry(&app, "settings/recorder.open");
+    assert_eq!(value, json!(4));
+    assert_eq!(writer.unwrap().as_str(), "agent:debug-bridge");
+    assert_eq!(origin, Some(egui_pop_core::debug::agent()));
+    // The user's write of the devtools setting (devtools' path), then the
+    // agent's undo of it: refused, it may not write that path.
+    let out = devtools::call(
+        &app.handle().clone(),
+        "store",
+        "set",
+        json!({ "path": devtools, "value": true }),
+    );
+    assert!(out.ok(), "{out:?}");
+    let f = app.debug_call("store", "undo", &json!(null));
+    assert!(!f.ok && f.message.contains(&devtools), "{f:?}");
+    assert!(devtools_on(&app));
+}
+
+#[test]
+fn the_users_devtools_path_writes_as_the_user() {
+    let app = build(builder());
+    let devtools = format!("settings/{SETTING_DEVTOOLS}");
+    let out = devtools::call(
+        &app.handle().clone(),
+        "store",
+        "set",
+        json!({ "path": devtools, "value": true }),
+    );
+    assert!(out.ok(), "{out:?}");
+    let (value, writer, origin) = entry(&app, &devtools);
+    assert_eq!(value, json!(true));
+    assert_eq!(writer, Some(OwnerId::FRAMEWORK));
+    assert_eq!(origin, Some(Origin::User));
+}
+
+#[test]
+fn commands_run_runs_as_its_caller() {
+    let runs = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let mut app = build(builder().plugin(Recorder(runs.clone())));
+    let f = app.debug_call_as(
+        "commands",
+        "run",
+        &json!({ "id": "recorder.mark" }),
+        Origin::User,
+    );
+    assert!(f.ok, "{f:?}");
+    let f = app.debug_call("commands", "run", &json!({ "id": "recorder.mark" }));
+    assert!(f.ok, "{f:?}");
+    // The user may run a command kept from agents; the agent may not.
+    let f = app.debug_call_as(
+        "commands",
+        "run",
+        &json!({ "id": "recorder.private" }),
+        Origin::User,
+    );
+    assert!(f.ok, "{f:?}");
+    let f = app.debug_call("commands", "run", &json!({ "id": "recorder.private" }));
+    assert!(
+        !f.ok && f.message.contains("not offered to agents"),
+        "{f:?}"
+    );
+    assert_eq!(
+        *runs.borrow(),
+        [Origin::User, egui_pop_core::debug::agent(), Origin::User]
+    );
+    // Through the handle (queued), the same.
+    let h = app.handle().clone();
+    let f = devtools::call(&h, "commands", "run", json!({ "id": "recorder.mark" }));
+    assert!(f.ok(), "{f:?}");
+    app.logic(&egui::Context::default());
+    assert_eq!(runs.borrow().last(), Some(&Origin::User));
 }

@@ -39,10 +39,12 @@
 //!   ([`Set::by`], or the scope [`enter_scope`] set, such as the plugin
 //!   whose command runs). A scope that is not the path's owner, not one
 //!   of its [`Writers`] and not the framework (acting for a person: the
-//!   settings form, a bound widget, an agent's `value.set`) is refused,
-//!   or only warned about under [`WriterCheck::Warn`]. A write naming no
-//!   scope is the application's own and is not checked; undo, redo and
-//!   restoring saved values are never refused.
+//!   settings form, a bound widget, the user's `value.set`) is refused,
+//!   or only warned about under [`WriterCheck::Warn`]. An agent or a
+//!   script writes as itself ([`Origin::writer`](crate::commands::Origin::writer)).
+//!   A write naming no scope is the application's own and is not
+//!   checked; undo, redo and restoring saved values are never refused,
+//!   but for an undo or redo issued by a writer ([`Store::undo_by`]).
 //!
 //! ```
 //! use egui_pop_model::commands::Origin;
@@ -1262,9 +1264,22 @@ impl Store {
         Ok(())
     }
 
-    /// Puts back the values a step changed, as a write by `origin`.
-    fn replay(&mut self, step: &Step, origin: &Origin, back: bool) -> Result<(), Refused> {
+    /// Puts back the values a step changed, as a write by `origin`;
+    /// `by`, every path is checked against its writers first (all or
+    /// nothing), else the framework replays it.
+    fn replay(
+        &mut self,
+        step: &Step,
+        origin: &Origin,
+        back: bool,
+        by: Option<&OwnerId>,
+    ) -> Result<(), Refused> {
         self.can_replay(step)?;
+        if let Some(by) = by {
+            for (path, _, _) in &step.changes {
+                self.check_writer(path, Some(by))?;
+            }
+        }
         let changes: Vec<(String, Value)> = if back {
             step.changes
                 .iter()
@@ -1279,7 +1294,12 @@ impl Store {
         };
         for (path, value) in changes {
             if self.entries[&path].value != value {
-                self.write(&path, value, origin, Some(OwnerId::FRAMEWORK));
+                self.write(
+                    &path,
+                    value,
+                    origin,
+                    Some(by.cloned().unwrap_or(OwnerId::FRAMEWORK)),
+                );
             }
         }
         Ok(())
@@ -1296,15 +1316,27 @@ impl Store {
         Ok(self.redo_in(&APP, origin)?.map(|s| s.label))
     }
 
+    /// As [`Store::undo`], written by `by` (`Origin::writer`): refused,
+    /// as a write is, when `by` is not one of the writers of every path
+    /// the step changed. What an agent's undo goes through.
+    pub fn undo_by(&mut self, origin: &Origin, by: &OwnerId) -> Result<Option<String>, Refused> {
+        Ok(self.walk(&APP, origin, false, Some(by))?.map(|s| s.label))
+    }
+
+    /// As [`Store::redo`], written by `by`.
+    pub fn redo_by(&mut self, origin: &Origin, by: &OwnerId) -> Result<Option<String>, Refused> {
+        Ok(self.walk(&APP, origin, true, Some(by))?.map(|s| s.label))
+    }
+
     /// Undoes a history's last step; the step, or `None` when there is
     /// none.
     pub fn undo_in(&mut self, history: &ScopeId, origin: &Origin) -> Result<Option<Step>, Refused> {
-        self.walk(history, origin, false)
+        self.walk(history, origin, false, None)
     }
 
     /// Redoes a history's last undone step.
     pub fn redo_in(&mut self, history: &ScopeId, origin: &Origin) -> Result<Option<Step>, Refused> {
-        self.walk(history, origin, true)
+        self.walk(history, origin, true, None)
     }
 
     /// Whether an undo (or a redo) of a history would be refused, without
@@ -1343,7 +1375,7 @@ impl Store {
             }
         }
         for _ in 0..count {
-            self.walk(history, origin, redo)?;
+            self.walk(history, origin, redo, None)?;
         }
         Ok(Some(count))
     }
@@ -1369,6 +1401,7 @@ impl Store {
         history: &ScopeId,
         origin: &Origin,
         redo: bool,
+        by: Option<&OwnerId>,
     ) -> Result<Option<Step>, Refused> {
         let Some(h) = self.histories.get_mut(history) else {
             return Ok(None);
@@ -1376,7 +1409,7 @@ impl Store {
         let Some(step) = (if redo { h.redo.pop() } else { h.undo.pop() }) else {
             return Ok(None);
         };
-        let replayed = self.replay(&step, origin, !redo);
+        let replayed = self.replay(&step, origin, !redo, by);
         let h = self.histories.get_mut(history).expect("still there");
         let (from, to) = if redo {
             (&mut h.redo, &mut h.undo)
