@@ -85,10 +85,8 @@ rfd = "0.17"
 image = { version = "0.25", default-features = false }
 # MIT: docked tabs and splits for the workbench's areas. egui_stack
 # continues egui_dock 0.21 on egui 0.37.
-# Temporary: the kit paints the docks through egui_stack's `DockPainter`,
-# not released yet (its pull request's branch). Back to crates.io, at the
-# release that has it, before this merges.
-egui_stack = { git = "https://github.com/quazardous/egui_stack", branch = "wip/dock-painter", default-features = false }
+# 0.22.1 has the `DockPainter` the kit paints the docks with.
+egui_stack = { version = "0.22.1", default-features = false }
 egui-pop = { version = "0.3.0", path = "crates/egui-pop" }
 
 [workspace.lints.rust]
