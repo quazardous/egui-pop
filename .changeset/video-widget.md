@@ -11,6 +11,8 @@ Right, Up and Down), its picture is an accessible video node, and
 `video.seek`, `video.volume` and `video.mute` commands and the `videos`
 collector for agents. Without the `video` feature (or on the web) it draws a
 placeholder saying so, with Open outside. The viewer's video page is now this
-widget. GStreamer's player loops without a gap through segment seeks
-(`VideoPlayer::set_looping`). The video types
+widget. GStreamer's player converts pictures on every core and makes egui's picture
+in one pass (4K VP9 decoded by the GPU now plays in real time, where it fell
+behind at about 20 frames a second), and loops without a gap through segment
+seeks (`VideoPlayer::set_looping`). The video types
 moved to `egui_pop_views::video`; they are still named under `viewer::`.
