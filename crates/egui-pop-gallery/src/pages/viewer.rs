@@ -259,6 +259,7 @@ mod youtube {
 
     pub(super) fn show(ui: &mut Ui, app: &AppHandle) {
         ui.label("A YouTube link opens in the viewer, in YouTube's privacy-enhanced player. On X11 the player sits over the panel and follows it; on Wayland it opens in a window of its own. Ctrl+click opens it outside.");
+        ui.label("As YouTube's terms ask, the player's request names the application: the gallery sends the Referer https://org.egui_pop.gallery/, built from its id org.egui_pop.Gallery. The player is never smaller than 200 by 200 pixels: over a smaller panel a card offers Open outside, and the player comes back when the panel grows. Nothing is drawn over it.");
         section(ui, "A video on YouTube");
         links::link(ui, app, "Terminal Velocity demo", VIDEO);
         section(ui, "Other video");
