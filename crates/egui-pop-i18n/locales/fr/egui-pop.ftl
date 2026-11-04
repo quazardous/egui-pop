@@ -44,6 +44,10 @@ command-about-read =
     .description = Le nom de l’application, sa version, sa description, ses licences, ses auteurs et ses liens, les versions d’egui-pop et d’egui, la plateforme, le moteur de rendu et les informations de version en texte.
     .title = Lire les informations sur l’application
 
+command-help-report =
+    .description = Ouvre un nouveau ticket dans le navigateur, prérempli avec les informations de version, la plateforme, la page affichée et le dernier élément inspecté.
+    .title = Signaler un problème
+
 command-app-devtools =
     .description = Ouvre ou ferme le panneau des outils de développement (quand le réglage Outils de développement est activé).
     .title = Outils de développement
@@ -1043,6 +1047,10 @@ egui-pop-inspect-button = Inspecter un élément
 egui-pop-inspect-copied = Copié.
 
 egui-pop-inspect-copy = Copier
+
+egui-pop-inspect-report = Signaler…
+
+egui-pop-inspect-report-hover = Ouvre un nouveau ticket dans le navigateur avec cet élément, les informations de version et la plateforme.
 
 egui-pop-inspect-hint = Inspection : cliquez sur un élément, ou déplacez-vous avec Tab et les flèches puis appuyez sur Entrée. Échap pour sortir.
 

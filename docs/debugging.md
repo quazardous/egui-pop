@@ -139,7 +139,10 @@ focused and enabled; and what the application adds
 **Copy** puts it on the clipboard as a readable text block, one
 `Name: value` line each, with its JSON form
 (`application/x-egui-pop.inspect+json`), through the clipboard's
-`clipboard.copy` step; **Pick another** goes back to the mode. The last
+`clipboard.copy` step; **Report…**, when the application says where
+issues go (`help.report`, see [About](about.md#reporting-a-problem)),
+opens a new issue prefilled with the pick, the version info, the
+platform and the page; **Pick another** goes back to the mode. The last
 pick is also the `inspect` collector's snapshot (`json` and `text`).
 
 ```rust

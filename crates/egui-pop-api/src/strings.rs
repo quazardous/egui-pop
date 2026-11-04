@@ -669,6 +669,11 @@ pub const INSPECT_HINT: StrKey = StrKey::new(
 pub const INSPECT_TITLE: StrKey = StrKey::new("egui-pop-inspect-title", "Inspected element");
 pub const INSPECT_COPY: StrKey = StrKey::new("egui-pop-inspect-copy", "Copy");
 pub const INSPECT_COPIED: StrKey = StrKey::new("egui-pop-inspect-copied", "Copied.");
+pub const INSPECT_REPORT: StrKey = StrKey::new("egui-pop-inspect-report", "Report…");
+pub const INSPECT_REPORT_HOVER: StrKey = StrKey::new(
+    "egui-pop-inspect-report-hover",
+    "Opens a new issue in the browser with this element, the version info and the platform.",
+);
 pub const INSPECT_PICK_ANOTHER: StrKey =
     StrKey::new("egui-pop-inspect-pick-another", "Pick another");
 
@@ -1520,6 +1525,8 @@ pub const ALL: &[StrKey] = &[
     INSPECT_TITLE,
     INSPECT_COPY,
     INSPECT_COPIED,
+    INSPECT_REPORT,
+    INSPECT_REPORT_HOVER,
     INSPECT_PICK_ANOTHER,
     THEME_EDITOR_MISSING,
     THEME_EDITOR_START,

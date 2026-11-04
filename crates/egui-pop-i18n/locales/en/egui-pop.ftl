@@ -377,6 +377,10 @@ command-gesture-value-step =
     .description = The wheel with these keys steps the slider under the pointer, focused or not.
     .title = Values: step with the wheel
 
+command-help-report =
+    .description = Opens a new issue in the browser, prefilled with the version info, the platform, the page shown and the last element inspected.
+    .title = Report a problem
+
 command-history-drop-snapshot =
     .description = Deletes one of a history's snapshots (`scope`; none: where Undo goes now; `snapshot`, its id), refused unless its revision is still `if_rev`; with `dry_run`, only checks it is there.
     .title = Delete a snapshot
@@ -1278,6 +1282,10 @@ egui-pop-inspect-copy = Copy
 egui-pop-inspect-hint = Inspecting: click an element, or move with Tab and the arrows and press Enter. Escape leaves.
 
 egui-pop-inspect-pick-another = Pick another
+
+egui-pop-inspect-report = Report…
+
+egui-pop-inspect-report-hover = Opens a new issue in the browser with this element, the version info and the platform.
 
 egui-pop-inspect-title = Inspected element
 

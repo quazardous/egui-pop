@@ -1,0 +1,65 @@
+name: Bug report
+description: Something in egui-pop or its gallery misbehaves.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. From the gallery (on the web or the
+        desktop), Help > Report a problem fills the version info, the
+        platform and the page for you; the inspect dialog's Report
+        button adds the element you picked.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and where.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: false
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the Files page
+        2. Press Tab twice
+        3. ...
+    validations:
+      required: false
+  - type: textarea
+    id: version
+    attributes:
+      label: Version info
+      description: Help > About, then "Copy version info".
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: The operating system, or the browser and its version.
+      placeholder: web (wasm32), Firefox 132 on Linux
+    validations:
+      required: true
+  - type: input
+    id: page
+    attributes:
+      label: Page
+      description: The gallery page or the view shown.
+    validations:
+      required: false
+  - type: textarea
+    id: pick
+    attributes:
+      label: Inspected element
+      description: View > Inspect an element (Ctrl+Shift+F12), click the element, then Copy.
+      render: text
+    validations:
+      required: false

@@ -565,6 +565,16 @@ fn playground(ui: &mut Ui, app: &AppHandle) {
     });
 }
 
+/// The page shown, for Help > Report a problem: its title and story
+/// (`Files (story files)`).
+pub fn report_page(app: &AppHandle) -> Option<String> {
+    let page = app.service(&NAV)?.page();
+    Some(match app.stories().into_iter().find(|s| s.id == page) {
+        Some(s) => format!("{} (story {page})", s.title),
+        None => format!("story {page}"),
+    })
+}
+
 /// What the inspect mode's dialog adds in the gallery: the page shown,
 /// its story and plugin, and whether the element is on the page or in its
 /// playground.

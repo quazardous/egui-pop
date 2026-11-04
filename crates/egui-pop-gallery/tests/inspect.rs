@@ -109,6 +109,34 @@ fn a_click_names_the_button_without_pressing_it_and_copy_holds_it() {
     assert_eq!(last["text"], text.as_str());
     assert_eq!(last["json"]["element"]["role"], "Button");
     assert_eq!(last["json"]["app"]["Story"], "debug");
+    // Report…: a new issue on the gallery's repository, its form filled
+    // with the page and this pick.
+    let rec = egui_pop::api::links::RecordingOpener::default();
+    egui_pop::api::links::links(&app)
+        .unwrap()
+        .set_opener(std::sync::Arc::new(rec.clone()));
+    h.get_by_role_and_label(Role::Button, "Report…").click();
+    h.run();
+    h.run();
+    let records = rec.records();
+    assert_eq!(records.len(), 1, "{records:?}");
+    let url = &records[0].target;
+    assert!(
+        url.starts_with(
+            "https://github.com/quazardous/egui-pop/issues/new?template=bug.yml&title=Problem%20in%20Debug%20bridge%20%28story%20debug%29&version=egui-pop%20gallery%20"
+        ),
+        "{url}"
+    );
+    assert!(
+        url.contains("&page=Debug%20bridge%20%28story%20debug%29"),
+        "{url}"
+    );
+    assert!(
+        url.contains(
+            "&pick=Element%3A%20Button%20%22Announce%20%5C%22Saved%5C%22%22%20%28widget%29%0A"
+        ),
+        "{url}"
+    );
     // Pick another: the dialog goes, the mode is back.
     h.get_by_role_and_label(Role::Button, "Pick another")
         .click();

@@ -53,6 +53,8 @@ pub fn info() -> AppInfo {
         .website(SITE)
         .docs(DOCS)
         .issues(&format!("{REPOSITORY}/issues"))
+        // `.github/ISSUE_TEMPLATE/bug.yml`: Help > Report a problem fills it.
+        .issue_form("bug.yml")
         .icon(super::frame::logo_sized)
 }
 

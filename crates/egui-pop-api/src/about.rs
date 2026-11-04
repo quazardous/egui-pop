@@ -14,8 +14,14 @@
 //! `about.version` endpoint), else straight to the system clipboard.
 //!
 //! Commands: `about` (Help > About *application*; its title says
-//! `{ $application }`) and, for agents, `about.read` (the same as JSON,
-//! kept out of the palette).
+//! `{ $application }`), for agents `about.read` (the same as JSON, kept
+//! out of the palette), and `help.report` (Help > Report a problem, the
+//! palette, the inspect dialog's Report button, the About dialog's link):
+//! a new issue opened in the browser, prefilled with the version info,
+//! the platform, the page shown and the last inspect pick ([`report`]).
+//! `help.report` is declared only when the [`AppInfo`] says where issues
+//! go ([`AppInfo::issues`]): a library cannot know where an
+//! application's bugs belong, and a command leading nowhere is noise.
 //!
 //! ```
 //! use egui_pop_api::about::{ABOUT, AboutPlugin, AppInfo};
@@ -48,6 +54,8 @@ use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, PluginId};
 use serde_json::{Value as Json, json};
 
+pub mod report;
+
 use crate::app::{AppHandle, MENU_HELP};
 use crate::clipboard::{self, ClipSource, CopyRequest};
 use crate::dialogs::{Custom, DIALOGS};
@@ -66,6 +74,8 @@ pub const ABOUT: ServiceToken<About> = ServiceToken::new("egui_pop.about");
 pub const CMD_ABOUT: CommandId = CommandId::from_static("about");
 /// The same, as JSON, for agents.
 pub const CMD_ABOUT_READ: CommandId = CommandId::from_static("about.read");
+/// Help > Report a problem: a prefilled new issue, in the browser.
+pub const CMD_REPORT: CommandId = CommandId::from_static("help.report");
 
 /// The clipboard endpoint "Copy version info" copies from.
 pub const VERSION_ENDPOINT: &str = "about.version";
@@ -96,8 +106,14 @@ pub struct AppInfo {
     pub repository: Option<String>,
     pub website: Option<String>,
     pub docs: Option<String>,
-    /// Where to report a problem.
+    /// Where to report a problem: the issue list
+    /// (`https://github.com/owner/repo/issues`). Set, `help.report`
+    /// opens a new issue under it, prefilled.
     pub issues: Option<String>,
+    /// The repository's issue form `help.report` fills (`bug.yml`, in
+    /// `.github/ISSUE_TEMPLATE/`), its fields named as
+    /// [`report`]'s `FIELD_*`; without it, the report goes in the body.
+    pub issue_form: Option<String>,
     /// What draws the interface (`wgpu: Vulkan, llvmpipe`), for the
     /// version info; the host knows it.
     pub renderer: Option<String>,
@@ -117,6 +133,7 @@ impl fmt::Debug for AppInfo {
             .field("website", &self.website)
             .field("docs", &self.docs)
             .field("issues", &self.issues)
+            .field("issue_form", &self.issue_form)
             .field("renderer", &self.renderer)
             .field("icon", &self.icon.is_some())
             .finish()
@@ -163,8 +180,16 @@ impl AppInfo {
         self
     }
 
+    /// Where to report a problem: the issue list. It turns
+    /// `help.report` on.
     pub fn issues(mut self, url: &str) -> Self {
         self.issues = Some(url.into());
+        self
+    }
+
+    /// The issue form `help.report` fills (`bug.yml`).
+    pub fn issue_form(mut self, file: &str) -> Self {
+        self.issue_form = Some(file.into());
         self
     }
 
@@ -180,10 +205,15 @@ impl AppInfo {
     }
 
     /// Where the application runs: the operating system and the
-    /// architecture, or the web.
+    /// architecture, or the web with the browser and its operating
+    /// system, read from the user agent (`web (wasm32), Firefox 132 on
+    /// Linux`).
     pub fn platform() -> String {
         if cfg!(target_arch = "wasm32") {
-            "web (wasm32)".into()
+            match user_agent() {
+                Some(ua) => format!("web (wasm32), {}", report::describe_user_agent(&ua)),
+                None => "web (wasm32)".into(),
+            }
         } else {
             format!("{} {}", std::env::consts::OS, std::env::consts::ARCH)
         }
@@ -219,12 +249,25 @@ impl AppInfo {
                 "docs": self.docs,
                 "issues": self.issues,
             },
+            "issue_form": self.issue_form,
             "egui_pop": EGUI_POP_VERSION,
             "egui": EGUI_VERSION,
             "platform": Self::platform(),
             "renderer": self.renderer,
             "version_info": self.version_info(),
         })
+    }
+}
+
+/// The browser's user agent, on the web.
+fn user_agent() -> Option<String> {
+    #[cfg(all(target_arch = "wasm32", feature = "eframe"))]
+    {
+        eframe::web_sys::window().and_then(|w| w.navigator().user_agent().ok())
+    }
+    #[cfg(not(all(target_arch = "wasm32", feature = "eframe")))]
+    {
+        None
     }
 }
 
@@ -246,16 +289,43 @@ impl About {
     }
 }
 
-/// Help > About *application*, and `about.read` for agents.
-#[derive(Debug, Default)]
+/// Says which page or view is shown, for a report (`None`: it cannot).
+pub type PageFn = dyn Fn(&AppHandle) -> Option<String>;
+
+/// Help > About *application*, `about.read` for agents, and
+/// `help.report` when the info says where issues go.
+#[derive(Default)]
 pub struct AboutPlugin {
     info: AppInfo,
+    page: Option<Rc<PageFn>>,
+}
+
+impl fmt::Debug for AboutPlugin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AboutPlugin")
+            .field("info", &self.info)
+            .field("page", &self.page.is_some())
+            .finish()
+    }
 }
 
 impl AboutPlugin {
     pub fn new(info: AppInfo) -> Self {
-        Self { info }
+        Self { info, page: None }
     }
+
+    /// Says which page or view is shown, for `help.report`'s page field
+    /// and title.
+    pub fn page(mut self, f: impl Fn(&AppHandle) -> Option<String> + 'static) -> Self {
+        self.page = Some(Rc::new(f));
+        self
+    }
+}
+
+/// The page function, for [`report_of`].
+#[derive(Default)]
+struct Shared {
+    page: std::cell::RefCell<Option<Rc<PageFn>>>,
 }
 
 /// The version info, as the `about.version` endpoint copies it.
@@ -290,6 +360,19 @@ impl Plugin for AboutPlugin {
             },
         )?;
         ctx.clip_endpoint(VERSION_ENDPOINT, Some(Rc::new(VersionSource)), None);
+        *ctx.app().local::<Shared>().page.borrow_mut() = self.page.clone();
+        if self.info.issues.is_some() {
+            ctx.command(
+                CommandSpec::new(CMD_REPORT, "Report a problem", CAT)
+                    .description("Opens a new issue in the browser, prefilled with the version info, the platform, the page shown and the last element inspected.")
+                    .menu(MENU_HELP, "8_report", 0),
+                |call| {
+                    let url = report_url(call.app)?;
+                    open_report(call.app, &url.url)?;
+                    Ok(json!({ "url": url.url, "trimmed": url.trimmed }))
+                },
+            )?;
+        }
         ctx.command(
             CommandSpec::new(CMD_ABOUT, "About { $application }", CAT)
                 .description("The application's name, version, licence, authors and links, with its version info to copy.")
@@ -359,6 +442,69 @@ pub fn copy_version_info(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// What a report says: the version info, the platform, the page shown
+/// (when the application says it), the last inspect pick.
+pub fn report_of(app: &AppHandle) -> Result<report::Report, String> {
+    let about = app
+        .service(&ABOUT)
+        .ok_or("the about plugin is not connected")?;
+    let info = about.info();
+    let platform = AppInfo::platform();
+    let version: String = info
+        .version_info()
+        .lines()
+        .filter(|l| !l.starts_with("Platform: "))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    let page = app
+        .local::<Shared>()
+        .page
+        .borrow()
+        .clone()
+        .and_then(|f| f(app));
+    let title = match &page {
+        Some(p) => format!("Problem in {p}"),
+        None => format!("Problem in {}", info.name),
+    };
+    let pick = crate::devtools::inspect::last(app).map(|i| i.text());
+    Ok(report::Report {
+        title,
+        version,
+        platform,
+        page,
+        pick,
+    })
+}
+
+/// The new-issue URL `help.report` opens (it needs [`AboutPlugin`] with
+/// [`AppInfo::issues`]).
+pub fn report_url(app: &AppHandle) -> Result<report::IssueUrl, String> {
+    let about = app
+        .service(&ABOUT)
+        .ok_or("the about plugin is not connected")?;
+    let info = about.info();
+    let issues = info
+        .issues
+        .as_deref()
+        .ok_or("the application says nowhere to report issues")?;
+    Ok(report_of(app)?.url(issues, info.issue_form.as_deref()))
+}
+
+/// Opens the URL: through the links service when its plugin is
+/// connected (a new tab on the web, the system's browser on the
+/// desktop), else egui's `open_url`.
+fn open_report(app: &AppHandle, url: &str) -> Result<(), String> {
+    if crate::links::links(app).is_none() {
+        app.egui().open_url(egui::OpenUrl::new_tab(url));
+        return Ok(());
+    }
+    let label = strings::tr(&app.egui(), &txt::ABOUT_ISSUES);
+    match crate::links::open(app, egui_pop_model::links::Request::new(url).label(&label)) {
+        Outcome::Done(r) => r.map(|_| ()),
+        Outcome::Vetoed { by, reason } => Err(format!("vetoed by {by}: {reason}")),
+    }
+}
+
 fn link(ui: &mut Ui, label: &str, url: &Option<String>) {
     if let Some(url) = url {
         ui.hyperlink_to(label, url).on_hover_text(url);
@@ -418,7 +564,17 @@ pub fn show(ui: &mut Ui, app: &AppHandle, copied: bool) -> bool {
         );
         link(ui, &strings::tr(&ctx, &txt::ABOUT_WEBSITE), &info.website);
         link(ui, &strings::tr(&ctx, &txt::ABOUT_DOCS), &info.docs);
-        link(ui, &strings::tr(&ctx, &txt::ABOUT_ISSUES), &info.issues);
+        // Reporting goes through `help.report`, prefilled; the bare
+        // issue list only when the command is not there.
+        let issues = strings::tr(&ctx, &txt::ABOUT_ISSUES);
+        if app.command(&CMD_REPORT).is_some() {
+            let hover = info.issues.clone().unwrap_or_default();
+            if ui.link(&issues).on_hover_text(hover).clicked() {
+                app.run(CMD_REPORT, Json::Null);
+            }
+        } else {
+            link(ui, &issues, &info.issues);
+        }
     });
     ui.add_space(8.0);
     let mut now = false;

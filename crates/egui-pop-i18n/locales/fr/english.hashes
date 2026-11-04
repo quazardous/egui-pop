@@ -187,6 +187,8 @@ command-gesture-value-panel.description 2604dc7ad8cb0477
 command-gesture-value-panel.title c7e38b72093dbe31
 command-gesture-value-step.description 28dd8dd569518e78
 command-gesture-value-step.title 547562cb851b7b85
+command-help-report.description 5efdd9aa299ac6f8
+command-help-report.title 0f49e08b86c19aef
 command-history-drop-snapshot.description 991d59381651f3ad
 command-history-drop-snapshot.title c4b12f67ab2f2e07
 command-history-jump.description 01e45ff186f3b55c
@@ -638,6 +640,8 @@ egui-pop-inspect-copied 6a1af6540e3f5739
 egui-pop-inspect-copy 424486452ba52062
 egui-pop-inspect-hint 485c2b10a5a067f2
 egui-pop-inspect-pick-another 1e2626e2d33f00ab
+egui-pop-inspect-report 2bafbeac87801785
+egui-pop-inspect-report-hover f67d2a1d789e60ca
 egui-pop-inspect-title ede4415ccaba9928
 egui-pop-job-action-name 853d74aaa6f6d374
 egui-pop-job-asked d7bce35f00506b13

@@ -230,7 +230,7 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::fonts::FontsPage)
         .plugin(egui_pop::api::tips::TipsPlugin)
         .plugin(pages::tips::TipsPage)
-        .plugin(egui_pop::api::about::AboutPlugin::new(pages::about::info()))
+        .plugin(egui_pop::api::about::AboutPlugin::new(pages::about::info()).page(shell::report_page))
         .plugin(pages::about::AboutPage)
         .plugin(PagePlugin {
             plugin: PluginId::from_static("gallery.placeholders"),

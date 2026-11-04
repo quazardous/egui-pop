@@ -16,7 +16,9 @@
 //! Copy puts a readable text block on the clipboard (the plain-text
 //! fallback) with its JSON form (`application/x-egui-pop.inspect+json`),
 //! through the clipboard's `clipboard.copy` step when its plugin is
-//! connected. The last pick is the `inspect` collector's snapshot.
+//! connected. Report… (when the application declares `help.report`, see
+//! [`crate::about`]) opens a new issue prefilled with the pick. The last
+//! pick is the `inspect` collector's snapshot.
 
 use std::cell::RefCell;
 use std::fmt;
@@ -449,6 +451,16 @@ fn body(ui: &mut Ui, app: &AppHandle, pass: &mut crate::dialogs::CustomPass) {
                 "inspect.copy_failed",
                 json!({ "error": e }),
             );
+        }
+        // Report: a new issue with this pick, when the application says
+        // where issues go (`help.report`).
+        if app.command(&crate::about::CMD_REPORT).is_some()
+            && ui
+                .button(strings::tr(&ctx, &txt::INSPECT_REPORT))
+                .on_hover_text(strings::tr(&ctx, &txt::INSPECT_REPORT_HOVER))
+                .clicked()
+        {
+            app.run(crate::about::CMD_REPORT, Json::Null);
         }
         if ui
             .button(strings::tr(&ctx, &txt::INSPECT_PICK_ANOTHER))
