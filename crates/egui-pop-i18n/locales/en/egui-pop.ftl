@@ -2157,6 +2157,10 @@ egui-pop-views-viewer-embed-own-window = This video plays in a window of its own
 
 egui-pop-views-viewer-embed-show = Show the video
 
+egui-pop-views-viewer-embed-too-small = The panel is too small for YouTube's player
+
+egui-pop-views-viewer-embed-too-small-detail = YouTube's player needs at least { $min } by { $min } pixels; here it would get { $width } by { $height }. Enlarge the panel, or open the video outside.
+
 egui-pop-views-viewer-empty = Nothing is open. Help pages and images open here.
 
 egui-pop-views-viewer-find = Find in page

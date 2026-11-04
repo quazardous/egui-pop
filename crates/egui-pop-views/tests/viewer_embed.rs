@@ -1,7 +1,8 @@
 //! The viewer's YouTube page over a pretend web view, so these run in every
 //! build: what the links policy sends there, what the web view is asked to
-//! load and where, its loop turned, the links it hands back, when it closes,
-//! and the error page (ADR 0017).
+//! load and where, the `Referer` naming the application, the player's minimum
+//! size, its loop turned, the links it hands back, when it closes, and the
+//! error page (ADR 0017).
 
 #![cfg(feature = "markdown")]
 
@@ -14,12 +15,15 @@ use egui_pop_api::links::{self, How, LinksPlugin, RecordingOpener, Request};
 use egui_pop_api::{App, AppHandle};
 use egui_pop_model::commands::Origin;
 use egui_pop_views::viewer::{
-    DEFAULT_REFERRER, Docs, EmbedBackend, EmbedRequest, Embedded, PANEL, Placement, VIEWER, Viewer,
-    ViewerPlugin, embed_url,
+    Docs, EmbedBackend, EmbedRequest, Embedded, MIN_PLAYER, PANEL, Placement, VIEWER, Viewer,
+    ViewerPlugin, embed_url, fits_player, referrer_for,
 };
 use serde_json::Value;
 
 const VIDEO: &str = "https://www.youtube.com/watch?v=5TGDf7crzXI";
+/// The tests' application id, and the `Referer` built from it.
+const APP_ID: &str = "org.example.Viewer";
+const REFERRER: &str = "https://org.example.viewer/";
 
 /// What the pretend web view was asked, and what it answers.
 #[derive(Default)]
@@ -31,6 +35,9 @@ struct Log {
     links: Vec<String>,
     closed: bool,
     own_window: bool,
+    /// Its web views sit over the panel (as a child on X11), so the panel's
+    /// size is the player's.
+    in_panel: bool,
     /// `open` answers this.
     refuse: Option<String>,
     /// `pump` answers this.
@@ -84,6 +91,10 @@ impl EmbedBackend for Pretend {
         "pretend"
     }
 
+    fn in_panel(&self, _: &Placement) -> bool {
+        self.log().in_panel
+    }
+
     fn open(&self, request: &EmbedRequest) -> Result<Box<dyn Embedded>, String> {
         let mut log = self.log();
         if let Some(e) = &log.refuse {
@@ -102,6 +113,7 @@ fn plugins(pretend: Option<&Pretend>) -> egui_pop_api::AppBuilder {
         None => viewer,
     };
     App::builder()
+        .app_id(APP_ID)
         .plugin(DialogsPlugin)
         .plugin(LinksPlugin::default())
         .plugin(viewer)
@@ -115,16 +127,18 @@ type Shown<'a> = Harness<'a, Option<App>>;
 
 /// The application in a window of its own, the video open in its viewer.
 fn shown<'a>(pretend: &Pretend, target: &str) -> Shown<'a> {
+    shown_at(pretend, target, egui::vec2(1000.0, 640.0))
+}
+
+fn shown_at<'a>(pretend: &Pretend, target: &str, size: egui::Vec2) -> Shown<'a> {
     let p = pretend.clone();
-    let mut h = Harness::builder()
-        .with_size(egui::vec2(1000.0, 640.0))
-        .build_ui_state(
-            move |ui, app: &mut Option<App>| {
-                let app = app.get_or_insert_with(|| plugins(Some(&p)).build(ui.ctx()).unwrap());
-                app.show(ui);
-            },
-            None,
-        );
+    let mut h = Harness::builder().with_size(size).build_ui_state(
+        move |ui, app: &mut Option<App>| {
+            let app = app.get_or_insert_with(|| plugins(Some(&p)).build(ui.ctx()).unwrap());
+            app.show(ui);
+        },
+        None,
+    );
     h.run_steps(2);
     let app = handle(&h);
     links::open(&app, Request::new(target));
@@ -163,7 +177,8 @@ fn a_youtube_link_plays_in_the_viewer_when_it_has_a_web_view() {
         r.url
             .starts_with("https://www.youtube-nocookie.com/embed/5TGDf7crzXI?")
     );
-    assert_eq!(r.referrer, DEFAULT_REFERRER);
+    // The application named, as YouTube's terms ask.
+    assert_eq!(r.referrer, REFERRER);
     // No X11 window in a test: a window of its own.
     assert_eq!(r.place.parent_x11, None);
     assert!(r.place.rect.width() > 100.0, "{:?}", r.place.rect);
@@ -173,9 +188,61 @@ fn a_youtube_link_plays_in_the_viewer_when_it_has_a_web_view() {
 }
 
 #[test]
-fn the_referrer_is_the_applications_own() {
+fn the_referrer_is_built_from_the_application_id() {
+    assert_eq!(referrer_for(APP_ID).as_deref(), Some(REFERRER));
+    assert_eq!(
+        referrer_for(" org.egui_pop.Gallery ").as_deref(),
+        Some("https://org.egui_pop.gallery/")
+    );
+    for bad in [
+        "",
+        "  ",
+        "org example",
+        "org..example",
+        ".org",
+        "org/x",
+        "org:1",
+    ] {
+        assert_eq!(referrer_for(bad), None, "`{bad}`");
+    }
     let pretend = Pretend::default();
     let app = App::builder()
+        .app_id(APP_ID)
+        .plugin(LinksPlugin::default())
+        .plugin(ViewerPlugin::default().web_video(Arc::new(pretend.clone())))
+        .build(&egui::Context::default())
+        .unwrap();
+    assert_eq!(app.handle().app_id(), APP_ID);
+    links::open(app.handle(), Request::new(VIDEO));
+    assert_eq!(
+        viewer_of(app.handle()).state()["embed"]["referrer"],
+        REFERRER
+    );
+}
+
+#[test]
+fn without_an_application_id_youtube_opens_outside() {
+    let pretend = Pretend::default();
+    let app = App::builder()
+        .plugin(LinksPlugin::default())
+        .plugin(ViewerPlugin::default().web_video(Arc::new(pretend.clone())))
+        .build(&egui::Context::default())
+        .unwrap();
+    let h = app.handle();
+    assert!(!viewer_of(h).plays_web_video());
+    let rec = RecordingOpener::default();
+    links::links(h).unwrap().set_opener(Arc::new(rec.clone()));
+    links::open(h, Request::new(VIDEO));
+    assert_eq!(rec.records().len(), 1);
+    assert_eq!(rec.records()[0].how, How::Outside);
+    assert!(pretend.log().opened.is_empty());
+}
+
+#[test]
+fn the_application_may_give_its_own_referrer() {
+    let pretend = Pretend::default();
+    let app = App::builder()
+        .app_id(APP_ID)
         .plugin(LinksPlugin::default())
         .plugin(
             ViewerPlugin::default()
@@ -217,6 +284,80 @@ fn without_a_web_view_youtube_and_other_videos_open_outside() {
         }
         assert_eq!(viewer_of(h).state()["status"], "empty");
     }
+}
+
+#[test]
+fn the_minimum_is_200_by_200_of_the_web_views_pixels() {
+    assert_eq!(MIN_PLAYER, 200.0);
+    let fits = |w, h, scale| fits_player(egui::vec2(w, h), scale);
+    assert!(fits(200.0, 200.0, 1.0));
+    assert!(!fits(199.0, 400.0, 1.0));
+    assert!(!fits(400.0, 199.0, 1.0));
+    // On a 2x screen the web view's 200 pixels are 400 physical ones.
+    assert!(!fits(300.0, 300.0, 2.0));
+    assert!(fits(400.0, 400.0, 2.0));
+    // A scale below 1 never lowers the physical minimum.
+    assert!(!fits(150.0, 150.0, 0.5));
+}
+
+#[test]
+fn a_panel_too_small_shows_the_card_and_the_player_comes_back_when_it_grows() {
+    let pretend = Pretend::default();
+    pretend.log().in_panel = true;
+    // Too low a window for the player's 200 pixels.
+    let mut h = shown_at(&pretend, VIDEO, egui::vec2(1000.0, 180.0));
+    assert!(pretend.log().opened.is_empty(), "no web view");
+    assert_eq!(embed(&h)["too_small"], true);
+    assert!(
+        h.query_all_by_value("The panel is too small for YouTube's player")
+            .next()
+            .is_some()
+    );
+    assert!(h.query_all_by_label("Open outside").next().is_some());
+    // Large enough again: the web view opens, at least 200 by 200.
+    h.set_size(egui::vec2(1000.0, 640.0));
+    h.run_steps(4);
+    assert_eq!(embed(&h)["too_small"], false);
+    {
+        let log = pretend.log();
+        assert_eq!(log.opened.len(), 1);
+        let r = log.opened[0].place.rect;
+        assert!(r.width() >= MIN_PLAYER && r.height() >= MIN_PLAYER, "{r:?}");
+    }
+    // Smaller again: closed, the card back.
+    h.set_size(egui::vec2(1000.0, 180.0));
+    h.run_steps(4);
+    assert_eq!(pretend.log().open, 0);
+    assert_eq!(embed(&h)["too_small"], true);
+}
+
+#[test]
+fn the_card_opens_the_video_outside() {
+    let pretend = Pretend::default();
+    pretend.log().in_panel = true;
+    // Too low for the player, high enough for the card's button.
+    let mut h = shown_at(&pretend, VIDEO, egui::vec2(1000.0, 240.0));
+    assert_eq!(embed(&h)["too_small"], true);
+    let rec = RecordingOpener::default();
+    links::links(&handle(&h))
+        .unwrap()
+        .set_opener(Arc::new(rec.clone()));
+    links::links(&handle(&h)).unwrap().trust("www.youtube.com");
+    // The card's button, after the toolbar's.
+    h.query_all_by_label("Open outside").last().unwrap().click();
+    h.run_steps(3);
+    let r = rec.records();
+    assert_eq!(r.len(), 1, "{r:?}");
+    assert_eq!((r[0].target.as_str(), r[0].how), (VIDEO, How::Outside));
+}
+
+#[test]
+fn a_window_of_its_own_does_not_hang_on_the_panels_size() {
+    // Its own window keeps itself at the minimum (the backend's part).
+    let pretend = Pretend::default();
+    let h = shown_at(&pretend, VIDEO, egui::vec2(1000.0, 180.0));
+    assert_eq!(pretend.log().opened.len(), 1);
+    assert_eq!(embed(&h)["too_small"], false);
 }
 
 #[test]

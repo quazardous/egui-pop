@@ -198,6 +198,17 @@ pub const VIEWER_EMBED_OWN_WINDOW: StrKey = StrKey::new(
 /// A YouTube page's button, once its own window was closed.
 pub const VIEWER_EMBED_SHOW: StrKey =
     StrKey::new("egui-pop-views-viewer-embed-show", "Show the video");
+/// The card in place of YouTube's player when the panel is smaller than the
+/// player's minimum.
+pub const VIEWER_EMBED_TOO_SMALL: StrKey = StrKey::new(
+    "egui-pop-views-viewer-embed-too-small",
+    "The panel is too small for YouTube's player",
+);
+/// The card's reason: the minimum and the panel's size, in pixels.
+pub const VIEWER_EMBED_TOO_SMALL_DETAIL: StrKey = StrKey::new(
+    "egui-pop-views-viewer-embed-too-small-detail",
+    "YouTube's player needs at least { $min } by { $min } pixels; here it would get { $width } by { $height }. Enlarge the panel, or open the video outside.",
+);
 /// The title of the error page of a video that cannot be played, and of a
 /// `Video` widget's failure.
 pub const VIEWER_VIDEO_FAILED: StrKey = StrKey::new(
@@ -297,6 +308,8 @@ pub const ALL: &[StrKey] = &[
     VIDEO_NO_PLAYER,
     VIEWER_EMBED_OWN_WINDOW,
     VIEWER_EMBED_SHOW,
+    VIEWER_EMBED_TOO_SMALL,
+    VIEWER_EMBED_TOO_SMALL_DETAIL,
 ];
 
 #[cfg(test)]

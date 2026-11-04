@@ -323,7 +323,9 @@ fn body(ui: &mut Ui, app: &AppHandle, v: &Viewer, actions: &mut Vec<Action>) {
             });
         }
         Status::Shown(page) if matches!(page.content, Content::YouTube(_)) => {
-            embed::draw(ui, app, v);
+            if embed::draw(ui, app, v) {
+                actions.push(Action::OpenOutside);
+            }
         }
         Status::Shown(page) if matches!(page.content, Content::Video(_)) => {
             if let Some((target, detail)) = video::draw(ui, app, v) {

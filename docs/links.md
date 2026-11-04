@@ -369,11 +369,36 @@ before. Other remote video stays outside either way.
 
 - **What loads**: YouTube's privacy-enhanced player,
   `https://www.youtube-nocookie.com/embed/<id>`, as the web view's page, its
-  request carrying a `Referer`: YouTube's player refuses to play without one
-  (its error 153). `ViewerPlugin::embed_referrer` sets it, the application's own
-  site ideally; `viewer::DEFAULT_REFERRER` (`https://localhost/`) otherwise.
+  request carrying a `Referer` that names the application: YouTube's player
+  refuses to play without one (its error 153), and YouTube's
+  [Required Minimum Functionality](https://developers.google.com/youtube/terms/required-minimum-functionality)
+  asks a desktop application to set it as a header, to an `https` URL whose
+  domain is the application's id. It is built from `AppBuilder::app_id`
+  (reverse-DNS, `org.example.App`; `run_native` takes the window's
+  `ViewportBuilder::with_app_id` when none is given) as `https://<app id>/`,
+  lowercased (`viewer::referrer_for`); `ViewerPlugin::embed_referrer`
+  replaces it. Without either, YouTube links open outside and a warning is
+  logged. The gallery sends `https://org.egui_pop.gallery/` (its id
+  `org.egui_pop.Gallery`). No `origin` or `widget_referrer` player parameter
+  is sent: `origin` goes with the IFrame API (`enablejsapi=1`), which the
+  page does not use, and `widget_referrer` names a page a widget is embedded
+  in, which there is not
+  ([player parameters](https://developers.google.com/youtube/player_parameters)).
   Nothing else loads in the web view: a link the player follows (its title,
   "Watch on YouTube") is opened outside through the links service, as content.
+- **Its size**: the player gets at least 200 by 200 of the web view's
+  pixels (`viewer::MIN_PLAYER`), YouTube's minimum: its place in the panel is
+  16:9 and at least 200 tall when the panel allows. Over a panel too small
+  for that, the web view is closed and a card says why, with **Open
+  outside**; it opens again, from the start, when the panel grows. The web
+  view's pixels are the window's physical pixels divided by the system's
+  scale: on a 2x screen the panel needs 400 physical pixels each way
+  (`viewer::fits_player`). Its own window cannot be made smaller than 200 by
+  200.
+- **Nothing over the player**: the page draws only a background and a word
+  under the web view, which covers them; no control, badge or popup of
+  egui-pop's is drawn on the player (egui's popups could not be anyway: the
+  web view is a native window above egui).
 - **Where**: on X11 (or Xwayland), with the panel in the main window, the web
   view is a child window over the panel, following it as it moves and resizes.
   On Wayland, or with the panel detached, it opens in a window of its own (wry's
@@ -397,7 +422,26 @@ before. Other remote video stays outside either way.
   allows it as a narrow exception for that crate alone (ADR 0017).
 - **Failures** (WebKitGTK cannot start, the web view cannot open) end on the
   error page, with **Retry**, **Open outside** and **Copy link**.
-- `viewer::EmbedBackend` (`ViewerPlugin::web_video`) replaces the web view.
+- `viewer::EmbedBackend` (`ViewerPlugin::web_video`) replaces the web view;
+  its `in_panel` says whether a web view sits over the panel (whose size is
+  then checked) or in a window of its own (which it keeps at the minimum).
+
+#### Terms
+
+YouTube allows its videos in an application through its own embedded player
+only ([YouTube Terms of Service](https://www.youtube.com/static?template=terms),
+[API Services Terms](https://developers.google.com/youtube/terms/api-services-terms-of-service),
+[Developer Policies](https://developers.google.com/youtube/terms/developer-policies)).
+That is all this page does: the official player, unmodified, loaded from
+YouTube, its links opened outside. Extracting the stream to play it in another
+player, downloading or caching it, or drawing over the player is ruled out, and
+egui-pop will not do it. The page follows the Required Minimum Functionality
+egui-pop controls (the `Referer` naming the application, the 200 by 200
+minimum, nothing over the player, one player, playing only once shown). An
+application turning `webview` on accepts YouTube's terms for itself, and owns
+what they ask of it beyond egui-pop: an application id that is really its own,
+and being able to be updated remotely (Developer Policies III.B.1), which is its
+packaging's part.
 
 The `viewer` collector of the debug bridge shows the same state;
 `viewer.shown` and `viewer.failed` go on the journal. The lint checks
