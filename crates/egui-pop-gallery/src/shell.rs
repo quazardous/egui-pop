@@ -1,5 +1,5 @@
 //! The gallery's shell plugin: the page list in the side bar (a tree, its
-//! groups foldable), the page in the main zone, its playground in the inspector, the theme switchers in
+//! groups foldable, a filter field above it), the page in the main zone, its playground in the inspector, the theme switchers in
 //! the top bar, and commands to move between pages.
 
 use std::sync::Mutex;
@@ -18,7 +18,7 @@ use egui_pop::model::ids::{BlockId, CommandId, PluginId, StoryId};
 use egui_pop::prelude::{Block, ServiceToken, zones};
 use egui_pop::theme::{self, Density, Tokens};
 use egui_pop::views::Mode;
-use egui_pop::views::tree::{Node, Signal, Sink, TreeSource, TreeState, TreeView};
+use egui_pop::views::tree::{FilterField, Node, Signal, Sink, TreeSource, TreeState, TreeView};
 use serde_json::{Value as Json, json};
 
 use crate::{PAGES, TITLE};
@@ -368,9 +368,10 @@ fn groups(stories: &[StoryInfo]) -> Vec<&str> {
 /// The list of pages as a tree: the groups and their pages, known at once.
 struct PageTree<'a>(&'a [StoryInfo]);
 
-impl TreeSource<String> for PageTree<'_> {
-    fn load(&self, parent: Option<&String>, sink: Sink<String>) {
-        sink.deliver(match parent {
+impl PageTree<'_> {
+    /// A branch's children: the groups, or a group's pages.
+    fn children(&self, parent: Option<&String>) -> Vec<Node<String>> {
+        match parent {
             None => groups(self.0)
                 .into_iter()
                 .map(|g| Node::branch(group_key(g), g))
@@ -381,7 +382,21 @@ impl TreeSource<String> for PageTree<'_> {
                 .filter(|s| group_key(&s.group) == *group)
                 .map(|s| Node::leaf(page_key(&s.id), &s.title))
                 .collect(),
-        });
+        }
+    }
+}
+
+impl TreeSource<String> for PageTree<'_> {
+    fn load(&self, parent: Option<&String>, sink: Sink<String>) {
+        sink.deliver(self.children(parent));
+    }
+
+    /// A page is found by its title, its description and its group.
+    fn match_text(&self, node: &Node<String>) -> String {
+        match self.0.iter().find(|s| page_key(&s.id) == node.key) {
+            Some(s) => format!("{} {} {}", s.title, s.description, s.group),
+            None => node.name().to_string(),
+        }
     }
 }
 
@@ -421,6 +436,14 @@ fn pages(ui: &mut Ui, app: &AppHandle) {
         for g in groups(&stories) {
             list.set_expanded(&group_key(g), !folded.iter().any(|f| f == g));
         }
+        // Every page at once, folded groups' too: the filter finds them.
+        let tree = PageTree(&stories);
+        let handle = list.handle();
+        handle.set_children(None, Ok(tree.children(None)));
+        for g in groups(&stories) {
+            let key = group_key(g);
+            handle.set_children(Some(key.clone()), Ok(tree.children(Some(&key))));
+        }
     }
     if bring_into_view {
         let page = nav.page();
@@ -440,6 +463,9 @@ fn pages(ui: &mut Ui, app: &AppHandle) {
         .scoped(Stock::ScrollBar, Tone::Neutral, |ui| {
             // The side bar is narrow: the two levels indent little.
             ui.spacing_mut().indent = t.space.m;
+            FilterField::new("gallery.pages")
+                .hint("Filter pages")
+                .show(ui, &mut list);
             TreeView::new("gallery.pages")
                 .label("Pages")
                 .mode(Mode::None)
