@@ -82,8 +82,10 @@ struct Keep {
     asked: Option<bool>,
     /// Tab is to go on from the place in the next pass, Shift or not.
     going: Option<bool>,
-    /// The widget given the focus back this pass, for Tab to go on from.
+    /// The widget given the focus back this pass, for Tab to go on from, and
+    /// whether Tab goes back.
     anchor: Option<Id>,
+    anchor_back: bool,
     scrolled_at: Option<u64>,
     /// When Tab was last pressed, and whether Shift was held.
     tabbed: Option<(u64, bool)>,
@@ -128,6 +130,7 @@ pub(crate) fn begin_pass(ctx: &Context) {
             m.move_focus(direction(back));
         });
         s.anchor = Some(id);
+        s.anchor_back = back;
         return;
     }
     if focused.is_some() {
@@ -150,6 +153,14 @@ pub(crate) fn begin_pass(ctx: &Context) {
         ctx.memory_mut(|m| m.move_focus(FocusDirection::None));
         s.asked = Some(back);
     }
+}
+
+/// The widget this pass gave the focus back for Tab to go on from, and whether
+/// Tab goes back: a roving group moves it to its end.
+pub(crate) fn going_on_from(ctx: &Context) -> Option<(Id, bool)> {
+    let st = shared_in_window::<Keep>(ctx, "core.focus.place");
+    let s = lock(&st);
+    s.anchor.map(|a| (a, s.anchor_back))
 }
 
 /// Remembers what holds the focus, or hands it on. Runs after the widgets are

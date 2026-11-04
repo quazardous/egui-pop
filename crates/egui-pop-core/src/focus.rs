@@ -738,6 +738,7 @@ impl egui::plugin::Plugin for FocusPlugin {
         crate::stay::begin_pass(ui.ctx());
         crate::reveal::begin_pass(ui.ctx());
         crate::place::begin_pass(ui.ctx());
+        crate::roving::begin_pass(ui.ctx());
     }
 
     fn on_end_pass(&mut self, ui: &mut Ui) {

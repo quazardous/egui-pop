@@ -74,6 +74,18 @@ toolbar smaller; titles use the button text style. The kit's
 `icon-button`: a fill under the pointer and while pressed, the frame
 while on, the muted text colour when disabled.
 
+## The keyboard
+
+A toolbar is one Tab stop ([a roving group](inputs.md#a-roving-group-is-one-stop)),
+as in Office, VS Code and ARIA's toolbar pattern:
+
+| Key | What it does |
+|---|---|
+| Tab, Shift+Tab | Into the toolbar, on the tool focused there last (the first the first time); from any tool, out of it |
+| Left, Right (a column: Up, Down) | The tool before or after, round from one end to the other; a greyed tool is passed over |
+| Home, End | The first tool, the last |
+| Enter, Space | Runs the tool, opens a submenu or More tools |
+
 ## What agents read
 
 `toolbars::layout(app, &menu)` (the `toolbars` debug collector, by menu
@@ -97,5 +109,3 @@ list.
   way for the user to customise a toolbar's tools.
 - Split buttons (an action and a menu of its variants) and tools that
   are not commands (a field, a zoom box).
-- Keyboard navigation along a toolbar with the arrow keys (Tab goes
-  through its buttons today).

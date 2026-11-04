@@ -19,6 +19,8 @@
 //!   the toolbar is first drawn and again when the context changes.
 //! - The tools that do not fit go, from the end, into a "More tools"
 //!   button ([`Glyph::More`]) opening them as a menu.
+//! - The toolbar is one Tab stop ([`tab::roving`]): the arrows along it go
+//!   from tool to tool, and Tab coming back lands on the tool focused last.
 //!
 //! Sizes come from the theme: the icon is `size.icon.toolbar`, padded by
 //! `space.xs`, so the density moves them. What each toolbar drew last is
@@ -52,6 +54,7 @@ use egui_pop_core::kit::{Glyph, Kit, KitCx, Part, State};
 use egui_pop_core::progress::paint_spinner;
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
+use egui_pop_core::tab::{self, Axis};
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::ids::{CommandId, MenuId};
 use egui_pop_model::menus::{Item, Shown, show_items};
@@ -294,21 +297,30 @@ impl<'a> Toolbar<'a> {
         } else {
             Layout::left_to_right(Align::Center)
         };
-        ui.with_layout(layout, |ui| {
-            ui.spacing_mut().item_spacing = vec2(m.gap, m.gap);
-            for tool in &tools[..shown_until] {
-                let size = match (tool.trace.kind, vertical) {
-                    (ToolKind::Separator, true) => vec2(column, m.separator),
-                    (ToolKind::Separator, false) => vec2(m.separator, m.height),
-                    (_, true) => vec2(column, m.height),
-                    (_, false) => vec2(tool.width, m.height),
-                };
-                self.tool(ui, &m, &font, &cx, tool, size);
-            }
-            if !overflow.is_empty() {
-                let rows: Vec<Shown> = overflow.iter().map(|&i| tools[i].row()).collect();
-                self.more(ui, &m, &cx, rows, if vertical { column } else { m.height });
-            }
+        // One Tab stop, the arrows along it (ARIA's toolbar).
+        let axis = if vertical {
+            Axis::Vertical
+        } else {
+            Axis::Horizontal
+        };
+        let group = format!("toolbar:{}:{:?}", self.menu, ui.scope_id());
+        tab::roving(ui, &group, axis, |ui| {
+            ui.with_layout(layout, |ui| {
+                ui.spacing_mut().item_spacing = vec2(m.gap, m.gap);
+                for tool in &tools[..shown_until] {
+                    let size = match (tool.trace.kind, vertical) {
+                        (ToolKind::Separator, true) => vec2(column, m.separator),
+                        (ToolKind::Separator, false) => vec2(m.separator, m.height),
+                        (_, true) => vec2(column, m.height),
+                        (_, false) => vec2(tool.width, m.height),
+                    };
+                    self.tool(ui, &m, &font, &cx, tool, size);
+                }
+                if !overflow.is_empty() {
+                    let rows: Vec<Shown> = overflow.iter().map(|&i| tools[i].row()).collect();
+                    self.more(ui, &m, &cx, rows, if vertical { column } else { m.height });
+                }
+            })
         });
         let out = ToolbarLayout {
             menu: self.menu.clone(),
