@@ -876,7 +876,7 @@ fn a_title_that_drags_moves_under_the_pointer_and_a_press_that_does_not_folds() 
     assert!((now[1].band.top() - start[1].band.top() - 30.0).abs() < 1.0);
     assert!((now[0].height - start[0].height - 30.0).abs() < 1.0);
     assert!((now[1].height - start[1].height + 30.0).abs() < 1.0);
-    assert_eq!(now[0].drag, Some(egui_pop_model::sections::DragMode::Push));
+    assert_eq!(now[0].drag, Some(egui_pop_core::sections::DragMode::Push));
     // Up in the same drag: the title under the pointer, no drift.
     h.hover_at(from + egui::vec2(0.0, -30.0));
     h.run();
@@ -1102,7 +1102,7 @@ const PULL: egui::Modifiers = egui::Modifiers::COMMAND;
 
 #[test]
 fn a_pull_moves_the_block_below_and_opens_empty_room() {
-    use egui_pop_model::sections::DragMode;
+    use egui_pop_core::sections::DragMode;
     let mut h = options(600.0, false, false);
     h.run();
     let start = heights(&h);
@@ -1197,7 +1197,7 @@ fn a_double_click_on_a_boundary_clears_the_empty_room_too() {
 
 #[test]
 fn pressing_or_releasing_the_key_in_a_drag_changes_the_mode_with_no_jump() {
-    use egui_pop_model::sections::DragMode;
+    use egui_pop_core::sections::DragMode;
     for grab in [false, true] {
         let mut h = options(600.0, grab, false);
         h.run();

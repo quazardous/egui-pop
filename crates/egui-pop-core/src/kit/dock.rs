@@ -1,15 +1,20 @@
 //! The kit paints egui_stack's docks: its tabs (`tab`), tab bars
 //! (`tab-bar`), separators (`splitter`) and drop overlay
-//! (`dock-preview`, its buttons `button`). egui_stack lays them out and
-//! takes their input.
+//! (`dock-preview`, its buttons `button`); and its section stacks
+//! ([`crate::sections`]): their bands (`section-band`, the mark
+//! `section-disclosure`, the count `section-count`) and the focus ring of
+//! their boundaries. egui_stack lays them out and takes their input.
 
-use egui::{Painter, Rect, vec2};
+use egui::{Color32, FontFamily, FontId, Painter, Rect, pos2, vec2};
 use egui_stack::{
-    DockPainter, DropButtonPaint, DropPaint, DropTargetPaint, PartState, SeparatorAxis,
-    SeparatorPaint, Split, TabBarPaint, TabBarTailPaint, TabMeasure, TabPaint,
+    DockPainter, DropButtonPaint, DropPaint, DropTargetPaint, PartState, SectionBandPaint,
+    SectionBoundaryPaint, SeparatorAxis, SeparatorPaint, Split, TabBarPaint, TabBarTailPaint,
+    TabMeasure, TabPaint,
 };
 
-use super::{Kit, KitCx, Part, State};
+use super::{Corners, Glyph, Kit, KitCx, Part, State, paint_ring};
+use crate::indicator;
+use crate::theme::{TextRole, Tokens};
 
 /// The kit's state for egui_stack's flags (`DRAGGED` and `LEAF_FOCUSED`
 /// have no kit state).
@@ -152,6 +157,133 @@ impl DockPainter for Kit {
                 label,
             },
         );
+    }
+
+    fn section_band(&self, painter: &Painter, band: &SectionBandPaint<'_>) {
+        let cx = cx(painter);
+        let ctx = painter.ctx();
+        let tokens = Tokens::of(ctx);
+        if band.state.contains(PartState::FOCUSED) {
+            // The band shows its focus itself, as any kit part does.
+            crate::ring::own(ctx, band.id);
+        }
+        let state = state(band.state);
+        let rect = band.rect;
+        let data = &self.section_band.data;
+        let gap = tokens.space.inline;
+        self.section_band.paint(
+            &cx,
+            &Part {
+                rect,
+                room: rect,
+                state,
+                label: None,
+            },
+        );
+
+        // The disclosure mark at the start.
+        let mark = &self.section_disclosure;
+        let side = if mark.data.width > 0.0 {
+            mark.data.width
+        } else {
+            10.0
+        };
+        let mark_rect = Rect::from_center_size(
+            pos2(rect.left() + data.padding_x + side / 2.0, rect.center().y),
+            vec2(side, side),
+        );
+        let mark_part = Part {
+            rect: mark_rect,
+            room: mark_rect,
+            state,
+            label: None,
+        };
+        mark.paint(&cx, &mark_part);
+        let glyph = if band.open {
+            Glyph::DisclosureOpen
+        } else {
+            Glyph::DisclosureClosed
+        };
+        self.glyph(glyph)
+            .paint(painter, mark_rect, mark.style(state).text);
+
+        // The count at the end.
+        let mut end = rect.right() - data.padding_x;
+        if let Some(n) = band.count {
+            let count = &self.section_count;
+            let size = if count.data.font_size > 0.0 {
+                count.data.font_size
+            } else {
+                tokens.font.small
+            };
+            let galley = painter.layout_no_wrap(
+                indicator::badge_text(n, indicator::CAP),
+                FontId::proportional(size),
+                Color32::PLACEHOLDER,
+            );
+            let measured = count.measure(galley.size());
+            let pill = Rect::from_min_size(
+                pos2(end - measured.x, rect.center().y - measured.y / 2.0),
+                measured,
+            );
+            count.paint_part(
+                &cx,
+                &Part {
+                    rect: pill,
+                    room: pill,
+                    state: State::REST,
+                    label: Some(&galley),
+                },
+            );
+            end = pill.left() - gap;
+        }
+
+        // The title between them, clipped to its room.
+        let role = tokens.text_role.get(TextRole::Section);
+        let size = if data.font_size > 0.0 {
+            data.font_size
+        } else {
+            role.size
+        };
+        let family = crate::ui::role_family(ctx, role.weight).unwrap_or(FontFamily::Proportional);
+        let galley = painter.layout_no_wrap(
+            band.title.to_owned(),
+            FontId::new(size, family),
+            Color32::PLACEHOLDER,
+        );
+        // The label's room, less the padding `paint_label` takes off.
+        let start = mark_rect.right() + gap - data.padding_x;
+        let room = Rect::from_x_y_ranges(start..=(end + data.padding_x).max(start), rect.y_range());
+        let clipped = painter.with_clip_rect(
+            Rect::from_x_y_ranges(
+                mark_rect.right()..=end.max(mark_rect.right()),
+                rect.y_range(),
+            )
+            .intersect(painter.clip_rect()),
+        );
+        self.section_band.paint_label(
+            &KitCx {
+                painter: &clipped,
+                ppp: cx.ppp,
+            },
+            &Part {
+                rect,
+                room,
+                state,
+                label: Some(&galley),
+            },
+        );
+    }
+
+    fn section_boundary(&self, painter: &Painter, boundary: &SectionBoundaryPaint<'_>) {
+        // Nothing at rest nor under the pointer: the bands' own lines part
+        // the sections. The focus shows as the band's ring, over the line.
+        if !boundary.state.contains(PartState::FOCUSED) {
+            return;
+        }
+        crate::focus::own_ring(painter.ctx(), boundary.id);
+        let focus = self.section_band.data.states.get(State::FOCUS);
+        paint_ring(&cx(painter), boundary.rect, focus, Corners::All);
     }
 }
 
