@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use egui_pop_api::about::report::{self, Report, TRIMMED, URL_LIMIT, describe_user_agent};
-use egui_pop_api::about::{self, AboutPlugin, AppInfo, CMD_REPORT};
+use egui_pop_api::about::{self, AboutPlugin, AppInfo, CMD_REPORT, CMD_SUGGEST};
 use egui_pop_api::app::MENU_HELP;
 use egui_pop_api::links::{LinksPlugin, RecordingOpener};
 use egui_pop_api::{App, AppBuilder};
@@ -92,6 +92,58 @@ fn it_opens_the_new_issue_through_the_links_service() {
     assert!(!url.contains("Platform%3A"), "{url}");
     // No page said, nothing inspected.
     assert!(!url.contains("&page=") && !url.contains("&pick="), "{url}");
+}
+
+#[test]
+fn an_idea_opens_the_idea_form_beside_the_bug_report() {
+    let rec = RecordingOpener::default();
+    let mut app = App::builder()
+        .name("Darkroom")
+        .plugin(
+            AboutPlugin::new(
+                AppInfo::new("", "1.2.0")
+                    .issues(ISSUES)
+                    .issue_form("bug.yml"),
+            )
+            .page(|_| Some("Develop".into()))
+            .idea_form("feature.yml"),
+        )
+        .plugin(LinksPlugin::default().opener(Arc::new(rec.clone())))
+        .build(&egui::Context::default())
+        .unwrap();
+    let h = app.handle();
+    // Two entries of the Help menu: a problem, an idea.
+    let help: Vec<_> = h
+        .menu(&MENU_HELP)
+        .into_iter()
+        .filter_map(|i| match i.item {
+            Item::Command { id, .. } if id == CMD_REPORT || id == CMD_SUGGEST => Some(id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(help, [CMD_REPORT, CMD_SUGGEST]);
+    assert_eq!(
+        h.command_menu_title(&h.command(&CMD_SUGGEST).unwrap()),
+        "Suggest an idea"
+    );
+    let out = app.run(&CMD_SUGGEST, Json::Null, Origin::User);
+    let url = out.now().unwrap().unwrap()["url"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        url,
+        format!("{ISSUES}/new?template=feature.yml&title=Idea%20for%20Develop&page=Develop")
+    );
+    assert_eq!(rec.records()[0].target, url);
+    // Without an idea form, in the body; a bug keeps its own form.
+    let mut r = about::report_of(app.handle()).unwrap();
+    r.title = "Idea for Develop".into();
+    let body = r.idea_url(ISSUES, None).url;
+    assert!(body.contains("&body=%23%23%23%20The%20idea%0A"), "{body}");
+    assert!(body.contains("%23%23%23%20Page%0A%0ADevelop"), "{body}");
+    let bug = about::report_url(app.handle()).unwrap().url;
+    assert!(bug.contains("template=bug.yml"), "{bug}");
 }
 
 #[test]

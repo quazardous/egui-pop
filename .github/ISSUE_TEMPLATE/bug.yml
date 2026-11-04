@@ -9,6 +9,8 @@ body:
         desktop), Help > Report a problem fills the version info, the
         platform and the page for you; the inspect dialog's Report
         button adds the element you picked.
+        An idea rather than a problem? Use the Suggestion form, or
+        Help > Suggest an idea.
   - type: textarea
     id: what
     attributes:

@@ -50,6 +50,10 @@ command-help-report =
     .description = Ouvre un nouveau ticket dans le navigateur, prérempli avec les informations de version, la plateforme, la page affichée et le dernier élément inspecté.
     .title = Signaler un problème
 
+command-help-suggest =
+    .description = Ouvre un nouveau ticket pour une idée dans le navigateur, prérempli avec la page affichée.
+    .title = Proposer une idée
+
 command-app-devtools =
     .description = Ouvre ou ferme le panneau des outils de développement (quand le réglage Outils de développement est activé).
     .title = Outils de développement

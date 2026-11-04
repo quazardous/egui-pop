@@ -2,7 +2,7 @@ blank_issues_enabled: true
 contact_links:
   - name: Gallery
     url: https://quazardous.github.io/egui-pop/gallery/
-    about: Try the components in the browser; Help > Report a problem files a prefilled bug report.
+    about: Try the components in the browser; Help > Report a problem files a prefilled bug report, Help > Suggest an idea an idea.
   - name: Documentation
     url: https://quazardous.github.io/egui-pop/docs/
     about: The guides and the API reference.

@@ -1,6 +1,7 @@
 //! Report a problem: the new-issue URL `help.report` opens, prefilled
 //! with what a maintainer asks first (the version info, the platform, the
-//! page shown, the last inspect pick).
+//! page shown, the last inspect pick). An idea (`help.suggest`,
+//! [`Report::idea_url`]) carries its title and the page alone.
 //!
 //! The URL follows GitHub's query parameters: `title` and `body`, or,
 //! with an issue form (`template=bug.yml`), one parameter per form field,
@@ -115,6 +116,57 @@ impl Report {
         let url = match page {
             Some(p) => fit(p, |p| build(Some(p), None)).unwrap_or_else(|| build(None, None)),
             None => build(None, None),
+        };
+        IssueUrl { url, trimmed: true }
+    }
+
+    /// The new-issue URL of an idea under `issues`: its title and the
+    /// page, in the idea form `form` (`feature.yml`, its page field
+    /// [`FIELD_PAGE`]) or in the body without one. The version info, the
+    /// platform and the pick are left out: an idea is not a bug.
+    pub fn idea_url(&self, issues: &str, form: Option<&str>) -> IssueUrl {
+        let base = issues.trim_end_matches('/');
+        let base = if base.ends_with("/new") {
+            base.to_string()
+        } else {
+            format!("{base}/new")
+        };
+        let build = |page: Option<&str>| -> String {
+            let mut q: Vec<(&str, String)> = Vec::new();
+            if let Some(f) = form {
+                q.push(("template", f.to_string()));
+            }
+            q.push(("title", self.title.clone()));
+            match (form, page) {
+                (Some(_), Some(p)) => q.push((FIELD_PAGE, p.to_string())),
+                (Some(_), None) => {}
+                (None, _) => {
+                    let mut body =
+                        String::from("### The idea\n\n\n\n### How you do it today\n\n\n");
+                    if let Some(p) = page {
+                        body.push_str("\n### Page\n\n");
+                        body.push_str(p);
+                        body.push('\n');
+                    }
+                    q.push(("body", body));
+                }
+            }
+            let query: Vec<String> = q
+                .iter()
+                .map(|(k, v)| format!("{k}={}", encode(v)))
+                .collect();
+            format!("{base}?{}", query.join("&"))
+        };
+        let full = build(self.page.as_deref());
+        if full.len() <= URL_LIMIT {
+            return IssueUrl {
+                url: full,
+                trimmed: false,
+            };
+        }
+        let url = match self.page.as_deref() {
+            Some(p) => fit(p, |p| build(Some(p))).unwrap_or_else(|| build(None)),
+            None => build(None),
         };
         IssueUrl { url, trimmed: true }
     }
