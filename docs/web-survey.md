@@ -143,13 +143,13 @@ problem" is in the About dialog; and that the page is not in the URL.
 | R1 | Ctrl+Shift+C and F12 belong to the browser | The documented inspect chord opens the browser's inspector instead | in progress | in progress |
 | R2 | Devtools off by default, the menu entries greyed with no reason, the chords silent | A reporter never finds inspect | [browser] | in progress (on by default); also a toast or tooltip saying which setting enables them (S) |
 | R3 | The devtools setting is lost on reload | Each visit starts over | [browser]: on after the toggle, Ctrl+Shift+C did nothing after a reload | in progress |
-| R4 | "Report a problem" opens the bare issue list | The reporter writes everything by hand; most will not | [browser] | A prefilled new-issue URL (`issues/new?title=&body=&labels=`, [GitHub's query parameters](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/creating-an-issue#creating-an-issue-from-a-url-query)) with the version info, the browser, the page and the last pick in the body (S) |
-| R5 | No "Report a problem" in the Help menu, the palette or the inspect dialog | The entry point is two clicks deep in About | [browser] | A `help.report` command in Help and the palette, and a "Report this" button beside Copy in the inspect dialog (S) |
+| R4 | "Report a problem" opens the bare issue list | The reporter writes everything by hand; most will not | [browser] | done (2026-11-04): `help.report` opens `issues/new` with the issue form `bug.yml` filled field by field (`template=`, then `title`, `version`, `platform`, `page`, `pick`), or a body without a form, under 8 KB with the pick trimmed first |
+| R5 | No "Report a problem" in the Help menu, the palette or the inspect dialog | The entry point is two clicks deep in About | [browser] | done (2026-11-04): `help.report` in Help and the palette, a Report… button beside Copy in the inspect dialog, and the About dialog's link through the same command |
 | R6 | The inspect copy has no version, platform, browser or renderer | Two copies to paste; half the reports will miss one | [browser] | Append the version info to the inspect text, or make the report one block (S) |
-| R7 | The version info says `web (wasm32)`: no browser, no browser version, no OS | Browser-specific bugs (keys, clipboard, WebGL vs WebGPU) cannot be told apart | [read] `AppInfo::platform`, [browser] | On the web, read `navigator.userAgent` (or `userAgentData`) and `Context::os` into the platform line (S) |
+| R7 | The version info says `web (wasm32)`: no browser, no browser version, no OS | Browser-specific bugs (keys, clipboard, WebGL vs WebGPU) cannot be told apart | [read] `AppInfo::platform`, [browser] | done for the browser and the OS (2026-11-04): the platform line reads `navigator.userAgent` (`web (wasm32), Firefox 132 on Linux`) |
 | R8 | No URL per page | Steps cannot link the page; a reload loses it | [browser]: reload shows the overview; [read]: the web `main` uses `Options::default()` | Read and write the page in the URL's hash (`#page=files`), as `--page` does on the desktop (S) |
 | R9 | No screenshot from the app | The reporter needs an outside tool; many reports come without one | [read] | A "Copy screenshot" or "Save screenshot" command through `ViewportCommand::Screenshot` (supported by eframe's web runner) and `Context::copy_image` or a download (M) |
-| R10 | No issue template in the repository | A prefilled URL has nothing to aim at; free-form reports | [read] `.github/` holds only the pull request template | An issue form for bugs (fields: steps, expected, actual, version info, inspect text) (S) |
+| R10 | No issue template in the repository | A prefilled URL has nothing to aim at; free-form reports | [read] `.github/` holds only the pull request template | done (2026-11-04): `.github/ISSUE_TEMPLATE/bug.yml` (what happened, expected, steps, version info, platform, page, inspected element), a light `feature.yml` and `config.yml` |
 | R11 | Keys lost after a click outside the canvas | After the address bar or the browser's devtools, chords do nothing until the canvas is clicked; a reporter thinks the key is broken | [browser]: after a blur, Alt+Down changed nothing; a click on the canvas restored it | Focus the canvas when the pointer enters it, or show a "click to use the keyboard" hint while it has no focus (S) |
 | R12 | A panic shows a message but no way to report it | The one report that matters most is the hardest | [read] `main.rs` `failed` | Add a prefilled issue link with the panic text to the failure message (S) |
 | R13 | Console noise a reporter will paste | `logging to egui-pop-gallery-0/gallery.log` (no file on the web), `crash reports: ... operation not supported on this platform`, `Unhandled egui viewport command: Decorations(true)` at every start | [browser], all three browsers | Skip the log file line, the crash plugin's warning and the decorations command on the web (S) |
@@ -377,7 +377,8 @@ the font pairs page (Chromium), probably from eframe's canvas fallback for glyph
 One per fix worth doing, ordered by value for the reporting goal first,
 then by cost. The three items in progress are left out.
 
-1. **Prefilled issue from the app** (R4, R5, R10): a `help.report`
+1. **Prefilled issue from the app** (R4, R5, R10; done 2026-11-04, R7's
+   browser line with it): a `help.report`
    command in Help, the palette and the inspect dialog that opens
    `issues/new` with a title, the version info, the browser, the page and
    the last pick, plus a bug issue form in the repository. S.

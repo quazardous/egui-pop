@@ -51,6 +51,7 @@ system's browser on the desktop.
 |---|---|
 | `about` | Help > About *application* (the title says `{ $application }`, filled with the name) |
 | `about.read` | For agents, kept out of the palette: everything as JSON (name, version, description, licences, authors, links, egui-pop's and egui's versions, the platform, the renderer, `version_info`) |
+| `help.report` | Help > Report a problem, the palette, the inspect dialog's Report… button and the About dialog's link: a prefilled new issue in the browser. Declared only when `AppInfo::issues` is set |
 
 `about::open(app)` opens the dialog from code; `about::show(ui, app,
 copied)` draws its body anywhere (the gallery's page does).
@@ -73,6 +74,55 @@ With the clipboard plugin connected, it goes through the
 sanitisers run, a refusal shows in a toast); without it, straight to the
 system clipboard.
 
+## Reporting a problem
+
+`AppInfo::issues(url)` says where issues go (the issue list,
+`https://github.com/owner/repo/issues`) and turns `help.report` on;
+`AppInfo::issue_form("bug.yml")` names the repository's issue form.
+`AboutPlugin::page(|app| …)` says which page or view is shown, when the
+application can:
+
+```rust
+use egui_pop::api::about::{AboutPlugin, AppInfo, CMD_REPORT};
+use egui_pop::api::App;
+
+let info = AppInfo::new("Darkroom", "1.2.0")
+    .issues("https://github.com/example/darkroom/issues")
+    .issue_form("bug.yml");
+let app = App::builder()
+    .plugin(AboutPlugin::new(info).page(|_app| Some("Develop".into())))
+    .build(&egui_pop::egui::Context::default())
+    .unwrap();
+assert!(app.handle().command(&CMD_REPORT).is_some());
+```
+
+Without an issues URL the command is not declared at all: a library
+cannot know where an application's bugs belong, and a menu entry, a
+palette entry or an agent's command leading nowhere is noise. The About
+dialog's "Report a problem" link runs the same command, so there is one
+way to report.
+
+The command opens `<issues>/new` through the links service (a new tab on
+the web, the system's browser on the desktop; egui's `open_url` without
+the links plugin), prefilled with GitHub's query parameters:
+
+- `title`: `Problem in <page>`, or `Problem in <application>`;
+- with an issue form, `template=bug.yml` and one parameter per field,
+  named by its `id`: `version` (the version info without its platform
+  line), `platform`, `page`, `pick` (the last inspect pick's text, when
+  there is one); the reporter's own fields (what happened, expected,
+  steps) stay empty;
+- without a form, the same in `body`, a Markdown section each.
+
+On the web the platform names the browser and its system, read from the
+user agent (`web (wasm32), Firefox 132 on Linux`). Every value is
+percent-encoded and the URL stays under 8000 bytes (`report::URL_LIMIT`;
+GitHub refuses a little over 8 KB): the pick is cut first, then the page,
+each ending `(trimmed)`. `about::report_url(app)` gives the URL without
+opening it. egui-pop's own form is
+[`.github/ISSUE_TEMPLATE/bug.yml`](../.github/ISSUE_TEMPLATE/bug.yml);
+an application copies it, or keeps its field ids.
+
 ## Translated
 
 The dialog's text is in egui-pop's catalogues (`egui-pop-about-*`); the
@@ -86,5 +136,5 @@ shown as given.
 egui has no About dialog, and no crate was found offering one for egui
 with translations, agents' access and a copy for bug reports: owned.
 
-Not done yet: links through an application-wide links service (one
-place to open, log or refuse a URL), credits for third-party licences.
+Not done yet: credits for third-party licences; a screenshot and a
+panic's text in the report.
