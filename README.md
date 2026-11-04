@@ -286,13 +286,11 @@ which move only when their code does.
 | 0.3.x | 0.36 | 1.95 |
 | 0.4.x | 0.37 | 1.95 |
 
-`main` is on egui 0.37 and is not on crates.io yet: egui-phosphor has
-no release on egui 0.37, so the workspace patches it from a fork
-([#146](https://github.com/quazardous/egui-pop/issues/146)), and a
-patch does not carry over to crates.io. Until it is released, stay on
-0.3 with egui 0.36, or depend on egui-pop through git with the same
-`[patch.crates-io]` entry for egui-phosphor in your own `Cargo.toml`
-(patches do not carry over from a dependency).
+egui-phosphor has no release on egui 0.37 yet, so egui-pop depends on
+`egui-pop-phosphor`, a fork published under its own name that carries
+upstream's pending update; egui-pop moves back to egui-phosphor once
+upstream releases
+([#146](https://github.com/quazardous/egui-pop/issues/146)).
 
 ## How quality is held
 

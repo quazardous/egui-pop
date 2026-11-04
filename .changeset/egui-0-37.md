@@ -26,8 +26,4 @@ turns on eframe's `clipboard` feature, a feature of its own since 0.37.
 New: `ui::set_scroll_offset` moves a scroll area by its id, egui 0.37
 having made the offset of its state private.
 
-egui_stack comes from crates.io (0.22). Until an egui-phosphor on egui
-0.37 is on crates.io (issue #146), egui-pop patches it from a fork and
-is not published; an application depending on egui-pop through git
-needs the same `[patch.crates-io]` entry for egui-phosphor as
-egui-pop's workspace.
+egui_stack comes from crates.io (0.22).

@@ -140,7 +140,7 @@ requires. A verdict changed on 2026-11-03 says why.
 | egui_json_tree | 0.17.0 (2026-08-15) | 0.36 | MIT OR Apache-2.0 | JSON tree with search | **Adopt** for the debug bridge and the journal viewer. Not a dependency yet |
 | egui_commonmark | 0.26.0 (2026-10-15) | 0.37 | MIT OR Apache-2.0 | Markdown | **Adopted** (changed 2026-11-03: it was "later"; the viewer's `markdown` feature in `egui-pop-views` uses 0.25, [links](links.md)) |
 | egui_logger, egui_tracing | 0.13.0 (2026-10-16), 0.3.0 (2026-04-10) | 0.37, 0.34 | MIT, Unlicense | Log views | Later; the journal viewer is ours |
-| egui-phosphor | 0.14.0 (2026-09-10) | 0.36 | MIT OR Apache-2.0 | Icons | **Adopted**; on egui 0.36 until its pull request for 0.37 is released ([#146](https://github.com/quazardous/egui-pop/issues/146), section 2.4) |
+| egui-phosphor | 0.14.0 (2026-09-10) | 0.36 | MIT OR Apache-2.0 | Icons | **Adopted**; on egui 0.37 through the `egui-pop-phosphor` fork until its pull request for 0.37 is released ([#146](https://github.com/quazardous/egui-pop/issues/146), section 2.4) |
 | egui_circular_progress_bar | 2.0.0 (2026-08-19) | 0.36 | **GPL-3.0** | Ring progress | **Skip: GPL-3.0** cannot go into an MIT library. A ring is a few lines of painting anyway |
 | egui-data-table | 0.11.0 (2026-08-01) | 0.35 | non-standard | Editable data table | Skip: non-standard licence, little use |
 | re_ui | 0.41.0 (2026-10-28) | 0.37 | MIT OR Apache-2.0 (fonts OFL-1.1, Bitstream Vera) | Rerun's UI kit: list items, design tokens | Ideas only (too coupled to Rerun) |
@@ -197,11 +197,12 @@ Tracked in [#24](https://github.com/quazardous/egui-pop/issues/24).
   ([directions](egui-stack-directions.md)).
 - **egui-phosphor** 0.14.0 requires egui 0.36. Its upstream pull request
   ([amPerl/egui-phosphor#49](https://github.com/amPerl/egui-phosphor/pull/49))
-  moves it to 0.37; until it is released, a fork pinned by revision
-  ([#146](https://github.com/quazardous/egui-pop/issues/146)).
-- While the egui-phosphor patch remains, egui-pop cannot be published
-  to crates.io, and applications using egui-pop from git need the same
-  `[patch]`.
+  moves it to 0.37; until it is released, egui-pop depends on
+  `egui-pop-phosphor` 0.15, a fork carrying that pull request,
+  published on crates.io under its own name with its library still
+  named `egui_phosphor`, so no code changes
+  ([#146](https://github.com/quazardous/egui-pop/issues/146)). It goes
+  back to egui-phosphor once upstream releases.
 - Nothing else in the tree holds it back: egui_table 0.11 and
   egui_commonmark 0.26 already require egui 0.37, so both move with the
   bump.
