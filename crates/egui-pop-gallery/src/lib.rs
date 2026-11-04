@@ -322,6 +322,9 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(egui_pop::i18n::ShowKeys)
         .plugin(pages::i18n::I18nPage)
         .plugin(pages::debug::DebugPage);
+    // The video page's widgets, read and driven by agents.
+    #[cfg(feature = "video")]
+    let builder = builder.plugin(egui_pop::views::video::VideoPlugin);
     pages::platform::add(builder, options.platform, take_instance())
 }
 

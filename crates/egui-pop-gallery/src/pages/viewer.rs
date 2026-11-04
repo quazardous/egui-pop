@@ -95,10 +95,10 @@ impl Plugin for ViewerPage {
         ctx.story(
             Story::new(
                 StoryId::from_static("viewer-video"),
-                "Video in the viewer",
+                "Video",
                 video::show,
             )
-            .description("A local video file played in the in-app viewer, through the system's GStreamer: Play and Pause, the position, the volume and the time, a file it cannot play on an error page with Open outside, a remote video left outside.")
+            .description("The video widget, through the system's GStreamer: with full controls (Play and Pause, the position, the volume, the time), compact ones, and none (playing at once, looping, silent); the same widget in the in-app viewer, a file it cannot play on an error page with Open outside, a remote video left outside.")
             .group("Framework", 107),
         )?;
         #[cfg(feature = "webview")]
@@ -159,7 +159,7 @@ mod video {
     use egui::Ui;
     use egui_pop::api::AppHandle;
     use egui_pop::api::links;
-    use egui_pop::views::viewer::write_test_clip;
+    use egui_pop::views::video::{Controls, Fit, Video, write_test_clip};
 
     use super::section;
 
@@ -180,27 +180,9 @@ mod video {
     }
 
     pub(super) fn show(ui: &mut Ui, app: &AppHandle) {
-        ui.label("A local video file opens in the viewer. On its picture: Space plays or pauses, Left and Right move by five seconds, Up and Down change the volume.");
+        ui.label("The video widget plays a local file in place, each on its own player. On a picture with controls: Space plays or pauses, Left and Right move by five seconds, Up and Down change the volume.");
         section(ui, "A clip written by GStreamer's test sources");
-        match FILES.get() {
-            None => {
-                if ui.button("Write the clip").clicked() {
-                    let ctx = ui.ctx().clone();
-                    std::thread::spawn(move || write(ctx));
-                }
-            }
-            Some(Err(why)) => {
-                ui.label(format!("The clip could not be written: {why}"));
-            }
-            Some(Ok((clip, bad))) => {
-                ui.horizontal_wrapped(|ui| {
-                    let clip = format!("file://{}", clip.display());
-                    links::link(ui, app, "The clip", &clip);
-                    let bad = format!("file://{}", bad.display());
-                    links::link(ui, app, "A file that is no video", &bad);
-                });
-            }
-        }
+        clip(ui, app);
         section(ui, "A remote video");
         ui.label("Stays outside: it opens in the browser.");
         links::link(
@@ -209,6 +191,56 @@ mod video {
             "A video on the web",
             "https://example.org/clip.mp4",
         );
+    }
+
+    /// The clip in the viewer and in the widget three ways, once written.
+    fn clip(ui: &mut Ui, app: &AppHandle) {
+        let Some(Ok((clip, bad))) = FILES.get() else {
+            match FILES.get() {
+                Some(Err(why)) => {
+                    ui.label(format!("The clip could not be written: {why}"));
+                }
+                _ => {
+                    if ui.button("Write the clip").clicked() {
+                        let ctx = ui.ctx().clone();
+                        std::thread::spawn(move || write(ctx));
+                    }
+                }
+            }
+            return;
+        };
+        section(ui, "In the viewer");
+        ui.horizontal_wrapped(|ui| {
+            let clip = format!("file://{}", clip.display());
+            links::link(ui, app, "The clip", &clip);
+            let bad = format!("file://{}", bad.display());
+            links::link(ui, app, "A file that is no video", &bad);
+        });
+        let width = ui.available_width().min(560.0);
+        section(ui, "Full controls");
+        let _ = Video::new(clip)
+            .id("gallery.full")
+            .app(app)
+            .size(egui::vec2(width, width * 0.75 * 0.75))
+            .show(ui);
+        section(ui, "Compact controls");
+        let _ = Video::new(clip)
+            .id("gallery.compact")
+            .controls(Controls::Compact)
+            .app(app)
+            .size(egui::vec2(width * 0.6, width * 0.6 * 0.75))
+            .show(ui);
+        section(ui, "No controls: playing at once, looping, silent");
+        let _ = Video::new(clip)
+            .id("gallery.bare")
+            .controls(Controls::None)
+            .autoplay(true)
+            .looping(true)
+            .muted(true)
+            .fit(Fit::Cover)
+            .app(app)
+            .size(egui::vec2(width * 0.4, width * 0.4 * 9.0 / 16.0))
+            .show(ui);
     }
 }
 
