@@ -8,6 +8,44 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.5.0 (2026-11-04)
+
+Published: egui-pop-model 0.4.1, egui-pop-core 0.5.0, egui-pop-api 0.5.0, egui-pop-test 0.5.0, egui-pop-viewport 0.5.0, egui-pop-i18n 0.5.0, egui-pop-editors 0.5.0, egui-pop-platform 0.5.0, egui-pop-views 0.5.0, egui-pop-imaging 0.5.0, egui-pop 0.5.0.
+
+### Breaking changes
+
+- egui-pop, egui-pop-api, egui-pop-core, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-model, egui-pop-platform, egui-pop-test, egui-pop-viewport, egui-pop-views: Collapsible sections (`core::sections`) run on egui_stack's `sections` module
+  (egui_stack 0.22.2): the kit paints them as its `DockPainter`, the strings
+  name their boundaries, the pointer map gives the pull's keys, and the look and
+  the behaviour are unchanged. `Section`, `Stack`, `Laid`, `Remembered`,
+  `laid_out` and `row_height` are egui_stack's, re-exported; `Laid` is now
+  `#[non_exhaustive]`, so it can no longer be built outside the crate. The
+  arithmetic is re-exported as `core::sections::plan` (with `DragMode`), and
+  `model::sections` is deprecated, kept unchanged for one release. Layouts are
+  remembered under egui_stack's memory key; one stored under egui-pop's old key
+  moves there the first time its stack is shown or loaded.
+
+  Migration: build a `Laid` from a real stack (`laid_out`) instead of a struct
+  literal; take `DragMode` and the plan from `core::sections`, not
+  `model::sections`.
+
+### Features
+
+- egui-pop-api: An application can say its id: `AppBuilder::app_id("org.example.App")`, read
+  back with `AppHandle::app_id`. `run_native` and `run_native_with` take the
+  window's (`ViewportBuilder::with_app_id`) when none is given. The viewer's
+  YouTube player names the application with it.
+- egui-pop-views: The viewer's YouTube page (feature `webview`) follows YouTube's terms. Its
+  `Referer` names the application, `https://<app id>/`, from
+  `AppBuilder::app_id` (`viewer::referrer_for`), in place of
+  `https://localhost/`; `ViewerPlugin::embed_referrer` still replaces it, and
+  without either YouTube links open outside. The player is never smaller than
+  200 by 200 of the web view's pixels (`viewer::MIN_PLAYER`,
+  `viewer::fits_player`): over a smaller panel a card says why, with Open
+  outside, and the player comes back when the panel grows; its own window
+  cannot be made smaller. `EmbedBackend::in_panel` says which of the two a
+  backend does. `viewer::DEFAULT_REFERRER` is deprecated.
+
 ## 2026-11-04
 
 Published: egui-pop-core 0.4.1, egui-pop-api 0.4.1, egui-pop-views 0.4.1.
