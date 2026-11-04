@@ -940,15 +940,27 @@ fn activity_bar(ui: &mut Ui, app: &AppHandle) {
     });
 }
 
-/// The indicators the bar shows, from its end: those whose clause holds
-/// and that the user did not hide here, in the order chosen.
+/// The indicators the bar shows, from its end: those whose clause holds,
+/// that the user did not hide here and that have something to show, in
+/// the order chosen.
 fn shown(app: &AppHandle) -> Vec<(Indicator, IndicatorState)> {
     let cx = app.context();
     let c = choices(app);
     ordered(app, &c)
         .into_iter()
-        .filter(|(i, _)| i.applies(&cx) && !c.hidden.contains(&i.id))
+        .filter(|(i, s)| i.applies(&cx) && !c.hidden.contains(&i.id) && !blank(app, i, s))
         .collect()
+}
+
+/// Whether an item has nothing to show: no text, no icon, no spinner and
+/// no counts. It is not drawn (an empty button would have no name) and
+/// takes no room until a reducer gives it something.
+fn blank(app: &AppHandle, ind: &Indicator, state: &IndicatorState) -> bool {
+    indicator_text(state).is_empty()
+        && state.busy.is_none()
+        && state.errors == 0
+        && state.warnings == 0
+        && shown_icon(app, ind, state).is_none()
 }
 
 /// A text's width in the status bar's small font.
@@ -1570,6 +1582,10 @@ fn item(
             }
             ItemPart::Text => {
                 let text = indicator_text(state);
+                if text.is_empty() && icon.is_none() {
+                    // Nothing to click on: only its spinner or counts.
+                    continue;
+                }
                 let label = RichText::new(text.as_str()).color(color).small();
                 let r = match &icon {
                     // The icon before the text, in the button: it takes
