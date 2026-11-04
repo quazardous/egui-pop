@@ -106,6 +106,13 @@ pub const MENU_FILE: MenuId = MenuId::from_static("app.menu.file");
 pub const MENU_EDIT: MenuId = MenuId::from_static("app.menu.edit");
 pub const MENU_VIEW: MenuId = MenuId::from_static("app.menu.view");
 pub const MENU_HELP: MenuId = MenuId::from_static("app.menu.help");
+/// The end of the main menu bar: its command items show there as icon
+/// buttons (`menus::bar_end`), the last at the bar's end, each pressed
+/// while its `checked` clause holds and left out where its command does
+/// not apply. Commands go there as into any menu
+/// (`CommandSpec::menu(MENU_BAR_END, group, order)`): the devtools'
+/// inspect mode does.
+pub const MENU_BAR_END: MenuId = MenuId::from_static("app.menu-bar.end");
 
 /// The framework's commands.
 pub use crate::palette::CMD_PALETTE;
@@ -5781,6 +5788,15 @@ impl App {
                             ui.separator();
                             let zone = ui.scope(|ui| h.show_zone(ui, &zones::TOP_BAR));
                             used = zone.response.rect.max.x - start + ui.spacing().item_spacing.x;
+                        }
+                        if crate::menus::has_end_items(&h, &MENU_BAR_END) {
+                            // At the bar's end, whatever the menus and
+                            // the zone left.
+                            let end = ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| crate::menus::bar_end(ui, &h, &MENU_BAR_END),
+                            );
+                            used += end.inner + 2.0 * ui.spacing().item_spacing.x;
                         }
                         if used != reserve {
                             TOP_BAR_RESERVE.set(ui.ctx(), used);

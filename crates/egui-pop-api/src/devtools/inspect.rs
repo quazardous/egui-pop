@@ -4,8 +4,10 @@
 //! precisely in a report.
 //!
 //! The command `devtools.inspect` (Ctrl+Shift+F12; View menu, the
-//! palette, the devtools panel) enters the mode, a second press or
-//! Escape leaves it. Not Ctrl+Shift+C: browsers take it for their own
+//! palette, the picker button at the menu bar's end, the devtools panel)
+//! enters the mode, a second press or Escape leaves it. While it is on,
+//! the menu bar's button is pressed ([`CONTEXT_INSPECTING`]) and the
+//! pointer is a crosshair ([`CURSOR`]), but over the inspect dialog. Not Ctrl+Shift+C: browsers take it for their own
 //! element picker before a web build sees it. It works in every window, a detached
 //! panel's included. The picking itself is `egui_pop_core::inspect`'s;
 //! this side adds the window, the zone, block or panel and the plugin
@@ -33,7 +35,7 @@ use egui_pop_model::ids::{BlockId, CommandId};
 use serde::Serialize;
 use serde_json::{Value as Json, json};
 
-use crate::app::{AppHandle, MENU_VIEW};
+use crate::app::{AppHandle, MENU_BAR_END, MENU_VIEW};
 use crate::clipboard::{self, ClipSource, ClipType, CopyRequest};
 use crate::dialogs::{Custom, DIALOGS, DialogSpec};
 use crate::steps::Outcome;
@@ -43,6 +45,12 @@ use crate::{Ctx, PluginError};
 
 /// Enters or leaves the inspect mode.
 pub const CMD_INSPECT: CommandId = CommandId::from_static("devtools.inspect");
+/// The context key saying the mode is on (`true` or `false`): the
+/// command's `checked` clause, which draws its menu bar button pressed.
+pub const CONTEXT_INSPECTING: &str = "inspecting";
+/// The pointer over the window while the mode is on (not over the
+/// inspect dialog): a crosshair, as browsers' element pickers.
+pub const CURSOR: egui::CursorIcon = egui::CursorIcon::Crosshair;
 /// The clipboard endpoint Copy takes the last pick from.
 pub const ENDPOINT: &str = "devtools.inspect";
 /// The JSON form of a pick on the clipboard.
@@ -341,7 +349,10 @@ pub(crate) fn connect(ctx: &mut Ctx<'_>, describe: Option<Describe>) -> Result<(
             )
             .key("Ctrl+Shift+F12")
             .when("devtoolsEnabled")
+            .icon("phosphor:cursor-click")
+            .checked(CONTEXT_INSPECTING)
             .menu(MENU_VIEW, "8_devtools", 1)
+            .menu(MENU_BAR_END, "9_devtools", 0)
             .no_agent(),
         |call| {
             if active(call.app) {
@@ -408,9 +419,31 @@ fn pass(ui: &mut Ui, app: &AppHandle) {
     if let Some(pick) = picker::take_picked(&ctx) {
         picked(app, pick);
     }
-    if picker::active(&ctx) {
-        hint(ui);
+    let active = picker::active(&ctx);
+    let key = if active { "true" } else { "false" };
+    if app.context().get(CONTEXT_INSPECTING) != key {
+        app.set_context(CONTEXT_INSPECTING, key);
+        ctx.request_repaint();
     }
+    if active {
+        hint(ui);
+        if !over_dialog(app, &ctx) {
+            ctx.set_cursor_icon(CURSOR);
+        }
+    }
+}
+
+/// Whether the pointer is over the inspect dialog (it keeps its own
+/// cursors).
+fn over_dialog(app: &AppHandle, ctx: &egui::Context) -> bool {
+    let Some(id) = *shared(app).dialog.borrow() else {
+        return false;
+    };
+    let Some(pointer) = ctx.pointer_hover_pos() else {
+        return false;
+    };
+    egui_pop_core::overlay::rect(ctx, crate::dialogs::overlay_id(id))
+        .is_some_and(|r| r.contains(pointer))
 }
 
 fn picked(app: &AppHandle, pick: Pick) {

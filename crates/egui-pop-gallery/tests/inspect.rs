@@ -2,8 +2,9 @@
 //! without reaching it, the dialog names it, Copy puts it on the
 //! clipboard; in a detached panel too; by the keyboard; Escape leaves.
 
-use egui::accesskit::Role;
+use egui::accesskit::{Role, Toggled};
 use egui_kittest::Harness;
+use egui_kittest::kittest::NodeT as _;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop::api::AppHandle;
 use egui_pop::api::devtools::inspect;
@@ -220,4 +221,72 @@ fn escape_leaves_and_a_click_then_reaches_the_button() {
     assert!(inspect::active(&app));
     chord(&mut h);
     assert!(!inspect::active(&app));
+}
+
+#[test]
+fn the_menu_bar_picker_toggles_the_mode_and_the_pointer_is_a_crosshair() {
+    let mut h = harness("debug");
+    let app = handle(&h);
+    // At the menu bar's end, its key in the tooltip, not pressed.
+    let picker = h.get_by_role_and_label(Role::Button, "Inspect an element");
+    assert_eq!(picker.accesskit_node().toggled(), Some(Toggled::False));
+    assert_eq!(
+        app.keys_for(&inspect::CMD_INSPECT)
+            .first()
+            .map(String::as_str),
+        Some("Ctrl+Shift+F12")
+    );
+    // The debug page's own button says the same: the tooltip is a second.
+    let tip = "Inspect an element (Ctrl+Shift+F12)";
+    assert_eq!(h.query_all_by_label(tip).count(), 1);
+    picker.hover();
+    h.run();
+    assert_eq!(h.query_all_by_label(tip).count(), 2);
+    h.get_by_role_and_label(Role::Button, "Inspect an element")
+        .click();
+    h.run();
+    h.run();
+    assert!(inspect::active(&app));
+    assert_eq!(app.context().get(inspect::CONTEXT_INSPECTING), "true");
+    let picker = h.get_by_role_and_label(Role::Button, "Inspect an element");
+    assert_eq!(picker.accesskit_node().toggled(), Some(Toggled::True));
+    // Over the page: a crosshair.
+    h.get_by_label("Announce \"Saved\"").hover();
+    h.run();
+    assert_eq!(
+        h.output().platform_output.cursor_icon,
+        egui::CursorIcon::Crosshair
+    );
+    // Pressed again, it leaves the mode instead of being picked.
+    h.get_by_role_and_label(Role::Button, "Inspect an element")
+        .click();
+    h.run();
+    h.run();
+    assert!(!inspect::active(&app));
+    assert!(h.query_by_label("Inspected element").is_none());
+    assert_eq!(app.context().get(inspect::CONTEXT_INSPECTING), "false");
+    h.get_by_label("Announce \"Saved\"").hover();
+    h.run();
+    assert_ne!(
+        h.output().platform_output.cursor_icon,
+        egui::CursorIcon::Crosshair
+    );
+    // Off with the devtools setting.
+    {
+        use egui_pop::model::commands::Origin;
+        use egui_pop::model::values::{Change, Set, Value};
+        egui_pop::core::lock(&app.store())
+            .set(Set::new(
+                &format!("settings/{}", egui_pop::api::devtools::SETTING_DEVTOOLS),
+                Change::To(Value::Bool(false)),
+                Origin::User,
+            ))
+            .unwrap();
+    }
+    h.run();
+    h.run();
+    assert!(
+        h.query_by_role_and_label(Role::Button, "Inspect an element")
+            .is_none()
+    );
 }

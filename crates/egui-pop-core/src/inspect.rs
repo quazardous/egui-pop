@@ -143,6 +143,9 @@ struct Window {
     pressed: bool,
     regions: Vec<Region>,
     parts: Vec<KitPart>,
+    /// Where a press reaches egui all the same ([`pass_through`]), from
+    /// the pass just drawn.
+    through: Vec<Rect>,
 }
 
 #[derive(Default)]
@@ -240,6 +243,22 @@ pub fn arm(ctx: &Context, on: bool) {
     }
     ctx.add_plugin(Hook);
     lock(&st).armed = on;
+}
+
+/// Lets a press on `rect` of the window being drawn reach egui while
+/// the mode is on, instead of picking: the control toggling the mode (a
+/// menu bar button) then leaves it. Call it each pass the control is
+/// drawn.
+pub fn pass_through(ctx: &Context, rect: Rect) {
+    if INSPECTING.load(Ordering::SeqCst) == 0 {
+        return;
+    }
+    let viewport = ctx.viewport_id();
+    let st = state(ctx);
+    let mut s = lock(&st);
+    if s.on {
+        s.windows.entry(viewport).or_default().through.push(rect);
+    }
 }
 
 /// The pick made since the last call, if any.
@@ -364,6 +383,10 @@ impl egui::plugin::Plugin for Hook {
                 pressed,
                 ..
             } => {
+                if *pressed && w.through.iter().any(|r| r.contains(*pos)) {
+                    // The control leaving the mode (a toggle) is pressed.
+                    return true;
+                }
                 if *pressed {
                     if *button == egui::PointerButton::Primary {
                         w.acts.push(Act::Click(*pos));
@@ -415,6 +438,7 @@ impl egui::plugin::Plugin for Hook {
         if let Some(w) = s.windows.get_mut(&viewport) {
             w.regions.clear();
             w.parts.clear();
+            w.through.clear();
         }
     }
 

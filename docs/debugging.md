@@ -116,16 +116,21 @@ assert!(app.handle().debug_snapshot()["screen"]["windows"].is_array());
 
 When something on screen misbehaves, say exactly which element it is:
 `devtools.inspect` (**Ctrl+Shift+F12**; View > Inspect an
-element, the palette, or the button at the start of the devtools
-panel) enters the inspect mode once the `developer.devtools` setting is
-on. While it is on:
+element, the palette, the picker button at the end of the menu bar, or
+the button at the start of the devtools panel) enters the inspect mode
+once the `developer.devtools` setting is on. The menu bar's button
+shows only then; its tooltip gives the command's key as the keymap
+binds it, and it stays pressed while the mode is on (the `inspecting`
+context key). While it is on:
 
-- the widget under the pointer is outlined, with a small label (its
-  role, name and size), and a hint sits at the top of the window;
+- the pointer is a crosshair over the window (not over the inspect
+  dialog), the widget under it outlined, with a small label (its role,
+  name and size), and a hint sits at the top of the window;
 - a click picks it and does not reach it (nothing is pressed);
 - Tab, Shift+Tab and the arrows move between the interactive widgets
   instead, Enter picks the one outlined;
-- Escape, or Ctrl+Shift+F12 again, leaves;
+- Escape, Ctrl+Shift+F12 again, or the menu bar's button pressed again,
+  leaves (that button is not picked);
 - it works in every window, a detached panel's included.
 
 A pick opens a dialog with what egui and egui-pop know: the element's

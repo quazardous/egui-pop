@@ -418,6 +418,98 @@ pub fn bar_within(ui: &mut Ui, app: &AppHandle, menu: &MenuId, reserve: f32) {
         .insert(menu.to_string(), layout);
 }
 
+/// The command items of a menu that apply now, as [`bar_end`] draws
+/// them.
+fn end_items(app: &AppHandle, menu: &MenuId) -> Vec<(CommandId, Json, Option<String>, bool, bool)> {
+    show_items(&app.menu(menu), &app.when_context())
+        .into_iter()
+        .filter_map(|s| match s {
+            Shown::Item {
+                item: Item::Command { id, args, label },
+                enabled: true,
+                checked,
+                checkable,
+                ..
+            } => Some((id, args, label, checked, checkable)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Whether [`bar_end`] would draw something for this menu now.
+pub fn has_end_items(app: &AppHandle, menu: &MenuId) -> bool {
+    !end_items(app, menu).is_empty()
+}
+
+/// Draws a menu's command items as icon buttons at the end of a bar
+/// (the shell's menu bar draws [`MENU_BAR_END`](crate::app::MENU_BAR_END)
+/// there), in the menu's order: each the command's icon (its `icon_on`
+/// while its `checked` clause holds, the button then drawn selected),
+/// its title and first key binding in the tooltip. An item whose command
+/// does not apply (its `when`) is left out, not greyed: a bar's end shows
+/// what can be done. A command without an icon shows its title. Laid
+/// out from the end: call it in a right-to-left `Ui`. Returns the width
+/// it took.
+pub fn bar_end(ui: &mut Ui, app: &AppHandle, menu: &MenuId) -> f32 {
+    let ctx = ui.ctx().clone();
+    let side = Tokens::of(&ctx).size.icon_inline;
+    let items = end_items(app, menu);
+    let r = ui.scope(|ui| {
+        // From the end: the last item first, so they read in order.
+        for (id, args, label, checked, checkable) in items.iter().rev() {
+            let spec = app.command(id);
+            let english = label
+                .clone()
+                .or_else(|| spec.as_ref().map(|c| c.title.clone()))
+                .unwrap_or_else(|| id.to_string());
+            let name = strings::command_title(&ctx, id.as_str(), &english);
+            let tip = match app.keys_for(id).first() {
+                Some(keys) => strings::tr_args(
+                    &ctx,
+                    &txt::TOOLBAR_WITH_KEY,
+                    &[("action", &name), ("keys", keys)],
+                ),
+                None => name.clone(),
+            };
+            let icon = spec
+                .as_ref()
+                .and_then(|c| c.icon_for(*checked))
+                .and_then(|n| Icon::by_name(crate::layout_controls::command_icon(app, id, n)));
+            let r = match icon {
+                Some(icon) => {
+                    let mark = Id::unique(("egui_pop_menu_bar_end", id.as_str()));
+                    let button =
+                        Button::new(Atom::custom(egui::IdSalt::new(mark), vec2(side, side)))
+                            .selected(*checked);
+                    let r = ui.add(button);
+                    let rect = Rect::from_center_size(r.rect.center(), vec2(side, side));
+                    icon.paint(ui.painter(), rect, ui.style().interact(&r).text_color());
+                    egui_pop_core::icon::registry::record(&ctx, "menu bar", &name, icon.name());
+                    r
+                }
+                None => ui.add(Button::new(name.as_str()).selected(*checked)),
+            };
+            if *id == crate::devtools::inspect::CMD_INSPECT {
+                // Pressed while inspecting, it leaves the mode rather
+                // than being picked.
+                egui_pop_core::inspect::pass_through(&ctx, r.rect);
+            }
+            let enabled = r.enabled();
+            if *checkable {
+                r.widget_info(|| {
+                    egui::WidgetInfo::selected(egui::Role::Button, enabled, *checked, &name)
+                });
+            } else {
+                r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, &name));
+            }
+            if r.on_hover_text(tip).clicked() {
+                app.run(id.clone(), args.clone());
+            }
+        }
+    });
+    r.response.rect.width()
+}
+
 /// Where a menu bar drew its menus last.
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct BarLayout {
