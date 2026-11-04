@@ -599,6 +599,11 @@ indicators fed by the host's journal: an `Indicator` is a reducer over
 the events of a prefix, so a long job publishes its progress and the
 status bar follows it.
 
+The activity bar and the status bar are each one Tab stop
+([a roving group](inputs.md#a-roving-group-is-one-stop)): Up and Down go
+between the activity bar's buttons, Left and Right between the status bar's
+items, and Tab coming back lands on the one focused there last.
+
 ```rust
 use egui_pop::api::strips::{Indicator, Tone};
 

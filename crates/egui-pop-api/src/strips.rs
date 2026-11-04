@@ -1340,10 +1340,12 @@ fn indicators(ui: &mut Ui, app: &AppHandle) {
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         // Under the items: the bar's own menu, the hidden items to show.
         if !hidden.is_empty() {
+            // No stop: it would show nothing focused, and every item's own
+            // menu lists the hidden items too.
             let bar = ui.interact(
                 ui.max_rect(),
                 ui.scope_id().with("egui_pop_status_bar"),
-                Sense::click(),
+                Sense::CLICK,
             );
             egui_pop_core::pointer::claim::context_menu(&bar, |ui| {
                 show_hidden_menu(ui, app, &hidden)
