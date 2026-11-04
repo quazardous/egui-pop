@@ -62,6 +62,7 @@
 - [File dialogs survey](file-dialogs-survey.md)
 - [Keyboard survey](keyboard-survey.md)
 - [Scrolling survey](scrolling-survey.md)
+- [Web survey](web-survey.md)
 - [API stability](stability.md)
 - [Changesets and releases](releasing.md)
 - [How quality is held](quality.md)
