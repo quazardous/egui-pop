@@ -190,6 +190,10 @@ of every crate with every feature on.
   (keys the browser keeps, platform services, storage, rendering,
   accessibility, every gallery page), ranked by how much it gets in the
   way of reporting a bug from the web gallery, with follow-ups.
+- [Video survey](video-survey.md): what egui-pop's applications need from
+  video, the native players compared (GStreamer, libmpv, FFmpeg, the
+  platforms', the egui crates), whether YouTube and other hosts can play
+  inside and under which terms, and the follow-ups ranked.
 - [API stability](stability.md): what each release promises.
 - [Changesets and releases](releasing.md): the changeset each change
   adds, commit subjects, the checks, and how a release is made.
