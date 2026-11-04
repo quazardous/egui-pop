@@ -2,7 +2,7 @@
 //! before the text, changed by a reducer; the icon of the command an item
 //! runs (its "on" icon while the command is checked); an item shown by its
 //! icon alone, named by its label; agents read the names, and an unknown
-//! name is reported.
+//! name is reported. An item with neither text nor icon is not drawn.
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
@@ -52,6 +52,16 @@ impl Plugin for Demo {
         )
         .indicator(
             Indicator::new("demo.broken", "Broken", "broken.").icon("test-no-such-status-icon"),
+        )
+        .indicator(
+            // Nothing to say until an image is shown.
+            Indicator::new("demo.zoom", "Zoom", "zoom.")
+                .initial(IndicatorState::default())
+                .reduce(|state, e| {
+                    if e.name == "zoom.shown" {
+                        state.text = "100%".into();
+                    }
+                }),
         );
         Ok(())
     }
@@ -129,4 +139,25 @@ fn an_unknown_status_icon_is_reported() {
         unknown.iter().any(|d| d.subject == "demo.broken"),
         "{unknown:?}"
     );
+}
+
+#[test]
+fn an_item_with_neither_text_nor_icon_is_not_drawn() {
+    // The harness checks every widget's accessible name after each run:
+    // an empty item drawn as a button would have none.
+    let mut h = harness();
+    assert!(h.unnamed_widgets().is_empty(), "{:?}", h.unnamed_widgets());
+    // Agents still list it.
+    let zoom = strips::status(h.state().handle())
+        .into_iter()
+        .find(|e| e.id == "demo.zoom")
+        .unwrap();
+    assert!(zoom.text.is_empty() && zoom.icon.is_none());
+    // It shows once it has something to say.
+    h.state()
+        .handle()
+        .publish("demo", None, "zoom.shown", Json::Null);
+    h.run();
+    h.run();
+    assert!(h.query_by_label("100%").is_some());
 }

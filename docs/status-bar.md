@@ -73,6 +73,11 @@ its icon alone (a connection, a sync) keeps its label as its
 accessible name. The names are checked with the other declarations
 (`unknown-icon`), an unknown one drawn as the placeholder.
 
+An item with neither text nor icon (nor spinner nor counts) is not
+drawn and takes no room: a reducer with nothing to say yet (a zoom
+before an image is shown) leaves the text empty, and the item appears
+once it has one. Agents still list it (`strips::status`).
+
 ## Popovers
 
 `popover(|ui, app| …)` gives an item a small layout opened by a click:
