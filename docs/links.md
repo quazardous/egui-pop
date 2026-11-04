@@ -321,7 +321,10 @@ page, anchors, zoom and links work as on a markdown page.
 With `views-video` (`egui-pop-views/video`, off by default), a local video file
 (`.mp4`, `.webm`, `.mov`, `.mkv`, `.ogv`, `.m4v`, `.avi`) opens in the viewer.
 Without the feature, on the web build, or with no player, it opens outside as any
-local file. A remote video stays outside either way.
+local file. A remote video stays outside either way. The page is the
+[`Video` widget](video.md) with its full controls, under the id
+`egui_pop.viewer` (so the `video.*` commands and the `videos` collector reach it
+too).
 
 | Control | Mouse | Keys |
 |---|---|---|
@@ -331,8 +334,8 @@ local file. A remote video stays outside either way.
 
 - It opens paused on its first picture, with the focus on the picture, so that
   nothing makes a sound before the user asks.
-- GStreamer's threads decode; each pass uploads only the last picture. Only a
-  playing video asks for repaints.
+- GStreamer's threads decode and convert; each pass uploads only the last
+  picture. Only a playing video asks for repaints.
 - Leaving the page stops the player. So does its panel going out of view (closed,
   or a tab behind another): showing it again opens the file at the same place,
   paused.
@@ -347,11 +350,13 @@ local file. A remote video stays outside either way.
   is a line on the page. **The binary links GStreamer's libraries: without them
   installed it does not start**, so an application declares them as a dependency
   of its package.
-- `viewer::VideoBackend` (`ViewerPlugin::video`) replaces the player;
-  `viewer::GStreamer::audio_sink` names the element the sound goes to, kept in
-  time with the pictures even when silent (`fakesink`).
-- `viewer::write_test_clip` writes a small clip from GStreamer's test sources, for
-  tests and the gallery's story (`cargo run -p egui-pop-gallery --features video`).
+- `video::VideoBackend` (`ViewerPlugin::video`) replaces the player;
+  `video::GStreamer::audio_sink` names the element the sound goes to, kept in
+  time with the pictures even when silent (`fakesink`). Both are also named
+  under `viewer::`, as before the widget.
+- `video::write_test_clip` writes a small clip from GStreamer's test sources, for
+  tests and the gallery's Video page (`cargo run -p egui-pop-gallery --features
+  video`).
 
 ### The YouTube page
 

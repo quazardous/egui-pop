@@ -117,6 +117,8 @@ of every crate with every feature on.
 - [Lists and tables](table.md): a list and a data table, virtualised,
   sorting and widths in the value store, cells drawn by the
   application, steps.
+- [Video](video.md): a local video file played in place, with full,
+  compact or no controls, looping and muted previews, driven by agents.
 - [The photo library](library.md): a virtualised thumbnail grid and a
   filmstrip over thumbnails supplied asynchronously, ratings, colour
   labels, flags and stacks, the culling keys, a comparison, tag chips

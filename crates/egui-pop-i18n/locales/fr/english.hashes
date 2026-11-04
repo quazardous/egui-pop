@@ -15,6 +15,7 @@ category-pointer 644ef2da9fdd0998
 category-terminal d3fbfb901d4c6c19
 category-theme 207825bba80d1810
 category-values 0e9206c70dea46eb
+category-video 1e025230cf98fc7a
 category-view 9cb14957d0a66a9e
 category-viewer 0111455edf9c95c7
 category-window 091ff0a5b7d5ed9d
@@ -325,6 +326,18 @@ command-value-set.description c9c594db377b1318
 command-value-set.title 76d4379c34679211
 command-value-undo.description fe2b25636c56375d
 command-value-undo.title cc7022a2d9050a57
+command-video-mute.description 102ccc84505fcfa8
+command-video-mute.title faafcb225a5acc9a
+command-video-pause.description 822e2ce0c005664f
+command-video-pause.title 5e94c26922b54e95
+command-video-play.description 42497d4b95531129
+command-video-play.title b0acc7d4c7f65c4b
+command-video-seek.description 7a3ebc3ad664c61a
+command-video-seek.title 160ddccce2fc64b7
+command-video-toggle.description dd870ee8b632adac
+command-video-toggle.title 660f312ffa4b7270
+command-video-volume.description 56137ba5ff9a00e5
+command-video-volume.title 5f645b185fb73481
 command-view-interface-zoom-in.description df0a261ace564502
 command-view-interface-zoom-in.title d72fc2a0991a2849
 command-view-interface-zoom-out.description 9c4e32d221f46357
@@ -1049,6 +1062,7 @@ egui-pop-views-sorted-up 3e593b33e0ce2cba
 egui-pop-views-table 7d631a7bf18ade47
 egui-pop-views-tree 7df8572525d939c5
 egui-pop-views-unflagged b07b2164c3071e36
+egui-pop-views-video-no-player 1dbde1fafaadcf04
 egui-pop-views-viewer-address b7dfa5bea5897243
 egui-pop-views-viewer-back 5f409e65a5b970e0
 egui-pop-views-viewer-code-block 3bd59df56363b1c5
@@ -1136,6 +1150,7 @@ plugin-egui-pop-theme-editor.title 3cf4b14fef58503f
 plugin-egui-pop-tips.title 8f302965a6ea2b6b
 plugin-egui-pop-toasts.title cc96fc899cce2811
 plugin-egui-pop-tray.title cca4f6a2e19dbb7c
+plugin-egui-pop-video.title 1e025230cf98fc7a
 plugin-egui-pop-viewer.title 0111455edf9c95c7
 plugin-egui-pop-views.title 260aa6928752872b
 plugin-egui-pop-window.title 091ff0a5b7d5ed9d

@@ -1,7 +1,13 @@
-//! The viewer's video player over GStreamer (feature `video`): `playbin` opens
-//! the file and picks the decoders, an `appsink` takes the pictures as RGBA on
+//! The video player over GStreamer (feature `video`): `playbin` opens the file
+//! and picks the decoders, an `appsink` takes the pictures as RGBA on
 //! GStreamer's own threads, and the interface's thread only reads the last
-//! one and the bus. This module is the only code that names GStreamer.
+//! one and the bus. This module is the
+//! only code that names GStreamer.
+//!
+//! - **Loops** ([`VideoPlayer::set_looping`]): a segment seek, so that the end
+//!   of the file is a segment's end instead of the stream's, and from there
+//!   another segment seek back to the start without flushing: the decoders
+//!   and the sinks go on without a gap.
 //!
 //! The binary links GStreamer's libraries, so a machine without them does not
 //! start it at all: a package declares them as a dependency. What can be missing
@@ -9,6 +15,7 @@
 //! loads by name: `playbin` (the base plugins), a demuxer or a decoder.
 
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -20,7 +27,7 @@ use gstreamer_app as gst_app;
 use gstreamer_video as gst_video;
 use gstreamer_video::prelude::*;
 
-use super::video::{
+use super::{
     VideoBackend, VideoFrame, VideoPlayer, VideoRequest, VideoState, VideoStatus, rgba_image,
 };
 
@@ -75,13 +82,26 @@ impl VideoBackend for GStreamer {
             playbin.set_property("audio-sink", &sink);
         }
         let mailbox = Mailbox::default();
-        playbin.set_property("video-sink", picture_sink(&mailbox, &request.egui));
+        playbin.set_property("video-sink", picture_sink(&mailbox, &request.egui)?);
         let bus = playbin
             .bus()
             .ok_or("GStreamer's `playbin` element has no bus")?;
         let wake = request.egui.clone();
+        let looping = Arc::new(AtomicBool::new(false));
+        let again = looping.clone();
+        let weak = playbin.downgrade();
         bus.set_sync_handler(move |_, message| {
             use gst::MessageView as M;
+            if let M::SegmentDone(_) = message.view()
+                && again.load(Ordering::Relaxed)
+                && let Some(playbin) = weak.upgrade()
+            {
+                // Back to the start at once, without a flush, off this
+                // streaming thread: the next segment follows the last.
+                playbin.call_async(|playbin| {
+                    let _ = playbin.seek_simple(gst::SeekFlags::SEGMENT, gst::ClockTime::ZERO);
+                });
+            }
             if matches!(
                 message.view(),
                 M::Error(_)
@@ -90,6 +110,7 @@ impl VideoBackend for GStreamer {
                     | M::AsyncDone(_)
                     | M::StateChanged(_)
                     | M::DurationChanged(_)
+                    | M::SegmentDone(_)
             ) {
                 wake.request_repaint();
             }
@@ -104,6 +125,9 @@ impl VideoBackend for GStreamer {
             ended: false,
             pending_seek: None,
             note: None,
+            looping,
+            segment: false,
+            loops: 0,
         };
         // Up to the first picture, on GStreamer's threads: the bus says how
         // it went.
@@ -117,9 +141,13 @@ impl VideoBackend for GStreamer {
     }
 }
 
-/// The element taking the pictures, in RGBA whatever the file holds: only the
-/// last one is kept, and each asks for a repaint.
-fn picture_sink(mailbox: &Mailbox, egui: &Context) -> gst_app::AppSink {
+/// The element taking the pictures, in RGBA whatever the file holds.
+fn picture_sink(mailbox: &Mailbox, egui: &Context) -> Result<gst::Element, String> {
+    Ok(app_sink(mailbox, egui).upcast())
+}
+
+/// The `appsink`: only the last picture is kept, and each asks for a repaint.
+fn app_sink(mailbox: &Mailbox, egui: &Context) -> gst_app::AppSink {
     let caps = gst_video::VideoCapsBuilder::new()
         .format(gst_video::VideoFormat::Rgba)
         .build();
@@ -210,12 +238,26 @@ struct Player {
     /// A position asked for before it could seek.
     pending_seek: Option<Duration>,
     note: Option<String>,
+    /// Asked to loop: read by the bus's handler, which seeks back at a
+    /// segment's end.
+    looping: Arc<AtomicBool>,
+    /// The playing segment ends at the file's end with a message, not the
+    /// stream (a segment seek was made).
+    segment: bool,
+    /// Segment ends seen while looping: the demuxer's, a little ahead of
+    /// the pictures shown.
+    loops: u64,
 }
 
 impl Player {
-    fn seek_now(&self, to: Duration) -> Result<(), String> {
+    fn seek_now(&mut self, to: Duration) -> Result<(), String> {
         let nanos = u64::try_from(to.as_nanos()).unwrap_or(i64::MAX as u64);
-        let flags = gst::SeekFlags::FLUSH | gst::SeekFlags::ACCURATE;
+        let mut flags = gst::SeekFlags::FLUSH | gst::SeekFlags::ACCURATE;
+        // While looping, every seek keeps the end a segment's.
+        self.segment = self.looping.load(Ordering::Relaxed);
+        if self.segment {
+            flags |= gst::SeekFlags::SEGMENT;
+        }
         self.playbin
             .seek_simple(
                 flags,
@@ -246,10 +288,26 @@ impl VideoPlayer for Player {
                     // on nothing.
                     self.set_state(gst::State::Paused)?;
                 }
+                gst::MessageView::SegmentDone(_) => {
+                    if self.looping.load(Ordering::Relaxed) {
+                        // The bus's handler has already gone back.
+                        self.loops += 1;
+                    } else {
+                        // Looping was turned off on the way: an end.
+                        self.ended = true;
+                        self.playing = false;
+                        self.segment = false;
+                        self.set_state(gst::State::Paused)?;
+                    }
+                }
                 gst::MessageView::AsyncDone(_) => {
+                    let first = !self.ready;
                     self.ready = true;
                     if let Some(to) = self.pending_seek.take() {
                         self.seek_now(to)?;
+                    } else if first && self.looping.load(Ordering::Relaxed) && !self.segment {
+                        let at = self.position().unwrap_or(Duration::ZERO);
+                        self.seek_now(at)?;
                     }
                 }
                 _ => {}
@@ -264,11 +322,13 @@ impl VideoPlayer for Player {
         } else {
             VideoState::Paused
         };
-        let time = |t: gst::ClockTime| Duration::from_nanos(t.nseconds());
         Ok(VideoStatus {
             state,
-            position: self.playbin.query_position::<gst::ClockTime>().map(time),
-            duration: self.playbin.query_duration::<gst::ClockTime>().map(time),
+            position: self.position(),
+            duration: self
+                .playbin
+                .query_duration::<gst::ClockTime>()
+                .map(|t| Duration::from_nanos(t.nseconds())),
             note: self.note.clone(),
         })
     }
@@ -303,6 +363,32 @@ impl VideoPlayer for Player {
     fn set_volume(&mut self, volume: f32) {
         self.playbin
             .set_property("volume", f64::from(volume.clamp(0.0, 1.0)));
+    }
+
+    fn set_looping(&mut self, on: bool) -> bool {
+        let was = self.looping.swap(on, Ordering::Relaxed);
+        // Turned on once the file is open: a segment from where it is. Turned
+        // off, the segment's end is taken for the end.
+        if on && !was && self.ready && !self.segment && !self.ended {
+            let at = self.position().unwrap_or(Duration::ZERO);
+            if self.seek_now(at).is_err() {
+                self.looping.store(false, Ordering::Relaxed);
+                return false;
+            }
+        }
+        true
+    }
+
+    fn loops(&self) -> u64 {
+        self.loops
+    }
+}
+
+impl Player {
+    fn position(&self) -> Option<Duration> {
+        self.playbin
+            .query_position::<gst::ClockTime>()
+            .map(|t| Duration::from_nanos(t.nseconds()))
     }
 }
 

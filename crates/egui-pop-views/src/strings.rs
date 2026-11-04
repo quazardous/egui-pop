@@ -155,24 +155,24 @@ pub const VIEWER_UNSUPPORTED: StrKey = StrKey::new(
     "egui-pop-views-viewer-unsupported",
     "This page cannot be shown here",
 );
-/// A video page's button while paused.
+/// A video's button while paused (the `Video` widget and the viewer's page).
 pub const VIEWER_VIDEO_PLAY: StrKey = StrKey::new("egui-pop-views-viewer-video-play", "Play");
-/// A video page's button while playing.
+/// A video's button while playing.
 pub const VIEWER_VIDEO_PAUSE: StrKey = StrKey::new("egui-pop-views-viewer-video-pause", "Pause");
-/// A video page's position slider.
+/// A video's position slider.
 pub const VIEWER_VIDEO_POSITION: StrKey =
     StrKey::new("egui-pop-views-viewer-video-position", "Position");
-/// A video page's volume slider.
+/// A video's volume slider.
 pub const VIEWER_VIDEO_VOLUME: StrKey = StrKey::new("egui-pop-views-viewer-video-volume", "Volume");
-/// A video page's time.
+/// A video's time.
 pub const VIEWER_VIDEO_TIME: StrKey = StrKey::new(
     "egui-pop-views-viewer-video-time",
     "{ $elapsed } / { $total }",
 );
-/// A video page's picture, its accessible name.
+/// A video's picture, its accessible name.
 pub const VIEWER_VIDEO_PICTURE: StrKey =
     StrKey::new("egui-pop-views-viewer-video-picture", "Video: { $name }");
-/// A video page before its first picture.
+/// A video before its first picture.
 pub const VIEWER_VIDEO_LOADING: StrKey =
     StrKey::new("egui-pop-views-viewer-video-loading", "Opening the video…");
 /// A YouTube page whose web view is in a window of its own.
@@ -183,10 +183,17 @@ pub const VIEWER_EMBED_OWN_WINDOW: StrKey = StrKey::new(
 /// A YouTube page's button, once its own window was closed.
 pub const VIEWER_EMBED_SHOW: StrKey =
     StrKey::new("egui-pop-views-viewer-embed-show", "Show the video");
-/// The title of the error page of a video that cannot be played.
+/// The title of the error page of a video that cannot be played, and of a
+/// `Video` widget's failure.
 pub const VIEWER_VIDEO_FAILED: StrKey = StrKey::new(
     "egui-pop-views-viewer-video-failed",
     "This video cannot be played here",
+);
+/// A `Video` widget without a player (a build without the `video` feature,
+/// the web).
+pub const VIDEO_NO_PLAYER: StrKey = StrKey::new(
+    "egui-pop-views-video-no-player",
+    "This application has no video player",
 );
 /// The viewer's content's accessible name.
 pub const VIEWER_PAGE: StrKey = StrKey::new("egui-pop-views-viewer-page", "Page");
@@ -268,6 +275,7 @@ pub const ALL: &[StrKey] = &[
     VIEWER_VIDEO_PICTURE,
     VIEWER_VIDEO_LOADING,
     VIEWER_VIDEO_FAILED,
+    VIDEO_NO_PLAYER,
     VIEWER_EMBED_OWN_WINDOW,
     VIEWER_EMBED_SHOW,
 ];

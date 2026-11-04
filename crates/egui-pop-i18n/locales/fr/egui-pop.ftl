@@ -2423,7 +2423,33 @@ egui-pop-arrangement-name = Nom
 
 egui-pop-arrangement-suggested = Agencement { $n }
 
+category-video = Vidéo
+
 category-viewer = Visionneuse
+
+command-video-mute =
+    .description = Coupe le son d’une vidéo (`muted` : true) ou le lui rend (false) ; sans `muted`, bascule.
+    .title = Couper le son d’une vidéo
+
+command-video-pause =
+    .description = Met en pause une vidéo (`video`, son id).
+    .title = Mettre une vidéo en pause
+
+command-video-play =
+    .description = Lit une vidéo (`video`, son id).
+    .title = Lire une vidéo
+
+command-video-seek =
+    .description = Amène une vidéo (`video`) à une position (`seconds`), ou la déplace d’une durée (`by`, négative pour reculer), sans sortir de la vidéo.
+    .title = Amener une vidéo à un instant
+
+command-video-toggle =
+    .description = Lit ou met en pause une vidéo (`video`, son id) ; depuis sa fin, la relit depuis le début.
+    .title = Lire ou mettre en pause une vidéo
+
+command-video-volume =
+    .description = Règle le volume d’une vidéo (`volume`, de 0 à 1), ou le change (`by`) ; l’un comme l’autre lui rend le son.
+    .title = Régler le volume d’une vidéo
 
 command-viewer-back =
     .description = Affiche la page précédente de la visionneuse.
@@ -2505,6 +2531,8 @@ command-viewer-zoom-reset =
     .description = Rend à la page de la visionneuse sa taille normale.
     .title = Taille normale de la page
 
+egui-pop-views-video-no-player = Cette application n'a pas de lecteur vidéo
+
 egui-pop-views-viewer-address = Adresse
 
 egui-pop-views-viewer-back = Précédente
@@ -2578,6 +2606,9 @@ egui-pop-views-viewer-zoom-out = Réduire
 
 panel-egui-pop-viewer =
     .title = Visionneuse
+
+plugin-egui-pop-video =
+    .title = Vidéo
 
 plugin-egui-pop-viewer =
     .title = Visionneuse

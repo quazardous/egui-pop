@@ -32,6 +32,8 @@ category-theme = Theme
 
 category-values = Values
 
+category-video = Video
+
 category-view = View
 
 category-viewer = Viewer
@@ -652,6 +654,30 @@ command-value-set =
 command-value-undo =
     .description = Undo the last change of the store's values.
     .title = Undo
+
+command-video-mute =
+    .description = Mutes a video (`muted`: true) or gives its sound back (false); without `muted`, switches.
+    .title = Mute a video
+
+command-video-pause =
+    .description = Pauses a video (`video`, its id).
+    .title = Pause a video
+
+command-video-play =
+    .description = Plays a video (`video`, its id).
+    .title = Play a video
+
+command-video-seek =
+    .description = Moves a video (`video`) to a position (`seconds`), or by an amount (`by`, negative to go back), kept within it.
+    .title = Move a video to a time
+
+command-video-toggle =
+    .description = Plays or pauses a video (`video`, its id); from its end, plays it from the start.
+    .title = Play or pause a video
+
+command-video-volume =
+    .description = Sets a video's volume (`volume`, from 0 to 1), or changes it (`by`); either gives the sound back.
+    .title = Set a video's volume
 
 command-view-interface-zoom-in =
     .description = Makes the whole interface one step larger.
@@ -2101,6 +2127,8 @@ egui-pop-views-tree = Tree
 
 egui-pop-views-unflagged = Unflagged
 
+egui-pop-views-video-no-player = This application has no video player
+
 egui-pop-views-viewer-address = Address
 
 egui-pop-views-viewer-back = Back
@@ -2313,6 +2341,9 @@ plugin-egui-pop-toasts =
 
 plugin-egui-pop-tray =
     .title = Tray icon
+
+plugin-egui-pop-video =
+    .title = Video
 
 plugin-egui-pop-viewer =
     .title = Viewer

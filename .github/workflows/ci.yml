@@ -175,9 +175,10 @@ jobs:
             **/tests/snapshots/*.new.png
           if-no-files-found: ignore
 
-  # The viewer's video page (feature `video`), the one build needing GStreamer:
-  # the other jobs build without it. It tests on a clip it writes itself, so
-  # the plugins are there for the test sources, the AVI muxer and demuxer.
+  # The video widget and the viewer's video page (feature `video`), the one
+  # build needing GStreamer: the other jobs build without it. It tests on a
+  # clip it writes itself, so the plugins are there for the test sources, the
+  # AVI muxer and demuxer.
   video:
     name: Viewer's video (GStreamer)
     needs: changes
@@ -202,8 +203,8 @@ jobs:
           shared-key: video
       - run: cargo clippy -p egui-pop-views -p egui-pop-gallery -p egui-pop --all-targets --locked --features egui-pop-views/video,egui-pop-gallery/video,egui-pop/views-video -- -D warnings
       - run: cargo doc -p egui-pop-views -p egui-pop --no-deps --locked --features egui-pop-views/video,egui-pop/views-video
-      - run: cargo test -p egui-pop-views --locked --features video --lib viewer
-      - run: cargo test -p egui-pop-views --locked --features video --test viewer_video --test viewer_gstreamer
+      - run: cargo test -p egui-pop-views --locked --features video --lib -- viewer video
+      - run: cargo test -p egui-pop-views --locked --features video --test video --test video_gstreamer --test viewer_video --test viewer_gstreamer
       - run: cargo test -p egui-pop-gallery --locked --features video --test viewer_video
       - name: Upload snapshot differences
         if: failure()
