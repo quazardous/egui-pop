@@ -1,6 +1,15 @@
 ---
-egui-pop-core: minor
+egui-pop-core: major
 egui-pop-model: minor
+egui-pop: major
+egui-pop-api: major
+egui-pop-editors: major
+egui-pop-i18n: major
+egui-pop-imaging: major
+egui-pop-platform: major
+egui-pop-test: major
+egui-pop-viewport: major
+egui-pop-views: major
 ---
 
 Collapsible sections (`core::sections`) run on egui_stack's `sections` module
@@ -13,3 +22,7 @@ arithmetic is re-exported as `core::sections::plan` (with `DragMode`), and
 `model::sections` is deprecated, kept unchanged for one release. Layouts are
 remembered under egui_stack's memory key; one stored under egui-pop's old key
 moves there the first time its stack is shown or loaded.
+
+Migration: build a `Laid` from a real stack (`laid_out`) instead of a struct
+literal; take `DragMode` and the plan from `core::sections`, not
+`model::sections`.
