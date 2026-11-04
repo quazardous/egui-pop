@@ -53,6 +53,7 @@
 //! }
 //! ```
 
+pub mod filter;
 pub mod model;
 
 use std::sync::{Arc, Mutex};
@@ -63,12 +64,13 @@ use egui::{
 use egui_pop_api::steps::Outcome;
 use egui_pop_api::{AppHandle, menus};
 use egui_pop_core::icon::{Size, Source};
-use egui_pop_core::kit::{KitCx, Part, State};
+use egui_pop_core::kit::{KitCx, Part, State, Tone};
 use egui_pop_core::strings::{self, tr, tr_args};
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::ids::{MenuId, StepId};
 use serde_json::{Value as Json, json};
 
+pub use filter::{FilterField, Query};
 pub use model::{Children, Edit, Model, Node, Position, Row};
 
 use crate::nav::{self, Nav, TypeAhead};
@@ -94,6 +96,14 @@ pub trait TreeSource<K: Key> {
     fn can_drop(&self, keys: &[K], target: &K, position: Position) -> Result<(), String> {
         let _ = (keys, target, position);
         Ok(())
+    }
+
+    /// What the filter searches for a node ([`TreeState::set_filter`]):
+    /// by default its plain name ([`Node::name`]). Add words the label
+    /// does not show (a description, tags, a path) after the name; the
+    /// row highlights what matches in its label only.
+    fn match_text(&self, node: &Node<K>) -> String {
+        node.name().to_string()
     }
 }
 
@@ -264,6 +274,21 @@ pub struct TreeState<K: Key> {
     pending: Option<(Vec<K>, Option<K>)>,
     /// A node to bring into view at the next pass.
     reveal: Option<K>,
+    /// The filter as typed, and its words.
+    filter: String,
+    query: Query,
+    /// The query changed since the matches were last computed.
+    filter_fresh: bool,
+    /// The model's version the matches were computed for.
+    filtered_at: Option<u64>,
+    /// The filter field drawn with the tree, if any.
+    pub(crate) field: Option<Id>,
+    /// The field takes the focus at its next draw.
+    pub(crate) field_focus: bool,
+    /// The tree takes the focus at its next draw.
+    pub(crate) focus_tree: bool,
+    /// The flattening last reported to agents.
+    pub(crate) reported: Option<u64>,
 }
 
 impl<K: Key> Default for TreeState<K> {
@@ -284,6 +309,14 @@ impl<K: Key> Default for TreeState<K> {
             context: None,
             pending: None,
             reveal: None,
+            filter: String::new(),
+            query: Query::default(),
+            filter_fresh: false,
+            filtered_at: None,
+            field: None,
+            field_focus: false,
+            focus_tree: false,
+            reported: None,
         }
     }
 }
@@ -361,6 +394,71 @@ impl<K: Key> TreeState<K> {
     /// there by then (open its ancestors first).
     pub fn reveal(&mut self, key: &K) {
         self.reveal = Some(key.clone());
+    }
+
+    /// Filters the tree (empty: no filter), from its next draw: the nodes
+    /// matching every word ([the filter](crate::tree::filter) says how) show with their
+    /// ancestors, the rest is hidden, and the cursor goes to the first
+    /// match when its row hides. A [`FilterField`] types it.
+    pub fn set_filter(&mut self, text: impl Into<String>) {
+        let text = text.into();
+        if text != self.filter {
+            self.query = Query::new(&text);
+            self.filter = text;
+            self.filter_fresh = true;
+        }
+    }
+
+    /// The filter as typed.
+    pub fn filter(&self) -> &str {
+        &self.filter
+    }
+
+    /// While the tree filters: how many nodes match, and how many it has
+    /// loaded.
+    pub fn filter_count(&self) -> Option<(usize, usize)> {
+        self.model.matches().map(|n| (n, self.model.len()))
+    }
+
+    /// Computes the matches again when the query or the nodes changed;
+    /// returns whether the query did.
+    fn refilter(&mut self, source: &dyn TreeSource<K>) -> bool {
+        let fresh = std::mem::take(&mut self.filter_fresh);
+        if !fresh && self.filtered_at == Some(self.model.version()) {
+            return false;
+        }
+        self.filtered_at = Some(self.model.version());
+        let matched = (!self.query.is_empty()).then(|| {
+            self.model
+                .nodes()
+                .filter(|n| self.query.matches(&source.match_text(n)))
+                .map(|n| n.key.clone())
+                .collect()
+        });
+        self.model.set_matches(matched, fresh);
+        if fresh {
+            self.model.rows();
+            let cursor = self.selection.cursor().cloned();
+            if self.query.is_empty() {
+                // Back to the whole tree: where the cursor was.
+                self.reveal = cursor;
+            } else if cursor.as_ref().and_then(|c| self.row_of(c)).is_none() {
+                let first = self
+                    .model
+                    .rows_now()
+                    .iter()
+                    .filter_map(Row::key)
+                    .find(|k| self.model.is_match(k))
+                    .cloned();
+                if let Some(k) = &first {
+                    self.reveal = Some(k.clone());
+                }
+                if first.is_some() {
+                    self.selection.set_cursor(first);
+                }
+            }
+        }
+        fresh
     }
 
     /// Whether a node is being renamed.
@@ -705,6 +803,20 @@ impl<'a, K: Key> TreeView<'a, K> {
 
     /// Draws the tree; runs what the user did as steps.
     pub fn show(
+        self,
+        ui: &mut Ui,
+        state: &mut TreeState<K>,
+        source: &dyn TreeSource<K>,
+    ) -> TreeOutput<K> {
+        // With a filter field, its keys are bound on the tree's surface.
+        if state.field.is_some() {
+            egui_pop_core::focus::scope(ui, filter::SURFACE, &[], |ui| self.draw(ui, state, source))
+        } else {
+            self.draw(ui, state, source)
+        }
+    }
+
+    fn draw(
         mut self,
         ui: &mut Ui,
         state: &mut TreeState<K>,
@@ -744,8 +856,27 @@ impl<'a, K: Key> TreeView<'a, K> {
             }
             state.drain();
         }
+        if state.refilter(source)
+            && let Some((n, total)) = state.filter_count()
+        {
+            egui_pop_core::a11y::announce(
+                ui.ctx(),
+                tr_args(
+                    ui.ctx(),
+                    &s::TREE_FILTER_ANNOUNCE,
+                    &[("count", &n.to_string()), ("total", &total.to_string())],
+                ),
+                egui_pop_core::a11y::Politeness::Polite,
+            );
+        }
 
         let focused = ui.memory(|m| m.has_focus(id));
+        // Ctrl+F or `/` (`tree.filter`) asked for the field.
+        if focused && state.field.is_some() && filter::take_request(ui.ctx()) {
+            state.field_focus = true;
+            ui.ctx().request_repaint();
+        }
+        let focus_tree = std::mem::take(&mut state.focus_tree);
         // The kit's disclosure glyphs, read once for every row.
         let kit = egui_pop_core::kit::Kit::of(ui.ctx());
         let (open_glyph, closed_glyph) = (
@@ -776,16 +907,20 @@ impl<'a, K: Key> TreeView<'a, K> {
             renaming,
             drag,
             context,
+            query,
             ..
         } = state;
         let count = model.rows_now().len();
+        // A filter that matches nothing says so in a row.
+        let no_match = count == 0 && model.is_filtered();
+        let shown = if no_match { 1 } else { count };
         let mut take_focus = false;
         let (_, response, inner) = rows::show(
             ui,
             id,
             &label,
             scroll,
-            count,
+            shown,
             row_h,
             self.height,
             |ui, visible| {
@@ -793,6 +928,12 @@ impl<'a, K: Key> TreeView<'a, K> {
                 let pointer = ui.input(|i| i.pointer.interact_pos());
                 for i in visible.range.clone() {
                     let rect = (visible.rect_of)(i);
+                    if no_match {
+                        pseudo(ui, rect, rect.left() + indent, |ui| {
+                            ui.weak(tr(ui.ctx(), &s::TREE_FILTER_NONE));
+                        });
+                        continue;
+                    }
                     let row = model.rows_now()[i].clone();
                     let x = rect.left() + row.depth() as f32 * indent;
                     match row {
@@ -848,7 +989,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                                 vec2(indent, rect.height()),
                             );
                             if node.branch {
-                                let glyph = if model.is_expanded(&key) {
+                                let glyph = if model.is_open(&key) {
                                     open_glyph
                                 } else {
                                     closed_glyph
@@ -925,15 +1066,45 @@ impl<'a, K: Key> TreeView<'a, K> {
                                     take_focus = true;
                                 }
                             } else {
-                                ui.painter()
-                                    .with_clip_rect(text_rect.intersect(ui.clip_rect()))
-                                    .text(
+                                let font = egui::TextStyle::Body.resolve(ui.style());
+                                let painter = ui
+                                    .painter()
+                                    .with_clip_rect(text_rect.intersect(ui.clip_rect()));
+                                let hits = if model.is_filtered() {
+                                    query.positions(&node.label)
+                                } else {
+                                    Vec::new()
+                                };
+                                if hits.is_empty() {
+                                    painter.text(
                                         pos2(text_rect.left(), text_rect.center().y),
                                         egui::Align2::LEFT_CENTER,
                                         &node.label,
-                                        egui::TextStyle::Body.resolve(ui.style()),
+                                        font,
                                         color,
                                     );
+                                } else {
+                                    // What matches, in the row's accent tone,
+                                    // underlined (as the palette marks it).
+                                    let strong = visible
+                                        .kit
+                                        .list_row
+                                        .style_toned(Tone::Accent, row_state)
+                                        .text;
+                                    let job = filter::highlighted(
+                                        &node.label,
+                                        &hits,
+                                        font,
+                                        color,
+                                        strong,
+                                    );
+                                    let galley = painter.layout_job(job);
+                                    let at = pos2(
+                                        text_rect.left(),
+                                        text_rect.center().y - galley.size().y / 2.0,
+                                    );
+                                    painter.galley(at, galley, color);
+                                }
                             }
                             let name = node.label.clone();
                             r.widget_info(move || {
@@ -944,10 +1115,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                                 // The first click did it.
                             } else if double {
                                 if node.branch {
-                                    actions.push(Action::Expand(
-                                        key.clone(),
-                                        !model.is_expanded(&key),
-                                    ));
+                                    actions.push(Action::Expand(key.clone(), !model.is_open(&key)));
                                 } else {
                                     actions.push(Action::Activate(key.clone()));
                                 }
@@ -955,10 +1123,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                                 take_focus = true;
                                 let on_toggle = pointer.is_some_and(|p| toggle.contains(p));
                                 if node.branch && on_toggle {
-                                    actions.push(Action::Expand(
-                                        key.clone(),
-                                        !model.is_expanded(&key),
-                                    ));
+                                    actions.push(Action::Expand(key.clone(), !model.is_open(&key)));
                                 } else if let Some(j) = node_index(model, i) {
                                     let nodes = model.node_rows();
                                     let key_at = |j: usize| {
@@ -977,7 +1142,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                                     )));
                                     if self.activate_on_click {
                                         actions.push(if node.branch {
-                                            Action::Expand(key.clone(), !model.is_expanded(&key))
+                                            Action::Expand(key.clone(), !model.is_open(&key))
                                         } else {
                                             Action::Activate(key.clone())
                                         });
@@ -1060,7 +1225,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                 }
             }
         }
-        if take_focus {
+        if take_focus || focus_tree {
             response.request_focus();
         }
         let ran = !actions.is_empty();
@@ -1071,6 +1236,7 @@ impl<'a, K: Key> TreeView<'a, K> {
             state.drain();
             ui.ctx().request_repaint();
         }
+        filter::report(ui.ctx(), &self.id, state);
         TreeOutput { response, signals }
     }
 
@@ -1114,7 +1280,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                     let Some(node) = model.node(&key) else {
                         continue;
                     };
-                    let open = node.branch && model.is_expanded(&key);
+                    let open = node.branch && model.is_open(&key);
                     match (k, open) {
                         (Nav::Left, true) => actions.push(Action::Expand(key, false)),
                         (Nav::Left, false) => {
@@ -1127,10 +1293,12 @@ impl<'a, K: Key> TreeView<'a, K> {
                         }
                         (_, false) if node.branch => actions.push(Action::Expand(key, true)),
                         (_, true) => {
-                            if let Some(first) = model.loaded(Some(&key)).and_then(|v| v.first())
-                                && let Some(j) =
+                            // The first child shown (a filter may hide some).
+                            if let Some(j) = model.loaded(Some(&key)).and_then(|v| {
+                                v.iter().find_map(|first| {
                                     nodes.iter().position(|&i| rows[i].key() == Some(first))
-                            {
+                                })
+                            }) {
                                 go(j, Modifiers::NONE, actions);
                             }
                         }
@@ -1154,7 +1322,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                     let key = key_at(c);
                     match model.node(&key) {
                         Some(n) if n.branch => {
-                            actions.push(Action::Expand(key.clone(), !model.is_expanded(&key)))
+                            actions.push(Action::Expand(key.clone(), !model.is_open(&key)))
                         }
                         Some(_) => actions.push(Action::Activate(key)),
                         None => {}
@@ -1229,6 +1397,12 @@ impl<'a, K: Key> TreeView<'a, K> {
                     state.model.fail(parent.as_ref(), reason);
                 }
                 (TREE_LOAD, outcome, Signal::Load { key: parent })
+            }
+            // While filtering, a branch opens or closes for the filter
+            // only: the fold the tree keeps, and its step, wait.
+            Action::Expand(key, expanded) if state.model.is_filtered() => {
+                state.model.set_open(&key, expanded);
+                return;
             }
             Action::Expand(key, expanded) => {
                 let mut done = (key.clone(), expanded);

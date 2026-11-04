@@ -38,6 +38,8 @@ category-view = View
 
 category-viewer = Viewer
 
+category-views = Views
+
 category-window = Window
 
 clip-application-x-egui-pop-inspect-json =
@@ -630,6 +632,10 @@ command-tips-reset =
 command-tips-show =
     .description = Shows the tip the rules pick here, as a card beside what it is about; `tip`, an id, shows that one.
     .title = Show a tip
+
+command-tree-filter =
+    .description = Moves the focus from a tree to its filter field.
+    .title = Filter the tree
 
 command-value-get =
     .description = A value with its descriptor (`path`).
@@ -2124,6 +2130,14 @@ egui-pop-views-sorted-up = { $column }, sorted ascending
 egui-pop-views-table = Table
 
 egui-pop-views-tree = Tree
+
+egui-pop-views-tree-filter = Filter
+
+egui-pop-views-tree-filter-announce = { $count } of { $total } match the filter
+
+egui-pop-views-tree-filter-count = { $count } of { $total }
+
+egui-pop-views-tree-filter-none = No match
 
 egui-pop-views-unflagged = Unflagged
 
