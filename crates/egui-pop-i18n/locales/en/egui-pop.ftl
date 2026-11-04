@@ -1229,6 +1229,10 @@ egui-pop-history-show-replaced = Show replaced steps
 
 egui-pop-history-snapshot-name = Snapshot { $n }
 
+egui-pop-history-snapshot-pending = { $name } (not saved yet)
+
+egui-pop-history-snapshot-pending-hint = Kept at the next save; lost if the application quits first
+
 egui-pop-history-snapshots = Snapshots
 
 egui-pop-history-start = Start

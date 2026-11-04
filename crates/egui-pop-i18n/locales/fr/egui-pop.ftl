@@ -998,6 +998,10 @@ egui-pop-history-show-replaced = Afficher les étapes remplacées
 
 egui-pop-history-snapshot-name = Instantané { $n }
 
+egui-pop-history-snapshot-pending = { $name } (pas encore enregistré)
+
+egui-pop-history-snapshot-pending-hint = Gardé au prochain enregistrement ; perdu si l’application quitte avant
+
 egui-pop-history-snapshots = Instantanés
 
 egui-pop-history-start = Début

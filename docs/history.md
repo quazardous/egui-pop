@@ -139,6 +139,11 @@ only what `History::features` says the scope supports.
   a new step (`edit.restore`, vetoable like an undo, so an undo takes
   the restore back), `forget` deletes one. Taking or deleting one is
   published as `history.snapshot_taken` or `history.snapshot_deleted`.
+  An owner whose history is saved may keep a snapshot only at its next
+  save (an image editor pins it to the version that save writes): until
+  then it sets `Snapshot::pending`, and the panel shows the name with
+  "(not saved yet)", its tooltip saying it is lost if the application
+  quits first.
 - **The hover preview**: `preview(scope, Some(at))` while the pointer
   is on a row (`At::Step`, 0 the start, or `At::Snapshot`),
   `preview(scope, None)` when it leaves (or the panel is no longer

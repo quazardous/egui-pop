@@ -81,6 +81,7 @@ impl Store {
             step,
             origin: origin.clone(),
             at: self.now(),
+            pending: false,
         };
         if dry_run {
             return Ok(info);
