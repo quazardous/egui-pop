@@ -249,3 +249,29 @@ fn agents_read_the_toolbars_drawn() {
     assert_eq!(wide["tools"][0]["command"], "demo.save");
     assert_eq!(wide["tools"][0]["icon"], "save");
 }
+
+#[test]
+fn a_toolbar_is_one_tab_stop_with_the_arrows_inside() {
+    use egui::Key;
+    use egui_pop_test::walk::{self, Press, SHIFT_TAB, TAB};
+    let mut h = harness();
+    let name = |s: Option<walk::Stop>| s.map(|s| (s.name, s.id)).expect("a focus");
+    let save = walk::reach(&mut h, TAB, "Save", 20).expect("the wide toolbar");
+    let right = Press::key(Key::ArrowRight);
+    assert_eq!(name(walk::press(&mut h, right)).0, "Show the grid");
+    // Delete is greyed: passed over.
+    assert_eq!(name(walk::press(&mut h, right)).0, "Plain");
+    let align = name(walk::press(&mut h, right));
+    assert_eq!(align.0, "Align");
+    assert_eq!(
+        name(walk::press(&mut h, right)).1,
+        save.id,
+        "round to the first"
+    );
+    assert_eq!(name(walk::press(&mut h, Press::key(Key::End))), align);
+    // Tab goes on to the next toolbar, Shift+Tab comes back to the last tool.
+    let next = name(walk::press(&mut h, TAB));
+    assert_eq!(next.0, "Save");
+    assert_ne!(next.1, save.id);
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), align);
+}

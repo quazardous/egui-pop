@@ -26,6 +26,8 @@
 //!   nothing while a modal scope or a modal overlay is open. In a window
 //!   with [`regions`](crate::regions) (an application's), F6 is theirs, and
 //!   the panel scopes of a region take that region's turn.
+//! - A [`roving`] group (a toolbar, a strip) is one stop: Tab leaves it and
+//!   comes back to the widget focused there last, the arrows go inside.
 //! - The focus on a widget that is not a stop is left to egui (its own
 //!   Tab order is the order widgets were drawn), and a focused widget
 //!   that takes the keys itself (a terminal) keeps Tab and F6.
@@ -215,6 +217,60 @@ pub fn stop(ui: &Ui, response: &Response, stop: TabStop) {
         id: response.id,
         entry,
     });
+}
+
+/// Which way a [`roving`] group runs, which decides its arrows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Axis {
+    /// A row: Left and Right.
+    Horizontal,
+    /// A column: Up and Down.
+    Vertical,
+}
+
+/// Draws `add` as a roving group named `name`: one Tab stop for all its
+/// widgets, the arrows going between them (a toolbar, a strip of icons, a
+/// status bar), as ARIA's toolbar pattern has it.
+///
+/// - **Tab** from any of its widgets leaves the group, past its last widget,
+///   and Shift+Tab before its first.
+/// - **Tab coming in**, either way, lands on the widget focused there last; on
+///   its first the first time.
+/// - **The arrows along it** (Left and Right for [`Axis::Horizontal`], Up and
+///   Down for [`Axis::Vertical`]) go to the widget placed before or after,
+///   round from one end to the other; **Home** and **End** to its ends. The
+///   other arrows are left to egui (and stay in their region).
+///
+/// Its widgets are those drawn inside `add` that can take the focus, so a
+/// disabled one is passed over. An open menu or popup keeps the arrows, and a
+/// focused text field every key. Name each group of a window apart: the widget
+/// focused last is remembered by name.
+///
+/// It needs the focus plugin ([`focus::install`](crate::focus::install); an
+/// application has it): without it, the widgets stay stops of egui's order.
+///
+/// ```
+/// use egui_pop_core::tab::{self, Axis};
+///
+/// fn tools(ui: &mut egui::Ui) {
+///     tab::roving(ui, "tools", Axis::Horizontal, |ui| {
+///         ui.horizontal(|ui| {
+///             let _ = ui.button("Cut");
+///             let _ = ui.button("Copy");
+///             let _ = ui.button("Paste");
+///         });
+///     });
+/// }
+/// ```
+pub fn roving<R>(ui: &mut Ui, name: &str, axis: Axis, add: impl FnOnce(&mut Ui) -> R) -> R {
+    crate::roving::show(ui, name, axis, add)
+}
+
+/// The roving groups drawn in the last pass, by name, with their widgets that
+/// can take the focus in the order drawn.
+pub fn rovings(ctx: &Context) -> Vec<(String, Vec<Id>)> {
+    crate::roving::groups(ctx)
 }
 
 /// The scopes drawn in the last pass, with their stops.

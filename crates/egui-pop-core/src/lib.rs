@@ -95,6 +95,7 @@ pub mod progress;
 pub mod regions;
 mod reveal;
 mod ring;
+mod roving;
 pub mod scale;
 mod scroll_keys;
 pub mod sections;

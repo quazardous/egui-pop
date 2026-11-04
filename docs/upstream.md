@@ -388,6 +388,20 @@ limit.
   `crates/egui-pop-core/src/stay.rs`).
 - **Remove when**: egui bounds its arrow moves to a container (a focus scope).
 
+## egui: no roving Tab stop
+
+- **Compensated**: a widget is in Tab's order if and only if it senses
+  `FOCUSABLE`, and that order is the order of drawing: nothing keeps a toolbar's
+  buttons out of it while they stay focusable by arrow or click, nor says where
+  Tab lands in a container. A toolbar of twenty tools was twenty stops.
+- **Upstream**: not filed yet.
+- **Workaround**: `tab::roving` (`// upstream:` in
+  `crates/egui-pop-core/src/roving.rs`): Tab from a widget of the group goes on
+  from the group's end, and Tab landing on another of its widgets than the one
+  focused there last is moved to it before the next pass draws.
+- **Remove when**: egui has a focus scope with a single Tab stop (the web's
+  roving `tabindex`), or lets a widget leave Tab's order and stay focusable.
+
 ## egui: Tab wraps only in a modal layer
 
 - **Compensated**: Tab goes by drawing order through the whole window and wraps

@@ -265,6 +265,24 @@ palette, the status bar): such a move is undone in the next pass, and the focus
 stays where it was. Tab and F6 cross regions; a widget outside every region
 keeps egui's rule.
 
+### A roving group is one stop
+
+`tab::roving(ui, name, axis, add)` makes what `add` draws one Tab stop, as ARIA's
+toolbar pattern has it: egui-pop's toolbars are drawn in one.
+
+- **Tab** from any of its widgets leaves the group, past its last widget, and
+  Shift+Tab before its first. After Escape, Tab goes on past it too.
+- **Tab coming in**, either way, lands on the widget focused there last; on the
+  first the first time.
+- **The arrows along it** (Left and Right in a row, `Axis::Horizontal`; Up and Down
+  in a column, `Axis::Vertical`) go to the widget placed before or after, round from
+  one end to the other; Home and End go to its ends. The other arrows are egui's,
+  and stay in their region.
+- **Its widgets** are those drawn inside it that can take the focus: a disabled one
+  is passed over. An open menu or popup keeps the arrows, and a focused text field
+  every key.
+- It needs the focus plugin; `tab::rovings` lists the groups the last pass drew.
+
 ### A popover keeps Tab
 
 With the focus plugin (`focus::install`; an application has it), Tab does not walk
