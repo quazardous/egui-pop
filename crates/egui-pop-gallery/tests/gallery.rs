@@ -6183,6 +6183,45 @@ fn the_folds_the_sections_and_the_layout_survive_a_restart() {
 }
 
 #[test]
+fn a_rebound_shortcut_and_a_setting_survive_a_restart() {
+    use egui_pop::api::devtools::inspect::CMD_INSPECT;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "debug"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    assert_eq!(app.keys_for(&CMD_INSPECT), ["Ctrl+Shift+F12"]);
+    app.rebind(CMD_INSPECT, Some("Ctrl+Alt+F9".into()));
+    egui_pop::core::lock(&app.store())
+        .set(egui_pop::model::values::Set::new(
+            "settings/developer.devtools",
+            egui_pop::model::values::Change::To(egui_pop::model::values::Value::Bool(false)),
+            egui_pop::model::commands::Origin::User,
+        ))
+        .unwrap();
+    h.run();
+    assert_eq!(app.keys_for(&CMD_INSPECT), ["Ctrl+Alt+F9"]);
+
+    // What eframe does at exit (the browser's local storage on the
+    // web), and at the next start.
+    let mut kept = KeptStorage::default();
+    eframe::App::save(h.state_mut(), &mut kept);
+    drop(h);
+    let options = options("pop-dark", Density::Comfortable, "debug");
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1100.0, 720.0))
+        .shared_wgpu()
+        .build_eframe(move |cc| {
+            let gallery = Gallery::from_creation_context(cc, options).expect("the gallery builds");
+            gallery.restore(&kept);
+            gallery
+        });
+    h.run();
+    h.run();
+    let app = h.state().app.handle().clone();
+    assert_eq!(app.keys_for(&CMD_INSPECT), ["Ctrl+Alt+F9"]);
+    assert!(!egui_pop::api::devtools::enabled(&app));
+}
+
+#[test]
 fn a_scripted_run_keeps_nothing() {
     let mut h = Harness::builder()
         .with_size(egui::vec2(1100.0, 720.0))
