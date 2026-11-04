@@ -19,7 +19,11 @@ use std::io::Write as _;
 
 use egui::Ui;
 use egui_pop::api::{App, AppBuilder, BuildError};
+use egui_pop::model::commands::Origin;
 use egui_pop::model::ids::{PluginId, StoryId};
+use egui_pop::model::keymap::{KeymapDoc, Layer};
+use egui_pop::model::keymap_schema;
+use egui_pop::model::values::{SettingsDoc, settings_schema};
 use egui_pop::theme::ThemeSpec;
 
 pub mod host;
@@ -351,6 +355,14 @@ fn take_instance() -> Option<egui_pop::platform::instance::Instance> {
 /// desktop, the browser's local storage on the web.
 const LAYOUT_KEY: &str = "gallery.layout";
 
+/// Where the settings changed from their default are kept, beside the
+/// layout: the gallery gives the app no persistence directory, which a
+/// web page has none of.
+const SETTINGS_KEY: &str = "gallery.settings";
+
+/// Where the user's keymap layer (the shortcuts rebound) is kept.
+const KEYMAP_KEY: &str = "gallery.keymap";
+
 /// The gallery application: the egui-pop app, and the options of a
 /// scripted run.
 #[derive(Debug)]
@@ -412,14 +424,35 @@ impl Gallery {
         Ok(gallery)
     }
 
-    /// Puts back the layout kept by an earlier run. One no longer readable is
-    /// dropped; the workbench repairs one that does not fit today's panels.
+    /// Puts back the layout, the settings and the shortcuts kept by an
+    /// earlier run. A document no longer readable is dropped; the
+    /// workbench repairs a layout that does not fit today's panels, a
+    /// setting no plugin declares waits for one.
     pub fn restore(&self, storage: &dyn eframe::Storage) {
+        let app = self.app.handle();
         let kept = storage
             .get_string(LAYOUT_KEY)
             .and_then(|text| serde_json::from_str(&text).ok());
         if let Some(layout) = kept {
-            self.app.handle().set_layout(layout);
+            app.set_layout(layout);
+        }
+        let settings = storage.get_string(SETTINGS_KEY).and_then(|text| {
+            settings_schema()
+                .load::<SettingsDoc>(&text)
+                .ok()
+                .map(|l| l.value)
+        });
+        if let Some(doc) = settings {
+            let _ = egui_pop::core::lock(&app.store()).import(&doc, &Origin::User);
+        }
+        let keymap = storage.get_string(KEYMAP_KEY).and_then(|text| {
+            keymap_schema()
+                .load::<KeymapDoc>(&text)
+                .ok()
+                .map(|l| l.value)
+        });
+        if let Some(doc) = keymap {
+            app.load_keymap(doc, Layer::User);
         }
     }
 
@@ -530,10 +563,19 @@ impl eframe::App for Gallery {
     /// ([`eframe::App::persist_egui_memory`]): the folds of the page list, the
     /// stacked sections, the panels' sizes, how far pages are scrolled.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        if self.persists
-            && let Ok(text) = serde_json::to_string(&self.app.handle().layout())
-        {
+        if !self.persists {
+            return;
+        }
+        let app = self.app.handle();
+        if let Ok(text) = serde_json::to_string(&app.layout()) {
             storage.set_string(LAYOUT_KEY, text);
+        }
+        let settings = egui_pop::core::lock(&app.store()).export("settings/");
+        if let Ok(text) = settings_schema().save(&settings) {
+            storage.set_string(SETTINGS_KEY, text);
+        }
+        if let Ok(text) = keymap_schema().save(&app.export_keymap(Layer::User)) {
+            storage.set_string(KEYMAP_KEY, text);
         }
     }
 
