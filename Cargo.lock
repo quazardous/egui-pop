@@ -1296,7 +1296,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-api"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "eframe",
  "egui",
@@ -1318,7 +1318,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-core"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "egui",
  "egui-pop-model",
@@ -1525,7 +1525,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-views"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "egui",
  "egui-pop-api",
