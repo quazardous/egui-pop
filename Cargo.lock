@@ -1689,8 +1689,9 @@ dependencies = [
 
 [[package]]
 name = "egui_stack"
-version = "0.22.0"
-source = "git+https://github.com/quazardous/egui_stack?branch=wip%2Fdock-painter#c614e5a342e5804ed2d8fb0d3d039c0aaae8d3c4"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fb2d6c78d95aaf0a5a23d76a721951047d601d81a52fc19b31a8d060b42a7b8"
 dependencies = [
  "duplicate",
  "egui",
