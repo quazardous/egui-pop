@@ -746,6 +746,8 @@ pub(crate) struct Shared {
     pub(crate) panel_commands: RefCell<strings::PanelCommands>,
     /// The application's name (`AppBuilder::name`).
     name: RefCell<String>,
+    /// The application's id (`AppBuilder::app_id`).
+    app_id: RefCell<String>,
     diagnostics: RefCell<Diagnostics>,
     derived: RefCell<Derived>,
     plugins: RefCell<Vec<PluginInfo>>,
@@ -869,6 +871,7 @@ impl AppHandle {
             shell_sizes: RefCell::default(),
             panel_commands: RefCell::default(),
             name: RefCell::default(),
+            app_id: RefCell::default(),
             diagnostics: RefCell::new(Diagnostics::new()),
             derived: RefCell::new(Derived::default()),
             plugins: RefCell::new(Vec::new()),
@@ -1089,6 +1092,12 @@ impl AppHandle {
     /// given.
     pub fn name(&self) -> String {
         self.0.name.borrow().clone()
+    }
+
+    /// The application's id (`AppBuilder::app_id`), reverse-DNS
+    /// (`org.example.App`); empty when none was given.
+    pub fn app_id(&self) -> String {
+        self.0.app_id.borrow().clone()
     }
 
     /// The value store.
@@ -2705,6 +2714,7 @@ pub struct AppBuilder {
     wrap: Option<WrapUi>,
     on_exit: Vec<ExitFn>,
     name: Option<String>,
+    app_id: Option<String>,
     panel_alignment: crate::workbench::PanelAlignment,
     toast_corner: crate::toasts::Corner,
     pointer_profile: String,
@@ -2796,6 +2806,7 @@ impl AppBuilder {
             wrap: None,
             on_exit: Vec::new(),
             name: None,
+            app_id: None,
             panel_alignment: crate::workbench::PanelAlignment::Center,
             toast_corner: crate::toasts::Corner::default(),
             pointer_profile: egui_pop_model::pointer::DEFAULT_PROFILE.into(),
@@ -2838,6 +2849,17 @@ impl AppBuilder {
     /// none is given.
     pub fn name(mut self, name: &str) -> Self {
         self.name = Some(name.into());
+        self
+    }
+
+    /// The application's id, reverse-DNS (`org.example.App`): the one its
+    /// desktop file, its store listing and its window (eframe's
+    /// `ViewportBuilder::with_app_id`) carry. What identifies the
+    /// application to others reads it (`AppHandle::app_id`): the viewer's
+    /// YouTube player sends it. `run_native` takes the window's when none
+    /// is given.
+    pub fn app_id(mut self, id: &str) -> Self {
+        self.app_id = Some(id.into());
         self
     }
 
@@ -3173,6 +3195,7 @@ impl AppBuilder {
         app.handle.workbench_mut().layout.folded = self.folded;
         app.handle.workbench_mut().layout.over = self.over;
         *app.handle.0.name.borrow_mut() = self.name.unwrap_or_default();
+        *app.handle.0.app_id.borrow_mut() = self.app_id.unwrap_or_default();
         strings::set_application(ctx, &app.handle.name());
         let mut themes = self.themes;
         let mut kits = self.kits;
@@ -3265,6 +3288,9 @@ impl AppBuilder {
         self.system_focus
             .get_or_insert_with(egui_pop_core::focus_mode::read_system);
         self.name.get_or_insert_with(|| title.to_string());
+        if self.app_id.is_none() {
+            self.app_id.clone_from(&options.viewport.app_id);
+        }
         // The window's place from the last run, repaired (the screens are
         // not known before the window exists: only bounds are checked).
         if let Some(p) = &self.persist {
@@ -3301,6 +3327,9 @@ impl AppBuilder {
         self.system_focus
             .get_or_insert_with(egui_pop_core::focus_mode::read_system);
         self.name.get_or_insert_with(|| title.to_string());
+        if self.app_id.is_none() {
+            self.app_id.clone_from(&options.viewport.app_id);
+        }
         if let Some(p) = &self.persist {
             crate::window::restore(p.dir(), &mut options);
         }
