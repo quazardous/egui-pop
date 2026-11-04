@@ -2561,6 +2561,10 @@ egui-pop-views-viewer-embed-own-window = Cette vidéo est lue dans sa propre fen
 
 egui-pop-views-viewer-embed-show = Afficher la vidéo
 
+egui-pop-views-viewer-embed-too-small = Le panneau est trop petit pour le lecteur de YouTube
+
+egui-pop-views-viewer-embed-too-small-detail = Le lecteur de YouTube demande au moins { $min } sur { $min } pixels ; il aurait ici { $width } sur { $height }. Agrandissez le panneau ou ouvrez la vidéo à l’extérieur.
+
 egui-pop-views-viewer-empty = Rien n’est ouvert. Les pages d’aide et les images s’ouvrent ici.
 
 egui-pop-views-viewer-find = Rechercher dans la page

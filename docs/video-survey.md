@@ -442,10 +442,11 @@ Read against the Required Minimum Functionality [docs], [code]:
   domain is the application's id (reverse-DNS in Google's examples), and
   forbid masking it. `localhost` identifies nobody: the default should be
   derived from the application's id, and an application should be told to
-  set its own.
+  set its own. Since follow-up 4 (2026-11-04) it is
+  `https://<app id>/`, from `AppBuilder::app_id`.
 - **Size**: the player must be at least 200 by 200 pixels; a narrow panel
   can be smaller. Below that the page should show the card with "Open
-  outside" instead.
+  outside" instead. Since follow-up 4 it does.
 - **Autoplay**: the trial loads `autoplay=1`, after the user clicked the
   link, with the web view visible; it closes when its panel is hidden. That
   fits "not until the player is visible" and "one autoplaying player".
@@ -488,10 +489,11 @@ owner already settled it; everything else is a proposal.
    `Referer` derived from the application's id (not `localhost`), a
    minimum of 200 by 200 pixels below which the card with "Open outside"
    shows, a line in the documentation on the terms (no extraction, nothing
-   over the player, an application that can be updated). **S.** Whether
-   the trial stays at all is the owner's call
-   ([ADR 0017](adr/0017-links-and-outside-content.md#youtube-inside-a-trial-amended-2026-11-03)):
-   **not decided**. This survey's advice is to keep it, off by default.
+   over the player, an application that can be updated). **S.** **Done**
+   (2026-11-04, the owner chose to keep the trial, opt-in): the `Referer`
+   is `https://<app id>/` from `AppBuilder::app_id`, the card shows below
+   200 by 200 of the web view's pixels, and
+   [links.md](links.md#terms) says what the terms allow.
 5. **Plain web videos in our own player**: a remote `.mp4`, `.webm`,
    `.m3u8` or `.mpd`, and PeerTube videos through their file address,
    played by the same widget (GStreamer opens `https:`), after a click as
@@ -536,8 +538,9 @@ owner already settled it; everything else is a proposal.
 - **Decided already**: local video plays inside with the `video` feature
   (2026-11-01); the YouTube page exists as an opt-in trial (2026-11-03);
   `option-ext` is allowed as a narrow MPL exception for it (2026-11-03).
-- **To decide**: the `Video` widget's plan (1); whether the YouTube trial
-  stays (4); whether remote video files and PeerTube may play inside (5);
+- **Decided since**: the YouTube trial stays, opt-in, made to comply (4,
+  2026-11-04, done).
+- **To decide**: the `Video` widget's plan (1); whether remote video files and PeerTube may play inside (5);
   whether the WTFPL (`ffmpeg-next`) ever joins the allow-list (only if an
   FFmpeg backend is wanted, which this survey does not recommend).
 

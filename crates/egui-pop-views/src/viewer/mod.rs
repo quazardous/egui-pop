@@ -94,8 +94,11 @@ use egui_pop_model::panels::{Area, PanelSpec};
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
 use serde_json::{Value as Json, json};
 
+#[allow(deprecated)]
+pub use embed::DEFAULT_REFERRER;
 pub use embed::{
-    DEFAULT_REFERRER, EmbedBackend, EmbedRequest, Embedded, PUMP, Placement, embed_url,
+    EmbedBackend, EmbedRequest, Embedded, MIN_PLAYER, PUMP, Placement, embed_url, fits_player,
+    referrer_for,
 };
 pub use page::{Block, ImageRef, Markdown, has_scheme, resolve, slug};
 pub use video::{VIDEO_CONTEXT, VIDEO_ID, VIDEO_SURFACE};
@@ -1314,9 +1317,12 @@ impl ViewerPlugin {
         self
     }
 
-    /// The address the web view's request says it comes from (its `Referer`,
-    /// which YouTube's player needs): the application's own site, ideally.
-    /// [`DEFAULT_REFERRER`] otherwise.
+    /// The `Referer` the web view's request carries, in place of the one
+    /// built from the application's id (`https://<app id>/`, [`referrer_for`]
+    /// of `AppBuilder::app_id`). YouTube's terms ask that it identify the
+    /// application: an `https` URL whose domain is its id, as registered
+    /// with the store distributing it. Without it and without an id,
+    /// YouTube links open outside.
     pub fn embed_referrer(mut self, referrer: impl Into<String>) -> Self {
         self.referrer = Some(referrer.into());
         self
@@ -1357,9 +1363,17 @@ impl Plugin for ViewerPlugin {
         if let Some(backend) = &self.embed {
             v.set_embed_backend(Some(backend.clone()));
         }
-        if let Some(referrer) = &self.referrer {
-            lock(&v.embed).set_referrer(referrer.clone());
+        let referrer = self
+            .referrer
+            .clone()
+            .or_else(|| embed::referrer_for(&app.app_id()));
+        if referrer.is_none() && lock(&v.embed).has_backend() {
+            log::warn!(
+                target: "egui_pop",
+                "viewer: no application id (`AppBuilder::app_id`) to name in YouTube's `Referer`: YouTube links open outside"
+            );
         }
+        lock(&v.embed).set_referrer(referrer);
         if let Some(l) = links::links(&app) {
             l.set_inside(Some(Arc::new(Shows(v.clone()))));
         }

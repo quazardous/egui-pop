@@ -1077,6 +1077,8 @@ egui-pop-views-viewer-back 5f409e65a5b970e0
 egui-pop-views-viewer-code-block 3bd59df56363b1c5
 egui-pop-views-viewer-embed-own-window 782d4243b8081bc6
 egui-pop-views-viewer-embed-show 26af0ebdd1e98e7a
+egui-pop-views-viewer-embed-too-small af6b8917b30542ce
+egui-pop-views-viewer-embed-too-small-detail d1f96cd4f0e1d5c8
 egui-pop-views-viewer-empty 7f1605fb1c9257a6
 egui-pop-views-viewer-find 4cbf4c59f504086e
 egui-pop-views-viewer-find-close bc07218ad72a8a52

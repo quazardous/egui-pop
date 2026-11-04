@@ -344,9 +344,11 @@ decides nothing about a general web view; whether it stays is the owner's call.
   would.
 - **What loads.** The privacy-enhanced player
   (`youtube-nocookie.com/embed/<id>`) as the page itself, its request carrying
-  a `Referer` (`ViewerPlugin::embed_referrer`, `https://localhost/` by
-  default) through wry's `with_url_and_headers`: without one YouTube's player
-  refuses to play (its error 153). Every other navigation is refused in the web
+  a `Referer` through wry's `with_url_and_headers`: without one YouTube's player
+  refuses to play (its error 153). Since 2026-11-04 the `Referer` names the
+  application, `https://<app id>/` from `AppBuilder::app_id`
+  (`ViewerPlugin::embed_referrer` replaces it), as YouTube's Required Minimum
+  Functionality asks; it was `https://localhost/` before. Every other navigation is refused in the web
   view and handed to the links service, outside.
 - **Where.** On X11 (Xwayland included) a child window over the panel, following
   it; on Wayland, or with the panel detached, a window of its own: wry's child
@@ -361,5 +363,10 @@ decides nothing about a general web view; whether it stays is the owner's call.
   it. wry's Android-only part (`dom_query`, `selectors`, `cssparser`,
   `cssparser-macros`, `dtoa-short`, MPL-2.0 too) is never compiled for the
   platforms egui-pop builds, which `deny.toml` now lists (`[graph] targets`).
+- **YouTube's terms** (2026-11-04, the owner's choice: keep the trial, opt-in,
+  and make it comply): the `Referer` names the application, the player is never
+  smaller than 200 by 200 (a card with Open outside over a smaller panel), and
+  nothing of egui-pop's is drawn over it; an application turning the feature on
+  accepts YouTube's terms ([links.md](../links.md#terms)).
 - **What was checked**, in a headless nested compositor: the trial's
   [results](0017-links-and-outside-content-analysis.md#youtube-in-a-web-view-the-trial).

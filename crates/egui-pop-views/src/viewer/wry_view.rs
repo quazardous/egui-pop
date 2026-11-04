@@ -12,6 +12,8 @@
 //!   through wry's `build_gtk`.
 //! - The page loads with a `Referer` (`with_url_and_headers`); other pages it is
 //!   asked to go to are refused and handed back ([`Embedded::take_links`]).
+//! - **Its own window** cannot be made smaller than YouTube's minimum player
+//!   ([`MIN_PLAYER`] each way, in GTK's pixels, which are the web view's).
 //! - wry's web views are not `Send`: they stay in this thread's table, the
 //!   viewer holds a handle that reaches them from this thread only.
 
@@ -29,7 +31,7 @@ use x11rb::protocol::xproto::{
 };
 use x11rb::rust_connection::RustConnection;
 
-use super::embed::{EmbedBackend, EmbedRequest, Embedded, Placement};
+use super::embed::{EmbedBackend, EmbedRequest, Embedded, MIN_PLAYER, Placement};
 
 /// The web view backend of this build: wry over WebKitGTK.
 #[derive(Clone, Copy, Debug, Default)]
@@ -209,6 +211,13 @@ impl EmbedBackend for Wry {
             }
         };
         let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        if child.is_none() {
+            // YouTube's minimum player, in GTK's pixels, which are the web
+            // view's: its own window cannot be made smaller. A child is sized
+            // by the page, which closes it below that.
+            let min = MIN_PLAYER as i32;
+            vbox.set_size_request(min, min);
+        }
         window.add(&vbox);
         let view = builder
             .build_gtk(&vbox)
