@@ -1,9 +1,16 @@
 //! The video player over GStreamer (feature `video`): `playbin` opens the file
-//! and picks the decoders, an `appsink` takes the pictures as RGBA on
-//! GStreamer's own threads, and the interface's thread only reads the last
-//! one and the bus. This module is the
+//! and picks the decoders, a `videoconvert` on every core turns the pictures
+//! into RGBA and an `appsink` takes them on GStreamer's own threads; the
+//! interface's thread only reads the last one and the bus. This module is the
 //! only code that names GStreamer.
 //!
+//! - **Conversion**: `videoconvert` is asked for all the cores (`n-threads`
+//!   0); `playbin`'s own converter, on one, then has nothing to do. Its
+//!   opaque RGBA becomes egui's picture in one pass, without a copy on the
+//!   way. A 4K VP9 file decoded by the GPU and copied back now plays in real
+//!   time here, where it fell behind at about 20 pictures a second
+//!   (docs/video.md). Uploading the YUV planes and converting on the GPU is a
+//!   later step.
 //! - **Loops** ([`VideoPlayer::set_looping`]): a segment seek, so that the end
 //!   of the file is a segment's end instead of the stream's, and from there
 //!   another segment seek back to the start without flushing: the decoders
@@ -19,7 +26,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use egui::Context;
+use egui::{Color32, ColorImage, Context};
 use egui_pop_core::lock;
 use gstreamer as gst;
 use gstreamer::prelude::*;
@@ -27,9 +34,7 @@ use gstreamer_app as gst_app;
 use gstreamer_video as gst_video;
 use gstreamer_video::prelude::*;
 
-use super::{
-    VideoBackend, VideoFrame, VideoPlayer, VideoRequest, VideoState, VideoStatus, rgba_image,
-};
+use super::{VideoBackend, VideoFrame, VideoPlayer, VideoRequest, VideoState, VideoStatus};
 
 /// The last picture decoded, waiting for the interface.
 type Mailbox = Arc<Mutex<Option<VideoFrame>>>;
@@ -141,12 +146,33 @@ impl VideoBackend for GStreamer {
     }
 }
 
-/// The element taking the pictures, in RGBA whatever the file holds.
+/// The element taking the pictures, in RGBA whatever the file holds, converted
+/// on every core: only the last one is kept, and each asks for a repaint.
 fn picture_sink(mailbox: &Mailbox, egui: &Context) -> Result<gst::Element, String> {
-    Ok(app_sink(mailbox, egui).upcast())
+    let convert = gst::ElementFactory::make("videoconvert")
+        // 0: as many threads as cores.
+        .property("n-threads", 0_u32)
+        .build()
+        .map_err(|_| {
+            "GStreamer's `videoconvert` element is missing: install GStreamer's base plugins"
+                .to_string()
+        })?;
+    let sink = app_sink(mailbox, egui);
+    let bin = gst::Bin::new();
+    bin.add_many([&convert, sink.upcast_ref()])
+        .and_then(|()| convert.link(&sink))
+        .map_err(|e| format!("GStreamer could not build the picture sink: {e}"))?;
+    let pad = convert
+        .static_pad("sink")
+        .ok_or("GStreamer's `videoconvert` has no sink pad")?;
+    let ghost = gst::GhostPad::with_target(&pad)
+        .map_err(|e| format!("GStreamer could not build the picture sink: {e}"))?;
+    bin.add_pad(&ghost)
+        .map_err(|e| format!("GStreamer could not build the picture sink: {e}"))?;
+    Ok(bin.upcast())
 }
 
-/// The `appsink`: only the last picture is kept, and each asks for a repaint.
+/// The `appsink` at the end of [`picture_sink`].
 fn app_sink(mailbox: &Mailbox, egui: &Context) -> gst_app::AppSink {
     let caps = gst_video::VideoCapsBuilder::new()
         .format(gst_video::VideoFormat::Rgba)
@@ -188,7 +214,7 @@ fn frame_of(sample: &gst::Sample) -> Option<VideoFrame> {
     let frame = gst_video::VideoFrameRef::from_buffer_ref_readable(sample.buffer()?, &info).ok()?;
     let (width, height) = (frame.width() as usize, frame.height() as usize);
     let stride = usize::try_from(*frame.plane_stride().first()?).ok()?;
-    let image = rgba_image(frame.plane_data(0).ok()?, width, height, stride)?;
+    let image = opaque_image(frame.plane_data(0).ok()?, width, height, stride)?;
     let par = info.par();
     let pixel = if par.numer() > 0 && par.denom() > 0 {
         par.numer() as f32 / par.denom() as f32
@@ -199,6 +225,26 @@ fn frame_of(sample: &gst::Sample) -> Option<VideoFrame> {
         image: Arc::new(image),
         aspect: width as f32 * pixel / height as f32,
     })
+}
+
+/// The picture `videoconvert` wrote, in one pass: its RGBA is opaque (alpha
+/// 255), so egui's premultiplied colours are the same bytes, and no copy is
+/// made on the way (`rgba_image` makes one, for any alpha).
+fn opaque_image(data: &[u8], width: usize, height: usize, stride: usize) -> Option<ColorImage> {
+    let row = width.checked_mul(4)?;
+    if width == 0 || height == 0 || stride < row {
+        return None;
+    }
+    let mut pixels = Vec::with_capacity(width.checked_mul(height)?);
+    for y in 0..height {
+        let start = y.checked_mul(stride)?;
+        let line = data.get(start..start.checked_add(row)?)?;
+        pixels.extend(
+            line.chunks_exact(4)
+                .map(|p| Color32::from_rgba_premultiplied(p[0], p[1], p[2], p[3])),
+        );
+    }
+    Some(ColorImage::new([width, height], pixels))
 }
 
 /// What a failure is, in words the error page can use.

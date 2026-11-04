@@ -86,9 +86,26 @@ between two pictures on the same clip, half a frame more than playing on.
 
 ### The picture's path, and its cost
 
-`playbin` opens the file and picks the decoders; an `appsink` takes each
-picture as RGBA for egui's texture. Uploading the YUV planes and converting on
-the GPU is a later step ([survey](video-survey.md#follow-ups-ranked)).
+`playbin` opens the file and picks the decoders; a `videoconvert` turns each
+picture into RGBA on every core (`n-threads` 0), and the player makes egui's
+picture of it in one pass. With a hardware decoder (VA-API here), the decoded
+picture is copied back to memory before that conversion, which on one core
+(`playbin`'s default) cannot keep up with 4K.
+
+Measured headless on 2026-11-04 (Fedora 44, GStreamer 1.28, an AMD Radeon
+680M with Mesa's VA-API, twelve threads, a machine shared with other work), on
+10 s of 4K VP9 at 30 pictures a second:
+
+| What | Converting on one core | On every core |
+|---|---|---|
+| `gst-launch-1.0`, decode and convert only, unsynchronised | 24 a second (12.3 s) | 62 a second (4.9 s) |
+| The player, unsynchronised, pictures as egui's | 17 to 20 a second | 38 to 41 a second |
+| The player, playing in time | 17 to 23 a second, the 10 s taking 13 to 18 s (before this change) | 30 a second, in time (4 runs out of 4) |
+
+Converting on every core with the old two-pass copy was no better (12 to 15
+a second): the copy, then 15 to 55 ms a picture, was the other half; in one
+pass it takes about 4 ms. Uploading the YUV planes and converting on the GPU
+is a later step ([survey](video-survey.md#follow-ups-ranked)).
 
 ## Without a player
 
