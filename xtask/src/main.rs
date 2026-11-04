@@ -14,6 +14,9 @@
 //! write a release into the changelog after knope raised the versions,
 //! and tag a minor of the facade (`release.rs`, `docs/releasing.md`).
 //!
+//! `gallery` runs the gallery with the optional media features the
+//! system's libraries allow, found through pkg-config (`gallery.rs`).
+//!
 //! `screenshots [filter]` refreshes every image of the documentation:
 //! it builds the gallery in release mode, captures each shot headless
 //! through wbox (`tools/wbox/shoot.py`, one nested compositor per shot),
@@ -29,6 +32,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 
 mod affected;
+mod gallery;
 mod publish;
 mod release;
 
@@ -41,6 +45,10 @@ const USAGE: &str = "\
 cargo xtask <task>
 
 Tasks:
+  gallery [--release] [--no-detect] [--check] [--features LIST] [-- ARGS]
+                         run the gallery with the optional media features
+                         (video, webview) the system can build, found
+                         through pkg-config (`cargo xtask gallery --help`)
   screenshots [filter]   refresh the documentation's images, headless
                          through wbox; with a filter, only the shots whose
                          name contains it (`--list` prints the names)
@@ -303,6 +311,12 @@ fn sheet_themes() -> Vec<&'static str> {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("gallery") {
+        return gallery::gallery(&args[1..]).unwrap_or_else(|e| {
+            eprintln!("xtask: {e}");
+            ExitCode::FAILURE
+        });
+    }
     let result = match args.first().map(String::as_str) {
         Some("screenshots") => screenshots(&args[1..]),
         Some("hosts") => hosts(),

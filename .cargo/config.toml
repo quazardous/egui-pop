@@ -1,3 +1,5 @@
 [alias]
 # Repository tasks: `cargo xtask screenshots [filter]` (see xtask/).
 xtask = "run --quiet --package xtask --"
+# `cargo gallery`: the gallery with the media features the system can build.
+gallery = "xtask gallery"
