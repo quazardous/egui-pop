@@ -224,11 +224,13 @@ unfolded there (`GraphState::unfolded`).
 
 | Key | Where | What it does |
 |---|---|---|
-| Tab, Shift+Tab | anywhere | Through the canvas, each node, its chevron, its ports and its sliders |
+| Tab, Shift+Tab | anywhere | A large graph is one stop: into it, on the node (or the canvas) focused there last, and out of it from anywhere in it. A small one: through the canvas, each node, its chevron, its ports and its sliders |
+| Enter | a node of a graph that is one stop | Into its parts: its chevron, ports, sliders and header, where Tab and Shift+Tab go round |
+| Escape | a part of a graph that is one stop | Back to its node |
 | Arrows | the canvas | To the node nearest the centre of the view |
 | Arrows | a node | To the nearest node that way |
 | Shift + arrows | a node | Moves the selection by a grid step (`Move`) |
-| Enter, Space | a node | Selects it |
+| Space; Enter where every part is a stop | a node | Selects it |
 | Arrows | a port | To the node's other ports |
 | Enter, Space | a port | Begins a wire there; on a second port, connects (or says why not) |
 | Delete, Backspace | a port | Disconnects it |
@@ -237,6 +239,13 @@ unfolded there (`GraphState::unfolded`).
 | Ctrl+D | a node, the canvas | Duplicates the selection |
 | Ctrl+A | a node, the canvas | Selects every node |
 | Home | a node, the canvas | Fits the graph |
+
+A graph is one Tab stop from twelve nodes (`graph::ONE_STOP_FROM`), as ARIA
+asks of a composite widget: on a network of thirty modules Tab otherwise
+went through well over a hundred stops before leaving.
+`GraphEditor::tab_stops(TabStops::One)` or `TabStops::Each` chooses for any
+size. There, Enter on a node goes into its parts rather than selecting it
+(Space still selects), and a group's band or a folded stack is the pointer's.
 
 The keys are data (`graph::GraphKeys`, `graph::set_keys`). The view
 follows the focus: a node or port brought into focus out of view is

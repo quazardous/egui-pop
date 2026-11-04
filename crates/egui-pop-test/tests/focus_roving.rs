@@ -23,7 +23,7 @@ fn page<'a>(axis: Axis, disabled: Option<&'static str>) -> Harness<'a> {
                 };
                 match axis {
                     Axis::Horizontal => ui.horizontal(tools),
-                    Axis::Vertical => ui.vertical(tools),
+                    Axis::Vertical | Axis::Own => ui.vertical(tools),
                 };
             });
             let _ = ui.button("After");

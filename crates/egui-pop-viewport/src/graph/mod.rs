@@ -40,7 +40,9 @@
 //!   to the node's other ports, Enter or Space picks it as a wire's end
 //!   (twice: connected), Delete disconnects it and Escape goes back to
 //!   the node. Delete removes the selection, Ctrl+D duplicates it,
-//!   Ctrl+A selects everything, Home fits.
+//!   Ctrl+A selects everything, Home fits. A large graph is one Tab stop
+//!   ([`TabStops`]): Tab enters and leaves it, Enter goes into a node's
+//!   parts and Escape back.
 //! - **Accessibility**: the canvas is a group named by its label, each
 //!   node a group (role description "node") with its ports as buttons,
 //!   their type and wires as the value; refusals and wires are announced.
@@ -97,6 +99,7 @@ use egui_pop_core::pointer::claim::{self, Secondary};
 use egui_pop_core::slider::{self, Slider};
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings::{self, tr, tr_args};
+use egui_pop_core::tab;
 use egui_pop_core::theme::Tokens;
 use serde_json::{Value as Json, json};
 
@@ -231,6 +234,26 @@ pub fn set_keys(ctx: &egui::Context, keys: GraphKeys) {
 type HookFn<'a> = dyn FnMut(&Edit, Cause) -> Verdict<Edit> + 'a;
 type HeaderFn<'a> = dyn FnMut(&mut Ui, &Node) + 'a;
 
+/// How Tab goes through a graph, set with [`GraphEditor::tab_stops`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TabStops {
+    /// One stop from [`ONE_STOP_FROM`] nodes, a stop per part below.
+    #[default]
+    Auto,
+    /// The graph is one Tab stop, as ARIA asks of a composite widget: Tab
+    /// enters it on the node (or the canvas) focused there last and leaves it
+    /// from anywhere in it; the arrows go between nodes; Enter goes into a
+    /// node's parts (its chevron, ports, sliders and header), Tab and
+    /// Shift+Tab go round them, Escape goes back to the node.
+    One,
+    /// Tab goes through the canvas, each node, its chevron, its ports and its
+    /// sliders.
+    Each,
+}
+
+/// From how many nodes a graph is one Tab stop with [`TabStops::Auto`].
+pub const ONE_STOP_FROM: usize = 12;
+
 /// The node graph editor.
 pub struct GraphEditor<'a> {
     model: &'a dyn GraphModel,
@@ -249,6 +272,7 @@ pub struct GraphEditor<'a> {
     requests: Vec<Request>,
     describe: bool,
     keep_export: bool,
+    tab_stops: TabStops,
 }
 
 impl fmt::Debug for GraphEditor<'_> {
@@ -302,6 +326,7 @@ impl<'a> GraphEditor<'a> {
             requests: Vec::new(),
             describe: false,
             keep_export: false,
+            tab_stops: TabStops::Auto,
         }
     }
 
@@ -384,6 +409,13 @@ impl<'a> GraphEditor<'a> {
     /// and the debug bridge; see [`describe`]).
     pub fn describe(mut self, on: bool) -> Self {
         self.describe = on;
+        self
+    }
+
+    /// How Tab goes through the graph: one stop for a large graph by default,
+    /// see [`TabStops`].
+    pub fn tab_stops(mut self, stops: TabStops) -> Self {
+        self.tab_stops = stops;
         self
     }
 
@@ -573,6 +605,11 @@ impl<'a> GraphEditor<'a> {
             self.state.routes.clear();
         }
         let label = self.label.clone().unwrap_or_else(|| tr(&ctx, &s::GRAPH));
+        let one_stop = match self.tab_stops {
+            TabStops::One => true,
+            TabStops::Each => false,
+            TabStops::Auto => nodes.len() >= ONE_STOP_FROM,
+        };
         let shown = self.state.view;
         let mut view = shown;
         let mut cx = Cx {
@@ -596,6 +633,7 @@ impl<'a> GraphEditor<'a> {
             to_global: TSTransform::IDENTITY,
             reveal: None,
             gestures,
+            one_stop,
         };
         // The scene draws; the profile moves it (above and in `canvas`):
         // its zoom held where it is, its own pan off, the wheel taken.
@@ -603,9 +641,17 @@ impl<'a> GraphEditor<'a> {
             .zoom_range(Rangef::point(zoom))
             .drag_pan_buttons(egui::containers::DragPanButtons::empty())
             .sense(Sense::click_and_drag());
-        let inner = ui.scope_builder(UiBuilder::new().max_rect(outer), |ui| {
-            scene.show(ui, &mut view, |ui| cx.content(ui))
-        });
+        let mut draw = |ui: &mut Ui| {
+            ui.scope_builder(UiBuilder::new().max_rect(outer), |ui| {
+                scene.show(ui, &mut view, |ui| cx.content(ui))
+            })
+        };
+        let inner = if one_stop {
+            let name = format!("graph:{id:?}");
+            tab::roving(ui, &name, tab::Axis::Own, draw)
+        } else {
+            draw(ui)
+        };
         let mut response = inner.inner.response;
         cx.canvas(&response, &label);
         let reveal = cx.reveal.take();
@@ -909,6 +955,8 @@ struct Cx<'a, 'g, 'h> {
     reveal: Option<Rect>,
     /// The pointer profile's gestures on the graph.
     gestures: crate::gestures::ViewGestures,
+    /// The graph is one Tab stop ([`TabStops`]).
+    one_stop: bool,
 }
 
 impl Cx<'_, '_, '_> {
@@ -1463,7 +1511,31 @@ impl Cx<'_, '_, '_> {
         }
         self.drag_move(ui, &resp);
         self.node_menu(&resp, n);
+        if self.one_stop {
+            // Its parts: Enter goes into them, Escape back.
+            let name = format!("graph-node:{nid:?}");
+            tab::parts(ui, &name, nid, |ui| {
+                self.node_parts(ui, painter, b, i, header);
+            });
+        } else {
+            self.node_parts(ui, painter, b, i, header);
+        }
+    }
 
+    /// A node's parts: its title bar's chevron and slot, its ports, its
+    /// parameters.
+    fn node_parts(
+        &mut self,
+        ui: &mut Ui,
+        painter: &egui::Painter,
+        b: &Placed,
+        i: usize,
+        header: Rect,
+    ) {
+        let base = self.base;
+        let n = &base.nodes[i];
+        let r = b.rect;
+        let nid = node_id(self.id, &n.id);
         // The title bar: the chevron, the title, the application's slot.
         let mut text_left = r.left() + PAD * 2.0;
         if self.level != Level::Overview {

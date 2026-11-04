@@ -825,9 +825,16 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
     Ctrl+Page Up, as VS Code), through the `workbench.focus` step. Close buttons
     are not shown, so they are no stops today; one added later should not be a
     stop of its own (egui_stack's `TabFocus::Roving` makes them none, item 17).
-19. **The graph as one stop.** A setting, on by default for large graphs: Tab
+19. **Done: the graph as one stop.** A setting, on by default for large graphs: Tab
     enters and leaves the graph, arrows go between nodes, Enter goes into a
-    node's parts, Escape back, as ports already do. Size: M.
+    node's parts, Escape back, as ports already do. Size: M. Done:
+    `GraphEditor::tab_stops` (`TabStops::Auto`, `One`, `Each`), one stop from twelve
+    nodes (`graph::ONE_STOP_FROM`). Tab enters on the node or the canvas focused there
+    last and leaves from anywhere in the graph; the arrows stay the graph's own (a
+    roving group with `Axis::Own`, taking in the scene's layer). Enter on a node goes
+    into its parts (`tab::parts`: chevron, ports, sliders, header), where Tab goes
+    round, and Escape comes back; Space still selects. A group's band and a folded
+    stack are the pointer's in a one-stop graph ([docs](node-graph.md#keyboard)).
 20. **Done: the key that opens a dialog does not answer it.** The dialog is
     drawn after the page, in the pass of the press that clicked its button, and
     reads the same press as its own; held, the first repeat clicks the button
