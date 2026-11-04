@@ -325,6 +325,11 @@ pub struct Snapshot {
     /// When it was taken, in seconds of the owner's clock.
     #[serde(default)]
     pub at: f64,
+    /// Not kept yet: an owner that keeps a snapshot only once its state
+    /// is saved (at its next save) says so until then; it is lost if the
+    /// application quits first. The history panel marks it.
+    #[serde(default)]
+    pub pending: bool,
 }
 
 /// A step a new step dropped from the redo list, kept by an owner whose
@@ -502,6 +507,26 @@ fn scope_of(line: &Line) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_snapshot_from_an_older_owner_is_not_pending() {
+        let mut snap = Snapshot {
+            id: 1,
+            scope: ScopeId::from_static("app"),
+            name: "Before".into(),
+            step: 2,
+            origin: crate::commands::Origin::User,
+            at: 0.0,
+            pending: true,
+        };
+        let back: Snapshot = serde_json::from_value(serde_json::to_value(&snap).unwrap()).unwrap();
+        assert_eq!(back, snap);
+        // Written before the flag: not pending.
+        let mut old = serde_json::to_value(&snap).unwrap();
+        old.as_object_mut().unwrap().remove("pending");
+        snap.pending = false;
+        assert_eq!(serde_json::from_value::<Snapshot>(old).unwrap(), snap);
+    }
 
     fn step(id: u64, scope: &'static str, at: f64) -> StepInfo {
         let mut s = StepInfo::new(

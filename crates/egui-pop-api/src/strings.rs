@@ -1103,6 +1103,16 @@ pub const HISTORY_RESTORE_HINT: StrKey = StrKey::new(
     "egui-pop-history-restore-hint",
     "Go back to this snapshot (a new step)",
 );
+/// A snapshot not kept yet: its row's text.
+pub const HISTORY_SNAPSHOT_PENDING: StrKey = StrKey::new(
+    "egui-pop-history-snapshot-pending",
+    "{ $name } (not saved yet)",
+);
+/// A snapshot not kept yet: what its row's tooltip adds.
+pub const HISTORY_SNAPSHOT_PENDING_HINT: StrKey = StrKey::new(
+    "egui-pop-history-snapshot-pending-hint",
+    "Kept at the next save; lost if the application quits first",
+);
 /// A snapshot row's context menu: delete it.
 pub const HISTORY_DELETE_SNAPSHOT: StrKey =
     StrKey::new("egui-pop-history-delete-snapshot", "Delete the snapshot");
@@ -1685,6 +1695,8 @@ pub const ALL: &[StrKey] = &[
     HISTORY_SNAPSHOT_NAME,
     HISTORY_RESTORE,
     HISTORY_RESTORE_HINT,
+    HISTORY_SNAPSHOT_PENDING,
+    HISTORY_SNAPSHOT_PENDING_HINT,
     HISTORY_DELETE_SNAPSHOT,
     HISTORY_UNDO_THIS,
     HISTORY_SHOW_REPLACED,

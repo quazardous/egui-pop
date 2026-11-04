@@ -613,6 +613,8 @@ egui-pop-history-restore eb78406341b90759
 egui-pop-history-restore-hint c33a0487c10c8565
 egui-pop-history-show-replaced c88ffbd8b2ba59db
 egui-pop-history-snapshot-name db19a01692f898d9
+egui-pop-history-snapshot-pending 6be5fcfb1ac5df59
+egui-pop-history-snapshot-pending-hint 9ab26ead4b5bd374
 egui-pop-history-snapshots 3cbde88467abf088
 egui-pop-history-start b1d0aa0c78fdb3f7
 egui-pop-history-take-snapshot 65e42e7699712b7b

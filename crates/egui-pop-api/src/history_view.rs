@@ -462,9 +462,24 @@ fn rows(ui: &mut Ui, app: &AppHandle, view: egui::Id) {
     if features.snapshots || !snapshots.is_empty() {
         ui.label(RichText::new(strings::tr(&ctx, &txt::HISTORY_SNAPSHOTS)).strong());
         let restore_hint = strings::tr(&ctx, &txt::HISTORY_RESTORE_HINT);
+        let pending_hint = format!(
+            "{restore_hint}\n{}",
+            strings::tr(&ctx, &txt::HISTORY_SNAPSHOT_PENDING_HINT)
+        );
         for snap in &snapshots {
-            let r = ui.add(widgets::SelectableRow::new(false, snap.name.as_str()).steady());
-            let r = previewed(r, app, view, &scope, At::Snapshot(snap.id), &restore_hint);
+            // A snapshot its owner keeps only at its next save says so.
+            let (text, hint) = if snap.pending {
+                let name = strings::tr_args(
+                    &ctx,
+                    &txt::HISTORY_SNAPSHOT_PENDING,
+                    &[("name", &snap.name)],
+                );
+                (RichText::new(name).italics(), &pending_hint)
+            } else {
+                (RichText::new(snap.name.as_str()), &restore_hint)
+            };
+            let r = ui.add(widgets::SelectableRow::new(false, text).steady());
+            let r = previewed(r, app, view, &scope, At::Snapshot(snap.id), hint);
             if r.clicked() {
                 act = Some(Act::Restore(snap.id));
             }
