@@ -8,6 +8,205 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.4.0 (2026-11-04)
+
+Published: egui-pop-model 0.4.0, egui-pop-core 0.4.0, egui-pop-api 0.4.0, egui-pop-test 0.4.0, egui-pop-viewport 0.4.0, egui-pop-i18n 0.4.0, egui-pop-editors 0.4.0, egui-pop-platform 0.4.0, egui-pop-views 0.4.0, egui-pop-imaging 0.4.0, egui-pop 0.4.0.
+
+### Breaking changes
+
+- egui-pop, egui-pop-api, egui-pop-core, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-platform, egui-pop-test, egui-pop-viewport, egui-pop-views: egui-pop is built on egui 0.37 (eframe, egui-wgpu, egui_kittest and
+  egui_extras 0.37, egui_table 0.11, egui_commonmark 0.26), and the
+  workbench draws its docked areas with egui_stack, the continuation of
+  egui_dock, in place of egui_dock 0.21. An application moves to egui 0.37
+  with egui-pop: its own egui code follows egui's changelog (`Id::unique`
+  for `Id::new`, `Ui::scope_id` for `Ui::id`, `egui::Role` for
+  `WidgetType`, whose names follow AccessKit's: `TextInput`, `CheckBox`,
+  `Unknown`...). egui-pop's functions taking a widget type, such as
+  `a11y::name`, take an `egui::Role`. `widgets::combo_box` and
+  `combo_box_labelled` return `ComboBox<'static>`. With eframe, egui-pop
+  turns on eframe's `clipboard` feature, a feature of its own since 0.37.
+
+  New: `ui::set_scroll_offset` moves a scroll area by its id, egui 0.37
+  having made the offset of its state private.
+
+  egui_stack comes from crates.io (0.22).
+- egui-pop, egui-pop-api, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-platform, egui-pop-test, egui-pop-views: The application's options inside the in-app file picker (egui-pop-api;
+  `docs/files.md`): `FileRequest::choice` adds a combo box and
+  `FileRequest::check` a check box, in the desktop portal's `choices` shape,
+  shown above the picker's buttons; `files::chosen_choices` reads each id with
+  its value when the choice ends, and `file.chosen` carries them. A run-hook
+  answers `choices` with its `paths` or calls `Files::set_choices`, and the
+  debug bridge's `answer` takes `choices`, each checked against the request. A
+  `FilePicker` drawn on its own gives them with `choices` and `set_choice`.
+  `rfd` cannot show them, so a request with choices opens the in-app picker
+  even where the system's chooser is used. To move: `FileRequest` is now
+  `#[non_exhaustive]` (a field added later breaks nobody); build it with
+  `FileRequest::open` and the others and their builders, not as a struct
+  literal.
+- egui-pop-api, egui-pop-model: A history snapshot can be pending: `Snapshot::pending` says its owner keeps it
+  only at its next save, and loses it if the application quits first (an owner
+  whose history is saved, as an image editor's). The history panel shows such a
+  snapshot's name with "(not saved yet)" in italics, and its tooltip says when it
+  is kept. A snapshot read from an owner that does not set the flag is not
+  pending. `Snapshot` gains a field: an owner building one by its fields adds
+  `pending`.
+- egui-pop, egui-pop-api, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-platform, egui-pop-test, egui-pop-views: A photo's facts in the file picker's preview pane (egui-pop-api;
+  `docs/files.md`): `PhotoFacts` (when it was taken, camera, lens, shutter,
+  aperture, ISO, focal length, rating), given by a provider with
+  `Preview::photo`, shows in one order whichever provider read it: the exposure
+  on one line (`1/250 s  f/5.6  ISO 200`), the rating as five stars, read "3 of
+  5" by a screen reader. EXIF's date form reads as a date. Agents read them as
+  `photo` in the preview's metadata. French included. To move: `Preview` gains a
+  field and is `#[non_exhaustive]`; make one with `Preview::new` and its
+  builders.
+- egui-pop, egui-pop-api, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-platform, egui-pop-test, egui-pop-views: Richer places in the in-app file picker's side bar (egui-pop-api;
+  `docs/files.md`): the system's folders (Desktop, Documents, Downloads,
+  Pictures, Music, Videos, from the XDG user directories on Linux), and the
+  volumes mounted under Devices (mount points under `/run/media`, `/media` and
+  `/mnt`, `/Volumes` on macOS, the drives on Windows), read when a picker opens
+  (`files::places`, `Files::set_system_places` for an application's own). A
+  bookmark's menu renames it, moves it up or down, or removes it
+  (`files::rename_bookmark`, `files::move_bookmark`, kept in
+  `settings/files.bookmark_names`). The side bar scrolls. French included. To
+  move: `Places` gains fields and is `#[non_exhaustive]` (start from
+  `Places::default()`), and `PickerAnswer` gains `RenameBookmark` and
+  `MoveBookmark` and is `#[non_exhaustive]`: a `match` on it needs a wildcard arm.
+
+### Features
+
+- egui-pop-api: The line resizing a side or bottom area answers the keyboard: once Tab
+  reaches it, an arrow across it moves it 16 points, Shift and an arrow 64,
+  and Enter gives the area its default size back, as a dock separator does.
+  It is named after its area for assistive technology ("Resize the start
+  side bar"; new string `egui-pop-area-resize`, translated in French).
+- egui-pop-api, egui-pop-core, egui-pop-views: Context menus open by the keyboard: Shift+F10 or the `Menu` key opens
+  the context menu of the focused widget, under it rather than at the
+  pointer, for `pointer::claim::context_menu` and so for
+  `menus::context_menu_with`; a tree opens its cursor row's. New:
+  `pointer::claim::menu_key` (whether the key was pressed),
+  `pointer::claim::context_menu_opened` and `menus::context_menu_opened`,
+  for a widget whose rows open menus while it keeps the focus itself.
+- egui-pop-api, egui-pop-core, egui-pop-i18n: Devtools' keys no longer clash with the browsers' own, so a web build sees
+  them: the devtools panel (`app.devtools`) moves from F12 to Shift+F12, the
+  inspect mode (`devtools.inspect`) from Ctrl+Shift+C to Ctrl+Shift+F12.
+  Firefox, Chrome and Safari take neither, on Linux, Windows or macOS.
+  Ctrl+Shift+C can still be bound to the inspect mode in the keyboard
+  shortcuts; egui-winit's copy event is given back as the key only then, so
+  a text field copies with it otherwise. New `DevtoolsPlugin::on_by_default`:
+  an application shown to developers (the gallery) turns the
+  `developer.devtools` setting on by default; it stays off otherwise.
+- egui-pop-api, egui-pop-core, egui-pop-editors, egui-pop-viewport, egui-pop-views: A focus you can see: with the focus plugin (an application has it), the
+  widget the keyboard focused gets a ring of the `focus.ring` token, drawn
+  inside the part of it that shows, egui's own widgets included. Only the
+  keyboard shows it (Tab, an arrow, F6, a command, a screen reader): a click
+  focuses without a ring, as `:focus-visible` has it. A widget showing its
+  focus itself calls the new `focus::own_ring` each pass it has the focus;
+  one painting a kit state from `State::from_response` has it said for it,
+  and egui's text fields are left alone. `focus::ring_shown` says whether
+  the keyboard moved the focus where it is.
+- egui-pop-core, egui-pop-viewport: A large node graph is one Tab stop: from twelve nodes (`graph::ONE_STOP_FROM`),
+  Tab enters the graph on the node or the canvas focused there last and leaves it
+  from anywhere in it, the arrows go between nodes, Enter goes into a node's parts
+  (chevron, ports, sliders, header) where Tab goes round, and Escape comes back to
+  the node. `GraphEditor::tab_stops` chooses (`TabStops::Auto`, `One`, `Each`).
+  In egui-pop-core, `tab::parts` makes a widget's parts entered by Enter and left
+  by Escape, `tab::Axis::Own` a roving group whose widgets move the focus with the
+  arrows themselves, and a roving group takes in what it draws on other layers
+  (a scene's) below menus and popovers, which keep their own.
+- egui-pop-api, egui-pop-core: An inspect picker in the menu bar, and a crosshair while inspecting. The
+  menu bar's end shows the command items of a new menu,
+  `app::MENU_BAR_END`, as icon buttons (`menus::bar_end`): each the
+  command's icon, pressed while its `checked` clause holds, its title and
+  key binding in the tooltip, left out where the command does not apply.
+  `devtools.inspect` goes there with the `phosphor:cursor-click` icon, so
+  it shows while the devtools setting is on, pressed while the mode is (a
+  new `inspecting` context key, `inspect::CONTEXT_INSPECTING`); pressed
+  again, it leaves the mode rather than being picked
+  (`egui_pop_core::inspect::pass_through`). While inspecting, the pointer
+  is a crosshair (`inspect::CURSOR`) everywhere but over the inspect
+  dialog.
+- egui-pop-api, egui-pop-core: The kit paints the workbench's docks through egui_stack's `DockPainter`
+  (`Kit` implements it): the tabs, as wide as the kit measures them (no
+  longer at least their label plus 16 points), the tab bars, the
+  separators between docked panels (the `splitter` component, no longer
+  egui's colours) and the drop overlay inside an area (`dock-preview`, its
+  buttons `button`). The tabs are painted once, where egui_stack lays them
+  out, instead of over its invisible ones.
+- egui-pop-api: More keys in the in-app file picker (`docs/files.md`): `Alt+Left` and
+  `Alt+Right` go back and forward through the folders shown, `Ctrl+H` shows or
+  hides hidden files, `F5` reads the folder again, and `Alt+P` is now a command
+  too. All are commands of the keymap (`file.back`, `file.forward`,
+  `file.toggle_hidden`, `file.reload`, `file.toggle_preview`), so they can be
+  rebound, and the check boxes' tips say their keys. `FilePicker::go_back`,
+  `go_forward` and `reload` do the same for a picker drawn on its own. `Back` and `Forward`
+  hold in a modal (the picker's, a dialog's), where the context stack's
+  `nav.back` (also `Alt+Left`) no longer applies (`!modalOpen`).
+- egui-pop-api, egui-pop-i18n: Reporting a problem opens a prefilled issue. With `AppInfo::issues` set, a
+  `help.report` command (Help > Report a problem, the palette, a Report…
+  button beside Copy in the inspect dialog, the About dialog's link) opens
+  `<issues>/new` in the browser through the links service, with a title,
+  the version info, the platform, the page shown (`AboutPlugin::page`) and
+  the last inspect pick: one parameter per field of the issue form named by
+  `AppInfo::issue_form` (`template=bug.yml`), or a Markdown body without
+  one. Values are percent-encoded and the URL stays under 8000 bytes, the
+  pick trimmed first. Without an issues URL the command is not declared.
+  On the web, the platform line names the browser and its system, read
+  from the user agent (`web (wasm32), Firefox 132 on Linux`). The gallery
+  reports to egui-pop's repository, which now has a bug form and a
+  suggestion form. New strings `command-help-report`,
+  `egui-pop-inspect-report` and `egui-pop-inspect-report-hover`, translated
+  in French.
+- egui-pop-api: The activity bar and the status bar are each one Tab stop: Up and Down go
+  between the activity bar's buttons, Left and Right between the status bar's
+  items, round from one end to the other, Home and End to their ends, and Tab
+  coming back lands on the one focused there last. The status bar's background
+  is no longer an empty Tab stop.
+- egui-pop-api, egui-pop-core: A toolbar is one Tab stop: Tab from any tool leaves it, Tab coming back lands
+  on the tool focused last, and the arrows along it go from tool to tool, round
+  from one end to the other, Home and End to its ends, a greyed tool passed
+  over. The helper is `tab::roving` (with `tab::Axis` and `tab::rovings`), for
+  any row or column of widgets, with the focus plugin.
+- egui-pop-api: New commands `workbench.tab.next` (Ctrl+Page Down) and
+  `workbench.tab.previous` (Ctrl+Page Up): they show and focus the tab
+  beside the focused panel's in its group, wrapping, as VS Code does,
+  through the `workbench.focus` step.
+
+### Fixes
+
+- egui-pop-core: With the focus plugin, a plain arrow no longer takes the focus out of the
+  F6 region holding it (a side area, the centre, a palette, the status
+  bar): egui's move to the nearest widget that way is undone when it
+  crosses into another region, and the focus stays. Tab and F6 cross
+  regions; a widget outside every region keeps egui's rule.
+- egui-pop-api: The menu bar answers F10, which opens its first menu (the arrows then go
+  through it), and underlines each menu's access letter while Alt is held,
+  as Windows and Qt show it.
+- egui-pop-api: The `overlayOpen` context key is true while an egui popup is open (a
+  menu, a combo box's list), not only while egui-pop's overlay stack holds
+  something. Tab with a menu open and nothing focused no longer hides the
+  floating palettes behind it, and Escape there closes the menu rather
+  than leave zen mode or pop a pushed mode.
+- egui-pop-core: The Phosphor icon font comes from `egui-pop-phosphor` 0.15 on crates.io,
+  a fork of egui-phosphor carrying its pending update to egui 0.37, in
+  place of a git patch: egui-pop no longer needs a `[patch.crates-io]`
+  entry, in its workspace or in an application depending on it. The
+  library is still `egui_phosphor`, and the icons are unchanged. egui-pop
+  returns to egui-phosphor once upstream releases for egui 0.37 (#146).
+- egui-pop-api: The in-app file picker reads better with a screen reader (`docs/files.md`):
+  its entries, in the list or the grid, are a list box named by the folder (`Files in Photos`)
+  (several selectable when choosing several files), each entry an option of it,
+  the highlighted one its current option. The preview pane is a group named
+  Preview, and another folder is announced with how many entries it shows.
+  French included. Tests finding an entry as a `Button` find it as a
+  `ListBoxOption` now.
+- egui-pop-core: Enter and Space click a focused plain widget (a button, a checkbox, a
+  row sensing clicks only) only when pressed alone and once: with Ctrl,
+  Alt, Shift or Command held, or repeated while held down, the key
+  dispatcher takes them out of the input after the keymap had its turn, as
+  a native button does. A binding on such a key still runs; a widget
+  sensing drags (a slider, a splitter, a text field) reads its own keys as
+  before.
+
 ## 0.3.0 (2026-11-03)
 
 Published: egui-pop-tokens 0.2.1, egui-pop-win32 0.2.1, egui-pop-model 0.3.0, egui-pop-core 0.3.0, egui-pop-api 0.3.0, egui-pop-test 0.3.0, egui-pop-viewport 0.3.0, egui-pop-i18n 0.3.0, egui-pop-editors 0.3.0, egui-pop-platform 0.3.0, egui-pop-views 0.3.0, egui-pop-imaging 0.3.0, egui-pop 0.3.0.
