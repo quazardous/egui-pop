@@ -227,6 +227,10 @@ pub enum Axis {
     Horizontal,
     /// A column: Up and Down.
     Vertical,
+    /// The group keeps Tab only: its widgets move the focus with the arrows
+    /// themselves (a graph's nodes, by place). Home and End are left to them
+    /// too.
+    Own,
 }
 
 /// Draws `add` as a roving group named `name`: one Tab stop for all its
@@ -265,6 +269,19 @@ pub enum Axis {
 /// ```
 pub fn roving<R>(ui: &mut Ui, name: &str, axis: Axis, add: impl FnOnce(&mut Ui) -> R) -> R {
     crate::roving::show(ui, name, axis, add)
+}
+
+/// Draws `add` as the parts of the widget `owner` (a graph node's chevron,
+/// ports and sliders), inside a [`roving`] group: Tab coming into the group
+/// lands on the widget, not on its parts.
+///
+/// - **Enter** on `owner` goes into its parts, on the first.
+/// - **Tab** and **Shift+Tab** go round them, from the last to the first.
+/// - **Escape** goes back to `owner`.
+///
+/// Name each widget's parts apart. It needs the focus plugin.
+pub fn parts<R>(ui: &mut Ui, name: &str, owner: Id, add: impl FnOnce(&mut Ui) -> R) -> R {
+    crate::roving::parts(ui, name, owner, add)
 }
 
 /// The roving groups drawn in the last pass, by name, with their widgets that
