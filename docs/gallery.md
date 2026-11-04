@@ -9,6 +9,29 @@ cargo run -p egui-pop-gallery -- --theme pop-light --page zones
 cargo run -p egui-pop-gallery -- --help
 ```
 
+**The media pages.** The viewer's MP4 page (feature `video`, GStreamer) and
+YouTube page (feature `webview`, WebKitGTK, Linux only) need the system's
+libraries to build, so they are off by default. `cargo gallery` (short for
+`cargo xtask gallery`) asks pkg-config for them, turns on each feature it can
+build, prints a line per feature, off with the packages to install, then runs
+the gallery:
+
+```sh
+cargo gallery                          # what the system allows
+cargo gallery --check                  # only print the decision
+cargo gallery --release -- --page viewer
+cargo gallery --no-detect --features video   # only what is asked
+```
+
+`video` needs `gstreamer-1.0`, `gstreamer-base-1.0`, `gstreamer-app-1.0` and
+`gstreamer-video-1.0` (Fedora: `gstreamer1-devel gstreamer1-plugins-base-devel`;
+Debian/Ubuntu: `libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev`); its demo
+clip is written with the AVI muxer of the good plugins (`gstreamer1-plugins-good`,
+`gstreamer1.0-plugins-good`). `webview` needs `webkit2gtk-4.1` and `gtk+-3.0`
+(Fedora: `webkit2gtk4.1-devel`; Debian/Ubuntu: `libwebkit2gtk-4.1-dev`). Off
+Linux, `webview` stays off and `video` is probed the same way, through the
+pkg-config files of GStreamer's installers.
+
 Options: `--theme`, `--density` (`comfortable` or `compact`),
 `--accent`, `--reduced-motion`, `--page` (the page shown first),
 `--lang` (the language setting's default: `en`, `fr` or `system`),

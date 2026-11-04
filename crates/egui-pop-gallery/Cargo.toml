@@ -23,9 +23,11 @@ graph-pdf = ["egui-pop/graph-pdf"]
 native-dialogs = ["egui-pop/native-dialogs"]
 ## The viewer page plays a clip it generates (`egui-pop/views-video`), through
 ## the system's GStreamer; off by default so that no build needs it.
+## `cargo gallery` (xtask) turns it on when pkg-config finds GStreamer.
 video = ["egui-pop/views-video"]
 ## The viewer page plays a YouTube video in a web view (`egui-pop/views-webview`),
 ## through the system's WebKitGTK; off by default so that no build needs it.
+## `cargo gallery` (xtask) turns it on when pkg-config finds WebKitGTK.
 webview = ["egui-pop/views-webview"]
 ## egui-pop's and egui's profiling scopes as `tracing` spans, for the
 ## `threading` example (docs/threading.md).
