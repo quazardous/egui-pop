@@ -1275,14 +1275,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "egui-phosphor"
-version = "0.14.0"
-source = "git+https://github.com/quazardous/egui-phosphor?rev=01e8c1144cac3f551ceb834b6d26ddf36ba502cd#01e8c1144cac3f551ceb834b6d26ddf36ba502cd"
-dependencies = [
- "egui",
-]
-
-[[package]]
 name = "egui-pop"
 version = "0.3.0"
 dependencies = [
@@ -1329,8 +1321,8 @@ name = "egui-pop-core"
 version = "0.3.0"
 dependencies = [
  "egui",
- "egui-phosphor",
  "egui-pop-model",
+ "egui-pop-phosphor",
  "egui-pop-test-macros",
  "egui-pop-tokens",
  "egui_kittest",
@@ -1437,6 +1429,13 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
+]
+
+[[package]]
+name = "egui-pop-phosphor"
+version = "0.15.0"
+dependencies = [
+ "egui",
 ]
 
 [[package]]

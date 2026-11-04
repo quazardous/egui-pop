@@ -75,8 +75,11 @@ profiling = { version = "1", default-features = false }
 egui_kittest = "0.37"
 # MIT OR Apache-2.0: the test kit shares one wgpu device per process.
 egui-wgpu = { version = "0.37", default-features = false }
-# MIT OR Apache-2.0 (the Phosphor icons themselves are MIT).
-egui-phosphor = { version = "0.14", default-features = false, features = ["regular"] }
+# MIT OR Apache-2.0 (the Phosphor icons themselves are MIT). A fork of
+# egui-phosphor carrying its pending update to egui 0.37
+# (amPerl/egui-phosphor#49), published under its own name until upstream
+# releases; its library is still `egui_phosphor`.
+egui-phosphor = { package = "egui-pop-phosphor", version = "0.15", default-features = false, features = ["regular"] }
 eframe = { version = "0.37", default-features = false }
 # MIT; the system's file chooser (xdg portal on Linux).
 rfd = "0.17"
@@ -95,11 +98,3 @@ missing_debug_implementations = "warn"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
-
-# Temporary: egui-phosphor has no release on egui 0.37 yet. This fork
-# carries its open pull request updating it (amPerl/egui-phosphor#49).
-# A patch does not reach crates.io: published as is, egui-pop would
-# require egui-phosphor 0.14, on egui 0.36, so egui-pop is not published
-# while this patch remains (issue #146).
-[patch.crates-io]
-egui-phosphor = { git = "https://github.com/quazardous/egui-phosphor", rev = "01e8c1144cac3f551ceb834b6d26ddf36ba502cd" }
