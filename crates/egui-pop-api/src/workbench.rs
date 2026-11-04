@@ -1655,7 +1655,11 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             .show(ui, |ui| {
                 let region = focus::Region::new("activityBar", RANK_ACTIVITY_BAR);
                 focus::region(ui, &region, |ui| {
-                    app.show_zone(ui, &crate::zones::ACTIVITY_BAR);
+                    // One Tab stop, Up and Down between its items.
+                    let axis = egui_pop_core::tab::Axis::Vertical;
+                    egui_pop_core::tab::roving(ui, "activityBar", axis, |ui| {
+                        app.show_zone(ui, &crate::zones::ACTIVITY_BAR);
+                    });
                 });
             });
     }

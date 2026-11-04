@@ -45,6 +45,7 @@ impl Plugin for Demo {
                 state.tone = if n == 0 { Tone::Neutral } else { Tone::Accent };
             }),
         );
+        ctx.indicator(Indicator::new("demo.sync", "Synced", "sync."));
         Ok(())
     }
 }
@@ -126,4 +127,42 @@ fn indicators_follow_the_hosts_events() {
     app.publish("host", None, "other.thing", json!({}));
     h.run();
     assert!(h.query_by_label("Idle (0)").is_some());
+}
+
+#[test]
+fn the_activity_bar_is_one_tab_stop_with_up_and_down_inside() {
+    use egui::Key;
+    use egui_pop_test::walk::{self, F6, Press, SHIFT_TAB, TAB};
+    let mut h = harness();
+    let name = |s: Option<walk::Stop>| s.expect("a focus");
+    // F6 starts at the activity bar.
+    let files = name(walk::press(&mut h, F6));
+    assert_eq!(files.name, "Files");
+    let down = Press::key(Key::ArrowDown);
+    let search = name(walk::press(&mut h, down));
+    assert_eq!(search.name, "Search");
+    assert_eq!(name(walk::press(&mut h, down)).id, files.id, "round");
+    let up = Press::key(Key::ArrowUp);
+    assert_eq!(name(walk::press(&mut h, up)).id, search.id);
+    // Tab leaves the bar (for the side bar's tabs, named alike); Shift+Tab
+    // comes back to the item focused last.
+    let out = name(walk::press(&mut h, TAB));
+    assert!(out.id != files.id && out.id != search.id, "{out}");
+    assert_eq!(name(walk::press(&mut h, SHIFT_TAB)).id, search.id);
+}
+
+#[test]
+fn the_status_bar_is_one_tab_stop_with_left_and_right_inside() {
+    use egui::Key;
+    use egui_pop_test::walk::{self, End, Press, SHIFT_F6, TAB};
+    let mut h = harness();
+    // Shift+F6 from nothing: the last region, the status bar.
+    walk::press(&mut h, SHIFT_F6).expect("the status bar");
+    let along = walk::walk(&mut h, Press::key(Key::ArrowRight), 20);
+    assert!(matches!(along.end, End::Looped { .. }), "{along}");
+    assert!(along.stops.len() >= 2, "{along}");
+    let items: Vec<egui::Id> = along.stops.iter().map(|s| s.id).collect();
+    let round = walk::walk(&mut h, TAB, 100);
+    let in_bar = round.stops.iter().filter(|s| items.contains(&s.id)).count();
+    assert_eq!(in_bar, 1, "{round}");
 }

@@ -805,17 +805,19 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
     panels; Tab and F6 cross. A widget outside every region keeps egui's rule
     ([inputs](inputs.md#arrows-stay-in-their-region),
     [upstream](upstream.md#egui-arrows-move-the-focus-anywhere)).
-17. **A roving helper, then toolbars and strips.** `tab::roving`: one stop, arrows
-    inside, back to the last. Then one PR each: toolbars (`toolbars.md` lists it),
-    the activity bar, the status bar. Size: M, then S each. Done for the helper and
-    toolbars: `tab::roving` is part of the focus plugin, its widgets whatever is drawn
-    inside it that can take the focus (a greyed tool is passed over); Tab from any of
-    them leaves past the group's end, Tab coming in either way lands on the last
-    focused, the arrows along it go round and Home and End go to the ends, ordered
-    by place rather than drawing (the status bar draws its end items from the right).
-    Amended: the arrows wrap, as VS Code's action bars and Windows toolbars do (ARIA
-    leaves it open), and a dock's tab bar is not one of these: it is a tab list,
-    where an arrow also shows the tab, which egui_stack's `TabFocus::Roving` does
+17. **Done: a roving helper, then toolbars and strips.** `tab::roving`: one stop, arrows
+    inside, back to the last. Then one PR each: toolbars (`toolbars.md` lists it), the
+    activity bar, the status bar. Size: M, then S each. Done: `tab::roving` is part of
+    the focus plugin, its widgets whatever is drawn inside it that can take the focus (a
+    greyed tool is passed over); Tab from any of them leaves past the group's end, Tab
+    coming in either way lands on the last focused, the arrows along it go round and
+    Home and End go to the ends, ordered by place rather than drawing (the status bar
+    draws its end items from the right). Toolbars, the activity bar (Up and Down) and
+    the status bar (Left and Right) are drawn in one, and the status bar's background,
+    sensed for its context menu, is no longer an empty stop. Amended: the arrows wrap,
+    as VS Code's action bars and Windows toolbars do (ARIA leaves it open), and a dock's
+    tab bar is not one of these: it is a tab list, where an arrow also shows the tab,
+    which egui_stack's `TabFocus::Roving` does
     ([inputs](inputs.md#a-roving-group-is-one-stop),
     [upstream](upstream.md#egui-no-roving-tab-stop)).
 18. **Done: tabs by key.** `workbench.tab.next` and `.previous` show and focus

@@ -5803,7 +5803,11 @@ impl App {
             egui::Panel::bottom(Id::unique("egui_pop.status")).show(ui, |ui| {
                 let region = focus::Region::new("statusBar", crate::workbench::RANK_STATUS_BAR);
                 focus::region(ui, &region, |ui| {
-                    ui.horizontal(|ui| h.show_zone(ui, &zones::STATUS_BAR));
+                    // One Tab stop, Left and Right between its items.
+                    let axis = egui_pop_core::tab::Axis::Horizontal;
+                    egui_pop_core::tab::roving(ui, "statusBar", axis, |ui| {
+                        ui.horizontal(|ui| h.show_zone(ui, &zones::STATUS_BAR));
+                    });
                 });
             });
         }

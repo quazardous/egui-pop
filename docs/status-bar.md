@@ -30,6 +30,15 @@ then opens next to `…`). Mode chips never give way.
 The user hides items and moves them within their group from an item's
 context menu; agents use `status.item.hide` and `status.item.move`.
 
+## The keyboard
+
+The status bar is one Tab stop ([a roving group](inputs.md#a-roving-group-is-one-stop)),
+as VS Code's: Tab into it lands on the item focused there last (the first the
+first time), Left and Right go between its items in the order they are placed,
+round from one end to the other, Home and End to its ends, and Tab from any item
+leaves it. F6 reaches it as a region. The bar's own background is not a stop:
+every item's context menu lists the hidden items too.
+
 ## Live states
 
 An item's state (`IndicatorState`) is what its reducer makes of the
