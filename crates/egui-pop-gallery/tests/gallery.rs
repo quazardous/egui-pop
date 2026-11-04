@@ -2681,19 +2681,14 @@ fn the_shortcuts_editor_searches_by_key_and_removes_every_key() {
 }
 
 #[test]
-fn the_gallery_opens_devtools_once_its_setting_is_on() {
+fn the_gallery_opens_devtools_from_the_start() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "debug"));
     h.run();
     let app = h.state().app.handle().clone();
-    egui_pop::core::lock(&app.store())
-        .set(egui_pop::model::values::Set::new(
-            "settings/developer.devtools",
-            egui_pop::model::values::Change::To(egui_pop::model::values::Value::Bool(true)),
-            egui_pop::model::commands::Origin::User,
-        ))
-        .unwrap();
-    h.run();
-    h.key_press(egui::Key::F12);
+    // A showcase for developers: no setting to find first.
+    assert!(egui_pop::api::devtools::enabled(&app));
+    h.get_by_label("Inspect an element (Ctrl+Shift+F12)");
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F12);
     h.run();
     h.run();
     assert!(app.panel_visible(&egui_pop::api::devtools::PANEL_DEVTOOLS));

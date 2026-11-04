@@ -148,9 +148,9 @@ struct Window {
 #[derive(Default)]
 struct State {
     on: bool,
-    /// The devtools setting is on: the platform's copy chord with Shift
-    /// (egui-winit's `Copy` event) is given back as the key it was, so
-    /// that Ctrl+Shift+C can be bound.
+    /// The platform's copy chord with Shift (egui-winit's `Copy` event)
+    /// is given back as the key it was, so that Ctrl+Shift+C can be
+    /// bound to the mode.
     armed: bool,
     /// Whether AccessKit was on when the mode started.
     accesskit_before: Option<bool>,
@@ -231,7 +231,8 @@ pub fn active(ctx: &Context) -> bool {
 
 /// Gives the platform's copy chord with Shift back as a key (Ctrl+Shift+C
 /// under egui-winit, which turns it into a copy event and swallows the
-/// key) while `on`: the devtools setting is.
+/// key) while `on`: the devtools setting is, and the mode is bound to
+/// that chord.
 pub fn arm(ctx: &Context, on: bool) {
     let st = state(ctx);
     if lock(&st).armed == on {

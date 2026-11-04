@@ -3,9 +3,10 @@
 //! it, with a Copy button, so that a misbehaving element can be named
 //! precisely in a report.
 //!
-//! The command `devtools.inspect` (Ctrl+Shift+C, as in browsers; View
-//! menu, the palette, the devtools panel) enters the mode, a second
-//! press or Escape leaves it. It works in every window, a detached
+//! The command `devtools.inspect` (Ctrl+Shift+F12; View menu, the
+//! palette, the devtools panel) enters the mode, a second press or
+//! Escape leaves it. Not Ctrl+Shift+C: browsers take it for their own
+//! element picker before a web build sees it. It works in every window, a detached
 //! panel's included. The picking itself is `egui_pop_core::inspect`'s;
 //! this side adds the window, the zone, block or panel and the plugin
 //! owning it, the theme, its kit and density, and what the application
@@ -336,7 +337,7 @@ pub(crate) fn connect(ctx: &mut Ctx<'_>, describe: Option<Describe>) -> Result<(
             .description(
                 "Enters or leaves the inspect mode: click an element (or reach it with Tab and the arrows, then Enter) to see what egui-pop knows of it (when the Devtools setting is on).",
             )
-            .key("Ctrl+Shift+C")
+            .key("Ctrl+Shift+F12")
             .when("devtoolsEnabled")
             .menu(MENU_VIEW, "8_devtools", 1)
             .no_agent(),
@@ -378,11 +379,24 @@ pub(crate) fn connect(ctx: &mut Ctx<'_>, describe: Option<Describe>) -> Result<(
     Ok(())
 }
 
+/// Whether the mode is bound to the platform's copy chord with Shift
+/// (Ctrl+Shift+C, a user's rebinding): egui-winit turns it into a copy
+/// event, which `picker::arm` gives back as the key. Left alone
+/// otherwise, so a text field still copies with it.
+fn on_the_copy_chord(app: &AppHandle) -> bool {
+    app.keys_for(&CMD_INSPECT).iter().any(|k| {
+        egui_pop_model::keymap::Keys::parse(k).is_ok_and(|keys| match keys.0.as_slice() {
+            [c] => c.key == "c" && c.shift && !c.alt && (c.ctrl || c.meta),
+            _ => false,
+        })
+    })
+}
+
 /// Each pass, in each window.
 fn pass(ui: &mut Ui, app: &AppHandle) {
     let ctx = ui.ctx().clone();
     let on = super::enabled(app);
-    picker::arm(&ctx, on);
+    picker::arm(&ctx, on && on_the_copy_chord(app));
     if !on && picker::active(&ctx) {
         picker::stop(&ctx);
     }

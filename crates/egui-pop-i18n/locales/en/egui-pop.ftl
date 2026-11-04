@@ -2417,7 +2417,7 @@ setting-appearance-toast-corner-choice-top-left = top-left
 setting-appearance-toast-corner-choice-top-right = top-right
 
 setting-developer-devtools =
-    .description = Lets the devtools panel open (F12): key resolutions, the journal, steps, focus, scale and every debug collector.
+    .description = Lets the devtools panel open (View > Devtools): key resolutions, the journal, steps, focus, scale and every debug collector.
     .label = Devtools
 
 setting-developer-log-level =
