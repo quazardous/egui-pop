@@ -130,6 +130,42 @@ bridges egui's widgets today ([kit](kit.md#bridges-to-egui)).
 - **Risk:** low to medium. Defaults keep egui_dock's look; the trait is
   public API, so its argument structs are `#[non_exhaustive]`.
 
+**Done (2026-11-04).** egui_stack's `DockPainter`, set with
+`DockArea::painter`; egui-pop's `Kit` implements it
+(`crates/egui-pop-core/src/kit/dock.rs`). Amended from the above where the
+code said otherwise:
+
+- Each method takes the painter and one `#[non_exhaustive]` struct, which
+  also carries egui_stack's `Style` (faded while a window surface is
+  hovered) and, for tabs, the tab's `TabStyle`: the default painting needs
+  them. Every method has a default (the `StylePainter`), so a painter
+  overrides only some parts.
+- `tab_width` takes a `TabMeasure` (title, flags known before layout,
+  close button width, styles). A bar filling its width can still widen a
+  tab.
+- `tab_bar` paints under the tabs; `tab_bar_tail` paints the bar right of
+  the last tab, after them, where egui_dock drew its line. The line under
+  each tab is part of `tab`. `scrolled` is how far the tabs are scrolled,
+  in points.
+- `tab` gets the close button as `close: Option<TabClose { rect, state }>`
+  rather than `closeable` and `close_hovered`; egui_stack keeps the
+  button's place and input.
+- The drop overlay takes three methods: `drop_target` (the node under the
+  pointer), `drop_button` (the overlay's buttons) and `drop_preview`
+  (`rect`, `destination`, `refusal` with its laid out reason and the
+  pointer, and `from_buttons`).
+- The flags are `PartState`, shared by every part: `SELECTED`, `HOVERED`,
+  `PRESSED`, `FOCUSED`, `DRAGGED`, and `LEAF_FOCUSED` (the dock's focused
+  leaf, which egui_dock's look distinguishes).
+- The tab bar buttons, the hidden tab bar's handle, the bar's scroll bar
+  and the tab bodies are still painted from `Style`.
+
+egui-pop no longer has `SeenTab`, `paint_tabs`, the transparent style or
+the `tab_style_override` width (a tab is as wide as the kit measures it,
+no 8-point floor); its egui_stack style only sets the bar's height.
+Separators are the kit's `splitter`, the drop overlay inside an area the
+kit's `dock-preview` and `button`.
+
 ## 2. Behaviour egui-pop works around
 
 ### 2.1 The drop veto, by tab and destination
@@ -543,7 +579,7 @@ Ranked by benefit for cost, risk last.
    [upstream](upstream.md)), then from egui_dock to egui_stack: a rename,
    then dropping the workarounds A and V remove.
 3. T, the painter trait; egui-pop's kit implements it and `paint_tabs`
-   goes.
+   goes (done).
 4. P, sections first (their arithmetic is egui-free and tested), then the
    toolbar row, once sections' behaviour has settled.
 5. S, the layout value, folded into egui-pop's `layout` document version 3.
@@ -580,4 +616,4 @@ Each is one pull request with a test and a changelog entry.
     (`screen_rect`, `dragged`): write them, or remove them.
 12. **The width a tab gets**: a `DockPainter::tab_width` measure (or,
     before the trait, a `TabStyle::padding` field) so a tab can be
-    narrower than its label plus 16 points.
+    narrower than its label plus 16 points (done: both).

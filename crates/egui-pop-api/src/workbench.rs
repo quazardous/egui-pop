@@ -2724,20 +2724,22 @@ fn draw_dock(app: &AppHandle, ui: &mut Ui, area: Area) {
         let mut viewer = Viewer {
             app,
             prepared: &cache.tabs,
-            seen: Vec::new(),
         };
+        // egui_stack lays the tabs out and takes their input; the kit
+        // measures and paints them, and the bars, separators and drop
+        // overlay (`egui_pop_core::kit`).
         DockArea::new(&mut dock)
             .id(dock_id(area))
             .style(style)
+            .painter(&*kit)
             .show_close_buttons(false)
             .show_add_buttons(false)
             .show_leaf_close_all_buttons(false)
             .show_leaf_collapse_buttons(false)
             .show_inside(ui, &mut viewer);
-        let seen = std::mem::take(&mut viewer.seen);
-        paint_tabs(ui, &dock, &kit, &cache.tabs, &seen);
+        let bar = first_bar(&dock, &kit, &cache.tabs);
         cache_id.set(&ctx, cache);
-        if let Some(bar) = first_bar(ui, &dock, &kit, &seen) {
+        if let Some(bar) = bar {
             app.workbench_mut().bars.insert(area, bar);
         }
     }
@@ -2746,7 +2748,11 @@ fn draw_dock(app: &AppHandle, ui: &mut Ui, area: Area) {
 
 /// The tab bar of an area's first tabs (where `Layout::place` adds a
 /// panel), as drawn this pass: `None` when hidden.
-fn first_bar(ui: &Ui, dock: &DockState<PanelId>, kit: &Kit, seen: &[SeenTab]) -> Option<TabBar> {
+fn first_bar(
+    dock: &DockState<PanelId>,
+    kit: &Kit,
+    prepared: &HashMap<PanelId, PreparedTab>,
+) -> Option<TabBar> {
     let tree = dock.main_surface();
     let mut at = NodeIndex::root();
     while at.0 < tree.len() && tree[at].is_parent() {
@@ -2761,13 +2767,17 @@ fn first_bar(ui: &Ui, dock: &DockState<PanelId>, kit: &Kit, seen: &[SeenTab]) ->
     }
     let height = kit.tab_bar.data.height.max(kit.tab.data.height);
     let rect = Rect::from_min_size(leaf.rect.min, egui::vec2(leaf.rect.width(), height));
-    // The right edge of its last tab in the bar (a dragged tab floats on
-    // a layer of its own); tabs scrolled out end at the bar's right.
-    let end = seen
+    // The right edge of its last tab: the tabs side by side as wide as
+    // the kit measures them (`DockPainter::tab_width`), from where they
+    // are scrolled to; tabs scrolled out end at the bar's right.
+    let width: f32 = leaf
+        .tabs
         .iter()
-        .filter(|t| t.layer == ui.layer_id() && leaf.tabs.contains(&t.panel))
-        .map(|t| t.rect.right())
-        .fold(rect.left(), f32::max)
+        .filter_map(|p| prepared.get(p))
+        .map(|t| t.width)
+        .sum();
+    let end = (rect.left() + leaf.scroll + width)
+        .max(rect.left())
         .min(rect.right());
     Some(TabBar {
         rect,
@@ -2779,43 +2789,13 @@ fn first_bar(ui: &Ui, dock: &DockState<PanelId>, kit: &Kit, seen: &[SeenTab]) ->
 struct Viewer<'a> {
     app: &'a AppHandle,
     prepared: &'a HashMap<PanelId, PreparedTab>,
-    /// The tabs egui_stack laid out this pass, for the kit to paint.
-    seen: Vec<SeenTab>,
 }
 
-/// A tab egui_stack laid out and took the input of: where, on which layer
-/// (a dragged tab floats), and its interaction.
-struct SeenTab {
-    panel: PanelId,
-    rect: Rect,
-    layer: egui::LayerId,
-    hovered: bool,
-    pressed: bool,
-    focused: bool,
-}
-
-/// egui_stack lays the tabs out and takes their input; the kit paints them
-/// (`egui_pop_core::kit`). Its own tab painting is made invisible, and
-/// each tab is as wide as the kit measures it.
+/// egui_stack's style for an area: its tab bars as high as the kit's
+/// (the kit paints every part, `egui_pop_core::kit`).
 fn dock_style(style: &egui::Style, kit: &Kit) -> egui_stack::Style {
     let mut s = egui_stack::Style::from_egui(style);
-    let clear = Color32::TRANSPARENT;
-    s.tab_bar.bg_fill = clear;
-    s.tab_bar.hline_color = clear;
     s.tab_bar.height = kit.tab_bar.data.height.max(kit.tab.data.height);
-    for t in [
-        &mut s.tab.active,
-        &mut s.tab.inactive,
-        &mut s.tab.focused,
-        &mut s.tab.hovered,
-        &mut s.tab.active_with_kb_focus,
-        &mut s.tab.inactive_with_kb_focus,
-        &mut s.tab.focused_with_kb_focus,
-    ] {
-        t.bg_fill = clear;
-        t.outline_color = clear;
-        t.text_color = clear;
-    }
     s
 }
 
@@ -2912,75 +2892,6 @@ impl TabCache {
     }
 }
 
-/// Paints the tab bars and the tabs of an area with the kit, over what
-/// egui_stack laid out.
-fn paint_tabs(
-    ui: &Ui,
-    dock: &DockState<PanelId>,
-    kit: &Kit,
-    prepared: &HashMap<PanelId, PreparedTab>,
-    seen: &[SeenTab],
-) {
-    let ctx = ui.ctx();
-    let ppp = ctx.pixels_per_point();
-    let height = kit.tab_bar.data.height.max(kit.tab.data.height);
-    let mut bars: Vec<(Rect, Option<&PanelId>, &[PanelId])> = Vec::new();
-    for (_, leaf) in dock.iter_leaves() {
-        if leaf.tabs.is_empty() || leaf.tab_bar_hidden {
-            continue;
-        }
-        let bar = Rect::from_min_size(leaf.rect.min, egui::vec2(leaf.rect.width(), height));
-        bars.push((bar, leaf.tabs.get(leaf.active.0), &leaf.tabs));
-        let cx = KitCx {
-            painter: ui.painter(),
-            ppp,
-        };
-        kit.tab_bar.paint(
-            &cx,
-            &Part {
-                rect: bar,
-                room: bar,
-                state: State::REST,
-                label: None,
-            },
-        );
-    }
-    for tab in seen {
-        let Some((bar, active, _)) = bars.iter().find(|(_, _, tabs)| tabs.contains(&tab.panel))
-        else {
-            continue;
-        };
-        let painter = ctx.layer_painter(tab.layer);
-        // In the bar, tabs scrolled out of it are cut; a dragged tab
-        // floats free.
-        let painter = if tab.layer == ui.layer_id() {
-            painter.with_clip_rect(*bar)
-        } else {
-            painter
-        };
-        let state = State::REST
-            .with(State::SELECTED, *active == Some(&tab.panel))
-            .with(State::HOVER, tab.hovered)
-            .with(State::ACTIVE, tab.pressed)
-            .with(State::FOCUS, tab.focused);
-        let Some(prep) = prepared.get(&tab.panel) else {
-            continue;
-        };
-        kit.tab.paint_part(
-            &KitCx {
-                painter: &painter,
-                ppp,
-            },
-            &Part {
-                rect: tab.rect,
-                room: tab.rect,
-                state,
-                label: Some(&prep.label),
-            },
-        );
-    }
-}
-
 impl TabViewer for Viewer<'_> {
     type Tab = PanelId;
 
@@ -3010,29 +2921,9 @@ impl TabViewer for Viewer<'_> {
             }
         }
         if response.has_focus() {
-            // Painted in the kit's focus state, with the other tabs.
+            // Painted in the kit's focus state (`DockPainter::tab`).
             egui_pop_core::focus::own_ring(&response.ctx, response.id);
         }
-        self.seen.push(SeenTab {
-            panel: tab.clone(),
-            rect: response.rect,
-            layer: response.layer_id,
-            hovered: response.hovered(),
-            pressed: response.is_pointer_button_down_on(),
-            focused: response.has_focus(),
-        });
-    }
-
-    fn tab_style_override(
-        &self,
-        tab: &PanelId,
-        global: &egui_stack::TabStyle,
-    ) -> Option<egui_stack::TabStyle> {
-        let width = self.prepared.get(tab)?.width;
-        Some(egui_stack::TabStyle {
-            minimum_width: Some(width),
-            ..global.clone()
-        })
     }
 
     fn context_menu(&mut self, ui: &mut Ui, tab: &mut PanelId, _path: egui_stack::TabPath) {

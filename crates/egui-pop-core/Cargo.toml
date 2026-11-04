@@ -42,6 +42,9 @@ theme-zip = ["egui-pop-tokens/zip"]
 # (`ui::set_scroll_offset`), egui 0.37 having no setter for it.
 egui = { workspace = true, features = ["serde"] }
 egui-phosphor = { workspace = true, optional = true }
+# MIT: the kit paints the workbench's docks (`kit::dock`, its
+# `DockPainter`).
+egui_stack.workspace = true
 # MIT: the system's fonts by family and weight (feature `system-fonts`).
 fontdb = { version = "0.23", optional = true }
 # MIT OR Apache-2.0: SVG icons (feature `svg`); no text, no raster images.

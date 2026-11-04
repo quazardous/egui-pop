@@ -1334,6 +1334,7 @@ dependencies = [
  "egui-pop-test-macros",
  "egui-pop-tokens",
  "egui_kittest",
+ "egui_stack",
  "fontdb",
  "log",
  "resvg 0.46.0",
@@ -1689,8 +1690,7 @@ dependencies = [
 [[package]]
 name = "egui_stack"
 version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "097775e7cb7a117adf222b7fe05f746b7e1c8ae05d4078ee9ff05b69c4f07a1e"
+source = "git+https://github.com/quazardous/egui_stack?branch=wip%2Fdock-painter#c614e5a342e5804ed2d8fb0d3d039c0aaae8d3c4"
 dependencies = [
  "duplicate",
  "egui",

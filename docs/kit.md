@@ -304,10 +304,11 @@ compiled at install.
 ## Built so far
 
 - **Tabs of the workbench** (`tab`, `tab-bar`, `tab-preview`). egui_stack keeps the
-  layout, docking, drag and drop and the tabs' input; its own tab painting
-  is made invisible, each tab is as wide as the kit measures it
-  (`TabViewer::tab_style_override`), and the kit paints the bars and tabs
-  over what egui_stack laid out. Shapes shipped: `box` (joined to its
+  layout, docking, drag and drop and the tabs' input; the kit is its
+  `DockPainter` (`kit::dock`): it measures each tab (`tab_width`, the
+  kit's padding, no floor of egui_stack's) and paints the bars, the tabs,
+  the separators (`splitter`) and the drop overlay inside an area
+  (`dock-preview`, its buttons `button`) where egui_stack lays them out. Shapes shipped: `box` (joined to its
   panel, the default, close to egui_dock's own look), `underline`, and
   `plain` for the bar. The gallery's `workbench-kit-underline` snapshot
   is a theme that switches to `underline` with data only. A tab dragged
@@ -803,10 +804,8 @@ an `opacity-rest` outside 0 to 1. The gallery's `scoped` page shows one, restyle
 
 Known limits of this first step:
 
-- egui_stack adds 8 points either side of a label by default
-  (`TabStyle::padding`, not used yet) and never makes a tab narrower; a kit can make tabs wider, not narrower, and cannot
-  overlap them (Chrome-like tabs) until egui-pop lays the tab bar out
-  itself.
+- A kit can make tabs narrower than egui_stack's default but cannot
+  overlap them (Chrome-like tabs): egui_stack lays them side by side.
 - Corner radius, border width and indicator are uniform; per-side borders
   and per-corner radii are a later step.
 

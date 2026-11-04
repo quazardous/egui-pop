@@ -37,6 +37,7 @@ use egui_pop_tokens::Value;
 use crate::state::Slot;
 use crate::theme::Tokens;
 
+mod dock;
 mod glyph;
 mod paint;
 mod scoped;
