@@ -69,8 +69,6 @@
 //! ```
 
 mod embed;
-#[cfg(all(feature = "video", not(target_arch = "wasm32")))]
-mod gst_player;
 #[cfg(feature = "html")]
 mod html;
 mod page;
@@ -99,12 +97,15 @@ use serde_json::{Value as Json, json};
 pub use embed::{
     DEFAULT_REFERRER, EmbedBackend, EmbedRequest, Embedded, PUMP, Placement, embed_url,
 };
-#[cfg(all(feature = "video", not(target_arch = "wasm32")))]
-pub use gst_player::{GStreamer, write_test_clip};
 pub use page::{Block, ImageRef, Markdown, has_scheme, resolve, slug};
-pub use video::{
-    SEEK_STEP, VIDEO_CONTEXT, VIDEO_SURFACE, VOLUME_STEP, VideoBackend, VideoFrame, VideoPlayer,
-    VideoRequest, VideoState, VideoStatus, clock, rgba_image,
+pub use video::{VIDEO_CONTEXT, VIDEO_ID, VIDEO_SURFACE};
+// The video's types live with the widget (`crate::video`); named here too, as
+// before it had one.
+#[cfg(all(feature = "video", not(target_arch = "wasm32")))]
+pub use crate::video::{GStreamer, write_test_clip};
+pub use crate::video::{
+    SEEK_STEP, VOLUME_STEP, VideoBackend, VideoFrame, VideoPlayer, VideoRequest, VideoState,
+    VideoStatus, clock, rgba_image,
 };
 #[cfg(all(feature = "webview", target_os = "linux"))]
 pub use wry_view::Wry;
@@ -454,7 +455,7 @@ impl Viewer {
             inner: Mutex::new(Inner::default()),
             inbox: Arc::default(),
             cache: Mutex::new(CommonMarkCache::default()),
-            video: Mutex::new(video::Video::new(video::default_backend())),
+            video: Mutex::new(video::Video::new(crate::video::default_backend())),
             embed: Mutex::new(embed::Embed::new(embed::default_backend())),
         }
     }
@@ -851,7 +852,6 @@ impl Viewer {
 
     /// Takes what fetches brought (each pass).
     pub fn poll(&self, app: &AppHandle) {
-        self.poll_video(app);
         let arrived: Vec<(Arrival, Fetched)> = std::mem::take(&mut *lock(&self.inbox));
         for (what, result) in arrived {
             match what {
@@ -1529,22 +1529,22 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     .command(
         video_key(CMD_VIDEO_BACK, "Move the video back", "Left")
             .description("Moves the viewer's video back a few seconds."),
-        |call| viewer(call.app)?.video_seek_by(call.app, -video::SEEK_STEP.as_secs_f64()),
+        |call| viewer(call.app)?.video_seek_by(call.app, -SEEK_STEP.as_secs_f64()),
     )?
     .command(
         video_key(CMD_VIDEO_AHEAD, "Move the video ahead", "Right")
             .description("Moves the viewer's video ahead a few seconds."),
-        |call| viewer(call.app)?.video_seek_by(call.app, video::SEEK_STEP.as_secs_f64()),
+        |call| viewer(call.app)?.video_seek_by(call.app, SEEK_STEP.as_secs_f64()),
     )?
     .command(
         video_key(CMD_VIDEO_LOUDER, "Make the video louder", "Up")
             .description("Raises the volume of the viewer's video one step."),
-        |call| viewer(call.app)?.video_volume_by(call.app, video::VOLUME_STEP),
+        |call| viewer(call.app)?.video_volume_by(call.app, VOLUME_STEP),
     )?
     .command(
         video_key(CMD_VIDEO_QUIETER, "Make the video quieter", "Down")
             .description("Lowers the volume of the viewer's video one step."),
-        |call| viewer(call.app)?.video_volume_by(call.app, -video::VOLUME_STEP),
+        |call| viewer(call.app)?.video_volume_by(call.app, -VOLUME_STEP),
     )?
     .command(
         CommandSpec::new(CMD_VIDEO_SEEK, "Move the video to a time", CAT)

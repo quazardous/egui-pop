@@ -14,6 +14,10 @@
 //! - [`steps`]: their moments as steps, and [`ViewsPlugin`] that
 //!   declares them;
 //! - [`strings`]: the text they show, translatable;
+//! - [`video`]: the video widget, a local file played in place with full,
+//!   compact or no controls (GStreamer with the `video` feature, a
+//!   placeholder with Open outside without it), and the commands and
+//!   collector agents drive it with;
 //! - `viewer` (feature `markdown`): the in-app viewer of ADR 0017, a
 //!   panel showing `docs:` pages, markdown and images with back and
 //!   forward, an address bar, find in page and zoom, the links service's
@@ -38,6 +42,7 @@ pub mod steps;
 pub mod strings;
 pub mod table;
 pub mod tree;
+pub mod video;
 #[cfg(feature = "markdown")]
 pub mod viewer;
 

@@ -33,12 +33,11 @@ enum Action {
     FindClose,
     Find(String),
     Zoom(i32),
-    Video(video::Act),
+    VideoFailed { target: String, detail: String },
 }
 
 /// Draws the viewer's panel.
 pub(super) fn show(ui: &mut Ui, app: &AppHandle, v: &Viewer) {
-    v.video_in_view(app);
     v.poll(app);
     let mut actions = Vec::new();
     focus::scope(ui, super::SURFACE, &[], |ui| {
@@ -83,7 +82,7 @@ pub(super) fn show(ui: &mut Ui, app: &AppHandle, v: &Viewer) {
             Action::Zoom(by) => {
                 v.zoom_step(by);
             }
-            Action::Video(act) => v.video_act(app, act),
+            Action::VideoFailed { target, detail } => v.video_failed(app, &target, &detail),
         }
         ui.ctx().request_repaint();
     }
@@ -327,9 +326,9 @@ fn body(ui: &mut Ui, app: &AppHandle, v: &Viewer, actions: &mut Vec<Action>) {
             embed::draw(ui, app, v);
         }
         Status::Shown(page) if matches!(page.content, Content::Video(_)) => {
-            let mut acts = Vec::new();
-            video::draw(ui, v, &mut acts);
-            actions.extend(acts.into_iter().map(Action::Video));
+            if let Some((target, detail)) = video::draw(ui, app, v) {
+                actions.push(Action::VideoFailed { target, detail });
+            }
         }
         Status::Shown(page) => {
             let (zoom, restore) = {

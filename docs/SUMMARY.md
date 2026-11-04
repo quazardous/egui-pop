@@ -33,6 +33,7 @@
 - [Inputs, field states and Tab order](inputs.md)
 - [The tree](tree.md)
 - [Lists and tables](table.md)
+- [Video](video.md)
 - [The photo library](library.md)
 - [Text and code editors](editors.md)
 - [Micro-indicators](indicators.md)
