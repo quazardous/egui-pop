@@ -9,7 +9,9 @@ an application whose id is `org.example.Viewer`, whose executable is
 `viewer` and whose links are `viewer://...`.
 
 Give the same id everywhere: to eframe (`ViewportBuilder::with_app_id`,
-the Wayland app id and the X11 class), to the plugins
+the Wayland app id and the X11 class), to the application
+(`AppBuilder::app_id`, which `run_native` takes from eframe's when not
+given; the viewer's YouTube player names the application with it), to the plugins
 (`SystemKeysPlugin::new`, `TrayPlugin::app_id`, `Desktop::app_id`,
 `instance::single`), and to the package's files below.
 
