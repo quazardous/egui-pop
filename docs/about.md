@@ -52,6 +52,7 @@ system's browser on the desktop.
 | `about` | Help > About *application* (the title says `{ $application }`, filled with the name) |
 | `about.read` | For agents, kept out of the palette: everything as JSON (name, version, description, licences, authors, links, egui-pop's and egui's versions, the platform, the renderer, `version_info`) |
 | `help.report` | Help > Report a problem, the palette, the inspect dialog's Report… button and the About dialog's link: a prefilled new issue in the browser. Declared only when `AppInfo::issues` is set |
+| `help.suggest` | Help > Suggest an idea, the palette: a new issue for an idea in the browser, with the page shown. Declared only when `AppInfo::issues` is set |
 
 `about::open(app)` opens the dialog from code; `about::show(ui, app,
 copied)` draws its body anywhere (the gallery's page does).
@@ -122,6 +123,14 @@ each ending `(trimmed)`. `about::report_url(app)` gives the URL without
 opening it. egui-pop's own form is
 [`.github/ISSUE_TEMPLATE/bug.yml`](../.github/ISSUE_TEMPLATE/bug.yml);
 an application copies it, or keeps its field ids.
+
+An idea is not a problem: Help > Suggest an idea (`help.suggest`) sits
+beside Report a problem, so that the reporter chooses before the form
+opens. It opens `<issues>/new` titled `Idea for <page>` (or `<application>`)
+with the page alone (no version info, platform or pick), in the idea form
+named by `AboutPlugin::idea_form("feature.yml")` (its `page` field), or in
+the body without one. `about::idea_url(app)` gives the URL. egui-pop's form
+is [`.github/ISSUE_TEMPLATE/feature.yml`](../.github/ISSUE_TEMPLATE/feature.yml).
 
 ## Translated
 

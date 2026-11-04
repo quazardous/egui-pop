@@ -18,8 +18,11 @@
 //! out of the palette), and `help.report` (Help > Report a problem, the
 //! palette, the inspect dialog's Report button, the About dialog's link):
 //! a new issue opened in the browser, prefilled with the version info,
-//! the platform, the page shown and the last inspect pick ([`report`]).
-//! `help.report` is declared only when the [`AppInfo`] says where issues
+//! the platform, the page shown and the last inspect pick ([`report`]);
+//! and `help.suggest` (Help > Suggest an idea, the palette): a new issue
+//! for an idea, prefilled with the page shown, in the repository's idea
+//! form when the plugin names one ([`AboutPlugin::idea_form`]). Both are
+//! declared only when the [`AppInfo`] says where issues
 //! go ([`AppInfo::issues`]): a library cannot know where an
 //! application's bugs belong, and a command leading nowhere is noise.
 //!
@@ -76,6 +79,8 @@ pub const CMD_ABOUT: CommandId = CommandId::from_static("about");
 pub const CMD_ABOUT_READ: CommandId = CommandId::from_static("about.read");
 /// Help > Report a problem: a prefilled new issue, in the browser.
 pub const CMD_REPORT: CommandId = CommandId::from_static("help.report");
+/// Help > Suggest an idea: a new issue for an idea, in the browser.
+pub const CMD_SUGGEST: CommandId = CommandId::from_static("help.suggest");
 
 /// The clipboard endpoint "Copy version info" copies from.
 pub const VERSION_ENDPOINT: &str = "about.version";
@@ -293,11 +298,12 @@ impl About {
 pub type PageFn = dyn Fn(&AppHandle) -> Option<String>;
 
 /// Help > About *application*, `about.read` for agents, and
-/// `help.report` when the info says where issues go.
+/// `help.report` and `help.suggest` when the info says where issues go.
 #[derive(Default)]
 pub struct AboutPlugin {
     info: AppInfo,
     page: Option<Rc<PageFn>>,
+    idea_form: Option<String>,
 }
 
 impl fmt::Debug for AboutPlugin {
@@ -305,13 +311,27 @@ impl fmt::Debug for AboutPlugin {
         f.debug_struct("AboutPlugin")
             .field("info", &self.info)
             .field("page", &self.page.is_some())
+            .field("idea_form", &self.idea_form)
             .finish()
     }
 }
 
 impl AboutPlugin {
     pub fn new(info: AppInfo) -> Self {
-        Self { info, page: None }
+        Self {
+            info,
+            page: None,
+            idea_form: None,
+        }
+    }
+
+    /// The repository's issue form for ideas `help.suggest` fills
+    /// (`feature.yml`, in `.github/ISSUE_TEMPLATE/`), its page field
+    /// named [`report::FIELD_PAGE`]; without it, the idea goes in the
+    /// body.
+    pub fn idea_form(mut self, file: &str) -> Self {
+        self.idea_form = Some(file.into());
+        self
     }
 
     /// Says which page or view is shown, for `help.report`'s page field
@@ -322,10 +342,11 @@ impl AboutPlugin {
     }
 }
 
-/// The page function, for [`report_of`].
+/// The page function, for [`report_of`], and the idea form.
 #[derive(Default)]
 struct Shared {
     page: std::cell::RefCell<Option<Rc<PageFn>>>,
+    idea_form: std::cell::RefCell<Option<String>>,
 }
 
 /// The version info, as the `about.version` endpoint copies it.
@@ -361,6 +382,7 @@ impl Plugin for AboutPlugin {
         )?;
         ctx.clip_endpoint(VERSION_ENDPOINT, Some(Rc::new(VersionSource)), None);
         *ctx.app().local::<Shared>().page.borrow_mut() = self.page.clone();
+        *ctx.app().local::<Shared>().idea_form.borrow_mut() = self.idea_form.clone();
         if self.info.issues.is_some() {
             ctx.command(
                 CommandSpec::new(CMD_REPORT, "Report a problem", CAT)
@@ -368,6 +390,16 @@ impl Plugin for AboutPlugin {
                     .menu(MENU_HELP, "8_report", 0),
                 |call| {
                     let url = report_url(call.app)?;
+                    open_report(call.app, &url.url)?;
+                    Ok(json!({ "url": url.url, "trimmed": url.trimmed }))
+                },
+            )?
+            .command(
+                CommandSpec::new(CMD_SUGGEST, "Suggest an idea", CAT)
+                    .description("Opens a new issue for an idea in the browser, prefilled with the page shown.")
+                    .menu(MENU_HELP, "8_report", 1),
+                |call| {
+                    let url = idea_url(call.app)?;
                     open_report(call.app, &url.url)?;
                     Ok(json!({ "url": url.url, "trimmed": url.trimmed }))
                 },
@@ -488,6 +520,27 @@ pub fn report_url(app: &AppHandle) -> Result<report::IssueUrl, String> {
         .as_deref()
         .ok_or("the application says nowhere to report issues")?;
     Ok(report_of(app)?.url(issues, info.issue_form.as_deref()))
+}
+
+/// The new-issue URL `help.suggest` opens: the idea form, prefilled
+/// with the page shown (it needs [`AboutPlugin`] with
+/// [`AppInfo::issues`]).
+pub fn idea_url(app: &AppHandle) -> Result<report::IssueUrl, String> {
+    let about = app
+        .service(&ABOUT)
+        .ok_or("the about plugin is not connected")?;
+    let info = about.info();
+    let issues = info
+        .issues
+        .as_deref()
+        .ok_or("the application says nowhere to report issues")?;
+    let mut report = report_of(app)?;
+    report.title = match &report.page {
+        Some(p) => format!("Idea for {p}"),
+        None => format!("Idea for {}", info.name),
+    };
+    let form = app.local::<Shared>().idea_form.borrow().clone();
+    Ok(report.idea_url(issues, form.as_deref()))
 }
 
 /// Opens the URL: through the links service when its plugin is

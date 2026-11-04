@@ -230,7 +230,12 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::fonts::FontsPage)
         .plugin(egui_pop::api::tips::TipsPlugin)
         .plugin(pages::tips::TipsPage)
-        .plugin(egui_pop::api::about::AboutPlugin::new(pages::about::info()).page(shell::report_page))
+        // `.github/ISSUE_TEMPLATE/feature.yml`: Help > Suggest an idea fills it.
+        .plugin(
+            egui_pop::api::about::AboutPlugin::new(pages::about::info())
+                .page(shell::report_page)
+                .idea_form("feature.yml"),
+        )
         .plugin(pages::about::AboutPage)
         .plugin(PagePlugin {
             plugin: PluginId::from_static("gallery.placeholders"),

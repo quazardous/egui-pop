@@ -2,6 +2,11 @@ name: Suggestion
 description: An idea to make egui-pop or its gallery better.
 labels: ["enhancement"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        From the gallery, Help > Suggest an idea opens this form with
+        the page filled in.
   - type: textarea
     id: idea
     attributes:

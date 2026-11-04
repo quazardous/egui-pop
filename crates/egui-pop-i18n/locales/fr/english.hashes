@@ -191,6 +191,8 @@ command-gesture-value-step.description 28dd8dd569518e78
 command-gesture-value-step.title 547562cb851b7b85
 command-help-report.description 5efdd9aa299ac6f8
 command-help-report.title 0f49e08b86c19aef
+command-help-suggest.description 5f9e3fbf9f1f5ab3
+command-help-suggest.title 8f9bfc2277067f87
 command-history-drop-snapshot.description 991d59381651f3ad
 command-history-drop-snapshot.title c4b12f67ab2f2e07
 command-history-jump.description 01e45ff186f3b55c

@@ -385,6 +385,10 @@ command-help-report =
     .description = Opens a new issue in the browser, prefilled with the version info, the platform, the page shown and the last element inspected.
     .title = Report a problem
 
+command-help-suggest =
+    .description = Opens a new issue for an idea in the browser, prefilled with the page shown.
+    .title = Suggest an idea
+
 command-history-drop-snapshot =
     .description = Deletes one of a history's snapshots (`scope`; none: where Undo goes now; `snapshot`, its id), refused unless its revision is still `if_rev`; with `dry_run`, only checks it is there.
     .title = Delete a snapshot
