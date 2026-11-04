@@ -79,6 +79,10 @@ pub struct KeyDispatcher {
     /// The keys a binding took and that are still down: what a held key sends
     /// goes with its press, not to the widgets.
     held: Vec<Key>,
+    /// The text a consumed plain key types, when it did not come in the
+    /// same pass as the press, and the pass of the press: it is taken when
+    /// it comes in the next two.
+    typed: Vec<(String, u64)>,
 }
 
 impl Default for KeyDispatcher {
@@ -89,6 +93,7 @@ impl Default for KeyDispatcher {
             timeout: 2.0,
             traces: VecDeque::new(),
             held: Vec::new(),
+            typed: Vec::new(),
         }
     }
 }
@@ -200,24 +205,58 @@ impl KeyDispatcher {
                 self.keep(trace);
             }
         }
-        if !consumed.is_empty() {
+        let pass = ctx.cumulative_pass_nr();
+        self.typed.retain(|(_, p)| p + 2 >= pass);
+        // Its name (`a`), or its symbol for a key named otherwise (`/` for
+        // `slash`).
+        let texts: Vec<String> = consumed
+            .iter()
+            .filter(|(_, c)| !c.ctrl && !c.alt && !c.meta)
+            .flat_map(|(_, c)| {
+                let symbol = key_of(c).map(|(_, k)| k.symbol_or_name().to_string());
+                std::iter::once(c.key.clone()).chain(symbol)
+            })
+            .collect();
+        if !consumed.is_empty() || !self.typed.is_empty() {
+            let mut seen = false;
+            let typed = &mut self.typed;
             ctx.input_mut(|i| {
                 let mut index = 0;
-                let texts: Vec<String> = consumed
-                    .iter()
-                    .filter(|(_, c)| !c.ctrl && !c.alt && !c.meta)
-                    .map(|(_, c)| c.key.clone())
-                    .collect();
                 i.events.retain(|e| {
                     let n = index;
                     index += 1;
                     if consumed.iter().any(|(c, _)| *c == n) {
                         return false;
                     }
-                    // The text a consumed plain key would type.
-                    !matches!(e, Event::Text(t) if texts.iter().any(|k| t.eq_ignore_ascii_case(k)))
+                    let Event::Text(t) = e else { return true };
+                    // The text a consumed plain key types.
+                    if texts.iter().any(|k| t.eq_ignore_ascii_case(k)) {
+                        seen = true;
+                        return false;
+                    }
+                    // Or typed, a pass or two after its press.
+                    match typed.iter().position(|(k, _)| t.eq_ignore_ascii_case(k)) {
+                        Some(at) => {
+                            typed.remove(at);
+                            false
+                        }
+                        None => true,
+                    }
                 });
             });
+            // A symbol key whose text did not come with it: it may come next.
+            if !seen {
+                for (_, c) in consumed
+                    .iter()
+                    .filter(|(_, c)| !c.ctrl && !c.alt && !c.meta)
+                {
+                    if let Some((_, k)) = key_of(c)
+                        && k.symbol_or_name() != k.name()
+                    {
+                        self.typed.push((k.symbol_or_name().to_string(), pass));
+                    }
+                }
+            }
         }
         quiet_plain_clicks(ctx);
         out

@@ -142,6 +142,49 @@ fn chords_wait_and_typing_keeps_plain_keys() {
 }
 
 #[test]
+fn a_symbol_key_bound_types_nothing() {
+    // `/` is the key `Slash`: the dispatcher takes both its press and the
+    // text it types, as for a letter, even when the text comes a pass
+    // later (kittest sends one event per pass).
+    let mut keymap = Keymap::new();
+    keymap
+        .bind(
+            &OwnerId::FRAMEWORK,
+            Layer::Default,
+            "Slash",
+            Action::Run("find.open".parse().unwrap()),
+            "",
+        )
+        .unwrap();
+    let mut h = Harness::new_ui_state(
+        |ui, s: &mut (Keymap, KeyDispatcher, Vec<String>, Vec<String>)| {
+            let cx = focus::when_context(ui.ctx(), &WhenContext::new());
+            for d in s.1.process(ui.ctx(), &s.0, &cx) {
+                s.2.push(d.command.to_string());
+            }
+            ui.input(|i| {
+                for e in &i.events {
+                    if let egui::Event::Text(t) = e {
+                        s.3.push(t.clone());
+                    }
+                }
+            });
+        },
+        (keymap, KeyDispatcher::new(), Vec::new(), Vec::new()),
+    );
+    h.run();
+    h.key_press(Key::Slash);
+    h.event(egui::Event::Text("/".into()));
+    h.run();
+    assert_eq!(h.state().2, ["find.open"]);
+    assert!(h.state().3.is_empty(), "{:?}", h.state().3);
+    // Typed again later, it is text again.
+    h.event(egui::Event::Text("/".into()));
+    h.run();
+    assert_eq!(h.state().3, ["/"]);
+}
+
+#[test]
 fn chords_convert_both_ways() {
     let c = chord_of(Key::K, Modifiers::COMMAND);
     assert_eq!(c.to_string(), "Ctrl+K");
