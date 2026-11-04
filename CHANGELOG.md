@@ -8,6 +8,56 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 2026-11-04
+
+Published: egui-pop-core 0.4.1, egui-pop-api 0.4.1, egui-pop-views 0.4.1.
+
+### Features
+
+- egui-pop-api: Help > Suggest an idea (`help.suggest`) sits beside Report a problem when the
+  application says where issues go: an idea opens a new issue titled "Idea for
+  <page>" with the page alone, in the idea form named by
+  `AboutPlugin::idea_form("feature.yml")`, or in the body without one
+  (`about::idea_url`, `Report::idea_url`). Report a problem keeps the bug form.
+- egui-pop-views: A tree can be filtered: `TreeState::set_filter`, typed in a `FilterField`
+  drawn above the tree. A node shows when every word of the query is in its
+  match text (its name, plus the words `TreeSource::match_text` adds), as a
+  substring, ignoring case and the accents of Latin letters. The matches show
+  with their ancestors, opened for them without touching the fold the tree
+  keeps; the rest is hidden, a "No match" row says when nothing is left, and
+  the matched part of each label is underlined in the row's accent tone. The
+  cursor goes to the first match when its row hides. The field shows "3 of
+  57" and announces it; Ctrl+F or `/` in the tree goes to it (the `tree.filter`
+  command of `ViewsPlugin`, rebindable), Escape clears it and then leaves it,
+  Down goes to the tree. Agents read each tree's filter and rows in the new
+  `trees` debug collector. New strings `egui-pop-views-tree-filter*`,
+  translated in French.
+- egui-pop-views: A `Video` widget (`egui_pop_views::video`) plays a local video file in place,
+  each on its own player: `Video::new(path)` with `controls(Full | Compact |
+  None)`, `autoplay`, `looping`, `muted`, `volume`, `fit(Contain | Cover)`, a
+  `poster`, a `size` and an `id`. Its keys follow the viewer's (Space, Left and
+  Right, Up and Down), its picture is an accessible video node, and
+  `VideoPlugin` adds the `video.toggle`, `video.play`, `video.pause`,
+  `video.seek`, `video.volume` and `video.mute` commands and the `videos`
+  collector for agents. Without the `video` feature (or on the web) it draws a
+  placeholder saying so, with Open outside. The viewer's video page is now this
+  widget. GStreamer's player converts pictures on every core and makes egui's picture
+  in one pass (4K VP9 decoded by the GPU now plays in real time, where it fell
+  behind at about 20 frames a second), and loops without a gap through segment
+  seeks (`VideoPlayer::set_looping`). The video types
+  moved to `egui_pop_views::video`; they are still named under `viewer::`.
+
+### Fixes
+
+- egui-pop-api: A status item with neither text nor icon (nor spinner nor counts) is no
+  longer drawn as an empty button without an accessible name: it takes no
+  room until its reducer gives it something to show, and agents still list
+  it.
+- egui-pop-core: A plain key bound to a command whose text is a symbol (`/`, the key `Slash`)
+  no longer types that symbol into the widget that gets the focus: the
+  dispatcher takes its text as it does a letter's, also when it arrives a pass
+  or two after the press.
+
 ## 0.4.0 (2026-11-04)
 
 Published: egui-pop-model 0.4.0, egui-pop-core 0.4.0, egui-pop-api 0.4.0, egui-pop-test 0.4.0, egui-pop-viewport 0.4.0, egui-pop-i18n 0.4.0, egui-pop-editors 0.4.0, egui-pop-platform 0.4.0, egui-pop-views 0.4.0, egui-pop-imaging 0.4.0, egui-pop 0.4.0.
