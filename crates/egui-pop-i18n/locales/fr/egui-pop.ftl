@@ -2045,7 +2045,7 @@ setting-appearance-toast-corner-choice-top-left = en haut à gauche
 setting-appearance-toast-corner-choice-top-right = en haut à droite
 
 setting-developer-devtools =
-    .description = Permet d’ouvrir le panneau des outils de développement (F12) : résolutions des touches, journal, étapes, focus, échelle et chaque collecteur de débogage.
+    .description = Permet d’ouvrir le panneau des outils de développement (Affichage > Outils de développement) : résolutions des touches, journal, étapes, focus, échelle et chaque collecteur de débogage.
     .label = Outils de développement
 
 setting-developer-log-level =

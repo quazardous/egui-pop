@@ -50,7 +50,7 @@ The user's calls (the devtools panel, `debug_call_as` with
 journal (`debug.call.refused`).
 
 **Devtools is a view, not a gate.** `DevtoolsPlugin` (opt-in) shows the
-same collectors in a panel, opened with `F12` once the
+same collectors in a panel, opened with `Shift+F12` once the
 `developer.devtools` setting is on (off by default). The setting gates
 the panel only; the bridge answers Rust calls whatever its value. The
 panel is the user's: an action run from it goes through the

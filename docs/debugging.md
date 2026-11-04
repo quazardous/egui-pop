@@ -84,8 +84,10 @@ there panics with both names instead of deadlocking.
 ## Devtools
 
 The same collectors inside the application: `DevtoolsPlugin` (opt-in)
-adds a bottom panel, opened with `F12` once the `developer.devtools`
-setting is on (off by default, so end users never meet it). Its tabs
+adds a bottom panel, opened with `Shift+F12` once the `developer.devtools`
+setting is on (off by default, so end users never meet it;
+`DevtoolsPlugin::on_by_default(true)` turns it on in an application
+shown to developers, as the gallery does). Its tabs
 show the last key resolutions with each binding's verdict, the journal,
 the steps with their hooks and last runs, the focus chain, overlays and
 context keys, each window's scale (the `screen` collector), and every
@@ -113,7 +115,7 @@ assert!(app.handle().debug_snapshot()["screen"]["windows"].is_array());
 ## Inspecting an element
 
 When something on screen misbehaves, say exactly which element it is:
-`devtools.inspect` (**Ctrl+Shift+C**, as in browsers; View > Inspect an
+`devtools.inspect` (**Ctrl+Shift+F12**; View > Inspect an
 element, the palette, or the button at the start of the devtools
 panel) enters the inspect mode once the `developer.devtools` setting is
 on. While it is on:
@@ -123,7 +125,7 @@ on. While it is on:
 - a click picks it and does not reach it (nothing is pressed);
 - Tab, Shift+Tab and the arrows move between the interactive widgets
   instead, Enter picks the one outlined;
-- Escape, or Ctrl+Shift+C again, leaves;
+- Escape, or Ctrl+Shift+F12 again, leaves;
 - it works in every window, a detached panel's included.
 
 A pick opens a dialog with what egui and egui-pop know: the element's
@@ -176,11 +178,19 @@ How an element is found, and the limits:
 - **The kit part** is known for parts painted through a kit
   component's handler (`Component::paint`, `Component::show`). egui's
   own widgets drawn with a kit's scoped visuals show none.
-- **The chord**: egui-winit turns Ctrl+Shift+C into a copy event and
-  swallows the key. While the devtools setting is on, egui-pop gives
-  that event back as the key, so the binding works; a focused terminal
-  then loses Ctrl+Shift+C as its copy (rebind one of them in the
-  keyboard shortcuts if that matters).
+- **The keys**: not F12 nor Ctrl+Shift+C, the browsers' own: a web
+  build never sees them, the browser opens its developer tools or its
+  element picker first. Nor Ctrl+Shift+I, J, K, E, M, Z (Firefox's and
+  Chrome's tools; Cmd+Option on a Mac), Shift+F5, F7, F9 (Firefox),
+  Shift+F5, F6, F10 and Ctrl+F4, F5, F6 (Chrome), or Ctrl+Alt+a letter
+  (AltGr types a character with it on many Windows layouts). Shift+F12
+  and Ctrl+Shift+F12 are taken by none of Firefox, Chrome and Safari,
+  on Linux, Windows and macOS (on a Mac laptop, with Fn).
+- **Ctrl+Shift+C, rebound**: egui-winit turns it into a copy event and
+  swallows the key. While the devtools setting is on and the mode is
+  bound to it, egui-pop gives that event back as the key, so the
+  binding works; a focused terminal then loses Ctrl+Shift+C as its
+  copy.
 
 ### How other toolkits do it
 

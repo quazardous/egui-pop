@@ -8,8 +8,6 @@ use egui_kittest::kittest::Queryable as _;
 use egui_pop::api::AppHandle;
 use egui_pop::api::devtools::inspect;
 use egui_pop::model::clipboard::Slot;
-use egui_pop::model::commands::Origin;
-use egui_pop::model::values::{Change, Set, Value};
 use egui_pop::theme::Density;
 use egui_pop_gallery::{Gallery, Options};
 use egui_pop_test::SharedGpu as _;
@@ -29,15 +27,8 @@ fn harness(page: &str) -> Harness<'static, Gallery> {
             Gallery::from_creation_context(cc, options).expect("the gallery builds")
         });
     h.run();
-    let app = handle(&h);
-    egui_pop::core::lock(&app.store())
-        .set(Set::new(
-            "settings/developer.devtools",
-            Change::To(Value::Bool(true)),
-            Origin::User,
-        ))
-        .unwrap();
-    h.run();
+    // On from the start in the gallery.
+    assert!(egui_pop::api::devtools::enabled(&handle(&h)));
     h
 }
 
@@ -45,9 +36,12 @@ fn handle(h: &Harness<'_, Gallery>) -> AppHandle {
     h.state().app.handle().clone()
 }
 
-/// Ctrl+Shift+C, as in browsers.
+/// Ctrl+Shift+F12 (Ctrl+Shift+C is the browsers' own picker).
 fn chord(h: &mut Harness<'_, Gallery>) {
-    h.key_press_modifiers(egui::Modifiers::CTRL | egui::Modifiers::SHIFT, egui::Key::C);
+    h.key_press_modifiers(
+        egui::Modifiers::CTRL | egui::Modifiers::SHIFT,
+        egui::Key::F12,
+    );
     h.run();
     h.run();
 }

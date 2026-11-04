@@ -1,4 +1,4 @@
-//! Devtools: off by default, opened by F12 once the setting allows it,
+//! Devtools: off by default, opened by Shift+F12 once the setting allows it,
 //! its tabs reading the debug bridge, its actions going through a step a
 //! plugin may veto.
 
@@ -66,6 +66,11 @@ fn harness() -> Harness<'static, App> {
     h
 }
 
+fn shift_f12(h: &mut Harness<'_, App>) {
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F12);
+    h.run();
+}
+
 fn enable(h: &mut Harness<'_, App>) {
     let store = h.state().handle().store();
     egui_pop_core::lock(&store)
@@ -81,22 +86,24 @@ fn enable(h: &mut Harness<'_, App>) {
 #[test]
 fn devtools_open_only_once_the_setting_allows_them() {
     let mut h = harness();
-    h.key_press(egui::Key::F12);
-    h.run();
+    shift_f12(&mut h);
     assert!(!h.state().handle().panel_visible(&PANEL_DEVTOOLS));
     enable(&mut h);
+    // F12 alone is the browser's: a web build never sees it.
     h.key_press(egui::Key::F12);
     h.run();
+    h.run();
+    assert!(!h.state().handle().panel_visible(&PANEL_DEVTOOLS));
+    shift_f12(&mut h);
     h.run();
     assert!(h.state().handle().panel_visible(&PANEL_DEVTOOLS));
     assert!(h.query_by_label("Journal").is_some());
-    // The keys tab shows the resolution of F12 itself.
+    // The keys tab shows the resolution of Shift+F12 itself.
     assert!(
-        h.query_by_label_contains("F12: runs app.devtools")
+        h.query_by_label_contains("Shift+F12: runs app.devtools")
             .is_some()
     );
-    h.key_press(egui::Key::F12);
-    h.run();
+    shift_f12(&mut h);
     assert!(!h.state().handle().panel_visible(&PANEL_DEVTOOLS));
 }
 
@@ -170,4 +177,24 @@ fn the_screen_collector_tells_each_windows_scale() {
     let w = &snap["screen"]["windows"][0];
     assert_eq!(w["viewport"], "root");
     assert!(w["pixels_per_point"].as_f64().unwrap() > 0.0);
+}
+
+#[test]
+fn an_application_for_developers_turns_devtools_on_by_default() {
+    let setting = format!("settings/{SETTING_DEVTOOLS}");
+    let on = |plugin: DevtoolsPlugin| {
+        let app = App::builder()
+            .plugins(DefaultPlugins)
+            .plugin(plugin)
+            .build(&egui::Context::default())
+            .unwrap();
+        egui_pop_core::lock(&app.handle().store())
+            .get(&setting)
+            .and_then(|e| e.value.as_bool())
+    };
+    assert_eq!(on(DevtoolsPlugin::default()), Some(false));
+    assert_eq!(
+        on(DevtoolsPlugin::default().on_by_default(true)),
+        Some(true)
+    );
 }

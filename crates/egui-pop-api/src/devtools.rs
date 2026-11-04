@@ -1,15 +1,20 @@
 //! Devtools, as a plugin ([`DevtoolsPlugin`], opt-in): the debug
 //! bridge's collectors shown in the application itself, in a panel of
 //! the workbench (`egui_pop.devtools`, bottom), behind a setting
-//! (`developer.devtools`, off by default) so end users never meet it.
-//! `F12` (View > Devtools) opens it when the setting is on.
+//! (`developer.devtools`, off by default) so end users never meet it; an
+//! application shown to developers turns it on by default
+//! ([`DevtoolsPlugin::on_by_default`]).
+//! `Shift+F12` (View > Devtools) opens it when the setting is on. Not
+//! `F12`: browsers open their own developer tools with it before a web
+//! build sees it, as they take Ctrl+Shift+C, I, J, K (Cmd+Option on a
+//! Mac) and Shift+F5, F7, F9.
 //!
 //! Tabs: the key resolutions (each binding considered and its verdict),
 //! the journal's last events, the steps and their hooks, the focus
 //! chain and the overlays, the scale of each window, and every collector
 //! as JSON with its actions (an action that mutates says so).
 //!
-//! The inspect mode ([`inspect`], `devtools.inspect`, Ctrl+Shift+C):
+//! The inspect mode ([`inspect`], `devtools.inspect`, Ctrl+Shift+F12):
 //! click an element to see what egui-pop knows of it, and copy it.
 //!
 //! Steps (ADR 0011): `devtools.call` (`{ "collector", "action",
@@ -71,6 +76,7 @@ struct State {
 pub struct DevtoolsPlugin {
     state: Arc<Mutex<State>>,
     describe: Option<inspect::Describe>,
+    on_by_default: bool,
 }
 
 impl DevtoolsPlugin {
@@ -82,6 +88,15 @@ impl DevtoolsPlugin {
         f: impl Fn(&AppHandle, &egui_pop_core::inspect::Pick) -> Vec<(String, String)> + 'static,
     ) -> Self {
         self.describe = Some(inspect::Describe(std::rc::Rc::new(f)));
+        self
+    }
+
+    /// The `developer.devtools` setting's default: off (end users never
+    /// meet devtools), on for an application shown to developers (the
+    /// gallery). The user's choice, once made, wins either way.
+    #[must_use]
+    pub fn on_by_default(mut self, on: bool) -> Self {
+        self.on_by_default = on;
         self
     }
 }
@@ -125,8 +140,8 @@ impl Plugin for DevtoolsPlugin {
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         ctx.setting(
             SETTING_DEVTOOLS,
-            Descriptor::bool("Devtools", false).description(
-                "Lets the devtools panel open (F12): key resolutions, the journal, steps, focus, scale and every debug collector.",
+            Descriptor::bool("Devtools", self.on_by_default).description(
+                "Lets the devtools panel open (View > Devtools): key resolutions, the journal, steps, focus, scale and every debug collector.",
             ),
         )?;
         ctx.step(
@@ -141,7 +156,7 @@ impl Plugin for DevtoolsPlugin {
                 .description(
                     "Opens or closes the devtools panel (when the Devtools setting is on).",
                 )
-                .key("F12")
+                .key("Shift+F12")
                 .when("devtoolsEnabled")
                 .menu(MENU_VIEW, "8_devtools", 0)
                 .no_agent(),

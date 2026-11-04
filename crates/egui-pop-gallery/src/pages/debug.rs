@@ -196,10 +196,15 @@ fn playground(ui: &mut Ui, app: &AppHandle, s: &mut State) {
     // The inspect mode (devtools): click an element, see what egui-pop
     // knows of it, copy that into a report.
     let on = egui_pop::api::devtools::enabled(app);
-    if ui
-        .add_enabled(on, egui::Button::new("Inspect an element (Ctrl+Shift+C)"))
-        .clicked()
+    // The key as bound now: the user may have changed it.
+    let label = match app
+        .keys_for(&egui_pop::api::devtools::inspect::CMD_INSPECT)
+        .first()
     {
+        Some(key) => format!("Inspect an element ({key})"),
+        None => "Inspect an element".to_string(),
+    };
+    if ui.add_enabled(on, egui::Button::new(label)).clicked() {
         app.run(egui_pop::api::devtools::inspect::CMD_INSPECT, Json::Null);
     }
     if !on {
