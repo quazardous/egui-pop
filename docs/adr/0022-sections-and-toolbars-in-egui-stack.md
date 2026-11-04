@@ -59,3 +59,19 @@ section 5.
   repository for a widget meant to meet the dock); moving the whole
   toolbars module (it is the command world, which egui_stack must not
   know).
+
+## Progress
+
+- **Sections: done (2026-11-04).** egui_stack 0.22.2 has
+  `sections` (`Sections`, `Section`, `Stack`, `Layout`, `laid_out`, the
+  arithmetic in `sections::plan`); the painter seam is the existing
+  `DockPainter` (`section_band`, `section_boundary`) rather than a
+  `SectionsPainter` of its own, the labels are `Labels::resize_section`,
+  and the pull is configured by a `pull_when` closure. `egui_pop::core::sections`
+  wraps it with its API kept; the memory key became `egui_stack.sections`,
+  and a layout stored under egui-pop's old key moves there on first load.
+  `egui-pop-model` cannot re-export the arithmetic, as egui_stack depends
+  on egui and the model must not (ADR 0001, its layering test): its
+  `sections` stays as a deprecated, unused copy for one release, and the
+  arithmetic is re-exported as `egui_pop::core::sections::plan`.
+- **Toolbar row:** not started.

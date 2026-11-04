@@ -1,8 +1,11 @@
 # Collapsible sections
 
-Status: fifth version (2026-11-03): within one drag, what it shrank stays
-shrunk, after titles that drag, the pull and empty room, titles that stay,
-windowed rows and the wheel contained, heights set by hand and the push.
+Status: sixth version (2026-11-04): the stack is egui_stack's
+(`egui_stack::sections`, from 0.22.2), egui-pop wrapping it with the kit,
+its strings and its gestures (ADR 0022). Before: within one drag, what it
+shrank stays shrunk, titles that drag, the pull and empty room, titles
+that stay, windowed rows and the wheel contained, heights set by hand and
+the push.
 
 A stack of collapsible sections fills a panel: each section is a title
 band (a disclosure mark, a title, a count) over its own scrolling body.
@@ -43,9 +46,34 @@ fn sessions(ui: &mut egui_pop::egui::Ui, live: &[String]) {
 - `show` returns what the user did this pass (`toggled`, `resized`,
   `reset`) and the layout after it.
 
-The heights' arithmetic is in `egui_pop::model::sections`, without egui:
-`fit` lays a stack out, `plan_drag` says what moving a boundary does
-(`DragMode::Push` or `Pull`), `keep_title` what folding keeps.
+## egui_stack's stack, egui-pop's look
+
+The widget is egui_stack's `sections` module (ADR 0022): the layout
+arithmetic, the drag, the fold, the keyboard, the accessibility, the
+windowed rows and the wheel live there, and run against the same tests.
+`egui_pop::core::sections` wraps it, keeping its API:
+
+- the kit paints the bands and the boundaries' focus ring, as the kit's
+  `DockPainter` (`section_band`, `section_boundary`; see [The kit](#the-kit));
+- the boundaries are named from the strings provider
+  (`egui-pop-section-resize`, egui_stack's `Labels::resize_section`);
+- the pull's keys come from the pointer map (`gesture.sections.pull`,
+  egui_stack's `pull_when`), the band's height from the kit, and the stack's
+  own scroll bar, when it overflows, is the kit's seen at rest
+  (`overflow_scroll`);
+- the debug bridge's `core.sections.laid` slot and the old layouts'
+  move (see Remembered) stay egui-pop's.
+
+`Section`, `Stack`, `Laid`, `Remembered`, `laid_out` and `row_height` are
+egui_stack's, re-exported; `Laid` is `#[non_exhaustive]` there. `Layout`
+and `SectionsResponse` stay egui-pop's, converting to egui_stack's.
+
+The heights' arithmetic is egui_stack's `sections::plan`, without egui
+types, re-exported as `egui_pop::core::sections::plan`: `fit` lays a
+stack out, `plan_drag` says what moving a boundary does (`DragMode::Push`
+or `Pull`), `keep_title` what folding keeps. `egui_pop::model::sections`,
+where it was, is deprecated: an unused copy kept for one release (the
+model stays free of egui, so it cannot re-export egui_stack's).
 
 ## Behaviour
 
@@ -186,7 +214,10 @@ The heights' arithmetic is in `egui_pop::model::sections`, without egui:
   section's height is kept while it is folded, so it opens again at its
   size. A layout stored with the shares of an earlier version keeps its
   fold state, and its sections read as sized by the list. `Layout::empty`
-  is the empty room kept, none in a layout stored before it.
+  is the empty room kept, none in a layout stored before it. The memory
+  key is egui_stack's (`egui_stack.sections`); a layout stored by egui-pop
+  0.4 or earlier under `egui_pop.sections` moves there the first time its
+  stack is shown or loaded, unless egui_stack's key already holds one.
 
 ## Classic conventions, and where this departs
 
@@ -278,3 +309,8 @@ Checked 2026-10-27, on egui 0.36 and crates.io.
 boundaries, and the band must be drawn by the kit like every other
 part. The widget is small, built on egui's `ScrollArea` and
 interaction, with egui's persisted memory for the layout.
+
+**Since 2026-11-04: owned in egui_stack, wrapped here** (ADR 0022): the
+plain-egui core moved to egui_stack, which egui-pop already depends on
+for its docks, behind a painter, labels and configuration; the kit, the
+strings and the gestures stay egui-pop's.

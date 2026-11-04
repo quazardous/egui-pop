@@ -397,7 +397,8 @@ against the declared panels and screens; named arrangements are layouts
 in the host's store ([workbench](workbench.md#arrangements)).
 Sections keep their own `Layout` (fold and heights set by hand, by key)
 in egui's persisted memory, readable whole for an application
-(`crates/egui-pop-core/src/sections.rs:104-180`).
+(egui_stack's `sections::Layout` since 2026-11-04, under its key
+`egui_stack.sections`; egui-pop's `Layout` converts to it).
 
 egui_stack's serde (feature `serde`) covers `DockState`, `Surface`,
 `WindowState`, `Tree`, `Node`, `LeafNode` with runtime rects, indices
@@ -431,7 +432,18 @@ if the field names change).
 
 ## 5. Sections and toolbars
 
-What exists in egui-pop:
+**Sections: done (2026-11-04).** egui_stack 0.22.2 has the
+`sections` module, ported from egui-pop; `egui_pop::core::sections` wraps
+it (the kit's `DockPainter::section_band` and `section_boundary`, the
+strings behind `Labels::resize_section`, `pull_when` from the gesture
+map, `overflow_scroll` and `band_height` from the kit, the debug slot and
+the move of the old layouts), and egui-pop's tests run against the
+wrapper. `egui_pop::model::sections` is a deprecated copy for one
+release: the model stays free of egui, so it cannot re-export
+egui_stack's `sections::plan`, which `egui_pop::core::sections::plan`
+does. The toolbar row has not moved.
+
+What existed in egui-pop before:
 
 - **Sections**: the arithmetic in `crates/egui-pop-model/src/sections.rs`
   (1041 lines, no egui: `fit` at `:302`, `plan_drag` at `:108`,
@@ -580,8 +592,9 @@ Ranked by benefit for cost, risk last.
    then dropping the workarounds A and V remove.
 3. T, the painter trait; egui-pop's kit implements it and `paint_tabs`
    goes (done).
-4. P, sections first (their arithmetic is egui-free and tested), then the
-   toolbar row, once sections' behaviour has settled.
+4. P, sections first (their arithmetic is egui-free and tested; done
+   2026-11-04, egui_stack 0.22.2), then the toolbar row, once sections'
+   behaviour has settled.
 5. S, the layout value, folded into egui-pop's `layout` document version 3.
 6. N, then D, as one redesign of the tree, decided by its own ADR.
 7. W when eframe can drag between viewports.
