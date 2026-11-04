@@ -7,6 +7,21 @@ use egui_pop_core::strings::StrKey;
 
 /// A tree's accessible name, unless the application gives one.
 pub const TREE: StrKey = StrKey::new("egui-pop-views-tree", "Tree");
+/// A tree's filter field: its placeholder and accessible name.
+pub const TREE_FILTER: StrKey = StrKey::new("egui-pop-views-tree-filter", "Filter");
+/// Beside a tree's filter field: how many nodes match of how many.
+pub const TREE_FILTER_COUNT: StrKey = StrKey::new(
+    "egui-pop-views-tree-filter-count",
+    "{ $count } of { $total }",
+);
+/// A tree's filter that matches nothing: beside the field and as the
+/// tree's one row.
+pub const TREE_FILTER_NONE: StrKey = StrKey::new("egui-pop-views-tree-filter-none", "No match");
+/// Announced to screen readers when a tree's filter changes.
+pub const TREE_FILTER_ANNOUNCE: StrKey = StrKey::new(
+    "egui-pop-views-tree-filter-announce",
+    "{ $count } of { $total } match the filter",
+);
 /// A list's accessible name, unless the application gives one.
 pub const LIST: StrKey = StrKey::new("egui-pop-views-list", "List");
 /// A table's accessible name, unless the application gives one.
@@ -203,6 +218,10 @@ pub const VIEWER_CODE_BLOCK: StrKey = StrKey::new("egui-pop-views-viewer-code-bl
 /// Every string the views show, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
     TREE,
+    TREE_FILTER,
+    TREE_FILTER_COUNT,
+    TREE_FILTER_NONE,
+    TREE_FILTER_ANNOUNCE,
     LIST,
     TABLE,
     LOADING,

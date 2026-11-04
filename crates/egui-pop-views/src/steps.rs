@@ -27,7 +27,10 @@
 
 use egui_pop_api::steps::{Outcome, StepSpec};
 use egui_pop_api::{AppHandle, Ctx, Plugin, PluginError};
-use egui_pop_model::ids::{PluginId, StepId};
+use egui_pop_core::debug::FnCollector;
+use egui_pop_model::commands::CommandSpec;
+use egui_pop_model::ids::{CommandId, PluginId, StepId};
+use egui_pop_model::keymap::BindOptions;
 use serde_json::{Value as Json, json};
 
 pub const TREE_LOAD: StepId = StepId::from_static("tree.load");
@@ -42,11 +45,18 @@ pub const TABLE_SELECT: StepId = StepId::from_static("table.select");
 pub const TABLE_SORT: StepId = StepId::from_static("table.sort");
 pub const TABLE_RESIZE: StepId = StepId::from_static("table.resize");
 
+/// Moves the focus from a tree to its filter field (Ctrl+F, `/`).
+pub const CMD_TREE_FILTER: CommandId = CommandId::from_static("tree.filter");
+
 /// The plugin's id.
 pub const VIEWS: PluginId = PluginId::from_static("egui_pop.views");
 
-/// Declares the views' steps. Connect it when views run with an
-/// [`AppHandle`]: a step nobody declares is reported.
+/// Declares the views' steps, the `tree.filter` command (Ctrl+F and `/`
+/// in a tree drawn with a [`FilterField`](crate::tree::FilterField), on
+/// its `treeFilter` surface) and the `trees` debug collector (each
+/// tree's filter and rows shown, [`crate::tree::filter::drawn`]).
+/// Connect it when views run with an [`AppHandle`]: a step nobody
+/// declares is reported.
 #[derive(Debug, Default)]
 pub struct ViewsPlugin;
 
@@ -101,6 +111,25 @@ impl Plugin for ViewsPlugin {
         for spec in specs() {
             ctx.step(spec)?;
         }
+        let surface = || BindOptions::surface(crate::tree::filter::SURFACE);
+        ctx.command(
+            CommandSpec::new(CMD_TREE_FILTER, "Filter the tree", "Views")
+                .description("Moves the focus from a tree to its filter field.")
+                .key_with("Ctrl+F", surface())
+                .key_with("Slash", surface())
+                .hidden(),
+            |call| {
+                crate::tree::filter::request(&call.app.egui());
+                Ok(Json::Bool(true))
+            },
+        )?;
+        ctx.collector(
+            FnCollector::new(
+                "trees",
+                "The trees drawn: each one's filter, how many nodes match it of how many are loaded, and the rows shown (key, label, depth, whether it matches, whether a branch is open).",
+            )
+            .snapshot(crate::tree::filter::drawn),
+        )?;
         Ok(())
     }
 }

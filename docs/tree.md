@@ -192,6 +192,7 @@ runs the command):
 | Enter | Open or close a branch, open a leaf (`tree.activate`) |
 | F2 | Rename in place (with `TreeView::rename(true)`); Enter keeps, Escape cancels |
 | Letters | Type-ahead: the next node whose name starts with what was typed in the last second |
+| Ctrl+F, `/` | With a filter field: go to it ([Filter](#filter)) |
 
 A label may carry decorations (a size, a count, a state): the source
 then gives the node its plain name apart, `Node::with_name`. A rename
@@ -279,6 +280,78 @@ fn layers(ui: &mut egui::Ui, state: &mut TreeState<String>, locked: &HashSet<Str
         .show(ui, state, &Layers);
 }
 ```
+
+## Filter
+
+`TreeState::set_filter` filters the tree; a `FilterField`, drawn above
+it, types the filter. While the query is not empty:
+
+- a node shows when **every word** of the query is in its match text,
+  as a substring, ignoring case and the accents of Latin letters
+  (`ecran` finds `Écran`, `board` finds `Keyboard`);
+- the nodes that match show with their ancestors, which open for them
+  without touching the fold the tree keeps; the rest is hidden, and a
+  "No match" row says when nothing is left;
+- the part of a label that matches is drawn in the row's accent tone,
+  underlined (the kit's `list-row`, as the command palette marks it);
+- a branch opened or closed meanwhile (a click, Left, Right) is opened
+  or closed for the filter only, without `tree.expand`, until the
+  query changes; cleared, the tree is as it was, the cursor's row in
+  view;
+- the cursor goes to the first match when its row hides;
+- only the nodes loaded are searched: a lazy branch never opened is not
+  asked for. A source whose nodes are all known at once may set every
+  branch's children up front (`TreeHandle::set_children`) so that the
+  filter finds them in folded branches too.
+
+Substrings rather than the palette's fuzzy match: a filter hides what
+does not match, and a few letters in order are in almost any long
+text, so a fuzzy filter would hide little. Substrings rather than word
+starts, so that a word inside a name is found. VS Code's tree filter
+does the same in its contiguous mode.
+
+The match text is the node's plain name (`Node::name`); the source adds
+words the label does not show with `TreeSource::match_text`:
+
+```rust
+use egui_pop::egui;
+use egui_pop::views::tree::{FilterField, Node, Sink, TreeSource, TreeState, TreeView};
+
+/// Photos found by their name and by their tags.
+struct Photos;
+
+impl TreeSource<String> for Photos {
+    fn load(&self, _: Option<&String>, sink: Sink<String>) {
+        sink.deliver(vec![Node::leaf("p1".to_string(), "IMG_0001.raw")]);
+    }
+
+    fn match_text(&self, node: &Node<String>) -> String {
+        format!("{} beach sunset", node.name())
+    }
+}
+
+fn photos(ui: &mut egui::Ui, state: &mut TreeState<String>) {
+    FilterField::new("photos").show(ui, state);
+    TreeView::new("photos").label("Photos").show(ui, state, &Photos);
+}
+```
+
+The field shows how many nodes match of how many are loaded ("3 of
+57", or "No match") and announces it to screen readers. Its keys:
+
+| Key | Where | What it does |
+|---|---|---|
+| Ctrl+F, `/` | the tree | Goes to the field (`tree.filter`, on the `treeFilter` surface; rebindable) |
+| Escape | the field | Clears it; empty, gives the keyboard back to the tree |
+| Down | the field | Goes to the tree, its cursor on the first match |
+
+`tree.filter` is declared by `ViewsPlugin`; without it (no application)
+the field still filters, and is reached with the pointer or Tab.
+`TreeState::filter_count` says how many nodes match. Agents read every
+tree's filter and the rows shown in the `trees` debug collector
+(`tree::filter::drawn`): the query, the matches, the nodes loaded, and
+the first 200 rows with their key, label, depth, whether each matches
+and whether a branch is open.
 
 ## Steps and signals
 

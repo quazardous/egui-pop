@@ -29,6 +29,8 @@ category-theme = Thème
 
 category-values = Valeurs
 
+category-views = Vues
+
 category-view = Affichage
 
 category-window = Fenêtre
@@ -499,6 +501,10 @@ command-tips-next =
 command-tips-notNow =
     .description = Ferme l’astuce affichée ; elle pourra revenir un autre jour.
     .title = Pas maintenant
+
+command-tree-filter =
+    .description = Déplace le focus d’une arborescence vers son champ de filtre.
+    .title = Filtrer l’arborescence
 
 command-tips-off =
     .description = N’affiche plus d’astuces (le réglage tips.show).
@@ -1805,6 +1811,14 @@ egui-pop-views-sorted-up = { $column }, tri croissant
 egui-pop-views-table = Tableau
 
 egui-pop-views-tree = Arborescence
+
+egui-pop-views-tree-filter = Filtrer
+
+egui-pop-views-tree-filter-announce = { $count } sur { $total } correspondent au filtre
+
+egui-pop-views-tree-filter-count = { $count } sur { $total }
+
+egui-pop-views-tree-filter-none = Aucune correspondance
 
 egui-pop-views-unflagged = Sans marque
 

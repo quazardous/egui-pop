@@ -174,6 +174,21 @@ pub struct Model<K: Key> {
     wanted: Vec<Option<K>>,
     dirty: bool,
     tickets: u64,
+    /// Counts the changes to the nodes (not to the expansion).
+    version: u64,
+    /// The filter's matches, while there is a query.
+    filter: Option<Filtered<K>>,
+    /// How many times the rows were flattened.
+    flattens: u64,
+}
+
+/// What a filter shows: the nodes that match, their ancestors, and the
+/// branches opened or closed while it filters.
+#[derive(Debug)]
+struct Filtered<K> {
+    matched: HashSet<K>,
+    ancestors: HashSet<K>,
+    folds: HashMap<K, bool>,
 }
 
 impl<K: Key> Default for Model<K> {
@@ -187,6 +202,9 @@ impl<K: Key> Default for Model<K> {
             wanted: Vec::new(),
             dirty: true,
             tickets: 0,
+            version: 0,
+            filter: None,
+            flattens: 0,
         }
     }
 }
@@ -217,8 +235,93 @@ impl<K: Key> Model<K> {
         }
     }
 
+    /// Whether a branch is open in the fold the tree keeps (a filter
+    /// may show it otherwise, see [`Model::is_open`]).
     pub fn is_expanded(&self, key: &K) -> bool {
         self.expanded.contains(key)
+    }
+
+    /// Whether a branch shows open: as the filter opened it while there
+    /// is one, else as it is expanded.
+    pub fn is_open(&self, key: &K) -> bool {
+        match &self.filter {
+            Some(f) => f
+                .folds
+                .get(key)
+                .copied()
+                .unwrap_or_else(|| f.ancestors.contains(key)),
+            None => self.expanded.contains(key),
+        }
+    }
+
+    /// Opens or closes a branch as it shows: while a filter is set, until
+    /// the query changes, the fold kept untouched; else its expansion.
+    pub(crate) fn set_open(&mut self, key: &K, open: bool) {
+        match &mut self.filter {
+            Some(f) => {
+                f.folds.insert(key.clone(), open);
+                self.dirty = true;
+            }
+            None => self.set_expanded(key, open),
+        }
+    }
+
+    /// Every node the view knows, in no order.
+    pub fn nodes(&self) -> impl Iterator<Item = &Node<K>> {
+        self.nodes.values().map(|(n, _)| n)
+    }
+
+    /// Changes to the nodes so far: it moves when a node comes, goes,
+    /// moves or changes.
+    pub fn version(&self) -> u64 {
+        self.version
+    }
+
+    /// Whether a filter is set.
+    pub fn is_filtered(&self) -> bool {
+        self.filter.is_some()
+    }
+
+    /// Whether a node matches the filter set.
+    pub fn is_match(&self, key: &K) -> bool {
+        self.filter
+            .as_ref()
+            .is_some_and(|f| f.matched.contains(key))
+    }
+
+    /// How many nodes match the filter set (`None`: no filter).
+    pub fn matches(&self) -> Option<usize> {
+        self.filter.as_ref().map(|f| f.matched.len())
+    }
+
+    /// Sets the nodes the filter matched (`None`: no filter). `fresh`: a
+    /// new query, which forgets the branches opened or closed under the
+    /// last one.
+    pub(crate) fn set_matches(&mut self, matched: Option<HashSet<K>>, fresh: bool) {
+        let Some(matched) = matched else {
+            self.dirty |= self.filter.take().is_some();
+            return;
+        };
+        let mut ancestors = HashSet::new();
+        for k in &matched {
+            let mut at = self.nodes.get(k).and_then(|(_, p)| p.clone());
+            while let Some(p) = at {
+                if !ancestors.insert(p.clone()) {
+                    break;
+                }
+                at = self.nodes.get(&p).and_then(|(_, p)| p.clone());
+            }
+        }
+        let folds = match self.filter.take() {
+            Some(f) if !fresh => f.folds,
+            _ => HashMap::new(),
+        };
+        self.filter = Some(Filtered {
+            matched,
+            ancestors,
+            folds,
+        });
+        self.dirty = true;
     }
 
     pub fn set_expanded(&mut self, key: &K, expanded: bool) {
@@ -282,6 +385,7 @@ impl<K: Key> Model<K> {
             self.children.insert(parent, Children::Stale(stale));
         }
         self.dirty = true;
+        self.version += 1;
     }
 
     /// Marks a branch as failed (a load vetoed or refused).
@@ -297,6 +401,7 @@ impl<K: Key> Model<K> {
         self.children
             .insert(parent.cloned(), Children::Failed(reason.into()));
         self.dirty = true;
+        self.version += 1;
     }
 
     /// Applies an edit; returns whether it changed anything.
@@ -346,6 +451,9 @@ impl<K: Key> Model<K> {
             },
         };
         self.dirty |= changed;
+        if changed {
+            self.version += 1;
+        }
         changed
     }
 
@@ -453,6 +561,7 @@ impl<K: Key> Model<K> {
             self.detach(k);
         }
         self.dirty = true;
+        self.version += 1;
         let Some(Children::Loaded(list)) = self.children.get_mut(&parent) else {
             for k in &keys {
                 self.forget(k);
@@ -503,6 +612,7 @@ impl<K: Key> Model<K> {
             }
         }
         self.dirty = true;
+        self.version += 1;
     }
 
     /// The rows, flattened again when something changed.
@@ -537,37 +647,52 @@ impl<K: Key> Model<K> {
     }
 
     fn flatten(&mut self) {
+        /// A node to show, its depth, and whether it is under a node that
+        /// matches the filter (then all of its children show).
         enum Item<K> {
-            Node(K, usize),
+            Node(K, usize, bool),
             Row(Row<K>),
         }
+        let filter = self.filter.as_ref();
         let mut rows = Vec::with_capacity(self.rows.len());
         let mut wanted = Vec::new();
         let mut stack: Vec<Item<K>> = Vec::new();
         let push = |parent: Option<K>,
                     depth: usize,
+                    under: bool,
                     stack: &mut Vec<Item<K>>,
                     wanted: &mut Vec<Option<K>>| {
+            // A filter hides what is neither a match, an ancestor of one,
+            // nor under a match: the rows saying how a branch loads too.
+            let all = filter.is_none() || under;
             let list = match self.children.get(&parent) {
                 None => {
-                    wanted.push(parent.clone());
-                    stack.push(Item::Row(Row::Loading { parent, depth }));
+                    if all {
+                        wanted.push(parent.clone());
+                        stack.push(Item::Row(Row::Loading { parent, depth }));
+                    }
                     return;
                 }
                 Some(Children::Loading { stale, .. }) if stale.is_empty() => {
-                    stack.push(Item::Row(Row::Loading { parent, depth }));
+                    if all {
+                        stack.push(Item::Row(Row::Loading { parent, depth }));
+                    }
                     return;
                 }
                 Some(Children::Failed(reason)) => {
-                    stack.push(Item::Row(Row::Failed {
-                        parent,
-                        depth,
-                        reason: reason.clone(),
-                    }));
+                    if all {
+                        stack.push(Item::Row(Row::Failed {
+                            parent,
+                            depth,
+                            reason: reason.clone(),
+                        }));
+                    }
                     return;
                 }
                 Some(Children::Loaded(v)) if v.is_empty() => {
-                    stack.push(Item::Row(Row::Empty { parent, depth }));
+                    if all {
+                        stack.push(Item::Row(Row::Empty { parent, depth }));
+                    }
                     return;
                 }
                 Some(Children::Stale(v)) => {
@@ -576,23 +701,32 @@ impl<K: Key> Model<K> {
                 }
                 Some(Children::Loaded(v) | Children::Loading { stale: v, .. }) => v,
             };
-            stack.extend(list.iter().rev().map(|k| Item::Node(k.clone(), depth)));
+            let shown = |k: &&K| {
+                all || filter.is_some_and(|f| f.matched.contains(*k) || f.ancestors.contains(*k))
+            };
+            stack.extend(
+                list.iter()
+                    .rev()
+                    .filter(shown)
+                    .map(|k| Item::Node(k.clone(), depth, under)),
+            );
         };
-        push(None, 0, &mut stack, &mut wanted);
+        push(None, 0, false, &mut stack, &mut wanted);
         while let Some(item) = stack.pop() {
             match item {
                 Item::Row(r) => rows.push(r),
-                Item::Node(key, depth) => {
+                Item::Node(key, depth, under) => {
                     let open = self
                         .nodes
                         .get(&key)
-                        .is_some_and(|(n, _)| n.branch && self.expanded.contains(&key));
+                        .is_some_and(|(n, _)| n.branch && self.is_open(&key));
+                    let under = under || filter.is_some_and(|f| f.matched.contains(&key));
                     rows.push(Row::Node {
                         key: key.clone(),
                         depth,
                     });
                     if open {
-                        push(Some(key), depth + 1, &mut stack, &mut wanted);
+                        push(Some(key), depth + 1, under, &mut stack, &mut wanted);
                     }
                 }
             }
@@ -606,6 +740,13 @@ impl<K: Key> Model<K> {
         self.rows = rows;
         self.wanted = wanted;
         self.dirty = false;
+        self.flattens += 1;
+    }
+
+    /// How many times the rows were flattened: it moves when they may
+    /// have changed.
+    pub(crate) fn flattens(&self) -> u64 {
+        self.flattens
     }
 }
 
@@ -741,6 +882,42 @@ mod tests {
         // Into itself: left where it is.
         m.move_many(&["d".into()], &"a".into(), Position::After);
         assert_eq!(keys(&mut m), ["d", " a", " b", "c"]);
+    }
+
+    #[test]
+    fn a_filter_shows_matches_with_their_ancestors_and_keeps_the_fold() {
+        let mut m = Model::<String>::default();
+        load(&mut m, None, vec![b("a"), b("b"), l("c")]);
+        m.set_expanded(&"a".into(), true);
+        load(&mut m, Some("a"), vec![b("a1"), l("a2")]);
+        m.set_expanded(&"a1".into(), true);
+        load(&mut m, Some("a1"), vec![l("x"), l("y")]);
+        m.set_expanded(&"a1".into(), false);
+        assert_eq!(keys(&mut m), ["a", " a1", " a2", "b", "c"]);
+        // `y` matches: its folded ancestors open for it, `b` (not
+        // loaded) and the rest hide.
+        m.set_matches(Some(["y".to_string()].into()), true);
+        assert_eq!(keys(&mut m), ["a", " a1", "  y"]);
+        assert!(m.take_wanted().is_empty(), "nothing loads for a filter");
+        assert!(!m.is_expanded(&"a1".into()) && m.is_open(&"a1".into()));
+        // Closed while filtering: only the filter's fold changes.
+        m.set_open(&"a1".into(), false);
+        assert_eq!(keys(&mut m), ["a", " a1"]);
+        assert!(!m.is_expanded(&"a1".into()));
+        // The same query again keeps it; a new one forgets it.
+        m.set_matches(Some(["y".to_string()].into()), false);
+        assert_eq!(keys(&mut m), ["a", " a1"]);
+        // A branch that matches opens onto all of its children.
+        m.set_matches(Some(["a1".to_string()].into()), true);
+        assert_eq!(keys(&mut m), ["a", " a1"]);
+        m.set_open(&"a1".into(), true);
+        assert_eq!(keys(&mut m), ["a", " a1", "  x", "  y"]);
+        // Nothing matches: no row.
+        m.set_matches(Some(Default::default()), true);
+        assert!(keys(&mut m).is_empty());
+        // No filter: the fold as it was kept.
+        m.set_matches(None, true);
+        assert_eq!(keys(&mut m), ["a", " a1", " a2", "b", "c"]);
     }
 
     #[test]

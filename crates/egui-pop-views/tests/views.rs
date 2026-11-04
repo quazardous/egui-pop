@@ -14,7 +14,9 @@ use egui_pop_model::ids::{OwnerId, PluginId};
 use egui_pop_views::list::{ListRows, ListState, ListView};
 use egui_pop_views::steps::{TABLE_SORT, TREE_DROP};
 use egui_pop_views::table::{self, Column, DataTable, TableRows, TableState};
-use egui_pop_views::tree::{self, Node, Position, Sink, TreeSource, TreeState, TreeView};
+use egui_pop_views::tree::{
+    self, FilterField, Node, Position, Sink, TreeSource, TreeState, TreeView,
+};
 use egui_pop_views::{Mode, ViewsPlugin};
 
 /// Folders `a` to `e`, each with three files; `slow` answers only when
@@ -1105,4 +1107,188 @@ fn every_step_is_declared() {
     ] {
         assert!(declared.iter().any(|d| d == s), "{s}");
     }
+}
+
+/// The tree of [`tree_harness`] with a filter field above it; `a` open,
+/// `b` loaded then folded.
+fn filter_harness() -> Harness<'static, TreeApp> {
+    let app = TreeApp {
+        app: None,
+        state: TreeState::new(),
+        source: Source {
+            asked: Arc::default(),
+            slow: None,
+        },
+        signals: Vec::new(),
+    };
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(400.0, 600.0))
+        .build_ui_state(
+            |ui, t: &mut TreeApp| {
+                if t.app.is_none() {
+                    t.app = Some(App::builder().plugin(ViewsPlugin).build(ui.ctx()).unwrap());
+                }
+                let h = t.handle();
+                FilterField::new("files").show(ui, &mut t.state);
+                let out = TreeView::new("files")
+                    .label("Files")
+                    .mode(Mode::Multiple)
+                    .app(&h)
+                    .show(ui, &mut t.state, &t.source);
+                t.signals.extend(out.signals);
+            },
+            app,
+        );
+    h.run();
+    h.state_mut().state.set_expanded(&"a".into(), true);
+    h.state_mut().state.set_expanded(&"b".into(), true);
+    h.run();
+    h.state_mut().state.set_expanded(&"b".into(), false);
+    h.run();
+    h
+}
+
+/// The labels of the rows a tree reports to agents.
+fn shown(h: &Harness<'_, TreeApp>) -> Vec<String> {
+    let trees = tree::filter::drawn(&h.ctx);
+    trees["files"]["shown"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["label"].as_str().unwrap_or("").to_string())
+        .collect()
+}
+
+fn filter_field<'h>(h: &'h Harness<'_, TreeApp>) -> egui_kittest::Node<'h> {
+    h.get_by_role_and_label(egui::accesskit::Role::SearchInput, "Filter")
+}
+
+#[test]
+fn a_filter_shows_the_matches_with_their_ancestors_and_moves_the_cursor() {
+    let mut h = filter_harness();
+    filter_field(&h).click();
+    h.run();
+    filter_field(&h).type_text("file B2");
+    h.run();
+    h.run();
+    // `b` is folded: it opens for its match, its fold kept.
+    assert_eq!(shown(&h), ["Folder B", "File b2"]);
+    let model = h.state().state.model();
+    assert!(model.is_open(&"b".into()) && !model.is_expanded(&"b".into()));
+    assert_eq!(
+        h.state().state.selection().cursor().map(String::as_str),
+        Some("b/2"),
+        "the cursor goes to the first match"
+    );
+    assert!(model.is_match(&"b/2".into()) && !model.is_match(&"b".into()));
+    // Accents and case aside, every word anywhere.
+    h.state_mut().state.set_filter("FÏLE 1");
+    h.run();
+    assert_eq!(shown(&h), ["Folder A", "File a1", "Folder B", "File b1"]);
+}
+
+#[test]
+fn the_filter_field_hands_the_keyboard_to_the_tree_and_back() {
+    let mut h = filter_harness();
+    filter_field(&h).click();
+    h.run();
+    filter_field(&h).type_text("b2");
+    h.run();
+    h.run();
+    // Down: into the tree, its cursor on the match; Enter opens it.
+    h.key_press(Key::ArrowDown);
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+    assert!(
+        h.state()
+            .signals
+            .iter()
+            .any(|s| matches!(s, tree::Signal::Activate { key } if key == "b/2")),
+        "{:?}",
+        h.state().signals
+    );
+    // Escape clears the field and keeps it: what is typed next filters.
+    filter_field(&h).click();
+    h.run();
+    h.key_press(Key::Escape);
+    h.run();
+    assert_eq!(h.state().state.filter(), "");
+    filter_field(&h).type_text("a3");
+    h.run();
+    h.run();
+    assert_eq!(h.state().state.filter(), "a3");
+    assert_eq!(shown(&h), ["Folder A", "File a3"]);
+    // Twice more: cleared, then the tree has the keyboard again.
+    h.key_press(Key::Escape);
+    h.run();
+    h.key_press(Key::Escape);
+    h.run();
+    h.run();
+    assert_eq!(h.state().state.filter(), "");
+    h.key_press(Key::ArrowDown);
+    h.run();
+    assert_eq!(
+        h.state().state.selection().cursor().map(String::as_str),
+        Some("b"),
+        "the tree moves from where the cursor was"
+    );
+}
+
+#[test]
+fn nothing_matching_shows_no_match_and_clearing_keeps_the_fold() {
+    let mut h = filter_harness();
+    let before = shown(&h);
+    h.state_mut().state.set_filter("zzz");
+    h.run();
+    h.run();
+    // Beside the field and as the tree's one row.
+    assert_eq!(h.query_all_by_label("No match").count(), 2);
+    let trees = tree::filter::drawn(&h.ctx);
+    assert_eq!(trees["files"]["no_match"], true);
+    assert_eq!(trees["files"]["matches"], 0);
+    // Opened and closed while filtering: the fold kept is as it was.
+    h.state_mut().state.set_filter("file b");
+    h.run();
+    h.get_by_label("Folder B").click();
+    h.run();
+    h.key_press(Key::ArrowLeft);
+    h.run();
+    h.state_mut().state.set_filter("");
+    h.run();
+    h.run();
+    assert_eq!(shown(&h), before);
+    let model = h.state().state.model();
+    assert!(model.is_expanded(&"a".into()) && !model.is_expanded(&"b".into()));
+    assert!(
+        !h.state()
+            .signals
+            .iter()
+            .any(|s| matches!(s, tree::Signal::Expand { .. })),
+        "no tree.expand while filtering"
+    );
+}
+
+#[test]
+fn the_match_count_is_shown_announced_and_reported() {
+    let mut h = filter_harness();
+    h.state_mut().state.set_filter("file a");
+    h.run();
+    h.run();
+    // Five folders and six files loaded (`a`'s and `b`'s).
+    assert_eq!(h.state().state.filter_count(), Some((3, 11)));
+    h.get_by_label("3 of 11");
+    let said: Vec<String> = egui_pop_core::a11y::announcements(&h.ctx)
+        .into_iter()
+        .map(|a| a.text)
+        .collect();
+    assert!(
+        said.iter().any(|t| t == "3 of 11 match the filter"),
+        "{said:?}"
+    );
+    let bridge = h.state().handle().debug_snapshot();
+    assert_eq!(bridge["trees"]["files"]["filter"], "file a");
+    assert_eq!(bridge["trees"]["files"]["matches"], 3);
+    assert_eq!(bridge["trees"]["files"]["field"], true);
+    egui_pop_test::assert_all_named(&h);
 }

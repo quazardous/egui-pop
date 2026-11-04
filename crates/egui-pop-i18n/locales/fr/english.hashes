@@ -18,6 +18,7 @@ category-values 0e9206c70dea46eb
 category-video 1e025230cf98fc7a
 category-view 9cb14957d0a66a9e
 category-viewer 0111455edf9c95c7
+category-views e6828e3789cbed59
 category-window 091ff0a5b7d5ed9d
 clip-application-x-egui-pop-inspect-json.title 152bdf9ddf98243f
 command-about-read.description 06ed706c6376d552
@@ -314,6 +315,8 @@ command-tips-reset.description ac6d134f1eeaa5a7
 command-tips-reset.title 34a8b22df69aae1c
 command-tips-show.description 992d7bc28ef65efe
 command-tips-show.title 9c1b6b679eaac160
+command-tree-filter.description a4f11456e2272fcc
+command-tree-filter.title 7dade86b0e559732
 command-value-get.description db35160877838d62
 command-value-get.title 2bc8ed82ac514527
 command-value-list.description f3c82ce02da10d41
@@ -1061,6 +1064,10 @@ egui-pop-views-sorted-down 26c3550025343606
 egui-pop-views-sorted-up 3e593b33e0ce2cba
 egui-pop-views-table 7d631a7bf18ade47
 egui-pop-views-tree 7df8572525d939c5
+egui-pop-views-tree-filter 3a5e912c59d0059f
+egui-pop-views-tree-filter-announce 7b9981db1f64d5c9
+egui-pop-views-tree-filter-count 078d4a71d74d5df3
+egui-pop-views-tree-filter-none fcb43a0ac101bc4f
 egui-pop-views-unflagged b07b2164c3071e36
 egui-pop-views-video-no-player 1dbde1fafaadcf04
 egui-pop-views-viewer-address b7dfa5bea5897243
