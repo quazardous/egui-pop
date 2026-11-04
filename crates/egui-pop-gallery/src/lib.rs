@@ -111,6 +111,9 @@ pub fn builder(options: &Options) -> AppBuilder {
     let builder = App::builder()
         .host(host::GalleryHost::new(waiting.clone()))
         .name("egui-pop gallery")
+        // Its id, the window's too: what names it to others, such as the
+        // `Referer` of the viewer's YouTube player.
+        .app_id(pages::platform::APP_ID)
         .theme(spec)
         .shell_panel_size(
             egui_pop::api::workbench::PANEL_SIDE_BAR,
