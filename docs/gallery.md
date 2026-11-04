@@ -50,6 +50,14 @@ or Enter opens a page; the arrows walk the list, Left and Right fold and open
 a group, letters find a row. The folds are kept with the window's layout, and
 the group of the page shown opens by itself.
 
+A field above the list filters it ([the tree's filter](tree.md#filter)): a page
+shows when every word typed is in its title, its description or its group,
+ignoring case and accents, its group opened for it; the words found are
+underlined in the titles, and "3 of 63" beside the field says how many rows
+match. Ctrl+F or `/` in the list goes to the field, Down goes back to the list
+on the first match, Escape clears the field and then leaves it. The folds kept
+are left as they were.
+
 A page scrolls, each keeping its place, as its playground does: a shell panel
 gives no scroll area of its own ([bare panels](workbench.md#panels-in-areas)). Those
 that stay inside the zone by themselves are marked (`shell::FILLS_THE_ZONE`): the
@@ -371,6 +379,9 @@ Zones and blocks, the workbench, the layout controls, palettes, arrangements, th
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pages-short-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pages-short-pop-dark.png" width="200" alt="pages-short-pop-dark"></a><br>pages-short-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pages-folded-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pages-folded-pop-dark.png" width="200" alt="pages-folded-pop-dark"></a><br>pages-folded-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/page-short-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/page-short-pop-dark.png" width="200" alt="page-short-pop-dark"></a><br>page-short-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pages-filtered-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pages-filtered-pop-dark.png" width="200" alt="pages-filtered-pop-dark"></a><br>pages-filtered-pop-dark</td>
   </tr>
 </table>
 

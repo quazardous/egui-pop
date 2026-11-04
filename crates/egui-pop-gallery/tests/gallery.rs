@@ -6369,3 +6369,92 @@ fn the_page_list_works_by_the_keyboard() {
     assert_eq!(page(&h), StoryId::from_static("tokens"));
     assert!(in_list_view(&h, list_entry(&h, "Tokens table")));
 }
+
+/// The labels of the page list's rows, as the `trees` collector says.
+fn listed(h: &Harness<'_, Gallery>) -> Vec<String> {
+    let snap = h.state().app.handle().debug_snapshot();
+    snap["trees"]["gallery.pages"]["shown"]
+        .as_array()
+        .expect("the page list reports its rows")
+        .iter()
+        .map(|r| r["label"].as_str().unwrap_or("").to_string())
+        .collect()
+}
+
+#[test]
+fn the_page_list_filter_finds_a_page_by_its_description() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "tokens"));
+    h.run();
+    // Folded, so that the filter is seen to open it and leave it folded.
+    h.get_by_label("Components").click();
+    h.run();
+    let before = listed(&h);
+    // Ctrl+F in the list goes to the field.
+    h.get_by_label("Theme overview").click();
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::F);
+    h.run();
+    h.run();
+    // "licence" is only in the About page's description.
+    h.event(egui::Event::Text("licence".into()));
+    h.run();
+    h.run();
+    assert_eq!(listed(&h), ["Components", "About"]);
+    let snap = h.state().app.handle().debug_snapshot();
+    let pages = &snap["trees"]["gallery.pages"];
+    assert_eq!(pages["filter"], "licence");
+    assert_eq!(pages["matches"], 1);
+    let total = pages["nodes"].as_u64().unwrap();
+    assert!(h.query_by_label(&format!("1 of {total}")).is_some());
+    // Escape clears it, the folds as they were.
+    h.key_press(egui::Key::Escape);
+    h.run();
+    h.run();
+    assert_eq!(listed(&h), before);
+    // Down goes to the list, on the match; Enter opens it.
+    h.event(egui::Event::Text("licence".into()));
+    h.run();
+    h.run();
+    h.key_press(egui::Key::ArrowDown);
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert_eq!(h.state().page(), StoryId::from_static("about"));
+    // Words typed are underlined in the titles.
+    h.get_by_role_and_label(egui::accesskit::Role::SearchInput, "Filter pages")
+        .click();
+    h.run();
+    h.key_press(egui::Key::Escape);
+    h.run();
+    h.event(egui::Event::Text("tool".into()));
+    h.run();
+    h.run();
+    h.snapshot("pages-filtered-pop-dark");
+    // Nothing found says so.
+    h.event(egui::Event::Text("zzz".into()));
+    h.run();
+    h.run();
+    assert_eq!(h.query_all_by_label("No match").count(), 2);
+    // Escape clears, a second one leaves the field; `/` comes back.
+    h.key_press(egui::Key::Escape);
+    h.run();
+    h.key_press(egui::Key::Escape);
+    h.run();
+    h.run();
+    assert!(listed(&h).len() > 2);
+    h.key_press(egui::Key::Slash);
+    h.event(egui::Event::Text("/".into()));
+    h.run();
+    h.run();
+    h.event(egui::Event::Text("slid".into()));
+    h.run();
+    h.run();
+    let snap = h.state().app.handle().debug_snapshot();
+    assert_eq!(snap["trees"]["gallery.pages"]["filter"], "slid");
+    // `/` typed nothing: the field holds what came after.
+    assert!(
+        listed(&h).contains(&"Sliders".to_string()),
+        "{:?}",
+        listed(&h)
+    );
+}
