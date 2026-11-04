@@ -186,6 +186,10 @@ of every crate with every feature on.
 - [Scrolling survey](scrolling-survey.md): how desktops and applications show
   scroll bars and treat the wheel, a recommended default (bars visible at
   rest) and the changes ranked for egui-pop.
+- [Web survey](web-survey.md): what breaks or differs in the web build
+  (keys the browser keeps, platform services, storage, rendering,
+  accessibility, every gallery page), ranked by how much it gets in the
+  way of reporting a bug from the web gallery, with follow-ups.
 - [API stability](stability.md): what each release promises.
 - [Changesets and releases](releasing.md): the changeset each change
   adds, commit subjects, the checks, and how a release is made.
