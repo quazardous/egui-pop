@@ -47,6 +47,9 @@ fn the_kits_are_clean_and_readable() {
         let tokens = themes.resolve(&ThemeSpec::new(k.name.clone()));
         let failures = contrast::check(&tokens, Level::Normal);
         assert!(failures.is_empty(), "{}: {failures:#?}", k.name);
+        // Their charts' hues, fitted to their surfaces, stay apart.
+        let apart = contrast::check_category(&tokens);
+        assert!(apart.is_empty(), "{}: {apart:#?}", k.name);
     }
 }
 
