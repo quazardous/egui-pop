@@ -515,7 +515,7 @@ motion:
       $value: {value: 200, unit: "ms"}
       $description: "A toast sliding in from its corner's side, and out again (none under reduced motion)."
 palette:
-  $description: "Palettes and toolboxes floating over the interface, never modal; and `category`, the colours of a chart's series."
+  $description: "Palettes and toolboxes floating over the interface, never modal; `category`, the colours of a chart's series; and `log`, the colours of log levels."
   category:
     $description: "The categorical palette: one colour per series, in this order, for what is told apart by identity (docs/tokens.md). Each reads at 3:1 on the canvas, the panel and the raised surface; neighbours are 15 apart (OKLab ΔE) and 8 for protanopia and deuteranopia, any two 10 apart (contrast::check_category)."
     $type: "color"
@@ -529,6 +529,14 @@ palette:
     "7": {$value: "{chart.red}"}
     "8": {$value: "{chart.teal}"}
     "9": {$value: "{chart.purple}"}
+  log:
+    $description: "The log levels' colours, from the least to the most severe (docs/tokens.md): what a log view colours a line's level with. Each reads as text on the canvas and the panel; info is green and debug blue, as most log viewers draw them."
+    $type: "color"
+    trace: {$value: "{text.muted}"}
+    debug: {$value: "{info}"}
+    info: {$value: "{success}"}
+    warn: {$value: "{warning}"}
+    error: {$value: "{danger}"}
   magnet:
     $type: "dimension"
     $value: "{size.magnet}"

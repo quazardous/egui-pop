@@ -108,6 +108,17 @@ pub const PAIRS: &[Pair] = &[
     text("success", "surface.overlay"),
     text("info", "surface.panel"),
     text("info", "surface.overlay"),
+    // Log levels colour a log view's text, on the canvas or a panel.
+    text("palette.log.trace", "surface.canvas"),
+    text("palette.log.trace", "surface.panel"),
+    text("palette.log.debug", "surface.canvas"),
+    text("palette.log.debug", "surface.panel"),
+    text("palette.log.info", "surface.canvas"),
+    text("palette.log.info", "surface.panel"),
+    text("palette.log.warn", "surface.canvas"),
+    text("palette.log.warn", "surface.panel"),
+    text("palette.log.error", "surface.canvas"),
+    text("palette.log.error", "surface.panel"),
     // Components.
     text("button.rest.text", "button.rest.fill"),
     // Buttons by tone: the label on the tone's fill.

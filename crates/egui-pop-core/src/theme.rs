@@ -308,6 +308,34 @@ pub struct DataPalette {
     /// The categorical palette, `palette.category.0` to `.9`: one colour
     /// per series, in order (`egui_pop_tokens::CATEGORY`).
     pub category: [Color32; egui_pop_tokens::CATEGORY.len()],
+    /// The log levels' colours, `palette.log.*`.
+    pub log: LogPalette,
+}
+
+/// The log levels' colours (`palette.log.*`), from the least to the most
+/// severe: what a log view colours a line's level with. Each reads as
+/// text on the canvas and the panel.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct LogPalette {
+    /// `palette.log.trace`.
+    pub trace: Color32,
+    /// `palette.log.debug`.
+    pub debug: Color32,
+    /// `palette.log.info`.
+    pub info: Color32,
+    /// `palette.log.warn`.
+    pub warn: Color32,
+    /// `palette.log.error`.
+    pub error: Color32,
+}
+
+impl LogPalette {
+    /// The colours in [`egui_pop_tokens::LOG_LEVELS`]' order, from trace
+    /// to error.
+    pub fn levels(&self) -> [Color32; egui_pop_tokens::LOG_LEVELS.len()] {
+        [self.trace, self.debug, self.info, self.warn, self.error]
+    }
 }
 
 impl DataPalette {
@@ -509,6 +537,13 @@ impl Tokens {
             },
             palette: DataPalette {
                 category: egui_pop_tokens::CATEGORY.map(c),
+                log: LogPalette {
+                    trace: c("palette.log.trace"),
+                    debug: c("palette.log.debug"),
+                    info: c("palette.log.info"),
+                    warn: c("palette.log.warn"),
+                    error: c("palette.log.error"),
+                },
             },
             motion_duration: r.duration_ms("motion.duration").unwrap_or(0.0).max(0.0) / 1000.0,
             motion: {

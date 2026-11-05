@@ -207,6 +207,31 @@ const CORE: &[Required] = &[
     sys("palette.category.7", "color", "a chart's eighth series"),
     sys("palette.category.8", "color", "a chart's ninth series"),
     sys("palette.category.9", "color", "a chart's tenth series"),
+    sys(
+        "palette.log.trace",
+        "color",
+        "a log line at the trace level (readable as text)",
+    ),
+    sys(
+        "palette.log.debug",
+        "color",
+        "a log line at the debug level (readable as text)",
+    ),
+    sys(
+        "palette.log.info",
+        "color",
+        "a log line at the info level (readable as text)",
+    ),
+    sys(
+        "palette.log.warn",
+        "color",
+        "a log line at the warn level (readable as text)",
+    ),
+    sys(
+        "palette.log.error",
+        "color",
+        "a log line at the error level (readable as text)",
+    ),
     sys("radius.widget", "dimension", "corner radius of controls"),
     sys(
         "radius.window",
@@ -736,6 +761,18 @@ pub const CATEGORY: [&str; 10] = [
     "palette.category.7",
     "palette.category.8",
     "palette.category.9",
+];
+
+/// The log levels' colours, from the least to the most severe: `trace`,
+/// `debug`, `info`, `warn`, `error`, the levels of the `log` facade. A
+/// log view colours a line's level (or the line) with them; each reads
+/// as text on the canvas and the panel ([`crate::contrast::PAIRS`]).
+pub const LOG_LEVELS: [&str; 5] = [
+    "palette.log.trace",
+    "palette.log.debug",
+    "palette.log.info",
+    "palette.log.warn",
+    "palette.log.error",
 ];
 
 /// Every token a theme must provide: the system tier, the component tier

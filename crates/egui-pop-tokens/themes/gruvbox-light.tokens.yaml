@@ -289,3 +289,9 @@ accent:
 selection:
   $type: "color"
   $value: "{blue.5}"
+palette:
+  log:
+    info:
+      $type: "color"
+      $value: "{green.10}"
+      $description: "A step darker than success: the canvas is darker than the panel."

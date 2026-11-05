@@ -107,7 +107,9 @@ without it.
    `accent.{default, hover, active, subtle}`, `danger`, `warning`,
    `success`, `info`, `focus.ring`, `selection`,
    `palette.category.0` to `palette.category.9` (the categorical palette,
-   [below](#the-categorical-palette)), `radius.{widget, window}`,
+   [below](#the-categorical-palette)),
+   `palette.log.{trace, debug, info, warn, error}` (the log levels'
+   colours, [below](#log-levels)), `radius.{widget, window}`,
    `shadow.{popup, window, side}.{offset-x, offset-y, blur, spread, color}`
    (egui's popup and window shadows, and a side area lying over the
    centre; their colours alias the `shade.10` and `shade.38` palette
@@ -248,6 +250,35 @@ built-in hues were searched for together under these checks (the same
 hue per slot in the three themes, the lightness moved for each theme's
 surfaces) and reach 11.9 for any two, 20.9 for neighbours and 9.0 for
 neighbours with colour blindness.
+
+## Log levels
+
+A log view colours a line's level, or the whole line, with
+`palette.log.trace`, `palette.log.debug`, `palette.log.info`,
+`palette.log.warn` and `palette.log.error`: the five levels of the `log`
+facade, from the least to the most severe
+(`egui_pop_tokens::LOG_LEVELS`, in that order). Code reads them through
+`Tokens::of(ctx).palette.log` (`LogPalette`, whose `levels()` gives
+them in the same order).
+
+`pop-dark` aliases them to the status colours and the muted text, so the
+other built-in themes follow their own: trace is `{text.muted}`, debug
+`{info}`, info `{success}`, warn `{warning}` and error `{danger}`. Info
+is green and debug blue, as most log viewers draw them. A theme gives a
+level a value of its own where its status colour does not read on its
+canvas (`gruvbox-light` darkens info's green).
+
+| Level | pop-dark | pop-light | pop-high-contrast |
+|---|---|---|---|
+| `trace` | `#b3b1ad` | `#5d5a57` | `#e0ddda` |
+| `debug` | `#9ac7ff` | `#2a5993` | `#9ac7ff` |
+| `info` | `#9dd59e` | `#2a672f` | `#9dd59e` |
+| `warn` | `#f8b376` | `#884300` | `#f8b376` |
+| `error` | `#ffa696` | `#953226` | `#ffa696` |
+
+Each level is used as text: it reads at 4.5:1 (7:1 in high contrast) on
+`surface.canvas` and `surface.panel`, pairs of `contrast::PAIRS`
+checked like the status colours.
 
 ## A scale from one colour
 
