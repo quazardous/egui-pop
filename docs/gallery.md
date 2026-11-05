@@ -434,6 +434,7 @@ Zones and blocks, the workbench, the layout controls, palettes, arrangements, th
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pages-filtered-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pages-filtered-pop-dark.png" width="200" alt="pages-filtered-pop-dark"></a><br>pages-filtered-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-zone-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-zone-pop-dark.png" width="200" alt="workbench-zone-pop-dark"></a><br>workbench-zone-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-grid-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-grid-pop-dark.png" width="200" alt="workbench-grid-pop-dark"></a><br>workbench-grid-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-detached-drop-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-detached-drop-pop-dark.png" width="200" alt="workbench-detached-drop-pop-dark"></a><br>workbench-detached-drop-pop-dark</td>
   </tr>
 </table>
 
