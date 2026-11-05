@@ -24,7 +24,7 @@
 //!   tool, Home and End to the first and the last, and Tab coming back
 //!   lands on the tool focused last.
 //!
-//! egui_stack's [`ToolRow`](egui_stack::toolbar::ToolRow) lays the tools
+//! egui_stack's [`ToolRow`] lays the tools
 //! out, takes their input and moves the focus; the kit paints them (its
 //! `DockPainter`). Sizes come from the theme: the icon is
 //! `size.icon.toolbar`, padded by `space.xs`, so the density moves them.
