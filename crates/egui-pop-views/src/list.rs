@@ -31,9 +31,11 @@ use std::collections::HashSet;
 use egui::{Id, Response, Role, Ui, UiBuilder, WidgetInfo};
 use egui_pop_api::AppHandle;
 use egui_pop_api::selection::{SelectionItem, SelectionService};
+use egui_pop_core::icon::Source;
 use egui_pop_core::strings::tr;
 use egui_pop_model::ids::StepId;
 
+use crate::item::{self, Disclosure};
 use crate::nav::{self, TypeAhead};
 use crate::rows::{self, Scroll};
 use crate::select::{self, Key, Mode, Proposal, Selection};
@@ -63,7 +65,23 @@ pub trait ListRows<K: Key> {
         SelectionItem::from_key(&self.key(row))
     }
 
-    /// Draws row `row` (its background is drawn; the row is named by
+    /// Row `row`'s icon, drawn before what [`ListRows::ui`] draws, in
+    /// the row's text colour (default: none).
+    fn icon(&self, row: usize) -> Option<Source> {
+        let _ = row;
+        None
+    }
+
+    /// Row `row`'s weak text on its right (a count, a type; default:
+    /// none), in the row's muted tone; what [`ListRows::ui`] draws stops
+    /// before it.
+    fn trailing(&self, row: usize) -> Option<String> {
+        let _ = row;
+        None
+    }
+
+    /// Draws row `row` (its background is drawn, with its icon and its
+    /// trailing text, [a list item](crate::item)'s; the row is named by
     /// its label). By default, its label.
     fn ui(&mut self, ui: &mut Ui, row: usize, selected: bool) {
         let _ = selected;
@@ -291,15 +309,39 @@ impl<'a> ListView<'a> {
                         }
                     }
                     let state = rows::state(selected, hovered, cursor);
-                    rows::paint(ui, &visible.kit.list_row, rect, state);
+                    let icon = rows.icon(i);
+                    let placed = item::Frame {
+                        kit: visible.kit,
+                        state,
+                        depth: 0,
+                        guides: false,
+                        disclosure: Disclosure::None,
+                        handle: false,
+                        icon: icon.as_ref(),
+                    }
+                    .paint(ui, rect, false);
+                    let right = match rows.trailing(i) {
+                        Some(text) => item::paint_trailing(
+                            ui,
+                            visible.kit,
+                            state,
+                            rect,
+                            placed.left,
+                            rect.right(),
+                            &text,
+                        ),
+                        None => rect.right() - ui.spacing().item_spacing.x,
+                    };
                     let mut child = ui.new_child(
                         UiBuilder::new()
-                            .max_rect(rect.shrink2(egui::vec2(ui.spacing().item_spacing.x, 0.0)))
+                            .max_rect(egui::Rect::from_min_max(
+                                egui::pos2(placed.left, rect.top()),
+                                egui::pos2(right.max(placed.left), rect.bottom()),
+                            ))
                             .layout(egui::Layout::left_to_right(egui::Align::Center)),
                     );
                     if selected {
-                        child.visuals_mut().override_text_color =
-                            Some(rows::text_color(&visible.kit.list_row, state));
+                        child.visuals_mut().override_text_color = Some(placed.color);
                     }
                     rows.ui(&mut child, i, selected);
                     let name = rows.label(i);

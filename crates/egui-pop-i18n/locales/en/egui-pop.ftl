@@ -2097,6 +2097,8 @@ egui-pop-views-flag = Flag
 
 egui-pop-views-green = Green
 
+egui-pop-views-item-move = Move { $name }
+
 egui-pop-views-label = Label
 
 egui-pop-views-label-toggle = { $label } label

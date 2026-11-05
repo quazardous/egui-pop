@@ -343,6 +343,13 @@ compiled at install.
   and `outline` (a border only; a part with no height is a line between
   rows). The kit is fetched once per view and pass. The gallery's
   `table-kit-rows` snapshot restyles rows and headers with data only.
+- **List items** (`list-item`, `list-guide`): the dense row of
+  [list items and property rows](list-items.md), which the tree's and
+  the list's rows are too. `list-item` is based on `list-row` (a kit
+  restyling rows restyles them), adding a fill while `active`, muted text
+  while `disabled` and the `muted` tone (trailing text, property names).
+  `list-guide` is an indent guide, `outline`'s line along a part with no
+  width. Action buttons are `icon-button`s.
 - **Window buttons per platform flavour.** The buttons go where
   `title-bar.buttons-side` says; each carries a tone (minimize
   `warning`, maximize `success`, close `danger`) that a kit may give;

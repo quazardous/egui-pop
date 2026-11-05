@@ -27,7 +27,10 @@ command.
 
 The application implements `ListRows`: how many rows, each one's key
 and label (its accessible name, what type-ahead searches), and,
-optionally, how a row is drawn (by default, its label).
+optionally, how a row is drawn (by default, its label). A row is a
+[list item](list-items.md): `ListRows::icon` and `ListRows::trailing`
+give it an icon before what `ListRows::ui` draws and weak text on its
+right.
 
 ```rust
 use egui_pop::egui;

@@ -118,6 +118,10 @@ of every crate with every feature on.
   behind them.
 - [The tree](tree.md): a live tree over a lazy, asynchronous source,
   edits at any time, selection, keyboard, drag and drop, rename, steps.
+- [List items and property rows](list-items.md): one dense row for
+  lists, trees and panels (an icon, a label, weak trailing text, action
+  buttons on hover, indent guides, an arrow, a drag handle), its own row
+  height token, and property rows with their names aligned.
 - [Lists and tables](table.md): a list and a data table, virtualised,
   sorting and widths in the value store, cells drawn by the
   application, steps.

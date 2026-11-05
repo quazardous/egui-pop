@@ -33,6 +33,7 @@
 - [Sliders](sliders.md)
 - [Inputs, field states and Tab order](inputs.md)
 - [The tree](tree.md)
+- [List items and property rows](list-items.md)
 - [Lists and tables](table.md)
 - [Video](video.md)
 - [The photo library](library.md)

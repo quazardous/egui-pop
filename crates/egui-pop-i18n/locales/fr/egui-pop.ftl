@@ -1778,6 +1778,8 @@ egui-pop-views-flag = Marque
 
 egui-pop-views-green = Vert
 
+egui-pop-views-item-move = Déplacer { $name }
+
 egui-pop-views-label = Étiquette
 
 egui-pop-views-label-toggle = Étiquette { $label }

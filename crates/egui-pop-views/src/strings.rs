@@ -34,6 +34,8 @@ pub const FAILED: StrKey = StrKey::new("egui-pop-views-failed", "Could not load:
 pub const EMPTY: StrKey = StrKey::new("egui-pop-views-empty", "Empty");
 /// The rename field's accessible name.
 pub const RENAME: StrKey = StrKey::new("egui-pop-views-rename", "Rename { $name }");
+/// A list item's drag handle: its accessible name.
+pub const ITEM_MOVE: StrKey = StrKey::new("egui-pop-views-item-move", "Move { $name }");
 /// A column header's accessible name when sorted up.
 pub const SORTED_UP: StrKey =
     StrKey::new("egui-pop-views-sorted-up", "{ $column }, sorted ascending");
@@ -239,6 +241,7 @@ pub const ALL: &[StrKey] = &[
     FAILED,
     EMPTY,
     RENAME,
+    ITEM_MOVE,
     SORTED_UP,
     SORTED_DOWN,
     LIBRARY,
