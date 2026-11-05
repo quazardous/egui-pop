@@ -228,6 +228,38 @@ pub const VIEWER_PAGE: StrKey = StrKey::new("egui-pop-views-viewer-page", "Page"
 /// A code block's accessible name.
 pub const VIEWER_CODE_BLOCK: StrKey = StrKey::new("egui-pop-views-viewer-code-block", "Code block");
 
+/// A timeline's accessible name, unless the application gives one.
+pub const TIMELINE: StrKey = StrKey::new("egui-pop-views-timeline", "Timeline");
+/// A timeline's marker: its accessible name, and what is announced when the
+/// keys reach it.
+pub const TIMELINE_MARKER: StrKey = StrKey::new(
+    "egui-pop-views-timeline-marker",
+    "Marker { $label } at { $time }",
+);
+/// A timeline's cue point, the same way.
+pub const TIMELINE_CUE: StrKey =
+    StrKey::new("egui-pop-views-timeline-cue", "Cue { $label } at { $time }");
+/// A marker added with M or a double click: its label.
+pub const TIMELINE_NEW_MARKER: StrKey =
+    StrKey::new("egui-pop-views-timeline-new-marker", "Marker { $number }");
+/// The history's steps of a timeline.
+pub const TIMELINE_ADD_MARKER: StrKey =
+    StrKey::new("egui-pop-views-timeline-add-marker", "Add marker");
+pub const TIMELINE_MOVE_MARKER: StrKey =
+    StrKey::new("egui-pop-views-timeline-move-marker", "Move marker");
+pub const TIMELINE_REMOVE_MARKER: StrKey =
+    StrKey::new("egui-pop-views-timeline-remove-marker", "Remove marker");
+pub const TIMELINE_SET_RANGE: StrKey =
+    StrKey::new("egui-pop-views-timeline-set-range", "Set range");
+pub const TIMELINE_CLEAR_RANGE: StrKey =
+    StrKey::new("egui-pop-views-timeline-clear-range", "Clear range");
+pub const TIMELINE_LOOP_ON: StrKey =
+    StrKey::new("egui-pop-views-timeline-loop-on", "Loop the range");
+pub const TIMELINE_LOOP_OFF: StrKey =
+    StrKey::new("egui-pop-views-timeline-loop-off", "Stop looping");
+/// The speed shown beside the playhead while shuttling: `2×`, `-4×`.
+pub const TIMELINE_SPEED: StrKey = StrKey::new("egui-pop-views-timeline-speed", "{ $speed }×");
+
 /// Every string the views show, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
     TREE,
@@ -313,6 +345,18 @@ pub const ALL: &[StrKey] = &[
     VIEWER_EMBED_SHOW,
     VIEWER_EMBED_TOO_SMALL,
     VIEWER_EMBED_TOO_SMALL_DETAIL,
+    TIMELINE,
+    TIMELINE_MARKER,
+    TIMELINE_CUE,
+    TIMELINE_NEW_MARKER,
+    TIMELINE_ADD_MARKER,
+    TIMELINE_MOVE_MARKER,
+    TIMELINE_REMOVE_MARKER,
+    TIMELINE_SET_RANGE,
+    TIMELINE_CLEAR_RANGE,
+    TIMELINE_LOOP_ON,
+    TIMELINE_LOOP_OFF,
+    TIMELINE_SPEED,
 ];
 
 #[cfg(test)]

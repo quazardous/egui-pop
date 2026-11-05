@@ -127,6 +127,10 @@ of every crate with every feature on.
   application, steps.
 - [Video](video.md): a local video file played in place, with full,
   compact or no controls, looping and muted previews, driven by agents.
+- [Timeline](timeline.md): a ruler of time over seconds, frames and
+  timecode, or bars and beats: a playhead to scrub, a range that loops,
+  markers and cue points, snapping, the J/K/L transport keys, each change
+  a step of the history, driven by agents.
 - [The photo library](library.md): a virtualised thumbnail grid and a
   filmstrip over thumbnails supplied asynchronously, ratings, colour
   labels, flags and stacks, the culling keys, a comparison, tag chips

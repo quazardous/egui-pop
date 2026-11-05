@@ -21,6 +21,11 @@
 //! - [`steps`]: their moments as steps, and [`ViewsPlugin`] that
 //!   declares them;
 //! - [`strings`]: the text they show, translatable;
+//! - [`timeline`]: a timeline over seconds, frames (timecode) or bars and
+//!   beats: an adaptive ruler, a playhead to scrub, a range that loops,
+//!   markers and cue points, snapping, the J/K/L transport keys, each
+//!   change of its document a step of the history, and the commands and
+//!   collector agents drive it with;
 //! - [`video`]: the video widget, a local file played in place with full,
 //!   compact or no controls (GStreamer with the `video` feature, a
 //!   placeholder with Open outside without it), and the commands and
@@ -51,6 +56,7 @@ mod shared;
 pub mod steps;
 pub mod strings;
 pub mod table;
+pub mod timeline;
 pub mod tree;
 pub mod video;
 #[cfg(feature = "markdown")]

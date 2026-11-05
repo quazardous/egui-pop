@@ -16,7 +16,8 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-egui.workspace = true
+# `serde`: a marker's colour in a timeline's state.
+egui = { workspace = true, features = ["serde"] }
 egui-pop-model.workspace = true
 egui-pop-core.workspace = true
 egui-pop-api.workspace = true

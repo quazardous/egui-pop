@@ -4,8 +4,9 @@
 [![docs.rs](https://img.shields.io/docsrs/egui-pop-views)](https://docs.rs/egui-pop-views)
 
 Data views for egui-pop: a live tree over a lazy, asynchronous source, a
-list and a data table, and a photo library (thumbnail grid, culling,
-comparison), virtualised, keyboard-driven, every moment a step an
+list and a data table, a photo library (thumbnail grid, culling,
+comparison) and a timeline (seconds, timecode or bars and beats; a playhead,
+a looping range, markers, the J/K/L keys), virtualised, keyboard-driven, every moment a step an
 application can veto, replace or extend.
 
 Part of [egui-pop](https://github.com/quazardous/egui-pop), an
@@ -15,8 +16,9 @@ application framework and component library for
 crate as `egui_pop::views` (feature `views`); depend on `egui-pop-views`
 directly only to use this layer alone.
 
-Guide: [Lists and
-tables](https://github.com/quazardous/egui-pop/blob/main/docs/table.md).
+Guides: [Lists and
+tables](https://github.com/quazardous/egui-pop/blob/main/docs/table.md),
+[Timeline](https://github.com/quazardous/egui-pop/blob/main/docs/timeline.md).
 All of egui-pop's documentation: [the docs
 index](https://github.com/quazardous/egui-pop/blob/main/docs/README.md).
 

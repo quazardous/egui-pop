@@ -30,6 +30,8 @@ category-terminal = Terminal
 
 category-theme = Theme
 
+category-timeline = Timeline
+
 category-values = Values
 
 category-video = Video
@@ -592,6 +594,30 @@ command-theme-switch =
 command-theme-undo =
     .description = Takes the theme editor's last change back, through the theme.token step.
     .title = Undo a theme change
+
+command-timeline-add-marker =
+    .description = Adds a marker to a timeline at `seconds` or `time` (else at the playhead), named `label`, of `kind` `marker` or `cue`, in `color` (`#rrggbb`, else the theme's). Answers its `id` in `added`. One step of the history.
+    .title = Add a marker to a timeline
+
+command-timeline-pause =
+    .description = Asks a timeline to pause.
+    .title = Pause a timeline
+
+command-timeline-play =
+    .description = Asks a timeline to play at `speed` (1 by default, negative backwards); the application moves the time.
+    .title = Play a timeline
+
+command-timeline-remove-marker =
+    .description = Removes a timeline's marker `id`. One step of the history.
+    .title = Remove a marker from a timeline
+
+command-timeline-set-range =
+    .description = Sets a timeline's range from `start` to `end` (seconds), or clears it (`clear`: true); `loop` says whether playback goes round it. One step of the history.
+    .title = Set a timeline's range
+
+command-timeline-set-time =
+    .description = Moves a timeline's playhead (`timeline`, its id) to `seconds`, to `time` (text in the timeline's scale: `1:02.5`, `00:01:02:12`, `17.2.480`), or by `by` seconds; kept inside its bounds.
+    .title = Move a timeline's playhead
 
 command-tips-browse =
     .description = Every tip, by the plugin that declared it, each plugin's with its own switch.
@@ -2135,6 +2161,30 @@ egui-pop-views-sorted-up = { $column }, sorted ascending
 
 egui-pop-views-table = Table
 
+egui-pop-views-timeline = Timeline
+
+egui-pop-views-timeline-add-marker = Add marker
+
+egui-pop-views-timeline-clear-range = Clear range
+
+egui-pop-views-timeline-cue = Cue { $label } at { $time }
+
+egui-pop-views-timeline-loop-off = Stop looping
+
+egui-pop-views-timeline-loop-on = Loop the range
+
+egui-pop-views-timeline-marker = Marker { $label } at { $time }
+
+egui-pop-views-timeline-move-marker = Move marker
+
+egui-pop-views-timeline-new-marker = Marker { $number }
+
+egui-pop-views-timeline-remove-marker = Remove marker
+
+egui-pop-views-timeline-set-range = Set range
+
+egui-pop-views-timeline-speed = { $speed }×
+
 egui-pop-views-tree = Tree
 
 egui-pop-views-tree-filter = Filter
@@ -2356,6 +2406,9 @@ plugin-egui-pop-terminal =
 
 plugin-egui-pop-theme-editor =
     .title = Theme editor
+
+plugin-egui-pop-timeline =
+    .title = Timeline
 
 plugin-egui-pop-tips =
     .title = Tips
