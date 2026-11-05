@@ -74,4 +74,19 @@ section 5.
   on egui and the model must not (ADR 0001, its layering test): its
   `sections` stays as a deprecated, unused copy for one release, and the
   arithmetic is re-exported as `egui_pop::core::sections::plan`.
-- **Toolbar row:** not started.
+- **Toolbar row: done (2026-11-05).** egui_stack 0.22.3 has
+  `toolbar::ToolRow` (`Tool`, `ToolDisplay`, `laid_out`, `focused`,
+  `focus`), painted through three new `DockPainter` methods
+  (`tool_item`, with `in_menu` for the rows of its More menu,
+  `tool_more`, `tool_separator`), its More button named by
+  `Labels::more_tools` and `more_tools_in`, and one Tab stop by
+  `TabFocus::Roving`. `egui_pop::api::toolbars::Toolbar` keeps its API
+  and builds the row's tools from the menu's items: `when` and its
+  reasons, arguments, list providers, the busy spinner and the run on a
+  click stay in egui-pop, as do the tooltips (title, key, why greyed,
+  the last run's error), the icon registry record, the Fluent names of
+  More tools, submenus (a `Tool::menu` drawing the menu's rows) and the
+  `toolbars` collector. The kit's `DockPainter` paints the tools with
+  `toolbar-button` and the More and Dropdown glyphs, and the More menu's
+  rows with `menu-item`; egui-pop's own measuring, cut, painting and
+  `tab::roving` wrapping are gone.
