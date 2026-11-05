@@ -147,6 +147,18 @@ impl<K: Key> Selection<K> {
         self.cursor = cursor;
     }
 
+    /// Selects these keys, the cursor and the anchor kept (a selection
+    /// shared with other widgets, followed).
+    pub fn set_keys(&mut self, keys: impl IntoIterator<Item = K>) {
+        self.keys.clear();
+        self.set.clear();
+        for k in keys {
+            if self.set.insert(k.clone()) {
+                self.keys.push(k);
+            }
+        }
+    }
+
     /// Moves the cursor without changing the selection.
     pub fn set_cursor(&mut self, cursor: Option<K>) {
         self.cursor = cursor;

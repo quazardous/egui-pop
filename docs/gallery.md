@@ -94,8 +94,9 @@ library), `text-editor`,
 background jobs), `frame`, `scale`, `pointer` (pointer gesture profiles),
 `platform` (the platform services),
 `settings`, `i18n` (translations), `debug` (the debug
-bridge) and `linked-panels` (a list driving a slow preview in another
-panel, closed, moved or detached). `Alt+Down` and `Alt+Up` go to the next and previous page,
+bridge), `linked-panels` (a list driving a slow preview in another
+panel, closed, moved or detached) and `selection` (a tree, a list and a
+canvas sharing one selection and one hovered item). `Alt+Down` and `Alt+Up` go to the next and previous page,
 `Ctrl+Shift+T` to the next theme.
 
 It also builds for the web (`wasm32-unknown-unknown`, with Trunk from

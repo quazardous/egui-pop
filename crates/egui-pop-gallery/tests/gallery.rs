@@ -6458,3 +6458,81 @@ fn the_page_list_filter_finds_a_page_by_its_description() {
         listed(&h)
     );
 }
+
+#[test]
+fn the_selection_page_shares_one_selection_between_a_tree_a_list_and_a_canvas() {
+    use egui_pop::api::selection::{CMD_BACK, SELECTION, SelectionItem};
+    use egui_pop::model::commands::Origin;
+    use egui_pop_gallery::pages::selection::ENTITIES;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "selection"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    let service = app.service(&SELECTION).expect("the selection plugin");
+    let ids = |s: &egui_pop::api::selection::SelectionService| {
+        s.items()
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+    };
+    // Each entity is in the tree and in the list; the list is the right one.
+    let list_row = |h: &Harness<'_, Gallery>, name: &str| {
+        let rows: Vec<_> = h.query_all_by_label(name).collect();
+        assert_eq!(rows.len(), 2, "{name} in the tree and the list");
+        rows.into_iter()
+            .max_by(|a, b| a.rect().left().total_cmp(&b.rect().left()))
+            .unwrap()
+            .rect()
+            .center()
+    };
+    let at = list_row(&h, "Point B");
+    h.hover_at(at);
+    h.run();
+    assert_eq!(
+        service.hovered(),
+        Some(SelectionItem::from("world/points/b"))
+    );
+    assert!(h.query_by_label("Hovered: Point B").is_some());
+    h.query_all_by_label("Point B")
+        .max_by(|a, b| a.rect().left().total_cmp(&b.rect().left()))
+        .unwrap()
+        .click();
+    h.run();
+    assert_eq!(ids(&service), ["world/points/b"]);
+    assert!(h.query_by_label("Selected: Point B").is_some());
+    // The tree adds with Ctrl.
+    h.query_all_by_label("Camera")
+        .min_by(|a, b| a.rect().left().total_cmp(&b.rect().left()))
+        .unwrap()
+        .click_modifiers(egui::Modifiers::COMMAND);
+    h.run();
+    assert_eq!(ids(&service), ["world/points/b", "world/camera"]);
+    // A plain click on a dot of the canvas selects its entity alone.
+    let r = h.get_by_label("Entities on a canvas").rect();
+    let (path, _, p) = ENTITIES[4];
+    let dot = egui::pos2(
+        r.left() + 16.0 + p[0] * (r.width() - 32.0),
+        r.top() + 16.0 + p[1] * (r.height() - 32.0),
+    );
+    h.hover_at(dot);
+    h.run();
+    assert_eq!(service.hovered(), Some(SelectionItem::from(path)));
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton {
+            pos: dot,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        });
+    }
+    h.run();
+    assert_eq!(ids(&service), [path]);
+    // Back to the selection before.
+    let out = h
+        .state_mut()
+        .app
+        .run(&CMD_BACK, serde_json::Value::Null, Origin::User);
+    assert!(matches!(out.now(), Some(Ok(_))));
+    h.run();
+    assert_eq!(ids(&service), ["world/points/b", "world/camera"]);
+    assert!(h.query_by_label("Selected: Point B, Camera").is_some());
+}

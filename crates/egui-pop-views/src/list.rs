@@ -30,12 +30,14 @@ use std::collections::HashSet;
 
 use egui::{Id, Response, Role, Ui, UiBuilder, WidgetInfo};
 use egui_pop_api::AppHandle;
+use egui_pop_api::selection::{SelectionItem, SelectionService};
 use egui_pop_core::strings::tr;
 use egui_pop_model::ids::StepId;
 
 use crate::nav::{self, TypeAhead};
 use crate::rows::{self, Scroll};
 use crate::select::{self, Key, Mode, Proposal, Selection};
+use crate::shared;
 use crate::steps::LIST_SELECT;
 use crate::strings as s;
 
@@ -52,6 +54,14 @@ pub trait ListRows<K: Key> {
 
     /// Row `row`'s accessible name, searched by type-ahead.
     fn label(&self, row: usize) -> String;
+
+    /// Row `row`'s item in the application-wide selection
+    /// ([`ListView::shared`]): by default its key's
+    /// ([`SelectionItem::from_key`]). Give the id other widgets showing
+    /// the same thing use.
+    fn item(&self, row: usize) -> SelectionItem {
+        SelectionItem::from_key(&self.key(row))
+    }
 
     /// Draws row `row` (its background is drawn; the row is named by
     /// its label). By default, its label.
@@ -77,6 +87,8 @@ pub struct ListState<K: Key> {
     scroll: Scroll,
     type_ahead: TypeAhead,
     len: Option<usize>,
+    /// The shared selection's revision and the row count last followed.
+    seen: Option<(u64, u64)>,
 }
 
 impl<K: Key> Default for ListState<K> {
@@ -86,6 +98,7 @@ impl<K: Key> Default for ListState<K> {
             scroll: Scroll::default(),
             type_ahead: TypeAhead::default(),
             len: None,
+            seen: None,
         }
     }
 }
@@ -141,6 +154,7 @@ pub struct ListView<'a> {
     app: Option<&'a AppHandle>,
     height: Option<f32>,
     row_height: Option<f32>,
+    shared: Option<&'a SelectionService>,
 }
 
 impl<'a> ListView<'a> {
@@ -153,6 +167,7 @@ impl<'a> ListView<'a> {
             app: None,
             height: None,
             row_height: None,
+            shared: None,
         }
     }
 
@@ -185,7 +200,29 @@ impl<'a> ListView<'a> {
         self
     }
 
+    /// Binds the list to the application-wide selection
+    /// (`egui_pop_api::selection`, the service under `SELECTION`): its
+    /// rows ([`ListRows::item`]) show selected and hovered when they are
+    /// so anywhere, and what it selects (still through `list.select`)
+    /// goes there: a plain click or move replaces the whole selection,
+    /// Ctrl changes only the list's items. The list is then in the
+    /// selection's focus surface, where Alt+Left and Alt+Right walk its
+    /// history.
+    pub fn shared(mut self, selection: &'a SelectionService) -> Self {
+        self.shared = Some(selection);
+        self
+    }
+
     pub fn show<K: Key>(
+        self,
+        ui: &mut Ui,
+        state: &mut ListState<K>,
+        rows: &mut dyn ListRows<K>,
+    ) -> ListOutput<K> {
+        shared::surface(ui, self.shared.is_some(), |ui| self.draw(ui, state, rows))
+    }
+
+    fn draw<K: Key>(
         self,
         ui: &mut Ui,
         state: &mut ListState<K>,
@@ -194,6 +231,15 @@ impl<'a> ListView<'a> {
         let id = Id::unique(("egui_pop_views::list", &self.id));
         let len = rows.len();
         retain(&mut state.selection, &mut state.len, len, &|i| rows.key(i));
+        if let Some(service) = self.shared {
+            shared::follow(
+                service,
+                &mut state.selection,
+                &mut state.seen,
+                len as u64,
+                (0..len).map(|i| (rows.key(i), rows.item(i))),
+            );
+        }
         let row_h = self.row_height.unwrap_or_else(|| rows::height(ui));
         let focused = ui.memory(|m| m.has_focus(id));
         let mut proposals = Vec::new();
@@ -217,6 +263,8 @@ impl<'a> ListView<'a> {
         let selection = &state.selection;
         let mode = self.mode;
         let mut take_focus = false;
+        let shared = self.shared;
+        let mut hovering: Option<SelectionItem> = None;
         let (_, response, _) = rows::show(
             ui,
             id,
@@ -232,7 +280,17 @@ impl<'a> ListView<'a> {
                     let r = ui.interact(rect, id.with(("row", &key)), rows::ROW_SENSE);
                     let selected = selection.contains(&key);
                     let cursor = focused && selection.cursor() == Some(&key);
-                    let state = rows::state(selected, r.hovered(), cursor);
+                    // Hovered here, or the same item hovered elsewhere.
+                    let mut hovered = r.hovered();
+                    if let Some(service) = shared {
+                        let item = rows.item(i);
+                        if hovered {
+                            hovering = Some(item);
+                        } else {
+                            hovered = service.is_hovered(&item);
+                        }
+                    }
+                    let state = rows::state(selected, hovered, cursor);
                     rows::paint(ui, &visible.kit.list_row, rect, state);
                     let mut child = ui.new_child(
                         UiBuilder::new()
@@ -259,6 +317,10 @@ impl<'a> ListView<'a> {
         if take_focus {
             response.request_focus();
         }
+        if let Some(service) = shared {
+            service.hover(&self.id, hovering.as_ref());
+        }
+        let before = state.selection.keys().to_vec();
         let signals = run(
             self.app,
             &LIST_SELECT,
@@ -267,6 +329,24 @@ impl<'a> ListView<'a> {
             &mut state.selection,
             proposals,
         );
+        if let Some(service) = shared
+            && let Some(Signal::Select { keys, .. }) = signals
+                .iter()
+                .rev()
+                .find(|s| matches!(s, Signal::Select { .. }))
+        {
+            let items: std::collections::HashMap<K, SelectionItem> =
+                (0..len).map(|i| (rows.key(i), rows.item(i))).collect();
+            let item_of = |k: &K| {
+                items
+                    .get(k)
+                    .cloned()
+                    .unwrap_or_else(|| SelectionItem::from_key(k))
+            };
+            let keep_others = ui.input(|i| i.modifiers.command);
+            shared::write(service, &self.id, &before, keys, keep_others, &item_of);
+            state.seen = Some((service.revision(), len as u64));
+        }
         if !signals.is_empty() {
             ui.ctx().request_repaint();
         }
