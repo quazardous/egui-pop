@@ -416,6 +416,12 @@ command-viewer-zoom-out.description 378e7c03b4e0ed26
 command-viewer-zoom-out.title df8105f950aacea2
 command-viewer-zoom-reset.description 4c44a0180ef13a93
 command-viewer-zoom-reset.title ce0bc743244b2975
+command-workbench-arrange-column.description 83af61a33469f700
+command-workbench-arrange-column.title fd6c1344214f3375
+command-workbench-arrange-grid.description a41c298da1a4723a
+command-workbench-arrange-grid.title b2cd151bc8c5452b
+command-workbench-arrange-row.description 0fda01db0f8391fb
+command-workbench-arrange-row.title d8cb6d570a2cf235
 command-workbench-arrangement-reset.description 4da24365c252a37a
 command-workbench-arrangement-reset.title db7ca7676a40511f
 command-workbench-arrangement-save.description 9b40413dc152aaee
