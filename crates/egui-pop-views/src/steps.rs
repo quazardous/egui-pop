@@ -25,6 +25,7 @@
 //! | `table.select` | `table`, `keys`, `cursor` | sets the selection |
 //! | `table.sort` | `table`, `column` (`null`: unsorted), `descending` | writes the sort to the store |
 //! | `table.resize` | `table`, `widths` | writes the widths to the store |
+//! | `table.select_columns` | `table`, `columns` | sets the column selection |
 
 use egui_pop_api::steps::{Outcome, StepSpec};
 use egui_pop_api::{AppHandle, Ctx, Plugin, PluginError};
@@ -46,6 +47,7 @@ pub const LIST_SELECT: StepId = StepId::from_static("list.select");
 pub const TABLE_SELECT: StepId = StepId::from_static("table.select");
 pub const TABLE_SORT: StepId = StepId::from_static("table.sort");
 pub const TABLE_RESIZE: StepId = StepId::from_static("table.resize");
+pub const TABLE_SELECT_COLUMNS: StepId = StepId::from_static("table.select_columns");
 
 /// Moves the focus from a tree to its filter field (Ctrl+F, `/`).
 pub const CMD_TREE_FILTER: CommandId = CommandId::from_static("tree.filter");
@@ -102,6 +104,11 @@ pub fn specs() -> Vec<StepSpec> {
         .args(json!({ "table": "files", "column": "name", "descending": false })),
         StepSpec::new(TABLE_RESIZE, "A table's columns are resized.")
             .args(json!({ "table": "files", "widths": [200.0, 80.0] })),
+        StepSpec::new(
+            TABLE_SELECT_COLUMNS,
+            "A table's column selection changes (a header clicked); a veto keeps it.",
+        )
+        .args(json!({ "table": "files", "columns": ["size"] })),
     ]
 }
 

@@ -44,6 +44,13 @@ pub const SORTED_DOWN: StrKey = StrKey::new(
     "egui-pop-views-sorted-down",
     "{ $column }, sorted descending",
 );
+/// A header's context menu: sort the table up by this column.
+pub const SORT_ASCENDING: StrKey = StrKey::new("egui-pop-views-sort-ascending", "Sort ascending");
+/// A header's context menu: sort the table down by this column.
+pub const SORT_DESCENDING: StrKey =
+    StrKey::new("egui-pop-views-sort-descending", "Sort descending");
+/// A header's context menu: leave the table unsorted.
+pub const SORT_CLEAR: StrKey = StrKey::new("egui-pop-views-sort-clear", "Unsorted");
 
 /// A thumbnail grid's accessible name, unless the application gives one.
 pub const LIBRARY: StrKey = StrKey::new("egui-pop-views-library", "Library");
@@ -276,6 +283,9 @@ pub const ALL: &[StrKey] = &[
     ITEM_MOVE,
     SORTED_UP,
     SORTED_DOWN,
+    SORT_ASCENDING,
+    SORT_DESCENDING,
+    SORT_CLEAR,
     LIBRARY,
     FILMSTRIP,
     COMPARE,
