@@ -387,9 +387,16 @@ moves it by less than half a beat onto the other's phase. The deck's keys
 the decks' surface (`Timeline::surface`); J/K/L, I, O and Ctrl+L stay the
 timeline's.
 
-## What comes next
+The **Video editor** page is a minute at 25 frames per second: a titles
+track, two video tracks and two audio tracks drawn by the tracks page's
+painter, and a pretend program monitor showing the frame of the topmost
+video clip under the playhead (its source and source timecode) with the
+title over it. Ctrl+K splits, Shift+Delete ripple deletes, I and O mark
+the in and out points (their duration beside the monitor), J/K/L
+shuttle; its buttons run the same edits through the `timeline.*`
+commands, so each is one step of the history either way.
 
-A video editor demo on top (timecode, J/K/L, trimming, splitting).
+## What comes next
 
 What the DJ decks needed that the timeline does not give, worked around
 by the page:
@@ -409,9 +416,23 @@ by the page:
   the `timeline.*` commands are (the decks keep no history, as DJ
   software does not).
 
+What the video editor lacks (not worked around: its edits stay
+simpler than an editor's):
+
+- **Linked clips**: a shot's video and its sound are separate clips;
+  selecting, moving, trimming or ripple deleting one leaves the other
+  (Ctrl+K without a selection splits both, as it splits every clip at
+  the playhead).
+- **Track targeting and locks**: no track header to choose the tracks a
+  split or an edit acts on, nor to lock, mute or hide one.
+- **Three-point editing**: the in and out points are only a range; there
+  is no source monitor nor insert and overwrite edits into them.
+- **Ripple, roll, slip and slide trims**, and ripple delete of a gap
+  (a gap cannot be selected).
+
 Not in the timeline yet: drop-frame timecode, tempo changes along a
 track, a range's edges dragged directly (Shift+drag draws a new one);
-for clips, splitting at the playhead, ripple and roll edits, overwriting
+for clips, roll edits, overwriting
 a clip by dropping another on it (a drop lands beside it instead), a
 rubber band selection, track headers (the output's `tracks` rows leave
 room for the application's), and adding or removing tracks by agents.

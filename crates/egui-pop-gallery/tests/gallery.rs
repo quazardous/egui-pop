@@ -6935,6 +6935,106 @@ fn the_dj_page_sets_hot_cues_loops_and_syncs_a_deck_from_its_keys() {
 }
 
 #[test]
+fn the_editor_page_splits_at_the_playhead_and_ripple_deletes() {
+    use egui::accesskit::Role;
+    use egui_pop::model::commands::Origin;
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "editor"));
+        h.run();
+        results.add(h.try_snapshot(format!("editor-{theme}")));
+    }
+    let mut h = harness(options("pop-dark", Density::Comfortable, "editor"));
+    h.run();
+    let seq = |h: &Harness<'_, Gallery>| {
+        h.state().app.handle().debug_snapshot()["timeline"]["timelines"]["sequence"].clone()
+    };
+    let spans = |seq: &serde_json::Value, row: usize| -> Vec<(u64, f64, f64)> {
+        seq["tracks"][row]["clips"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| {
+                (
+                    c["id"].as_u64().unwrap(),
+                    c["seconds"].as_f64().unwrap(),
+                    c["end"].as_f64().unwrap(),
+                )
+            })
+            .collect()
+    };
+    // Ctrl+K with nothing selected: every clip under the playhead (14 s)
+    // splits there, V2's, V1's and A1's, in one step.
+    h.get_by_role_and_label(Role::Slider, "Sequence").focus();
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::K);
+    h.run();
+    let s = seq(&h);
+    assert_eq!(
+        spans(&s, 2),
+        [
+            (2, 0.0, 14.0),
+            (10, 14.0, 18.0),
+            (3, 18.0, 28.0),
+            (4, 28.0, 50.0)
+        ],
+        "{s}"
+    );
+    assert_eq!(s["tracks"][2]["clips"][1]["offset"], 26.0);
+    assert_eq!(spans(&s, 1), [(5, 10.0, 14.0), (9, 14.0, 16.0)]);
+    assert_eq!(spans(&s, 3)[1], (11, 14.0, 18.0));
+    // The second half of V1's interview, removed with Shift+Delete: the
+    // clips after it on V1 move back by its four seconds; A1 stays.
+    h.get_by_role_and_label(
+        Role::Button,
+        "Clip Interview on V1, 00:00:14:00 to 00:00:18:00",
+    )
+    .click();
+    h.run();
+    h.get_by_role_and_label(Role::Slider, "Sequence").focus();
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Delete);
+    h.run();
+    let rippled = [(2, 0.0, 14.0), (3, 14.0, 24.0), (4, 24.0, 46.0)];
+    assert_eq!(spans(&seq(&h), 2), rippled);
+    assert_eq!(spans(&seq(&h), 3)[2], (7, 28.0, 50.0));
+    // Ctrl+Z puts it back, in one step; Ctrl+Y does it again.
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+    h.run();
+    h.run();
+    assert_eq!(spans(&seq(&h), 2)[1], (10, 14.0, 18.0));
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Y);
+    h.run();
+    h.run();
+    assert_eq!(spans(&seq(&h), 2), rippled);
+    // An agent splits the score at 40 s: the new clip's id is answered.
+    let out = h.state_mut().app.run(
+        &egui_pop::views::timeline::CMD_SPLIT_CLIP,
+        serde_json::json!({ "timeline": "sequence", "id": 8, "time": "00:00:40:00" }),
+        Origin::User,
+    );
+    let answer = out.now().unwrap().unwrap();
+    assert_eq!(answer["added"], serde_json::json!([12]));
+    h.run();
+    assert_eq!(spans(&seq(&h), 4), [(8, 16.0, 40.0), (12, 40.0, 56.0)]);
+    // O marks the out point at the playhead; L twice asks for double speed.
+    h.get_by_role_and_label(Role::Slider, "Sequence").focus();
+    h.run();
+    for key in [egui::Key::O, egui::Key::L, egui::Key::L] {
+        h.key_press(key);
+        h.run();
+    }
+    let s = seq(&h);
+    assert_eq!(
+        s["range"]["text"],
+        serde_json::json!(["00:00:08:00", "00:00:14:00"]),
+        "{s}"
+    );
+    assert_eq!(s["speed"], 2.0);
+    results.add(h.try_snapshot("editor-keys-pop-dark"));
+}
+
+#[test]
 fn the_tracks_page_shows_clips_that_the_keys_select_move_and_trim() {
     use egui::accesskit::Role;
     let mut results = egui_kittest::SnapshotResults::new();

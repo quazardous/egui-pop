@@ -95,7 +95,7 @@ outlines and the loupe), `node-graph` (the node graph editor), `graph-file` (the
 (the live tree), `list-items` (dense rows on their own and in a tree,
 property rows in a selection panel), `table` (lists and tables), `plot` (charts: a time
 series with a time cursor, a scatter and bars), `library` (the photo
-library), `timeline` (timelines over seconds, a timecode and bars and beats), `tracks` (tracks of clips), `dj` (two DJ decks: hot cues, loops, sync), `text-editor`,
+library), `timeline` (timelines over seconds, a timecode and bars and beats), `tracks` (tracks of clips), `dj` (two DJ decks: hot cues, loops, sync), `editor` (a video editor: split, ripple delete, in and out marks), `text-editor`,
 `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
 `palettes`, `arrangements`, `contexts` (the context stack: places and modes, and the status bar that follows them), `clipboard` (typed items copied between palettes, paste special's previews), `links` (one policy for every link: declared links, links that ask first, local files, an agent's request), `viewer` (help pages, markdown, a safe subset of HTML and images in a panel), `strips` (the activity bar, and status items: live states, a popover, hover cards), `jobs` (a pretend host's
 background jobs), `frame`, `scale`, `pointer` (pointer gesture profiles),
@@ -356,6 +356,22 @@ a loop, the pitch fader and Sync; then keys on deck B: S, 3, a bar on,
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dj-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dj-pop-dark.png" width="200" alt="dj-pop-dark"></a><br>dj-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dj-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dj-pop-light.png" width="200" alt="dj-pop-light"></a><br>dj-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dj-keys-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dj-keys-pop-dark.png" width="200" alt="dj-keys-pop-dark"></a><br>dj-keys-pop-dark</td>
+  </tr>
+</table>
+
+### Video editor
+
+A minute at 25 fps: a pretend program monitor showing the frame under
+the playhead, a titles track, two video tracks and two audio tracks;
+then Ctrl+K at the playhead (every clip there split), Shift+Delete on a
+half (its gap closed), Ctrl+Z and Ctrl+Y, an agent's split, O and L
+twice. See [Timeline](timeline.md#tracks-and-clips).
+
+<table>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/editor-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/editor-pop-dark.png" width="200" alt="editor-pop-dark"></a><br>editor-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/editor-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/editor-pop-light.png" width="200" alt="editor-pop-light"></a><br>editor-pop-light</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/editor-keys-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/editor-keys-pop-dark.png" width="200" alt="editor-keys-pop-dark"></a><br>editor-keys-pop-dark</td>
   </tr>
 </table>
 
