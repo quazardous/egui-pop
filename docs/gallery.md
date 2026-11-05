@@ -32,6 +32,11 @@ clip is written with the AVI muxer of the good plugins (`gstreamer1-plugins-good
 Linux, `webview` stays off and `video` is probed the same way, through the
 pkg-config files of GStreamer's installers.
 
+**Driven by an agent.** `cargo gallery --features inspection` opens the
+`egui_inspection` endpoint Rerun's `egui-mcp` attaches to, on loopback and
+without authentication: the accessibility tree, clicks by label,
+screenshots and waits ([Driving the gallery with egui-mcp](inspection.md)).
+
 Options: `--theme`, `--density` (`comfortable` or `compact`),
 `--accent`, `--reduced-motion`, `--page` (the page shown first),
 `--lang` (the language setting's default: `en`, `fr` or `system`),

@@ -52,6 +52,7 @@
 - [About the application](about.md)
 - [Debugging](debugging.md)
 - [Agents and the debug bridge](agents.md)
+- [Driving the gallery with egui-mcp](inspection.md)
 - [Extensions](extensions.md)
 - [The gallery](gallery.md)
 - [A Rerun-like viewer](rerun-like.md)
