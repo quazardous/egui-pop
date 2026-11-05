@@ -254,3 +254,68 @@ fn a_link_from_a_launch_is_not_the_users_gesture() {
     assert_eq!(seen[0], Origin::User);
     assert!(seen[1..].iter().all(|o| *o == Origin::User), "{seen:?}");
 }
+
+/// Counts the repaints `ctx` asks for.
+fn repaints(ctx: &egui::Context) -> Arc<std::sync::atomic::AtomicUsize> {
+    let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let c = count.clone();
+    ctx.set_request_repaint_callback(move |_| {
+        c.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    });
+    count
+}
+
+#[test]
+fn without_app_the_launches_are_taken_and_wake_the_window() {
+    let launches = Instance::detached(Launch::default()).launches();
+    let ctx = egui::Context::default();
+    let woken = repaints(&ctx);
+    launches.set_waker(Some(ctx.clone()));
+    let later = Launch {
+        args: vec!["photo.jpg".into()],
+        ..Launch::default()
+    };
+    launches.deliver(later.clone());
+    assert!(woken.load(std::sync::atomic::Ordering::SeqCst) > 0);
+    assert_eq!(launches.take(), std::slice::from_ref(&later));
+    assert!(launches.take().is_empty(), "each launch is taken once");
+    assert_eq!(launches.history(), [later]);
+
+    launches.set_waker(None);
+    let before = woken.load(std::sync::atomic::Ordering::SeqCst);
+    launches.deliver(Launch::default());
+    assert_eq!(woken.load(std::sync::atomic::Ordering::SeqCst), before);
+    assert_eq!(launches.take().len(), 1);
+}
+
+#[test]
+fn without_app_a_launch_handed_through_the_socket_is_taken() {
+    let id = format!("org.egui-pop.test-noapp-{}", std::process::id());
+    let Single::First(running) = instance::single_with(&id, Launch::default()).unwrap() else {
+        panic!("the first launch is the first");
+    };
+    let launches = running.launches();
+    let ctx = egui::Context::default();
+    let woken = repaints(&ctx);
+    launches.set_waker(Some(ctx));
+    let second = Launch {
+        args: vec!["--open".into(), "photo.jpg".into()],
+        cwd: Some("/tmp".into()),
+        activation: None,
+    };
+    assert!(matches!(
+        instance::single_with(&id, second.clone()).unwrap(),
+        Single::Handed
+    ));
+    // The running instance answers once it has delivered the launch.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut taken = Vec::new();
+    while taken.is_empty() && Instant::now() < deadline {
+        taken = launches.take();
+        if taken.is_empty() {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+    assert_eq!(taken, [second]);
+    assert!(woken.load(std::sync::atomic::Ordering::SeqCst) > 0);
+}

@@ -35,7 +35,14 @@
 //!
 //! The launches handed over are kept ([`LAUNCHES`], [`Launches::history`]);
 //! [`Launches::deliver`] hands one over in-process, as a test or the
-//! gallery does. Registering the scheme with the system is the
+//! gallery does.
+//!
+//! Without `App` and its plugin, [`single`] works the same; the
+//! application takes the later launches itself: [`Instance::launches`]
+//! from [`Single::First`], [`Launches::set_waker`] with its egui context
+//! so a launch handed over repaints the window, and [`Launches::take`]
+//! each frame (bringing the window to the front with
+//! [`crate::window::raise`], opening what the launch names). Registering the scheme with the system is the
 //! packager's part: see `docs/packaging.md`.
 //!
 //! On Linux a connection from another user is refused (the abstract
@@ -165,11 +172,44 @@ impl Launches {
         lock(&self.0).history.iter().cloned().collect()
     }
 
-    fn take(&self) -> Vec<Launch> {
+    /// The launches handed over since the last call, oldest first, taken
+    /// out (each is taken once; [`Launches::history`] keeps them). What
+    /// [`InstancePlugin`] runs `instance.second_launch` for at each pass;
+    /// an application without `App` calls it each frame instead (see
+    /// [`Launches::set_waker`]).
+    pub fn take(&self) -> Vec<Launch> {
         lock(&self.0).pending.drain(..).collect()
     }
 
-    fn set_waker(&self, ctx: Option<egui::Context>) {
+    /// The egui context to repaint when a launch is handed over (`None`:
+    /// none), so that a window waiting for input sees it at once.
+    /// [`InstancePlugin`] sets its application's; an application without
+    /// `App` sets its own and [takes](Launches::take) the launches in
+    /// its frame:
+    ///
+    /// ```
+    /// use egui_pop_platform::instance::{self, Launch, Single};
+    ///
+    /// // At the top of `main`: `instance::single("org.example.App")?`.
+    /// let single = Single::First(instance::Instance::detached(Launch::default()));
+    /// let Single::First(instance) = single else {
+    ///     return; // Handed over to the running instance: exit.
+    /// };
+    /// let launches = instance.launches();
+    /// let ctx = egui::Context::default(); // eframe's, in `App::new`.
+    /// launches.set_waker(Some(ctx.clone()));
+    ///
+    /// // A later launch, as the listening thread hands it over.
+    /// launches.deliver(Launch { args: vec!["photo.jpg".into()], ..Launch::default() });
+    ///
+    /// // In the frame (`eframe::App::update`):
+    /// for launch in launches.take() {
+    ///     egui_pop_platform::window::raise(&ctx);
+    ///     assert_eq!(launch.args, ["photo.jpg"]); // Open what it names.
+    /// }
+    /// assert!(launches.take().is_empty());
+    /// ```
+    pub fn set_waker(&self, ctx: Option<egui::Context>) {
         lock(&self.0).waker = ctx;
     }
 }
@@ -200,7 +240,8 @@ impl Instance {
         &self.first
     }
 
-    /// The launches handed over.
+    /// The launches handed over: shared, the same each call. Without
+    /// `App`, [take](Launches::take) them each frame.
     pub fn launches(&self) -> Launches {
         self.launches.clone()
     }
