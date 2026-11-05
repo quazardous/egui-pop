@@ -14,12 +14,5 @@ fn main() -> eframe::Result {
         viewport: egui_pop::egui::ViewportBuilder::default().with_inner_size([1280.0, 800.0]),
         ..Default::default()
     };
-    rerun_like::builder(RerunLike::default()).run_native_with(
-        "Rerun-like viewer",
-        options,
-        |app, _| {
-            rerun_like::start(&app);
-            Ok(Box::new(app))
-        },
-    )
+    rerun_like::builder(RerunLike::default()).run_native("Rerun-like viewer", options)
 }

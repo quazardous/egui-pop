@@ -22,10 +22,10 @@ The code is the gallery crate's `rerun_like` module
 
 ## What it shows
 
-- **The top bar**: the menus (View holds the playback commands), the
-  recording's name, play and pause, the time readout, and the panel
-  toggles at the bar's end (the workbench's area toggles, as commands of
-  `MENU_BAR_END`).
+- **The top bar**: the menus (View holds the playback commands) and, at
+  the bar's end, the recording's name, play and pause and the time
+  readout (a block of the `TOP_BAR_END` zone), then the panel toggles
+  (the workbench's area toggles, as commands of `MENU_BAR_END`).
 - **The Blueprint**, on the left: the views and their entities in a
   tree with its filter field; an eye on a hovered row hides the entity
   from the views.
@@ -143,13 +143,14 @@ worked around, then the small things.
    both are done from `TreeView::row_widgets`, whose child `Ui` spans
    the row (the eye shows only on a hovered row the same way). Dense
    list items and property rows are planned.
-5. **No starting layout in the builder.** The shell's three zone
-   panels (side bar, main, inspector) are always declared, and an
-   application that does not use them hides them through a whole
-   layout put in after `build` (`App::handle().set_layout`, from
-   `run_native_with`); `Ctx::arrangement` names the same layout so
-   that resetting goes back to it. An `AppBuilder::layout` (or a way to
-   leave the shell's panels out) would say it once.
+5. **No starting layout in the builder** (solved). The shell's three
+   zone panels (side bar, main, inspector) are always declared, and the
+   example hid them through a whole layout put in after `build`
+   (`App::handle().set_layout`, from `run_native_with`), with
+   `Ctx::arrangement` naming the same layout so that resetting went back
+   to it. `AppBuilder::layout` says it once now: the layout to start
+   with (the shell's panels among its closed ones), and the one the
+   `Default` arrangement resets to.
 6. **No plot.** The time series is painted by hand (axes, grid, lines,
    the nearest line under the pointer, a value tag); egui-pop had no
    chart component and no categorical data palette among its tokens:
@@ -162,18 +163,23 @@ worked around, then the small things.
    and dark pair is two kit folders naming each other. A token file
    can carry its counterpart (`org.egui-pop.counterpart`), a kit
    cannot.
-8. **The top bar's zone is after the menus only.** Its blocks keep the
-   width they took, after the menus; content at the bar's end goes
-   through `MENU_BAR_END`, as commands only. Rerun centres nothing
-   there either, but its recording and its toggles sit at the end.
+8. **The top bar's zone is after the menus only** (solved). Its blocks
+   keep the width they took, after the menus; content at the bar's end
+   went through `MENU_BAR_END`, as commands only, where Rerun has its
+   recording and its toggles. The `TOP_BAR_END` zone takes any widget
+   at the bar's end now, before those commands: the example's
+   recording, playback and time are there.
 9. **The data table's cells paint their own highlight.** A column
    cannot be highlighted as a whole, and a header neither selects nor
    reports the pointer: the selected entity's column is tinted cell by
    cell.
-10. **Side areas are framed.** `AppBuilder::main_edge_to_edge` draws
-    the centre's panels without a margin; the side and bottom areas keep
-    theirs and a rounded frame, where Rerun's panels run to the window's
-    edges and its views are separated by a line only.
+10. **Side areas are framed** (solved). `AppBuilder::main_edge_to_edge`
+    drew the centre's panels without a margin; the side and bottom areas
+    kept theirs and a rounded frame, where Rerun's panels run to the
+    window's edges and its views are separated by a line only.
+    `AppBuilder::frameless` takes an area's margin and its panels'
+    frames away; the example makes every area frameless, and its side
+    and bottom panels give themselves a small margin.
 11. **Contrast.** Rerun's subdued text (`#555555` on `#0d0d0d`), its
     error red (`#ab0116`), its focus outline and its accent under white
     text fail egui-pop's AA contrast checks (`contrast::check`, which the
