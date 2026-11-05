@@ -56,6 +56,7 @@ pub mod strips;
 pub mod table;
 pub mod terminal;
 pub mod theme_editor;
+pub mod timeline;
 pub mod tips;
 pub mod toasts;
 pub mod tokens;
