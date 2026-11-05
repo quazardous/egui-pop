@@ -81,6 +81,10 @@ egui-wgpu = { version = "0.37", default-features = false }
 # releases; its library is still `egui_phosphor`.
 egui-phosphor = { package = "egui-pop-phosphor", version = "0.15", default-features = false, features = ["regular"] }
 eframe = { version = "0.37", default-features = false }
+# MIT OR Apache-2.0 (its rmp-serde and rmp are MIT): the protocol and
+# plugin behind eframe's `inspection`, which `egui-mcp` drives; the
+# gallery's `inspection` feature and its smoke test only.
+egui_inspection = { version = "0.37", default-features = false }
 # MIT; the system's file chooser (xdg portal on Linux).
 rfd = "0.17"
 # MIT OR Apache-2.0: PNG and JPEG decoded for the file picker's previews

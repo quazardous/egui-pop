@@ -7,6 +7,10 @@
 //! (the names in their `system-deps` metadata), turns on each feature
 //! whose libraries are all there, says why the others are off and what
 //! to install, then runs `cargo run -p egui-pop-gallery` with them.
+//!
+//! With `--features inspection` it also sets `EGUI_INSPECTION=1` for the
+//! gallery when the environment does not set it, so that eframe opens the
+//! `egui_inspection` endpoint `egui-mcp` attaches to (docs/inspection.md).
 
 use std::process::{Command, ExitCode, Stdio};
 
@@ -23,7 +27,10 @@ the packages to install.
   --no-detect            probe nothing: only the features given
   --check                print the decision and the command, run nothing
   --features LIST        more features, comma or space separated, kept
-                         whatever the probe says (repeatable)
+                         whatever the probe says (repeatable);
+                         `inspection` opens the egui_inspection endpoint
+                         for egui-mcp (EGUI_INSPECTION=1 unless set; no
+                         authentication, see docs/inspection.md)
   -- <args>              passed to the gallery (`-- --help` lists them)";
 
 /// What the launcher asks of the system, behind a trait so the tests
@@ -285,6 +292,34 @@ fn linux_hint(missing: &[&Module]) -> String {
     )
 }
 
+/// The environment variable eframe's `inspection` reads
+/// (`egui_inspection::INSPECTION_ENV_VAR`).
+pub const INSPECTION_ENV: &str = "EGUI_INSPECTION";
+
+/// With the `inspection` feature: the line printed about the endpoint
+/// and the value to give [`INSPECTION_ENV`] (`None` when the
+/// environment already sets it, and the gallery reads that). `None`
+/// without the feature.
+pub fn inspection(
+    features: &[String],
+    env: Option<&str>,
+) -> Option<(String, Option<&'static str>)> {
+    if !features.iter().any(|f| f == "inspection") {
+        return None;
+    }
+    const WARNING: &str = "no authentication, any local process can drive the gallery";
+    Some(match env {
+        None => (
+            format!("inspection: on, 127.0.0.1:5719 ({INSPECTION_ENV}=1); {WARNING}"),
+            Some("1"),
+        ),
+        Some(value) => (
+            format!("inspection: on, {INSPECTION_ENV}={value} from the environment; {WARNING}"),
+            None,
+        ),
+    })
+}
+
 /// The parsed command line.
 #[derive(Debug, Default, PartialEq, Eq)]
 struct Args {
@@ -362,13 +397,22 @@ pub fn gallery(args: &[String]) -> Result<ExitCode, String> {
         args.detect,
     );
     print!("{}", decision.render());
+    let env = std::env::var(INSPECTION_ENV).ok();
+    let inspection = inspection(&decision.features, env.as_deref());
+    if let Some((line, _)) = &inspection {
+        println!("{line}");
+    }
     let cargo_args = cargo_args(&args, &decision.features);
     println!("cargo {}", cargo_args.join(" "));
     if args.check {
         return Ok(ExitCode::SUCCESS);
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
-    let status = Command::new(cargo)
+    let mut command = Command::new(cargo);
+    if let Some((_, Some(value))) = inspection {
+        command.env(INSPECTION_ENV, value);
+    }
+    let status = command
         .args(&cargo_args)
         .current_dir(crate::root())
         .status()
@@ -531,6 +575,18 @@ mod tests {
         let explicit = vec!["video".to_string(), "video".to_string()];
         let d = decide(Os::Linux, &fake(ALL), &explicit, true);
         assert_eq!(d.features, ["video", "webview"]);
+    }
+
+    #[test]
+    fn inspection_sets_the_variable_unless_the_environment_does() {
+        assert_eq!(inspection(&strings(&["video"]), None), None);
+        let (line, value) = inspection(&strings(&["inspection"]), None).unwrap();
+        assert_eq!(value, Some("1"));
+        assert!(line.contains("127.0.0.1:5719"), "{line}");
+        assert!(line.contains("no authentication"), "{line}");
+        let (line, value) = inspection(&strings(&["inspection"]), Some("127.0.0.1:5800")).unwrap();
+        assert_eq!(value, None, "the environment's value is kept");
+        assert!(line.contains("EGUI_INSPECTION=127.0.0.1:5800"), "{line}");
     }
 
     fn strings(args: &[&str]) -> Vec<String> {

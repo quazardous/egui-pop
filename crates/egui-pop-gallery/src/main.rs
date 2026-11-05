@@ -16,6 +16,8 @@ fn main() -> eframe::Result {
         return Ok(());
     }
     options.announce = true;
+    #[cfg(feature = "inspection")]
+    announce_inspection();
     if options.platform {
         // One gallery at a time: a second launch hands its arguments
         // (a gallery://page/<name> link) to the first.
@@ -52,6 +54,24 @@ fn main() -> eframe::Result {
             Ok(Box::new(gallery))
         }),
     )
+}
+
+/// Says on stderr whether eframe opens the `egui_inspection` endpoint
+/// (feature `inspection`, `EGUI_INSPECTION` set), and that it has no
+/// authentication. eframe opens it when it creates the window.
+#[cfg(all(feature = "inspection", not(target_arch = "wasm32")))]
+fn announce_inspection() {
+    match egui_inspection::bind_addr_from_env() {
+        Some(addr) => eprintln!(
+            "inspection: the egui_inspection endpoint listens on {addr}, without \
+             authentication: any process that reaches it drives the gallery and reads \
+             its screen (docs/inspection.md)"
+        ),
+        None => eprintln!(
+            "inspection: built with the feature, but {} is not set: no endpoint",
+            egui_inspection::INSPECTION_ENV_VAR
+        ),
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
