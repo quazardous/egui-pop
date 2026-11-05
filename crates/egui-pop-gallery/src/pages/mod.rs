@@ -41,6 +41,7 @@ pub mod overview;
 pub mod palettes;
 pub mod placeholders;
 pub mod platform;
+pub mod plot;
 pub mod pointer;
 pub mod preview;
 pub mod progress;
