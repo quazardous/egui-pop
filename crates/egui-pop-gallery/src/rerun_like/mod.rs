@@ -5,7 +5,8 @@
 //! code: its theme is a kit made from the token values of Rerun's `re_ui`
 //! (`examples/kits/rerun-like-dark`, `rerun-like-light`).
 //!
-//! - a top bar: the menus, play and pause, the time, the panel toggles;
+//! - a top bar: the menus; at its end the recording, play and pause, the
+//!   time, the panel toggles;
 //! - the Blueprint on the left: the views and their entities, a filter;
 //! - the viewport in the centre: four views as egui_stack tabs and splits
 //!   (a time series, a camera image with boxes, a dataframe, a text log);
@@ -304,10 +305,12 @@ impl Plugin for RerunLike {
                 .default_size(230.0)
                 .min_size(160.0),
             move |ui, app| {
-                let mut m = m.borrow_mut();
-                m.begin(ui.ctx());
-                views::blueprint(ui, app, &mut m);
-                m.follow_tree();
+                padded(ui, |ui| {
+                    let mut m = m.borrow_mut();
+                    m.begin(ui.ctx());
+                    views::blueprint(ui, app, &mut m);
+                    m.follow_tree();
+                });
             },
         )?;
         let m = self.model.clone();
@@ -317,9 +320,11 @@ impl Plugin for RerunLike {
                 .default_size(270.0)
                 .min_size(180.0),
             move |ui, _| {
-                let mut m = m.borrow_mut();
-                m.begin(ui.ctx());
-                views::selection(ui, &mut m);
+                padded(ui, |ui| {
+                    let mut m = m.borrow_mut();
+                    m.begin(ui.ctx());
+                    views::selection(ui, &mut m);
+                });
             },
         )?;
         let m = self.model.clone();
@@ -329,10 +334,12 @@ impl Plugin for RerunLike {
                 .default_size(220.0)
                 .min_size(90.0),
             move |ui, app| {
-                let mut m = m.borrow_mut();
-                m.begin(ui.ctx());
-                m.advance(ui.ctx());
-                views::time_panel(ui, app, &mut m);
+                padded(ui, |ui| {
+                    let mut m = m.borrow_mut();
+                    m.begin(ui.ctx());
+                    m.advance(ui.ctx());
+                    views::time_panel(ui, app, &mut m);
+                });
             },
         )?;
         for view in View::ALL {
@@ -353,15 +360,16 @@ impl Plugin for RerunLike {
                             views::dataframe(ui, &mut m);
                             m.follow_table();
                         }
-                        View::Logs => views::logs(ui, &mut m),
+                        View::Logs => padded(ui, |ui| views::logs(ui, &mut m)),
                     }
                 },
             )?;
         }
-        // The top bar, after the menus: playback, the time, the toggles.
+        // The top bar's end, before the panel toggles: the recording,
+        // playback and the time.
         let m = self.model.clone();
         ctx.block(
-            zones::TOP_BAR,
+            zones::TOP_BAR_END,
             Block::add(BlockId::from_static("rerun.top_bar"), 0, move |ui, app| {
                 let mut m = m.borrow_mut();
                 m.begin(ui.ctx());
@@ -369,7 +377,6 @@ impl Plugin for RerunLike {
             }),
         );
         self.commands(ctx)?;
-        ctx.arrangement("Rerun", layout());
         Ok(())
     }
 }
@@ -492,9 +499,26 @@ impl RerunLike {
     }
 }
 
-/// The viewer's layout: the blueprint, the selection and the time panel
-/// around the viewport, whose four views are a two by two grid of
-/// splits; the shell's own panels closed.
+/// Draws a side or bottom panel's content inside a margin: the areas are
+/// frameless, so each panel gives itself the room it wants.
+fn padded(ui: &mut egui_pop::egui::Ui, add: impl FnOnce(&mut egui_pop::egui::Ui)) {
+    let t = Tokens::of(ui.ctx());
+    let m = |v: f32| v.round() as i8;
+    egui_pop::egui::Frame::new()
+        .inner_margin(egui_pop::egui::Margin::symmetric(
+            m(t.space.s),
+            m(t.space.xs),
+        ))
+        .show(ui, |ui| {
+            ui.set_min_size(ui.available_size());
+            add(ui);
+        });
+}
+
+/// The viewer's layout, the one it starts with and resets to: the
+/// blueprint, the selection and the time panel around the viewport,
+/// whose four views are a two by two grid of splits; the shell's own
+/// panels closed.
 pub fn layout() -> Layout {
     let tab = |v: View| Node::tab(view_panel(v));
     let column = |a: View, b: View, ratio: f32| Node::Split {
@@ -524,21 +548,19 @@ pub fn layout() -> Layout {
 }
 
 /// The application, before it is built: the default plugins, the views'
-/// plugin, the viewer, the two kits, Rerun-like Dark first.
+/// plugin, the viewer, the two kits, Rerun-like Dark first; its layout,
+/// every area frameless (Rerun's panels run to the window's edges, a
+/// line between them).
 pub fn builder(viewer: RerunLike) -> AppBuilder {
     let [dark, light] = kits();
     App::builder()
         .name("Rerun-like viewer")
-        .main_edge_to_edge(true)
+        .layout(layout())
+        .frameless(&Area::ALL)
         .plugins(DefaultPlugins)
         .plugin(egui_pop::views::ViewsPlugin)
         .plugin(viewer)
         .kit(dark)
         .kit(light)
         .theme(ThemeSpec::pair(DARK, LIGHT))
-}
-
-/// Puts the viewer's layout in, once the application is built.
-pub fn start(app: &App) {
-    app.handle().set_layout(layout());
 }

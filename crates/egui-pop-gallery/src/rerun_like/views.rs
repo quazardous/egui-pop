@@ -419,11 +419,11 @@ pub fn top_bar(ui: &mut Ui, app: &AppHandle, m: &mut Model) {
     let t = Tokens::of(ui.ctx());
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = t.space.s;
-        ui.separator();
         ui.label(RichText::new("demo_recording").color(t.text.muted));
         ui.separator();
         play_controls(ui, app, m);
         readout(ui, m);
+        ui.separator();
     });
 }
 

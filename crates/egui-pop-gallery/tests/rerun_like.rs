@@ -27,7 +27,6 @@ fn viewer(spec: ThemeSpec) -> (Harness<'static, App>, Rc<RefCell<Model>>) {
         .theme(spec)
         .build(&egui::Context::default())
         .expect("the viewer builds");
-    rerun_like::start(&app);
     let h = Harness::builder()
         .with_size(SIZE)
         .with_max_steps(8)
