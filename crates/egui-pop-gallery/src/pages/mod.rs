@@ -16,6 +16,7 @@ pub mod debug;
 pub mod dialogs;
 pub mod display;
 pub mod dj;
+pub mod editor;
 pub mod editors;
 pub mod files;
 pub mod fonts;

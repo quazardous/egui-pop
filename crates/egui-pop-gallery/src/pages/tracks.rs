@@ -175,7 +175,7 @@ impl ClipPainter for EditPainter {
 }
 
 /// A number from 0 to 1 for a source and a step in it.
-fn noise(source: &str, step: i64) -> f32 {
+pub(crate) fn noise(source: &str, step: i64) -> f32 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for b in source.bytes().chain(step.to_le_bytes()) {
         h ^= u64::from(b);
