@@ -1,16 +1,23 @@
 //! The shell's hooks for applications: the title zone above the menu
-//! bar, no menu bar, an edge-to-edge main area, a wrapper around the whole drawing,
-//! `on_exit` and the `app.exit` step, the window's place restored.
+//! bar, no menu bar, an edge-to-edge main area, frameless areas, a
+//! starting layout, the top bar's end zone, a wrapper around the whole
+//! drawing, `on_exit` and the `app.exit` step, the window's place
+//! restored.
 
 use std::cell::Cell;
 use std::rc::Rc;
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
-use egui_pop_api::app::STEP_EXIT;
+use egui_pop_api::app::{MENU_BAR_END, STEP_EXIT};
+use egui_pop_api::arrangements;
+use egui_pop_api::workbench::{PANEL_INSPECTOR, PANEL_MAIN, PANEL_SIDE_BAR};
 use egui_pop_api::zones::{self, Block};
-use egui_pop_api::{App, AppBuilder, Ctx, Plugin, PluginError};
-use egui_pop_model::ids::{BlockId, PluginId};
+use egui_pop_api::{App, AppBuilder, Ctx, DefaultPlugins, Plugin, PluginError};
+use egui_pop_model::commands::CommandSpec;
+use egui_pop_model::ids::{BlockId, CommandId, PanelId, PluginId};
+use egui_pop_model::layout::{Layout, Node};
+use egui_pop_model::panels::{Area, PanelSpec};
 use serde_json::json;
 
 struct Main;
@@ -73,6 +80,167 @@ fn the_main_area_may_be_drawn_edge_to_edge() {
         .get_by_label("main body")
         .rect();
     assert!(edge.left() < framed.left(), "{edge:?} {framed:?}");
+}
+
+const TREE: PanelId = PanelId::from_static("demo.tree");
+const LOG: PanelId = PanelId::from_static("demo.log");
+const VIEW: PanelId = PanelId::from_static("demo.view");
+
+/// A tree on the start side and a log at the bottom, each saying where it
+/// is drawn.
+struct Areas;
+
+impl Plugin for Areas {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("areas")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.panel(PanelSpec::new(TREE, "Tree", Area::StartSide), |ui, _| {
+            ui.label("tree body");
+        })?
+        .panel(PanelSpec::new(LOG, "Log", Area::Bottom), |ui, _| {
+            ui.label("log body");
+        })?
+        .panel(PanelSpec::new(VIEW, "View", Area::Center), |ui, _| {
+            ui.label("view body");
+        })?;
+        Ok(())
+    }
+}
+
+fn areas(b: AppBuilder) -> Harness<'static, App> {
+    harness(b.plugin(Areas))
+}
+
+#[test]
+fn side_and_bottom_areas_may_be_frameless() {
+    let framed = areas(App::builder());
+    let bare = areas(App::builder().frameless(&[Area::StartSide, Area::Bottom]));
+    for label in ["tree body", "log body"] {
+        let f = framed.get_by_label(label).rect();
+        let b = bare.get_by_label(label).rect();
+        assert!(b.left() < f.left(), "{label}: {b:?} {f:?}");
+    }
+    // The tree runs to its area's edge, where its tab starts.
+    let tree = bare.get_by_label("tree body").rect();
+    let tab = bare.get_by_label("Tree").rect();
+    assert_eq!(tree.left(), tab.left());
+    assert!(bare.state().handle().frameless(Area::Bottom));
+    assert!(!bare.state().handle().frameless(Area::EndSide));
+}
+
+#[test]
+fn the_main_area_may_be_frameless() {
+    let view = || Layout {
+        areas: vec![(Area::Center, Node::tab(VIEW))],
+        hidden: vec![PANEL_MAIN],
+        ..Layout::default()
+    };
+    let edge = areas(App::builder().layout(view()).main_edge_to_edge(true))
+        .get_by_label("view body")
+        .rect();
+    // No margin around the area, and none in its panels' bodies either.
+    let bare = areas(App::builder().layout(view()).frameless(&[Area::Center]))
+        .get_by_label("view body")
+        .rect();
+    assert!(bare.left() < edge.left(), "{bare:?} {edge:?}");
+}
+
+fn starting() -> Layout {
+    Layout {
+        areas: vec![
+            (Area::EndSide, Node::tab(TREE)),
+            (Area::Bottom, Node::tab(LOG)),
+        ],
+        hidden: vec![PANEL_SIDE_BAR, PANEL_INSPECTOR],
+        ..Layout::default()
+    }
+}
+
+#[test]
+fn the_builder_gives_the_starting_layout() {
+    let h = areas(
+        App::builder()
+            .plugins(DefaultPlugins)
+            .layout(starting())
+            .folded(&[Area::Bottom]),
+    );
+    let app = h.state().handle().clone();
+    let layout = app.layout();
+    assert_eq!(layout.area_of(&TREE), Some(Area::EndSide));
+    assert_eq!(layout.area_of(&LOG), Some(Area::Bottom));
+    assert_eq!(layout.folded, vec![Area::Bottom]);
+    assert!(!app.panel_visible(&PANEL_SIDE_BAR));
+    assert!(!app.panel_visible(&PANEL_INSPECTOR));
+    // The main zone has its block: placed, as the layout does not hide it.
+    assert!(app.panel_visible(&PANEL_MAIN));
+    // Moved, then reset: the `Default` arrangement is the starting layout.
+    app.move_panel(&TREE, Area::StartSide);
+    assert_eq!(app.layout().area_of(&TREE), Some(Area::StartSide));
+    assert_eq!(arrangements::current(&app), arrangements::DEFAULT);
+    assert!(arrangements::reset(&app).ok());
+    assert_eq!(app.layout().area_of(&TREE), Some(Area::EndSide));
+    assert!(!app.panel_visible(&PANEL_SIDE_BAR));
+}
+
+#[test]
+fn without_a_layout_panels_start_in_their_default_areas() {
+    let h = areas(App::builder().plugins(DefaultPlugins));
+    let app = h.state().handle().clone();
+    assert_eq!(app.layout().area_of(&TREE), Some(Area::StartSide));
+    assert!(arrangements::reset(&app).ok());
+    assert_eq!(app.layout().area_of(&TREE), Some(Area::StartSide));
+}
+
+const CMD_PIN: CommandId = CommandId::from_static("demo.pin");
+
+/// A widget in the top bar's end zone, beside a command at the bar's end.
+struct BarEnd;
+
+impl Plugin for BarEnd {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("bar_end")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.block(
+            zones::TOP_BAR_END,
+            Block::add(BlockId::from_static("bar_end.name"), 0, |ui, _| {
+                ui.label("recording");
+                ui.label("frame 12");
+            }),
+        );
+        ctx.command(
+            CommandSpec::new(CMD_PIN, "Pin", "Demo").menu(MENU_BAR_END, "1_demo", 0),
+            |_| Ok(serde_json::Value::Null),
+        )?;
+        Ok(())
+    }
+}
+
+#[test]
+fn the_top_bars_end_takes_widgets_before_its_commands() {
+    let h = harness(App::builder().plugin(BarEnd));
+    let file = h.get_by_label("File").rect();
+    let name = h.get_by_label("recording").rect();
+    let frame = h.get_by_label("frame 12").rect();
+    let pin = h.get_by_label("Pin").rect();
+    // Left to right, after the menus, before the command, at the end.
+    assert!(file.right() < name.left(), "{file:?} {name:?}");
+    assert!(name.right() <= frame.left(), "{name:?} {frame:?}");
+    assert!(frame.right() <= pin.left(), "{frame:?} {pin:?}");
+    assert!(name.left() > 300.0, "at the bar's end: {name:?}");
+    // On one line, the bar's.
+    assert!((name.center().y - pin.center().y).abs() < 2.0);
+}
+
+#[test]
+fn the_top_bars_end_shows_without_the_menu_bar() {
+    let h = harness(App::builder().menu_bar(false).plugin(BarEnd));
+    assert!(h.query_by_label("File").is_none());
+    let name = h.get_by_label("recording").rect();
+    assert!(name.left() > 300.0, "at the bar's end: {name:?}");
 }
 
 #[test]

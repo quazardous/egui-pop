@@ -15,6 +15,43 @@ tabs and splits over [egui_stack](https://github.com/quazardous/egui_stack)
 saves where the user put them and repairs that layout at the next start.
 The shell's side bar, main and inspector zones are panels of their areas.
 
+**The starting layout.** Without a saved layout, every panel starts in
+its default area. `AppBuilder::layout` gives the layout to start with
+instead (the panels' areas, tabs and splits, the closed panels, the
+folded areas), repaired against the declared panels as a saved layout
+is; the `Default` arrangement resets to it. An application that does not
+use the shell's zone panels lists them as closed:
+
+```rust
+use egui_pop::api::workbench::{PANEL_INSPECTOR, PANEL_MAIN, PANEL_SIDE_BAR};
+use egui_pop::model::ids::PanelId;
+use egui_pop::model::layout::{Layout, Node};
+use egui_pop::model::panels::Area;
+use egui_pop::prelude::*;
+
+const TREE: PanelId = PanelId::from_static("demo.tree");
+const VIEW: PanelId = PanelId::from_static("demo.view");
+
+let builder = App::builder()
+    .layout(Layout {
+        areas: vec![
+            (Area::StartSide, Node::tab(TREE)),
+            (Area::Center, Node::tab(VIEW)),
+        ],
+        hidden: vec![PANEL_SIDE_BAR, PANEL_MAIN, PANEL_INSPECTOR],
+        ..Layout::default()
+    })
+    // Every area runs to the window's edges, a line between them.
+    .frameless(&Area::ALL);
+```
+
+**Frameless areas.** An area has a margin around it, and each of its
+panels' bodies a margin and a rounded border. `AppBuilder::frameless`
+takes both away for the areas it names, so their panels run to the
+window's edges and are set apart by the splitter's line only (a viewer
+whose views draw to their edges); a panel then gives itself the margin
+it wants. `main_edge_to_edge` takes away only the centre's outer margin.
+
 **Bare panels.** A shell panel is declared `bare` (`PanelSpec::bare`): alone in
 its area it is drawn plainly, with no tab bar and no scroll area from anyone. What
 its blocks draw past its end is cut, and nothing says so. Beside another panel the
@@ -303,7 +340,13 @@ from the start, and the rest become submenus of a "…" entry (the
 `more` icon, named "More menus"), keeping their titles, items and
 `when` clauses. When no menu fits besides "…", the whole menu is one
 entry (the `menu` icon, named "Main menu"). The blocks of the
-`app.top-bar` zone keep the width they took, after the menus. Each
+`app.top-bar` zone keep the width they took, after the menus. At the
+bar's end, the commands of `MENU_BAR_END` show as icon buttons, and the
+blocks of the `app.top-bar-end` zone (`zones::TOP_BAR_END`) before them,
+left to right: a document's name, a readout, any widget of the
+application's. They too keep the width they took; the menus overflow
+first. Without the menu bar (`AppBuilder::menu_bar(false)`), the top bar
+still shows when either zone has blocks. Each
 label is measured once, and again only when the language, the kit or
 the scale changes.
 
@@ -587,7 +630,9 @@ redirect the document, veto, or load and save elsewhere.
 Named layouts saved, switched and reset, kept in the host's store
 (`egui_pop::api::arrangements`, in `DefaultPlugins`). A plugin offers
 templates (`Ctx::arrangement`); resetting goes back to the current
-arrangement's template. Steps: `arrangement.save`, `arrangement.switch`,
+arrangement's template. The `Default` arrangement's template is the
+starting layout (`AppBuilder::layout`), or every panel in its default
+area. Steps: `arrangement.save`, `arrangement.switch`,
 `arrangement.reset`, `arrangement.delete`.
 
 ## Slim strips
@@ -811,7 +856,9 @@ triggers at once. See [Pointer gestures and profiles](pointer-gestures.md).
 ## Around the shell
 
 `AppBuilder::wrap` draws around the whole application,
-`main_edge_to_edge` drops the centre's margins, `on_exit` runs before the
+`main_edge_to_edge` drops the centre's margins, `frameless` an area's
+margins and its panels' frames, `layout` gives the starting layout,
+`on_exit` runs before the
 `app.exit` step (whose default saves), `run_native_with` hands the built
 application to an `eframe::App` of the application's own (its `make`
 returns a `Result`: an error is logged, published as `app.make_failed`

@@ -27,6 +27,8 @@ use egui_pop_core::{a11y, fault, focus, lock};
 const THEME_INSTALLED: state::Slot<bool> = state::Slot::new("api.app.theme_installed");
 /// The width the top bar's blocks took after the menus, last pass.
 const TOP_BAR_RESERVE: state::Slot<f32> = state::Slot::new("api.app.top_bar_reserve");
+/// The width the top bar's end zone took last pass.
+const TOP_BAR_END_WIDTH: state::Slot<f32> = state::Slot::new("api.app.top_bar_end_width");
 use egui_pop_model::commands::{CommandSpec, Commands, Origin, Run};
 use egui_pop_model::diagnostics::{Diagnostic, Diagnostics};
 use egui_pop_model::ids::{
@@ -725,6 +727,8 @@ pub(crate) struct Shared {
     drawing_areas: std::cell::Cell<bool>,
     /// The centre drawn without margins.
     edge_to_edge: std::cell::Cell<bool>,
+    /// The areas drawn without a frame (`AppBuilder::frameless`).
+    frameless: RefCell<Vec<Area>>,
     /// The system's text scaling (`AppBuilder::system_text_scale`).
     system_text_scale: std::cell::Cell<crate::text::SystemTextScale>,
     /// Whether the system always shows its scroll bars
@@ -865,6 +869,7 @@ impl AppHandle {
             indicators_seen: std::cell::Cell::new(0),
             drawing_areas: std::cell::Cell::new(false),
             edge_to_edge: std::cell::Cell::new(false),
+            frameless: RefCell::new(Vec::new()),
             system_text_scale: std::cell::Cell::default(),
             system_scroll_bars: std::cell::Cell::default(),
             system_wheel_lines: std::cell::Cell::new(crate::pointer::SYSTEM_WHEEL_LINES),
@@ -2385,6 +2390,13 @@ impl AppHandle {
         self.0.edge_to_edge.get()
     }
 
+    /// Whether an area is drawn without a frame
+    /// ([`AppBuilder::frameless`]): no margin around it, its panels'
+    /// bodies without margin, border or rounded corners.
+    pub fn frameless(&self, area: Area) -> bool {
+        self.0.frameless.borrow().contains(&area)
+    }
+
     /// The system's text scaling the text size was seeded from
     /// (`AppBuilder::system_text_scale`; 1 when none was given).
     pub fn system_text_scale(&self) -> crate::text::SystemTextScale {
@@ -2717,6 +2729,8 @@ pub struct AppBuilder {
     system_scroll_bars: bool,
     system_wheel_lines: u32,
     edge_to_edge: bool,
+    frameless: Vec<Area>,
+    layout: Option<egui_pop_model::layout::Layout>,
     menu_bar: bool,
     system_file_chooser: bool,
     shell_sizes: Vec<(PanelId, f32)>,
@@ -2810,6 +2824,8 @@ impl AppBuilder {
             system_scroll_bars: false,
             system_wheel_lines: crate::pointer::SYSTEM_WHEEL_LINES,
             edge_to_edge: false,
+            frameless: Vec::new(),
+            layout: None,
             menu_bar: true,
             system_file_chooser: false,
             shell_sizes: Vec::new(),
@@ -2876,9 +2892,66 @@ impl AppBuilder {
     }
 
     /// Draws the main area edge to edge: no margin around the centre's
-    /// panels (an image viewer, a canvas).
+    /// panels (an image viewer, a canvas). Their bodies keep their own
+    /// frame; [`AppBuilder::frameless`] takes that away too.
     pub fn main_edge_to_edge(mut self, on: bool) -> Self {
         self.edge_to_edge = on;
+        self
+    }
+
+    /// Areas drawn without a frame: no margin around the area, and its
+    /// panels' bodies without margin, border or rounded corners, so that
+    /// they run to the window's edges and are set apart by the splitter's
+    /// line only (a viewer whose views draw to their edges). A panel then
+    /// gives itself the margin it wants. Any area: the side areas, the
+    /// bottom one, the centre (which `main_edge_to_edge` leaves framed
+    /// inside).
+    ///
+    /// ```
+    /// use egui_pop_api::App;
+    /// use egui_pop_model::panels::Area;
+    ///
+    /// let app = App::builder()
+    ///     .frameless(&[Area::StartSide, Area::Bottom])
+    ///     .build(&egui::Context::default())
+    ///     .unwrap();
+    /// assert!(app.handle().frameless(Area::Bottom));
+    /// assert!(!app.handle().frameless(Area::EndSide));
+    /// ```
+    pub fn frameless(mut self, areas: &[Area]) -> Self {
+        self.frameless = areas.to_vec();
+        self
+    }
+
+    /// The layout the application starts with when none was saved, and
+    /// the one the `Default` arrangement resets to: its panels in their
+    /// areas, its closed panels (`Layout::hidden`), its folded and lying
+    /// areas. Not given, every panel starts in its default area. The
+    /// shell's zone panels (`workbench::PANEL_SIDE_BAR`, `PANEL_MAIN`,
+    /// `PANEL_INSPECTOR`) show as soon as their zones have blocks, a
+    /// default plugin's included: listing them in `hidden` leaves them
+    /// out. A panel the layout does
+    /// not place goes to its default area; one it places where its rules
+    /// forbid, or that no plugin declares, is repaired as a saved layout
+    /// is (the repair is logged). `folded` and `over`, given too, add
+    /// their areas.
+    ///
+    /// ```
+    /// use egui_pop_api::App;
+    /// use egui_pop_api::workbench::{PANEL_INSPECTOR, PANEL_SIDE_BAR};
+    /// use egui_pop_model::layout::Layout;
+    ///
+    /// let app = App::builder()
+    ///     .layout(Layout {
+    ///         hidden: vec![PANEL_SIDE_BAR, PANEL_INSPECTOR],
+    ///         ..Layout::default()
+    ///     })
+    ///     .build(&egui::Context::default())
+    ///     .unwrap();
+    /// assert!(!app.handle().panel_visible(&PANEL_SIDE_BAR));
+    /// ```
+    pub fn layout(mut self, layout: egui_pop_model::layout::Layout) -> Self {
+        self.layout = Some(layout);
         self
     }
 
@@ -3210,6 +3283,7 @@ impl AppBuilder {
             .clone()
             .map(|p| Writer::new(p, egui_pop_core::persist::DEBOUNCE));
         app.handle.0.edge_to_edge.set(self.edge_to_edge);
+        *app.handle.0.frameless.borrow_mut() = self.frameless;
         app.handle.0.system_text_scale.set(self.system_text_scale);
         app.handle.0.system_scroll_bars.set(self.system_scroll_bars);
         app.handle.0.system_wheel_lines.set(self.system_wheel_lines);
@@ -3220,8 +3294,30 @@ impl AppBuilder {
             .system_file_chooser
             .set(self.system_file_chooser);
         *app.handle.0.shell_sizes.borrow_mut() = self.shell_sizes;
-        app.handle.workbench_mut().layout.folded = self.folded;
-        app.handle.workbench_mut().layout.over = self.over;
+        {
+            let mut wb = app.handle.workbench_mut();
+            let given = self.layout.is_some();
+            let mut start = self.layout.unwrap_or_default();
+            for a in self.folded {
+                if !start.folded.contains(&a) {
+                    start.folded.push(a);
+                }
+            }
+            for a in self.over {
+                if !start.over.contains(&a) {
+                    start.over.push(a);
+                }
+            }
+            if given {
+                // What the `Default` arrangement resets to.
+                wb.templates.push((
+                    OwnerId::FRAMEWORK,
+                    crate::arrangements::DEFAULT.to_string(),
+                    start.clone(),
+                ));
+            }
+            wb.layout = start;
+        }
         *app.handle.0.name.borrow_mut() = self.name.unwrap_or_default();
         *app.handle.0.app_id.borrow_mut() = self.app_id.unwrap_or_default();
         strings::set_application(ctx, &app.handle.name());
@@ -3567,6 +3663,7 @@ impl App {
         ]) {
             ctx.zone(zone.clone(), title)?;
         }
+        ctx.zone(zones::TOP_BAR_END, "Top bar end")?;
         ctx.zone(zones::WINDOW_OVERLAYS, "Window overlays")?;
         for (spec, zone, scope) in [
             (
@@ -5846,12 +5943,27 @@ impl App {
                             let zone = ui.scope(|ui| h.show_zone(ui, &zones::TOP_BAR));
                             used = zone.response.rect.max.x - start + ui.spacing().item_spacing.x;
                         }
-                        if crate::menus::has_end_items(&h, &MENU_BAR_END) {
+                        let commands = crate::menus::has_end_items(&h, &MENU_BAR_END);
+                        let blocks = h.zone_has_blocks(&zones::TOP_BAR_END);
+                        if commands || blocks {
                             // At the bar's end, whatever the menus and
-                            // the zone left.
+                            // the zone left: the commands last, the end
+                            // zone's blocks before them.
                             let end = ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| crate::menus::bar_end(ui, &h, &MENU_BAR_END),
+                                |ui| {
+                                    let mut width = 0.0;
+                                    if commands {
+                                        width += crate::menus::bar_end(ui, &h, &MENU_BAR_END);
+                                    }
+                                    if blocks {
+                                        if commands {
+                                            width += ui.spacing().item_spacing.x;
+                                        }
+                                        width += top_bar_end(ui, &h);
+                                    }
+                                    width
+                                },
                             );
                             used += end.inner + 2.0 * ui.spacing().item_spacing.x;
                         }
@@ -5865,10 +5977,18 @@ impl App {
                     });
                 });
             });
-        } else if h.zone_has_blocks(&zones::TOP_BAR) {
+        } else if h.zone_has_blocks(&zones::TOP_BAR) || h.zone_has_blocks(&zones::TOP_BAR_END) {
             egui::Panel::top(Id::unique("egui_pop.top")).show(ui, |ui| {
                 focus::scope(ui, "topBar", &[], |ui| {
-                    ui.horizontal(|ui| h.show_zone(ui, &zones::TOP_BAR));
+                    ui.horizontal(|ui| {
+                        h.show_zone(ui, &zones::TOP_BAR);
+                        if h.zone_has_blocks(&zones::TOP_BAR_END) {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| top_bar_end(ui, &h),
+                            );
+                        }
+                    });
                 });
             });
         }
@@ -6004,6 +6124,32 @@ impl eframe::App for App {
             Outcome::Done(Ok(_)) => {}
         }
     }
+}
+
+/// Draws the top bar's end zone (`zones::TOP_BAR_END`) in a right-to-left
+/// `Ui`, its blocks left to right in the width they took last pass;
+/// returns that width. The first time, the pass is drawn again once
+/// measured (`Context::request_discard`), so it is never shown out of
+/// place.
+fn top_bar_end(ui: &mut Ui, h: &AppHandle) -> f32 {
+    let height = ui.available_height();
+    let layout = egui::Layout::left_to_right(egui::Align::Center);
+    let known = TOP_BAR_END_WIDTH.get(ui.ctx());
+    let width = known.unwrap_or(0.0);
+    let r = ui.allocate_ui_with_layout(egui::vec2(width, height), layout, |ui| {
+        h.show_zone(ui, &zones::TOP_BAR_END);
+    });
+    let took = r.response.rect.width();
+    if (took - width).abs() > 0.5 {
+        if known.is_none() {
+            ui.ctx()
+                .request_discard("the top bar's end zone was measured");
+        } else {
+            ui.ctx().request_repaint();
+        }
+    }
+    TOP_BAR_END_WIDTH.set(ui.ctx(), took);
+    took
 }
 
 #[cfg(test)]

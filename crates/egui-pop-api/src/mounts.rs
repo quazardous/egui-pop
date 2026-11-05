@@ -148,7 +148,7 @@ pub fn popover() -> HostOffer {
 /// A block of a line zone.
 pub fn line() -> HostOffer {
     HostOffer::new(LINE, "L", "Line zone")
-        .source("zones: TOP_BAR, TITLE_BAR, ACTIVITY_BAR")
+        .source("zones: TOP_BAR, TOP_BAR_END, TITLE_BAR, ACTIVITY_BAR")
         .size(HostSize::Row)
 }
 
