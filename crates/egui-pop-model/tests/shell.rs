@@ -430,11 +430,11 @@ fn a_layout_round_trips_and_is_repaired_against_panels_and_screens() {
     layout
         .areas
         .retain(|(_, n)| !matches!(n, Node::Tabs { panels, .. } if panels.is_empty()));
-    layout.auxiliary.push(Auxiliary {
-        panel: pid("app.log"),
-        screen: "HDMI-1".into(),
-        rect: [0.0, 0.0, 800.0, 600.0],
-    });
+    layout.auxiliary.push(Auxiliary::window(
+        pid("app.log"),
+        "HDMI-1",
+        [0.0, 0.0, 800.0, 600.0],
+    ));
     let saved = Layout::from_json(&layout.to_json()).unwrap();
     assert_eq!(saved, layout);
     // Same screens: unchanged.
@@ -457,6 +457,72 @@ fn a_layout_round_trips_and_is_repaired_against_panels_and_screens() {
     assert!(!placed.contains(&"app.files"));
     assert!(fixed.auxiliary.is_empty());
     assert_eq!(notes.len(), 3, "{notes:?}");
+}
+
+#[test]
+fn panels_join_a_detached_window_as_tabs_and_round_trip() {
+    let panels = panels();
+    let mut layout = Layout::default_for(&panels);
+    let (log, files, inspector) = (pid("app.log"), pid("app.files"), pid("app.inspector"));
+    layout.remove(&log);
+    layout.auxiliary.push(Auxiliary::window(
+        log.clone(),
+        "eDP-1",
+        [0.0, 0.0, 640.0, 480.0],
+    ));
+    assert!(
+        layout.join_window(&files, &pid("app.editor")).is_err(),
+        "not a window"
+    );
+    layout.join_window(&files, &log).unwrap();
+    layout.join_window(&inspector, &files).unwrap();
+    assert_eq!(layout.area_of(&files), None);
+    let w = layout.window_of(&inspector).unwrap();
+    assert_eq!(
+        w.panels().cloned().collect::<Vec<_>>(),
+        [log.clone(), files.clone(), inspector.clone()]
+    );
+    assert_eq!(w.shown(), &inspector);
+    assert!(layout.shows(&files));
+    // Saved: the first panel under `panel`, the others under `tabs`.
+    let text = layout.to_json();
+    let json: Value = serde_json::from_str(&text).unwrap();
+    let saved = json["auxiliary"][0].clone();
+    assert_eq!(saved["panel"], "app.log");
+    assert_eq!(saved["tabs"], json!(["app.files", "app.inspector"]));
+    assert_eq!(saved["shown"], 2);
+    assert_eq!(Layout::from_json(&text).unwrap(), layout);
+    // A window saved before tabs reads as one panel.
+    let old: Auxiliary = serde_json::from_value(
+        json!({ "panel": "app.log", "screen": "eDP-1", "rect": [0, 0, 1, 1] }),
+    )
+    .unwrap();
+    assert!(old.tabs.is_empty() && old.shown == 0);
+    // Activating a tab shows it; taking the shown one out shows its
+    // neighbour; taking the first out leaves the window to the next.
+    assert!(layout.activate(&files));
+    assert_eq!(layout.window_of(&log).unwrap().shown(), &files);
+    layout.remove(&files);
+    assert_eq!(layout.window_of(&log).unwrap().shown(), &inspector);
+    layout.remove(&log);
+    let w = layout.window_of(&inspector).unwrap();
+    assert_eq!((w.panel.clone(), w.tabs.len()), (inspector.clone(), 0));
+    // A panel no longer declared leaves the window, the others stay;
+    // a window on a screen that is gone docks every panel back.
+    layout.join_window(&log, &inspector).unwrap();
+    let mut fewer = Panels::new();
+    for p in panels.all().into_iter().filter(|p| p.id != inspector) {
+        fewer.declare(&FW, p.clone()).unwrap();
+    }
+    let (fixed, _) = layout.clone().repair(&fewer, &["eDP-1"]);
+    let w = fixed.window_of(&log).unwrap();
+    assert_eq!((w.panel.clone(), w.tabs.len()), (log.clone(), 0));
+    let (gone, notes) = layout.repair(&panels, &[]);
+    assert!(gone.auxiliary.is_empty());
+    assert_eq!(gone.area_of(&log), Some(Area::Bottom));
+    assert_eq!(gone.area_of(&inspector), Some(Area::EndSide));
+    let gone_notes = notes.iter().filter(|n| n.contains("is gone")).count();
+    assert_eq!(gone_notes, 2, "{notes:?}");
 }
 
 #[test]

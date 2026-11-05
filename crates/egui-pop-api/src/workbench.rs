@@ -131,7 +131,7 @@ use egui_pop_core::kit::{
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 use egui_pop_model::ids::{PanelId, StepId, ZoneId};
-use egui_pop_model::layout::{FloatingGroup, Join, Layout, Node, Placement};
+use egui_pop_model::layout::{Auxiliary, FloatingGroup, Join, Layout, Node, Placement};
 use egui_pop_model::panels::{Area, PanelSpec, Panels, Place};
 use egui_stack::{DockArea, DockState, NodeIndex, Split, TabViewer};
 use serde_json::{Value as Json, json};
@@ -155,6 +155,7 @@ pub const STEP_PLACE: StepId = StepId::from_static("workbench.place");
 pub const STEP_DETACH: StepId = StepId::from_static("workbench.detach");
 pub const STEP_ATTACH: StepId = StepId::from_static("workbench.attach");
 pub const STEP_CLOSE_WINDOW: StepId = StepId::from_static("workbench.close_window");
+pub const STEP_JOIN_WINDOW: StepId = StepId::from_static("workbench.join_window");
 pub const STEP_ZEN: StepId = StepId::from_static("workbench.zen");
 pub const STEP_FLYOUT: StepId = StepId::from_static("workbench.flyout");
 pub const STEP_FLYOUT_SIZE: StepId = StepId::from_static("workbench.flyout_size");
@@ -186,6 +187,10 @@ pub const CMD_LEAVE_ZEN: egui_pop_model::ids::CommandId =
 
 /// Lays out the focused panel's group and its neighbours (the row,
 /// column or grid holding it) as a grid.
+/// Moves a panel into a detached window, as a tab (`panel`: the focused
+/// one by default; `window`: a panel of that window).
+pub const CMD_MOVE_TO_WINDOW: egui_pop_model::ids::CommandId =
+    egui_pop_model::ids::CommandId::from_static("workbench.move_to_window");
 pub const CMD_ARRANGE_GRID: egui_pop_model::ids::CommandId =
     egui_pop_model::ids::CommandId::from_static("workbench.arrange.grid");
 /// Lays out the focused panel's group and its neighbours in a row.
@@ -317,9 +322,14 @@ pub(crate) fn steps() -> Vec<crate::steps::StepSpec> {
         .args(json!({ "panel": "app.inspector" })),
         StepSpec::new(
             STEP_CLOSE_WINDOW,
-            "A detached panel's window closes; by default the panel docks back (`panel`).",
+            "A detached panel's window closes; by default its panels dock back (`panel`).",
         )
         .args(json!({ "panel": "app.inspector" })),
+        StepSpec::new(
+            STEP_JOIN_WINDOW,
+            "A panel moves into a detached window as a tab (`panel`; `window`: a panel of that window).",
+        )
+        .args(json!({ "panel": "app.outline", "window": "app.inspector" })),
         StepSpec::new(
             STEP_ZEN,
             "Zen mode starts (`zen`: true: only the centre is shown) or ends (false).",
@@ -399,6 +409,20 @@ pub struct TabBar {
     pub tabs: usize,
 }
 
+/// A tab dragged over a detached panel's window: a drop there moves
+/// it into that window, as a tab (`workbench.join_window`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct WindowDrop {
+    /// The dragged panel.
+    pub panel: PanelId,
+    /// The window, by its first panel.
+    pub window: PanelId,
+    /// Where it would go: the window's body, the zone drawn there.
+    pub zone: egui_stack::DropZone,
+    /// Why it may not go there, as the zone's label says.
+    pub refusal: Option<String>,
+}
+
 impl DropHint {
     /// Its name among the overlays: `drop:<panel>:<area>`.
     pub fn name(&self) -> String {
@@ -421,8 +445,12 @@ pub enum Change {
     Detach(PanelId),
     /// A detached panel docked back in its area.
     Attach(PanelId),
-    /// A detached panel's window closed (by default: docked back).
+    /// A detached panel's window closed (by default: docked back, with
+    /// the panels that joined it as tabs).
     CloseWindow(PanelId),
+    /// A panel joins a detached window as a tab: the window holding the
+    /// second panel.
+    JoinWindow(PanelId, PanelId),
     /// A palette opens: floating (where it was, or cascaded), or docked
     /// when it may not float.
     OpenPalette(PanelId),
@@ -560,6 +588,7 @@ impl Change {
             Change::Detach(p) => (STEP_DETACH, json!({ "panel": p })),
             Change::Attach(p) => (STEP_ATTACH, json!({ "panel": p })),
             Change::CloseWindow(p) => (STEP_CLOSE_WINDOW, json!({ "panel": p })),
+            Change::JoinWindow(p, w) => (STEP_JOIN_WINDOW, json!({ "panel": p, "window": w })),
             Change::OpenPalette(p) => (crate::palettes::STEP_OPEN, json!({ "panel": p })),
             Change::Float(p, pos) => (
                 crate::palettes::STEP_FLOAT,
@@ -734,6 +763,13 @@ impl Change {
             "workbench.detach" => Change::Detach(panel),
             "workbench.attach" => Change::Attach(panel),
             "workbench.close_window" => Change::CloseWindow(panel),
+            "workbench.join_window" => {
+                let w = args
+                    .get("window")
+                    .and_then(Json::as_str)
+                    .ok_or("`window` is missing")?;
+                Change::JoinWindow(panel, PanelId::new(w).map_err(|e| e.to_string())?)
+            }
             "workbench.hide" => Change::Hide(panel),
             "workbench.arrange" => Change::Arrange(panel, Arrangement::from_args(args)?),
             _ => Change::Focus(panel),
@@ -761,6 +797,9 @@ pub(crate) struct Workbench {
     pub dragging: Option<(PanelId, Area, Pos2)>,
     /// The drop hint drawn last frame.
     pub hint: Option<DropHint>,
+    /// The detached window under a dragged tab last frame, where a drop
+    /// moves it.
+    pub window_drop: Option<WindowDrop>,
     /// The panel the keys obey: see [`Workbench::follow_focus`].
     pub focused: Option<PanelId>,
     /// The last panel to be `focused` that lives in the layout proper: where
@@ -814,6 +853,7 @@ impl Default for Workbench {
             bars: BTreeMap::new(),
             content: Rect::NOTHING,
             dragging: None,
+            window_drop: None,
             hint: None,
             focused: None,
             settled: None,
@@ -1109,38 +1149,68 @@ impl Workbench {
                 if let Some(why) = spec.refuses(&crate::mounts::panel_host(Place::Window)) {
                     return Err(why);
                 }
-                if self.layout.auxiliary.iter().any(|a| a.panel == *p) {
+                let window = self.layout.window_of(p);
+                if window.is_some_and(|a| a.tabs.is_empty()) {
                     return Ok(json!({ "panel": p, "detached": true }));
                 }
+                // A tab of a window gets a window of its own beside it.
+                let beside = window.map(|a| {
+                    let [x, y, w, h] = a.rect;
+                    [x + 40.0, y + 40.0, w, h]
+                });
                 // Where it was drawn, in the window's coordinates.
-                let rect = self
-                    .layout
-                    .area_of(p)
-                    .and_then(|a| self.rects.get(&a))
-                    .map_or(DETACHED, |r| {
-                        [
-                            r.min.x + 40.0,
-                            r.min.y + 40.0,
-                            r.width().max(320.0),
-                            r.height().max(240.0),
-                        ]
-                    });
+                let rect = beside.unwrap_or_else(|| {
+                    self.layout
+                        .area_of(p)
+                        .and_then(|a| self.rects.get(&a))
+                        .map_or(DETACHED, |r| {
+                            [
+                                r.min.x + 40.0,
+                                r.min.y + 40.0,
+                                r.width().max(320.0),
+                                r.height().max(240.0),
+                            ]
+                        })
+                });
                 self.layout.remove(p);
                 self.layout.hidden.retain(|h| h != p);
                 self.layout
                     .auxiliary
-                    .push(egui_pop_model::layout::Auxiliary {
-                        panel: p.clone(),
-                        screen: crate::app::SCREENS[0].into(),
+                    .push(egui_pop_model::layout::Auxiliary::window(
+                        p.clone(),
+                        crate::app::SCREENS[0],
                         rect,
-                    });
+                    ));
                 json!({ "panel": p, "detached": true })
             }
-            Change::Attach(p) | Change::CloseWindow(p) => {
+            Change::Attach(p) => {
                 let spec = spec_of(p)?;
-                self.layout.auxiliary.retain(|a| a.panel != *p);
                 self.layout.place(p, spec.area);
                 json!({ "panel": p, "detached": false })
+            }
+            Change::CloseWindow(p) => {
+                // Every panel of the window docks back.
+                let panels: Vec<PanelId> = self
+                    .layout
+                    .window_of(p)
+                    .map_or_else(|| vec![p.clone()], |a| a.panels().cloned().collect());
+                spec_of(p)?;
+                let homes: Vec<(PanelId, Area)> = (panels.iter())
+                    .filter_map(|q| spec_of(q).ok().map(|s| (q.clone(), s.area)))
+                    .collect();
+                for (q, area) in &homes {
+                    self.layout.place(q, *area);
+                }
+                json!({ "panel": p, "detached": false, "docked": panels })
+            }
+            Change::JoinWindow(p, window) => {
+                let spec = spec_of(p)?;
+                if let Some(why) = spec.refuses(&crate::mounts::panel_host(Place::Window)) {
+                    return Err(why);
+                }
+                self.layout.join_window(p, window)?;
+                let named = self.layout.window_of(p).map(|a| a.panel.clone());
+                json!({ "panel": p, "window": named, "detached": true })
             }
             Change::OpenPalette(p) => {
                 let spec = spec_of(p)?;
@@ -1472,9 +1542,23 @@ pub(crate) fn windows(
     app_name: &str,
     keys: &mut dyn FnMut(&egui::Context),
 ) {
-    let auxiliary = app.workbench_mut().layout.auxiliary.clone();
+    let (auxiliary, dragging) = {
+        let mut wb = app.workbench_mut();
+        // Found again by this pass's windows.
+        wb.window_drop = None;
+        (wb.layout.auxiliary.clone(), wb.dragging.clone())
+    };
+    // The main window's top-left on the screen, in pixels, for windows
+    // that do not see a drag begun in the main one.
+    let origin = ctx.input(|i| i.viewport().inner_rect).map(|r| {
+        (
+            r.min.to_vec2() * ctx.pixels_per_point(),
+            ctx.pixels_per_point(),
+        )
+    });
     for aux in auxiliary {
-        let Some(spec) = app.workbench_mut().spec(&aux.panel).cloned() else {
+        // Titled after the panel it shows.
+        let Some(spec) = app.workbench_mut().spec(aux.shown()).cloned() else {
             continue;
         };
         let [x, y, w, h] = aux.rect;
@@ -1544,9 +1628,24 @@ pub(crate) fn windows(
                     None => {}
                 }
             }
-            egui::CentralPanel::default().show(ui, |ui| {
-                app.show_panel(ui, &panel);
-            });
+            let body = egui::CentralPanel::default()
+                .show(ui, |ui| {
+                    if aux.tabs.is_empty() {
+                        app.show_panel(ui, &panel);
+                    } else {
+                        window_tabs(app, ui, &aux);
+                    }
+                })
+                .response
+                .rect;
+            if let Some((dragged, _, at)) = &dragging
+                && !aux.holds(dragged)
+            {
+                let pointer = window_pointer(&vctx, own_window, *at, origin);
+                if let Some(pointer) = pointer.filter(|p| body.contains(*p)) {
+                    window_drop(app, &vctx, &aux, dragged, body, pointer);
+                }
+            }
             if own_window {
                 app.show_zone(ui, &crate::zones::WINDOW_OVERLAYS);
                 crate::menus::draw_popup(&vctx, app);
@@ -1572,6 +1671,151 @@ pub(crate) fn windows(
         });
     }
 }
+
+/// A detached window holding tabs: one tab bar (egui_stack's, painted
+/// by the kit as the areas' are), no splits. The order the user gives
+/// the tabs and the one shown go back to the layout.
+fn window_tabs(app: &AppHandle, ui: &mut Ui, aux: &Auxiliary) {
+    let ctx = ui.ctx().clone();
+    let kit = Kit::of(&ctx);
+    let panels: Vec<PanelId> = aux.panels().cloned().collect();
+    let mut dock = DockState::new(panels.clone());
+    if let Some(path) = dock.find_tab(aux.shown()) {
+        let _ = dock.set_active_tab(path);
+    }
+    let id = window_dock_id(&aux.panel);
+    let cache_id = TAB_CACHE.keyed(id);
+    let mut cache = cache_id.update(&ctx, std::mem::take);
+    cache.prepare(app, &ctx, &kit, &panels);
+    let style = cache.dock_style(ui.style(), &kit);
+    let mut viewer = Viewer {
+        app,
+        prepared: &cache.tabs,
+    };
+    DockArea::new(&mut dock)
+        .id(id)
+        .style(style)
+        .painter(&*kit)
+        .allowed_splits(egui_stack::AllowedSplits::None)
+        .show_close_buttons(false)
+        .show_add_buttons(false)
+        .show_leaf_close_all_buttons(false)
+        .show_leaf_collapse_buttons(false)
+        .show_inside(ui, &mut viewer);
+    cache_id.set(&ctx, cache);
+    if let Some(Node::Tabs { panels, active }) = from_dock(&dock) {
+        let mut wb = app.workbench_mut();
+        if let Some(a) = wb
+            .layout
+            .auxiliary
+            .iter_mut()
+            .find(|a| a.panel == aux.panel)
+        {
+            a.reorder(&panels);
+            if let Some(p) = panels.get(active) {
+                a.show(p);
+            }
+        }
+    }
+}
+
+/// A detached window's tab dock id.
+fn window_dock_id(panel: &PanelId) -> Id {
+    Id::unique(("egui_pop.window_dock", panel.as_str()))
+}
+
+/// Where the pointer is over a detached window while a tab drags, in
+/// that window's points, if egui knows it.
+///
+/// egui keeps each window's input apart, the drag in the window it began
+/// in. A window embedded in the main one (kittest, a backend without
+/// windows of its own) sees the main one's pointer. An OS window of its
+/// own sees the pointer only once the drag lets it go: while the button
+/// is held, the system gives every pointer event to the window where it
+/// was pressed (Wayland's and X11's implicit grab, the capture on
+/// Windows). There the main window's pointer, which the grab keeps
+/// following past its edges, is carried over the screen, when both
+/// windows know where they are (not on Wayland, which hides window
+/// positions: the tab menu's "Move to window" works everywhere).
+fn window_pointer(
+    vctx: &egui::Context,
+    own_window: bool,
+    at: Pos2,
+    origin: Option<(egui::Vec2, f32)>,
+) -> Option<Pos2> {
+    if let Some(p) = vctx.input(|i| i.pointer.hover_pos()) {
+        return Some(p);
+    }
+    if !own_window {
+        return Some(at);
+    }
+    let (origin, ppp) = origin?;
+    let inner = vctx.input(|i| i.viewport().inner_rect)?;
+    let screen = origin + at.to_vec2() * ppp;
+    Some((screen / vctx.pixels_per_point() - inner.min.to_vec2()).to_pos2())
+}
+
+/// A tab dragged over a detached window: the zone a drop takes there,
+/// drawn as the areas' (the kit's `dock-preview`, disabled with its
+/// reason where the panel may not go), kept for the drop.
+///
+/// A detached window holds tabs, not splits: the zone is the window's
+/// whole body (`DropZone::at` with no split allowed), and a drop there
+/// joins its tabs.
+pub(crate) fn window_drop(
+    app: &AppHandle,
+    vctx: &egui::Context,
+    aux: &Auxiliary,
+    dragged: &PanelId,
+    body: Rect,
+    pointer: Pos2,
+) {
+    let Some(spec) = app.workbench_mut().spec(dragged).cloned() else {
+        return;
+    };
+    let zone = egui_stack::DropZone::at(
+        body,
+        pointer,
+        WINDOW_EDGE_COVERAGE,
+        egui_stack::AllowedSplits::None,
+    );
+    let title = strings::panel_title(vctx, spec.id.as_str(), &spec.title);
+    let refusal = spec
+        .refuses(&crate::mounts::panel_host(Place::Window))
+        .map(|_| strings::tr_args(vctx, &txt::WORKBENCH_STAYS_DOCKED, &[("panel", &title)]));
+    let kit = Kit::of(vctx);
+    let t = egui_pop_core::theme::Tokens::of(vctx);
+    let painter = vctx.layer_painter(egui::LayerId::new(
+        egui::Order::Foreground,
+        Id::unique(("egui_pop.window_drop", aux.panel.as_str())),
+    ));
+    let label = refusal.clone().map(|why| {
+        let font = egui::FontId::proportional(t.font.body);
+        vctx.fonts_mut(|f| f.layout_no_wrap(why, font, Color32::PLACEHOLDER))
+    });
+    kit.dock_preview.paint_part(
+        &KitCx {
+            painter: &painter,
+            ppp: vctx.pixels_per_point(),
+        },
+        &Part {
+            rect: body,
+            room: body,
+            state: State::REST.with(State::DISABLED, label.is_some()),
+            label: label.as_ref(),
+        },
+    );
+    app.workbench_mut().window_drop = Some(WindowDrop {
+        panel: dragged.clone(),
+        window: aux.panel.clone(),
+        zone,
+        refusal,
+    });
+}
+
+/// The share of a detached window's body along each edge a split would
+/// take, as egui_stack's (unused while windows hold tabs only).
+const WINDOW_EDGE_COVERAGE: f32 = 0.25;
 
 /// Forgets the overlays of the windows closed since the last pass: what
 /// they showed is gone with them (a dialog shown there comes to the main
@@ -2467,6 +2711,27 @@ fn tab_beside(node: &Node, panel: &PanelId, back: bool) -> Option<PanelId> {
 /// (`panel` in the arguments, or the focused one) laid out `as` says, a
 /// grid with the arguments' `columns` if any. Nothing to arrange (no
 /// panel focused, or its group alone in its area) is not an error.
+/// The `workbench.move_to_window` command: `panel` (the focused one by
+/// default) joins the window holding `window`, through the
+/// `workbench.join_window` step.
+pub(crate) fn move_to_window_command(app: &AppHandle, args: &Json) -> Result<Json, String> {
+    let panel = match args.get("panel").and_then(Json::as_str) {
+        Some(p) => Some(PanelId::new(p).map_err(|e| e.to_string())?),
+        None => app.try_workbench().and_then(|wb| wb.focused.clone()),
+    };
+    let panel = panel.ok_or("no panel is focused: name one (`panel`)")?;
+    let window = args
+        .get("window")
+        .and_then(Json::as_str)
+        .ok_or("`window` is missing: a panel of the window")?;
+    let window = PanelId::new(window).map_err(|e| e.to_string())?;
+    match app.change_workbench(Change::JoinWindow(panel, window)) {
+        Some(Outcome::Done(r)) => r,
+        Some(Outcome::Vetoed { by, reason }) => Err(format!("stopped by `{by}`: {reason}")),
+        _ => Ok(json!({ "queued": true })),
+    }
+}
+
 pub(crate) fn arrange_command(app: &AppHandle, args: &Json, how: &str) -> Result<Json, String> {
     let panel = match args.get("panel").and_then(Json::as_str) {
         Some(p) => Some(PanelId::new(p).map_err(|e| e.to_string())?),
@@ -3277,6 +3542,35 @@ impl TabViewer for Viewer<'_> {
             self.app.change_workbench(Change::Detach(tab.clone()));
             ui.close();
         }
+        // The windows it may join, by their panels' titles: the way into
+        // a window where a drag cannot reach it (`window_pointer`).
+        let windows: Vec<(PanelId, Vec<PanelId>)> = if spec
+            .refuses(&crate::mounts::panel_host(Place::Window))
+            .is_none()
+        {
+            let wb = self.app.workbench_mut();
+            (wb.layout.auxiliary.iter())
+                .filter(|a| !a.holds(tab))
+                .map(|a| (a.panel.clone(), a.panels().cloned().collect()))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        if !windows.is_empty() {
+            ui.menu_button(strings::tr(&ctx, &txt::WORKBENCH_MOVE_TO_WINDOW), |ui| {
+                for (window, panels) in windows {
+                    let titles: Vec<String> = panels
+                        .iter()
+                        .map(|p| self.app.panel_title(&ctx, p))
+                        .collect();
+                    if ui.button(titles.join(", ")).clicked() {
+                        self.app
+                            .change_workbench(Change::JoinWindow(tab.clone(), window));
+                        ui.close();
+                    }
+                }
+            });
+        }
         if ui
             .button(strings::tr_args(
                 &ctx,
@@ -3317,6 +3611,16 @@ fn follow_drag(app: &AppHandle, ctx: &egui::Context) {
     let Some((panel, from, last)) = taken else {
         return;
     };
+    // Over a detached window when it was let go (`windows`): it joins
+    // that window's tabs.
+    let over = app.workbench_mut().window_drop.take();
+    if let Some(drop) = over.filter(|d| d.panel == panel) {
+        let out = app.change_workbench(Change::JoinWindow(panel.clone(), drop.window));
+        if let Some(Outcome::Done(Err(e))) = &out {
+            app.workbench_refused(&format!("move {panel}"), e);
+        }
+        return;
+    }
     let at = pos.unwrap_or(last);
     let to = app.workbench_mut().area_at(at).filter(|a| *a != from);
     if let Some(to) = to {
@@ -3334,7 +3638,10 @@ fn drop_hint(app: &AppHandle, ctx: &egui::Context) {
     wb.hint = None;
     // A tab over another area, or a palette over an area it docks in.
     let target = if let Some((panel, from, at)) = wb.dragging.clone() {
-        wb.area_at(at).filter(|a| *a != from).map(|to| (panel, to))
+        // Over a detached window, the window shows where it goes.
+        (wb.area_at(at).filter(|a| *a != from))
+            .filter(|_| wb.window_drop.is_none())
+            .map(|to| (panel, to))
     } else if let Some(d) = wb.palette_drag.clone().filter(|_| wb.group_hint.is_none()) {
         let edge = crate::palettes::magnet(ctx);
         wb.dock_at(d.at, edge).map(|to| (d.panel, to))

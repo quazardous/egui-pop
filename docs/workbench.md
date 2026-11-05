@@ -330,6 +330,34 @@ kept in the layout and repaired before the window opens. The window is
 titled with the panel and the application's name (`AppBuilder::name`,
 "Filmstrip — Helios"), not the main window's whole title.
 
+**Tabs in a detached window.** Other panels may join a detached window
+as tabs: it shows them in one tab bar (no splits) and is titled after
+the tab shown. A panel joins it:
+
+- **by a drag**: while a tab is dragged, a detached window under the
+  pointer shows the drop zone the areas show (the kit's `dock-preview`,
+  egui_stack's `DropZone::at` over the window's body), disabled with its
+  reason for a panel that may not leave the main window; let go there,
+  the tab joins the window's tabs. egui keeps each window's input apart
+  and the system hands a drag to the window it began in, so the window
+  sees the pointer only through the main one: a window embedded in the
+  main one (kittest, a backend without windows) always does, an OS
+  window does when both windows know where they are on the screen
+  (X11, Windows, macOS), not on Wayland, which hides window positions;
+- **from the tab's menu**, "Move to window", which lists the detached
+  windows by their panels and works everywhere; an agent runs the
+  `workbench.move_to_window` command (`panel`, the focused one by
+  default; `window`, a panel of that window), `AppHandle::move_to_window`
+  from code.
+
+Each way is one `workbench.join_window` step (`panel`, `window`). Its
+tab's menu moves a panel out again ("Move to …" docks it, Detach gives
+it a window of its own); closing the window docks every panel it holds.
+The layout document keeps the first panel under `panel` and the others
+under `tabs`, the shown one as `shown`: an application that predates
+tabs in windows opens the first panel there and docks the others in
+their default areas.
+
 Such a window is a window of the application in full:
 
 - **Keys.** The keymap reaches it: the key dispatcher runs in each

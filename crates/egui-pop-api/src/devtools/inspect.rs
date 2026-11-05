@@ -106,7 +106,7 @@ impl Inspected {
                     || element
                         .regions
                         .iter()
-                        .any(|r| r.kind == "panel" && r.id == a.panel.as_str())
+                        .any(|r| r.kind == "panel" && a.panels().any(|p| r.id == p.as_str()))
             })
             .map_or_else(
                 || {

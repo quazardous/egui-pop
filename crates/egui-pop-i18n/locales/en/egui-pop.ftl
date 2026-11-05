@@ -875,6 +875,10 @@ command-workbench-leave-zen =
     .description = Shows the whole workbench again.
     .title = Leave zen mode
 
+command-workbench-move-to-window =
+    .description = Moves the focused panel, or `panel`, into the detached window holding `window`, as a tab.
+    .title = Move to window
+
 command-workbench-next-region =
     .description = Moves the keyboard to the next part of the window: the activity bar, a side or bottom area, the centre, a palette, the flyout, the status bar.
     .title = Go to the next region
@@ -2354,6 +2358,10 @@ egui-pop-workbench-flyout-pin = Pin { $panel }
 egui-pop-workbench-fold = Fold { $area }
 
 egui-pop-workbench-move-to = Move to { $area }
+
+egui-pop-workbench-move-to-window = Move to window
+
+egui-pop-workbench-stays-docked = { $panel } cannot go into a window
 
 egui-pop-workbench-stays-out = { $panel } stays out of { $area }
 

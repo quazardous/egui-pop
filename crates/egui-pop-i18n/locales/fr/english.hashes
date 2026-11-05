@@ -436,6 +436,8 @@ command-workbench-layout-sideBarPosition.description 326d78f56e32ca0c
 command-workbench-layout-sideBarPosition.title 9377f826bd726ce4
 command-workbench-leave-zen.description 1f1cdceb5029699c
 command-workbench-leave-zen.title 807fcda4df4c8836
+command-workbench-move-to-window.description 2b0ad0cbce49c87a
+command-workbench-move-to-window.title c3ca169431886fd7
 command-workbench-next-region.description f70cc22932de1c13
 command-workbench-next-region.title 5bc664b02200e3be
 command-workbench-previous-region.description b7ab3302080ad9bf
@@ -1176,6 +1178,8 @@ egui-pop-workbench-float eb7e945b1415bcc5
 egui-pop-workbench-flyout-pin 4ebe2494b850fd48
 egui-pop-workbench-fold 873472b4101d195d
 egui-pop-workbench-move-to 1e7c641863b609f0
+egui-pop-workbench-move-to-window c3ca169431886fd7
+egui-pop-workbench-stays-docked b822e29e5d487cff
 egui-pop-workbench-stays-out 7973c10990577019
 egui-pop-workbench-unfold 4f6622581c6e6904
 egui-pop-workbench-window-title 2fb186786f7fdced
