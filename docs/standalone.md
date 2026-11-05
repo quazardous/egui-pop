@@ -25,8 +25,9 @@ drawing one frame in a bare `egui::Context`.
 | Image viewport, histogram, curves, colour wheels, zoom control, navigator, node graph | `egui-pop-viewport` (`viewport`) | `Viewport::new(..).show(ui, ..)`; each tool's `new(..).show(ui)`; `gpu::install` for the GPU path |
 | Tree, list, data table | `egui-pop-views` (`views`) | `TreeView`, `ListView`, `DataTable` with their states |
 | Text and code editors, terminal | `egui-pop-editors` (`editors`) | `TextSurface`, `CodeEditor`, `Terminal` over an `EditorState` or `TerminalState` |
-| Translations | `egui-pop-i18n` (`i18n`) | `I18n` and `Provider` installed with `core::strings::install` |
+| Translations | `egui-pop-i18n` (`i18n`) | an `I18n` installed with `i18n::install(&ctx, &i18n)`: `t(ctx, ..)`, `tr!` and egui-pop's own text |
 | Platform readers | `egui-pop-platform` (`platform-*`) | `text_scale::read`, `focus::read`, `wheel_lines::read`, `dirs`, `window::raise` |
+| A single instance | `egui-pop-platform` (`platform-instance`) | `instance::single`, then `Launches::set_waker` and `Launches::take` each frame |
 | Orthogonal wire routing | `ortho-router` (no egui) | its own crate |
 | The test kit's checks on any harness | `egui-pop-test` (dev-dependency) | `themed`, `assert_all_named`, `a11y_tree` |
 
@@ -432,27 +433,28 @@ out.textures_delta.clear();
 With the `i18n` feature. An `I18n` holds Fluent catalogues and looks
 text up on its own; installed as the context's strings provider, it
 translates egui-pop's own text (field states, error cards, the editors'
-find bar...).
+find bar...). `i18n::install` puts it in an egui context: `t(ctx, ..)`,
+`text(ctx, ..)` and `tr!` read it, and egui-pop's own text is
+translated through its strings provider.
 
 ```rust
-use std::sync::Arc;
-
 use egui_pop::egui;
-use egui_pop::i18n::{I18n, Provider, args};
+use egui_pop::i18n::{I18n, args, install, t, tr};
 
 let i18n = I18n::with_egui_pop("fr");
 i18n.add("fr", "hello = Bonjour, { $name } !\n").unwrap();
-assert_eq!(i18n.t("hello", &args![name = "Ada"]), "Bonjour, Ada !");
 
 let ctx = egui::Context::default();
-egui_pop::core::strings::install(&ctx, Arc::new(Provider::new(i18n)));
+install(&ctx, &i18n);
+assert_eq!(t(&ctx, "hello", &args![name = "Ada"]), "Bonjour, Ada !");
+assert_eq!(tr!("hello", name = "Ada"), "Bonjour, Ada !");
 let said = egui_pop::core::strings::lookup(&ctx, "egui-pop-field-modified-saved", "Modified since saved");
 assert_eq!(said, "Modifié depuis l’enregistrement");
 ```
 
-The language setting, `i18n::t(ctx, ..)` and `tr!` read the catalogues
-`I18nPlugin` installs: they need the application for now
-([#162](https://github.com/quazardous/egui-pop/issues/162)).
+The `I18n` is shared: the application switches the language with
+`i18n.set_locale(..)`, seen at the next lookup. The language setting
+and the `locale.changed` signal are `I18nPlugin`'s.
 
 ## Platform readers
 
@@ -468,6 +470,53 @@ let _mode = focus::read().mode;   // click to focus, or focus follows the pointe
 assert!(wheel_lines::read() >= 1);
 let _logs = dirs::log_dir("org.example.app");
 ```
+
+## A single instance
+
+With the `platform-instance` feature. `instance::single` at the top of
+`main` makes a later launch hand its arguments to the running one; the
+running one takes them in its frame, woken when one arrives:
+
+```rust,no_run
+use egui_pop::eframe;
+use egui_pop::egui;
+use egui_pop::platform::instance::{self, Launches, Single};
+
+struct Viewer {
+    launches: Launches,
+}
+
+impl eframe::App for Viewer {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        for launch in self.launches.take() {
+            egui_pop::platform::window::raise(ui.ctx());
+            // open what `launch.args` names, from `launch.cwd`
+            let _ = launch;
+        }
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let first = match instance::single("org.example.Viewer")? {
+        Single::Handed => return Ok(()), // the running instance took over
+        Single::First(first) => first,
+    };
+    let launches = first.launches();
+    eframe::run_native(
+        "Viewer",
+        eframe::NativeOptions::default(),
+        Box::new(move |cc| {
+            // A launch handed over repaints the window.
+            launches.set_waker(Some(cc.egui_ctx.clone()));
+            Ok(Box::new(Viewer { launches }))
+        }),
+    )?;
+    Ok(())
+}
+```
+
+`InstancePlugin` adds the `instance.second_launch` and `deeplink.open`
+steps and the scheme's links on top: those need the application.
 
 ## Without eframe
 
@@ -493,6 +542,6 @@ or they are plugins.
 | Steps and hooks (`before`, `replace`, `after`), `.app(..)` on a component, `egui-pop-imaging` | steps are the application's (ADR 0011); without it a component reports in its output |
 | The host, history, the clipboard, links, jobs, the context stack, choosing files | services behind the host and the application's store |
 | The debug bridge's commands and devtools | they describe and drive the application's registries |
-| `I18nPlugin`, the language setting, `t(ctx, ..)` and `tr!` | the plugin installs the catalogues they read ([#162](https://github.com/quazardous/egui-pop/issues/162)) |
+| `I18nPlugin` and the language setting | a plugin with a setting; without it the application calls `I18n::set_locale` |
 | Platform services: notifications, the tray, global shortcuts, logs, crash reports | plugins routing to commands and steps |
-| A single instance's later launches | `instance::single` works alone, but only `InstancePlugin` can take the launches handed over ([#163](https://github.com/quazardous/egui-pop/issues/163)) |
+| A single instance's steps and deep links | `InstancePlugin` runs them as steps and commands; without it the application takes the launches (above) |
