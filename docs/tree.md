@@ -92,8 +92,15 @@ never loaded is left out: it comes with the branch.
 
 ## What a row shows
 
-A row is its triangle, an icon, its label and widgets of the
-application's at its right end. `TreeView::icon` gives each node's icon
+A row is a [list item](list-items.md): its triangle, an icon, its label,
+weak trailing text, action buttons and widgets of the application's at
+its right end. `TreeView::guides(true)` draws indent guides,
+`TreeView::trailing` gives each node's weak text (a count, a type), and
+`TreeView::actions` its action buttons (a visibility eye, remove), shown
+on the row under the pointer, the selected rows and the cursor's row
+while the tree has the focus (Tab from the tree reaches them); a click
+runs `tree.action`, then `TreeView::on_action`, and does not select the
+row. `TreeView::icon` gives each node's icon
 (an `Icon` by role, a glyph or an image, `egui_pop::core::icon::Source`),
 drawn in the row's text colour. `TreeView::row_widgets` adds widgets
 right to left in the row (a visibility toggle, a lock): they act on
@@ -370,6 +377,7 @@ same moments come back as `Signal`s in `TreeOutput::signals`, with
 | `tree.rename` | `tree`, `key`, `from`, `to` | renames the node in the view |
 | `tree.activate` | `tree`, `key` | nothing: the application opens the leaf |
 | `tree.context` | `tree`, `key` | opens the row's context menu, for that row (a redirect changes the node it is for) |
+| `tree.action` | `tree`, `key`, `action` | nothing: `TreeView::on_action` follows (a veto ignores the click) |
 
 The view changes what it shows; the application changes its data, from
 the signals or from an after-hook. A before-hook refuses what the

@@ -113,7 +113,9 @@ without it.
    `space.{xs, s, m, l, xl}` (the spacing scale),
    `space.{inline, group, section, page}` (spacing by intent, below),
    `text-role.{title, section, body, muted, meta}.{size, color, weight}`
-   (text by role, below), `size.control.height`,
+   (text by role, below), `size.control.height`, `size.row.height` (a
+   row of a list, a tree or a property panel; an alias of the control
+   height unless a theme gives it a value of its own),
    `size.icon.{inline, toolbar, panel}`, `size.dialog.width`, `size.magnet`,
    `size.toast.width`, `font.size.{xs, s, m, l, xl}` (the size scale)
    and `font.text-style.{small, body, button, heading, monospace}`

@@ -68,6 +68,9 @@ pub mod node_graph {}
 #[doc = include_str!("../../../docs/tree.md")]
 pub mod tree {}
 
+#[doc = include_str!("../../../docs/list-items.md")]
+pub mod list_items {}
+
 #[doc = include_str!("../../../docs/table.md")]
 pub mod table {}
 

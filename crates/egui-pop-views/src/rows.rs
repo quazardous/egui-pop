@@ -167,12 +167,9 @@ pub(crate) fn text_color(row: &Component, state: State) -> egui::Color32 {
     row.style(state).text
 }
 
-/// A row's height: the theme's interactive height.
+/// A row's height: the theme's row height (`size.row.height`).
 pub(crate) fn height(ui: &Ui) -> f32 {
-    ui.spacing()
-        .interact_size
-        .y
-        .max(ui.text_style_height(&egui::TextStyle::Body) + 4.0)
+    crate::item::row_height(ui)
 }
 
 /// Rows clickable and draggable, not focusable: the view takes the

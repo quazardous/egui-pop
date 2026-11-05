@@ -92,7 +92,8 @@ viewport), `navigator` (the zoom control and the navigator), `images`,
 `grading` (curves and colour wheels), `cursors` (tool cursors, brush
 outlines and the loupe), `node-graph` (the node graph editor), `graph-file` (the node graph editor over a YAML file), `display` (wide gamut and HDR surfaces),
 `preview` (a custom dialog previewing an export in a viewport), `tree`
-(the live tree), `table` (lists and tables), `library` (the photo
+(the live tree), `list-items` (dense rows on their own and in a tree,
+property rows in a selection panel), `table` (lists and tables), `library` (the photo
 library), `text-editor`,
 `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
 `palettes`, `arrangements`, `contexts` (the context stack: places and modes, and the status bar that follows them), `clipboard` (typed items copied between palettes, paste special's previews), `links` (one policy for every link: declared links, links that ask first, local files, an agent's request), `viewer` (help pages, markdown, a safe subset of HTML and images in a panel), `strips` (the activity bar, and status items: live states, a popover, hover cards), `jobs` (a pretend host's

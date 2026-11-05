@@ -5,6 +5,11 @@
 //! - [`list`]: a list of rows the application draws;
 //! - [`table`]: a data table (on `egui_table`), sorted and resized
 //!   through the host's value store, cells drawn by the application;
+//! - [`item`]: the dense row they draw with, also a widget of its own
+//!   ([`item::ListItem`]: an icon, a label, weak trailing text, action
+//!   buttons shown on hover, indent guides, an arrow, a drag handle);
+//! - [`property`]: property rows, a name and a value, their names
+//!   aligned;
 //! - [`select`]: the selection by key they share; the tree and the list
 //!   also bind to the application-wide selection
 //!   (`egui_pop_api::selection`) with `shared`;
@@ -34,10 +39,12 @@
 //!
 //! Layer: a component on the application API (L4, ADR 0001).
 
+pub mod item;
 pub mod library;
 pub mod list;
 pub mod mounts;
 mod nav;
+pub mod property;
 mod rows;
 pub mod select;
 mod shared;

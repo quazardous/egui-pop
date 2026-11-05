@@ -12,10 +12,13 @@
 //!   Page Up/Down, Home/End, Left/Right to close, open or move to the
 //!   parent, Space, Ctrl+A, Enter, F2, type-ahead), **drag and drop**
 //!   (before, after or inside a node), **rename in place**.
-//! - **Rows** carry an icon ([`TreeView::icon`]) and widgets of the
-//!   application's at their right end ([`TreeView::row_widgets`]) that
-//!   act on their row without selecting it, and a context menu for the
-//!   row clicked ([`TreeView::context_menu`], [`TreeView::context_ui`]).
+//! - **Rows** are [list items](crate::item): an icon
+//!   ([`TreeView::icon`]), weak text on the right ([`TreeView::trailing`]),
+//!   action buttons shown on hover ([`TreeView::actions`]), indent guides
+//!   ([`TreeView::guides`]) and widgets of the application's at their
+//!   right end ([`TreeView::row_widgets`]) that act on their row without
+//!   selecting it, and a context menu for the row clicked
+//!   ([`TreeView::context_menu`], [`TreeView::context_ui`]).
 //! - **Virtualised**: rows are flattened once per change and only the
 //!   rows in view are built, so 100 000 nodes cost a screenful.
 //! - Each moment is a step (`tree.load`, `tree.expand`, `tree.select`,
@@ -64,7 +67,7 @@ use egui::{
 use egui_pop_api::selection::{SelectionItem, SelectionService};
 use egui_pop_api::steps::Outcome;
 use egui_pop_api::{AppHandle, menus};
-use egui_pop_core::icon::{Size, Source};
+use egui_pop_core::icon::Source;
 use egui_pop_core::kit::{KitCx, Part, State, Tone};
 use egui_pop_core::strings::{self, tr, tr_args};
 use egui_pop_core::theme::Tokens;
@@ -74,12 +77,14 @@ use serde_json::{Value as Json, json};
 pub use filter::{FilterField, Query};
 pub use model::{Children, Edit, Model, Node, Position, Row};
 
+use crate::item::{self, Disclosure, ItemAction};
 use crate::nav::{self, Nav, TypeAhead};
 use crate::rows::{self, Scroll};
 use crate::select::{Key, Mode, Proposal, Selection};
 use crate::shared;
 use crate::steps::{
-    self, TREE_ACTIVATE, TREE_CONTEXT, TREE_DROP, TREE_EXPAND, TREE_LOAD, TREE_RENAME, TREE_SELECT,
+    self, TREE_ACTION, TREE_ACTIVATE, TREE_CONTEXT, TREE_DROP, TREE_EXPAND, TREE_LOAD, TREE_RENAME,
+    TREE_SELECT,
 };
 use crate::strings as s;
 
@@ -644,6 +649,12 @@ type Allows<'a, K> = dyn Fn(&[K], &K, Position) -> Result<(), String> + 'a;
 type DropFn<'a, K> = Box<Allows<'a, K>>;
 /// What adds a row's widgets, or fills its context menu.
 type RowFn<'a, K> = Box<dyn FnMut(&mut Ui, &Node<K>) + 'a>;
+/// What gives a row's trailing text.
+type TrailingFn<'a, K> = Box<dyn Fn(&Node<K>) -> Option<String> + 'a>;
+/// What gives a row's action buttons.
+type ActionsFn<'a, K> = Box<dyn Fn(&Node<K>) -> Vec<ItemAction> + 'a>;
+/// What follows an action clicked on a row.
+type OnActionFn<'a, K> = Box<dyn FnMut(&K, &str) + 'a>;
 
 /// A row's context menu.
 enum ContextMenu<'a, K> {
@@ -664,6 +675,10 @@ pub struct TreeView<'a, K: Key> {
     activate_on_click: bool,
     height: Option<f32>,
     icon: Option<IconFn<'a, K>>,
+    guides: bool,
+    trailing: Option<TrailingFn<'a, K>>,
+    actions: Option<ActionsFn<'a, K>>,
+    on_action: Option<OnActionFn<'a, K>>,
     row_widgets: Option<RowFn<'a, K>>,
     context: Option<ContextMenu<'a, K>>,
     can_drop: Option<DropFn<'a, K>>,
@@ -682,6 +697,10 @@ impl<K: Key> std::fmt::Debug for TreeView<'_, K> {
             .field("activate_on_click", &self.activate_on_click)
             .field("height", &self.height)
             .field("icon", &self.icon.is_some())
+            .field("guides", &self.guides)
+            .field("trailing", &self.trailing.is_some())
+            .field("actions", &self.actions.is_some())
+            .field("on_action", &self.on_action.is_some())
             .field("row_widgets", &self.row_widgets.is_some())
             .field("context", &self.context.is_some())
             .field("can_drop", &self.can_drop.is_some())
@@ -703,6 +722,10 @@ impl<'a, K: Key> TreeView<'a, K> {
             activate_on_click: false,
             height: None,
             icon: None,
+            guides: false,
+            trailing: None,
+            actions: None,
+            on_action: None,
             row_widgets: None,
             context: None,
             can_drop: None,
@@ -801,6 +824,39 @@ impl<'a, K: Key> TreeView<'a, K> {
     /// shows is reported to agents (the `icons` collector's `drawn`).
     pub fn icon(mut self, icon: impl Fn(&Node<K>) -> Option<Source> + 'a) -> Self {
         self.icon = Some(Box::new(icon));
+        self
+    }
+
+    /// Draws a guide down each row for each of its levels (the kit's
+    /// `list-guide`).
+    pub fn guides(mut self, on: bool) -> Self {
+        self.guides = on;
+        self
+    }
+
+    /// Each row's weak text on its right (a count, a type; `None`: none),
+    /// in the row's muted tone, before its actions and widgets.
+    pub fn trailing(mut self, text: impl Fn(&Node<K>) -> Option<String> + 'a) -> Self {
+        self.trailing = Some(Box::new(text));
+        self
+    }
+
+    /// Each row's action buttons (a visibility eye, remove), right to left
+    /// before its widgets: shown on the row under the pointer, the
+    /// selected rows and the cursor's row while the tree has the focus,
+    /// pinned ones always. A click runs `tree.action`, then
+    /// [`TreeView::on_action`]; it does not select the row. Tab from the
+    /// tree reaches the cursor's buttons ([the keyboard](crate::item#keyboard)),
+    /// and screen readers find them on the row as custom actions.
+    pub fn actions(mut self, actions: impl Fn(&Node<K>) -> Vec<ItemAction> + 'a) -> Self {
+        self.actions = Some(Box::new(actions));
+        self
+    }
+
+    /// Called with the row's key and the action's id when an action
+    /// button was clicked and `tree.action` was not vetoed.
+    pub fn on_action(mut self, act: impl FnMut(&K, &str) + 'a) -> Self {
+        self.on_action = Some(Box::new(act));
         self
     }
 
@@ -927,12 +983,6 @@ impl<'a, K: Key> TreeView<'a, K> {
             ui.ctx().request_repaint();
         }
         let focus_tree = std::mem::take(&mut state.focus_tree);
-        // The kit's disclosure glyphs, read once for every row.
-        let kit = egui_pop_core::kit::Kit::of(ui.ctx());
-        let (open_glyph, closed_glyph) = (
-            kit.glyph(egui_pop_core::kit::Glyph::DisclosureOpen),
-            kit.glyph(egui_pop_core::kit::Glyph::DisclosureClosed),
-        );
         let mut actions = Vec::new();
         let row_h = rows::height(ui);
         if focused && state.renaming.is_none() {
@@ -945,6 +995,13 @@ impl<'a, K: Key> TreeView<'a, K> {
         }
         let label = self.label.clone().unwrap_or_else(|| tr(ui.ctx(), &s::TREE));
         let icon = self.icon.take();
+        let trailing = self.trailing.take();
+        let item_actions = self.actions.take();
+        let focused_id = ui.memory(|m| m.focused());
+        // The cursor row's actions, drawn after the tree takes its place
+        // in the Tab order; the actions clicked.
+        let mut late = None;
+        let mut clicked: Vec<(K, String)> = Vec::new();
         let mut row_widgets = self.row_widgets.take();
         let mut context_menu = self.context.take();
         let tree = self.id.as_str();
@@ -987,7 +1044,8 @@ impl<'a, K: Key> TreeView<'a, K> {
                         continue;
                     }
                     let row = model.rows_now()[i].clone();
-                    let x = rect.left() + row.depth() as f32 * indent;
+                    let depth = row.depth();
+                    let x = rect.left() + depth as f32 * indent;
                     match row {
                         Row::Node { key, .. } => {
                             let node = match model.node(&key) {
@@ -1043,38 +1101,41 @@ impl<'a, K: Key> TreeView<'a, K> {
                                 }
                             }
                             let row_state = rows::state(selected, hovered, cursor);
-                            rows::paint(ui, &visible.kit.list_row, rect, row_state);
-                            let color = rows::text_color(&visible.kit.list_row, row_state);
-                            let toggle = Rect::from_min_size(
-                                pos2(x, rect.top()),
-                                vec2(indent, rect.height()),
-                            );
-                            if node.branch {
-                                let glyph = if model.is_open(&key) {
-                                    open_glyph
+                            let source = icon.as_ref().and_then(|f| f(&node));
+                            let row_actions =
+                                item_actions.as_ref().map(|f| f(&node)).unwrap_or_default();
+                            let action_focused = focused_id.is_some_and(|f| {
+                                (0..row_actions.len()).any(|k| item::action_id(r.id, k) == f)
+                            });
+                            let at_cursor =
+                                selection.cursor() == Some(&key) && (focused || action_focused);
+                            let revealed =
+                                (r.contains_pointer() && drag.is_none()) || selected || at_cursor;
+                            let placed = item::Frame {
+                                kit: visible.kit,
+                                state: row_state,
+                                depth,
+                                guides: self.guides,
+                                disclosure: if node.branch {
+                                    Disclosure::branch(model.is_open(&key))
                                 } else {
-                                    closed_glyph
-                                };
-                                glyph.paint(ui.painter(), toggle, color);
+                                    Disclosure::Leaf
+                                },
+                                handle: false,
+                                icon: source.as_ref(),
                             }
-                            let mut left = toggle.right();
-                            if let Some(source) = icon.as_ref().and_then(|f| f(&node)) {
-                                let side = Size::Inline.points(&Tokens::of(ui.ctx()));
-                                let at = Rect::from_center_size(
-                                    pos2(left + side / 2.0, rect.center().y),
-                                    vec2(side, side),
+                            .paint(ui, rect, revealed);
+                            let color = placed.color;
+                            let toggle = placed.toggle.unwrap_or(rect);
+                            if let Some(name) = source.as_ref().and_then(Source::icon_name) {
+                                egui_pop_core::icon::registry::record(
+                                    ui.ctx(),
+                                    "tree",
+                                    &node.label,
+                                    name,
                                 );
-                                source.paint(ui, at, color);
-                                if let Some(name) = source.icon_name() {
-                                    egui_pop_core::icon::registry::record(
-                                        ui.ctx(),
-                                        "tree",
-                                        &node.label,
-                                        name,
-                                    );
-                                }
-                                left += side + ui.spacing().icon_spacing;
                             }
+                            let left = placed.left;
                             // The row's widgets, from the right end; the
                             // label stops before them.
                             let mut right = rect.right();
@@ -1093,6 +1154,50 @@ impl<'a, K: Key> TreeView<'a, K> {
                                 if used.width() > 0.0 {
                                     right = used.left() - ui.spacing().item_spacing.x;
                                 }
+                            }
+                            // Its actions, before the widgets; the
+                            // cursor's come after the tree in the Tab
+                            // order.
+                            let shown: Vec<usize> = (0..row_actions.len())
+                                .filter(|&k| revealed || row_actions[k].is_pinned())
+                                .collect();
+                            let spots = item::action_rects(ui, rect, right, shown.len());
+                            if let Some(last) = spots.last() {
+                                right = last.left();
+                            }
+                            if at_cursor && !shown.is_empty() {
+                                late = Some((
+                                    key.clone(),
+                                    r.id,
+                                    row_state,
+                                    shown
+                                        .iter()
+                                        .map(|&k| row_actions[k].clone())
+                                        .collect::<Vec<_>>(),
+                                    shown.clone(),
+                                    spots.clone(),
+                                ));
+                            } else {
+                                for (&k, spot) in shown.iter().zip(&spots) {
+                                    let a = &row_actions[k];
+                                    let id = item::action_id(r.id, k);
+                                    if item::action_button(ui, visible.kit, id, *spot, a, row_state)
+                                        .clicked()
+                                    {
+                                        clicked.push((key.clone(), a.id().to_string()));
+                                    }
+                                }
+                            }
+                            if let Some(text) = trailing.as_ref().and_then(|f| f(&node)) {
+                                right = item::paint_trailing(
+                                    ui,
+                                    visible.kit,
+                                    row_state,
+                                    rect,
+                                    left,
+                                    right,
+                                    &text,
+                                );
                             }
                             let text_rect = Rect::from_min_max(
                                 pos2(left, rect.top()),
@@ -1149,7 +1254,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                                     // underlined (as the palette marks it).
                                     let strong = visible
                                         .kit
-                                        .list_row
+                                        .list_item
                                         .style_toned(Tone::Accent, row_state)
                                         .text;
                                     let job = filter::highlighted(
@@ -1171,6 +1276,14 @@ impl<'a, K: Key> TreeView<'a, K> {
                             r.widget_info(move || {
                                 WidgetInfo::selected(Role::Button, true, selected, &name)
                             });
+                            let labels: Vec<String> =
+                                row_actions.iter().map(|a| a.label().to_string()).collect();
+                            item::custom_actions(ui, r.id, &labels);
+                            if let Some(a) =
+                                item::requested_action(ui, r.id).and_then(|k| row_actions.get(k))
+                            {
+                                clicked.push((key.clone(), a.id().to_string()));
+                            }
                             let double = r.double_clicked();
                             if double && self.activate_on_click {
                                 // The first click did it.
@@ -1257,6 +1370,23 @@ impl<'a, K: Key> TreeView<'a, K> {
                 }
             },
         );
+        // The cursor's actions, after the tree in the Tab order: Tab from
+        // the tree reaches them, Tab from the last leaves the tree.
+        if let Some((key, row, row_state, row_actions, shown, spots)) = late {
+            // In `ui` itself: a child `Ui` would move the ids of what
+            // follows whenever the buttons come and go.
+            let kit = egui_pop_core::kit::Kit::of(ui.ctx());
+            for ((a, &k), spot) in row_actions.iter().zip(&shown).zip(&spots) {
+                if !inner.contains_rect(*spot) {
+                    continue;
+                }
+                if item::action_button(ui, &kit, item::action_id(row, k), *spot, a, row_state)
+                    .clicked()
+                {
+                    clicked.push((key.clone(), a.id().to_string()));
+                }
+            }
+        }
         // A drag ends: dropped where it points, or nowhere.
         if let Some(d) = drag.as_ref() {
             let (released, down) =
@@ -1312,6 +1442,28 @@ impl<'a, K: Key> TreeView<'a, K> {
         }
         if ran {
             state.drain();
+            ui.ctx().request_repaint();
+        }
+        for (key, action) in clicked {
+            let outcome = steps::run(
+                self.app,
+                &TREE_ACTION,
+                json!({ "tree": self.id, "key": key, "action": action }),
+                |_| Ok(Json::Null),
+            );
+            match outcome {
+                Outcome::Done(Ok(_)) => {
+                    if let Some(act) = self.on_action.as_mut() {
+                        act(&key, &action);
+                    }
+                }
+                Outcome::Done(Err(reason)) | Outcome::Vetoed { reason, .. } => {
+                    signals.push(Signal::Vetoed {
+                        step: TREE_ACTION,
+                        reason,
+                    })
+                }
+            }
             ui.ctx().request_repaint();
         }
         filter::report(ui.ctx(), &self.id, state);
