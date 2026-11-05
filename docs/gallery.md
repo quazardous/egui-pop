@@ -305,6 +305,8 @@ and filmstrip, marks, filter chips, a comparison).
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/table-sorted-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/table-sorted-pop-dark.png" width="200" alt="table-sorted-pop-dark"></a><br>table-sorted-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/table-columns-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/table-columns-pop-dark.png" width="200" alt="table-columns-pop-dark"></a><br>table-columns-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-kit.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-kit.png" width="200" alt="library-kit"></a><br>library-kit</td>
+  </tr>
+  <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/list-items-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/list-items-pop-dark.png" width="200" alt="list-items-pop-dark"></a><br>list-items-pop-dark</td>
   </tr>
 </table>
