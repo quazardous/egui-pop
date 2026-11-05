@@ -10,6 +10,11 @@
 //! | `timeline.remove_marker` | `timeline`, `id` | removes a marker |
 //! | `timeline.play` | `timeline`, `speed` (1 by default, negative backwards) | asks to play |
 //! | `timeline.pause` | `timeline` | asks to pause |
+//! | `timeline.add_clip` | `timeline`, `track`, `seconds` or `time` (else the playhead), `length`, `offset`, `label`, `source`, `source_length`, `color` | adds a clip to a track; answers its `id` |
+//! | `timeline.move_clip` | `timeline`, `id`, `seconds` or `time`, `track` | moves a clip along its track or to another |
+//! | `timeline.trim_clip` | `timeline`, `id`, `start`, `end` (seconds) | moves a clip's start or end |
+//! | `timeline.remove_clip` | `timeline`, `id` or `ids` | removes clips |
+//! | `timeline.select_clips` | `timeline`, `ids` | selects clips (an empty list: none) |
 //!
 //! `timeline` is a widget's id; without it, the timeline that last had the
 //! focus, else the only one drawn with an id. A command is checked and
@@ -30,6 +35,7 @@ use egui_pop_model::ids::{CommandId, PluginId};
 use serde_json::{Value as Json, json};
 
 use super::state::{Marker, MarkerKind, TimeRange, TimelineState};
+use super::tracks::{Clip, ClipEdge, ClipMove};
 use super::{Op, apply};
 
 /// The plugin's id.
@@ -41,6 +47,11 @@ pub const CMD_ADD_MARKER: CommandId = CommandId::from_static("timeline.add_marke
 pub const CMD_REMOVE_MARKER: CommandId = CommandId::from_static("timeline.remove_marker");
 pub const CMD_PLAY: CommandId = CommandId::from_static("timeline.play");
 pub const CMD_PAUSE: CommandId = CommandId::from_static("timeline.pause");
+pub const CMD_ADD_CLIP: CommandId = CommandId::from_static("timeline.add_clip");
+pub const CMD_MOVE_CLIP: CommandId = CommandId::from_static("timeline.move_clip");
+pub const CMD_TRIM_CLIP: CommandId = CommandId::from_static("timeline.trim_clip");
+pub const CMD_REMOVE_CLIP: CommandId = CommandId::from_static("timeline.remove_clip");
+pub const CMD_SELECT_CLIPS: CommandId = CommandId::from_static("timeline.select_clips");
 
 /// Passes a timeline may go undrawn before agents no longer see it.
 const GONE_AFTER: u64 = 3;
@@ -66,7 +77,7 @@ impl Plugin for TimelinePlugin {
         ctx.collector(
             FnCollector::new(
                 "timeline",
-                "The timelines drawn with an id: their scale, view (start, duration, end), bounds, playhead (seconds and text), range and whether it loops, markers (id, time, text, label, kind, colour), the selected marker, the play state and speed asked; the one that last had the focus.",
+                "The timelines drawn with an id: their scale, view (start, duration, end), bounds, playhead (seconds and text), range and whether it loops, markers (id, time, text, label, kind, colour), the selected marker, the tracks (id, name, kind) and their clips (id, start, end, length, offset, text, label, source, source length, colour), the clips selected, the play state and speed asked; the one that last had the focus.",
             )
             .snapshot(move |_| Timelines::of(&egui).describe()),
         )?;
@@ -212,6 +223,10 @@ impl Timelines {
                     m.id = e.state.next_id();
                     Op::AddMarker(m)
                 }
+                Op::AddClip { track, mut clip } => {
+                    clip.id = e.state.next_clip_id();
+                    Op::AddClip { track, clip }
+                }
                 Op::RemoveMarker(id) if e.state.marker(id).is_none() => {
                     return Err(format!("no marker {id}"));
                 }
@@ -219,9 +234,16 @@ impl Timelines {
             };
             let added = match &op {
                 Op::AddMarker(m) => Some(m.id),
+                Op::AddClip { clip, .. } => Some(clip.id),
                 _ => None,
             };
-            apply(&mut e.state, op.clone());
+            // Checked on the state the widget will have: a refusal queues
+            // nothing.
+            let mut tried = e.state.clone();
+            if let Some(error) = apply(&mut tried, op.clone()).error {
+                return Err(error);
+            }
+            e.state = tried;
             e.queue.push((op, origin.clone()));
             let mut answer = describe(&e.state);
             if let Some(id) = added {
@@ -320,6 +342,24 @@ pub fn describe(s: &TimelineState) -> Json {
             "color": m.color.map(hex),
         })).collect::<Vec<_>>(),
         "selected": s.selected,
+        "tracks": s.tracks.iter().map(|t| json!({
+            "id": t.id,
+            "name": t.name,
+            "kind": t.kind,
+            "clips": t.clips.iter().map(|c| json!({
+                "id": c.id,
+                "seconds": c.start,
+                "end": c.end(),
+                "length": c.length,
+                "offset": c.offset,
+                "text": [text(c.start), text(c.end())],
+                "label": c.label,
+                "source": c.source,
+                "source_length": c.source_length,
+                "color": c.color.map(hex),
+            })).collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
+        "selected_clips": s.selected_clips,
         "play": s.play,
         "speed": s.speed,
     })
@@ -459,7 +499,120 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
             .args(json!({ "timeline": timeline })),
         |call| timelines(call).run(name(call.args), Op::Pause, call.origin),
     )?;
+    ctx.command(
+        CommandSpec::new(CMD_ADD_CLIP, "Add a clip to a timeline", CAT)
+            .description("Adds a clip to a timeline's track `track` (its id), starting at `seconds` or `time` (else at the playhead), `length` seconds long, reading its source from `offset` seconds in; `label`, `source` (what it plays, for the application), `source_length` (trimming stops at the source's ends) and `color` (`#rrggbb`) are optional. Refused where it would overlap a clip. Answers its `id` in `added`. One step of the history.")
+            .args(json!({ "timeline": timeline, "track": 1, "seconds": 4.0, "length": 2.5, "label": "Take 2", "source": "take2.mov" })),
+        |call| {
+            let t = timelines(call);
+            let args = call.args;
+            let track = args.get("track").and_then(Json::as_u64).ok_or("`track` is a track's id")?;
+            let at = match time_of(&t, args)? {
+                Some(s) => s,
+                None => t.get(name(args))?["playhead"]["seconds"].as_f64().unwrap_or(0.0),
+            };
+            let length = args.get("length").and_then(Json::as_f64).ok_or("`length` is a number of seconds")?;
+            let text = |key: &str| args.get(key).and_then(Json::as_str).unwrap_or("").to_string();
+            let mut clip = Clip::new(0, at, length, text("label"))
+                .offset(args.get("offset").and_then(Json::as_f64).unwrap_or(0.0))
+                .source(text("source"));
+            clip.source_length = args.get("source_length").and_then(Json::as_f64);
+            if let Some(c) = args.get("color").and_then(Json::as_str) {
+                clip.color = Some(parse_hex(c).ok_or_else(|| format!("`{c}` is not `#rrggbb`"))?);
+            }
+            t.run(name(args), Op::AddClip { track, clip }, call.origin)
+        },
+    )?;
+    ctx.command(
+        CommandSpec::new(CMD_MOVE_CLIP, "Move a clip on a timeline", CAT)
+            .description("Moves a timeline's clip `id` to start at `seconds` or `time`, and to track `track` (its id); what is not given stays. Refused where it would overlap a clip or leave the bounds. One step of the history.")
+            .args(json!({ "timeline": timeline, "id": 1, "seconds": 8.0, "track": 2 })),
+        |call| {
+            let t = timelines(call);
+            let args = call.args;
+            let id = clip_id(args)?;
+            let at = time_of(&t, args)?;
+            let track = args.get("track").and_then(Json::as_u64);
+            let clip = clip_of(&t, name(args), id)?;
+            let mv = ClipMove {
+                id,
+                track: track.unwrap_or(clip.0),
+                start: at.unwrap_or(clip.1),
+            };
+            t.run(name(args), Op::MoveClips(vec![mv]), call.origin)
+        },
+    )?;
+    ctx.command(
+        CommandSpec::new(CMD_TRIM_CLIP, "Trim a clip on a timeline", CAT)
+            .description("Moves a timeline's clip `id` start to `start` and its end to `end` (seconds on the timeline; either or both). Its offset into its source follows its start; it stops at its source's ends, its neighbours and the bounds. One step of the history each.")
+            .args(json!({ "timeline": timeline, "id": 1, "start": 4.5, "end": 9.0 })),
+        |call| {
+            let t = timelines(call);
+            let args = call.args;
+            let id = clip_id(args)?;
+            let start = args.get("start").and_then(Json::as_f64);
+            let end = args.get("end").and_then(Json::as_f64);
+            if start.is_none() && end.is_none() {
+                return Err("`start` or `end` is needed".into());
+            }
+            let mut answer = Json::Null;
+            for (edge, time) in [(ClipEdge::Start, start), (ClipEdge::End, end)] {
+                if let Some(time) = time {
+                    answer = t.run(name(args), Op::TrimClip { id, edge, time }, call.origin)?;
+                }
+            }
+            Ok(answer)
+        },
+    )?;
+    ctx.command(
+        CommandSpec::new(CMD_REMOVE_CLIP, "Remove clips from a timeline", CAT)
+            .description("Removes a timeline's clip `id`, or the clips `ids` (one step of the history together).")
+            .args(json!({ "timeline": timeline, "id": 1 })),
+        |call| {
+            let ids = clip_ids(call.args)?;
+            timelines(call).run(name(call.args), Op::RemoveClips(ids), call.origin)
+        },
+    )?;
+    ctx.command(
+        CommandSpec::new(CMD_SELECT_CLIPS, "Select clips on a timeline", CAT)
+            .description("Selects a timeline's clips `ids` (an empty list lets them go); the keys act on the last. Not a step of the history.")
+            .args(json!({ "timeline": timeline, "ids": [1, 2] })),
+        |call| {
+            let ids = clip_ids(call.args)?;
+            timelines(call).run(name(call.args), Op::SelectClips(ids), call.origin)
+        },
+    )?;
     Ok(())
+}
+
+/// The `id` argument, a clip's.
+fn clip_id(args: &Json) -> Result<u64, String> {
+    args.get("id")
+        .and_then(Json::as_u64)
+        .ok_or_else(|| "`id` is a clip's id".into())
+}
+
+/// `ids` (a list of clips' ids), else `id`.
+fn clip_ids(args: &Json) -> Result<Vec<u64>, String> {
+    match args.get("ids") {
+        Some(Json::Array(ids)) => ids
+            .iter()
+            .map(|v| v.as_u64().ok_or_else(|| "`ids` are clips' ids".to_string()))
+            .collect(),
+        Some(_) => Err("`ids` is a list of clips' ids".into()),
+        None => clip_id(args).map(|id| vec![id]),
+    }
+}
+
+/// Clip `id`'s track and start on the timeline `timeline`.
+fn clip_of(t: &Timelines, timeline: Option<&str>, id: u64) -> Result<(u64, f64), String> {
+    let pass = t.ctx.cumulative_pass_nr();
+    let mut reg = lock(&t.registry);
+    let (_, e) = target(&mut reg, timeline, pass)?;
+    match (e.state.clip_track(id), e.state.clip(id)) {
+        (Some(track), Some(c)) => Ok((track.id, c.start)),
+        _ => Err(format!("no clip {id}")),
+    }
 }
 
 #[cfg(test)]

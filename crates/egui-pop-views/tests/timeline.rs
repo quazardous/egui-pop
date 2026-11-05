@@ -1,7 +1,8 @@
 //! The `Timeline` widget: its transport keys, the pointer (scrub, range,
 //! zoom), its markers, each change of its document a step of the history,
-//! its accessible node, and agents reading it through the `timeline`
-//! collector and driving it with the `timeline.*` commands.
+//! its accessible node, its tracks and clips (selected, moved, trimmed), and
+//! agents reading it through the `timeline` collector and driving it with
+//! the `timeline.*` commands.
 
 use egui::accesskit::Role;
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, vec2};
@@ -11,8 +12,8 @@ use egui_pop_api::{App, history};
 use egui_pop_core::lock;
 use egui_pop_model::commands::Origin;
 use egui_pop_views::timeline::{
-    Edit, Marker, MarkerKind, PlayState, TimeRange, TimeScale, Timeline, TimelinePlugin,
-    TimelineState, Timelines,
+    Clip, ClipPaint, Edit, Marker, MarkerKind, PlayState, TimeRange, TimeScale, Timeline,
+    TimelinePlugin, TimelineState, Timelines, Track,
 };
 use serde_json::{Value, json};
 
@@ -188,6 +189,7 @@ fn i_and_o_set_a_range_that_loops_and_markers_follow_the_keys() {
             Edit::MarkerMoved { .. } => "move",
             Edit::MarkerRemoved(_) => "remove",
             Edit::Restored => "restored",
+            _ => "clip",
         })
         .collect();
     assert_eq!(
@@ -411,4 +413,268 @@ fn agents_read_timelines_and_drive_them_with_commands() {
     assert_eq!(song["play"], "paused");
     // A timeline nobody drew: refused, and said so.
     assert!(Timelines::of(&h.ctx).get(Some("nope")).is_err());
+}
+
+/// A minute at 25 fps: V1 holds "One" (0..10 s) and "Two" (20..30 s), A1
+/// "Sound" (5..15 s).
+fn edit() -> TimelineState {
+    let mut tl = TimelineState::new(TimeScale::frames(25), 60.0);
+    tl.playhead = 12.0;
+    let v1 = tl.add_track(Track::new(0, "V1"));
+    let a1 = tl.add_track(Track::new(0, "A1"));
+    tl.add_clip(v1, Clip::new(0, 0.0, 10.0, "One").source_length(12.0))
+        .unwrap();
+    tl.add_clip(v1, Clip::new(0, 20.0, 10.0, "Two").offset(2.0))
+        .unwrap();
+    tl.add_clip(a1, Clip::new(0, 5.0, 10.0, "Sound")).unwrap();
+    tl
+}
+
+fn undo_steps(app: &egui_pop_api::AppHandle) -> Vec<String> {
+    lock(&app.store())
+        .undo_steps()
+        .iter()
+        .map(|s| s.label.clone())
+        .collect()
+}
+
+#[test]
+fn clips_are_named_selected_and_driven_by_the_keys() {
+    let mut h = harness(edit(), true);
+    let app = h.state().app.as_ref().unwrap().handle().clone();
+    h.get_by_role_and_label(Role::Button, "Clip One on V1, 00:00:00:00 to 00:00:10:00");
+    egui_pop_test::assert_all_named(&h);
+    focus(&mut h);
+    let (none, shift, ctrl) = (Modifiers::NONE, Modifiers::SHIFT, Modifiers::COMMAND);
+    // Page Down: the next clip on the first track, the playhead to it.
+    press(&mut h, none, Key::PageDown);
+    assert_eq!(h.state().tl.selected_clips, [2]);
+    assert_eq!(h.state().tl.playhead, 20.0);
+    // Shift+Down: the clip nearest the playhead on the track below.
+    press(&mut h, shift, Key::ArrowDown);
+    assert_eq!(h.state().tl.selected_clips, [3]);
+    // Ctrl+Right moves it a frame; Ctrl+Up to V1 is refused (it would
+    // overlap One), so it stays.
+    press(&mut h, ctrl, Key::ArrowRight);
+    assert_eq!(h.state().tl.clip(3).unwrap().start, 5.04);
+    press(&mut h, ctrl, Key::ArrowUp);
+    assert_eq!(h.state().tl.clip_track(3).unwrap().name, "A1");
+    // ] trims its end to the playhead (20 s); [ its start, to 12 s.
+    press(&mut h, none, Key::CloseBracket);
+    assert_eq!(h.state().tl.clip(3).unwrap().end(), 20.0);
+    h.state_mut().tl.playhead = 12.0;
+    press(&mut h, none, Key::OpenBracket);
+    let c = h.state().tl.clip(3).unwrap().clone();
+    assert_eq!((c.start, c.end()), (12.0, 20.0));
+    assert!((c.offset - 6.96).abs() < 1e-9, "{}", c.offset);
+    // Delete removes it; Escape lets the selection go.
+    press(&mut h, none, Key::Delete);
+    assert!(h.state().tl.clip(3).is_none());
+    assert_eq!(
+        undo_steps(&app),
+        ["Move clip", "Trim clip", "Trim clip", "Remove clip"]
+    );
+    history::undo(&app, &Origin::User);
+    h.run();
+    assert_eq!(h.state().tl.clip(3).map(|c| c.start), Some(12.0));
+    assert!(h.state().edits.contains(&Edit::Restored));
+    press(&mut h, none, Key::PageUp);
+    assert_eq!(h.state().tl.selected_clips, [1]);
+    press(&mut h, none, Key::Escape);
+    assert!(h.state().tl.selected_clips.is_empty());
+}
+
+#[test]
+fn a_clip_dragged_moves_across_tracks_and_snaps_and_its_edge_trims() {
+    let mut h = harness(edit(), true);
+    let app = h.state().app.as_ref().unwrap().handle().clone();
+    let one = h
+        .get_by_role_and_label(Role::Button, "Clip One on V1, 00:00:00:00 to 00:00:10:00")
+        .rect();
+    let sound = h
+        .get_by_role_and_label(Role::Button, "Clip Sound on A1, 00:00:05:00 to 00:00:15:00")
+        .rect();
+    let slider = h.get_by_role_and_label(Role::Slider, "Timeline").rect();
+    let x_of = |t: f64| slider.left() + slider.width() * (t / 60.0) as f32;
+    // A click selects it, and leaves the playhead.
+    h.drag_at(one.center());
+    h.run();
+    h.drop_at(one.center());
+    h.run();
+    assert_eq!(h.state().tl.selected_clips, [1]);
+    assert_eq!(h.state().tl.playhead, 12.0);
+    // Grabbed in its middle (5 s), dropped near 40.2 s on A1: it lands
+    // with its start on the grid, on A1.
+    let y = sound.center().y;
+    h.drag_at(one.center());
+    h.run();
+    for t in [20.0, 38.0, 40.2] {
+        h.hover_at(Pos2::new(x_of(t), y));
+        h.run();
+    }
+    h.drop_at(Pos2::new(x_of(40.2), y));
+    h.run();
+    let c = h.state().tl.clip(1).unwrap().clone();
+    assert_eq!(h.state().tl.clip_track(1).unwrap().name, "A1");
+    assert!((c.start - 35.0).abs() < 0.5, "{}", c.start);
+    // Over Sound: it stops against it.
+    let one = h
+        .get_by_role_and_label(
+            Role::Button,
+            &format!(
+                "Clip One on A1, {} to {}",
+                h.state().tl.scale.format(c.start),
+                h.state().tl.scale.format(c.end())
+            ),
+        )
+        .rect();
+    h.drag_at(one.center());
+    h.run();
+    for t in [30.0, 22.0, 18.0] {
+        h.hover_at(Pos2::new(x_of(t), y));
+        h.run();
+    }
+    h.drop_at(Pos2::new(x_of(18.0), y));
+    h.run();
+    assert_eq!(h.state().tl.clip(1).unwrap().start, 15.0, "against Sound");
+    assert_eq!(undo_steps(&app), ["Move clip", "Move clip"]);
+    // Its end dragged to 27.1 s: trimmed, but no further than its source
+    // (12 s long), so it stops at 27 s.
+    let c = h.state().tl.clip(1).unwrap().clone();
+    let end = Pos2::new(x_of(c.end()) - 1.0, y);
+    h.drag_at(end);
+    h.run();
+    for t in [26.0, 27.1] {
+        h.hover_at(Pos2::new(x_of(t), y));
+        h.run();
+    }
+    h.drop_at(Pos2::new(x_of(27.1), y));
+    h.run();
+    assert_eq!(h.state().tl.clip(1).unwrap().end(), 27.0);
+    assert_eq!(
+        undo_steps(&app).last().map(String::as_str),
+        Some("Trim clip")
+    );
+    let trims = h
+        .state()
+        .edits
+        .iter()
+        .filter(|e| matches!(e, Edit::ClipTrimmed { .. }))
+        .count();
+    assert_eq!(trims, 1, "one edit for the whole drag");
+    history::undo(&app, &Origin::User);
+    h.run();
+    assert_eq!(h.state().tl.clip(1).unwrap().end(), 25.0);
+}
+
+#[test]
+fn an_application_paints_its_clips() {
+    let mut seen = Vec::new();
+    let mut tl = edit();
+    let ctx = egui::Context::default();
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let mut painter = |_: &egui::Painter, clip: &ClipPaint<'_>| {
+            let (from, to) = clip.source_in_view();
+            seen.push((clip.clip.label.clone(), clip.track.name.clone(), from, to));
+        };
+        Timeline::new(&mut tl).clips(&mut painter).show(ui);
+    });
+    out.textures_delta.clear();
+    let two = seen.iter().find(|s| s.0 == "Two").expect("Two painted");
+    assert_eq!(two.1, "V1");
+    // Its source from its offset.
+    assert!(
+        (two.2 - 2.0).abs() < 0.1 && (two.3 - 12.0).abs() < 0.1,
+        "{two:?}"
+    );
+    assert_eq!(seen.len(), 3);
+}
+
+#[test]
+fn agents_add_move_trim_select_and_remove_clips() {
+    let mut h = harness(edit(), true);
+    let app = h.state().app.as_ref().unwrap().handle().clone();
+    let call = |h: &mut Harness<'_, Kept>, id: &str, args: Value| {
+        let f = app.debug_call("commands", "run", &json!({ "id": id, "args": args }));
+        h.run();
+        f
+    };
+    let f = call(
+        &mut h,
+        "timeline.add_clip",
+        json!({ "track": 1, "seconds": 40.0, "length": 5.0, "label": "Three", "source": "three.mov", "color": "#3366cc" }),
+    );
+    assert!(f.ok, "{f:?}");
+    let added = h
+        .state()
+        .tl
+        .clips()
+        .find(|(_, c)| c.label == "Three")
+        .unwrap()
+        .1
+        .clone();
+    assert_eq!(
+        (added.start, added.end(), added.source.as_str()),
+        (40.0, 45.0, "three.mov")
+    );
+    // Refused where it would overlap, and said why.
+    let refused = h
+        .state_mut()
+        .app
+        .as_mut()
+        .unwrap()
+        .run(
+            &egui_pop_views::timeline::CMD_MOVE_CLIP,
+            json!({ "id": added.id, "seconds": 22.0 }),
+            Origin::Agent("t".into()),
+        )
+        .now();
+    let said = format!("{refused:?}");
+    assert!(
+        matches!(refused, Some(Err(_))) && said.contains("overlap clip 2"),
+        "{said}"
+    );
+    h.run();
+    for (id, args) in [
+        (
+            "timeline.move_clip",
+            json!({ "id": added.id, "track": 2, "time": "00:00:30:00" }),
+        ),
+        (
+            "timeline.trim_clip",
+            json!({ "id": added.id, "start": 31.0, "end": 33.0 }),
+        ),
+        ("timeline.select_clips", json!({ "ids": [1, added.id] })),
+    ] {
+        let f = call(&mut h, id, args);
+        assert!(f.ok, "{id}: {f:?}");
+    }
+    let c = h.state().tl.clip(added.id).unwrap();
+    assert_eq!((c.start, c.end(), c.offset), (31.0, 33.0, 1.0));
+    assert_eq!(h.state().tl.clip_track(added.id).unwrap().id, 2);
+    let snap = app.debug_snapshot();
+    let tl = &snap["timeline"]["timelines"]["song"];
+    assert_eq!(tl["selected_clips"], json!([1, added.id]), "{tl}");
+    assert_eq!(
+        tl["tracks"][1]["clips"][1]["text"],
+        json!(["00:00:31:00", "00:00:33:00"])
+    );
+    assert_eq!(tl["tracks"][1]["clips"][1]["color"], "#3366cc");
+    let f = call(
+        &mut h,
+        "timeline.remove_clip",
+        json!({ "ids": [1, added.id] }),
+    );
+    assert!(f.ok, "{f:?}");
+    assert!(h.state().tl.clip(1).is_none() && h.state().tl.clip(added.id).is_none());
+    assert_eq!(
+        undo_steps(&app),
+        [
+            "Add clip",
+            "Move clip",
+            "Trim clip",
+            "Trim clip",
+            "Remove clips"
+        ]
+    );
 }

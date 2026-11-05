@@ -5,6 +5,7 @@ use egui::Color32;
 use serde::{Deserialize, Serialize};
 
 use super::scale::TimeScale;
+use super::tracks::{Clip, ClipPlace, ClipSpan, Track};
 
 /// The fastest J or L shuttles, in either direction.
 pub const MAX_SPEED: f64 = 32.0;
@@ -149,17 +150,19 @@ pub enum PlayState {
 }
 
 /// The document's part of a timeline: what its history keeps, one step per
-/// change (the markers, the range, the loop).
+/// change (the markers, the range, the loop, the tracks and their clips).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TimelineDoc {
     pub markers: Vec<Marker>,
     pub range: Option<TimeRange>,
     pub looping: bool,
+    pub tracks: Vec<Track>,
 }
 
 /// A change of a timeline's document, as its output reports it.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Edit {
     MarkerAdded(Marker),
     MarkerMoved {
@@ -173,12 +176,33 @@ pub enum Edit {
         to: Option<TimeRange>,
     },
     LoopSet(bool),
+    ClipAdded {
+        track: u64,
+        clip: Clip,
+    },
+    /// A clip moved, along its track or to another.
+    ClipMoved {
+        id: u64,
+        from: ClipPlace,
+        to: ClipPlace,
+    },
+    /// A clip's start or end moved, its offset into its source following
+    /// its start.
+    ClipTrimmed {
+        id: u64,
+        from: ClipSpan,
+        to: ClipSpan,
+    },
+    ClipRemoved {
+        track: u64,
+        clip: Clip,
+    },
     /// The document was replaced from the history (an undo, a redo).
     Restored,
 }
 
 /// Everything a timeline shows: its scale, view, playhead, range, markers,
-/// and the play state and speed it asks for. The application keeps it,
+/// tracks and clips, and the play state and speed it asks for. The application keeps it,
 /// draws it with [`Timeline`](super::Timeline) and moves the playhead while
 /// it plays ([`advance`](Self::advance)).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -195,6 +219,11 @@ pub struct TimelineState {
     pub markers: Vec<Marker>,
     /// The marker the keys act on.
     pub selected: Option<u64>,
+    /// Rows of clips under the ruler, from the top.
+    pub tracks: Vec<Track>,
+    /// The clips selected, the one selected last at the end (the keys act
+    /// on it).
+    pub selected_clips: Vec<u64>,
     pub play: PlayState,
     /// Asked speed, negative backwards (J), 1 by default.
     pub speed: f64,
@@ -211,6 +240,8 @@ impl Default for TimelineState {
             looping: false,
             markers: Vec::new(),
             selected: None,
+            tracks: Vec::new(),
+            selected_clips: Vec::new(),
             play: PlayState::Paused,
             speed: 1.0,
         }
@@ -238,6 +269,7 @@ impl TimelineState {
             markers: self.markers.clone(),
             range: self.range,
             looping: self.looping,
+            tracks: self.tracks.clone(),
         }
     }
 
@@ -246,6 +278,8 @@ impl TimelineState {
         self.markers = doc.markers;
         self.range = doc.range;
         self.looping = doc.looping;
+        self.tracks = doc.tracks;
+        self.prune_selection();
         if self
             .selected
             .is_some_and(|id| !self.markers.iter().any(|m| m.id == id))

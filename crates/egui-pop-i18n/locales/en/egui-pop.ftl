@@ -595,9 +595,17 @@ command-theme-undo =
     .description = Takes the theme editor's last change back, through the theme.token step.
     .title = Undo a theme change
 
+command-timeline-add-clip =
+    .description = Adds a clip to a timeline's track `track` (its id), starting at `seconds` or `time` (else at the playhead), `length` seconds long, reading its source from `offset` seconds in; `label`, `source` (what it plays, for the application), `source_length` (trimming stops at the source's ends) and `color` (`#rrggbb`) are optional. Refused where it would overlap a clip. Answers its `id` in `added`. One step of the history.
+    .title = Add a clip to a timeline
+
 command-timeline-add-marker =
     .description = Adds a marker to a timeline at `seconds` or `time` (else at the playhead), named `label`, of `kind` `marker` or `cue`, in `color` (`#rrggbb`, else the theme's). Answers its `id` in `added`. One step of the history.
     .title = Add a marker to a timeline
+
+command-timeline-move-clip =
+    .description = Moves a timeline's clip `id` to start at `seconds` or `time`, and to track `track` (its id); what is not given stays. Refused where it would overlap a clip or leave the bounds. One step of the history.
+    .title = Move a clip on a timeline
 
 command-timeline-pause =
     .description = Asks a timeline to pause.
@@ -607,9 +615,17 @@ command-timeline-play =
     .description = Asks a timeline to play at `speed` (1 by default, negative backwards); the application moves the time.
     .title = Play a timeline
 
+command-timeline-remove-clip =
+    .description = Removes a timeline's clip `id`, or the clips `ids` (one step of the history together).
+    .title = Remove clips from a timeline
+
 command-timeline-remove-marker =
     .description = Removes a timeline's marker `id`. One step of the history.
     .title = Remove a marker from a timeline
+
+command-timeline-select-clips =
+    .description = Selects a timeline's clips `ids` (an empty list lets them go); the keys act on the last. Not a step of the history.
+    .title = Select clips on a timeline
 
 command-timeline-set-range =
     .description = Sets a timeline's range from `start` to `end` (seconds), or clears it (`clear`: true); `loop` says whether playback goes round it. One step of the history.
@@ -618,6 +634,10 @@ command-timeline-set-range =
 command-timeline-set-time =
     .description = Moves a timeline's playhead (`timeline`, its id) to `seconds`, to `time` (text in the timeline's scale: `1:02.5`, `00:01:02:12`, `17.2.480`), or by `by` seconds; kept inside its bounds.
     .title = Move a timeline's playhead
+
+command-timeline-trim-clip =
+    .description = Moves a timeline's clip `id` start to `start` and its end to `end` (seconds on the timeline; either or both). Its offset into its source follows its start; it stops at its source's ends, its neighbours and the bounds. One step of the history each.
+    .title = Trim a clip on a timeline
 
 command-tips-browse =
     .description = Every tip, by the plugin that declared it, each plugin's with its own switch.
@@ -2183,9 +2203,13 @@ egui-pop-views-table = Table
 
 egui-pop-views-timeline = Timeline
 
+egui-pop-views-timeline-add-clip = Add clip
+
 egui-pop-views-timeline-add-marker = Add marker
 
 egui-pop-views-timeline-clear-range = Clear range
+
+egui-pop-views-timeline-clip = Clip { $label } on { $track }, { $start } to { $end }
 
 egui-pop-views-timeline-cue = Cue { $label } at { $time }
 
@@ -2195,15 +2219,25 @@ egui-pop-views-timeline-loop-on = Loop the range
 
 egui-pop-views-timeline-marker = Marker { $label } at { $time }
 
+egui-pop-views-timeline-move-clip = Move clip
+
+egui-pop-views-timeline-move-clips = Move clips
+
 egui-pop-views-timeline-move-marker = Move marker
 
 egui-pop-views-timeline-new-marker = Marker { $number }
+
+egui-pop-views-timeline-remove-clip = Remove clip
+
+egui-pop-views-timeline-remove-clips = Remove clips
 
 egui-pop-views-timeline-remove-marker = Remove marker
 
 egui-pop-views-timeline-set-range = Set range
 
 egui-pop-views-timeline-speed = { $speed }×
+
+egui-pop-views-timeline-trim-clip = Trim clip
 
 egui-pop-views-tree = Tree
 

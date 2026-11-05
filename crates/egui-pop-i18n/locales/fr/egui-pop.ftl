@@ -2663,9 +2663,17 @@ setting-viewer-image-hosts =
 
 category-timeline = Ligne de temps
 
+command-timeline-add-clip =
+    .description = Ajoute un clip à la piste `track` (son id) d’une ligne de temps, commençant à `seconds` ou `time` (sinon à la tête de lecture), long de `length` secondes, lisant sa source à partir de `offset` secondes ; `label`, `source` (ce qu’il lit, pour l’application), `source_length` (le découpage s’arrête aux bouts de la source) et `color` (`#rrggbb`) sont facultatifs. Refusé là où il chevaucherait un clip. Répond son id dans `added`. Un pas de l’historique.
+    .title = Ajouter un clip à une ligne de temps
+
 command-timeline-add-marker =
     .description = Ajoute un repère à une ligne de temps à `seconds` ou `time` (sinon à la tête de lecture), nommé `label`, de type (`kind`) `marker` ou `cue`, de couleur `color` (`#rrggbb`, sinon celle du thème). Répond son id dans `added`. Un pas de l’historique.
     .title = Ajouter un repère à une ligne de temps
+
+command-timeline-move-clip =
+    .description = Déplace le clip `id` d’une ligne de temps pour qu’il commence à `seconds` ou `time`, et sur la piste `track` (son id) ; ce qui n’est pas donné reste. Refusé là où il chevaucherait un clip ou sortirait des bornes. Un pas de l’historique.
+    .title = Déplacer un clip sur une ligne de temps
 
 command-timeline-pause =
     .description = Demande à une ligne de temps de se mettre en pause.
@@ -2675,9 +2683,17 @@ command-timeline-play =
     .description = Demande à une ligne de temps de lire à la vitesse `speed` (1 par défaut, négative à rebours) ; l’application fait avancer le temps.
     .title = Lire une ligne de temps
 
+command-timeline-remove-clip =
+    .description = Retire le clip `id` d’une ligne de temps, ou les clips `ids` (un seul pas de l’historique pour tous).
+    .title = Retirer des clips d’une ligne de temps
+
 command-timeline-remove-marker =
     .description = Retire le repère `id` d’une ligne de temps. Un pas de l’historique.
     .title = Retirer un repère d’une ligne de temps
+
+command-timeline-select-clips =
+    .description = Sélectionne les clips `ids` d’une ligne de temps (une liste vide les relâche) ; les touches agissent sur le dernier. Pas un pas de l’historique.
+    .title = Sélectionner des clips sur une ligne de temps
 
 command-timeline-set-range =
     .description = Règle la plage d’une ligne de temps de `start` à `end` (en secondes), ou l’efface (`clear` : true) ; `loop` dit si la lecture y tourne en boucle. Un pas de l’historique.
@@ -2687,11 +2703,19 @@ command-timeline-set-time =
     .description = Amène la tête de lecture d’une ligne de temps (`timeline`, son id) à `seconds`, à `time` (un texte dans l’échelle de la ligne : `1:02.5`, `00:01:02:12`, `17.2.480`), ou la déplace de `by` secondes ; sans sortir de ses bornes.
     .title = Déplacer la tête de lecture d’une ligne de temps
 
+command-timeline-trim-clip =
+    .description = Amène le début du clip `id` d’une ligne de temps à `start` et sa fin à `end` (en secondes sur la ligne de temps ; l’un, l’autre ou les deux). Son décalage dans sa source suit son début ; il s’arrête aux bouts de sa source, à ses voisins et aux bornes. Un pas de l’historique chacun.
+    .title = Découper un clip sur une ligne de temps
+
 egui-pop-views-timeline = Ligne de temps
+
+egui-pop-views-timeline-add-clip = Ajouter un clip
 
 egui-pop-views-timeline-add-marker = Ajouter un repère
 
 egui-pop-views-timeline-clear-range = Effacer la plage
+
+egui-pop-views-timeline-clip = Clip { $label } sur { $track }, de { $start } à { $end }
 
 egui-pop-views-timeline-cue = Cue { $label } à { $time }
 
@@ -2703,13 +2727,23 @@ egui-pop-views-timeline-marker = Repère { $label } à { $time }
 
 egui-pop-views-timeline-move-marker = Déplacer le repère
 
+egui-pop-views-timeline-move-clip = Déplacer le clip
+
+egui-pop-views-timeline-move-clips = Déplacer les clips
+
 egui-pop-views-timeline-new-marker = Repère { $number }
+
+egui-pop-views-timeline-remove-clip = Retirer le clip
+
+egui-pop-views-timeline-remove-clips = Retirer les clips
 
 egui-pop-views-timeline-remove-marker = Retirer le repère
 
 egui-pop-views-timeline-set-range = Régler la plage
 
 egui-pop-views-timeline-speed = { $speed }×
+
+egui-pop-views-timeline-trim-clip = Découper le clip
 
 plugin-egui-pop-timeline =
     .title = Ligne de temps

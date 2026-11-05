@@ -287,6 +287,24 @@ pub const TIMELINE_LOOP_ON: StrKey =
     StrKey::new("egui-pop-views-timeline-loop-on", "Loop the range");
 pub const TIMELINE_LOOP_OFF: StrKey =
     StrKey::new("egui-pop-views-timeline-loop-off", "Stop looping");
+/// A timeline's clip: its accessible name, and what is announced when the
+/// keys reach it.
+pub const TIMELINE_CLIP: StrKey = StrKey::new(
+    "egui-pop-views-timeline-clip",
+    "Clip { $label } on { $track }, { $start } to { $end }",
+);
+/// The history's steps of a timeline's clips.
+pub const TIMELINE_ADD_CLIP: StrKey = StrKey::new("egui-pop-views-timeline-add-clip", "Add clip");
+pub const TIMELINE_MOVE_CLIP: StrKey =
+    StrKey::new("egui-pop-views-timeline-move-clip", "Move clip");
+pub const TIMELINE_MOVE_CLIPS: StrKey =
+    StrKey::new("egui-pop-views-timeline-move-clips", "Move clips");
+pub const TIMELINE_TRIM_CLIP: StrKey =
+    StrKey::new("egui-pop-views-timeline-trim-clip", "Trim clip");
+pub const TIMELINE_REMOVE_CLIP: StrKey =
+    StrKey::new("egui-pop-views-timeline-remove-clip", "Remove clip");
+pub const TIMELINE_REMOVE_CLIPS: StrKey =
+    StrKey::new("egui-pop-views-timeline-remove-clips", "Remove clips");
 /// The speed shown beside the playhead while shuttling: `2×`, `-4×`.
 pub const TIMELINE_SPEED: StrKey = StrKey::new("egui-pop-views-timeline-speed", "{ $speed }×");
 
@@ -397,6 +415,13 @@ pub const ALL: &[StrKey] = &[
     TIMELINE_LOOP_ON,
     TIMELINE_LOOP_OFF,
     TIMELINE_SPEED,
+    TIMELINE_CLIP,
+    TIMELINE_ADD_CLIP,
+    TIMELINE_MOVE_CLIP,
+    TIMELINE_MOVE_CLIPS,
+    TIMELINE_TRIM_CLIP,
+    TIMELINE_REMOVE_CLIP,
+    TIMELINE_REMOVE_CLIPS,
 ];
 
 #[cfg(test)]

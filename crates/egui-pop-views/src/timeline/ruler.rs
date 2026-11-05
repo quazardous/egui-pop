@@ -108,6 +108,8 @@ pub enum Snapped {
     Playhead,
     /// An end of the range.
     Range,
+    /// An edge of a clip.
+    Clip,
 }
 
 /// Points a time is pulled to, with what each is.
@@ -133,6 +135,40 @@ pub fn snap(scale: &TimeScale, time: f64, targets: &SnapTargets, reach: f64) -> 
     match targets.grid {
         Some(step) => (scale.round_to(time, step), Snapped::Grid),
         None => (scale.quantize(time), Snapped::Free),
+    }
+}
+
+/// Where a span `length` long starting near `start` snaps: whichever of its
+/// edges is nearer a point within `reach` lands on it; otherwise its start
+/// goes onto the grid (or the scale's units). Its new start, and what it
+/// snapped to.
+pub fn snap_span(
+    scale: &TimeScale,
+    start: f64,
+    length: f64,
+    targets: &SnapTargets,
+    reach: f64,
+) -> (f64, Snapped) {
+    let nearest = |t: f64| {
+        targets
+            .points
+            .iter()
+            .map(|(p, what)| ((p - t).abs(), *p - t, *what))
+            .filter(|(d, _, _)| *d <= reach)
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+    };
+    let by_start = nearest(start);
+    let by_end = nearest(start + length);
+    let pick = match (by_start, by_end) {
+        (Some(a), Some(b)) => Some(if b.0 < a.0 { b } else { a }),
+        (a, b) => a.or(b),
+    };
+    if let Some((_, shift, what)) = pick {
+        return (start + shift, what);
+    }
+    match targets.grid {
+        Some(step) => (scale.round_to(start, step), Snapped::Grid),
+        None => (scale.quantize(start), Snapped::Free),
     }
 }
 
@@ -240,5 +276,25 @@ mod tests {
         // Frames stay whole even free.
         let f = TimeScale::frames(25);
         assert_eq!(snap(&f, 1.01, &free, 0.2), (1.0, Snapped::Free));
+    }
+
+    #[test]
+    fn a_span_snaps_by_its_nearer_edge() {
+        let s = TimeScale::Seconds;
+        let targets = SnapTargets {
+            grid: Some(1.0),
+            points: vec![(10.0, Snapped::Clip), (20.0, Snapped::Playhead)],
+        };
+        // Its end is nearer the clip's edge than its start the playhead.
+        assert_eq!(snap_span(&s, 6.1, 4.0, &targets, 0.5), (6.0, Snapped::Clip));
+        assert_eq!(
+            snap_span(&s, 19.8, 4.0, &targets, 0.5),
+            (20.0, Snapped::Playhead)
+        );
+        // Nothing near: its start on the grid.
+        assert_eq!(
+            snap_span(&s, 13.4, 4.0, &targets, 0.5),
+            (13.0, Snapped::Grid)
+        );
     }
 }

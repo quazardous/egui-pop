@@ -1,6 +1,7 @@
 //! What a timeline is drawn with: its own tokens (`timeline.*`), each read by
 //! path and falling back on the system token it aliases, so a theme restyles
-//! the ruler, the playhead, the range and the markers with data only.
+//! the ruler, the playhead, the range, the markers, the tracks and the clips
+//! with data only.
 
 use egui::{Color32, Context};
 use egui_pop_core::theme::Tokens;
@@ -38,6 +39,21 @@ pub struct TimelineTokens {
     /// Around the marker the keys act on (`timeline.marker.selected`, else
     /// `focus.ring`).
     pub marker_selected: Color32,
+    /// The line between two tracks (`timeline.track.border`, else
+    /// `border.default`).
+    pub track_border: Color32,
+    /// A track's name (`timeline.track.text`, else `text.muted`).
+    pub track_text: Color32,
+    /// A clip without a colour of its own (`timeline.clip.fill`, else
+    /// `surface.raised`).
+    pub clip_fill: Color32,
+    /// A clip's outline (`timeline.clip.border`, else `border.strong`).
+    pub clip_border: Color32,
+    /// A clip's label (`timeline.clip.text`, else `text.default`).
+    pub clip_text: Color32,
+    /// A selected clip's outline and a trimming handle
+    /// (`timeline.clip.selected`, else `accent.default`).
+    pub clip_selected: Color32,
     /// The outline while the timeline has the keyboard focus (`focus.ring`).
     pub focus: Color32,
     /// The speed badge's fill and text (`surface.raised`, `text.strong`).
@@ -47,6 +63,9 @@ pub struct TimelineTokens {
     pub ruler_height: f32,
     /// The markers' lane (`size.control.height`, four fifths of it).
     pub lane_height: f32,
+    /// A track's height unless it or the timeline says
+    /// (`size.control.height`, twice).
+    pub track_height: f32,
     /// The labels' size (`font.scale.xs`).
     pub font_size: f32,
     /// Corners (`radius.widget`).
@@ -72,11 +91,18 @@ impl TimelineTokens {
             marker: c("timeline.marker", t.status.info),
             marker_text: c("timeline.marker.text", t.text.default),
             marker_selected: c("timeline.marker.selected", t.focus_ring),
+            track_border: c("timeline.track.border", t.border.default),
+            track_text: c("timeline.track.text", t.text.muted),
+            clip_fill: c("timeline.clip.fill", t.surface.raised),
+            clip_border: c("timeline.clip.border", t.border.strong),
+            clip_text: c("timeline.clip.text", t.text.default),
+            clip_selected: c("timeline.clip.selected", t.accent.default),
             focus: t.focus_ring,
             badge_fill: t.surface.raised,
             badge_text: t.text.strong,
             ruler_height: t.size.control_height,
             lane_height: (t.size.control_height * 0.8).round(),
+            track_height: t.size.control_height * 2.0,
             font_size: t.font.scale.xs,
             radius: t.radius.widget,
         }
