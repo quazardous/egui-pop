@@ -2492,6 +2492,13 @@ impl AppHandle {
         self.workbench_mut().hint.clone()
     }
 
+    /// The detached window under a dragged tab, where letting it go
+    /// moves it (as a tab), found in the last pass: `None` while no tab
+    /// is dragged over one.
+    pub fn window_drop(&self) -> Option<crate::workbench::WindowDrop> {
+        self.workbench_mut().window_drop.clone()
+    }
+
     /// The panel the keys obey, the context key `focusedPanel`: the last that
     /// held the widget focus, had the pointer pressed in it or was given the
     /// keyboard (`crate::workbench`'s "The focused panel").
@@ -2633,6 +2640,15 @@ impl AppHandle {
     /// rules keep it out.
     pub fn move_panel(&self, panel: &PanelId, area: Area) -> Option<Outcome> {
         self.change_workbench(crate::workbench::Change::Move(panel.clone(), area))
+    }
+
+    /// Moves a panel into the detached window holding `window` (a panel
+    /// of it), as a tab (`workbench.join_window`).
+    pub fn move_to_window(&self, panel: &PanelId, window: &PanelId) -> Option<Outcome> {
+        self.change_workbench(crate::workbench::Change::JoinWindow(
+            panel.clone(),
+            window.clone(),
+        ))
     }
 
     /// Moves a panel to a window of its own (`workbench.detach`).
@@ -3798,6 +3814,13 @@ impl App {
                 .when("!modalOpen")
                 .args(json!({ "panel": "app.inspector" })),
             |call| crate::workbench::arrange_command(call.app, call.args, "column"),
+        )?
+        .command(
+            CommandSpec::new(crate::workbench::CMD_MOVE_TO_WINDOW, "Move to window", "View")
+                .description("Moves the focused panel, or `panel`, into the detached window holding `window`, as a tab.")
+                .when("!modalOpen")
+                .args(json!({ "panel": "app.outline", "window": "app.inspector" })),
+            |call| crate::workbench::move_to_window_command(call.app, call.args),
         )?;
         crate::palettes::declare(&mut ctx)?;
         for (i, (menu, label)) in [
@@ -4342,6 +4365,12 @@ impl App {
                     "dragging": wb.dragging.as_ref().map(|(p, a, _)| json!({
                         "panel": p,
                         "from": crate::workbench::area_name(*a),
+                    })),
+                    "window_drop": wb.window_drop.as_ref().map(|d| json!({
+                        "panel": d.panel,
+                        "window": d.window,
+                        "zone": format!("{:?}", d.zone).to_lowercase(),
+                        "refusal": d.refusal,
                     })),
                     "drop_hint": wb.hint.as_ref().map(|h| json!({
                         "name": h.name(),

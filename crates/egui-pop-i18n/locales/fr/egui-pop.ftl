@@ -618,6 +618,10 @@ command-workbench-leave-zen =
     .description = Affiche de nouveau tout l’établi.
     .title = Quitter le mode zen
 
+command-workbench-move-to-window =
+    .description = Déplace le panneau actif, ou `panel`, dans la fenêtre détachée qui contient `window`, comme onglet.
+    .title = Déplacer vers la fenêtre
+
 command-workbench-zen =
     .description = N’affiche que le centre : ni barre de titre, de menus ou d’état, ni zone latérale ou du bas, ni palette. Échap en sort.
     .title = Mode zen
@@ -1863,6 +1867,10 @@ egui-pop-workbench-flyout-pin = Épingler { $panel }
 egui-pop-workbench-fold = Replier { $area }
 
 egui-pop-workbench-move-to = Déplacer vers { $area }
+
+egui-pop-workbench-move-to-window = Déplacer vers la fenêtre
+
+egui-pop-workbench-stays-docked = { $panel } ne peut pas aller dans une fenêtre
 
 egui-pop-workbench-stays-out = { $panel } ne va pas dans { $area }
 

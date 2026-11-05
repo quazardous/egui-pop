@@ -154,13 +154,126 @@ impl Node {
     }
 }
 
-/// A panel detached into its own window.
+/// A panel detached into its own window, and the panels that joined it
+/// there as tabs.
+///
+/// Saved as the window it was before tabs (its first panel under
+/// `panel`), the others under `tabs`: an application that predates them
+/// reads the first panel and puts the others back as it does any panel
+/// missing from a layout (docked in its default area).
+///
+/// ```
+/// use egui_pop_model::ids::PanelId;
+/// use egui_pop_model::layout::Auxiliary;
+///
+/// let log = PanelId::from_static("app.log");
+/// let notes = PanelId::from_static("app.notes");
+/// let mut w = Auxiliary::window(log.clone(), "main", [0.0, 0.0, 640.0, 480.0]);
+/// w.join(notes.clone());
+/// assert_eq!(w.panels().count(), 2);
+/// assert_eq!(w.shown(), &notes);
+/// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Auxiliary {
+    /// The panel detached first: it names the window.
     pub panel: PanelId,
     /// The screen it was on, by name, and its position there.
     pub screen: String,
     pub rect: [f32; 4],
+    /// The panels that joined the window as tabs, after `panel`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tabs: Vec<PanelId>,
+    /// The shown tab: 0 for `panel`, `n` for `tabs[n - 1]`.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub shown: usize,
+}
+
+impl Auxiliary {
+    /// A window showing one panel.
+    pub fn window(panel: PanelId, screen: &str, rect: [f32; 4]) -> Auxiliary {
+        Auxiliary {
+            panel,
+            screen: screen.to_string(),
+            rect,
+            tabs: Vec::new(),
+            shown: 0,
+        }
+    }
+
+    /// Its panels, in order.
+    pub fn panels(&self) -> impl Iterator<Item = &PanelId> {
+        std::iter::once(&self.panel).chain(&self.tabs)
+    }
+
+    /// Whether a panel is one of its panels.
+    pub fn holds(&self, panel: &PanelId) -> bool {
+        self.panels().any(|p| p == panel)
+    }
+
+    /// The panel shown.
+    pub fn shown(&self) -> &PanelId {
+        match self.shown.min(self.tabs.len()) {
+            0 => &self.panel,
+            n => &self.tabs[n - 1],
+        }
+    }
+
+    /// Shows one of its tabs; whether it holds it.
+    pub fn show(&mut self, panel: &PanelId) -> bool {
+        let at = self.panels().position(|p| p == panel);
+        if let Some(i) = at {
+            self.shown = i;
+        }
+        at.is_some()
+    }
+
+    /// A panel joins it as its last tab, shown (already there: shown).
+    pub fn join(&mut self, panel: PanelId) {
+        if !self.holds(&panel) {
+            self.tabs.push(panel.clone());
+        }
+        self.show(&panel);
+    }
+
+    /// Its panels in another order (the same panels): the shown one
+    /// stays shown.
+    pub fn reorder(&mut self, panels: &[PanelId]) {
+        let mut now: Vec<&PanelId> = self.panels().collect();
+        let mut next: Vec<&PanelId> = panels.iter().collect();
+        now.sort();
+        next.sort();
+        if panels.is_empty() || now != next {
+            return;
+        }
+        let shown = self.shown().clone();
+        self.panel = panels[0].clone();
+        self.tabs = panels[1..].to_vec();
+        self.show(&shown);
+    }
+
+    /// Takes a panel out; `false` when it was its only one (the window
+    /// is left as it was, to be dropped). The shown tab out, its
+    /// neighbour on the right is shown, or on the left at the end.
+    fn take(&mut self, panel: &PanelId) -> bool {
+        let Some(i) = self.panels().position(|p| p == panel) else {
+            return true;
+        };
+        if self.tabs.is_empty() {
+            return false;
+        }
+        let shown = self.shown.min(self.tabs.len());
+        if i == 0 {
+            self.panel = self.tabs.remove(0);
+        } else {
+            self.tabs.remove(i - 1);
+        }
+        self.shown = if shown > i || (shown == i && shown > self.tabs.len()) {
+            shown - 1
+        } else {
+            shown
+        };
+        true
+    }
 }
 
 /// One member of a floating group: a palette, or palettes held as tabs
@@ -827,9 +940,39 @@ impl Layout {
     /// Every panel placed, docked, detached or floating.
     pub fn placed(&self) -> Vec<&PanelId> {
         let mut v: Vec<&PanelId> = self.areas.iter().flat_map(|(_, n)| n.panels()).collect();
-        v.extend(self.auxiliary.iter().map(|a| &a.panel));
+        v.extend(self.auxiliary.iter().flat_map(|a| a.panels()));
         v.extend(self.floating.iter().flat_map(|g| g.panels()));
         v
+    }
+
+    /// The window a detached panel is in, if it is detached (alone or
+    /// as one of its tabs).
+    pub fn window_of(&self, panel: &PanelId) -> Option<&Auxiliary> {
+        self.auxiliary.iter().find(|a| a.holds(panel))
+    }
+
+    /// Moves a panel into the window holding `window` (a panel of it), as
+    /// its last tab, shown; taken out of where it was, opened if closed.
+    /// A panel in that window already is only shown.
+    pub fn join_window(&mut self, panel: &PanelId, window: &PanelId) -> Result<(), String> {
+        if !self.auxiliary.iter().any(|a| a.holds(window)) {
+            return Err(format!("`{window}` is in no window"));
+        }
+        if self.window_of(panel).is_some_and(|a| a.holds(window)) {
+            if let Some(a) = self.auxiliary.iter_mut().find(|a| a.holds(panel)) {
+                a.show(panel);
+            }
+            return Ok(());
+        }
+        self.remove(panel);
+        self.hidden.retain(|h| h != panel);
+        // `window` may have named the window `panel` left: still there,
+        // as `remove` keeps a window's other panels.
+        let a = (self.auxiliary.iter_mut())
+            .find(|a| a.holds(window))
+            .ok_or_else(|| format!("`{window}` is in no window"))?;
+        a.join(panel.clone());
+        Ok(())
     }
 
     /// The group a floating panel floats in, if it floats.
@@ -1049,7 +1192,7 @@ impl Layout {
             .into_iter()
             .filter_map(|(a, n)| n.retain(&|p: &PanelId| p != panel).map(|n| (a, n)))
             .collect();
-        self.auxiliary.retain(|x| x.panel != *panel);
+        self.auxiliary.retain_mut(|x| x.take(panel));
         for g in &mut self.floating {
             g.take(panel);
         }
@@ -1087,6 +1230,7 @@ impl Layout {
     /// docked.
     pub fn activate(&mut self, panel: &PanelId) -> bool {
         self.areas.iter_mut().any(|(_, n)| n.activate(panel))
+            || self.auxiliary.iter_mut().any(|a| a.show(panel))
     }
 
     /// The shown panels of an area, in order (the shown tab of each
@@ -1128,15 +1272,22 @@ impl Layout {
         let known = |id: &PanelId| panels.get(id.as_str()).is_some();
         let mut auxiliary = Vec::new();
         let mut redock = Vec::new();
-        for a in self.auxiliary {
-            if !known(&a.panel) {
-                notes.push(format!("panel `{}` no longer exists", a.panel));
-            } else if !screens.contains(&a.screen.as_str()) {
-                notes.push(format!(
-                    "screen `{}` is gone: `{}` docked back",
-                    a.screen, a.panel
-                ));
-                redock.push(a.panel);
+        for mut a in self.auxiliary {
+            for p in a.panels().filter(|p| !known(p)) {
+                notes.push(format!("panel `{p}` no longer exists"));
+            }
+            let gone: Vec<PanelId> = a.panels().filter(|p| !known(p)).cloned().collect();
+            if gone.len() == a.panels().count() {
+                continue;
+            }
+            for p in &gone {
+                a.take(p);
+            }
+            if !screens.contains(&a.screen.as_str()) {
+                for p in a.panels() {
+                    notes.push(format!("screen `{}` is gone: `{p}` docked back", a.screen));
+                }
+                redock.extend(a.panels().cloned());
             } else {
                 auxiliary.push(a);
             }
