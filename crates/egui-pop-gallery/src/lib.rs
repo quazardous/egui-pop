@@ -40,7 +40,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 61] = [
+pub const PAGES: [&str; 62] = [
     "overview",
     "tokens",
     "builtins",
@@ -76,6 +76,7 @@ pub const PAGES: [&str; 61] = [
     "tree",
     "list-items",
     "table",
+    "plot",
     "library",
     "timeline",
     "text-editor",
@@ -289,6 +290,17 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::tree::TreePage)
         .plugin(pages::list_items::ListItemsPage)
         .plugin(pages::table::TablePage)
+        .plugin(egui_pop::views::plot::PlotPlugin)
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.plot"),
+            story: StoryId::from_static("plot"),
+            title: "Charts",
+            description: "Plots on egui_plot in the kit's colours: a time series with a time cursor, a scatter and bars, each series in its slot of the categorical palette.",
+            group: "Components",
+            weight: 79,
+            show: pages::plot::show,
+            playground: Some(pages::plot::playground),
+        })
         .plugin(egui_pop::views::library::LibraryPlugin)
         .plugin(pages::library::LibraryPage)
         .plugin(egui_pop::views::timeline::TimelinePlugin)

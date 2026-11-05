@@ -3534,6 +3534,54 @@ fn the_table_page_selects_columns_from_their_headers() {
 }
 
 #[test]
+fn the_plot_page_describes_its_plots_and_reports_the_hovered_bar() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in POP_THEMES {
+        let mut h = harness(options(theme, Density::Comfortable, "plot"));
+        h.run();
+        egui_pop_test::assert_all_named(&h);
+        h.remove_cursor();
+        h.run();
+        results.add(h.try_snapshot(format!("plot-{theme}")));
+    }
+    let mut h = harness(options("pop-dark", Density::Comfortable, "plot"));
+    h.run();
+    // Each plot is one node, named by its label, described by its series.
+    let d = h
+        .get_by_label("Wheel speeds")
+        .accesskit_node()
+        .description()
+        .unwrap_or_default();
+    assert!(
+        d.starts_with("Left wheel (line): 201 points, x from 0 to 20"),
+        "{d}"
+    );
+    assert!(d.ends_with("Time cursor at 6"), "{d}");
+    // Across the bars plot, low enough to cross the bars: one is hovered,
+    // and the `plots` collector says which.
+    let r = h.get_by_label("Frames per second by scene").rect();
+    let mut hovered = None;
+    for i in 1..40 {
+        // Halfway up: every bar is taller than half the highest.
+        h.hover_at(r.left_center() + egui::vec2(r.width() * i as f32 / 40.0, 0.0));
+        h.run();
+        let snap = h.state().app.handle().debug_snapshot();
+        let plot = &snap["plots"]["plots"]["gallery.plot.bars"];
+        assert_eq!(plot["series"][0]["points"], 4, "{plot}");
+        if !plot["hovered"].is_null() {
+            hovered = Some(plot["hovered"].clone());
+            break;
+        }
+    }
+    let hovered = hovered.expect("a bar under the pointer");
+    assert!(
+        ["Run A", "Run B"].contains(&hovered["name"].as_str().unwrap_or("")),
+        "{hovered}"
+    );
+    assert!(h.query_by_label_contains("Last hovered: Run").is_some());
+}
+
+#[test]
 fn the_text_editor_page_edits_searches_through_the_keymap_and_vetoes_the_title() {
     use egui::{Key, Modifiers};
     let mut h = harness(options("pop-dark", Density::Comfortable, "text-editor"));
