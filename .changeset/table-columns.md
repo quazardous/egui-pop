@@ -1,5 +1,6 @@
 ---
 egui-pop-views: major
+egui-pop: major
 ---
 
 The data table selects columns: `DataTable::select_columns(true)` makes a
