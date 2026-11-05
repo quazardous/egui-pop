@@ -1,0 +1,14 @@
+$description: "The `list-guide` component of the default kit (docs/kit.md), layered into pop-dark."
+list-guide:
+  $description: "An indent guide (a kit component): a line down a nested row, under each level of its ancestors."
+  shape:
+    $type: "string"
+    $value: "outline"
+    $description: "The handler that draws it: outline (a line along a part with no width) or plain (none)."
+  rest:
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}

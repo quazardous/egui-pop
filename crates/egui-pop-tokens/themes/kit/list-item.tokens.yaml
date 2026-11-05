@@ -1,0 +1,19 @@
+$description: "The `list-item` component of the default kit (docs/kit.md), layered into pop-dark."
+list-item:
+  $description: "A dense row (a kit component): a list item or a property row, and the rows of the tree and the list; selected, under the pointer, pressed (`active`), the keyboard focus or the cursor of a focused view (`focus`), disabled. Its trailing text and a property's name are in the `muted` tone. Based on `list-row`: restyling the rows restyles it."
+  based-on:
+    $type: "string"
+    $value: "list-row"
+  active:
+    fill:
+      $type: "color"
+      $value: "{surface.active}"
+  disabled:
+    text:
+      $type: "color"
+      $value: "{text.muted}"
+  tone:
+    muted:
+      text:
+        $type: "color"
+        $value: "{text.muted}"

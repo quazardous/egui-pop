@@ -226,6 +226,11 @@ const CORE: &[Required] = &[
         "height of one-line controls",
     ),
     sys(
+        "size.row.height",
+        "dimension",
+        "height of a row of a list, a tree or a property panel",
+    ),
+    sys(
         "size.icon.inline",
         "dimension",
         "icons in text and controls",
