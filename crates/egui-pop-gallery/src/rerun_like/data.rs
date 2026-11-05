@@ -180,7 +180,7 @@ pub fn scalar(entity: usize, frame: u32) -> f32 {
 
 /// Whether an entity has data at this frame.
 pub fn logged_at(entity: usize, frame: u32) -> bool {
-    frame % ENTITIES[entity].every.max(1) == 0
+    frame.is_multiple_of(ENTITIES[entity].every.max(1))
 }
 
 /// A detection box at a frame: its label and its rectangle in the
