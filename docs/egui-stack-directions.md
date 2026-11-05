@@ -166,6 +166,14 @@ no 8-point floor); its egui_stack style only sets the bar's height.
 Separators are the kit's `splitter`, the drop overlay inside an area the
 kit's `dock-preview` and `button`.
 
+Since egui_stack 0.23 the drop overlay is drawn on the target
+(`OverlayType::Zones`: the region the tab would take, bordered and
+tinted, no buttons), and egui-pop sets it with its zone colours from the
+kit's `dock-preview`; the cross of buttons (`OverlayType::Widgets`) is
+no longer used. Since 0.24 the tree is n-ary, with rows, columns and
+grids (`Node::Linear`, `Node::Grid`), which the workbench saves in its
+layout document and arranges by command (`workbench.arrange`).
+
 ## 2. Behaviour egui-pop works around
 
 ### 2.1 The drop veto, by tab and destination

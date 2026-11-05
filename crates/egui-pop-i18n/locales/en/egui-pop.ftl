@@ -871,6 +871,18 @@ command-workbench-previous-region =
     .description = Moves the keyboard to the previous part of the window.
     .title = Go to the previous region
 
+command-workbench-arrange-grid =
+    .description = Lays out the focused panel's group and the groups beside it in rows and columns.
+    .title = Arrange as grid
+
+command-workbench-arrange-row =
+    .description = Lays out the focused panel's group and the groups beside it side by side.
+    .title = Arrange as row
+
+command-workbench-arrange-column =
+    .description = Lays out the focused panel's group and the groups beside it one above the other.
+    .title = Arrange as column
+
 command-workbench-tab-next =
     .description = Shows and focuses the next tab of the focused panel's group.
     .title = Go to the next tab

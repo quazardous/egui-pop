@@ -12,7 +12,10 @@ use crate::doc::{Schema, same};
 use crate::ids::PanelId;
 use crate::panels::{Area, Panels};
 
-/// Tabs and splits of one area.
+/// Tabs, splits and grids of one area.
+///
+/// A row or a column of more than two is saved as splits nested on their
+/// second side (`b`), each `ratio` the share of `a` in its split.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Node {
@@ -23,6 +26,20 @@ pub enum Node {
         ratio: f32,
         a: Box<Node>,
         b: Box<Node>,
+    },
+    /// Two or more nodes in rows and columns, row by row.
+    Grid {
+        /// The number of columns; none for as many as the square root of
+        /// the number of children, rounded up.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        columns: Option<usize>,
+        /// One share per column and one per row (even when empty or when
+        /// they do not match the layout).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        col_shares: Vec<f32>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        row_shares: Vec<f32>,
+        children: Vec<Node>,
     },
 }
 
@@ -43,6 +60,7 @@ impl Node {
                 v.extend(b.panels());
                 v
             }
+            Node::Grid { children, .. } => children.iter().flat_map(Node::panels).collect(),
         }
     }
 
@@ -57,6 +75,7 @@ impl Node {
                 None => false,
             },
             Node::Split { a, b, .. } => a.activate(panel) || b.activate(panel),
+            Node::Grid { children, .. } => children.iter_mut().any(|c| c.activate(panel)),
         }
     }
 
@@ -68,6 +87,11 @@ impl Node {
                 *active = panels.len() - 1;
             }
             Node::Split { a, .. } => a.push(panel),
+            Node::Grid { children, .. } => {
+                if let Some(first) = children.first_mut() {
+                    first.push(panel);
+                }
+            }
         }
     }
 
@@ -100,6 +124,32 @@ impl Node {
                 (Some(n), None) | (None, Some(n)) => Some(n),
                 (None, None) => None,
             },
+            Node::Grid {
+                columns,
+                col_shares,
+                row_shares,
+                children,
+            } => {
+                let before = children.len();
+                let mut children: Vec<Node> = children
+                    .into_iter()
+                    .filter_map(|c| c.retain(keep))
+                    .collect();
+                match children.len() {
+                    0 => None,
+                    1 => children.pop(),
+                    n => {
+                        // A grid that lost children lays them out evenly.
+                        let kept = n == before;
+                        Some(Node::Grid {
+                            columns,
+                            col_shares: if kept { col_shares } else { Vec::new() },
+                            row_shares: if kept { row_shares } else { Vec::new() },
+                            children,
+                        })
+                    }
+                }
+            }
         }
     }
 }
@@ -1052,6 +1102,11 @@ impl Layout {
                 Node::Split { a, b, .. } => {
                     walk(a, out);
                     walk(b, out);
+                }
+                Node::Grid { children, .. } => {
+                    for c in children {
+                        walk(c, out);
+                    }
                 }
             }
         }

@@ -2550,6 +2550,12 @@ impl AppHandle {
         self.workbench_mut().rects.get(&area).copied()
     }
 
+    /// Lays out the row, column or grid holding a panel's group again
+    /// (`workbench.arrange`; refused for a group alone in its area).
+    pub fn arrange(&self, panel: &PanelId, how: crate::workbench::Arrangement) -> Option<Outcome> {
+        self.change_workbench(crate::workbench::Change::Arrange(panel.clone(), how))
+    }
+
     /// Folds an area to its strip, or unfolds it (`workbench.fold`).
     pub fn fold_area(&self, area: Area, folded: bool) -> Option<Outcome> {
         self.change_workbench(crate::workbench::Change::Fold(area, folded))
@@ -3769,6 +3775,29 @@ impl App {
                 .when("!modalOpen")
                 .key("Ctrl+PageUp"),
             |call| crate::workbench::go_to_tab(call.app, true),
+        )?
+        // The row, column or grid around the focused panel's group, laid
+        // out again (`workbench.arrange`); `panel` names another group.
+        .command(
+            CommandSpec::new(crate::workbench::CMD_ARRANGE_GRID, "Arrange as grid", "View")
+                .description("Lays out the focused panel's group and the groups beside it in rows and columns.")
+                .when("!modalOpen")
+                .args(json!({ "panel": "app.inspector", "columns": 2 })),
+            |call| crate::workbench::arrange_command(call.app, call.args, "grid"),
+        )?
+        .command(
+            CommandSpec::new(crate::workbench::CMD_ARRANGE_ROW, "Arrange as row", "View")
+                .description("Lays out the focused panel's group and the groups beside it side by side.")
+                .when("!modalOpen")
+                .args(json!({ "panel": "app.inspector" })),
+            |call| crate::workbench::arrange_command(call.app, call.args, "row"),
+        )?
+        .command(
+            CommandSpec::new(crate::workbench::CMD_ARRANGE_COLUMN, "Arrange as column", "View")
+                .description("Lays out the focused panel's group and the groups beside it one above the other.")
+                .when("!modalOpen")
+                .args(json!({ "panel": "app.inspector" })),
+            |call| crate::workbench::arrange_command(call.app, call.args, "column"),
         )?;
         crate::palettes::declare(&mut ctx)?;
         for (i, (menu, label)) in [

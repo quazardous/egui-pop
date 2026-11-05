@@ -590,3 +590,123 @@ fn an_application_starts_an_area_over_and_the_placement_is_saved() {
     assert_eq!(app.area_placement(Area::EndSide), Placement::Over);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The bottom area as a row of three groups: the log, the notes, the tree.
+fn row_of_three(h: &mut Harness<'_, App>) {
+    let app = h.state().handle();
+    let mut layout = app.layout();
+    layout.areas.retain(|(a, _)| *a != Area::Bottom);
+    layout.areas.retain_mut(|(_, n)| {
+        let panels: Vec<PanelId> = n.panels().into_iter().cloned().collect();
+        !panels.contains(&TREE)
+    });
+    layout.hidden.retain(|p| *p != NOTES);
+    layout.areas.push((
+        Area::Bottom,
+        Node::Split {
+            vertical: false,
+            ratio: 0.25,
+            a: Box::new(Node::tab(LOG)),
+            b: Box::new(Node::Split {
+                vertical: false,
+                ratio: 0.5,
+                a: Box::new(Node::tab(NOTES)),
+                b: Box::new(Node::tab(TREE)),
+            }),
+        },
+    ));
+    app.set_layout(layout);
+    h.run();
+}
+
+fn bottom(h: &Harness<'_, App>) -> Node {
+    let layout = h.state().handle().layout();
+    let (_, node) = layout
+        .areas
+        .iter()
+        .find(|(a, _)| *a == Area::Bottom)
+        .unwrap();
+    node.clone()
+}
+
+#[test]
+fn the_groups_beside_a_panel_are_arranged_as_a_grid_and_back_in_a_row() {
+    let mut h = harness(builder(false));
+    row_of_three(&mut h);
+    let row = bottom(&h);
+    assert!(
+        matches!(&row, Node::Split { ratio, .. } if (ratio - 0.25).abs() < 1e-4),
+        "{row:?}"
+    );
+    let run = |h: &mut Harness<'_, App>, id: &str, args: Json| {
+        let reply = h
+            .state_mut()
+            .run(&CommandId::new(id).unwrap(), args, Origin::User);
+        h.run();
+        reply
+    };
+    // As a grid of two columns, by the agent's command.
+    run(
+        &mut h,
+        "workbench.arrange.grid",
+        serde_json::json!({ "panel": "demo.notes", "columns": 2 }),
+    );
+    let grid = bottom(&h);
+    let Node::Grid {
+        columns, children, ..
+    } = &grid
+    else {
+        panic!("a grid: {grid:?}");
+    };
+    assert_eq!(*columns, Some(2));
+    assert_eq!(children.len(), 3);
+    // Drawn again, then saved and read: the same grid.
+    h.run();
+    assert_eq!(bottom(&h), grid);
+    let layout = h.state().handle().layout();
+    let text = layout.to_json();
+    assert!(text.contains("\"grid\""), "{text}");
+    assert_eq!(
+        egui_pop_model::layout::Layout::from_json(&text).unwrap(),
+        layout
+    );
+    // The panels are all still drawn.
+    assert!(h.query_by_label("log body").is_some());
+    assert!(h.query_by_label("tree body").is_some());
+    // Back in a row, the focused panel's (the notes, focused by the step).
+    h.state().handle().focus_panel(&NOTES);
+    h.run();
+    run(&mut h, "workbench.arrange.row", Json::Null);
+    let row = bottom(&h);
+    assert!(
+        matches!(&row, Node::Split { vertical: false, b, .. } if matches!(**b, Node::Split { vertical: false, .. })),
+        "{row:?}"
+    );
+    assert_eq!(row.panels(), vec![&LOG, &NOTES, &TREE]);
+    // A column.
+    run(&mut h, "workbench.arrange.column", Json::Null);
+    assert!(matches!(bottom(&h), Node::Split { vertical: true, .. }));
+}
+
+#[test]
+fn a_group_alone_in_its_area_has_nothing_to_arrange() {
+    let mut h = harness(builder(false));
+    let before = h.state().handle().layout();
+    h.state_mut().run(
+        &CommandId::new("workbench.arrange.grid").unwrap(),
+        serde_json::json!({ "panel": "demo.log" }),
+        Origin::User,
+    );
+    h.run();
+    assert_eq!(h.state().handle().layout(), before);
+    // Through the step itself, refused.
+    let out = h
+        .state()
+        .handle()
+        .arrange(&LOG, egui_pop_api::workbench::Arrangement::Grid(None))
+        .unwrap();
+    assert!(
+        matches!(out, Outcome::Done(Err(ref e)) if e.contains("alone")),
+        "{out:?}"
+    );
+}
