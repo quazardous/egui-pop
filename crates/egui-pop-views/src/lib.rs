@@ -1,4 +1,4 @@
-//! Data views for egui-pop: a live tree, a list and a data table.
+//! Data views for egui-pop: a live tree, a list, a data table and charts.
 //!
 //! - [`tree`]: a tree over a source the application implements, with
 //!   lazy, asynchronous branches and edits at any time;
@@ -10,6 +10,9 @@
 //!   buttons shown on hover, indent guides, an arrow, a drag handle);
 //! - [`property`]: property rows, a name and a value, their names
 //!   aligned;
+//! - [`plot`]: charts (on `egui_plot`): time series, scatters and bars
+//!   in the kit's colours and the categorical palette, with an
+//!   accessible summary, a time cursor and the `plots` collector;
 //! - [`select`]: the selection by key they share; the tree and the list
 //!   also bind to the application-wide selection
 //!   (`egui_pop_api::selection`) with `shared`;
@@ -49,6 +52,7 @@ pub mod library;
 pub mod list;
 pub mod mounts;
 mod nav;
+pub mod plot;
 pub mod property;
 mod rows;
 pub mod select;

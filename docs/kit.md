@@ -350,6 +350,14 @@ compiled at install.
   while `disabled` and the `muted` tone (trailing text, property names).
   `list-guide` is an indent guide, `outline`'s line along a part with no
   width. Action buttons are `icon-button`s.
+- **Charts** (`plot`, `plot-cursor`): the plot area's background and
+  frame (`fill`, `border-color`, `border-width`, `radius`, handler
+  `box`), its axis text, grid and crosshair in `text` (`hover` while the
+  pointer is over it); the time cursor a `plot-cursor`, a line across
+  the area (handler `tick`, `width` thick, in `fill`). The
+  series are not the kit's: they take the categorical palette
+  (`palette.category.*`, [tokens.md](tokens.md#the-categorical-palette)),
+  which a kit may change like any token ([Charts](plot.md)).
 - **Window buttons per platform flavour.** The buttons go where
   `title-bar.buttons-side` says; each carries a tone (minimize
   `warning`, maximize `success`, close `danger`) that a kit may give;

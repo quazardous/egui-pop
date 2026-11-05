@@ -50,6 +50,8 @@ mod meter;
 mod meter_tick;
 mod palette_window;
 mod pill;
+mod plot;
+mod plot_cursor;
 mod popover;
 mod progress_bar;
 mod progress_caption;
@@ -146,6 +148,8 @@ pub(super) const GROUPS: &[&[Required]] = &[
     meter_tick::CONTRACT,
     palette_window::CONTRACT,
     pill::CONTRACT,
+    plot::CONTRACT,
+    plot_cursor::CONTRACT,
     popover::CONTRACT,
     progress_bar::CONTRACT,
     progress_caption::CONTRACT,

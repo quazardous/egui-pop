@@ -57,7 +57,7 @@ graph-pdf = ["viewport", "egui-pop-viewport/graph-pdf", "egui-pop-imaging?/graph
 ## the zoom control and navigator, each change a step of the application
 ## (`egui-pop-imaging`, re-exported as `egui_pop::imaging`).
 imaging = ["viewport", "dep:egui-pop-imaging"]
-## Data views: a live tree, a list and a data table
+## Data views: a live tree, a list, a data table and charts
 ## (`egui-pop-views`, re-exported as `egui_pop::views`).
 views = ["dep:egui-pop-views"]
 ## The in-app viewer (`egui_pop::views::viewer`): `docs:` pages,

@@ -242,6 +242,9 @@ pub const PAIRS: &[Pair] = &[
     ui("curve.point", "curve.background"),
     // A selected node's outline over the node.
     ui("graph.node-selected", "graph.node"),
+    // A plot: its axis text and its time cursor over its background.
+    text("plot.rest.text", "plot.rest.fill"),
+    ui("plot-cursor.rest.fill", "plot.rest.fill"),
     // The categorical palette's series, on the surfaces charts are
     // drawn on (WCAG 1.4.11, a graphical object).
     ui("palette.category.0", "surface.canvas"),

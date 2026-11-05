@@ -51,6 +51,29 @@ pub const SORT_DESCENDING: StrKey =
     StrKey::new("egui-pop-views-sort-descending", "Sort descending");
 /// A header's context menu: leave the table unsorted.
 pub const SORT_CLEAR: StrKey = StrKey::new("egui-pop-views-sort-clear", "Unsorted");
+/// A plot's accessible name, unless the application gives one.
+pub const PLOT: StrKey = StrKey::new("egui-pop-views-plot", "Chart");
+/// A plot series' kind, in its accessible summary: a line.
+pub const PLOT_LINE: StrKey = StrKey::new("egui-pop-views-plot-line", "line");
+/// A plot series' kind: points alone (a scatter).
+pub const PLOT_POINTS: StrKey = StrKey::new("egui-pop-views-plot-points", "points");
+/// A plot series' kind: bars.
+pub const PLOT_BARS: StrKey = StrKey::new("egui-pop-views-plot-bars", "bars");
+/// A plot series in the plot's accessible summary.
+pub const PLOT_SERIES: StrKey = StrKey::new(
+    "egui-pop-views-plot-series",
+    "{ $name } ({ $kind }): { $count } points, x from { $x_min } to { $x_max }, y from { $y_min } to { $y_max }",
+);
+/// A plot series with no point, in the summary.
+pub const PLOT_SERIES_EMPTY: StrKey = StrKey::new(
+    "egui-pop-views-plot-series-empty",
+    "{ $name } ({ $kind }): no points",
+);
+/// A plot's time cursor, in the summary.
+pub const PLOT_TIME_CURSOR: StrKey = StrKey::new(
+    "egui-pop-views-plot-time-cursor",
+    "Time cursor at { $time }",
+);
 
 /// A thumbnail grid's accessible name, unless the application gives one.
 pub const LIBRARY: StrKey = StrKey::new("egui-pop-views-library", "Library");
@@ -286,6 +309,13 @@ pub const ALL: &[StrKey] = &[
     SORT_ASCENDING,
     SORT_DESCENDING,
     SORT_CLEAR,
+    PLOT,
+    PLOT_LINE,
+    PLOT_POINTS,
+    PLOT_BARS,
+    PLOT_SERIES,
+    PLOT_SERIES_EMPTY,
+    PLOT_TIME_CURSOR,
     LIBRARY,
     FILMSTRIP,
     COMPARE,

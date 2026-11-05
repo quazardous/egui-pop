@@ -26,6 +26,9 @@ serde_json.workspace = true
 # MIT OR Apache-2.0: Rerun's virtualised table (sticky header, resizable
 # columns); the data table wraps it.
 egui_table = "0.11"
+# MIT OR Apache-2.0: the charts (`plot`) wrap egui_plot, its version
+# tied to egui's (0.38 is on egui 0.37).
+egui_plot = "0.38"
 # MIT OR Apache-2.0: the viewer's markdown (feature `markdown`), its
 # version tied to egui's (0.26 is on egui 0.37).
 egui_commonmark = { version = "0.26", default-features = false, features = ["pulldown_cmark"], optional = true }

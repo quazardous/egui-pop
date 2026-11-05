@@ -51,6 +51,7 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("slider", "box", Arc::new(cell::BoxCell));
     shapes.insert("slider-toggle", "box", Arc::new(cell::BoxCell));
     shapes.insert("pill", "box", Arc::new(cell::BoxCell));
+    shapes.insert("plot", "box", Arc::new(cell::BoxCell));
     shapes.insert("pill", "pill", Arc::new(pill::Pill));
     shapes.insert("radio", "box", Arc::new(cell::BoxCell));
     shapes.insert("radio", "pill", Arc::new(pill::Pill));
@@ -71,6 +72,7 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("toolbar-button", "box", Arc::new(cell::BoxCell));
     shapes.insert("meter", "track", Arc::new(progress::Track));
     shapes.insert("meter-tick", "tick", Arc::new(progress::Tick));
+    shapes.insert("plot-cursor", "tick", Arc::new(progress::Tick));
     shapes.insert("progress-bar", "track", Arc::new(progress::Track));
     shapes.insert("progress-fill", "span", Arc::new(progress::Span));
     shapes.insert("progress-line", "track", Arc::new(progress::Track));
