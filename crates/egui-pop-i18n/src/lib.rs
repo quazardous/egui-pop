@@ -7,7 +7,8 @@
 //!   installs the interface's strings provider so egui-pop's own text and
 //!   what plugins declare are translated (see [`plugin`]).
 //! - [`I18n`]: the catalogues and the locale, shared; [`t`], [`text`]
-//!   and [`tr!`] look text up. A lookup tries the locale, its parents
+//!   and [`tr!`] look text up. Without `App`, [`install`] puts an
+//!   [`I18n`] in an egui context for them and for egui-pop's own text. A lookup tries the locale, its parents
 //!   (`fr-CA`, then `fr`), then English; a key missing everywhere shows
 //!   the English written in the code, else the key.
 //! - [`format`](mod@format): numbers, dates and plurals for the locale,
@@ -51,10 +52,11 @@ pub mod plugin;
 
 pub use fluent_bundle::{FluentArgs, FluentValue};
 pub use i18n::{Args, Catalogue, EGUI_POP, I18n, Provider};
-pub use plugin::{I18nPlugin, ShowKeys, global, t, text};
+pub use plugin::{I18nPlugin, ShowKeys, global, install, t, text};
 
-/// The text of a key from the catalogues of the connected
-/// [`I18nPlugin`] ([`global`]), with named arguments; the key itself
+/// The text of a key from the catalogues last installed, by
+/// [`install`] or the connected [`I18nPlugin`] ([`global`]), with named
+/// arguments; the key itself
 /// when no catalogue has it. The extractor finds its literal keys.
 ///
 /// ```
