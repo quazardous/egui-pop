@@ -154,3 +154,44 @@ fn a_later_kit_of_the_same_name_replaces_an_earlier_one() {
     assert_eq!(kits.len(), 1);
     assert_eq!(kits[0].label, "Second");
 }
+
+#[test]
+fn a_kit_with_both_variants_follows_the_light_or_dark_setting() {
+    let kit = KitData::from_text(
+        "brand",
+        r##"
+$extensions:
+  org.egui-pop.kit:
+    name: "brand-dark"
+    counterpart:
+      name: "brand-light"
+      label: "Brand Light"
+      tokens:
+        $extends: "pop-light"
+        surface:
+          panel: {$type: "color", $value: "#fafafa"}
+surface:
+  panel: {$type: "color", $value: "#101010"}
+"##,
+    );
+    let app = App::builder()
+        .kit(kit)
+        .theme(ThemeSpec::new("brand-dark"))
+        .build(&egui::Context::default())
+        .unwrap();
+    let service = app.handle().theme();
+    let kits: Vec<String> = service.kits().iter().map(|k| k.name.clone()).collect();
+    assert_eq!(kits, ["brand-dark", "brand-light"]);
+    assert_eq!(service.counterpart().as_deref(), Some("brand-light"));
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(400.0, 300.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    service.set_preference(egui::ThemePreference::Light);
+    h.run();
+    let panel = egui_pop_core::theme::Tokens::of(&h.ctx).surface.panel;
+    assert_eq!(panel, egui::Color32::from_rgb(0xfa, 0xfa, 0xfa));
+    service.set_preference(egui::ThemePreference::Dark);
+    h.run();
+    let panel = egui_pop_core::theme::Tokens::of(&h.ctx).surface.panel;
+    assert_eq!(panel, egui::Color32::from_rgb(0x10, 0x10, 0x10));
+}

@@ -1,0 +1,52 @@
+$description: "Rerun-like, both variants: what the dark and the light variant share (sizes, radii, type, the tab bar and the section bands, and the roles both alias the same way)."
+text:
+  $type: "color"
+  on-accent: {$value: "{blue.contrast}"}
+accent:
+  $type: "color"
+  default: {$value: "{blue.9}"}
+  hover: {$value: "{blue.10}"}
+  active: {$value: "{blue.8}"}
+  subtle: {$value: "{blue.3}"}
+danger:
+  $type: "color"
+  $value: "{red.11}"
+success:
+  $type: "color"
+  $value: "{green.11}"
+info:
+  $type: "color"
+  $value: "{blue.11}"
+radius:
+  $type: "dimension"
+  widget: {$value: {value: 4, unit: "px"}, $description: "small_corner_radius"}
+  window: {$value: {value: 10, unit: "px"}, $description: "window_corner_radius"}
+size:
+  $type: "dimension"
+  control:
+    height: {$value: {value: 22, unit: "px"}, $description: "large_button_size; also the rows' height here"}
+  icon:
+    inline: {$value: {value: 14, unit: "px"}, $description: "small_icon_size"}
+    toolbar: {$value: {value: 16, unit: "px"}}
+  title-bar:
+    height: {$value: {value: 24, unit: "px"}, $description: "title_bar_height"}
+font:
+  size:
+    $type: "dimension"
+    xs: {$value: {value: 10.5, unit: "px"}, $description: "Typography Small"}
+    s: {$value: {value: 11, unit: "px"}, $description: "Typography Eyebrow"}
+    m: {$value: {value: 12.5, unit: "px"}, $description: "Typography Body"}
+    l: {$value: {value: 13, unit: "px"}, $description: "Typography Heading 4"}
+    xl: {$value: {value: 16, unit: "px"}, $description: "Typography Heading 3"}
+  text-style:
+    $type: "dimension"
+    monospace: {$value: "{font.size.m}", $description: "Rerun's monospace is the body size."}
+tab-bar:
+  rest:
+    fill: {$type: "color", $value: "{surface.panel}", $description: "tab_bar_color"}
+    border-width: {$type: "dimension", $value: {value: 0, unit: "px"}}
+section-band:
+  height: {$type: "dimension", $value: {value: 24, unit: "px"}}
+  rest:
+    fill: {$type: "color", $value: "{surface.panel}", $description: "section_header_color"}
+    text: {$type: "color", $value: "{text.strong}"}

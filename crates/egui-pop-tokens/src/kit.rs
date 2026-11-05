@@ -29,6 +29,30 @@
 //!       - {file: "JetBrainsMono-Regular.ttf", family: "JetBrains Mono", weight: 400}
 //! ```
 //!
+//! A kit may hold both variants of its look, light and dark: the
+//! manifest's `counterpart` gives the other variant's name, label and
+//! tokens (a token tree, with its own `$extends`). It becomes a theme of
+//! its own, each naming the other as its counterpart
+//! ([`crate::VARIANT_OF_EXTENSION`]), so the light, dark or system
+//! setting switches between them. `kit.yaml`'s own tokens are its
+//! variant's only; the other token files (`*.tokens.yaml`) and the faces
+//! serve both.
+//!
+//! ```yaml
+//! $extends: "pop-dark"
+//! $extensions:
+//!   org.egui-pop.kit:
+//!     name: "brand-dark"
+//!     label: "Brand Dark"
+//!     counterpart:
+//!       name: "brand-light"
+//!       label: "Brand Light"
+//!       tokens:
+//!         $extends: "pop-light"
+//!         surface: {panel: {$type: "color", $value: "#fafafa"}}
+//! surface: {panel: {$type: "color", $value: "#101010"}}
+//! ```
+//!
 //! Reading a kit never fails: what is wrong (bad YAML or JSON, a term outside the
 //! vocabulary, a font file missing) is in [`KitData::problems`], and the
 //! kit is still usable with fallbacks (a kit whose `kit.yaml` cannot be
@@ -342,6 +366,10 @@ pub struct KitData {
     pub label: Option<String>,
     /// The kit's tokens: a theme named [`KitData::name`].
     pub theme: TokenFile,
+    /// The kit's other variant, light or dark, when its manifest gives
+    /// one (`counterpart`): a theme of its own, each naming the other as
+    /// its counterpart.
+    pub counterpart: Option<KitVariant>,
     pub fonts: Vec<KitFont>,
     pub license: Option<String>,
     pub origin: Origin,
@@ -513,7 +541,24 @@ impl KitData {
         self.label.as_deref().unwrap_or(&self.name)
     }
 
-    /// The kit as a theme picker lists it.
+    /// The kit and its other variant, if it has one, as a theme picker
+    /// lists them: a theme each.
+    pub fn infos(&self) -> Vec<KitInfo> {
+        let mut v = vec![self.info()];
+        if let Some(c) = &self.counterpart {
+            v.push(KitInfo {
+                name: c.name.clone(),
+                label: c.display_name().to_string(),
+                description: c.theme.description.clone(),
+                origin: self.origin.clone(),
+                problems: self.problems.len(),
+            });
+        }
+        v
+    }
+
+    /// The kit as a theme picker lists it (its own variant; see
+    /// [`KitData::infos`]).
     pub fn info(&self) -> KitInfo {
         KitInfo {
             name: self.name.clone(),
@@ -522,6 +567,25 @@ impl KitData {
             origin: self.origin.clone(),
             problems: self.problems.len(),
         }
+    }
+}
+
+/// A kit's other variant ([`KitData::counterpart`]): the manifest's
+/// `counterpart`, with the kit's other token files merged in.
+#[derive(Clone, Debug, PartialEq)]
+pub struct KitVariant {
+    /// Its theme's name.
+    pub name: String,
+    /// A name for people, from the manifest.
+    pub label: Option<String>,
+    /// Its tokens: a theme named [`KitVariant::name`].
+    pub theme: TokenFile,
+}
+
+impl KitVariant {
+    /// The variant's name for people: its label, else its name.
+    pub fn display_name(&self) -> &str {
+        self.label.as_deref().unwrap_or(&self.name)
     }
 }
 
@@ -539,10 +603,14 @@ pub struct KitInfo {
 }
 
 impl Themes {
-    /// Adds a kit's theme (replacing a theme of the same name, returned).
-    /// Its faces and handlers are installed by `egui_pop_core::kit::KitSource`
-    /// or `AppBuilder::kit`.
+    /// Adds a kit's theme (replacing a theme of the same name, returned),
+    /// and its other variant's when it has one. Its faces and handlers
+    /// are installed by `egui_pop_core::kit::KitSource` or
+    /// `AppBuilder::kit`.
     pub fn add_kit(&mut self, kit: &KitData) -> Option<TokenFile> {
+        if let Some(c) = &kit.counterpart {
+            self.add(c.theme.clone());
+        }
         self.add(kit.theme.clone())
     }
 }
@@ -578,16 +646,17 @@ pub fn check(kit: &KitData) -> Vec<Problem> {
     }
     let mut themes = Themes::default();
     themes.add_kit(kit);
-    let resolved = themes.resolve(&ThemeSpec::new(kit.name.clone()));
-    problems.extend(resolved.problems().iter().cloned().map(Problem::Theme));
-    problems.extend(
-        same_glyphs(&resolved)
-            .into_iter()
-            .map(|(a, b, icon)| Problem::SameGlyph {
+    let names = std::iter::once(&kit.name).chain(kit.counterpart.as_ref().map(|c| &c.name));
+    for name in names {
+        let resolved = themes.resolve(&ThemeSpec::new(name.clone()));
+        problems.extend(resolved.problems().iter().cloned().map(Problem::Theme));
+        problems.extend(same_glyphs(&resolved).into_iter().map(|(a, b, icon)| {
+            Problem::SameGlyph {
                 roles: (a.into(), b.into()),
                 icon,
-            }),
-    );
+            }
+        }));
+    }
     problems
 }
 
@@ -680,25 +749,13 @@ fn assemble(
             Err(p) => problems.push(p),
         }
     }
-    for (file, part) in parts {
+    for (file, part) in &parts {
         if part.extends.is_some() {
             problems.push(Problem::Extends { file: file.clone() });
         }
-        for (path, token) in part.tokens {
-            match theme.tokens.entry(path) {
-                std::collections::btree_map::Entry::Occupied(e) => {
-                    problems.push(Problem::Repeated {
-                        path: e.key().clone(),
-                        file: file.clone(),
-                    });
-                }
-                std::collections::btree_map::Entry::Vacant(e) => {
-                    e.insert(token);
-                }
-            }
-        }
     }
-    let manifest = Manifest::read(&theme, &mut problems);
+    merge_parts(&mut theme, &parts, &mut problems);
+    let mut manifest = Manifest::read(&theme, &mut problems);
     let asked = manifest.name.clone().unwrap_or_else(|| folder.to_string());
     let name = if BUILT_IN_THEMES.contains(&asked.as_str()) {
         let used = format!("{asked}-kit");
@@ -715,6 +772,10 @@ fn assemble(
         theme.extends = Some(FALLBACK_THEME.to_string());
     }
     problems.extend(vocabulary(&theme));
+    let counterpart = manifest
+        .counterpart
+        .take()
+        .and_then(|c| counterpart(&mut theme, c, &parts, &mut problems));
     let mut faces = Vec::new();
     for entry in &manifest.fonts {
         if !fonts.iter().any(|(f, _)| f == &entry.file) && matches!(origin, Origin::Dir(_)) {
@@ -759,12 +820,84 @@ fn assemble(
         name,
         label: manifest.label,
         theme,
+        counterpart,
         fonts: faces,
         license,
         origin,
         manifest_fonts: manifest.fonts.into_iter().map(|e| e.file).collect(),
         problems,
     }
+}
+
+/// Merges the kit's other token files into a variant's tokens: what the
+/// variant gives itself is kept, and the repeat reported.
+fn merge_parts(theme: &mut TokenFile, parts: &[(String, TokenFile)], problems: &mut Vec<Problem>) {
+    for (file, part) in parts {
+        for (path, token) in &part.tokens {
+            match theme.tokens.entry(path.clone()) {
+                std::collections::btree_map::Entry::Occupied(e) => {
+                    problems.push(Problem::Repeated {
+                        path: e.key().clone(),
+                        file: file.clone(),
+                    });
+                }
+                std::collections::btree_map::Entry::Vacant(e) => {
+                    e.insert(token.clone());
+                }
+            }
+        }
+    }
+}
+
+/// The kit's other variant from its manifest's `counterpart`: its tokens
+/// with the kit's other token files merged in, both variants naming each
+/// other ([`crate::VARIANT_OF_EXTENSION`]). `None`, and a problem, when
+/// it cannot be used.
+fn counterpart(
+    theme: &mut TokenFile,
+    c: ManifestCounterpart,
+    parts: &[(String, TokenFile)],
+    problems: &mut Vec<Problem>,
+) -> Option<KitVariant> {
+    let refuse = |problems: &mut Vec<Problem>, reason: String| {
+        problems.push(Problem::Manifest {
+            reason: format!("`counterpart`: {reason}; the kit has one variant"),
+        });
+        None
+    };
+    if c.name == theme.name {
+        return refuse(problems, format!("`{}` is the kit's own name", c.name));
+    }
+    if BUILT_IN_THEMES.contains(&c.name.as_str()) {
+        return refuse(problems, format!("`{}` is a built-in theme's name", c.name));
+    }
+    let mut file = match TokenFile::from_tree(&c.name, &c.tokens) {
+        Ok(f) => f,
+        Err(e) => return refuse(problems, e.to_string()),
+    };
+    let label = format!("{KIT_FILE} (counterpart)");
+    problems.extend(file.upgrade().into_iter().map(|warning| Problem::Format {
+        file: label.clone(),
+        warning,
+    }));
+    merge_parts(&mut file, parts, problems);
+    if file.extends.is_none() {
+        file.extends = Some(FALLBACK_THEME.to_string());
+    }
+    problems.extend(vocabulary(&file));
+    file.set_extension(
+        crate::VARIANT_OF_EXTENSION,
+        Some(Json::String(theme.name.clone())),
+    );
+    theme.set_extension(
+        crate::VARIANT_OF_EXTENSION,
+        Some(Json::String(file.name.clone())),
+    );
+    Some(KitVariant {
+        name: c.name,
+        label: c.label,
+        theme: file,
+    })
 }
 
 /// The first bytes of a TrueType, OpenType or collection file.
@@ -781,6 +914,15 @@ struct Manifest {
     name: Option<String>,
     label: Option<String>,
     fonts: Vec<ManifestFont>,
+    counterpart: Option<ManifestCounterpart>,
+}
+
+/// The manifest's `counterpart`: the other variant's name, label and
+/// token tree.
+struct ManifestCounterpart {
+    name: String,
+    label: Option<String>,
+    tokens: Json,
 }
 
 struct ManifestFont {
@@ -850,6 +992,40 @@ impl Manifest {
             }
             Some(_) => problems.push(Problem::Manifest {
                 reason: "`fonts` is not a list".into(),
+            }),
+        }
+        match obj.get("counterpart") {
+            None => {}
+            Some(Json::Object(c)) => {
+                let text = |key: &str| {
+                    c.get(key)
+                        .and_then(Json::as_str)
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(String::from)
+                };
+                match (text("name"), c.get("tokens")) {
+                    (Some(name), _) if name.contains(['/', '\\', '{', '}']) => {
+                        problems.push(Problem::Manifest {
+                            reason: format!(
+                                "`counterpart.name`: `{name}` may not contain `/`, `\\`, `{{` or `}}`; the kit has one variant"
+                            ),
+                        });
+                    }
+                    (Some(name), Some(tokens)) if tokens.is_object() => {
+                        m.counterpart = Some(ManifestCounterpart {
+                            name,
+                            label: text("label"),
+                            tokens: tokens.clone(),
+                        });
+                    }
+                    _ => problems.push(Problem::Manifest {
+                        reason: "`counterpart` needs a `name` and its `tokens` (a map); the kit has one variant".into(),
+                    }),
+                }
+            }
+            Some(_) => problems.push(Problem::Manifest {
+                reason: "`counterpart` is not a map; the kit has one variant".into(),
             }),
         }
         m

@@ -262,10 +262,9 @@ the [README](../README.md#refreshing-the-screenshots)).
 Not built in, and not in any published crate: kit folders an
 application adds with `AppBuilder::kit` ([kits as packages](kit-packages.md)).
 
-- `examples/kits/rerun-like-dark` and `rerun-like-light`, "Rerun-like
-  Dark" and "Rerun-like Light", each the other's counterpart: the
-  Rerun viewer's look, from the token values of its `re_ui` crate
+- `examples/kits/rerun-like`, "Rerun-like Dark" and its counterpart
+  "Rerun-like Light" in one kit: the Rerun viewer's look, from the token values of its `re_ui` crate
   (Rerun Technologies AB, MIT OR Apache-2.0; not affiliated with or
   endorsed by Rerun; see [NOTICE](../NOTICE)). The
-  [Rerun-like viewer](rerun-like.md) uses them, and lists which tokens
+  [Rerun-like viewer](rerun-like.md) uses it, and lists which tokens
   came from where.
