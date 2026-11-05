@@ -216,6 +216,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     }
     ui.weak("Drag a tab onto another area: it goes there when its rules allow it; the drop hint says why not.");
     ui.weak("Detached, the notes' window takes their key (Ctrl+Shift+Delete) and shows their dialog over itself; every other window waits for the answer.");
+    ui.weak("Drop a tab on the notes' window, or pick Move to window in its tab menu: it joins the window's tabs.");
     // The bottom panel's alignment, a setting (as VS Code's).
     let store = app.store();
     let path = format!("settings/{}", workbench::SETTING_PANEL_ALIGNMENT);

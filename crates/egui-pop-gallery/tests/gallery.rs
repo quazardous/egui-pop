@@ -2073,9 +2073,49 @@ fn the_workbench_page_detaches_a_panel_into_its_own_window() {
     assert!(h.query_by_label("Free notes.").is_some());
     let mut results = egui_kittest::SnapshotResults::new();
     results.add(h.try_snapshot("workbench-detached-pop-dark"));
+    // The Properties tab dragged over the window, held: the window shows
+    // its drop zone; let go, it joins the window's tabs.
+    let properties = egui_pop::model::ids::PanelId::from_static("gallery.properties");
+    let a = h
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Properties")
+        .rect()
+        .center();
+    let b = h.get_by_label("Free notes.").rect().center();
+    let pointer = |h: &mut Harness<'_, Gallery>, e: egui::Event| {
+        h.input_mut().events.push(e);
+        h.step();
+    };
+    let button = |pos, pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    pointer(&mut h, egui::Event::PointerMoved(a));
+    pointer(&mut h, button(a, true));
+    for i in 1..=8 {
+        pointer(
+            &mut h,
+            egui::Event::PointerMoved(a + (b - a) * (i as f32 / 8.0)),
+        );
+    }
+    h.step();
+    let over = app.window_drop().expect("the window shows its drop zone");
+    assert_eq!(
+        (over.panel.clone(), over.window.clone()),
+        (properties.clone(), notes.clone())
+    );
+    results.add(h.try_snapshot("workbench-detached-drop-pop-dark"));
+    pointer(&mut h, button(b, false));
+    h.run();
+    let window = app.layout().auxiliary[0].clone();
+    assert_eq!(window.tabs, vec![properties.clone()]);
     // The window may cover the page's button (kittest draws it inside
     // the main one): docked back through the handle.
     app.attach_panel(&notes);
+    h.run();
+    assert_eq!(app.layout().auxiliary[0].panel, properties);
+    app.attach_panel(&properties);
     h.run();
     assert!(app.layout().auxiliary.is_empty());
     assert!(app.panel_visible(&notes));
