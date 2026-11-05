@@ -54,6 +54,10 @@ of every crate with every feature on.
 - [History](history.md): undo histories owned by the kernel, which one
   Ctrl+Z undoes, the "Go there" toast, the history panel and the
   agents' `history.*`.
+- [The shared selection](selection.md): one selection and one hovered
+  item for the whole application, shared by the tree, the list and the
+  application's widgets; back and forward through past selections, and
+  the agents' `selection.*`.
 - [The clipboard](clipboard.md): typed items kept by the owner,
   readable fallbacks on the system clipboard, a paste negotiated with
   its target, types, transforms and sanitisers declared by plugins,
