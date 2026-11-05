@@ -102,6 +102,7 @@ What was taken from `re_ui` (`dark_theme.ron`, `light_theme.ron`,
 | `space.*` | 2, 4, 8, 12, 16: egui-pop's own, already Rerun's 4-point grid | | `view_padding` 12, `item_spacing` 8 |
 | `palette.log.trace`, `.debug`, `.info` | Gray.700, Blue.700, Green.700 | Gray.300, Blue.500, Green.475 | `trace_log_text_color`, `debug_log_text_color`, `info_log_text_color` (light: Green.500 reads at 4.48:1 on white, a step darker at 4.5:1) |
 | `palette.log.warn`, `.error` | `warning`, `danger` | `warning`, `#ab0116` | `warn_fg_color`, `error_fg_color` (lifted or darkened where they fail the contrast checks, as `warning` and `danger` are) |
+| `palette.log.critical` | Red.900 | Red.200 | `strong_fg_color` on `error_fg_color`: a level's token is a text colour, so the kit takes the red nearest the strong text |
 | `plot`: `shape` `plain`, no border, no radius, `rest.fill` | Gray.100 | Gray.1000 | no frame around a time series; `viewport_background`, `PlotBackground`'s default colour |
 | `plot-cursor`: `width`, `rest.fill` | 1.5, `text.default` | the same | `paint_time_cursor`: 1.5 times the widgets' stroke, in their foreground colour |
 | `table-header-cell`: `shape` `plain`, a line under it (`indicator-side` bottom), `rest.fill`, `rest.border-color` | Gray.150, Gray.300 | Gray.850, Gray.700 | `table_header_bg_fill`, `table_header_stroke_color` |
@@ -224,6 +225,3 @@ worked around, then the small things.
       half opacity (`spatial_label_bg_opacity`), and its axes take Red,
       Green and Blue 550 in light, 600 in dark (`axis_color_x`, `_y`,
       `_z`): no viewport token for either.
-    - **The critical log level.** Rerun draws it in strong text on the
-      error colour; the `log` facade's five levels have tokens
-      (`palette.log.*`), a sixth has none.

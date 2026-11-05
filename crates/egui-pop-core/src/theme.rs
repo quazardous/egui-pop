@@ -328,13 +328,22 @@ pub struct LogPalette {
     pub warn: Color32,
     /// `palette.log.error`.
     pub error: Color32,
+    /// `palette.log.critical`: past error.
+    pub critical: Color32,
 }
 
 impl LogPalette {
     /// The colours in [`egui_pop_tokens::LOG_LEVELS`]' order, from trace
-    /// to error.
+    /// to critical.
     pub fn levels(&self) -> [Color32; egui_pop_tokens::LOG_LEVELS.len()] {
-        [self.trace, self.debug, self.info, self.warn, self.error]
+        [
+            self.trace,
+            self.debug,
+            self.info,
+            self.warn,
+            self.error,
+            self.critical,
+        ]
     }
 }
 
@@ -543,6 +552,7 @@ impl Tokens {
                     info: c("palette.log.info"),
                     warn: c("palette.log.warn"),
                     error: c("palette.log.error"),
+                    critical: c("palette.log.critical"),
                 },
             },
             motion_duration: r.duration_ms("motion.duration").unwrap_or(0.0).max(0.0) / 1000.0,

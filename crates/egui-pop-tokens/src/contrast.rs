@@ -119,6 +119,8 @@ pub const PAIRS: &[Pair] = &[
     text("palette.log.warn", "surface.panel"),
     text("palette.log.error", "surface.canvas"),
     text("palette.log.error", "surface.panel"),
+    text("palette.log.critical", "surface.canvas"),
+    text("palette.log.critical", "surface.panel"),
     // Components.
     text("button.rest.text", "button.rest.fill"),
     // Buttons by tone: the label on the tone's fill.

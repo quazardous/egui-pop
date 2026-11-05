@@ -108,7 +108,7 @@ without it.
    `success`, `info`, `focus.ring`, `selection`,
    `palette.category.0` to `palette.category.9` (the categorical palette,
    [below](#the-categorical-palette)),
-   `palette.log.{trace, debug, info, warn, error}` (the log levels'
+   `palette.log.{trace, debug, info, warn, error, critical}` (the log levels'
    colours, [below](#log-levels)), `radius.{widget, window}`,
    `shadow.{popup, window, side}.{offset-x, offset-y, blur, spread, color}`
    (egui's popup and window shadows, and a side area lying over the
@@ -255,16 +255,19 @@ neighbours with colour blindness.
 
 A log view colours a line's level, or the whole line, with
 `palette.log.trace`, `palette.log.debug`, `palette.log.info`,
-`palette.log.warn` and `palette.log.error`: the five levels of the `log`
-facade, from the least to the most severe
-(`egui_pop_tokens::LOG_LEVELS`, in that order). Code reads them through
+`palette.log.warn`, `palette.log.error` and `palette.log.critical`: the
+five levels of the `log` facade and a sixth past error, the critical level
+some loggers add (Python's `logging`, Rerun's text log), from the least
+to the most severe (`egui_pop_tokens::LOG_LEVELS`, in that order). Code reads them through
 `Tokens::of(ctx).palette.log` (`LogPalette`, whose `levels()` gives
 them in the same order).
 
 `pop-dark` aliases them to the status colours and the muted text, so the
 other built-in themes follow their own: trace is `{text.muted}`, debug
-`{info}`, info `{success}`, warn `{warning}` and error `{danger}`. Info
-is green and debug blue, as most log viewers draw them. A theme gives a
+`{info}`, info `{success}`, warn `{warning}`, error `{danger}` and
+critical `{red.12}`, danger's red at its scale's high-contrast text step
+(danger is step 11): lighter than danger in a dark theme, darker in a
+light one. Info is green and debug blue, as most log viewers draw them. A theme gives a
 level a value of its own where its status colour does not read on its
 canvas (`gruvbox-light` darkens info's green).
 
@@ -275,6 +278,7 @@ canvas (`gruvbox-light` darkens info's green).
 | `info` | `#9dd59e` | `#2a672f` | `#9dd59e` |
 | `warn` | `#f8b376` | `#884300` | `#f8b376` |
 | `error` | `#ffa696` | `#953226` | `#ffa696` |
+| `critical` | `#ffdfd7` | `#4d1c16` | `#ffdfd7` |
 
 Each level is used as text: it reads at 4.5:1 (7:1 in high contrast) on
 `surface.canvas` and `surface.panel`, pairs of `contrast::PAIRS`
