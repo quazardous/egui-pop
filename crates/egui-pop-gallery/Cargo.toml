@@ -32,6 +32,11 @@ webview = ["egui-pop/views-webview"]
 ## egui-pop's and egui's profiling scopes as `tracing` spans, for the
 ## `threading` example (docs/threading.md).
 trace = ["dep:tracing", "dep:profiling", "profiling/profile-with-tracing"]
+## eframe's `inspection`: with `EGUI_INSPECTION=1` in the environment, the
+## gallery opens an `egui_inspection` endpoint that `egui-mcp` drives
+## (docs/inspection.md). Off by default: the endpoint has no
+## authentication. Native only: on the web it compiles and opens nothing.
+inspection = ["eframe/inspection", "dep:egui_inspection"]
 
 [[example]]
 name = "threading"
@@ -52,6 +57,8 @@ tracing = { version = "0.1", optional = true }
 # A shell in the terminal page, on the desktop.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 egui-pop = { workspace = true, features = ["editors-pty"] }
+# The endpoint's address, read as eframe reads it, for the start line.
+egui_inspection = { workspace = true, optional = true, features = ["plugin"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "0.4"
@@ -60,3 +67,5 @@ log.workspace = true
 [dev-dependencies]
 egui_kittest = { workspace = true, features = ["eframe", "wgpu", "snapshot"] }
 egui-pop-test = { workspace = true, features = ["wgpu"] }
+# The smoke test serves the protocol from a harness and asks for the tree.
+egui_inspection = { workspace = true, features = ["plugin"] }
