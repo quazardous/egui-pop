@@ -1,0 +1,13 @@
+$description: "The `plot-cursor` component of the default kit (docs/kit.md), layered into pop-dark."
+plot-cursor:
+  $description: "A plot's time cursor: a vertical line across its area at the time the application gives, `width` thick (a kit component)."
+  shape:
+    $type: "string"
+    $value: "tick"
+  width:
+    $type: "dimension"
+    $value: {value: 2, unit: "px"}
+  rest:
+    fill:
+      $type: "color"
+      $value: "{accent.default}"

@@ -203,7 +203,8 @@ entity, a sensor, a run) with `palette.category.0` to
 second slot 1. A series keeps its slot whatever else is shown, so its
 colour follows it from one view to the next. Code reads them through
 `Tokens::of(ctx).palette` (`DataPalette::series(i)`, which starts again
-from slot 0 past the last). More series than slots repeat colours: name them (a
+from slot 0 past the last); the plot component uses them
+([Charts](plot.md)). More series than slots repeat colours: name them (a
 legend) or group the smallest.
 
 The slots alias a reference group named by hue, `chart.blue`,

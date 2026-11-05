@@ -104,7 +104,7 @@ requires. A verdict changed on 2026-11-03 says why.
 
 | Crate | Version (date) | egui | Licence | What | Verdict |
 |---|---|---|---|---|---|
-| egui_plot | 0.38.0 (2026-10-19) | 0.37 | MIT OR Apache-2.0 | Lines, bars, boxes | Debug panels only; our scopes are images fed by the engine |
+| egui_plot | 0.38.0 (2026-10-19) | 0.37 | MIT OR Apache-2.0 | Lines, points, bars, boxes, heatmaps; legend, axes, linked axes and cursors, pan, zoom, box zoom | **Wrapped** for charts (decided 2026-11-05): `egui-pop-views`' `plot` adds the kit's look, the categorical palette, an accessible summary (egui_plot has none), the hovered point, a time cursor and a collector ([plot.md](plot.md)). Not for the scopes, which are images fed by the engine |
 | egui_dock | 0.21.1 (2026-08-06) | 0.36 | MIT | Docking, tabs, splits | Adopted, then **replaced** by [egui_stack](https://github.com/quazardous/egui_stack), its continuation on egui 0.37 (changed 2026-11-03: egui_dock has no release for 0.37; [#145](https://github.com/quazardous/egui-pop/issues/145)). egui-pop's areas are still docks of their own (see `upstream.md`) |
 | egui_tiles | 0.18.0 (2026-10-19) | 0.37 | MIT OR Apache-2.0 | Rerun's tiling, now in the rerun-io/egui_crates repository | Not needed next to egui_stack; a source of ideas and code for it, with credit ([directions](egui-stack-directions.md)) |
 | egui-notify | 0.24.0 (2026-10-30) | 0.37 | MIT | Toasts | Ideas only, now taken: the slide, the corners and the toast's states are in egui-pop's toasts, with credit (`crates/egui-pop-api/src/toasts.rs`, `NOTICE`). Not a dependency: it keeps a string queue, with no commands and no state to inspect, and 0.24 pulls egui-phosphor from git |

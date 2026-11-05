@@ -35,6 +35,7 @@
 - [The tree](tree.md)
 - [List items and property rows](list-items.md)
 - [Lists and tables](table.md)
+- [Charts](plot.md)
 - [Video](video.md)
 - [Timeline](timeline.md)
 - [The photo library](library.md)

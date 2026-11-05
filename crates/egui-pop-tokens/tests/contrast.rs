@@ -80,7 +80,8 @@ fn a_theme_with_a_poor_pair_fails_the_check() {
                 "editor.line-number",
                 "syntax.comment",
                 "field.tone.muted.text",
-                "text-role.meta.color"
+                "text-role.meta.color",
+                "plot.rest.text"
             ]
             .contains(&f.pair.foreground)),
         "{failures:?}"

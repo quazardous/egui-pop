@@ -1068,6 +1068,13 @@ egui-pop-views-list 52d27082aa325209
 egui-pop-views-loading 06346d0bdf25c589
 egui-pop-views-mark-best 64551f88dd1fbd2e
 egui-pop-views-pick 81c377c23c1fdbce
+egui-pop-views-plot adaaa89f56c1438b
+egui-pop-views-plot-bars 21839fff7d4de56b
+egui-pop-views-plot-line ac8aac1c4664c65f
+egui-pop-views-plot-points 277df5f8c31291ec
+egui-pop-views-plot-series 80eefb30a02d1a80
+egui-pop-views-plot-series-empty 733e96cac283230f
+egui-pop-views-plot-time-cursor 14cee61bd136db96
 egui-pop-views-purple aec3b56dba08aef7
 egui-pop-views-rate-stars f4bd6e27d3358d18
 egui-pop-views-rating 36690a4e79cfa166

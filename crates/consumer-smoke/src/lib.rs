@@ -74,6 +74,9 @@ pub mod list_items {}
 #[doc = include_str!("../../../docs/table.md")]
 pub mod table {}
 
+#[doc = include_str!("../../../docs/plot.md")]
+pub mod plot {}
+
 #[doc = include_str!("../../../docs/editors.md")]
 pub mod editors {}
 

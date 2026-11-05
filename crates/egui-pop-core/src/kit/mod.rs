@@ -819,6 +819,12 @@ components! {
     palette_window: "palette-window" => "card",
     /// A pill over a thumbnail: a badge (by tone) or a stack's count.
     pill: "pill" => "pill",
+    /// A chart's plot area (`egui_pop_views::plot`): its background and
+    /// frame, its axis text and grid in `text` (`hover` while the
+    /// pointer is over it).
+    plot: "plot" => "box",
+    /// A plot's time cursor, a line across its area (`width` thick).
+    plot_cursor: "plot-cursor" => "tick",
     /// A popover's or a menu's surface.
     popover: "popover" => "card",
     /// A radio button's circle, its mark the `radio` glyph: `selected`
