@@ -57,7 +57,7 @@ egui-pop-model = { version = "0.4.1", path = "crates/egui-pop-model" }
 # Without its default fonts: the facade's `bundled-fonts` turns them on,
 # so an application can leave them out.
 egui-pop-core = { version = "0.5.0", path = "crates/egui-pop-core", default-features = false }
-egui-pop-api = { version = "0.5.0", path = "crates/egui-pop-api", default-features = false }
+egui-pop-api = { version = "0.5.1", path = "crates/egui-pop-api", default-features = false }
 egui-pop-test = { version = "0.5.0", path = "crates/egui-pop-test" }
 egui-pop-test-macros = { version = "0.1.0", path = "crates/egui-pop-test-macros" }
 egui-pop-viewport = { version = "0.5.0", path = "crates/egui-pop-viewport" }
@@ -91,7 +91,7 @@ image = { version = "0.25", default-features = false }
 # 0.22.1 has the `DockPainter` the kit paints the docks with; 0.22.2 the
 # section stacks egui-pop wraps (`sections`).
 egui_stack = { version = "0.22.2", default-features = false }
-egui-pop = { version = "0.5.0", path = "crates/egui-pop" }
+egui-pop = { version = "0.5.1", path = "crates/egui-pop" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
