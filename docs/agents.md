@@ -69,6 +69,11 @@ the process that do exist are not the bridge:
   only; see [tools/wbox](../tools/wbox));
 - [tools/wbox](../tools/wbox) drives a real gallery window in a nested,
   headless compositor: screenshots, clicks and keys, as a person would;
+- the gallery's opt-in `inspection` feature serves egui's
+  `egui_inspection` protocol on loopback, without authentication, for
+  Rerun's `egui-mcp`: the accessibility tree, clicks and keys by role or
+  label, screenshots and a wait, as a person would, not the bridge
+  ([Driving the gallery with egui-mcp](inspection.md));
 - the single-instance plugin of `egui-pop-platform`
   ([instance.md](instance.md)) listens on a local socket for later
   launches of the same application; what they hand over (arguments,
@@ -252,18 +257,21 @@ An application may offer a writing action to agents it trusts with it
 
 ### Wait
 
-There is no blocking wait on the bridge. An agent polls: `journal.since`
-for a command's `command.done`, the `steps` collector for the last runs
-of each step (who vetoed, redirected, ran), the `jobs` collector's
-`idle`. An application may add its own (the gallery's
+There is no blocking wait on the bridge (`egui-mcp`'s `wait_for` waits
+on the accessibility tree, [inspection.md](inspection.md)). An agent
+polls: `journal.since` for a command's `command.done`, the `steps`
+collector for the last runs of each step (who vetoed, redirected, ran),
+the `jobs` collector's `idle`. An application may add its own (the gallery's
 `gallery.viewport.wait_idle`).
 
 ### Screenshots and the accessibility tree
 
 Not through the bridge. In tests, egui_kittest renders frames and
 `egui_pop_test::a11y_tree` prints the accessibility tree
-([Testing](testing.md)); for a real window, wbox takes screenshots. The
-bridge gives the same information as data: the `fields`, `focus`,
+([Testing](testing.md)); for a real window, wbox takes screenshots, and
+the gallery built with `--features inspection` gives both to `egui-mcp`
+([inspection.md](inspection.md)). The bridge gives the same information
+as data: the `fields`, `focus`,
 `indicators` and `announcements` collectors.
 
 ## An example, end to end

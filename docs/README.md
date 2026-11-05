@@ -165,6 +165,10 @@ of every crate with every feature on.
   application (in process, no socket), discovering and running
   commands, reading state, the replies' shapes, what is refused, and
   the known gaps.
+- [Driving the gallery with egui-mcp](inspection.md): the gallery's
+  opt-in `inspection` feature, the `egui_inspection` endpoint it opens
+  (loopback, no authentication) and Rerun's `egui-mcp` on it: the tree,
+  clicks by label, screenshots, waits.
 - [Extensions](extensions.md): the known extensions in three tiers
   (official, community, featured), the entry format, how to get listed
   and the checks an entry passes; the extension template
