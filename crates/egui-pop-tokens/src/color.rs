@@ -86,6 +86,18 @@ impl Color {
         }
     }
 
+    /// The linear-light sRGB channels, `[r, g, b]`, alpha ignored.
+    pub fn to_linear(self) -> [f64; 3] {
+        [decode(self.r), decode(self.g), decode(self.b)]
+    }
+
+    /// In OKLab, `[l, a, b]`: lightness 0 to 1 and the two colour axes;
+    /// alpha ignored. The inverse of [`Color::from_oklab`].
+    pub fn to_oklab(self) -> [f64; 3] {
+        let [r, g, b] = self.to_linear();
+        linear_to_oklab(r, g, b)
+    }
+
     /// The channels as bytes, `[r, g, b, a]`, straight alpha.
     pub fn to_srgba_u8(self) -> [u8; 4] {
         let b = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
@@ -115,15 +127,8 @@ impl Color {
 
     /// WCAG 2.x relative luminance of the colour, alpha ignored.
     pub fn relative_luminance(self) -> f32 {
-        let lin = |c: f32| {
-            let c = f64::from(c.clamp(0.0, 1.0));
-            if c <= 0.040_45 {
-                c / 12.92
-            } else {
-                ((c + 0.055) / 1.055).powf(2.4)
-            }
-        };
-        (0.2126 * lin(self.r) + 0.7152 * lin(self.g) + 0.0722 * lin(self.b)) as f32
+        let [r, g, b] = self.to_linear();
+        (0.2126 * r + 0.7152 * g + 0.0722 * b) as f32
     }
 
     /// Whether the colour reads as dark (relative luminance under that of
@@ -137,6 +142,29 @@ impl fmt::Display for Color {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.to_hex())
     }
+}
+
+/// An sRGB channel to linear light, clipped to 0..1 first.
+fn decode(c: f32) -> f64 {
+    let c = f64::from(c.clamp(0.0, 1.0));
+    if c <= 0.040_45 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+/// Linear-light sRGB to OKLab (Björn Ottosson's matrices).
+pub(crate) fn linear_to_oklab(r: f64, g: f64, b: f64) -> [f64; 3] {
+    let l = 0.412_221_470_8 * r + 0.536_332_536_3 * g + 0.051_445_992_9 * b;
+    let m = 0.211_903_498_2 * r + 0.680_699_545_1 * g + 0.107_396_956_6 * b;
+    let s = 0.088_302_461_9 * r + 0.281_718_837_6 * g + 0.629_978_700_5 * b;
+    let (l, m, s) = (l.cbrt(), m.cbrt(), s.cbrt());
+    [
+        0.210_454_255_3 * l + 0.793_617_785_0 * m - 0.004_072_046_8 * s,
+        1.977_998_495_1 * l - 2.428_592_205_0 * m + 0.450_593_709_9 * s,
+        0.025_904_037_1 * l + 0.782_771_766_2 * m - 0.808_675_766_0 * s,
+    ]
 }
 
 /// Linear light to the sRGB transfer curve, clipped to 0..1.

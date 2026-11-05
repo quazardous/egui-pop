@@ -76,3 +76,16 @@ scroll-bar:
   width:
     $type: "dimension"
     $value: {value: 14, unit: "px"}
+chart:
+  $type: "color"
+  $description: "The categorical palette's hues for high contrast: lighter, at 4.5:1 on its black surfaces."
+  blue: {$value: "#15b3fe"}
+  orange: {$value: "#ff942f"}
+  green: {$value: "#01c996"}
+  pink: {$value: "#feb5f9"}
+  olive: {$value: "#c1b007"}
+  periwinkle: {$value: "#a9bdff"}
+  lime: {$value: "#bae962"}
+  red: {$value: "#fe8b9e"}
+  teal: {$value: "#17f9fe"}
+  purple: {$value: "#cc8ffe"}

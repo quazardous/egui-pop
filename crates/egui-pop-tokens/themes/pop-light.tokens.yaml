@@ -194,3 +194,16 @@ scroll-bar:
     $type: "number"
     $value: 0.6
     $description: "Dark ink on a light panel needs more than the dark theme's to reach 3:1."
+chart:
+  $type: "color"
+  $description: "The categorical palette's hues for light surfaces: darker, to read at 3:1 on every built-in light theme's canvas, panel and raised surface."
+  blue: {$value: "#014d74"}
+  orange: {$value: "#b66402"}
+  green: {$value: "#026a52"}
+  pink: {$value: "#a447a5"}
+  olive: {$value: "#564700"}
+  periwinkle: {$value: "#4157c3"}
+  lime: {$value: "#3f8304"}
+  red: {$value: "#d34d6a"}
+  teal: {$value: "#078997"}
+  purple: {$value: "#672b98"}

@@ -73,7 +73,9 @@ mod yaml;
 mod yaml_trap;
 
 pub use color::Color;
-pub use contract::{CONTRACT_VERSION, RENAME_WINDOW, RENAMED, Renamed, Required, Tier, contract};
+pub use contract::{
+    CATEGORY, CONTRACT_VERSION, RENAME_WINDOW, RENAMED, Renamed, Required, Tier, contract,
+};
 #[allow(deprecated)]
 pub use draft::{
     DRAFT_EXTENSION, DRAFT_HISTORY_CAP, DRAFT_VERSION, GeneratedVariant, ThemeDraft, TokenEdit,
