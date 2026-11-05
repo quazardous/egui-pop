@@ -18,15 +18,19 @@
 //!   per entry (with the entry's own icon), asked of its provider when
 //!   the toolbar is first drawn and again when the context changes.
 //! - The tools that do not fit go, from the end, into a "More tools"
-//!   button ([`Glyph::More`]) opening them as a menu.
-//! - The toolbar is one Tab stop ([`tab::roving`]): the arrows along it go
-//!   from tool to tool, and Tab coming back lands on the tool focused last.
+//!   button ([`Glyph::More`](egui_pop_core::kit::Glyph::More)) opening
+//!   them as a menu.
+//! - The toolbar is one Tab stop: the arrows along it go from tool to
+//!   tool, Home and End to the first and the last, and Tab coming back
+//!   lands on the tool focused last.
 //!
-//! Sizes come from the theme: the icon is `size.icon.toolbar`, padded by
-//! `space.xs`, so the density moves them. What each toolbar drew last is
-//! [`layout`] (the `toolbars` debug collector), so an agent reads a
-//! toolbar's tools, their state and which went into "More tools" without
-//! pixels.
+//! egui_stack's [`ToolRow`](egui_stack::toolbar::ToolRow) lays the tools
+//! out, takes their input and moves the focus; the kit paints them (its
+//! `DockPainter`). Sizes come from the theme: the icon is
+//! `size.icon.toolbar`, padded by `space.xs`, so the density moves them.
+//! What each toolbar drew last is [`layout`] (the `toolbars` debug
+//! collector), so an agent reads a toolbar's tools, their state and which
+//! went into "More tools" without pixels.
 //!
 //! ```
 //! use egui_pop_api::AppHandle;
@@ -44,26 +48,21 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
-use egui::containers::menu::MenuConfig;
-use egui::{
-    Align, Align2, Color32, FontId, Layout, Rect, Response, Role, Sense, Ui, UiKind, UiStackInfo,
-    WidgetInfo, pos2, vec2,
-};
+use egui::{Align, Layout, Popup, Ui};
 use egui_pop_core::icon::{Icon, IconRef, Size};
-use egui_pop_core::kit::{Glyph, Kit, KitCx, Part, State};
-use egui_pop_core::progress::paint_spinner;
+use egui_pop_core::kit::Kit;
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
-use egui_pop_core::tab::{self, Axis};
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::ids::{CommandId, MenuId};
 use egui_pop_model::menus::{Item, Shown, show_items};
 use egui_pop_model::when::{When, WhenContext};
+use egui_stack::toolbar::{self as row, ToolDisplay, ToolRow};
 use serde::Serialize;
 use serde_json::Value as Json;
 
 use crate::app::AppHandle;
-use crate::menus::{self, ListItem};
+use crate::menus::{self, ListItem, Mark, RowTrace};
 use crate::strings as txt;
 
 /// How a toolbar shows its tools.
@@ -249,99 +248,210 @@ impl<'a> Toolbar<'a> {
         let ctx = ui.ctx().clone();
         let cx = menus::with_args(&app.when_context(), &self.args);
         let shown = show_items(&app.menu(&self.menu), &cx);
-        let mut tools = self.tools(ui, &shown, &cx);
+        let tools = self.tools(ui, &shown, &cx);
         let t = Tokens::of(&ctx);
-        let m = Metrics::of(&t);
-        let font = egui::TextStyle::Button.resolve(ui.style());
-        let vertical = self.orientation == Orientation::Vertical;
-        for tool in &mut tools {
-            tool.measure(&ctx, &m, &font, self.labels);
+        let icon = Size::Toolbar.points(&t);
+        let pad = t.space.xs;
+        let kit = Kit::of(&ctx);
+        // The More button's names, from the strings.
+        let mut labels = egui_stack::Labels::ENGLISH;
+        labels.more_tools = strings::tr(&ctx, &txt::TOOLBAR_MORE).into();
+        if let Some(toolbar) = &self.name {
+            labels.more_tools_in =
+                strings::tr_args(&ctx, &txt::TOOLBAR_MORE_IN, &[("toolbar", toolbar)]).into();
         }
-        // A column is as wide as its widest tool.
-        let column = tools
-            .iter()
-            .filter(|t| t.trace.kind != ToolKind::Separator)
-            .map(|t| t.width)
-            .fold(m.height, f32::max);
-        let extents: Vec<f32> = tools
-            .iter()
-            .map(|t| match (t.trace.kind, vertical) {
-                (ToolKind::Separator, _) => m.separator,
-                (_, true) => m.height,
-                (_, false) => t.width,
+        // Unique in the application: the row's memory (its Tab stop) and
+        // `laid_out` go by it.
+        let name = format!("egui-pop.toolbar:{}:{:?}", self.menu, ui.scope_id());
+        let mut bar = ToolRow::new(name)
+            .display(match self.labels {
+                Labels::Icons => ToolDisplay::Icons,
+                Labels::Beside => ToolDisplay::Beside,
+                Labels::Text => ToolDisplay::Text,
             })
-            .collect();
-        let room = if vertical {
-            ui.available_height()
-        } else {
-            ui.available_width()
-        };
-        let kept = fit(&extents, m.gap, m.height, room);
-        // No separator at the cut, nor leading the overflow.
-        let mut shown_until = kept;
-        while shown_until > 0 && tools[shown_until - 1].trace.kind == ToolKind::Separator {
-            shown_until -= 1;
+            .icon_size(icon)
+            .padding(pad)
+            .spacing(pad / 2.0)
+            .painter(&*kit)
+            .labels(labels);
+        if self.orientation == Orientation::Vertical {
+            bar = bar.vertical();
         }
-        let mut overflow: Vec<usize> = (kept..tools.len()).collect();
-        while overflow
-            .first()
-            .is_some_and(|&i| tools[i].trace.kind == ToolKind::Separator)
-        {
-            overflow.remove(0);
+        if let Some(title) = &self.name {
+            bar = bar.title(title.clone());
         }
-        for &i in &overflow {
-            tools[i].trace.overflow = true;
-        }
+        let vertical = self.orientation == Orientation::Vertical;
+        let row_tools = tools
+            .iter()
+            .enumerate()
+            .map(|(i, tool)| self.row_tool(&ctx, i, tool, &cx));
         let layout = if vertical {
             Layout::top_down(Align::Min)
         } else {
             Layout::left_to_right(Align::Center)
         };
-        // One Tab stop, the arrows along it (ARIA's toolbar).
-        let axis = if vertical {
-            Axis::Vertical
-        } else {
-            Axis::Horizontal
-        };
-        let group = format!("toolbar:{}:{:?}", self.menu, ui.scope_id());
-        tab::roving(ui, &group, axis, |ui| {
-            ui.with_layout(layout, |ui| {
-                ui.spacing_mut().item_spacing = vec2(m.gap, m.gap);
-                for tool in &tools[..shown_until] {
-                    let size = match (tool.trace.kind, vertical) {
-                        (ToolKind::Separator, true) => vec2(column, m.separator),
-                        (ToolKind::Separator, false) => vec2(m.separator, m.height),
-                        (_, true) => vec2(column, m.height),
-                        (_, false) => vec2(tool.width, m.height),
-                    };
-                    self.tool(ui, &m, &font, &cx, tool, size);
+        let response = ui
+            .with_layout(layout, |ui| {
+                // A separator's room along the row.
+                ui.spacing_mut().item_spacing.x = t.space.s;
+                if vertical {
+                    return bar.show(ui, row_tools);
                 }
-                if !overflow.is_empty() {
-                    let rows: Vec<Shown> = overflow.iter().map(|&i| tools[i].row()).collect();
-                    self.more(ui, &m, &cx, rows, if vertical { column } else { m.height });
+                // A row is centred across the line it is in and takes
+                // the line's height, as a widget of `ui.horizontal` does:
+                // ToolRow starts at the top of its room, so its room is
+                // its own height (the tallest of the icon and the button
+                // text, padded), centred in the line.
+                let line = ui.available_rect_before_wrap();
+                let text = ui.text_style_height(&egui::TextStyle::Button);
+                let height = (icon.max(text) + 2.0 * pad).round();
+                let room = egui::vec2(ui.available_width(), height);
+                let out = ui.allocate_ui(room, |ui| bar.show(ui, row_tools)).inner;
+                if line.height().is_finite() {
+                    ui.expand_to_include_y(line.top());
+                    ui.expand_to_include_y(line.bottom());
                 }
+                out
             })
-        });
+            .inner;
+        if let Some(tool) = response
+            .clicked
+            .as_deref()
+            .and_then(|id| id.parse::<usize>().ok())
+            .and_then(|i| tools.get(i))
+            && let Some(id) = &tool.trace.command
+        {
+            app.request_run_in(
+                id.clone(),
+                menus::merge(&tool.trace.args, &self.args),
+                cx.clone(),
+            );
+        }
+        // The row's tools as drawn, a subsequence of ours, in order.
+        let mut traces = Vec::with_capacity(response.laid.tools.len());
+        let mut ours = tools.iter().enumerate();
+        for laid in &response.laid.tools {
+            let sep = laid.kind == row::ToolKind::Separator;
+            let found = ours.by_ref().find(|(i, t)| {
+                if sep {
+                    t.trace.kind == ToolKind::Separator
+                } else {
+                    laid.id == i.to_string()
+                }
+            });
+            if let Some((_, t)) = found {
+                let mut trace = t.trace.clone();
+                trace.overflow = laid.overflow;
+                traces.push(trace);
+            }
+        }
+        // The More menu open: its rows, for agents, as a menu's.
+        let more_open = response
+            .laid
+            .more
+            .is_some_and(|more| Popup::is_id_open(&ctx, more.with("popup")));
+        if more_open {
+            let gutter = icon + 2.0 * pad;
+            for tr in traces
+                .iter()
+                .filter(|t| t.overflow && t.kind != ToolKind::Separator)
+            {
+                let mark = match (tr.busy, tr.checked, tr.icon.is_some()) {
+                    (true, ..) => Mark::Busy,
+                    (false, true, true) => Mark::Framed,
+                    (false, true, false) if tr.radio => Mark::Radio,
+                    (false, true, false) => Mark::Check,
+                    (false, false, true) => Mark::Icon,
+                    (false, false, false) => Mark::None,
+                };
+                menus::record_row(
+                    &ctx,
+                    RowTrace {
+                        menu: self.menu.clone(),
+                        label: tr.label.clone(),
+                        icon: tr.icon.clone(),
+                        mark,
+                        label_x: gutter,
+                        gutter,
+                    },
+                );
+            }
+        }
         let out = ToolbarLayout {
             menu: self.menu.clone(),
             orientation: self.orientation,
             labels: self.labels,
             name: self.name.clone(),
-            overflow: overflow
-                .iter()
-                .filter(|&&i| tools[i].trace.kind != ToolKind::Separator)
-                .count(),
-            tools: tools
-                .into_iter()
-                .enumerate()
-                .filter(|(i, _)| *i < shown_until || overflow.contains(i))
-                .map(|(_, t)| t.trace)
-                .collect(),
+            overflow: response.laid.overflow,
+            tools: traces,
         };
         app.local::<Layouts>()
             .0
             .borrow_mut()
             .insert(self.menu.to_string(), out.clone());
+        out
+    }
+
+    /// One of our tools as the row's, named by its index: its tooltip
+    /// (title, key, why it is greyed, the last run's error), its icon
+    /// recorded where drawn, a submenu drawing the menu's rows.
+    fn row_tool<'t>(
+        &'t self,
+        ctx: &egui::Context,
+        i: usize,
+        tool: &'t Tool,
+        cx: &'t WhenContext,
+    ) -> row::Tool<'t> {
+        let tr = &tool.trace;
+        let id = i.to_string();
+        let label = tr.label.clone();
+        let mut out = match tr.kind {
+            ToolKind::Separator => return row::Tool::separator(),
+            ToolKind::Submenu => {
+                let (app, args) = (self.app, &self.args);
+                let sub = tr.submenu.clone();
+                row::Tool::menu(id, label, move |ui| {
+                    if let Some(sub) = sub {
+                        let shown = show_items(&app.menu(&sub), cx);
+                        menus::rows(ui, app, &sub, shown, cx, args, 1);
+                    }
+                })
+            }
+            ToolKind::Command => match (tr.checkable, tr.radio) {
+                (true, true) => row::Tool::radio(id, label, tr.checked),
+                (true, false) => row::Tool::toggle(id, label, tr.checked),
+                _ => row::Tool::button(id, label),
+            },
+        };
+        let tip = match &tr.keys {
+            Some(keys) => strings::tr_args(
+                ctx,
+                &txt::TOOLBAR_WITH_KEY,
+                &[("action", &tr.label), ("keys", keys)],
+            ),
+            None => tr.label.clone(),
+        };
+        let tip = match (&tr.why, &tool.failed) {
+            (Some(why), _) => format!("{tip}\n{why}"),
+            (None, Some(e)) => format!(
+                "{tip}\n{}",
+                strings::tr_args(ctx, &txt::MENU_LAST_RUN_FAILED, &[("error", e)])
+            ),
+            (None, None) => tip,
+        };
+        out = out.tooltip(tip).enabled(tr.enabled).busy(tr.busy);
+        if let Some(keys) = &tr.keys {
+            out = out.shortcut(keys.clone());
+        }
+        if let Some(icon) = tool.icon {
+            let (label, name) = (tr.label.as_str(), tr.icon.as_deref());
+            out = out.icon_painter(move |painter, rect, color| {
+                icon.paint(painter, rect, color);
+                if let Some(name) = name {
+                    egui_pop_core::icon::registry::record(painter.ctx(), "toolbar", label, name);
+                }
+            });
+        }
         out
     }
 
@@ -417,252 +527,6 @@ impl<'a> Toolbar<'a> {
         key.set(ui.ctx(), (cx.clone(), entries.clone()));
         entries
     }
-
-    /// Draws one tool in a rectangle of `size`.
-    fn tool(
-        &self,
-        ui: &mut Ui,
-        m: &Metrics,
-        font: &FontId,
-        cx: &WhenContext,
-        tool: &Tool,
-        size: egui::Vec2,
-    ) {
-        let ctx = ui.ctx().clone();
-        let tr = &tool.trace;
-        if tr.kind == ToolKind::Separator {
-            let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-            let stroke = egui::Stroke::new(1.0, Tokens::of(&ctx).border.default);
-            let line = if size.x > size.y {
-                [rect.left_center(), rect.right_center()]
-            } else {
-                [rect.center_top(), rect.center_bottom()]
-            };
-            ui.painter().line_segment(line, stroke);
-            return;
-        }
-        let response = ui
-            .add_enabled_ui(tr.enabled, |ui| {
-                ui.allocate_exact_size(size, Sense::click()).1
-            })
-            .inner;
-        let state = State::from_response(&response)
-            .with(State::SELECTED, tr.checked)
-            .with(State::DISABLED, !tr.enabled);
-        self.paint(ui, m, font, tool, response.rect, state);
-        let name = tr.label.clone();
-        let enabled = tr.enabled;
-        match (tr.kind, tr.checkable, tr.radio) {
-            (ToolKind::Command, true, true) => {
-                let checked = tr.checked;
-                response.widget_info(|| {
-                    WidgetInfo::selected(Role::RadioButton, enabled, checked, &name)
-                });
-            }
-            (ToolKind::Command, true, false) => {
-                let checked = tr.checked;
-                response
-                    .widget_info(|| WidgetInfo::selected(Role::Button, enabled, checked, &name));
-            }
-            _ => response.widget_info(|| WidgetInfo::labeled(Role::Button, enabled, &name)),
-        }
-        if tr.busy {
-            ctx.accesskit_node_builder(response.id, |node| node.set_busy());
-        }
-        let tip = match &tr.keys {
-            Some(keys) => strings::tr_args(
-                &ctx,
-                &txt::TOOLBAR_WITH_KEY,
-                &[("action", &tr.label), ("keys", keys)],
-            ),
-            None => tr.label.clone(),
-        };
-        let response = match (&tr.why, &tool.failed) {
-            (Some(why), _) => response.on_disabled_hover_text(format!("{tip}\n{why}")),
-            (None, Some(e)) => response.on_hover_text(format!(
-                "{tip}\n{}",
-                strings::tr_args(&ctx, &txt::MENU_LAST_RUN_FAILED, &[("error", e)])
-            )),
-            (None, None) => response.on_hover_text(tip),
-        };
-        match tr.kind {
-            ToolKind::Command => {
-                if response.clicked()
-                    && let Some(id) = &tr.command
-                {
-                    self.app.request_run_in(
-                        id.clone(),
-                        menus::merge(&tr.args, &self.args),
-                        cx.clone(),
-                    );
-                }
-            }
-            ToolKind::Submenu => {
-                if let Some(sub) = &tr.submenu {
-                    self.popup(&response, cx, |ui, app, cx, args| {
-                        let shown = show_items(&app.menu(sub), cx);
-                        menus::rows(ui, app, sub, shown, cx, args, 1);
-                    });
-                }
-            }
-            ToolKind::Separator => {}
-        }
-    }
-
-    /// Paints a tool's box, icon (or spinner), title and drop-down mark.
-    fn paint(&self, ui: &Ui, m: &Metrics, font: &FontId, tool: &Tool, rect: Rect, state: State) {
-        if !ui.is_rect_visible(rect) {
-            return;
-        }
-        let ctx = ui.ctx();
-        let kit = Kit::of(ctx);
-        let look = &kit.toolbar_button;
-        let painter = ui.painter();
-        look.paint(
-            &KitCx {
-                painter,
-                ppp: ctx.pixels_per_point(),
-            },
-            &Part {
-                rect,
-                room: rect,
-                state,
-                label: None,
-            },
-        );
-        let color = look.style(state).text;
-        let (icon, text) = tool.parts(self.labels);
-        let square = |x: f32| {
-            Rect::from_min_size(
-                pos2(x, rect.center().y - m.icon / 2.0),
-                vec2(m.icon, m.icon),
-            )
-        };
-        // Alone, the icon is centred; with a title, both start at the
-        // padding.
-        let alone = icon.is_some() && !text && tool.trace.kind == ToolKind::Command;
-        let mut x = rect.left() + m.pad;
-        if let Some(i) = icon {
-            let at = if alone {
-                Rect::from_center_size(rect.center(), vec2(m.icon, m.icon))
-            } else {
-                square(x)
-            };
-            if tool.trace.busy {
-                paint_spinner(ui, at, color);
-            } else {
-                i.paint(painter, at, color);
-            }
-            x += m.icon + m.inner;
-        }
-        if text {
-            painter.text(
-                pos2(x, rect.center().y),
-                Align2::LEFT_CENTER,
-                &tool.trace.label,
-                font.clone(),
-                color,
-            );
-        }
-        if tool.trace.kind == ToolKind::Submenu {
-            let side = m.icon * 0.6;
-            let at = Rect::from_center_size(
-                pos2(rect.right() - m.pad - side / 2.0, rect.center().y),
-                vec2(side, side),
-            );
-            kit.glyph(Glyph::Dropdown).paint(painter, at, color);
-        }
-        if let (Some(name), Some(_)) = (&tool.trace.icon, icon) {
-            egui_pop_core::icon::registry::record(ctx, "toolbar", &tool.trace.label, name);
-        }
-    }
-
-    /// The "More tools" button, opening the tools that did not fit.
-    fn more(&self, ui: &mut Ui, m: &Metrics, cx: &WhenContext, rows: Vec<Shown>, width: f32) {
-        let ctx = ui.ctx().clone();
-        let name = match &self.name {
-            Some(toolbar) => strings::tr_args(&ctx, &txt::TOOLBAR_MORE_IN, &[("toolbar", toolbar)]),
-            None => strings::tr(&ctx, &txt::TOOLBAR_MORE),
-        };
-        let (rect, response) = ui.allocate_exact_size(vec2(width, m.height), Sense::click());
-        if ui.is_rect_visible(rect) {
-            let kit = Kit::of(&ctx);
-            let look = &kit.toolbar_button;
-            let state = State::from_response(&response);
-            look.paint(
-                &KitCx {
-                    painter: ui.painter(),
-                    ppp: ctx.pixels_per_point(),
-                },
-                &Part {
-                    rect,
-                    room: rect,
-                    state,
-                    label: None,
-                },
-            );
-            let at = Rect::from_center_size(rect.center(), vec2(m.icon, m.icon));
-            kit.glyph(Glyph::More)
-                .paint(ui.painter(), at, look.style(state).text);
-        }
-        let label = name.clone();
-        response.widget_info(|| WidgetInfo::labeled(Role::Button, true, &label));
-        let response = response.on_hover_text(name);
-        let menu = self.menu.clone();
-        self.popup(&response, cx, move |ui, app, cx, args| {
-            menus::rows(ui, app, &menu, rows, cx, args, 1);
-        });
-    }
-
-    /// A menu popup under a tool, opened by its click, drawn by `rows`.
-    fn popup(
-        &self,
-        response: &Response,
-        cx: &WhenContext,
-        rows: impl FnOnce(&mut Ui, &AppHandle, &WhenContext, &Json),
-    ) {
-        let ui_config = MenuConfig::default();
-        let app = self.app;
-        let args = &self.args;
-        egui::Popup::menu(response)
-            .close_behavior(ui_config.close_behavior)
-            .info(
-                UiStackInfo::new(UiKind::Menu)
-                    .with_tag_value(MenuConfig::MENU_CONFIG_TAG, ui_config),
-            )
-            .show(|ui| rows(ui, app, cx, args));
-    }
-}
-
-/// What a toolbar's tools are sized from.
-struct Metrics {
-    /// The icon's side (`size.icon.toolbar`).
-    icon: f32,
-    /// Around the icon and the title (`space.xs`).
-    pad: f32,
-    /// Between the icon and the title.
-    inner: f32,
-    /// Between tools.
-    gap: f32,
-    /// A tool's height (a row's) or width (an icon-only column's).
-    height: f32,
-    /// A separator's room along the toolbar.
-    separator: f32,
-}
-
-impl Metrics {
-    fn of(t: &Tokens) -> Metrics {
-        let t_icon = Size::Toolbar.points(t);
-        let pad = t.space.xs;
-        Metrics {
-            icon: t_icon,
-            pad,
-            inner: t.space.xs,
-            gap: t.space.xs / 2.0,
-            height: t_icon + 2.0 * pad,
-            separator: t.space.s,
-        }
-    }
 }
 
 /// A command item, as a tool is made of it.
@@ -683,15 +547,8 @@ struct Tool {
     trace: ToolTrace,
     /// The icon drawn, resolved.
     icon: Option<Icon>,
-    /// Its label as declared (an item's own), for the overflow menu.
-    own_label: Option<String>,
     /// The last run's error.
     failed: Option<String>,
-    /// Its item's own clause holds (the menu row checks the command's
-    /// again).
-    item_enabled: bool,
-    /// Its width in a row.
-    width: f32,
 }
 
 impl Tool {
@@ -714,10 +571,7 @@ impl Tool {
                 overflow: false,
             },
             icon: None,
-            own_label: None,
             failed: None,
-            item_enabled: true,
-            width: 0.0,
         }
     }
 
@@ -725,10 +579,8 @@ impl Tool {
         let mut tool = Tool::separator();
         tool.trace.kind = ToolKind::Submenu;
         tool.trace.submenu = Some(menu);
-        tool.own_label = Some(label.clone());
         tool.trace.label = label;
         tool.trace.enabled = enabled;
-        tool.item_enabled = enabled;
         tool
     }
 
@@ -796,117 +648,7 @@ impl Tool {
                 overflow: false,
             },
             icon,
-            own_label: c.label,
             failed,
-            item_enabled: c.enabled,
-            width: 0.0,
         }
-    }
-
-    /// What it shows: its icon (if the labels show icons) and whether its
-    /// title shows.
-    fn parts(&self, labels: Labels) -> (Option<Icon>, bool) {
-        let icon = self.icon.filter(|_| labels != Labels::Text);
-        let text = labels != Labels::Icons || icon.is_none();
-        (icon, text)
-    }
-
-    /// Works out its width in a row.
-    fn measure(&mut self, ctx: &egui::Context, m: &Metrics, font: &FontId, labels: Labels) {
-        if self.trace.kind == ToolKind::Separator {
-            return;
-        }
-        let (icon, text) = self.parts(labels);
-        let mut w = 2.0 * m.pad;
-        if icon.is_some() {
-            w += m.icon;
-        }
-        if text {
-            if icon.is_some() {
-                w += m.inner;
-            }
-            w += ctx
-                .fonts_mut(|f| {
-                    f.layout_no_wrap(self.trace.label.clone(), font.clone(), Color32::PLACEHOLDER)
-                })
-                .size()
-                .x;
-        }
-        if self.trace.kind == ToolKind::Submenu {
-            w += m.inner + m.icon * 0.6;
-        }
-        self.width = w.max(m.height);
-    }
-
-    /// The tool as a menu row (in "More tools").
-    fn row(&self) -> Shown {
-        let tr = &self.trace;
-        match tr.kind {
-            ToolKind::Separator => Shown::Separator,
-            ToolKind::Submenu => Shown::Item {
-                item: Item::Submenu {
-                    menu: tr
-                        .submenu
-                        .clone()
-                        .unwrap_or_else(|| MenuId::from_static("none")),
-                    label: self.own_label.clone().unwrap_or_default(),
-                },
-                enabled: self.item_enabled,
-                checked: false,
-                checkable: false,
-                radio: false,
-            },
-            ToolKind::Command => Shown::Item {
-                item: Item::Command {
-                    id: tr
-                        .command
-                        .clone()
-                        .unwrap_or_else(|| CommandId::from_static("none")),
-                    args: tr.args.clone(),
-                    label: self.own_label.clone(),
-                },
-                // Its item's clause: the row checks the command's again.
-                enabled: self.item_enabled,
-                checked: tr.checked,
-                checkable: tr.checkable,
-                radio: tr.radio,
-            },
-        }
-    }
-}
-
-/// How many tools of these extents stay in a toolbar of `room` points,
-/// `gap` apart, the rest going into a "More tools" button `more` long:
-/// all of them when they fit.
-fn fit(extents: &[f32], gap: f32, more: f32, room: f32) -> usize {
-    let all: f32 = extents.iter().sum::<f32>() + gap * extents.len().saturating_sub(1) as f32;
-    if all <= room {
-        return extents.len();
-    }
-    let mut used = more;
-    extents
-        .iter()
-        .take_while(|e| {
-            used += *e + gap;
-            used <= room
-        })
-        .count()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::fit;
-
-    #[test]
-    fn tools_that_do_not_fit_go_into_more_from_the_end() {
-        let e = [10.0, 10.0, 10.0];
-        // All fit, no "More tools".
-        assert_eq!(fit(&e, 1.0, 10.0, 32.0), 3);
-        // One goes: "More tools" takes its room too, and a gap before it.
-        assert_eq!(fit(&e, 1.0, 8.0, 31.0), 2);
-        assert_eq!(fit(&e, 1.0, 10.0, 31.0), 1);
-        assert_eq!(fit(&e, 1.0, 10.0, 21.0), 1);
-        // Nothing fits besides it.
-        assert_eq!(fit(&e, 1.0, 10.0, 5.0), 0);
     }
 }

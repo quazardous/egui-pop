@@ -1172,7 +1172,7 @@ const ROWS: Slot<(u64, Vec<RowTrace>, Vec<RowTrace>)> = Slot::new("api.menus.row
 /// The most rows kept per pass.
 const ROWS_MAX: usize = 512;
 
-fn record_row(ctx: &Context, row: RowTrace) {
+pub(crate) fn record_row(ctx: &Context, row: RowTrace) {
     let now = ctx.cumulative_pass_nr();
     ROWS.update(ctx, |(pass, building, last)| {
         if *pass != now {
