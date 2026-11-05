@@ -220,6 +220,9 @@ impl TextRoles {
 #[non_exhaustive]
 pub struct Size {
     pub control_height: f32,
+    /// A row of a list, a tree or a property panel (`size.row.height`),
+    /// apart from the controls' height.
+    pub row_height: f32,
     pub icon_inline: f32,
     pub icon_toolbar: f32,
     pub icon_panel: f32,
@@ -445,6 +448,7 @@ impl Tokens {
             },
             size: Size {
                 control_height: d("size.control.height"),
+                row_height: d("size.row.height"),
                 icon_inline: d("size.icon.inline"),
                 icon_toolbar: d("size.icon.toolbar"),
                 icon_panel: d("size.icon.panel"),

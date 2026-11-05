@@ -7,7 +7,8 @@ use crate::kit::{ComponentKit, KitCx, Part, Primitive};
 
 /// The border of a part, nothing else: inside its rectangle, with its
 /// radius, or along it when the part has no height (a line between two
-/// rows, centred on it). A tree's drop marker.
+/// rows, centred on it) or no width (a row's indent guide). A tree's drop
+/// marker.
 pub(crate) struct Outline;
 
 impl Primitive<ComponentKit> for Outline {
@@ -24,6 +25,8 @@ impl Primitive<ComponentKit> for Outline {
         let rect = part.rect;
         if rect.height() <= 0.0 {
             cx.painter.hline(rect.x_range(), rect.top(), stroke);
+        } else if rect.width() <= 0.0 {
+            cx.painter.vline(rect.left(), rect.y_range(), stroke);
         } else {
             let r = b.radius.round().clamp(0.0, 255.0) as u8;
             cx.painter

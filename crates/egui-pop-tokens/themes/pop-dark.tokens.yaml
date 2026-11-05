@@ -375,6 +375,10 @@ size:
     height:
       $value: {value: 24, unit: "px"}
       $description: "Height of buttons, fields and other one-line controls."
+  row:
+    height:
+      $value: "{size.control.height}"
+      $description: "Height of a row of a list, a tree or a property panel (list items, property rows): the controls' height unless a theme makes rows denser or roomier."
   icon:
     inline:
       $value: {value: 16, unit: "px"}

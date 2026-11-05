@@ -39,6 +39,8 @@ mod indicator_flag;
 mod indicator_outline;
 mod indicator_swatch;
 mod job_log;
+mod list_guide;
+mod list_item;
 mod list_row;
 mod list_view;
 mod mark_toggle;
@@ -133,6 +135,8 @@ pub(super) const GROUPS: &[&[Required]] = &[
     indicator_outline::CONTRACT,
     indicator_swatch::CONTRACT,
     job_log::CONTRACT,
+    list_guide::CONTRACT,
+    list_item::CONTRACT,
     list_row::CONTRACT,
     list_view::CONTRACT,
     mark_toggle::CONTRACT,

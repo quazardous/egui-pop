@@ -647,6 +647,13 @@ components! {
     /// A row of a tree, a list or a table: `selected`, `hover`, and
     /// `focus` for the cursor of a focused view.
     list_row: "list-row" => "box",
+    /// A dense row, based on `list-row`: a list item or a property row,
+    /// and the tree's and the list's rows; `active` while pressed,
+    /// `disabled`, its trailing text and a property's name in the
+    /// `muted` tone.
+    list_item: "list-item" => "box",
+    /// An indent guide down a nested row, a part with no width.
+    list_guide: "list-guide" => "outline",
     /// A data view as a whole (tree, list, table, library grid): its
     /// outline while it has the keyboard focus, painted over its rows.
     list_view: "list-view" => "plain",
