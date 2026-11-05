@@ -29,6 +29,7 @@ use egui_pop::theme::ThemeSpec;
 pub mod host;
 mod options;
 pub mod pages;
+pub mod rerun_like;
 pub mod shell;
 
 pub use options::{DEFAULT_SIZE, Options, USAGE};

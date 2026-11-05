@@ -104,6 +104,12 @@ It also builds for the web (`wasm32-unknown-unknown`, with Trunk from
 for scripted runs and screenshots ([tools/wbox](../tools/wbox)). Its
 pages are also the snapshot tests (see [Testing](testing.md)).
 
+**Examples.** The crate also holds whole applications built on egui-pop:
+`threading` (frame times under load, [Threading](threading.md)) and
+`rerun_like`, a viewer with the Rerun viewer's look and layout
+(`cargo run -p egui-pop-gallery --example rerun_like`,
+[A Rerun-like viewer](rerun-like.md)).
+
 ## Screenshots
 
 Every snapshot the gallery's tests keep, by kind, four to a row. They
@@ -408,6 +414,17 @@ Settings, shortcuts, pointer gesture profiles, tips, About (the page and its dia
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/about-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/about-pop-dark.png" width="200" alt="about-pop-dark"></a><br>about-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/about-dialog-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/about-dialog-pop-dark.png" width="200" alt="about-dialog-pop-dark"></a><br>about-dialog-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/inspect-dialog-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/inspect-dialog-pop-dark.png" width="200" alt="inspect-dialog-pop-dark"></a><br>inspect-dialog-pop-dark</td>
+  </tr>
+</table>
+
+### Examples
+
+The `rerun_like` example, a whole application ([A Rerun-like viewer](rerun-like.md)), in its two kits.
+
+<table>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/rerun-like-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/rerun-like-dark.png" width="200" alt="rerun-like-dark"></a><br>rerun-like-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/rerun-like-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/rerun-like-light.png" width="200" alt="rerun-like-light"></a><br>rerun-like-light</td>
   </tr>
 </table>
 
