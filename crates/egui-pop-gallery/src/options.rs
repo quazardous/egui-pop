@@ -31,6 +31,9 @@ Options:
   --detach <panel>       open a panel and detach it into a window of its
                          own at start (gallery.notes, on the workbench
                          page)
+  --system-file-chooser  allow the system's file chooser, a fallback (only
+                         built with the native-dialogs feature; never
+                         under tests)
   --no-persistence       neither read nor keep the folds, the sections and
                          the layout of earlier runs, nor the window's place
   --quit-after <frames>  exit by itself after this many frames (implies
@@ -72,6 +75,9 @@ pub struct Options {
     /// A transparent window, image surfaces installed and BT.2020 with a
     /// 2.2 power wanted.
     pub wide_gamut: bool,
+    /// `--system-file-chooser`: the application allows the system's file
+    /// chooser (`AppBuilder::system_file_chooser`), a fallback.
+    pub system_file_chooser: bool,
     pub help: bool,
 }
 
@@ -92,6 +98,7 @@ impl Default for Options {
             dump_debug: false,
             platform: false,
             wide_gamut: false,
+            system_file_chooser: false,
             help: false,
         }
     }
@@ -132,6 +139,7 @@ impl Options {
                 "--detach" => o.detach = Some(value("--detach")?),
                 "--platform" => o.platform = true,
                 "--wide-gamut" => o.wide_gamut = true,
+                "--system-file-chooser" => o.system_file_chooser = true,
                 "--quit-after" => {
                     let v = value("--quit-after")?;
                     o.quit_after = Some(
@@ -183,6 +191,7 @@ mod tests {
             "--size",
             "1280x800",
             "--wide-gamut",
+            "--system-file-chooser",
             "--detach",
             "gallery.notes",
             "--no-persistence",
@@ -198,6 +207,7 @@ mod tests {
         assert_eq!(o.lang, "fr");
         assert_eq!(o.size, [1280.0, 800.0]);
         assert!(o.wide_gamut);
+        assert!(o.system_file_chooser);
         assert_eq!(o.detach.as_deref(), Some("gallery.notes"));
         assert_eq!(
             Options::parse(Vec::<String>::new()).unwrap(),

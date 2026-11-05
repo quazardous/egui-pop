@@ -18,8 +18,10 @@ default = ["graph-png", "graph-pdf"]
 graph-png = ["egui-pop/graph-png"]
 ## The node graph page exports PDF (`egui-pop/graph-pdf`).
 graph-pdf = ["egui-pop/graph-pdf"]
-## The system's file chooser in the gallery (tests always use the in-app
-## picker, so this is off by default).
+## The system's file chooser, a fallback: off by default, and even built in,
+## used only with `--system-file-chooser`. Tests never use it (the
+## harnesses refuse it, `egui_pop::api::files::system_chooser_refused`);
+## never test with this feature or with `--all-features`: CI only lints it.
 native-dialogs = ["egui-pop/native-dialogs"]
 ## The viewer page plays a clip it generates (`egui-pop/views-video`), through
 ## the system's GStreamer; off by default so that no build needs it.
