@@ -152,6 +152,7 @@ $extensions:
             info: {$value: "{green.8}", $description: "Green.475: info_log_text_color is Green.500, at 4.48:1 on white; a step darker reads at 4.5:1"}
             warn: {$value: "{warning}", $description: "warn_fg_color (#FF7A0C), darkened as `warning` is for contrast on white"}
             error: {$value: "#ab0116", $description: "error_fg_color"}
+            critical: {$value: "{red.12}", $description: "Red.200: Rerun draws critical in strong_fg_color (Gray.0) on error_fg_color; as a text colour, the red nearest the strong text"}
         plot:
           rest:
             fill: {$type: "color", $value: "{gray.0}", $description: "Gray.1000: viewport_background, a plot background's default"}
@@ -302,6 +303,7 @@ palette:
     info: {$value: "#00da7e", $description: "Green.700: info_log_text_color"}
     warn: {$value: "{warning}", $description: "warn_fg_color (#FF7A0C)"}
     error: {$value: "{danger}", $description: "error_fg_color (#AB0116) lifted as `danger` is: Rerun's red does not read on the dark panel"}
+    critical: {$value: "{red.12}", $description: "Red.900: Rerun draws critical in strong_fg_color (Gray.1000) on error_fg_color; as a text colour, the red nearest the strong text"}
 plot:
   rest:
     fill: {$type: "color", $value: "{gray.2}", $description: "Gray.100: viewport_background, a plot background's default"}

@@ -57,7 +57,7 @@ the file with `Logs::write(level, target, message)`. No step runs per
 line: lines are written from whatever thread logs them.
 
 A view showing log lines colours their levels with the theme's
-`palette.log.{trace, debug, info, warn, error}` tokens
+`palette.log.{trace, debug, info, warn, error, critical}` tokens
 (`Tokens::of(ctx).palette.log`, [Tokens](tokens.md#log-levels)).
 
 ## Crash reports

@@ -232,6 +232,11 @@ const CORE: &[Required] = &[
         "color",
         "a log line at the error level (readable as text)",
     ),
+    sys(
+        "palette.log.critical",
+        "color",
+        "a log line at the critical level, past error (readable as text)",
+    ),
     sys("radius.widget", "dimension", "corner radius of controls"),
     sys(
         "radius.window",
@@ -764,15 +769,18 @@ pub const CATEGORY: [&str; 10] = [
 ];
 
 /// The log levels' colours, from the least to the most severe: `trace`,
-/// `debug`, `info`, `warn`, `error`, the levels of the `log` facade. A
-/// log view colours a line's level (or the line) with them; each reads
-/// as text on the canvas and the panel ([`crate::contrast::PAIRS`]).
-pub const LOG_LEVELS: [&str; 5] = [
+/// `debug`, `info`, `warn`, `error`, the levels of the `log` facade, and
+/// `critical`, past error (the level some loggers add: Python's, Rerun's
+/// text log). A log view colours a line's level (or the line) with them;
+/// each reads as text on the canvas and the panel
+/// ([`crate::contrast::PAIRS`]).
+pub const LOG_LEVELS: [&str; 6] = [
     "palette.log.trace",
     "palette.log.debug",
     "palette.log.info",
     "palette.log.warn",
     "palette.log.error",
+    "palette.log.critical",
 ];
 
 /// Every token a theme must provide: the system tier, the component tier

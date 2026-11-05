@@ -537,6 +537,7 @@ palette:
     info: {$value: "{success}"}
     warn: {$value: "{warning}"}
     error: {$value: "{danger}"}
+    critical: {$value: "{red.12}", $description: "Past error: danger's red at the scale's high-contrast text step, bolder than danger (step 11)."}
   magnet:
     $type: "dimension"
     $value: "{size.magnet}"
