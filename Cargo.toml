@@ -90,7 +90,7 @@ image = { version = "0.25", default-features = false }
 # continues egui_dock 0.21 on egui 0.37.
 # 0.22.1 has the `DockPainter` the kit paints the docks with; 0.22.2 the
 # section stacks egui-pop wraps (`sections`).
-egui_stack = { version = "0.22.2", default-features = false }
+egui_stack = { version = "0.22.3", default-features = false }
 egui-pop = { version = "0.5.1", path = "crates/egui-pop" }
 
 [workspace.lints.rust]
