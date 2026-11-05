@@ -835,6 +835,18 @@ command-viewer-zoom-reset =
     .description = Gives the viewer's page its normal size.
     .title = Reset the page zoom
 
+command-workbench-arrange-column =
+    .description = Lays out the focused panel's group and the groups beside it one above the other.
+    .title = Arrange as column
+
+command-workbench-arrange-grid =
+    .description = Lays out the focused panel's group and the groups beside it in rows and columns.
+    .title = Arrange as grid
+
+command-workbench-arrange-row =
+    .description = Lays out the focused panel's group and the groups beside it side by side.
+    .title = Arrange as row
+
 command-workbench-arrangement-reset =
     .description = Puts the panels back as the current arrangement's template has them.
     .title = Reset the arrangement
@@ -870,18 +882,6 @@ command-workbench-next-region =
 command-workbench-previous-region =
     .description = Moves the keyboard to the previous part of the window.
     .title = Go to the previous region
-
-command-workbench-arrange-grid =
-    .description = Lays out the focused panel's group and the groups beside it in rows and columns.
-    .title = Arrange as grid
-
-command-workbench-arrange-row =
-    .description = Lays out the focused panel's group and the groups beside it side by side.
-    .title = Arrange as row
-
-command-workbench-arrange-column =
-    .description = Lays out the focused panel's group and the groups beside it one above the other.
-    .title = Arrange as column
 
 command-workbench-tab-next =
     .description = Shows and focuses the next tab of the focused panel's group.
