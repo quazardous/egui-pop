@@ -16,6 +16,7 @@
 - [Linked panels](linked-panels.md)
 - [The context stack](contexts.md)
 - [History](history.md)
+- [The shared selection](selection.md)
 - [The clipboard](clipboard.md)
 - [Links](links.md)
 - [The status bar and the context stack](status-and-context.md)

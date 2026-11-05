@@ -30,6 +30,10 @@
 //!   own `OpenUrl` routed through it; the link widget, the
 //!   confirmation, the agents' `links.open` and `links.check`, the
 //!   `links` collector and the lint, a plugin;
+//! - [`selection`]: the application-wide selection (opt-in):
+//!   the items selected and the one hovered, shared by every panel,
+//!   their history (`selection.back`, `selection.forward`), context keys,
+//!   the agents' commands and the `selection` collector, a plugin;
 //! - [`services`]: typed service tokens;
 //! - [`stories`]: gallery stories as a contribution;
 //! - [`busy`]: a button bound to a command, showing its busy state (a
@@ -144,6 +148,7 @@ pub mod palettes;
 pub mod plugin;
 pub mod pointer;
 pub mod scroll_bars;
+pub mod selection;
 pub mod services;
 pub mod settings;
 pub mod settings_pages;
