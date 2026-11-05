@@ -8,6 +8,15 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.5.1 (2026-11-05)
+
+Published: egui-pop-api 0.5.1, egui-pop 0.5.1.
+
+### Fixes
+
+- egui-pop, egui-pop-api: The cross on a tip's card closes it again: it was drawn as a plain icon, so a
+  click on it did nothing.
+
 ## 0.5.0 (2026-11-04)
 
 Published: egui-pop-model 0.4.1, egui-pop-core 0.5.0, egui-pop-api 0.5.0, egui-pop-test 0.5.0, egui-pop-viewport 0.5.0, egui-pop-i18n 0.5.0, egui-pop-editors 0.5.0, egui-pop-platform 0.5.0, egui-pop-views 0.5.0, egui-pop-imaging 0.5.0, egui-pop 0.5.0.
