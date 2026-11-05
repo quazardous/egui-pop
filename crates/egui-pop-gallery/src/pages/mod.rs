@@ -15,6 +15,7 @@ pub mod cursors;
 pub mod debug;
 pub mod dialogs;
 pub mod display;
+pub mod dj;
 pub mod editors;
 pub mod files;
 pub mod fonts;

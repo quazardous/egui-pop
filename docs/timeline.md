@@ -363,10 +363,39 @@ source, and a waveform, both from the source's time, so a clip trimmed
 or moved keeps its picture and its sound in place; the titles with
 `PlainClips`).
 
+The **DJ decks** page puts two decks on bars and beats (128 and 124 BPM),
+each a timeline with one track holding its song, drawn by a painter of
+the gallery's: a pretend waveform, louder on the beats and in the drop,
+under a beat grid with the bars brighter. Hot cues 1 to 8 are cue points
+coloured per pad (set on the nearest beat, or jumped to), the loop is the
+range (I and O, halved and doubled from its start), the pitch fader
+scales the pretend clock, and Sync gives a deck the other's tempo and
+moves it by less than half a beat onto the other's phase. The deck's keys
+(1 to 8, Shift with them, `[`, `]`, S) are commands of the page bound on
+the decks' surface (`Timeline::surface`); J/K/L, I, O and Ctrl+L stay the
+timeline's.
+
 ## What comes next
 
-Two demos on top: a DJ deck (beat grid, hot cues, loops) and a video
-editor (timecode, J/K/L, trimming).
+A video editor demo on top (timecode, J/K/L, trimming, splitting).
+
+What the DJ decks needed that the timeline does not give, worked around
+by the page:
+
+- **A view centred on the playhead**: `follow` turns pages; a deck keeps
+  its playhead in the middle and scrolls under it, which the page does by
+  moving `view` each frame.
+- **Locked tracks or clips**: a deck's song can be dragged, trimmed or
+  deleted like any clip; the page puts it back after each pass.
+- **Which timeline a surface key is for**: a command bound on a surface
+  two timelines share is not told which one has the focus; the page
+  remembers the deck whose timeline had it last.
+- **An application's data on a marker**: a hot cue's pad lives in its
+  label; a marker has no field of the application's (a slot, a type).
+- **An application's own edits as steps**: changing `TimelineState`
+  directly is not a step of the history; only the widget's gestures and
+  the `timeline.*` commands are (the decks keep no history, as DJ
+  software does not).
 
 Not in the timeline yet: drop-frame timecode, tempo changes along a
 track, a range's edges dragged directly (Shift+drag draws a new one);
