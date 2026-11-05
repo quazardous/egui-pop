@@ -54,6 +54,7 @@
 - [Agents and the debug bridge](agents.md)
 - [Extensions](extensions.md)
 - [The gallery](gallery.md)
+- [A Rerun-like viewer](rerun-like.md)
 
 # Reference
 

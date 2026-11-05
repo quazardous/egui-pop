@@ -170,6 +170,10 @@ of every crate with every feature on.
   and the checks an entry passes; the extension template
   (`templates/extension`).
 - [The gallery](gallery.md): the catalogue application and its options.
+- [A Rerun-like viewer](rerun-like.md): an example application with the
+  Rerun viewer's look and layout (a kit from Rerun's design tokens, a
+  blueprint, a viewport of four views, a selection panel, a time
+  panel), and the gaps it found in egui-pop, ranked.
 
 ## Reference
 
