@@ -95,7 +95,7 @@ outlines and the loupe), `node-graph` (the node graph editor), `graph-file` (the
 (the live tree), `list-items` (dense rows on their own and in a tree,
 property rows in a selection panel), `table` (lists and tables), `plot` (charts: a time
 series with a time cursor, a scatter and bars), `library` (the photo
-library), `timeline` (timelines over seconds, a timecode and bars and beats), `text-editor`,
+library), `timeline` (timelines over seconds, a timecode and bars and beats), `tracks` (tracks of clips), `dj` (two DJ decks: hot cues, loops, sync), `text-editor`,
 `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
 `palettes`, `arrangements`, `contexts` (the context stack: places and modes, and the status bar that follows them), `clipboard` (typed items copied between palettes, paste special's previews), `links` (one policy for every link: declared links, links that ask first, local files, an agent's request), `viewer` (help pages, markdown, a safe subset of HTML and images in a panel), `strips` (the activity bar, and status items: live states, a popover, hover cards), `jobs` (a pretend host's
 background jobs), `frame`, `scale`, `pointer` (pointer gesture profiles),
@@ -341,6 +341,21 @@ waveform); then keys on a clip. See [Timeline](timeline.md#tracks-and-clips).
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/tracks-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/tracks-pop-dark.png" width="200" alt="tracks-pop-dark"></a><br>tracks-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/tracks-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/tracks-pop-light.png" width="200" alt="tracks-pop-light"></a><br>tracks-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/tracks-keys-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/tracks-keys-pop-dark.png" width="200" alt="tracks-keys-pop-dark"></a><br>tracks-keys-pop-dark</td>
+  </tr>
+</table>
+
+### DJ decks
+
+Two decks on bars and beats, at 128 and 124 BPM: a pretend waveform
+under a beat grid drawn by the page's clip painter, coloured hot cues,
+a loop, the pitch fader and Sync; then keys on deck B: S, 3, a bar on,
+3, `[` twice, Shift+4 and L. See [Timeline](timeline.md#the-gallery).
+
+<table>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dj-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dj-pop-dark.png" width="200" alt="dj-pop-dark"></a><br>dj-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dj-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dj-pop-light.png" width="200" alt="dj-pop-light"></a><br>dj-pop-light</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/dj-keys-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/dj-keys-pop-dark.png" width="200" alt="dj-keys-pop-dark"></a><br>dj-keys-pop-dark</td>
   </tr>
 </table>
 

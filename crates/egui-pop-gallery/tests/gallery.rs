@@ -6873,6 +6873,68 @@ fn the_timeline_page_shows_a_timeline_per_scale_and_takes_its_keys() {
 }
 
 #[test]
+fn the_dj_page_sets_hot_cues_loops_and_syncs_a_deck_from_its_keys() {
+    use egui::accesskit::Role;
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "dj"));
+        h.run();
+        results.add(h.try_snapshot(format!("dj-{theme}")));
+    }
+    let mut h = harness(options("pop-dark", Density::Comfortable, "dj"));
+    h.run();
+    let value = |h: &Harness<'_, Gallery>, label: &str| {
+        h.get_by_role_and_label(Role::Slider, label)
+            .accesskit_node()
+            .value()
+    };
+    assert_eq!(value(&h, "Deck A").as_deref(), Some("34.3.480"));
+    assert_eq!(value(&h, "Deck B").as_deref(), Some("1.2.240"));
+    assert_eq!(h.query_all_by_label("128.00 BPM").count(), 1);
+    // On deck B: S syncs it to deck A (its tempo, and half a beat in as
+    // A is); 3 sets a hot cue on the nearest beat, a bar on, 3 jumps back
+    // to it; [ starts a loop of four beats there, [ again halves it;
+    // Shift+4 clears the fourth cue; L plays.
+    h.get_by_role_and_label(Role::Slider, "Deck B").focus();
+    h.run();
+    for (modifiers, key) in [
+        (egui::Modifiers::NONE, egui::Key::S),
+        (egui::Modifiers::NONE, egui::Key::Num3),
+        (egui::Modifiers::SHIFT, egui::Key::ArrowRight),
+        (egui::Modifiers::NONE, egui::Key::Num3),
+        (egui::Modifiers::NONE, egui::Key::OpenBracket),
+        (egui::Modifiers::NONE, egui::Key::OpenBracket),
+        (egui::Modifiers::SHIFT, egui::Key::Num4),
+        (egui::Modifiers::NONE, egui::Key::L),
+    ] {
+        h.key_press_modifiers(modifiers, key);
+        h.run();
+    }
+    assert_eq!(h.query_all_by_label("128.00 BPM").count(), 2);
+    assert_eq!(value(&h, "Deck B").as_deref(), Some("1.3.000"));
+    let snap = h.state().app.handle().debug_snapshot();
+    let b = &snap["timeline"]["timelines"]["deck-b"];
+    let cues: Vec<_> = b["markers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| (m["label"].as_str().unwrap(), m["text"].as_str().unwrap()))
+        .collect();
+    assert_eq!(cues, [("1", "1.1.000"), ("3", "1.3.000")], "{b}");
+    assert_eq!(b["markers"][1]["color"], "#e8c52c");
+    assert_eq!(
+        b["range"]["text"],
+        serde_json::json!(["1.3.000", "2.1.000"]),
+        "{b}"
+    );
+    assert_eq!(b["looping"], true);
+    assert_eq!(b["play"], "playing");
+    // The song stays one clip, whatever the keys did.
+    assert_eq!(b["tracks"][0]["clips"].as_array().unwrap().len(), 1);
+    results.add(h.try_snapshot("dj-keys-pop-dark"));
+}
+
+#[test]
 fn the_tracks_page_shows_clips_that_the_keys_select_move_and_trim() {
     use egui::accesskit::Role;
     let mut results = egui_kittest::SnapshotResults::new();
