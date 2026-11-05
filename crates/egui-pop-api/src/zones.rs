@@ -31,6 +31,12 @@ pub const CAPTION_START: ZoneId = ZoneId::from_static("app.caption-start");
 pub const ACTIVITY_BAR: ZoneId = ZoneId::from_static("app.activity-bar");
 /// The top bar, after the main menu.
 pub const TOP_BAR: ZoneId = ZoneId::from_static("app.top-bar");
+/// The top bar's end: blocks drawn there, left to right, sit at the
+/// bar's end before the commands of `app::MENU_BAR_END` (a document's
+/// name, a readout, a widget of the application's). They keep the width
+/// they took the pass before, as the top bar's do; the menus overflow
+/// first. Declared by the framework beside the shell's zones.
+pub const TOP_BAR_END: ZoneId = ZoneId::from_static("app.top-bar-end");
 /// The side bar at the start (left in left-to-right).
 pub const SIDE_BAR: ZoneId = ZoneId::from_static("app.side-bar");
 /// The main area.

@@ -1710,21 +1710,23 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         sash_keys(ui, area, id, flipped, default);
         let pad = |p: f32| p.round().clamp(0.0, 127.0) as i8;
         let side = &kit.side_area.data;
-        let shown =
-            panel
-                .frame(egui::Frame::side_top_panel(ui.style()).inner_margin(
-                    egui::Margin::symmetric(pad(side.padding_x), pad(side.padding_y)),
-                ))
-                .show_separator_line(kit.side_area.style(State::REST).border_width > 0.0)
-                .resizable(true)
-                .default_size(default)
-                .min_size(min.max(48.0))
-                .show(ui, |ui| {
-                    // The panel keeps its width; content narrower than it does
-                    // not shrink it.
-                    ui.set_min_size(ui.available_size());
-                    draw_area(app, ui, area);
-                });
+        let margin = if app.frameless(area) {
+            egui::Margin::ZERO
+        } else {
+            egui::Margin::symmetric(pad(side.padding_x), pad(side.padding_y))
+        };
+        let shown = panel
+            .frame(egui::Frame::side_top_panel(ui.style()).inner_margin(margin))
+            .show_separator_line(kit.side_area.style(State::REST).border_width > 0.0)
+            .resizable(true)
+            .default_size(default)
+            .min_size(min.max(48.0))
+            .show(ui, |ui| {
+                // The panel keeps its width; content narrower than it does
+                // not shrink it.
+                ui.set_min_size(ui.available_size());
+                draw_area(app, ui, area);
+            });
         app.workbench_mut().rects.insert(area, shown.response.rect);
         // egui names the line "Resize panel": which one, it cannot say.
         let name = strings::tr_args(&ctx, &txt::AREA_RESIZE, &[("area", &area_text(&ctx, area))]);
@@ -1732,7 +1734,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         grip(&ctx, &kit, area, shown.response.rect, flipped);
     }
     let mut central = egui::CentralPanel::default();
-    if app.edge_to_edge() {
+    if app.edge_to_edge() || app.frameless(Area::Center) {
         central = central.frame(egui::Frame::central_panel(ui.style()).inner_margin(0.0));
     }
     let shown = central.show(ui, |ui| {
@@ -2720,7 +2722,15 @@ fn draw_dock(app: &AppHandle, ui: &mut Ui, area: Area) {
         let cache_id = TAB_CACHE.keyed(dock_id(area));
         let mut cache = cache_id.update(&ctx, std::mem::take);
         cache.prepare(app, &ctx, &kit, &tabs);
-        let style = cache.dock_style(ui.style(), &kit);
+        let mut style = cache.dock_style(ui.style(), &kit);
+        if app.frameless(area) {
+            // The panels' bodies run to the area's edges; the splitter's
+            // line alone sets them apart.
+            let body = &mut style.tab.tab_body;
+            body.inner_margin = egui::Margin::ZERO;
+            body.stroke = egui::Stroke::NONE;
+            body.corner_radius = egui::CornerRadius::ZERO;
+        }
         let mut viewer = Viewer {
             app,
             prepared: &cache.tabs,

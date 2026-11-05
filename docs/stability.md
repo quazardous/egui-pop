@@ -99,7 +99,8 @@ Three tiers:
   steps are kept; their API may move while the first applications
   adopt them.
 - The shell's hooks for applications: `AppBuilder::wrap`,
-  `main_edge_to_edge`, `on_exit`, `run_native_with`.
+  `main_edge_to_edge`, `frameless`, `layout`, `on_exit`,
+  `run_native_with`, the `TOP_BAR_END` zone.
 - Visual kits (`egui_pop_core::kit`, kit folders, `AppBuilder::kit`):
   a kit's boxes per state and tone, its handlers and its package format
   may still move; the tokens a kit reads follow the tokens' tier.
