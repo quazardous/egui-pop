@@ -185,10 +185,10 @@ fn show_card(ctx: &Context, app: &AppHandle, tips: &Tips, tip: &Tip) {
                 &text,
                 Some(|ui: &mut Ui| {
                     let label = strings::tr(ui.ctx(), &txt::TIPS_NOT_NOW);
-                    if ui
-                        .add(Icon::Close.size(Size::Inline).label(&label))
-                        .clicked()
-                    {
+                    // A button: an icon with only a label senses hover,
+                    // and a click on it does nothing.
+                    let cross = Icon::Close.size(Size::Inline).label(&label);
+                    if ui.add(cross.sense_click()).clicked() {
                         tips.not_now(app);
                     }
                 }),

@@ -3,7 +3,7 @@
 //! they are about, and tips follow the interface's language.
 
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable as _;
+use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_api::tips::{self, CMD_TIPS_LIST, CMD_TIPS_RESET, TIPS, Tip, TipsPlugin};
 use egui_pop_api::zones::{self, Block};
 use egui_pop_api::{App, Ctx, Plugin, PluginError};
@@ -381,6 +381,34 @@ fn the_card_sits_beside_its_target_and_escape_closes_it() {
     h.run();
     assert!(h.query_by_label("Did you know?").is_none());
     assert!(tips.current().is_none());
+}
+
+#[test]
+fn the_cards_cross_closes_it_for_good() {
+    let clock = ManualClock::new(1_000_000.0);
+    let mut h = harness_of(shots(&clock));
+    let tips = h.state().handle().service(&TIPS).unwrap();
+    tips.set_auto(true);
+    tips.show(h.state().handle(), "shots.rate").unwrap();
+    h.run();
+    assert!(h.query_by_label("Did you know?").is_some());
+    // A click on the cross closes the card.
+    h.get_by_label("Not now").click();
+    h.run();
+    assert!(tips.current().is_none(), "the cross did not close the card");
+    assert!(h.query_by_label("Did you know?").is_none());
+    // It stays closed while tips come by themselves.
+    for _ in 0..8 {
+        h.step();
+    }
+    h.run();
+    assert!(tips.current().is_none());
+    assert!(h.query_by_label("Did you know?").is_none());
+    // The cross is a button for screen readers too.
+    tips.show(h.state().handle(), "shots.rate").unwrap();
+    h.run();
+    let role = h.get_by_label("Not now").accesskit_node().role();
+    assert_eq!(role, egui::accesskit::Role::Button);
 }
 
 #[test]
