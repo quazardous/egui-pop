@@ -47,6 +47,36 @@ each may have a network namespace of its own), a named pipe on Windows,
 and a socket in `/tmp` on the other Unix systems; its name holds the
 application's id and the user's name. Nothing else is written.
 
+## Without the application
+
+`instance::single` does not need `App`. An application without it takes
+the later launches itself from the `Launches` of `Single::First`
+(`Instance::launches`): `Launches::set_waker` with its egui context, so
+a launch handed over repaints the window, and `Launches::take` in each
+frame, which drains the launches handed over since the last call:
+
+```rust
+use egui_pop::egui;
+use egui_pop::platform::instance::{Instance, Launch};
+
+let first = Instance::detached(Launch::default()); // `Single::First(first)`
+let launches = first.launches();
+let ctx = egui::Context::default();
+launches.set_waker(Some(ctx.clone()));
+
+launches.deliver(Launch { args: vec!["photo.jpg".into()], ..Launch::default() });
+
+// Each frame:
+for launch in launches.take() {
+    egui_pop::platform::window::raise(&ctx);
+    assert_eq!(launch.args, ["photo.jpg"]); // open what it names
+}
+```
+
+Links in the application's scheme are in `Launch::links(&["viewer".into()])`;
+what to do with them, and who asked (a link from a launch is not the
+user's gesture, below), is the application's call.
+
 ## The steps
 
 | Step | Arguments | Default |
