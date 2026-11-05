@@ -62,6 +62,7 @@ pub mod tips;
 pub mod toasts;
 pub mod tokens;
 pub mod toolbars;
+pub mod tracks;
 pub mod tree;
 pub mod values;
 pub mod viewer;

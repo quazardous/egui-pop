@@ -6739,3 +6739,50 @@ fn the_timeline_page_shows_a_timeline_per_scale_and_takes_its_keys() {
     assert_eq!(track["selected"], 3);
     results.add(h.try_snapshot("timeline-keys-pop-dark"));
 }
+
+#[test]
+fn the_tracks_page_shows_clips_that_the_keys_select_move_and_trim() {
+    use egui::accesskit::Role;
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "tracks"));
+        h.run();
+        results.add(h.try_snapshot(format!("tracks-{theme}")));
+    }
+    let mut h = harness(options("pop-dark", Density::Comfortable, "tracks"));
+    h.run();
+    h.get_by_role_and_label(
+        Role::Button,
+        "Clip Wide shot on V1, 00:00:00:00 to 00:00:12:00",
+    );
+    // Shift+Down from nothing: the clip at the playhead (9 s) on the first
+    // track holding one, the titles; again, V2's nearest, then V1's.
+    h.get_by_role_and_label(Role::Slider, "Edit").focus();
+    h.run();
+    for (modifiers, key) in [
+        (egui::Modifiers::SHIFT, egui::Key::ArrowDown),
+        (egui::Modifiers::SHIFT, egui::Key::ArrowDown),
+        (egui::Modifiers::SHIFT, egui::Key::ArrowDown),
+        // Its end to the playhead, then the next clip, moved a frame on.
+        (egui::Modifiers::NONE, egui::Key::CloseBracket),
+        (egui::Modifiers::NONE, egui::Key::PageDown),
+        (egui::Modifiers::COMMAND, egui::Key::ArrowRight),
+    ] {
+        h.key_press_modifiers(modifiers, key);
+        h.run();
+    }
+    let snap = h.state().app.handle().debug_snapshot();
+    let edit = &snap["timeline"]["timelines"]["edit"];
+    let v1 = &edit["tracks"][2];
+    assert_eq!(v1["name"], "V1", "{edit}");
+    assert_eq!(
+        v1["clips"][0]["text"],
+        serde_json::json!(["00:00:00:00", "00:00:09:00"]),
+        "{v1}"
+    );
+    assert_eq!(v1["clips"][1]["label"], "Close-up");
+    assert_eq!(v1["clips"][1]["seconds"], 12.04);
+    assert_eq!(edit["selected_clips"], serde_json::json!([4]));
+    assert!(h.query_by_label("selected: Close-up").is_some());
+    results.add(h.try_snapshot("tracks-keys-pop-dark"));
+}

@@ -7,8 +7,10 @@ viewer's time panel (seconds), a video editor (frames and timecode) and a
 DJ application (bars and beats): only its [`TimeScale`](#time-scales)
 changes.
 
-This is the timeline's core. Tracks and clips, drawn through a painter the
-application gives, come next, on top of it ([below](#what-comes-next)).
+Under the ruler, [tracks](#tracks-and-clips) hold clips (a start, a
+length, an offset into a source) that an application's painter draws: a
+video's thumbnails, an audio waveform, a data plot. They are selected,
+moved within and across tracks and trimmed by their edges.
 
 ```rust,ignore
 use egui_pop::views::timeline::{Marker, MarkerKind, TimeScale, Timeline, TimelineState};
@@ -85,10 +87,12 @@ touch the one before it.
 | `range`, `looping` | the selected range, and whether playing goes round it |
 | `markers` | `Marker { id, time, label, kind, color }`, in time order; `kind` is `Marker` (a flag) or `Cue` (a pin), `color` the theme's when `None` |
 | `selected` | the marker the keys act on |
+| `tracks` | rows of [clips](#tracks-and-clips), from the top |
+| `selected_clips` | the clips selected, the last one the keys act on |
 | `play`, `speed` | what the user asked: `Paused` or `Playing`, and the speed (negative backwards) |
 
 Its document part, `TimelineDoc` (`doc`, `set_doc`), is the markers, the
-range and the loop: what the history keeps.
+range, the loop and the tracks with their clips: what the history keeps.
 
 **Playing is the application's job.** The widget only says what was
 asked: `play` and `speed` in the state and the output, and
@@ -105,24 +109,28 @@ While it plays, the view follows the playhead a page at a time
 |---|---|---|
 | `id(name)` | none | its name for agents, and its key in the context |
 | `label(text)` | "Timeline" | its accessible name |
-| `lanes(height)` | a control's height | the lanes under the ruler and the markers |
+| `lanes(height)` | a control's height, none with tracks | the lanes under the tracks |
+| `track_height(points)` | twice a control's height | a track's height, unless the track says |
+| `clips(&mut painter)` | `PlainClips` | what draws the clips' content ([below](#painting-clips)) |
 | `width(points)` | the width available | |
-| `snap(Snap)` | all on | what snapping goes to: `grid`, `markers` (and the range's ends), `playhead`; `Snap::OFF` for none |
+| `snap(Snap)` | all on | what snapping goes to: `grid`, `markers` (and the range's ends), `playhead`, `clips` (their edges); `Snap::OFF` for none |
 | `app(&AppHandle)`, `history(path)` | none | each change of the document a step of the history ([below](#history)) |
 | `surface(name)` | `timeline` | its focus surface, for key bindings |
 | `take_focus(bool)` | off | takes the keyboard focus this pass |
 | `follow(bool)` | on | the view follows the playhead while it plays |
 
 `show(ui)` draws it; `show_with(ui, |ui, lanes| ...)` draws what goes in
-the lanes too (rows of data, a waveform), before the markers and the
-playhead are drawn over it: `Lanes::x_of` and `time_at` map time and
+the lanes too (rows of data, a beat grid), before the clips, the markers
+and the playhead are drawn over it: `Lanes::x_of` and `time_at` map time and
 points. Rerun-like time panels draw their rows of data ticks this way.
 
 `TimelineOutput` says what happened: `playhead_moved`, `scrubbing`,
 `transport_changed`, `play`, `speed`, `view_changed`, and `edits`, the
 document's changes (`Edit::MarkerAdded`, `MarkerMoved`, `MarkerRemoved`,
-`RangeSet`, `LoopSet`, and `Restored` when the history put the document
-back).
+`RangeSet`, `LoopSet`, `ClipAdded`, `ClipMoved`, `ClipTrimmed`,
+`ClipRemoved`, and `Restored` when the history put the document back;
+`Edit` is non-exhaustive), and `tracks`, each track's id and row on
+screen, for what an application draws beside them.
 
 ### Pointer
 
@@ -139,10 +147,12 @@ back).
 | Double click on the markers' lane | adds a marker there |
 | Alt held | no snapping (frames still land on whole frames) |
 
-Snapping pulls a time to a marker, the range's ends or the playhead within
-8 points (`SNAP_REACH`), the nearest first; otherwise onto the grid (the
-ruler's small ticks). A scrub does not snap to the playhead it moves, a
-dragged marker not to itself.
+Snapping pulls a time to a marker, the range's ends, the playhead or a
+clip's edge within 8 points (`SNAP_REACH`), the nearest first; otherwise
+onto the grid (the ruler's small ticks). A scrub does not snap to the
+playhead it moves, a dragged marker or clip not to itself. A clip moved
+snaps by whichever of its edges is nearer a point (`ruler::snap_span`),
+else its start onto the grid.
 
 ### Keys
 
@@ -165,18 +175,108 @@ application binds on the timeline's surface runs its command instead.
 | Ctrl+L | loops the range, or no longer | Ableton |
 | M | adds a marker at the playhead, "Marker 3" | Premiere, Resolve |
 | ↑ / ↓ | selects the previous / next marker, the playhead goes there (announced) | Resolve's Shift+↑/↓ |
-| Ctrl+← / Ctrl+→ (Shift: bigger) | moves the selected marker one unit | |
-| Delete, Backspace | removes the selected marker | |
-| Escape | lets the selected marker go | |
+| Ctrl+← / Ctrl+→ (Shift: bigger) | moves the selected marker, else the selected clips, one unit | |
+| Page Up / Page Down | selects the previous / next clip on the selected one's track (else the first track's, from the playhead), the playhead goes to its start (announced) | Premiere's edit points |
+| Shift+↑ / Shift+↓ | selects the clip at the playhead (else the nearest) on the track above / below (announced) | egui-pop's |
+| Ctrl+↑ / Ctrl+↓ | moves the selected clips a track up / down, where they fit | egui-pop's |
+| `[` / `]` | trims the selected clip's start / end to the playhead | Resolve's Shift+[ / ] |
+| Delete, Backspace | removes the selected marker, else the selected clips | |
+| Escape | lets the selected marker and clips go | |
 | `+` / `-` | zooms in / out around the playhead | |
+
+### Tracks and clips
+
+```rust,ignore
+use egui_pop::views::timeline::{Clip, TimeScale, Timeline, TimelineState, Track};
+
+let mut edit = TimelineState::new(TimeScale::frames(25), 120.0);
+let v1 = edit.add_track(Track::new(0, "V1").kind("video"));
+let a1 = edit.add_track(Track::new(0, "A1").kind("audio").height(40.0));
+edit.add_clip(v1, Clip::new(0, 0.0, 12.0, "Wide shot")
+    .source("wide.mov")      // what it plays: the application's
+    .offset(3.0)             // the source read from 3 s in
+    .source_length(20.0))?;  // trimming stops at its ends
+
+Timeline::new(&mut edit).clips(&mut my_painter).show(ui);
+```
+
+A `Track` (`id`, `name`, `kind`, `height`, `clips`) is a row under the
+markers' lane; its `kind` is free text for the application's painter
+(`video`, `audio`, `data`). A `Clip` is `id` (unique in the timeline),
+`start` and `length` on the timeline, `offset` into its source, `label`,
+`source` (what it plays, which the timeline never reads),
+`source_length` (`None`: a source without ends, a still or a generator)
+and `color`. Time is in seconds, as everywhere in the timeline; on frames
+a clip's start, length and offset are whole frames. `source_at(time)`
+and `time_of(source_time)` map the timeline and the source.
+
+The rules, kept by `TimelineState` (each method usable without the
+widget, for an application's own commands):
+
+- A track's clips are in time order and **never overlap** (touching end
+  to start is fine), and stay inside the bounds.
+- `add_clip(track, clip)` and `move_clips(&[ClipMove])` (several at once,
+  across tracks) are **refused** where they would overlap or leave the
+  bounds (`ClipError`): nothing changes.
+- `trim_clip(id, ClipEdge, time)` **stops** at the source's ends, the
+  neighbours, the bounds and the shortest a clip can be
+  (`min_clip_length`: a frame, else the ruler's finest step); trimming the
+  start moves the offset with it, so the picture stays where it was.
+- `remove_clips(&ids)`; `clip`, `clip_track`, `clips()` find them;
+  `neighbour_clip` and `clip_across` are what the keys walk.
+
+With the pointer:
+
+| Gesture | Does |
+|---|---|
+| Click on a clip | selects it alone; Ctrl: in or out of the selection; Shift: added |
+| Drag a clip | moves the selection along its track or to others, snapped; where it does not fit, it lands against the nearest edge that lets it (another clip's, the bounds'); one step when dropped |
+| Drag a clip's edge | trims it (the cursor turns to a resize arrow over an edge) |
+| Press on a track, off the clips | lets the clips go, and moves the playhead as anywhere |
+| Middle drag on a clip | pans |
+| Alt held | no snapping |
+
+The playhead stays where it is when a clip is clicked or dragged. Each
+clip is an accessible button, "Clip Wide shot on V1, 00:00:00:00 to
+00:00:12:00", selected or not; a screen reader's click selects it.
+
+#### Painting clips
+
+The timeline draws each clip's box (its colour, else
+`timeline.clip.fill`), its outline, its selection and the edge the
+pointer would trim; a `ClipPainter` draws what is inside, clipped to the
+clip in view:
+
+```rust,ignore
+impl ClipPainter for MyPainter {
+    fn paint(&mut self, painter: &egui::Painter, clip: &ClipPaint<'_>) {
+        if clip.track.kind == "audio" {
+            let (from, to) = clip.source_in_view(); // seconds of the source
+            // ... a waveform across clip.content, x by clip.x_of_source(t)
+        }
+        clip.paint_label(painter); // what PlainClips draws
+    }
+}
+```
+
+`ClipPaint` gives the clip and its track, `rect` (the whole clip, often
+wider than the lanes when zoomed in), `visible` (the part in view),
+`content` (under the label when the track is tall enough), the `lanes`
+and the `scale` for mapping, `selected`, `hovered` and the `tokens`. A
+closure `|painter, clip| ...` is a painter too. `PlainClips`, the
+default, draws the labels only, each kept in sight at the left of the
+part in view.
 
 ### History
 
-With `app(app).history(path)`, the document (markers, range, loop) is kept
+With `app(app).history(path)`, the document (markers, range, loop, tracks
+and clips) is kept
 as text at `path` of the application's value store (declared there if it is
 not), and each change is one step of egui-pop's history ([History](history.md)):
 adding, moving (a drag is one step, from where it was to where it lands),
-removing a marker, setting or clearing the range, looping. Ctrl+Z undoes it
+removing a marker, setting or clearing the range, looping, adding,
+moving, trimming and removing clips (clips moved or removed together are
+one step). Selecting is not a step. Ctrl+Z undoes it
 and the timeline takes the document back at its next pass
 (`Edit::Restored`). The playhead, the view and playing are not steps. An
 agent's change is a step named as the agent's.
@@ -208,9 +308,13 @@ aliases (`TimelineTokens`), so a theme restyles it with data:
 | `timeline.playhead` | `accent.default` | the playhead |
 | `timeline.marker` | `info` | a marker without a colour of its own |
 | `timeline.marker.text`, `.selected` | `text.default`, `focus.ring` | its label, the selected one's outline |
+| `timeline.track.border`, `.text` | `border.default`, `text.muted` | the line under a track, its name |
+| `timeline.clip.fill`, `.border`, `.text` | `surface.raised`, `border.strong`, `text.default` | a clip without a colour of its own, its label |
+| `timeline.clip.selected` | `accent.default` | a selected clip's outline, the edge being trimmed |
 
 The ruler's height is `size.control.height`, its labels `font.scale.xs` in
-the monospace font.
+the monospace font; a track is twice `size.control.height` high unless it
+or the timeline says.
 
 ## For agents: `timeline.*`
 
@@ -225,16 +329,23 @@ widgets work without it. A timeline is reached by its `id`.
 | `timeline.remove_marker` | `timeline`, `id` | removes a marker |
 | `timeline.play` | `timeline`, `speed` | asks to play |
 | `timeline.pause` | `timeline` | asks to pause |
+| `timeline.add_clip` | `timeline`, `track`, `seconds` or `time` (else the playhead), `length`, `offset`, `label`, `source`, `source_length`, `color` | adds a clip, answers its id in `added`; refused where it would overlap |
+| `timeline.move_clip` | `timeline`, `id`, `seconds` or `time`, `track` | moves a clip (what is not given stays); refused where it would overlap or leave the bounds |
+| `timeline.trim_clip` | `timeline`, `id`, `start`, `end` | moves a clip's start or end (seconds on the timeline), stopping as a drag does |
+| `timeline.remove_clip` | `timeline`, `id` or `ids` | removes clips, one step together |
+| `timeline.select_clips` | `timeline`, `ids` | selects clips (`[]`: none); not a step |
 
 Without `timeline`, the one that last had the focus, else the only one
-drawn. A command is checked at once and answered with the timeline as the
-collector shows it; the widget applies it at its next pass, as a step of
+drawn. A command is checked at once (a refusal says why: `it would overlap clip
+4`, `no clip 9`) and answered with the timeline as the collector shows it; the widget applies it at its next pass, as a step of
 the history made by the agent.
 
 The `timeline` collector lists each timeline drawn with an id: its scale,
 view, bounds, playhead (seconds and text), range (and its text), loop,
 markers (id, seconds, text, label, kind, colour), the selected marker, the
-play state and speed; and the one that last had the focus.
+tracks (id, name, kind) with their clips (id, seconds, end, length,
+offset, text, label, source, source length, colour), the clips selected,
+the play state and speed; and the one that last had the focus.
 
 ## The gallery
 
@@ -245,17 +356,21 @@ track at 128 BPM with coloured cue points, a loop of four bars and a kick
 drawn on every beat. A pretend player moves each playhead while it plays,
 on the motion clock (frozen in the tests, so the snapshots stand still).
 
+The **Tracks and clips** page is a forty-second edit at 25 frames per
+second: a titles track, two video tracks and two audio tracks, drawn by
+a painter of the gallery's (pretend thumbnails, one per second of the
+source, and a waveform, both from the source's time, so a clip trimmed
+or moved keeps its picture and its sound in place; the titles with
+`PlainClips`).
+
 ## What comes next
 
-Tracks and clips: rows under the ruler, each holding clips (a start, a
-length, a source offset) drawn by a painter trait the application gives
-(a video's thumbnails, an audio waveform, a data plot), with selection,
-trimming and moving clips as steps of the history. They build on this
-core: `Lanes` for the geometry, `TimeView` and `Ticks` for the mapping
-and the grid, `ruler::snap` with clip edges as more targets, the
-`Timeline`'s pointer and keys, and `TimelineDoc` grown with the tracks.
-Then two demos: a DJ deck (beat grid, hot cues, loops) and a video editor
-(timecode, J/K/L, trimming).
+Two demos on top: a DJ deck (beat grid, hot cues, loops) and a video
+editor (timecode, J/K/L, trimming).
 
-Not in this core: drop-frame timecode, tempo changes along a track, and
-a range's edges dragged directly (Shift+drag draws a new one).
+Not in the timeline yet: drop-frame timecode, tempo changes along a
+track, a range's edges dragged directly (Shift+drag draws a new one);
+for clips, splitting at the playhead, ripple and roll edits, overwriting
+a clip by dropping another on it (a drop lands beside it instead), a
+rubber band selection, track headers (the output's `tracks` rows leave
+room for the application's), and adding or removing tracks by agents.
