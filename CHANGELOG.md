@@ -8,6 +8,120 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.6.0 (2026-11-05)
+
+Published: egui-pop-tokens 0.2.2, egui-pop-core 0.6.0, egui-pop-api 0.6.0, egui-pop-test 0.6.0, egui-pop-viewport 0.6.0, egui-pop-i18n 0.6.0, egui-pop-editors 0.6.0, egui-pop-platform 0.6.0, egui-pop-views 0.6.0, egui-pop-imaging 0.6.0, egui-pop 0.6.0.
+
+### Breaking changes
+
+- egui-pop, egui-pop-api, egui-pop-core, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-platform, egui-pop-test, egui-pop-tokens, egui-pop-viewport, egui-pop-views: Dense list items and property rows (egui-pop-views), in the style of Rerun's list items. `item::ListItem` is one row for lists, trees and panels: a drag handle, indent guides, a collapsing arrow, an icon, its label, weak trailing text and action buttons (`item::ItemAction`: a visibility eye, remove) shown while the row is hovered, focused or selected, or always, a pinned action at rest too. It is `selected`, `hover`, `active`, `focus` and `disabled`; its accessible node is a `ListItem` with its selected and expanded states, its level, and its actions as custom actions; Tab walks from the row through its buttons. `property::PropertyRow` splits the row into a name and a value (any widget, read-only or editable), the names of the rows sharing a column id taking the widest's width so that their values line up. The tree's and the list's rows are list items, looking as before: `TreeView::guides`, `TreeView::trailing` and `TreeView::actions` (a click runs the new `tree.action` step, then `TreeView::on_action`; Tab from the tree reaches the cursor's buttons), `ListRows::icon` and `ListRows::trailing`. Rows are `size.row.height` high, a new token (egui-pop-tokens, `Size::row_height` in egui-pop-core) kept apart from `size.control.height`, which it aliases by default: a theme makes rows denser or roomier than its buttons. The kit gains `list-item` (based on `list-row`: an `active` fill, `disabled` and `muted` text) and `list-guide` (the `outline` handler draws a line along a part with no width). The drag handle's name is translated (egui-pop-i18n, "Move { $name }").
+
+  `kit::Kit` is now `#[non_exhaustive]`, so a later kit component is not a break.
+
+  Migration: `kit::Kit` has two new fields (`list_item`, `list_guide`) and can no longer be built from a struct literal outside egui-pop-core; get one from `Kit::compile` or `Kit::of`, and change its fields on the value.
+- egui-pop, egui-pop-api, egui-pop-core, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-platform, egui-pop-test, egui-pop-tokens, egui-pop-viewport, egui-pop-views: Charts, and a categorical palette for them.
+
+  - **A categorical palette.** `palette.category.0` to `palette.category.9`
+    are system tokens: one colour per series, in order, aliasing a
+    reference group named by hue (`chart.blue`, `chart.orange`...) that
+    `pop-dark`, `pop-light` and `pop-high-contrast` each give for their
+    surfaces. Every slot reads at 3:1 on the canvas, the panel and the
+    raised surface (new pairs in `contrast::PAIRS`), and the slots are told
+    apart: `contrast::check_category` measures them in OKLab (ΔE OK,
+    `contrast::delta_e`), neighbours at 15, any two at 10, neighbours at 8
+    with protanopia or deuteranopia (`contrast::Vision::simulate`).
+    `Color::to_oklab` and `Color::to_linear` are new. Code reads the
+    palette through `Tokens::palette` (`DataPalette`, `series(i)`).
+  - **Two kit components**, `plot` (a chart's background and frame, its
+    axis text and grid) and `plot-cursor` (its time cursor, a line across
+    it). `Kit` gains the `plot` and `plot_cursor` fields, a breaking change
+    for code building a `Kit` by hand (`Kit` is not `#[non_exhaustive]`
+    yet); the crates depending on egui-pop-core take the major with it.
+  - **`egui_pop_views::plot`**: `Plot` wraps egui_plot (MIT OR
+    Apache-2.0) for time series, scatters and bars in the kit's colours and
+    the palette, with an accessible summary (its series' names, kinds,
+    point counts and ranges), the point under the pointer
+    (`PlotOutput::hovered`), an optional time cursor
+    (`Plot::time_cursor(Option<f64>)`), linked axes and cursors, and the
+    `plots` collector (`PlotPlugin`). The gallery's new `plot` page shows
+    them.
+- egui-pop, egui-pop-views: The data table selects columns: `DataTable::select_columns(true)` makes a
+  header click select its column (Ctrl toggles, Shift extends), through the
+  new `table.select_columns` step, and moves the sort to the header's menu.
+  Selected columns and the column under the pointer are tinted from header
+  to last row. A right click on a header opens its menu (the sort entries,
+  then the application's, `DataTable::header_menu`). `TableOutput` says
+  `columns_selected`, `hovered_column` and `header_clicked`;
+  `TableState::selected_columns` gives the columns. `DataTable::shared_columns`
+  binds the column selection to the application-wide selection, a column
+  being the item `column:<id>`.
+
+  Breaking: `TableOutput` has new fields and is now `#[non_exhaustive]`
+  (it is only ever built by the table), so later fields are additive.
+
+### Features
+
+- egui-pop-i18n: `egui_pop_i18n::install(&ctx, &i18n)` installs an `I18n` in an egui
+  context without `App` or `I18nPlugin`: `t(ctx, ..)`, `text(ctx, ..)` and
+  `of(ctx)` read it (with their Fluent arguments), `tr!` reads it as the
+  global catalogues, and egui-pop's own text is translated through its
+  strings provider. `I18nPlugin` installs its catalogues the same way.
+- egui-pop-platform: A single instance without `App`: `Launches::take` (the launches handed
+  over since the last call) and `Launches::set_waker` (the egui context a
+  launch repaints) are public. An application takes the `Launches` from
+  `Single::First(instance)` with `instance.launches()`, sets its context
+  as the waker and takes the launches in its frame.
+- egui-pop, egui-pop-api, egui-pop-test: The system's file chooser (feature `native-dialogs`) is a fallback, off at
+  build time and at run time. Even built in, it is used only when the
+  application allows it with `AppBuilder::system_file_chooser(true)` (read
+  back with `AppHandle::system_file_chooser`); the `files.native` setting is
+  declared only then. `FilesPlugin::default()` now gives the in-app picker,
+  as `FilesPlugin::in_app()` does.
+
+  It is never used under tests: `files::system_chooser_refused` (and
+  `files::system_chooser_refusal`, which says why) refuses it under
+  `cfg(test)`, once `files::refuse_system_chooser` was called, with
+  `EGUI_POP_TEST` (`files::TEST_ENV`) or `NEXTEST` in the environment, or when
+  the frames come with no window's focus (egui_kittest, a bare
+  `Context::run`). Every harness of `egui-pop-test` calls
+  `refuse_system_chooser`, so an application's own tests are covered whatever
+  its features. The files service's debug snapshot gives `native_allowed` and
+  `native_refused`.
+- egui-pop-api, egui-pop-views: An application-wide selection: `selection::SelectionPlugin` provides a
+  `SelectionService` (the `SELECTION` token) holding the selected items and
+  the hovered one, as string ids (`SelectionItem`), shared by every panel.
+  A click replaces, Ctrl toggles, Shift selects a range in the widget's order;
+  subscribers and the journal (`selection.changed`) hear each change, and the
+  context keys `hasSelection` and `selectionCount` follow. `selection.back` and
+  `selection.forward` walk the past selections (Alt+Left and Alt+Right in a
+  widget bound to the selection). Agents read the `selection` collector and
+  run `selection.set`, `selection.add`, `selection.clear` and `selection.hover`.
+
+  `TreeView::shared` and `ListView::shared` bind the tree and the list to it:
+  their rows show what is selected and hovered anywhere, and what they select
+  goes there. `TreeSource::item` and `ListRows::item` name a row's item.
+- egui-pop-views: A timeline, `views::timeline::Timeline`: a ruler of time over a pluggable
+  `TimeScale` (seconds; frames at a `FrameRate`, written as a timecode
+  `HH:MM:SS:FF`; bars and beats at a `Tempo`, written `bar.beat.tick`), with
+  an adaptive ruler whose labels never overlap, a view zoomed and panned
+  (Ctrl+wheel, pinch, the wheel, Ctrl+drag), a playhead to click or scrub, a
+  range set by Shift+drag or I and O that can loop, markers and cue points
+  (added, moved, removed, reached with Up and Down), snapping to the grid,
+  the markers and the playhead (Alt turns it off), and the transport keys
+  (Space, J/K/L shuttle, the arrows, Home and End). Time is an `f64` in
+  seconds. The application keeps a serializable `TimelineState` and moves
+  the time while it plays (`TimelineState::advance`); the widget reports the
+  play state and speed asked. With `Timeline::history`, each change of the
+  document (markers, range, loop) is one step of the history. The timeline
+  is an accessible slider over the time; `TimelinePlugin` adds the
+  `timeline` collector and the `timeline.set_time`, `set_range`,
+  `add_marker`, `remove_marker`, `play` and `pause` commands. Its look is
+  the theme's `timeline.*` tokens, falling back on system tokens.
+
+### Fixes
+
+- egui-pop, egui-pop-api, egui-pop-core: Toolbars run on egui_stack's toolbar row (`egui_stack::toolbar::ToolRow`, egui_stack 0.22.3): it lays the tools out, cuts the row into More tools, takes the clicks and moves the focus (one Tab stop, the arrows, Home and End), and the kit paints the tools through its `DockPainter` (`tool_item`, `tool_more`, `tool_separator`), the painter of the docks and section stacks too. `toolbars::Toolbar` keeps its API, its tooltips, keys, greyed reasons, busy spinners and the `toolbars` collector. The rows of More tools take a menu's look but are now laid out by egui_stack: their labels start nearer the icon, the menu is narrower, and Align's submenu is egui's own. A tool with a title is rounded up to a whole point, so tools after it may move by less than a point.
+
 ## 0.5.1 (2026-11-05)
 
 Published: egui-pop-api 0.5.1, egui-pop 0.5.1.
