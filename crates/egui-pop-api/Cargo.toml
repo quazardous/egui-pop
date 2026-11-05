@@ -22,8 +22,10 @@ default = ["eframe", "bundled-fonts", "image-previews"]
 bundled-fonts = ["egui-pop-core/bundled-fonts"]
 ## Run applications in a native window or a browser through eframe.
 eframe = ["dep:eframe"]
-## The system's file chooser for path fields (rfd); without it, the
-## in-app picker.
+## The system's file chooser (rfd), a fallback kept just in case: off by
+## default, and even built in, used only when the application allows it at
+## run time (`AppBuilder::system_file_chooser`), never under tests
+## (`files::system_chooser_refused`). Otherwise the in-app picker answers.
 native-dialogs = ["dep:rfd"]
 ## PNG and JPEG previews in the in-app file picker (the `image` crate).
 image-previews = ["dep:image"]

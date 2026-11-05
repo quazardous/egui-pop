@@ -25,6 +25,8 @@ fn harness_from(
     builder: egui_kittest::HarnessBuilder<Gallery>,
     options: Options,
 ) -> Harness<'static, Gallery> {
+    // No system dialog on the desktop, whatever the features.
+    egui_pop::api::files::refuse_system_chooser();
     builder
         .with_size(egui::vec2(1100.0, 720.0))
         // egui 0.37 takes a few more passes to settle: a style or a text

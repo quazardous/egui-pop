@@ -30,7 +30,10 @@ the packages to install.
                          whatever the probe says (repeatable);
                          `inspection` opens the egui_inspection endpoint
                          for egui-mcp (EGUI_INSPECTION=1 unless set; no
-                         authentication, see docs/inspection.md)
+                         authentication, see docs/inspection.md);
+                         `native-dialogs` builds the system's file
+                         chooser, a fallback used only with
+                         `-- --system-file-chooser`
   -- <args>              passed to the gallery (`-- --help` lists them)";
 
 /// What the launcher asks of the system, behind a trait so the tests

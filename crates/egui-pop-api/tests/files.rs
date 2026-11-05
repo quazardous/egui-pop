@@ -4023,3 +4023,67 @@ fn the_entries_are_a_list_box_and_a_new_folder_is_said() {
     );
     let _ = std::fs::remove_dir_all(root);
 }
+
+/// The system's chooser is a fallback: without the application allowing it,
+/// neither it nor its setting is there.
+#[test]
+fn the_system_chooser_is_off_unless_the_application_allows_it() {
+    let h = harness(None);
+    let app = h.state().handle().clone();
+    assert!(!app.system_file_chooser());
+    assert_eq!(app.debug_snapshot()["files"]["native_allowed"], false);
+    assert!(
+        setting_native(&app).is_none(),
+        "no setting that would change nothing"
+    );
+}
+
+/// Even built with `native-dialogs`, allowed by the application and wanted by
+/// the setting, the system's chooser is refused under `egui_pop_test`'s
+/// harness: a choice opens the in-app picker, and no dialog reaches the
+/// desktop. Run with `--features native-dialogs` too.
+#[test]
+fn the_harness_refuses_the_system_chooser() {
+    let root = tree("refused");
+    let mut h = egui_pop_test::app(
+        App::builder()
+            .system_file_chooser(true)
+            .plugin(FilesPlugin::default()),
+        egui::vec2(900.0, 640.0),
+    );
+    let app = h.state().handle().clone();
+    app.service(&FILES)
+        .unwrap()
+        .set_system_places(Arc::new(Default::default));
+    h.run();
+    assert!(app.system_file_chooser());
+    assert_eq!(
+        setting_native(&app),
+        Some(true),
+        "allowed, the setting is declared, on"
+    );
+    assert!(files::system_chooser_refused(&h.ctx));
+    assert_eq!(files::system_chooser_refusal(&h.ctx), Some("test harness"));
+    let files_now = app.debug_snapshot()["files"].clone();
+    assert_eq!(files_now["native_allowed"], true);
+    assert_eq!(files_now["native"], true);
+    assert_eq!(files_now["native_refused"], "test harness");
+    let p = choose(&mut h, FileRequest::open("Open an image").directory(&root));
+    let open = &app.debug_snapshot()["files"]["open"][0];
+    assert_eq!(open["via"], "in_app");
+    assert!(h.query_by_label("Open an image").is_some());
+    assert!(h.query_by_label("photos/").is_some());
+    let f = app.service(&FILES).unwrap();
+    f.deliver(f.open_ids()[0], None).unwrap();
+    assert_eq!(result(&mut h, &p), Ok(Chosen::Cancelled));
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// The `files.native` setting, when declared.
+fn setting_native(app: &egui_pop_api::AppHandle) -> Option<bool> {
+    let store = app.store();
+    let store = egui_pop_core::lock(&store);
+    store
+        .get(&format!("settings/{}", files::SETTING_NATIVE))
+        .and_then(|e| e.value.as_bool())
+}

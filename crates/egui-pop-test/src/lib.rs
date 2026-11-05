@@ -2,7 +2,8 @@
 //!
 //! - [`app`] and [`themed`]: egui_kittest harnesses with a theme
 //!   installed before the first frame; [`harness_for`]: a plugin in an
-//!   application with the default plugins;
+//!   application with the default plugins. Each refuses the system's file
+//!   chooser to the process, so that no test opens a dialog on the desktop;
 //! - [`keymap_problems`] and [`assert_keymap_clean`]: no two commands
 //!   claim the same keys, no binding names a command that does not
 //!   exist;
@@ -71,10 +72,19 @@ use egui_kittest::kittest::{NodeT, Queryable as _};
 use egui_pop_api::{App, AppBuilder};
 use egui_pop_core::theme::{self, ThemeSpec};
 
+/// No system dialog opens on the desktop from a test: each harness here
+/// refuses the system's file chooser for the whole process
+/// (`egui_pop_api::files::refuse_system_chooser`), whatever the
+/// `native-dialogs` feature and the application say.
+fn no_system_dialogs() {
+    egui_pop_api::files::refuse_system_chooser();
+}
+
 /// A harness drawing a whole application. The application is built on a
 /// context of its own, then attaches to the harness's on the first frame
 /// (its theme installed before anything is drawn).
 pub fn app(builder: AppBuilder, size: Vec2) -> Harness<'static, App> {
+    no_system_dialogs();
     let app = builder
         .build(&egui::Context::default())
         .unwrap_or_else(|e| panic!("the application does not build: {e}"));
@@ -90,6 +100,7 @@ pub const SCALES: [f32; 4] = [1.0, 1.25, 1.5, 2.0];
 /// As [`app`], on a screen of this native scale (physical pixels per
 /// point).
 pub fn app_at(builder: AppBuilder, size: Vec2, scale: f32) -> Harness<'static, App> {
+    no_system_dialogs();
     let app = builder
         .build(&egui::Context::default())
         .unwrap_or_else(|e| panic!("the application does not build: {e}"));
@@ -266,6 +277,7 @@ pub fn assert_writes_declared(app: &App) {
 /// As [`app`], rendering with wgpu (for snapshots).
 #[cfg(feature = "wgpu")]
 pub fn app_wgpu(builder: AppBuilder, size: Vec2) -> Harness<'static, App> {
+    no_system_dialogs();
     let app = builder
         .build(&egui::Context::default())
         .unwrap_or_else(|e| panic!("the application does not build: {e}"));
@@ -277,6 +289,7 @@ pub fn app_wgpu(builder: AppBuilder, size: Vec2) -> Harness<'static, App> {
 
 /// A harness drawing `ui` with a theme installed before the first frame.
 pub fn themed<'a>(spec: &ThemeSpec, size: Vec2, ui: impl FnMut(&mut egui::Ui) + 'a) -> Harness<'a> {
+    no_system_dialogs();
     let h = Harness::builder().with_size(size).build_ui(ui);
     theme::install(&h.ctx, spec);
     h

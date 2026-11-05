@@ -85,6 +85,9 @@ jobs:
       # The gallery's `inspection` feature (eframe's), off by default:
       # its smoke test runs in the default build (tests/inspection.rs).
       - run: cargo clippy -p egui-pop-gallery --all-targets --locked --features inspection -- -D warnings
+      # The system's file chooser, a fallback off by default: linted, never
+      # tested with (its tests would only check that it is refused).
+      - run: cargo clippy -p egui-pop-api -p egui-pop-gallery --all-targets --locked --features egui-pop-api/native-dialogs,egui-pop-gallery/native-dialogs -- -D warnings
       - run: cargo doc --workspace --no-deps --locked
 
   # The guides compiled as documentation, when only they changed (clippy
@@ -127,6 +130,9 @@ jobs:
     env:
       # Render with Mesa's software Vulkan driver: the same pixels on every run.
       WGPU_BACKEND: vulkan
+      # No system file chooser in any test (`files::TEST_ENV`), whatever
+      # the features.
+      EGUI_POP_TEST: "1"
     steps:
       - uses: actions/checkout@v5
         with:

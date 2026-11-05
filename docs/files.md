@@ -6,12 +6,14 @@ a `Pending`, the host contract's result to come
 ([ADR 0010](adr/0010-host.md)), which gives `{ "paths": [...] }`, or
 `null` when the person cancelled.
 
+- **The in-app picker**, egui-pop's own: what answers, unless an
+  application turns to the fallback below.
 - **The system's chooser** (feature `native-dialogs` of the facade,
-  through `rfd`): the xdg desktop portal on Linux, the common dialogs on
-  Windows, the open and save panels on macOS. It is made on the
-  interface thread and awaited on a thread of its own.
-- **The in-app picker**, when the feature is off, when no portal can
-  answer (no session bus), or when the `files.native` setting is off.
+  through `rfd`): a fallback kept in case an application cannot do with
+  the in-app picker, [off at build time and at run time](#the-systems-chooser-a-fallback).
+  The xdg desktop portal on Linux, the common dialogs on Windows, the
+  open and save panels on macOS. It is made on the interface thread and
+  awaited on a thread of its own.
 
 ```rust
 use egui_pop::api::files::{self, Chosen, FileRequest, FilesPlugin, FILES};
@@ -47,6 +49,46 @@ own, an application starts the choice with `Files::choose_inline` and
 draws the in-app picker where it wants it (`Files::show_inline`). `Files::highlighted`
 says which entry it highlights, for another panel to follow
 ([linked panels](linked-panels.md)).
+
+## The system's chooser, a fallback
+
+The system's chooser is never used by itself. It takes all of these:
+
+1. the `native-dialogs` feature, off by default (build time);
+2. the application allowing it, `AppBuilder::system_file_chooser(true)`,
+   off by default (run time). Only then is the person's setting
+   `files.native` declared, on by default;
+3. that setting on, a request without `choices` (`rfd` cannot show them)
+   and, on Linux and the BSDs, a session bus for the portal;
+4. no test running. `files::system_chooser_refused` refuses it, whatever
+   the feature and the application say, when any of these holds
+   (`files::system_chooser_refusal` says which):
+   - `cfg(test)`: `egui-pop-api`'s own unit tests;
+   - a harness of `egui_pop_test` was made: each (`app`, `app_at`,
+     `app_wgpu`, `harness_for`, `themed`) calls
+     `files::refuse_system_chooser`, for the whole process, so an
+     application's own tests built on it are covered;
+   - `EGUI_POP_TEST` is set in the environment (egui-pop's CI sets it),
+     for a test run that uses neither;
+   - the process is a test of cargo-nextest (`NEXTEST`);
+   - the frames come with no window's focus: egui_kittest and a bare
+     `Context::run` say none, while a window of eframe or egui-winit always
+     says whether it has the focus. An integration that does not report it
+     gets the in-app picker.
+
+```rust
+use egui_pop::prelude::*;
+
+// A fallback for an application that cannot do with the in-app picker.
+let builder = App::builder()
+    .plugins(egui_pop::api::DefaultPlugins)
+    .system_file_chooser(true);
+# let _ = builder;
+```
+
+Tests never need it, and never build with it: test with the default
+features. CI only lints `native-dialogs` (clippy), it runs no test with
+it.
 
 ## The last folder per purpose
 

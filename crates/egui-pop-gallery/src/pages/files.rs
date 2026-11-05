@@ -359,9 +359,14 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let ctx = ui.ctx().clone();
     ui.label(if cfg!(target_arch = "wasm32") {
         "On the web, the in-app picker reads the demo folder from memory."
-    } else if files::native_available() {
-        "The system's chooser is available (setting `files.native`); off, the in-app picker below answers."
+    } else if app.system_file_chooser()
+        && files::native_available()
+        && !files::system_chooser_refused(&ctx)
+    {
+        "The system's chooser, a fallback, is allowed here (`--system-file-chooser`, setting `files.native`); off, the in-app picker below answers."
     } else {
+        // Unchanged under tests (the snapshots show it): the system's
+        // chooser is a fallback, also off unless `--system-file-chooser`.
         "No system chooser here (the `native-dialogs` feature is off, or no portal): the in-app picker answers."
     });
     section(ui, "Choose");

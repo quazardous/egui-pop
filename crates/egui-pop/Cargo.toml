@@ -145,7 +145,10 @@ platform-thumbnails = ["dep:egui-pop-platform", "egui-pop-platform/thumbnails"]
 ## service (`egui_pop::platform::open`).
 platform-open = ["dep:egui-pop-platform", "egui-pop-platform/open"]
 ## The system's file chooser (through `rfd`: the xdg desktop portal on
-## Linux); without it, the in-app picker.
+## Linux), a fallback kept just in case: off by default, and even built in,
+## used only when the application allows it at run time
+## (`AppBuilder::system_file_chooser`), never under tests. Otherwise the
+## in-app picker answers.
 native-dialogs = ["egui-pop-api/native-dialogs"]
 ## PNG and JPEG previews in the in-app file picker, decoded with the
 ## `image` crate (MIT OR Apache-2.0), which eframe already uses.

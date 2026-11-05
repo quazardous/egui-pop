@@ -124,6 +124,9 @@ pub fn builder(options: &Options) -> AppBuilder {
             egui_pop::api::workbench::PANEL_SIDE_BAR,
             shell::SIDE_BAR_WIDTH,
         )
+        // The system's file chooser is a fallback: only when asked for
+        // (`--system-file-chooser`), and refused under tests anyway.
+        .system_file_chooser(options.system_file_chooser)
         .plugins(egui_pop::api::DefaultPlugins)
         // The desktop's thumbnails in the file picker, for what egui-pop
         // does not preview itself.

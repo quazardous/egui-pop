@@ -1,6 +1,6 @@
 //! Choosing files, as a plugin ([`FilesPlugin`], in `DefaultPlugins`):
-//! the system's chooser off the interface thread, or an in-app picker
-//! when the system's is unavailable or switched off.
+//! egui-pop's in-app picker, or, as a fallback an application allows, the
+//! system's chooser off the interface thread.
 //!
 //! [`Files::choose`] returns a [`Pending`] (the host contract's, ADR
 //! 0010): the frame never waits. In-app pickers open in a modal of their
@@ -9,14 +9,18 @@
 //! `null` when the person cancelled; [`chosen`] reads it.
 //!
 //! - **The system's chooser** (feature `native-dialogs`, through `rfd`):
-//!   the xdg desktop portal on Linux, the common dialogs on Windows, the
-//!   open and save panels on macOS. It is created on the interface
-//!   thread and awaited on a thread of its own.
-//! - **The in-app picker** ([`FilePicker`]), when the feature is off, no
-//!   portal answers (no session bus), or the `files.native` setting is
-//!   off: a click selects and a double click or Enter opens, keyboard
-//!   navigation (arrows, Enter, Backspace or `Alt+Up` for the parent
-//!   folder, `Ctrl+Enter` to choose the folder or the selection,
+//!   a fallback kept in case an application cannot do with the in-app
+//!   picker, off at build time and at run time. Used only when the feature
+//!   is compiled in *and* the application allows it
+//!   (`AppBuilder::system_file_chooser`) *and* the person's `files.native`
+//!   setting is on *and* a portal answers; never under tests
+//!   ([`system_chooser_refused`]). The xdg desktop portal on Linux, the
+//!   common dialogs on Windows, the open and save panels on macOS. It is
+//!   created on the interface thread and awaited on a thread of its own.
+//! - **The in-app picker** ([`FilePicker`]), in every other case: a
+//!   click selects and a double click or Enter opens, keyboard navigation
+//!   (arrows, Enter, Backspace or `Alt+Up` for the parent folder,
+//!   `Ctrl+Enter` to choose the folder or the selection,
 //!   `Ctrl+D` to bookmark), several files selected with `Ctrl` or `Shift`
 //!   and a click, `Shift` and the arrows, `Ctrl+Space` and `Ctrl+A`
 //!   ([`CMD_TOGGLE_SELECTION`], [`CMD_SELECT_ALL`]), a typed path with
@@ -207,7 +211,9 @@ const WHEN_EDIT_PATH: &str = "filePickerEditPath";
 /// not the context stack's back (`nav.back`).
 const WHEN_IN_MODAL: &str = "modalOpen && filePickerEditPath";
 
-/// The setting: use the system's chooser when there is one.
+/// The setting: use the system's chooser when there is one. Declared only
+/// when the application allows that chooser
+/// (`AppBuilder::system_file_chooser`); on by default there.
 pub const SETTING_NATIVE: SettingId = SettingId::from_static("files.native");
 /// The setting: the in-app picker shows its preview pane.
 pub const SETTING_PREVIEW: SettingId = SettingId::from_static("files.preview");
@@ -661,6 +667,11 @@ struct State {
     last: VecDeque<Json>,
     /// The system's chooser is used when available (the setting).
     native: bool,
+    /// The application allows the system's chooser
+    /// (`AppBuilder::system_file_chooser`).
+    allowed: bool,
+    /// Why the system's chooser is refused, as of the last frame.
+    refused: Option<&'static str>,
     /// Where the in-app picker reads (none: the system's file system).
     fs: Option<SharedFs>,
     previews: Previews,
@@ -716,6 +727,56 @@ pub fn native_available() -> bool {
     }
     #[cfg(not(all(feature = "native-dialogs", not(target_arch = "wasm32"))))]
     false
+}
+
+/// The environment variable that refuses the system's chooser to a process,
+/// whatever its value: for test runs that drive an application without
+/// `egui_pop_test` (egui-pop's CI sets it).
+pub const TEST_ENV: &str = "EGUI_POP_TEST";
+
+/// Refused in this process ([`refuse_system_chooser`]).
+static REFUSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Refuses the system's chooser in this process from now on, whatever the
+/// feature, the application and the setting say: the in-app picker answers
+/// every choice. One way. `egui_pop_test`'s harnesses call it, so that an
+/// application's own tests never open a dialog on the desktop.
+pub fn refuse_system_chooser() {
+    REFUSED.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether the system's chooser is refused here, whatever the feature, the
+/// application and the setting say: under tests, or with no window.
+/// [`system_chooser_refusal`] says why.
+pub fn system_chooser_refused(ctx: &egui::Context) -> bool {
+    system_chooser_refusal(ctx).is_some()
+}
+
+/// Why the system's chooser is refused here, the first reason found, or
+/// `None`:
+///
+/// - `"cfg(test)"`: this crate's own unit tests;
+/// - `"test harness"`: [`refuse_system_chooser`] was called (each of
+///   `egui_pop_test`'s harnesses does);
+/// - `"EGUI_POP_TEST"`: [`TEST_ENV`] is set;
+/// - `"nextest"`: the process is a test of cargo-nextest (`NEXTEST`);
+/// - `"no window"`: the frames come with no window's focus, as with
+///   egui_kittest or a bare `Context::run`. A window of eframe or
+///   egui-winit always says whether it has the focus.
+pub fn system_chooser_refusal(ctx: &egui::Context) -> Option<&'static str> {
+    if cfg!(test) {
+        Some("cfg(test)")
+    } else if REFUSED.load(std::sync::atomic::Ordering::Relaxed) {
+        Some("test harness")
+    } else if std::env::var_os(TEST_ENV).is_some() {
+        Some(TEST_ENV)
+    } else if std::env::var_os("NEXTEST").is_some() {
+        Some("nextest")
+    } else if ctx.input(|i| i.viewport().focused.is_none()) {
+        Some("no window")
+    } else {
+        None
+    }
 }
 
 impl Files {
@@ -860,11 +921,17 @@ impl Files {
         }
     }
 
-    /// The default of `file.choose`: the system's chooser when it is
-    /// available and wanted, else the in-app picker.
+    /// The default of `file.choose`: the in-app picker, or the system's
+    /// chooser when the application allows it, the person wants it, it is
+    /// there and it is not refused (tests).
     fn start(&self, app: &AppHandle, id: u64, request: FileRequest) -> Result<Json, String> {
         // `rfd` cannot show the application's choices: the in-app picker does.
-        let native = lock(&self.0).native && native_available() && request.choices.is_empty();
+        let native = {
+            let s = lock(&self.0);
+            s.allowed && s.native
+        } && request.choices.is_empty()
+            && native_available()
+            && !system_chooser_refused(&app.egui());
         let fs = self.file_system();
         let previews = self.previews();
         let groupings = self.groupings();
@@ -994,7 +1061,9 @@ impl Files {
         let s = lock(&self.0);
         json!({
             "native": s.native,
+            "native_allowed": s.allowed,
             "native_available": native_available(),
+            "native_refused": s.refused,
             "open": s.open.iter().map(|o| {
                 let mut d = json!({ "id": o.id, "request": o.request.to_json(), "via": o.via });
                 if let Some(p) = &o.picker {
@@ -1252,17 +1321,16 @@ pub const PLUGIN: PluginId = PluginId::from_static("egui_pop.files");
 /// The plugin.
 #[derive(Clone, Debug)]
 pub struct FilesPlugin {
-    native: bool,
     fs: Option<SharedFs>,
     builtin_previews: bool,
     groupings: Vec<Arc<dyn FileGrouping>>,
 }
 
 impl Default for FilesPlugin {
-    /// The system's chooser when there is one.
+    /// The in-app picker; the system's chooser only where the application
+    /// allows it (`AppBuilder::system_file_chooser`).
     fn default() -> Self {
         Self {
-            native: true,
             fs: None,
             builtin_previews: true,
             groupings: Vec::new(),
@@ -1271,14 +1339,10 @@ impl Default for FilesPlugin {
 }
 
 impl FilesPlugin {
-    /// The in-app picker by default (the setting may still switch).
+    /// The in-app picker: the same as [`FilesPlugin::default`], which no
+    /// longer turns to the system's chooser by itself.
     pub fn in_app() -> Self {
-        Self {
-            native: false,
-            fs: None,
-            builtin_previews: true,
-            groupings: Vec::new(),
-        }
+        Self::default()
     }
 
     /// The in-app picker reads from `fs` (a [`fs::MemoryFs`], say), not
@@ -1315,6 +1379,8 @@ impl Plugin for FilesPlugin {
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         let files = Files::default();
+        let allowed = ctx.app().system_file_chooser();
+        lock(&files.0).allowed = allowed;
         if let Some(fs) = self.fs.clone() {
             files.set_file_system(fs);
         }
@@ -1326,12 +1392,16 @@ impl Plugin for FilesPlugin {
         for grouping in &self.groupings {
             files.groupings().register(grouping.clone());
         }
-        ctx.setting(
-            SETTING_NATIVE,
-            Descriptor::bool("Use the system's file chooser", self.native).description(
-                "Choose files with the system's chooser when there is one; off, with egui-pop's own.",
-            ),
-        )?;
+        // Only where the application allows the system's chooser: elsewhere
+        // the setting would change nothing.
+        if allowed {
+            ctx.setting(
+                SETTING_NATIVE,
+                Descriptor::bool("Use the system's file chooser", true).description(
+                    "Choose files with the system's chooser when there is one; off, with egui-pop's own.",
+                ),
+            )?;
+        }
         ctx.setting(
             SETTING_PREVIEW,
             Descriptor::bool("Previews in the file picker", true).description(
@@ -1599,9 +1669,11 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
         .get(&format!("settings/{SETTING_NATIVE}"))
         .and_then(|e| e.value.as_bool())
         .unwrap_or(false);
+    let refused = system_chooser_refusal(ui.ctx());
     let (new_folder, select_all, selects, edit_path) = {
         let mut s = lock(&files.0);
         s.native = native;
+        s.refused = refused;
         let any = |test: &dyn Fn(&FilePicker) -> bool| {
             s.open
                 .iter()

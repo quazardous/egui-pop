@@ -736,6 +736,9 @@ pub(crate) struct Shared {
     toast_corner: std::cell::Cell<crate::toasts::Corner>,
     /// The main menu drawn as a bar under the title.
     menu_bar: std::cell::Cell<bool>,
+    /// The application allows the system's file chooser
+    /// (`AppBuilder::system_file_chooser`).
+    system_file_chooser: std::cell::Cell<bool>,
     /// The window the user worked in last (focused, clicked or typed
     /// in): a dialog opens over it.
     active_window: std::cell::Cell<egui::ViewportId>,
@@ -867,6 +870,7 @@ impl AppHandle {
             system_wheel_lines: std::cell::Cell::new(crate::pointer::SYSTEM_WHEEL_LINES),
             toast_corner: std::cell::Cell::default(),
             menu_bar: std::cell::Cell::new(true),
+            system_file_chooser: std::cell::Cell::new(false),
             active_window: std::cell::Cell::new(egui::ViewportId::ROOT),
             shell_sizes: RefCell::default(),
             panel_commands: RefCell::default(),
@@ -2405,6 +2409,12 @@ impl AppHandle {
         self.0.menu_bar.get()
     }
 
+    /// Whether the application allows the system's file chooser
+    /// (`AppBuilder::system_file_chooser`): off by default.
+    pub fn system_file_chooser(&self) -> bool {
+        self.0.system_file_chooser.get()
+    }
+
     pub(crate) fn set_drawing_areas(&self, on: bool) {
         self.0.drawing_areas.set(on);
     }
@@ -2708,6 +2718,7 @@ pub struct AppBuilder {
     system_wheel_lines: u32,
     edge_to_edge: bool,
     menu_bar: bool,
+    system_file_chooser: bool,
     shell_sizes: Vec<(PanelId, f32)>,
     folded: Vec<Area>,
     over: Vec<Area>,
@@ -2800,6 +2811,7 @@ impl AppBuilder {
             system_wheel_lines: crate::pointer::SYSTEM_WHEEL_LINES,
             edge_to_edge: false,
             menu_bar: true,
+            system_file_chooser: false,
             shell_sizes: Vec::new(),
             folded: Vec::new(),
             over: Vec::new(),
@@ -2876,6 +2888,18 @@ impl AppBuilder {
     /// top bar's zone is then drawn only when it has blocks.
     pub fn menu_bar(mut self, on: bool) -> Self {
         self.menu_bar = on;
+        self
+    }
+
+    /// Allows the system's file chooser (`files`, feature `native-dialogs`):
+    /// a fallback, off by default, for an application that cannot do with
+    /// egui-pop's in-app picker. On, the files plugin uses the system's
+    /// chooser when the feature is compiled in, a portal answers and the
+    /// person's `files.native` setting is on; never under tests
+    /// (`files::system_chooser_refused`). Off, or without the feature, the
+    /// in-app picker always answers.
+    pub fn system_file_chooser(mut self, on: bool) -> Self {
+        self.system_file_chooser = on;
         self
     }
 
@@ -3191,6 +3215,10 @@ impl AppBuilder {
         app.handle.0.system_wheel_lines.set(self.system_wheel_lines);
         app.handle.0.toast_corner.set(self.toast_corner);
         app.handle.0.menu_bar.set(self.menu_bar);
+        app.handle
+            .0
+            .system_file_chooser
+            .set(self.system_file_chooser);
         *app.handle.0.shell_sizes.borrow_mut() = self.shell_sizes;
         app.handle.workbench_mut().layout.folded = self.folded;
         app.handle.workbench_mut().layout.over = self.over;
