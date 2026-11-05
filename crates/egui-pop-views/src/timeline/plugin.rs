@@ -14,6 +14,8 @@
 //! | `timeline.move_clip` | `timeline`, `id`, `seconds` or `time`, `track` | moves a clip along its track or to another |
 //! | `timeline.trim_clip` | `timeline`, `id`, `start`, `end` (seconds) | moves a clip's start or end |
 //! | `timeline.remove_clip` | `timeline`, `id` or `ids` | removes clips |
+//! | `timeline.split_clip` | `timeline`, `id` or `ids`, `seconds` or `time` (else the playhead) | splits clips in two there; answers the new ones' ids |
+//! | `timeline.ripple_delete` | `timeline`, `id` or `ids` | removes clips and closes their gaps |
 //! | `timeline.select_clips` | `timeline`, `ids` | selects clips (an empty list: none) |
 //!
 //! `timeline` is a widget's id; without it, the timeline that last had the
@@ -52,6 +54,8 @@ pub const CMD_MOVE_CLIP: CommandId = CommandId::from_static("timeline.move_clip"
 pub const CMD_TRIM_CLIP: CommandId = CommandId::from_static("timeline.trim_clip");
 pub const CMD_REMOVE_CLIP: CommandId = CommandId::from_static("timeline.remove_clip");
 pub const CMD_SELECT_CLIPS: CommandId = CommandId::from_static("timeline.select_clips");
+pub const CMD_SPLIT_CLIP: CommandId = CommandId::from_static("timeline.split_clip");
+pub const CMD_RIPPLE_DELETE: CommandId = CommandId::from_static("timeline.ripple_delete");
 
 /// Passes a timeline may go undrawn before agents no longer see it.
 const GONE_AFTER: u64 = 3;
@@ -240,7 +244,8 @@ impl Timelines {
             // Checked on the state the widget will have: a refusal queues
             // nothing.
             let mut tried = e.state.clone();
-            if let Some(error) = apply(&mut tried, op.clone()).error {
+            let applied = apply(&mut tried, op.clone());
+            if let Some(error) = applied.error {
                 return Err(error);
             }
             e.state = tried;
@@ -248,6 +253,17 @@ impl Timelines {
             let mut answer = describe(&e.state);
             if let Some(id) = added {
                 answer["added"] = json!(id);
+            }
+            let split: Vec<u64> = applied
+                .edits
+                .iter()
+                .filter_map(|e| match e {
+                    super::Edit::ClipSplit { new, .. } => Some(*new),
+                    _ => None,
+                })
+                .collect();
+            if !split.is_empty() {
+                answer["added"] = json!(split);
             }
             answer
         };
@@ -574,6 +590,30 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         },
     )?;
     ctx.command(
+        CommandSpec::new(CMD_SPLIT_CLIP, "Split clips on a timeline", CAT)
+            .description("Splits a timeline's clip `id`, or the clips `ids`, at `seconds` or `time` (else at the playhead): each ends there and a new clip starts there, reading its source on. Refused unless the time is inside each, a frame or more from its ends. Answers the new clips' ids in `added`. One step of the history together.")
+            .args(json!({ "timeline": timeline, "id": 1, "seconds": 6.0 })),
+        |call| {
+            let t = timelines(call);
+            let args = call.args;
+            let ids = clip_ids(args)?;
+            let time = match time_of(&t, args)? {
+                Some(time) => time,
+                None => playhead_of(&t, name(args))?,
+            };
+            t.run(name(args), Op::SplitClips { ids, time }, call.origin)
+        },
+    )?;
+    ctx.command(
+        CommandSpec::new(CMD_RIPPLE_DELETE, "Ripple delete clips on a timeline", CAT)
+            .description("Removes a timeline's clip `id`, or the clips `ids`, and closes the gaps they leave: the clips after them on their tracks move back. One step of the history together.")
+            .args(json!({ "timeline": timeline, "id": 1 })),
+        |call| {
+            let ids = clip_ids(call.args)?;
+            timelines(call).run(name(call.args), Op::RippleRemove(ids), call.origin)
+        },
+    )?;
+    ctx.command(
         CommandSpec::new(CMD_SELECT_CLIPS, "Select clips on a timeline", CAT)
             .description("Selects a timeline's clips `ids` (an empty list lets them go); the keys act on the last. Not a step of the history.")
             .args(json!({ "timeline": timeline, "ids": [1, 2] })),
@@ -602,6 +642,13 @@ fn clip_ids(args: &Json) -> Result<Vec<u64>, String> {
         Some(_) => Err("`ids` is a list of clips' ids".into()),
         None => clip_id(args).map(|id| vec![id]),
     }
+}
+
+/// The playhead of the timeline `timeline`.
+fn playhead_of(t: &Timelines, timeline: Option<&str>) -> Result<f64, String> {
+    let pass = t.ctx.cumulative_pass_nr();
+    let mut reg = lock(&t.registry);
+    target(&mut reg, timeline, pass).map(|(_, e)| e.state.playhead)
 }
 
 /// Clip `id`'s track and start on the timeline `timeline`.

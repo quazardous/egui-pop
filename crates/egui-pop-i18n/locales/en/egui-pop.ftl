@@ -623,6 +623,10 @@ command-timeline-remove-marker =
     .description = Removes a timeline's marker `id`. One step of the history.
     .title = Remove a marker from a timeline
 
+command-timeline-ripple-delete =
+    .description = Removes a timeline's clip `id`, or the clips `ids`, and closes the gaps they leave: the clips after them on their tracks move back. One step of the history together.
+    .title = Ripple delete clips on a timeline
+
 command-timeline-select-clips =
     .description = Selects a timeline's clips `ids` (an empty list lets them go); the keys act on the last. Not a step of the history.
     .title = Select clips on a timeline
@@ -634,6 +638,10 @@ command-timeline-set-range =
 command-timeline-set-time =
     .description = Moves a timeline's playhead (`timeline`, its id) to `seconds`, to `time` (text in the timeline's scale: `1:02.5`, `00:01:02:12`, `17.2.480`), or by `by` seconds; kept inside its bounds.
     .title = Move a timeline's playhead
+
+command-timeline-split-clip =
+    .description = Splits a timeline's clip `id`, or the clips `ids`, at `seconds` or `time` (else at the playhead): each ends there and a new clip starts there, reading its source on. Refused unless the time is inside each, a frame or more from its ends. Answers the new clips' ids in `added`. One step of the history together.
+    .title = Split clips on a timeline
 
 command-timeline-trim-clip =
     .description = Moves a timeline's clip `id` start to `start` and its end to `end` (seconds on the timeline; either or both). Its offset into its source follows its start; it stops at its source's ends, its neighbours and the bounds. One step of the history each.
@@ -2249,9 +2257,15 @@ egui-pop-views-timeline-remove-clips = Remove clips
 
 egui-pop-views-timeline-remove-marker = Remove marker
 
+egui-pop-views-timeline-ripple-delete = Ripple delete
+
 egui-pop-views-timeline-set-range = Set range
 
 egui-pop-views-timeline-speed = { $speed }×
+
+egui-pop-views-timeline-split-clip = Split clip
+
+egui-pop-views-timeline-split-clips = Split clips
 
 egui-pop-views-timeline-trim-clip = Trim clip
 

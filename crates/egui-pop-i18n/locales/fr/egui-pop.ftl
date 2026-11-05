@@ -2711,6 +2711,10 @@ command-timeline-remove-marker =
     .description = Retire le repère `id` d’une ligne de temps. Un pas de l’historique.
     .title = Retirer un repère d’une ligne de temps
 
+command-timeline-ripple-delete =
+    .description = Retire le clip `id` d’une ligne de temps, ou les clips `ids`, et referme les trous qu’ils laissent : les clips qui les suivent sur leurs pistes reculent. Un seul pas de l’historique.
+    .title = Supprimer des clips en refermant le trou
+
 command-timeline-select-clips =
     .description = Sélectionne les clips `ids` d’une ligne de temps (une liste vide les relâche) ; les touches agissent sur le dernier. Pas un pas de l’historique.
     .title = Sélectionner des clips sur une ligne de temps
@@ -2722,6 +2726,10 @@ command-timeline-set-range =
 command-timeline-set-time =
     .description = Amène la tête de lecture d’une ligne de temps (`timeline`, son id) à `seconds`, à `time` (un texte dans l’échelle de la ligne : `1:02.5`, `00:01:02:12`, `17.2.480`), ou la déplace de `by` secondes ; sans sortir de ses bornes.
     .title = Déplacer la tête de lecture d’une ligne de temps
+
+command-timeline-split-clip =
+    .description = Coupe en deux le clip `id` d’une ligne de temps, ou les clips `ids`, à `seconds` ou à `time` (sinon à la tête de lecture) : chacun s’y arrête et un nouveau clip y commence, qui lit la suite de sa source. Refusé si le temps n’est pas dans chacun, à une image au moins de ses bouts. Répond les ids des nouveaux clips dans `added`. Un seul pas de l’historique.
+    .title = Couper des clips sur une ligne de temps
 
 command-timeline-trim-clip =
     .description = Amène le début du clip `id` d’une ligne de temps à `start` et sa fin à `end` (en secondes sur la ligne de temps ; l’un, l’autre ou les deux). Son décalage dans sa source suit son début ; il s’arrête aux bouts de sa source, à ses voisins et aux bornes. Un pas de l’historique chacun.
@@ -2759,9 +2767,15 @@ egui-pop-views-timeline-remove-clips = Retirer les clips
 
 egui-pop-views-timeline-remove-marker = Retirer le repère
 
+egui-pop-views-timeline-ripple-delete = Supprimer et refermer
+
 egui-pop-views-timeline-set-range = Régler la plage
 
 egui-pop-views-timeline-speed = { $speed }×
+
+egui-pop-views-timeline-split-clip = Couper le clip
+
+egui-pop-views-timeline-split-clips = Couper les clips
 
 egui-pop-views-timeline-trim-clip = Découper le clip
 

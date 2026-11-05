@@ -305,6 +305,12 @@ pub const TIMELINE_REMOVE_CLIP: StrKey =
     StrKey::new("egui-pop-views-timeline-remove-clip", "Remove clip");
 pub const TIMELINE_REMOVE_CLIPS: StrKey =
     StrKey::new("egui-pop-views-timeline-remove-clips", "Remove clips");
+pub const TIMELINE_SPLIT_CLIP: StrKey =
+    StrKey::new("egui-pop-views-timeline-split-clip", "Split clip");
+pub const TIMELINE_SPLIT_CLIPS: StrKey =
+    StrKey::new("egui-pop-views-timeline-split-clips", "Split clips");
+pub const TIMELINE_RIPPLE_DELETE: StrKey =
+    StrKey::new("egui-pop-views-timeline-ripple-delete", "Ripple delete");
 /// The speed shown beside the playhead while shuttling: `2×`, `-4×`.
 pub const TIMELINE_SPEED: StrKey = StrKey::new("egui-pop-views-timeline-speed", "{ $speed }×");
 
@@ -422,6 +428,9 @@ pub const ALL: &[StrKey] = &[
     TIMELINE_TRIM_CLIP,
     TIMELINE_REMOVE_CLIP,
     TIMELINE_REMOVE_CLIPS,
+    TIMELINE_SPLIT_CLIP,
+    TIMELINE_SPLIT_CLIPS,
+    TIMELINE_RIPPLE_DELETE,
 ];
 
 #[cfg(test)]
