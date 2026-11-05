@@ -6569,3 +6569,54 @@ fn the_selection_page_shares_one_selection_between_a_tree_a_list_and_a_canvas() 
     assert_eq!(ids(&service), ["world/points/b", "world/camera"]);
     assert!(h.query_by_label("Selected: Point B, Camera").is_some());
 }
+
+#[test]
+fn the_timeline_page_shows_a_timeline_per_scale_and_takes_its_keys() {
+    use egui::accesskit::Role;
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "timeline"));
+        h.run();
+        results.add(h.try_snapshot(format!("timeline-{theme}")));
+    }
+    let mut h = harness(options("pop-dark", Density::Comfortable, "timeline"));
+    h.run();
+    let value = |h: &Harness<'_, Gallery>, label: &str| {
+        h.get_by_role_and_label(Role::Slider, label)
+            .accesskit_node()
+            .value()
+    };
+    assert_eq!(value(&h, "Recording").as_deref(), Some("0:12.000"));
+    assert_eq!(value(&h, "Video").as_deref(), Some("00:00:50:00"));
+    assert_eq!(value(&h, "Track").as_deref(), Some("34.3.000"));
+    // On the track: Up goes back to the Drop, L twice asks for double speed,
+    // I and O after a bar's step set a new range.
+    h.get_by_role_and_label(Role::Slider, "Track").focus();
+    h.run();
+    for (modifiers, key) in [
+        (egui::Modifiers::NONE, egui::Key::ArrowUp),
+        (egui::Modifiers::NONE, egui::Key::I),
+        (egui::Modifiers::SHIFT, egui::Key::ArrowRight),
+        (egui::Modifiers::SHIFT, egui::Key::ArrowRight),
+        (egui::Modifiers::NONE, egui::Key::O),
+        (egui::Modifiers::NONE, egui::Key::L),
+        (egui::Modifiers::NONE, egui::Key::L),
+    ] {
+        h.key_press_modifiers(modifiers, key);
+        h.run();
+    }
+    assert_eq!(value(&h, "Track").as_deref(), Some("35.1.000"));
+    let snap = h.state().app.handle().debug_snapshot();
+    let track = &snap["timeline"]["timelines"]["beats"];
+    assert_eq!(
+        track["range"]["text"],
+        serde_json::json!(["33.1.000", "35.1.000"]),
+        "{track}"
+    );
+    assert_eq!(
+        (track["play"].as_str(), track["speed"].as_f64()),
+        (Some("playing"), Some(2.0))
+    );
+    assert_eq!(track["selected"], 3);
+    results.add(h.try_snapshot("timeline-keys-pop-dark"));
+}

@@ -94,7 +94,7 @@ outlines and the loupe), `node-graph` (the node graph editor), `graph-file` (the
 `preview` (a custom dialog previewing an export in a viewport), `tree`
 (the live tree), `list-items` (dense rows on their own and in a tree,
 property rows in a selection panel), `table` (lists and tables), `library` (the photo
-library), `text-editor`,
+library), `timeline` (timelines over seconds, a timecode and bars and beats), `text-editor`,
 `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
 `palettes`, `arrangements`, `contexts` (the context stack: places and modes, and the status bar that follows them), `clipboard` (typed items copied between palettes, paste special's previews), `links` (one policy for every link: declared links, links that ask first, local files, an agent's request), `viewer` (help pages, markdown, a safe subset of HTML and images in a panel), `strips` (the activity bar, and status items: live states, a popover, hover cards), `jobs` (a pretend host's
 background jobs), `frame`, `scale`, `pointer` (pointer gesture profiles),
@@ -305,6 +305,21 @@ and filmstrip, marks, filter chips, a comparison).
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/table-sorted-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/table-sorted-pop-dark.png" width="200" alt="table-sorted-pop-dark"></a><br>table-sorted-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-kit.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-kit.png" width="200" alt="library-kit"></a><br>library-kit</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/list-items-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/list-items-pop-dark.png" width="200" alt="list-items-pop-dark"></a><br>list-items-pop-dark</td>
+  </tr>
+</table>
+
+### Timeline
+
+A timeline per time scale (seconds, a timecode at 25 fps, bars and beats at
+128 BPM) with markers, cue points and a looping range; then keys on the
+track: Up to the Drop, I, two bars, O, and L twice (the speed beside the
+playhead). See [Timeline](timeline.md).
+
+<table>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/timeline-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/timeline-pop-dark.png" width="200" alt="timeline-pop-dark"></a><br>timeline-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/timeline-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/timeline-pop-light.png" width="200" alt="timeline-pop-light"></a><br>timeline-pop-light</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/timeline-keys-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/timeline-keys-pop-dark.png" width="200" alt="timeline-keys-pop-dark"></a><br>timeline-keys-pop-dark</td>
   </tr>
 </table>
 
