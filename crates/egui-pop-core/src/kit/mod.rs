@@ -600,6 +600,7 @@ macro_rules! components {
     ($($(#[$doc:meta])* $field:ident: $name:literal => $default:literal,)*) => {
         /// A compiled kit: every component egui-pop draws through one.
         #[derive(Clone, Debug)]
+        #[non_exhaustive]
         pub struct Kit {
             $($(#[$doc])* pub $field: Component,)*
             /// The icon of each glyph role (`glyph.*`).
