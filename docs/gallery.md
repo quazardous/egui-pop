@@ -290,7 +290,7 @@ Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, 
 
 ### Data views
 
-The live tree, lists and tables, and the photo library (a thumbnail grid
+The live tree, list items and property rows, lists and tables, and the photo library (a thumbnail grid
 and filmstrip, marks, filter chips, a comparison).
 
 <table>
@@ -304,6 +304,7 @@ and filmstrip, marks, filter chips, a comparison).
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/table-kit-rows.png"><img src="../crates/egui-pop-gallery/tests/snapshots/table-kit-rows.png" width="200" alt="table-kit-rows"></a><br>table-kit-rows</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/table-sorted-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/table-sorted-pop-dark.png" width="200" alt="table-sorted-pop-dark"></a><br>table-sorted-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-kit.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-kit.png" width="200" alt="library-kit"></a><br>library-kit</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/list-items-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/list-items-pop-dark.png" width="200" alt="list-items-pop-dark"></a><br>list-items-pop-dark</td>
   </tr>
 </table>
 

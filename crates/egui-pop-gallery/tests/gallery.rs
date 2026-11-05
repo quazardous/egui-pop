@@ -3369,6 +3369,39 @@ fn the_tree_page_opens_a_hundred_thousand_files() {
 }
 
 #[test]
+fn the_list_items_page_shows_actions_on_hover_and_aligns_properties() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "list-items"));
+    run_until(&mut h, |h| h.query_by_label("Property rows").is_some());
+    // The hidden entity's eye is pinned; the others' show on hover.
+    assert_eq!(
+        h.query_all_by_label("Show boxes").count(),
+        2,
+        "in the items and the tree"
+    );
+    assert!(h.query_by_label("Remove camera").is_none());
+    let camera = h
+        .query_all_by_label("camera")
+        .min_by(|a, b| a.rect().top().total_cmp(&b.rect().top()))
+        .unwrap()
+        .rect();
+    h.hover_at(camera.center());
+    h.run();
+    h.get_by_label("Hide camera").click();
+    h.run();
+    assert!(h.query_by_label("visibility world/camera").is_some());
+    // The selected entity's properties, their values lined up.
+    let path = h.get_by_label("world/points").rect();
+    let points = h.get_by_label("1200").rect();
+    assert_eq!(path.left(), points.left());
+    // The tree's rows are list items too (its actions: the views' tests).
+    assert!(h.query_by_label("Scene").is_some());
+    h.remove_cursor();
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    h.snapshot("list-items-pop-dark");
+}
+
+#[test]
 fn the_table_page_sorts_through_the_store_and_vetoes_one_sort() {
     use egui::accesskit::Role;
     let mut h = harness(options("pop-dark", Density::Comfortable, "table"));
