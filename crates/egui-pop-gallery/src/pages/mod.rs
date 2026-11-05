@@ -47,6 +47,7 @@ pub mod roles;
 pub mod scale;
 pub mod scoped;
 pub mod sections;
+pub mod selection;
 pub mod settings;
 pub mod sliders;
 pub mod story;

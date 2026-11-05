@@ -5,7 +5,9 @@
 //! - [`list`]: a list of rows the application draws;
 //! - [`table`]: a data table (on `egui_table`), sorted and resized
 //!   through the host's value store, cells drawn by the application;
-//! - [`select`]: the selection by key they share;
+//! - [`select`]: the selection by key they share; the tree and the list
+//!   also bind to the application-wide selection
+//!   (`egui_pop_api::selection`) with `shared`;
 //! - [`library`]: a photo library's widgets: a thumbnail grid and a
 //!   filmstrip, ratings, colour labels and flags, a comparison, tag
 //!   chips and input, a search field with filter chips, their steps and
@@ -38,6 +40,7 @@ pub mod mounts;
 mod nav;
 mod rows;
 pub mod select;
+mod shared;
 pub mod steps;
 pub mod strings;
 pub mod table;

@@ -61,6 +61,7 @@ use std::sync::{Arc, Mutex};
 use egui::{
     Context, Id, Modifiers, Rect, Response, Role, TextEdit, Ui, UiBuilder, WidgetInfo, pos2, vec2,
 };
+use egui_pop_api::selection::{SelectionItem, SelectionService};
 use egui_pop_api::steps::Outcome;
 use egui_pop_api::{AppHandle, menus};
 use egui_pop_core::icon::{Size, Source};
@@ -76,6 +77,7 @@ pub use model::{Children, Edit, Model, Node, Position, Row};
 use crate::nav::{self, Nav, TypeAhead};
 use crate::rows::{self, Scroll};
 use crate::select::{Key, Mode, Proposal, Selection};
+use crate::shared;
 use crate::steps::{
     self, TREE_ACTIVATE, TREE_CONTEXT, TREE_DROP, TREE_EXPAND, TREE_LOAD, TREE_RENAME, TREE_SELECT,
 };
@@ -104,6 +106,14 @@ pub trait TreeSource<K: Key> {
     /// row highlights what matches in its label only.
     fn match_text(&self, node: &Node<K>) -> String {
         node.name().to_string()
+    }
+
+    /// A node's item in the application-wide selection
+    /// ([`TreeView::shared`]): by default its key's
+    /// ([`SelectionItem::from_key`]). Give the id other widgets showing
+    /// the same thing use.
+    fn item(&self, key: &K) -> SelectionItem {
+        SelectionItem::from_key(key)
     }
 }
 
@@ -289,6 +299,9 @@ pub struct TreeState<K: Key> {
     pub(crate) focus_tree: bool,
     /// The flattening last reported to agents.
     pub(crate) reported: Option<u64>,
+    /// The shared selection's revision and the model's version last
+    /// followed.
+    seen: Option<(u64, u64)>,
 }
 
 impl<K: Key> Default for TreeState<K> {
@@ -317,6 +330,7 @@ impl<K: Key> Default for TreeState<K> {
             field_focus: false,
             focus_tree: false,
             reported: None,
+            seen: None,
         }
     }
 }
@@ -653,6 +667,7 @@ pub struct TreeView<'a, K: Key> {
     row_widgets: Option<RowFn<'a, K>>,
     context: Option<ContextMenu<'a, K>>,
     can_drop: Option<DropFn<'a, K>>,
+    shared: Option<&'a SelectionService>,
 }
 
 impl<K: Key> std::fmt::Debug for TreeView<'_, K> {
@@ -670,6 +685,7 @@ impl<K: Key> std::fmt::Debug for TreeView<'_, K> {
             .field("row_widgets", &self.row_widgets.is_some())
             .field("context", &self.context.is_some())
             .field("can_drop", &self.can_drop.is_some())
+            .field("shared", &self.shared.is_some())
             .finish()
     }
 }
@@ -690,6 +706,7 @@ impl<'a, K: Key> TreeView<'a, K> {
             row_widgets: None,
             context: None,
             can_drop: None,
+            shared: None,
         }
     }
 
@@ -707,6 +724,19 @@ impl<'a, K: Key> TreeView<'a, K> {
     /// Runs its moments as steps of this application.
     pub fn app(mut self, app: &'a AppHandle) -> Self {
         self.app = Some(app);
+        self
+    }
+
+    /// Binds the tree to the application-wide selection
+    /// (`egui_pop_api::selection`, the service under `SELECTION`): its
+    /// loaded nodes ([`TreeSource::item`]) show selected and hovered when
+    /// they are so anywhere, and what it selects (still through
+    /// `tree.select`) goes there: a plain click or move replaces the whole
+    /// selection, Ctrl changes only the tree's items. The tree is then in
+    /// the selection's focus surface, where Alt+Left and Alt+Right walk
+    /// its history.
+    pub fn shared(mut self, selection: &'a SelectionService) -> Self {
+        self.shared = Some(selection);
         self
     }
 
@@ -808,12 +838,16 @@ impl<'a, K: Key> TreeView<'a, K> {
         state: &mut TreeState<K>,
         source: &dyn TreeSource<K>,
     ) -> TreeOutput<K> {
-        // With a filter field, its keys are bound on the tree's surface.
-        if state.field.is_some() {
-            egui_pop_core::focus::scope(ui, filter::SURFACE, &[], |ui| self.draw(ui, state, source))
-        } else {
-            self.draw(ui, state, source)
-        }
+        shared::surface(ui, self.shared.is_some(), |ui| {
+            // With a filter field, its keys are bound on the tree's surface.
+            if state.field.is_some() {
+                egui_pop_core::focus::scope(ui, filter::SURFACE, &[], |ui| {
+                    self.draw(ui, state, source)
+                })
+            } else {
+                self.draw(ui, state, source)
+            }
+        })
     }
 
     fn draw(
@@ -870,6 +904,22 @@ impl<'a, K: Key> TreeView<'a, K> {
             );
         }
 
+        if let Some(service) = self.shared {
+            let version = state.model.version();
+            let TreeState {
+                model,
+                selection,
+                seen,
+                ..
+            } = &mut *state;
+            shared::follow(
+                service,
+                selection,
+                seen,
+                version,
+                model.nodes().map(|n| (n.key.clone(), source.item(&n.key))),
+            );
+        }
         let focused = ui.memory(|m| m.has_focus(id));
         // Ctrl+F or `/` (`tree.filter`) asked for the field.
         if focused && state.field.is_some() && filter::take_request(ui.ctx()) {
@@ -915,6 +965,8 @@ impl<'a, K: Key> TreeView<'a, K> {
         let no_match = count == 0 && model.is_filtered();
         let shown = if no_match { 1 } else { count };
         let mut take_focus = false;
+        let shared = self.shared;
+        let mut hovering: Option<SelectionItem> = None;
         let (_, response, inner) = rows::show(
             ui,
             id,
@@ -980,7 +1032,16 @@ impl<'a, K: Key> TreeView<'a, K> {
                             let selected = selection.contains(&key);
                             let cursor = (focused && selection.cursor() == Some(&key))
                                 || r.context_menu_opened();
-                            let hovered = r.contains_pointer() && drag.is_none();
+                            let mut hovered = r.contains_pointer() && drag.is_none();
+                            // Hovered here, or the same item hovered elsewhere.
+                            if let Some(service) = shared {
+                                let item = source.item(&key);
+                                if hovered {
+                                    hovering = Some(item);
+                                } else {
+                                    hovered = service.is_hovered(&item);
+                                }
+                            }
                             let row_state = rows::state(selected, hovered, cursor);
                             rows::paint(ui, &visible.kit.list_row, rect, row_state);
                             let color = rows::text_color(&visible.kit.list_row, row_state);
@@ -1228,9 +1289,26 @@ impl<'a, K: Key> TreeView<'a, K> {
         if take_focus || focus_tree {
             response.request_focus();
         }
+        if let Some(service) = shared {
+            service.hover(&self.id, hovering.as_ref());
+        }
         let ran = !actions.is_empty();
+        let before = state.selection.keys().to_vec();
+        let first = signals.len();
         for a in actions {
             self.run(state, source, a, &mut signals);
+        }
+        if let Some(service) = shared
+            && let Some(Signal::Select { keys, .. }) = signals[first..]
+                .iter()
+                .rev()
+                .find(|s| matches!(s, Signal::Select { .. }))
+        {
+            let keep_others = ui.input(|i| i.modifiers.command);
+            shared::write(service, &self.id, &before, keys, keep_others, &|k| {
+                source.item(k)
+            });
+            state.seen = Some((service.revision(), state.model.version()));
         }
         if ran {
             state.drain();
