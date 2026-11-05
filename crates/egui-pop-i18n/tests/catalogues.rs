@@ -65,6 +65,10 @@ fn messages() -> Messages {
         std::env::temp_dir().join(format!("egui-pop-catalogues-{}-{call}", std::process::id()));
     let ctx = egui::Context::default();
     let app = platform(App::builder(), &scratch)
+        // Declares the `files.native` setting (only an application that
+        // allows the system's file chooser has it), so that its strings are
+        // translated. Nothing is chosen here, and tests refuse that chooser.
+        .system_file_chooser(true)
         .plugins(egui_pop_api::DefaultPlugins)
         .plugin(egui_pop_api::devtools::DevtoolsPlugin::default())
         .plugin(egui_pop_api::frame::FramePlugin::system())
