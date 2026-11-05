@@ -13,3 +13,8 @@ cargo run -p egui-pop-tokens --example kit-check -- examples/kits/underline-tabs
   (`traffic-light` circles at the start of the title bar, glyphs shown
   while the group is hovered); the gallery's `frame-kit-macos` snapshot
   is drawn from it.
+- `rerun-like-dark/` and `rerun-like-light/`: data only, the Rerun
+  viewer's look from the token values of its `re_ui` crate (MIT OR
+  Apache-2.0, see NOTICE), each naming the other as its counterpart; the
+  `rerun_like` example of the gallery crate uses them
+  (`docs/rerun-like.md`).

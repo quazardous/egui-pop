@@ -256,3 +256,16 @@ Each one as the gallery's overview page shows it, at full size (a
 
 The images are refreshed with the others (`cargo xtask screenshots`, see
 the [README](../README.md#refreshing-the-screenshots)).
+
+## Example kits
+
+Not built in, and not in any published crate: kit folders an
+application adds with `AppBuilder::kit` ([kits as packages](kit-packages.md)).
+
+- `examples/kits/rerun-like-dark` and `rerun-like-light`, "Rerun-like
+  Dark" and "Rerun-like Light", each the other's counterpart: the
+  Rerun viewer's look, from the token values of its `re_ui` crate
+  (Rerun Technologies AB, MIT OR Apache-2.0; not affiliated with or
+  endorsed by Rerun; see [NOTICE](../NOTICE)). The
+  [Rerun-like viewer](rerun-like.md) uses them, and lists which tokens
+  came from where.
