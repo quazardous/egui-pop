@@ -489,11 +489,11 @@ impl SelectionService {
     /// Hovers an item until said otherwise (an agent's), or none.
     pub fn hover_until_changed(&self, item: Option<&SelectionItem>, source: &str) {
         let item = item.cloned();
-        let source = source.to_string();
-        self.change(&source.clone(), false, move |s| {
+        let owner = source.to_string();
+        self.change(source, false, move |s| {
             s.hovered = item.map(|item| Hover {
                 item,
-                source,
+                source: owner,
                 pass: None,
             });
         });
