@@ -199,7 +199,9 @@ fn without_i18n_the_english_in_the_code_shows() {
 
 #[test]
 fn disconnected_it_leaves_nothing_behind_and_comes_back() {
-    let mut h = harness(App::builder().plugin(I18nPlugin::new()));
+    // English pinned: the setting's default follows the system's
+    // language, which would translate the labels looked for.
+    let mut h = harness(App::builder().plugin(I18nPlugin::new().language("en")));
     let app = app(&h).handle().clone();
     app.set_plugin_enabled(PluginId::from_static("story-page"), false);
     app.set_plugin_enabled(PLUGIN, false);
