@@ -72,12 +72,22 @@ A button is the toolbar icon size (`size.icon.toolbar`) padded by
 toolbar smaller; titles use the button text style. The kit's
 `toolbar-button` ([kit](kit.md)) paints the buttons, based on
 `icon-button`: a fill under the pointer and while pressed, the frame
-while on, the muted text colour when disabled.
+while on, the muted text colour when disabled. The rows of More tools
+take a menu's look (`menu-item`, the icon in the gutter framed while
+on, the key in the `muted` tone).
+
+egui_stack's `toolbar::ToolRow` lays the tools out, cuts the row into
+More tools, takes the clicks and moves the focus; `Toolbar` builds its
+tools from the menu's items and the kit paints them, through the kit's
+`DockPainter` (`tool_item`, `tool_more`, `tool_separator`), the
+painter of the docks and section stacks too
+([ADR 0022](adr/0022-sections-and-toolbars-in-egui-stack.md)).
 
 ## The keyboard
 
-A toolbar is one Tab stop ([a roving group](inputs.md#a-roving-group-is-one-stop)),
-as in Office, VS Code and ARIA's toolbar pattern:
+A toolbar is one Tab stop (egui_stack's `TabFocus::Roving`, as
+[a roving group](inputs.md#a-roving-group-is-one-stop) is), as in
+Office, VS Code and ARIA's toolbar pattern:
 
 | Key | What it does |
 |---|---|
@@ -94,7 +104,9 @@ every tool in order, a command with its arguments, a submenu or a
 separator, with its title, icon name, key, whether it is enabled and
 why not, checked, busy, and whether it went into More tools. The
 declared items are the menu's (`AppHandle::menu`). Each icon drawn is
-recorded in the icon registry's drawn list (`toolbar`).
+recorded in the icon registry's drawn list (`toolbar`), and the rows of
+an open More tools are in `menus::rows_drawn`, under the toolbar's menu
+id.
 
 The gallery's `toolbars` page shows a toolbar of icons with egui-pop's
 Edit commands in it, the same tools with their titles, a narrow one
