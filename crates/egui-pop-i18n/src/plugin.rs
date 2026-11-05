@@ -59,8 +59,8 @@ pub const LOCALE_CHANGED: &str = "locale.changed";
 
 static GLOBAL: RwLock<Option<I18n>> = RwLock::new(None);
 
-/// The catalogues the last connected plugin uses (an empty English one
-/// before): what [`crate::tr!`] reads.
+/// The catalogues last installed ([`install`], or a connected plugin; an
+/// empty English one before): what [`crate::tr!`] reads.
 pub fn global() -> I18n {
     GLOBAL
         .read()
@@ -76,14 +76,53 @@ fn set_global(i18n: Option<I18n>) {
 /// The catalogues installed in a context.
 const INSTALLED: Slot<I18n> = Slot::new("i18n.installed");
 
-/// The catalogues the plugin installed in an egui context.
+/// The catalogues installed in an egui context, by [`install`] or the
+/// plugin.
 pub fn of(ctx: &egui::Context) -> Option<I18n> {
     INSTALLED.get(ctx)
 }
 
+/// Installs catalogues in an egui context, for an application that does
+/// not use [`App`](egui_pop_api::App) and its [`I18nPlugin`]: [`t`],
+/// [`text`] and [`of`] read them in this context, [`crate::tr!`] reads
+/// them through [`global`], and egui-pop's own text is translated
+/// through a [`Provider`] installed as the context's strings provider.
+/// [`I18nPlugin`] installs its catalogues this way when it connects.
+///
+/// [`I18n`] is shared: a later [`I18n::set_locale`] or
+/// [`I18n::add`] shows at the next lookup, without installing again.
+/// The global is the process's, so the last call wins when several
+/// contexts install different catalogues. The plugin's other duties
+/// (the language setting, the `i18n.resolve` step, `locale.changed`)
+/// are left out: the application sets the locale itself.
+///
+/// ```
+/// use egui_pop_i18n::{I18n, args, install, t, tr};
+///
+/// let i18n = I18n::new("fr");
+/// i18n.add("fr", "hello = Bonjour, { $name } !\n").unwrap();
+/// let ctx = egui::Context::default();
+/// install(&ctx, &i18n);
+/// assert_eq!(t(&ctx, "hello", &args![name = "Ada"]), "Bonjour, Ada !");
+/// assert_eq!(tr!("hello", name = "Ada"), "Bonjour, Ada !");
+/// ```
+pub fn install(ctx: &egui::Context, i18n: &I18n) {
+    INSTALLED.set(ctx, i18n.clone());
+    strings::install(ctx, Arc::new(Provider::new(i18n.clone())));
+    set_global(Some(i18n.clone()));
+}
+
+/// Undoes [`install`]: the context back to the built-in English, the
+/// global back to an empty English catalogue.
+fn uninstall(ctx: &egui::Context) {
+    INSTALLED.remove(ctx);
+    strings::install(ctx, Arc::new(strings::English));
+    set_global(None);
+}
+
 /// The text of `key` in the context's language, with Fluent arguments;
-/// else the key itself. Without the plugin, the interface's strings
-/// provider answers (or the key shows).
+/// else the key itself. Without catalogues installed ([`install`] or the
+/// plugin), the interface's strings provider answers (or the key shows).
 ///
 /// ```
 /// use egui_pop_i18n::{args, t};
@@ -363,18 +402,12 @@ impl Plugin for I18nPlugin {
             let i18n = i18n.clone();
             ctx.on(on, move |app, _| i18n.set_hooked(hooked(app)));
         }
-        let app = ctx.app();
-        INSTALLED.set(&app.egui(), i18n.clone());
-        strings::install(&app.egui(), Arc::new(Provider::new(i18n.clone())));
-        set_global(Some(i18n));
+        install(&ctx.app().egui(), &i18n);
         Ok(())
     }
 
     fn disconnect(&mut self, ctx: &mut Ctx<'_>) {
-        let egui = ctx.app().egui();
-        INSTALLED.remove(&egui);
-        strings::install(&egui, Arc::new(strings::English));
-        set_global(None);
+        uninstall(&ctx.app().egui());
         *self.follow.lock().unwrap_or_else(PoisonError::into_inner) = Follow::default();
     }
 }
@@ -446,8 +479,7 @@ fn follow(app: &AppHandle, i18n: &I18n, follow: &Mutex<Follow>, env: Option<&str
     let generation = i18n.generation();
     if f.installed != Some(generation) {
         let ctx = app.egui();
-        INSTALLED.set(&ctx, i18n.clone());
-        strings::install(&ctx, Arc::new(Provider::new(i18n.clone())));
+        install(&ctx, i18n);
         f.installed = Some(generation);
         ctx.request_repaint();
     }
