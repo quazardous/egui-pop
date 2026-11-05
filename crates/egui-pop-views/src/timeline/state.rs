@@ -197,6 +197,13 @@ pub enum Edit {
         track: u64,
         clip: Clip,
     },
+    /// A clip split in two at `at`: clip `id` ends there, clip `new`
+    /// (added) starts there.
+    ClipSplit {
+        id: u64,
+        at: f64,
+        new: u64,
+    },
     /// The document was replaced from the history (an undo, a redo).
     Restored,
 }

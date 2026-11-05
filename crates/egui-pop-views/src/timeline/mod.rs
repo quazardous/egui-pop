@@ -49,7 +49,8 @@
 //!   drag moves the selection along a track or across tracks, a clip's
 //!   edges trim it. Page Up and Page Down walk a track's clips, Shift+Up
 //!   and Shift+Down reach the next track's, Ctrl+arrows move the selection,
-//!   `[` and `]` trim it to the playhead.
+//!   `[` and `]` trim it to the playhead, Ctrl+K splits clips at the
+//!   playhead, Shift+Delete removes the selection and closes its gaps.
 //! - **History**: with [`Timeline::history`], each change of the document
 //!   (adding, moving, removing a marker, setting or clearing the range,
 //!   looping, adding, moving, trimming, removing clips) is one step of
@@ -86,8 +87,8 @@ use egui_pop_model::values::{Change, Descriptor, Set, Value};
 
 pub use plugin::{
     CMD_ADD_CLIP, CMD_ADD_MARKER, CMD_MOVE_CLIP, CMD_PAUSE, CMD_PLAY, CMD_REMOVE_CLIP,
-    CMD_REMOVE_MARKER, CMD_SELECT_CLIPS, CMD_SET_RANGE, CMD_SET_TIME, CMD_TRIM_CLIP, PLUGIN,
-    TimelinePlugin, Timelines, describe,
+    CMD_REMOVE_MARKER, CMD_RIPPLE_DELETE, CMD_SELECT_CLIPS, CMD_SET_RANGE, CMD_SET_TIME,
+    CMD_SPLIT_CLIP, CMD_TRIM_CLIP, PLUGIN, TimelinePlugin, Timelines, describe,
 };
 pub use ruler::{Snapped, Ticks};
 pub use scale::{FrameRate, Tempo, TimeScale};
@@ -179,6 +180,13 @@ enum Op {
         from: ClipSpan,
     },
     RemoveClips(Vec<u64>),
+    /// Removes clips and closes their gaps.
+    RippleRemove(Vec<u64>),
+    /// Splits clips at a time.
+    SplitClips {
+        ids: Vec<u64>,
+        time: f64,
+    },
     SelectClips(Vec<u64>),
 }
 
@@ -317,6 +325,39 @@ fn apply(state: &mut TimelineState, op: Op) -> Applied {
                 );
             }
         },
+        Op::RippleRemove(ids) => match ids.iter().find(|id| state.clip(**id).is_none()) {
+            Some(id) => done.error = Some(ClipError::NoClip(*id).to_string()),
+            None => {
+                let (removed, moved) = state.ripple_remove_clips(&ids);
+                done.edits.extend(
+                    removed
+                        .into_iter()
+                        .map(|(track, clip)| Edit::ClipRemoved { track, clip }),
+                );
+                done.edits.extend(moved);
+            }
+        },
+        Op::SplitClips { ids, time } => {
+            // All or none: each must hold the time.
+            let t = state.scale.quantize(time);
+            let min = state.min_clip_length();
+            match ids.iter().find_map(|id| match state.clip(*id) {
+                None => Some(ClipError::NoClip(*id)),
+                Some(c) if t < c.start + min - 1e-9 || t > c.end() - min + 1e-9 => {
+                    Some(ClipError::BadLength)
+                }
+                Some(_) => None,
+            }) {
+                Some(e) => done.error = Some(e.to_string()),
+                None => {
+                    for id in ids {
+                        if let Ok(new) = state.split_clip(id, t) {
+                            done.edits.push(Edit::ClipSplit { id, at: t, new });
+                        }
+                    }
+                }
+            }
+        }
         Op::SelectClips(ids) => match ids.iter().find(|id| state.clip(**id).is_none()) {
             Some(id) => done.error = Some(ClipError::NoClip(*id).to_string()),
             None => {
@@ -335,11 +376,17 @@ fn apply(state: &mut TimelineState, op: Op) -> Applied {
 /// The history step's name for the edits of one op.
 fn edit_label(edits: &[Edit]) -> Option<&'static StrKey> {
     let many = edits.len() > 1;
+    let removes = edits.iter().any(|e| matches!(e, Edit::ClipRemoved { .. }));
+    if removes && edits.iter().any(|e| matches!(e, Edit::ClipMoved { .. })) {
+        return Some(&txt::TIMELINE_RIPPLE_DELETE);
+    }
     Some(match edits.first()? {
         Edit::ClipAdded { .. } => &txt::TIMELINE_ADD_CLIP,
         Edit::ClipMoved { .. } if many => &txt::TIMELINE_MOVE_CLIPS,
         Edit::ClipMoved { .. } => &txt::TIMELINE_MOVE_CLIP,
         Edit::ClipTrimmed { .. } => &txt::TIMELINE_TRIM_CLIP,
+        Edit::ClipSplit { .. } if many => &txt::TIMELINE_SPLIT_CLIPS,
+        Edit::ClipSplit { .. } => &txt::TIMELINE_SPLIT_CLIP,
         Edit::ClipRemoved { .. } if many => &txt::TIMELINE_REMOVE_CLIPS,
         Edit::ClipRemoved { .. } => &txt::TIMELINE_REMOVE_CLIP,
         Edit::MarkerAdded(_) => &txt::TIMELINE_ADD_MARKER,
@@ -1323,6 +1370,35 @@ fn key_run(
                 run(state, mem, Op::RemoveClips(ids));
             }
         }
+        KeyAct::Ripple => {
+            if !state.selected_clips.is_empty() {
+                let ids = state.selected_clips.clone();
+                run(state, mem, Op::RippleRemove(ids));
+            }
+        }
+        KeyAct::Split => {
+            // The selected clips under the playhead, else every clip there.
+            let t = state.playhead;
+            let at = |c: &Clip| c.start < t && t < c.end();
+            let selected: Vec<u64> = state
+                .selected_clips
+                .iter()
+                .copied()
+                .filter(|id| state.clip(*id).is_some_and(at))
+                .collect();
+            let ids = if selected.is_empty() {
+                state
+                    .clips()
+                    .filter(|(_, c)| at(c))
+                    .map(|(_, c)| c.id)
+                    .collect()
+            } else {
+                selected
+            };
+            if !ids.is_empty() {
+                run(state, mem, Op::SplitClips { ids, time: t });
+            }
+        }
         KeyAct::Deselect => {
             state.selected = None;
             state.selected_clips.clear();
@@ -1382,6 +1458,10 @@ enum KeyAct {
     Neighbour(bool),
     Nudge(f64, bool),
     Remove,
+    /// The selected clips removed, their gaps closed.
+    Ripple,
+    /// The clips at the playhead split there.
+    Split,
     Deselect,
     Zoom(f64),
     /// The next (or previous) clip on the selected one's track.
@@ -1436,6 +1516,8 @@ fn key_act(key: Key, m: Modifiers, repeat: bool, k_held: bool, selected: bool) -
         Key::X if alt_only && once => KeyAct::ClearRange,
         Key::M if none && once => KeyAct::AddMarker,
         Key::Delete | Key::Backspace if none && once && selected => KeyAct::Remove,
+        Key::Delete | Key::Backspace if shift && once && selected => KeyAct::Ripple,
+        Key::K if ctrl_only && once => KeyAct::Split,
         Key::Escape if none && selected => KeyAct::Deselect,
         Key::Plus | Key::Equals if none || shift => KeyAct::Zoom(2.0),
         Key::Minus if none => KeyAct::Zoom(0.5),

@@ -128,7 +128,7 @@ points. Rerun-like time panels draw their rows of data ticks this way.
 `transport_changed`, `play`, `speed`, `view_changed`, and `edits`, the
 document's changes (`Edit::MarkerAdded`, `MarkerMoved`, `MarkerRemoved`,
 `RangeSet`, `LoopSet`, `ClipAdded`, `ClipMoved`, `ClipTrimmed`,
-`ClipRemoved`, and `Restored` when the history put the document back;
+`ClipRemoved`, `ClipSplit`, and `Restored` when the history put the document back;
 `Edit` is non-exhaustive), and `tracks`, each track's id and row on
 screen, for what an application draws beside them.
 
@@ -181,6 +181,8 @@ application binds on the timeline's surface runs its command instead.
 | Ctrl+↑ / Ctrl+↓ | moves the selected clips a track up / down, where they fit | egui-pop's |
 | `[` / `]` | trims the selected clip's start / end to the playhead | Resolve's Shift+[ / ] |
 | Delete, Backspace | removes the selected marker, else the selected clips | |
+| Shift+Delete, Shift+Backspace | removes the selected clips and closes their gaps (ripple delete) | Premiere |
+| Ctrl+K | splits the selected clips at the playhead; none selected: every clip there | Premiere's Add Edit |
 | Escape | lets the selected marker and clips go | |
 | `+` / `-` | zooms in / out around the playhead | |
 
@@ -222,6 +224,13 @@ widget, for an application's own commands):
   neighbours, the bounds and the shortest a clip can be
   (`min_clip_length`: a frame, else the ruler's finest step); trimming the
   start moves the offset with it, so the picture stays where it was.
+- `split_clip(id, time)` cuts a clip in two at `time` (a whole frame on
+  frames): it keeps its id and ends there, a new clip (the next id,
+  returned) starts there and reads its source on; refused unless both
+  parts are at least `min_clip_length` long.
+- `ripple_remove_clips(&ids)` removes clips and closes the gaps they
+  leave: the clips after each on its track move back by its length
+  (other tracks stay).
 - `remove_clips(&ids)`; `clip`, `clip_track`, `clips()` find them;
   `neighbour_clip` and `clip_across` are what the keys walk.
 
@@ -275,8 +284,9 @@ as text at `path` of the application's value store (declared there if it is
 not), and each change is one step of egui-pop's history ([History](history.md)):
 adding, moving (a drag is one step, from where it was to where it lands),
 removing a marker, setting or clearing the range, looping, adding,
-moving, trimming and removing clips (clips moved or removed together are
-one step). Selecting is not a step. Ctrl+Z undoes it
+moving, trimming, splitting and removing clips (clips moved, split or
+removed together are one step; a ripple delete, its removals and moves,
+is one). Selecting is not a step. Ctrl+Z undoes it
 and the timeline takes the document back at its next pass
 (`Edit::Restored`). The playhead, the view and playing are not steps. An
 agent's change is a step named as the agent's.
@@ -333,6 +343,8 @@ widgets work without it. A timeline is reached by its `id`.
 | `timeline.move_clip` | `timeline`, `id`, `seconds` or `time`, `track` | moves a clip (what is not given stays); refused where it would overlap or leave the bounds |
 | `timeline.trim_clip` | `timeline`, `id`, `start`, `end` | moves a clip's start or end (seconds on the timeline), stopping as a drag does |
 | `timeline.remove_clip` | `timeline`, `id` or `ids` | removes clips, one step together |
+| `timeline.split_clip` | `timeline`, `id` or `ids`, `seconds` or `time` (else the playhead) | splits clips there, one step together; answers the new clips' ids in `added`; refused unless the time is inside each |
+| `timeline.ripple_delete` | `timeline`, `id` or `ids` | removes clips and closes their gaps, one step |
 | `timeline.select_clips` | `timeline`, `ids` | selects clips (`[]`: none); not a step |
 
 Without `timeline`, the one that last had the focus, else the only one

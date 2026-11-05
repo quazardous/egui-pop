@@ -448,6 +448,79 @@ impl TimelineState {
         Ok(before)
     }
 
+    /// Splits clip `id` at `time` (on the scale's units) into two clips
+    /// touching there: the clip keeps its id and ends at `time`, the new
+    /// one (the next id) starts there, reading its source on from where
+    /// the first stops. Refused unless both parts are at least
+    /// [`min_clip_length`](Self::min_clip_length) long. The new clip's id.
+    pub fn split_clip(&mut self, id: u64, time: f64) -> Result<u64, ClipError> {
+        let (row, at) = self.locate(id).ok_or(ClipError::NoClip(id))?;
+        let t = self.scale.quantize(time);
+        let min = self.min_clip_length();
+        let next = self.next_clip_id();
+        let c = &mut self.tracks[row].clips[at];
+        if !t.is_finite() || t < c.start + min - EPSILON || t > c.end() - min + EPSILON {
+            return Err(ClipError::BadLength);
+        }
+        let mut second = c.clone();
+        second.id = next;
+        second.start = t;
+        second.length = c.end() - t;
+        second.offset = c.offset + (t - c.start);
+        c.length = t - c.start;
+        let track = &mut self.tracks[row];
+        track.clips.push(second);
+        track.sort();
+        Ok(next)
+    }
+
+    /// Removes clips and closes the gaps they leave: on each track, the
+    /// clips after a removed one move back by its length. The clips
+    /// removed (each with its track's id), and an edit per clip moved.
+    pub fn ripple_remove_clips(&mut self, ids: &[u64]) -> (Vec<(u64, Clip)>, Vec<Edit>) {
+        let removed = self.remove_clips(ids);
+        let before: Vec<(u64, ClipPlace)> = self
+            .tracks
+            .iter()
+            .flat_map(|t| {
+                t.clips.iter().map(|c| {
+                    let place = ClipPlace {
+                        track: t.id,
+                        start: c.start,
+                    };
+                    (c.id, place)
+                })
+            })
+            .collect();
+        // The last gap first, so that the ones before still see the clips
+        // after them where they were.
+        let mut gaps: Vec<&(u64, Clip)> = removed.iter().collect();
+        gaps.sort_by(|a, b| b.1.start.total_cmp(&a.1.start));
+        for (track, gone) in gaps {
+            if let Some(t) = self.tracks.iter_mut().find(|t| t.id == *track) {
+                for c in &mut t.clips {
+                    if c.start >= gone.end() - EPSILON {
+                        c.start = self.scale.quantize((c.start - gone.length).max(gone.start));
+                    }
+                }
+                t.sort();
+            }
+        }
+        let mut moved = Vec::new();
+        for (id, from) in before {
+            if let Some(c) = self.clip(id)
+                && c.start != from.start
+            {
+                let to = ClipPlace {
+                    track: from.track,
+                    start: c.start,
+                };
+                moved.push(Edit::ClipMoved { id, from, to });
+            }
+        }
+        (removed, moved)
+    }
+
     /// Removes clips: those removed, each with its track's id.
     pub fn remove_clips(&mut self, ids: &[u64]) -> Vec<(u64, Clip)> {
         let mut removed = Vec::new();
@@ -687,6 +760,53 @@ mod tests {
         .unwrap();
         s.add_clip(a1, Clip::new(0, 5.0, 10.0, "Sound")).unwrap();
         s
+    }
+
+    #[test]
+    fn a_split_makes_two_clips_reading_the_source_on() {
+        let mut s = edit();
+        // Clip 2: 20..30 on the timeline, its source from 2 s in.
+        let new = s.split_clip(2, 24.0).unwrap();
+        assert_eq!(new, 4);
+        let (a, b) = (s.clip(2).unwrap(), s.clip(4).unwrap());
+        assert_eq!((a.start, a.length, a.offset), (20.0, 4.0, 2.0));
+        assert_eq!((b.start, b.length, b.offset), (24.0, 6.0, 6.0));
+        assert_eq!(b.source_length, Some(20.0));
+        assert_eq!(s.clip_track(4).unwrap().name, "V1");
+        // Not at an end, nor nearer it than a frame, nor off the clip.
+        assert_eq!(s.split_clip(2, 20.0), Err(ClipError::BadLength));
+        assert_eq!(s.split_clip(2, 23.99), Err(ClipError::BadLength));
+        assert_eq!(s.split_clip(4, 40.0), Err(ClipError::BadLength));
+        assert_eq!(s.split_clip(9, 1.0), Err(ClipError::NoClip(9)));
+        // On frames, the cut lands on a whole frame.
+        let new = s.split_clip(1, 3.013).unwrap();
+        assert_eq!(s.clip(new).unwrap().start, 3.0);
+    }
+
+    #[test]
+    fn a_ripple_delete_closes_the_gaps_on_their_tracks() {
+        let mut s = edit();
+        s.split_clip(2, 25.0).unwrap(); // V1: 0..10, 20..25, 25..30
+        let (removed, moved) = s.ripple_remove_clips(&[1, 2]);
+        assert_eq!(removed.len(), 2);
+        // 25..30 moves back by both: 5 s for clip 2, then 10 for clip 1.
+        assert_eq!(s.clip(4).unwrap().start, 10.0);
+        assert_eq!(
+            moved,
+            [Edit::ClipMoved {
+                id: 4,
+                from: ClipPlace {
+                    track: 1,
+                    start: 25.0
+                },
+                to: ClipPlace {
+                    track: 1,
+                    start: 10.0
+                },
+            }]
+        );
+        // Other tracks stay.
+        assert_eq!(s.clip(3).unwrap().start, 5.0);
     }
 
     #[test]
