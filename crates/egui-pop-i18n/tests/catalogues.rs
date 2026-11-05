@@ -85,6 +85,7 @@ fn messages() -> Messages {
         .plugin(egui_pop_views::library::LibraryPlugin)
         .plugin(egui_pop_views::viewer::ViewerPlugin::default())
         .plugin(egui_pop_views::video::VideoPlugin)
+        .plugin(egui_pop_views::timeline::TimelinePlugin)
         .plugin(egui_pop_editors::EditorsPlugin)
         .plugin(egui_pop_editors::TerminalPlugin)
         .plugin(egui_pop_editors::JobConsolesPlugin)

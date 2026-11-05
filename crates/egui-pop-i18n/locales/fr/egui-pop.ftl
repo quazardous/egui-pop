@@ -2640,3 +2640,56 @@ plugin-egui-pop-viewer =
 setting-viewer-image-hosts =
     .description = Les hôtes dont la visionneuse charge les images, chacun autorisé par vous une fois ; vide pour être de nouveau consulté.
     .label = Images chargées depuis
+
+category-timeline = Ligne de temps
+
+command-timeline-add-marker =
+    .description = Ajoute un repère à une ligne de temps à `seconds` ou `time` (sinon à la tête de lecture), nommé `label`, de type (`kind`) `marker` ou `cue`, de couleur `color` (`#rrggbb`, sinon celle du thème). Répond son id dans `added`. Un pas de l’historique.
+    .title = Ajouter un repère à une ligne de temps
+
+command-timeline-pause =
+    .description = Demande à une ligne de temps de se mettre en pause.
+    .title = Mettre une ligne de temps en pause
+
+command-timeline-play =
+    .description = Demande à une ligne de temps de lire à la vitesse `speed` (1 par défaut, négative à rebours) ; l’application fait avancer le temps.
+    .title = Lire une ligne de temps
+
+command-timeline-remove-marker =
+    .description = Retire le repère `id` d’une ligne de temps. Un pas de l’historique.
+    .title = Retirer un repère d’une ligne de temps
+
+command-timeline-set-range =
+    .description = Règle la plage d’une ligne de temps de `start` à `end` (en secondes), ou l’efface (`clear` : true) ; `loop` dit si la lecture y tourne en boucle. Un pas de l’historique.
+    .title = Régler la plage d’une ligne de temps
+
+command-timeline-set-time =
+    .description = Amène la tête de lecture d’une ligne de temps (`timeline`, son id) à `seconds`, à `time` (un texte dans l’échelle de la ligne : `1:02.5`, `00:01:02:12`, `17.2.480`), ou la déplace de `by` secondes ; sans sortir de ses bornes.
+    .title = Déplacer la tête de lecture d’une ligne de temps
+
+egui-pop-views-timeline = Ligne de temps
+
+egui-pop-views-timeline-add-marker = Ajouter un repère
+
+egui-pop-views-timeline-clear-range = Effacer la plage
+
+egui-pop-views-timeline-cue = Cue { $label } à { $time }
+
+egui-pop-views-timeline-loop-off = Ne plus boucler
+
+egui-pop-views-timeline-loop-on = Boucler sur la plage
+
+egui-pop-views-timeline-marker = Repère { $label } à { $time }
+
+egui-pop-views-timeline-move-marker = Déplacer le repère
+
+egui-pop-views-timeline-new-marker = Repère { $number }
+
+egui-pop-views-timeline-remove-marker = Retirer le repère
+
+egui-pop-views-timeline-set-range = Régler la plage
+
+egui-pop-views-timeline-speed = { $speed }×
+
+plugin-egui-pop-timeline =
+    .title = Ligne de temps
