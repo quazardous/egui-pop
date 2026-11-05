@@ -173,3 +173,16 @@ section-band:
   rest:
     fill: {$type: "color", $value: "{surface.panel}", $description: "section_header_color"}
     text: {$type: "color", $value: "{text.strong}"}
+chart:
+  $type: "color"
+  $description: "The categorical palette's hues (palette.category aliases them, in order), egui-pop's own hue per slot with its lightness fitted to Rerun's dark surfaces: 3:1 on them, and apart as contrast::check_category asks."
+  blue: {$value: "#18b1ff"}
+  orange: {$value: "#e88405"}
+  green: {$value: "#09c88a"}
+  pink: {$value: "#b246a6"}
+  olive: {$value: "#787604"}
+  periwinkle: {$value: "#bec3ff"}
+  lime: {$value: "#afe658"}
+  red: {$value: "#e04f60"}
+  teal: {$value: "#02929a"}
+  purple: {$value: "#ae8afe"}

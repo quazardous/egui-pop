@@ -151,9 +151,13 @@ worked around, then the small things.
    that resetting goes back to it. An `AppBuilder::layout` (or a way to
    leave the shell's panels out) would say it once.
 6. **No plot.** The time series is painted by hand (axes, grid, lines,
-   the nearest line under the pointer, a value tag); egui-pop has no
+   the nearest line under the pointer, a value tag); egui-pop had no
    chart component and no categorical data palette among its tokens:
-   the entities' colours are the example's own.
+   the entities' colours are the example's own. Both exist now
+   ([Charts](plot.md), [the categorical palette](tokens.md#the-categorical-palette)),
+   and the two kits give their own hues (`chart.*`, fitted to Rerun's
+   surfaces); the example still paints its time series and keeps its
+   colours, until it moves to `Plot` with the timeline.
 7. **A kit is one variant.** A kit package holds one theme: the light
    and dark pair is two kit folders naming each other. A token file
    can carry its counterpart (`org.egui-pop.counterpart`), a kit
