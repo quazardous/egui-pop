@@ -1076,6 +1076,9 @@ egui-pop-views-reject 062b691eb88cd9cc
 egui-pop-views-remove ed2985bd18c0952e
 egui-pop-views-rename ed0b5cd95191e800
 egui-pop-views-search 6375c9162586c361
+egui-pop-views-sort-ascending 4a72ce7d9146894f
+egui-pop-views-sort-clear 4d0b2ddb60f8a69b
+egui-pop-views-sort-descending 0ee49f49f711e85d
 egui-pop-views-sorted-down 26c3550025343606
 egui-pop-views-sorted-up 3e593b33e0ce2cba
 egui-pop-views-table 7d631a7bf18ade47

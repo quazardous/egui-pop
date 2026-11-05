@@ -3465,6 +3465,75 @@ fn the_table_page_sorts_through_the_store_and_vetoes_one_sort() {
 }
 
 #[test]
+fn the_table_page_selects_columns_from_their_headers() {
+    use egui_pop::api::selection::{SELECTION, SelectionItem};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "table"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    let service = app.service(&SELECTION).expect("the selection plugin");
+    // A header's menu: the sort entries, then the page's own.
+    h.get_by_label("Size").click_secondary();
+    h.run();
+    assert!(h.query_by_label("Describe this column").is_some());
+    h.get_by_label("Sort descending").click();
+    h.run();
+    h.run();
+    assert!(h.query_by_label("Size, sorted descending").is_some());
+    let t = last_step(&h, "table.sort").expect("ran");
+    assert_eq!(t.args["column"], "size");
+    // Columns selected from the headers: a click, Ctrl+click.
+    h.get_by_label("Select columns from their headers (the sort moves to the header menu)")
+        .click();
+    h.run();
+    h.get_by_label("Date").click();
+    h.run();
+    let t = last_step(&h, "table.select_columns").expect("ran");
+    assert_eq!(t.args["columns"], serde_json::json!(["date"]));
+    assert!(
+        h.query_by_label("Size, sorted descending").is_some(),
+        "a click no longer sorts"
+    );
+    h.get_by_label("Rating")
+        .click_modifiers(egui::Modifiers::COMMAND);
+    h.run();
+    let rating = h.get_by_label("Rating").rect().center();
+    h.hover_at(rating);
+    h.run();
+    assert_eq!(
+        last_step(&h, "table.select_columns").unwrap().args["columns"],
+        serde_json::json!(["date", "rating"])
+    );
+    // The application-wide selection holds them as `column:<id>`, and the
+    // column under the pointer is hovered there too.
+    assert_eq!(
+        service.items(),
+        [
+            SelectionItem::from("column:date"),
+            SelectionItem::from("column:rating")
+        ]
+    );
+    h.run();
+    assert_eq!(
+        service.hovered(),
+        Some(SelectionItem::from("column:rating"))
+    );
+    assert!(
+        h.query_by_label_contains("Columns selected: date, rating")
+            .is_some()
+    );
+    // A cell's column is hovered too.
+    let date = h.get_by_label("Date").rect();
+    h.hover_at(date.center() + egui::vec2(0.0, date.height() * 2.5));
+    h.run();
+    h.run();
+    assert!(
+        h.query_by_label_contains("under the pointer: date")
+            .is_some()
+    );
+    h.snapshot("table-columns-pop-dark");
+}
+
+#[test]
 fn the_text_editor_page_edits_searches_through_the_keymap_and_vetoes_the_title() {
     use egui::{Key, Modifiers};
     let mut h = harness(options("pop-dark", Density::Comfortable, "text-editor"));

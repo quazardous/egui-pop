@@ -1,11 +1,13 @@
 //! The lists and tables page: a data table of 10 000 photos (sorted and
 //! resized through the value store, cells drawn by the page, a veto on
-//! one sort) and a list of keywords.
+//! one sort, columns selected from their headers and shared with the
+//! application-wide selection, a header menu) and a list of keywords.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use egui::{Color32, Ui};
+use egui_pop::api::selection::{SELECTION, SELECTION_PLUGIN};
 use egui_pop::api::steps::Before;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
@@ -158,6 +160,8 @@ pub struct PageState {
     pub keywords: Keywords,
     sorted_once: bool,
     pub log: Vec<String>,
+    /// Whether a header click selects its column.
+    pub select_columns: bool,
 }
 
 impl Default for PageState {
@@ -201,6 +205,7 @@ impl Default for PageState {
             keywords: Keywords(words.iter().map(|w| w.to_string()).collect()),
             sorted_once: false,
             log: Vec::new(),
+            select_columns: false,
         }
     }
 }
@@ -219,7 +224,7 @@ impl Plugin for TablePage {
     }
 
     fn requires(&self) -> Vec<PluginId> {
-        vec![SHELL, egui_pop::views::steps::VIEWS]
+        vec![SHELL, egui_pop::views::steps::VIEWS, SELECTION_PLUGIN]
     }
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
@@ -257,16 +262,42 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
     {
         app.set_context(VETO, if veto { "true" } else { "false" });
     }
+    widgets::checkbox(
+        ui,
+        &mut p.select_columns,
+        "Select columns from their headers (the sort moves to the header menu)",
+    );
     section(ui, &format!("Photos ({PHOTOS})"));
     let store = app.store();
     let columns = columns();
-    let out = DataTable::new("gallery.photos", &columns)
+    let service = app.service(&SELECTION);
+    let mut menu_log = None;
+    let mut table = DataTable::new("gallery.photos", &columns)
         .label("Photos")
         .mode(Mode::Multiple)
         .app(app)
         .store(&store, PREFIX)
         .height(super::fitted_height(ui, 260.0))
-        .show(ui, &mut p.table, &mut p.photos);
+        .select_columns(p.select_columns)
+        .header_menu(|ui, column| {
+            if widgets::selectable_label(ui, false, "Describe this column").clicked() {
+                menu_log = Some(format!("header menu: describe {column}"));
+                ui.close();
+            }
+        });
+    if let Some(service) = &service {
+        table = table.shared_columns(service);
+    }
+    let out = table.show(ui, &mut p.table, &mut p.photos);
+    if let Some(line) = menu_log {
+        p.log.push(line);
+    }
+    if out.columns_selected {
+        p.log.push(format!(
+            "table.select_columns {:?}",
+            p.table.selected_columns()
+        ));
+    }
     if out.sorted || !p.sorted_once {
         p.photos.sort(p.table.sort());
         p.sorted_once = true;
@@ -283,6 +314,14 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
     for s in out.signals {
         p.log.push(describe(&s));
     }
+    ui.label(format!(
+        "Columns selected: {}  ·  under the pointer: {}",
+        match p.table.selected_columns() {
+            [] => "none".to_string(),
+            c => c.join(", "),
+        },
+        out.hovered_column.as_deref().unwrap_or("none")
+    ));
     ui.label(format!(
         "Sorted by: {}  ·  {} selected",
         p.table

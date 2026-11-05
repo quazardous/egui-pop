@@ -1810,6 +1810,12 @@ egui-pop-views-rename = Renommer { $name }
 
 egui-pop-views-search = Rechercher
 
+egui-pop-views-sort-ascending = Trier par ordre croissant
+
+egui-pop-views-sort-clear = Non trié
+
+egui-pop-views-sort-descending = Trier par ordre décroissant
+
 egui-pop-views-sorted-down = { $column }, tri décroissant
 
 egui-pop-views-sorted-up = { $column }, tri croissant

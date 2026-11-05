@@ -2155,6 +2155,12 @@ egui-pop-views-rename = Rename { $name }
 
 egui-pop-views-search = Search
 
+egui-pop-views-sort-ascending = Sort ascending
+
+egui-pop-views-sort-clear = Unsorted
+
+egui-pop-views-sort-descending = Sort descending
+
 egui-pop-views-sorted-down = { $column }, sorted descending
 
 egui-pop-views-sorted-up = { $column }, sorted ascending

@@ -8,6 +8,15 @@
 //! the host's value store (declare them once with [`declare`]), every
 //! change a step (`table.select`, `table.sort`, `table.resize`).
 //!
+//! Columns can be selected too ([`DataTable::select_columns`]): a header
+//! click selects its column (Ctrl toggles it, Shift extends), the column
+//! is tinted from its header to its last row, and the sort moves to the
+//! header's context menu, as in a spreadsheet. The column under the
+//! pointer is tinted as well and said in the output
+//! ([`TableOutput::hovered_column`]). A right click on a header opens its
+//! menu: the sort entries, then the application's
+//! ([`DataTable::header_menu`]).
+//!
 //! The application owns the rows: it sorts them as [`TableState::sort`]
 //! (or the store) says and gives them through [`TableRows`].
 //!
@@ -39,6 +48,7 @@
 
 use egui::{Id, Response, Role, Sense, Ui, WidgetInfo};
 use egui_pop_api::AppHandle;
+use egui_pop_api::selection::{SelectionItem, SelectionService};
 use egui_pop_api::steps::Outcome;
 use egui_pop_core::binding::SharedStore;
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
@@ -54,7 +64,7 @@ use crate::list::{self, Signal};
 use crate::nav::{self, TypeAhead};
 use crate::rows;
 use crate::select::{Key, Mode, Proposal, Selection};
-use crate::steps::{self, TABLE_RESIZE, TABLE_SELECT, TABLE_SORT};
+use crate::steps::{self, TABLE_RESIZE, TABLE_SELECT, TABLE_SELECT_COLUMNS, TABLE_SORT};
 use crate::strings as s;
 
 /// A column as declared.
@@ -206,6 +216,14 @@ pub struct TableState<K: Key> {
     reveal: Option<usize>,
     page: usize,
     len: Option<usize>,
+    /// The selected columns' ids, in the columns' order.
+    columns: Vec<String>,
+    /// The column a Shift+click extends from.
+    column_anchor: Option<String>,
+    /// The column under the pointer at the last pass, tinted at this one.
+    hovered_column: Option<String>,
+    /// The shared selection's revision last followed (columns).
+    seen: Option<u64>,
 }
 
 impl<K: Key> Default for TableState<K> {
@@ -219,6 +237,10 @@ impl<K: Key> Default for TableState<K> {
             reveal: None,
             page: 10,
             len: None,
+            columns: Vec::new(),
+            column_anchor: None,
+            hovered_column: None,
+            seen: None,
         }
     }
 }
@@ -247,6 +269,22 @@ impl<K: Key> TableState<K> {
         &self.widths
     }
 
+    /// The selected columns' ids ([`DataTable::select_columns`]).
+    pub fn selected_columns(&self) -> &[String] {
+        &self.columns
+    }
+
+    /// Sets the selected columns without running a step.
+    pub fn set_selected_columns(&mut self, columns: impl IntoIterator<Item = String>) {
+        self.columns = columns.into_iter().collect();
+    }
+
+    /// The column under the pointer at the last pass, over its header or
+    /// one of its cells.
+    pub fn hovered_column(&self) -> Option<&str> {
+        self.hovered_column.as_deref()
+    }
+
     /// Brings a row into view at the next pass.
     pub fn reveal(&mut self, row: usize) {
         self.reveal = Some(row);
@@ -255,6 +293,7 @@ impl<K: Key> TableState<K> {
 
 /// What [`DataTable::show`] returns.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct TableOutput<K> {
     /// The table as one focusable widget.
     pub response: Response,
@@ -264,6 +303,31 @@ pub struct TableOutput<K> {
     pub sorted: bool,
     /// The widths changed this pass (a resize ended).
     pub resized: bool,
+    /// The column selection changed this pass
+    /// ([`TableState::selected_columns`]).
+    pub columns_selected: bool,
+    /// The column under the pointer, over its header or one of its cells.
+    pub hovered_column: Option<String>,
+    /// The column whose header was clicked this pass (a primary click).
+    pub header_clicked: Option<String>,
+}
+
+/// What a header's context menu adds after the sort entries, given the
+/// menu's `Ui` and the column's id.
+type MenuFn<'a> = dyn FnMut(&mut Ui, &str) + 'a;
+
+/// [`DataTable::header_menu`]'s closure.
+struct HeaderMenu<'a>(Box<MenuFn<'a>>);
+
+impl std::fmt::Debug for HeaderMenu<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("HeaderMenu")
+    }
+}
+
+/// A column's item in the application-wide selection: `column:<id>`.
+pub fn column_item(column: &str) -> SelectionItem {
+    SelectionItem::new(format!("column:{column}"))
 }
 
 /// The data table widget.
@@ -277,6 +341,9 @@ pub struct DataTable<'a> {
     store: Option<(&'a SharedStore, String)>,
     height: Option<f32>,
     row_height: Option<f32>,
+    select_columns: bool,
+    header_menu: Option<HeaderMenu<'a>>,
+    shared_columns: Option<&'a SelectionService>,
 }
 
 impl<'a> DataTable<'a> {
@@ -291,7 +358,39 @@ impl<'a> DataTable<'a> {
             store: None,
             height: None,
             row_height: None,
+            select_columns: false,
+            header_menu: None,
+            shared_columns: None,
         }
+    }
+
+    /// Lets a header click select its column (Ctrl+click toggles it,
+    /// Shift+click extends from the last one clicked), through the
+    /// `table.select_columns` step; the selected columns are tinted from
+    /// header to last row. The sort is then in the header's context menu
+    /// (a click no longer sorts), as in a spreadsheet. Off by default: a
+    /// click sorts.
+    pub fn select_columns(mut self, on: bool) -> Self {
+        self.select_columns = on;
+        self
+    }
+
+    /// Adds entries to a header's context menu (a right click), after the
+    /// sort entries: `add(ui, column_id)`.
+    pub fn header_menu(mut self, add: impl FnMut(&mut Ui, &str) + 'a) -> Self {
+        self.header_menu = Some(HeaderMenu(Box::new(add)));
+        self
+    }
+
+    /// Binds the column selection to the application-wide selection
+    /// (`egui_pop_api::selection`), its items `column:<id>`
+    /// ([`column_item`]): the columns selected or hovered anywhere are
+    /// tinted, and what is selected here goes there (Ctrl changes only
+    /// this table's columns). Needs [`DataTable::select_columns`] to
+    /// select from the headers.
+    pub fn shared_columns(mut self, selection: &'a SelectionService) -> Self {
+        self.shared_columns = Some(selection);
+        self
     }
 
     /// Its accessible name.
@@ -365,13 +464,35 @@ impl<'a> DataTable<'a> {
     }
 
     pub fn show<K: Key>(
-        self,
+        mut self,
         ui: &mut Ui,
         state: &mut TableState<K>,
         rows: &mut dyn TableRows<K>,
     ) -> TableOutput<K> {
         let id = Id::unique(("egui_pop_views::table", &self.id));
         self.read_store(state);
+        state
+            .columns
+            .retain(|c| self.columns.iter().any(|col| &col.id == c));
+        if let Some(service) = self.shared_columns
+            && state.seen != Some(service.revision())
+        {
+            state.seen = Some(service.revision());
+            let items: std::collections::HashSet<SelectionItem> =
+                service.items().into_iter().collect();
+            state.columns = self
+                .columns
+                .iter()
+                .filter(|c| items.contains(&column_item(&c.id)))
+                .map(|c| c.id.clone())
+                .collect();
+        }
+        let shared_hover = self.shared_columns.and_then(|service| {
+            self.columns
+                .iter()
+                .find(|c| service.is_hovered(&column_item(&c.id)))
+                .map(|c| c.id.clone())
+        });
         let len = rows.len();
         list::retain(&mut state.selection, &mut state.len, len, &|i| rows.key(i));
         let row_h = self.row_height.unwrap_or_else(|| rows::height(ui));
@@ -430,6 +551,13 @@ impl<'a> DataTable<'a> {
             take_focus: false,
             row_h,
             kit: Kit::of(ui.ctx()),
+            select_columns: self.select_columns,
+            selected_columns: &state.columns,
+            tinted: state.hovered_column.clone().or(shared_hover),
+            hovered_column: None,
+            header_clicked: None,
+            column_click: None,
+            header_menu: self.header_menu.take(),
         };
         let widths = &state.widths;
         let given = &mut state.given;
@@ -471,7 +599,22 @@ impl<'a> DataTable<'a> {
         );
         let take_focus = delegate.take_focus;
         let sort_to = delegate.sort_to.take();
-        state.page = delegate.page;
+        let hovered_column = delegate.hovered_column.take();
+        let header_clicked = delegate.header_clicked.take();
+        let column_click = delegate.column_click.take();
+        let page = delegate.page;
+        drop(delegate);
+        if hovered_column != state.hovered_column {
+            state.hovered_column = hovered_column.clone();
+            ui.ctx().request_repaint();
+        }
+        if let Some(service) = self.shared_columns {
+            service.hover(
+                &self.id,
+                hovered_column.as_deref().map(column_item).as_ref(),
+            );
+        }
+        state.page = page;
         let label = self
             .label
             .clone()
@@ -600,7 +743,59 @@ impl<'a> DataTable<'a> {
             // Given again: what was decided, not what was dragged.
             state.given = None;
         }
-        if !signals.is_empty() || sorted || resized {
+        // A header click selecting columns.
+        let mut columns_selected = false;
+        if let Some((column, mods)) = column_click {
+            let before = state.columns.clone();
+            let to = column_selection(
+                self.columns,
+                &state.columns,
+                state.column_anchor.as_deref(),
+                &column,
+                mods,
+            );
+            let mut done = to.clone();
+            let outcome = steps::run(
+                self.app,
+                &TABLE_SELECT_COLUMNS,
+                json!({ "table": self.id, "columns": to }),
+                |args| {
+                    done = serde_json::from_value(args["columns"].clone())
+                        .map_err(|e| e.to_string())?;
+                    Ok(json!(done))
+                },
+            );
+            match outcome {
+                Outcome::Done(Ok(_)) => {
+                    if !mods.shift {
+                        state.column_anchor = Some(column);
+                    }
+                    if done != before {
+                        state.columns = done;
+                        columns_selected = true;
+                        if let Some(service) = self.shared_columns {
+                            let item_of = |c: &String| column_item(c);
+                            crate::shared::write(
+                                service,
+                                &self.id,
+                                &before,
+                                &state.columns,
+                                mods.command,
+                                &item_of,
+                            );
+                            state.seen = Some(service.revision());
+                        }
+                    }
+                }
+                Outcome::Done(Err(reason)) | Outcome::Vetoed { reason, .. } => {
+                    signals.push(Signal::Vetoed {
+                        step: TABLE_SELECT_COLUMNS,
+                        reason,
+                    })
+                }
+            }
+        }
+        if !signals.is_empty() || sorted || resized || columns_selected {
             ui.ctx().request_repaint();
         }
         TableOutput {
@@ -608,8 +803,54 @@ impl<'a> DataTable<'a> {
             signals,
             sorted,
             resized,
+            columns_selected,
+            hovered_column,
+            header_clicked,
         }
     }
+}
+
+/// The columns selected after a header click on `column`: alone, or
+/// toggled with Ctrl, or the run from `anchor` with Shift (added to the
+/// selection with Ctrl too), in the columns' order.
+pub fn column_selection(
+    columns: &[Column],
+    current: &[String],
+    anchor: Option<&str>,
+    column: &str,
+    mods: egui::Modifiers,
+) -> Vec<String> {
+    let index = |id: &str| columns.iter().position(|c| c.id == id);
+    let mut out: Vec<String> = if mods.shift {
+        let to = index(column);
+        let from = anchor.and_then(index).or(to);
+        let mut run = match (from, to) {
+            (Some(a), Some(b)) => columns[a.min(b)..=a.max(b)]
+                .iter()
+                .map(|c| c.id.clone())
+                .collect(),
+            _ => vec![column.to_string()],
+        };
+        if mods.command {
+            run.extend(current.iter().cloned());
+        }
+        run
+    } else if mods.command {
+        let mut v = current.to_vec();
+        match v.iter().position(|c| c == column) {
+            Some(i) => {
+                v.remove(i);
+            }
+            None => v.push(column.to_string()),
+        }
+        v
+    } else {
+        vec![column.to_string()]
+    };
+    // In the columns' order, once each.
+    out.sort_by_key(|c| index(c).unwrap_or(usize::MAX));
+    out.dedup();
+    out
 }
 
 struct Delegate<'a, K: Key> {
@@ -627,6 +868,52 @@ struct Delegate<'a, K: Key> {
     row_h: f32,
     /// Fetched once per pass, for every row and header.
     kit: std::sync::Arc<Kit>,
+    select_columns: bool,
+    selected_columns: &'a [String],
+    /// The column tinted as hovered: under the pointer at the last pass,
+    /// or hovered elsewhere (the shared selection).
+    tinted: Option<String>,
+    /// The column under the pointer this pass.
+    hovered_column: Option<String>,
+    header_clicked: Option<String>,
+    /// A header click selecting its column, with the modifiers held.
+    column_click: Option<(String, egui::Modifiers)>,
+    header_menu: Option<HeaderMenu<'a>>,
+}
+
+impl<K: Key> Delegate<'_, K> {
+    /// The fill a column's parts take when it is selected or hovered:
+    /// the list row's in that state (selected wins), `None` otherwise.
+    fn column_fill(&self, column: &str) -> Option<egui::Color32> {
+        let state = if self.selected_columns.iter().any(|c| c == column) {
+            State::SELECTED
+        } else if self.tinted.as_deref() == Some(column) {
+            State::HOVER
+        } else {
+            return None;
+        };
+        Some(self.kit.list_row.style(state).fill)
+    }
+
+    /// Tints a cell of a selected or hovered column, at half strength so
+    /// a selected row still shows through.
+    fn tint(&self, ui: &Ui, column: &str, rect: egui::Rect) {
+        if let Some(fill) = self.column_fill(column) {
+            ui.painter()
+                .rect_filled(rect, 0.0, fill.gamma_multiply(0.5));
+        }
+    }
+
+    /// Marks a selected or hovered column's header with a bar along its
+    /// bottom, in the full fill, leaving its title as it is.
+    fn mark_header(&self, ui: &Ui, column: &str, rect: egui::Rect) {
+        if let Some(fill) = self.column_fill(column) {
+            let h = (rect.height() * 0.1).clamp(2.0, 4.0);
+            let bar =
+                egui::Rect::from_min_max(egui::pos2(rect.left(), rect.bottom() - h), rect.max);
+            ui.painter().rect_filled(bar, 0.0, fill);
+        }
+    }
 }
 
 impl<K: Key> TableDelegate for Delegate<'_, K> {
@@ -660,11 +947,67 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
             title: &c.title,
             name: &name,
             descending: sorted.map(|s| s.descending),
-            sortable: c.sortable,
+            // Clickable when a click does something, and for its menu.
+            sortable: c.sortable || self.select_columns || self.header_menu.is_some(),
         }
         .show(ui, &self.kit, rect, ui.scope_id().with("sort"));
-        if c.sortable && r.clicked() {
-            self.sort_to = Some(Sort::next(self.sort, &c.id));
+        self.mark_header(ui, &c.id, rect);
+        if self.select_columns {
+            let selected = self.selected_columns.contains(&c.id);
+            r.widget_info(|| WidgetInfo::selected(Role::Button, true, selected, &name));
+        }
+        if r.hovered() {
+            self.hovered_column = Some(c.id.clone());
+        }
+        if r.clicked() {
+            self.header_clicked = Some(c.id.clone());
+            if self.select_columns {
+                self.column_click = Some((c.id.clone(), ui.input(|i| i.modifiers)));
+            } else if c.sortable {
+                self.sort_to = Some(Sort::next(self.sort, &c.id));
+            }
+        }
+        let current = self.sort.filter(|s| s.column == c.id).cloned();
+        let menu = &mut self.header_menu;
+        let mut sort_to = None;
+        r.context_menu(|ui| {
+            if c.sortable {
+                let entry = |ui: &mut Ui, key, to: Option<Sort>| {
+                    let on = current == to;
+                    egui_pop_core::widgets::selectable_label(ui, on, tr(ui.ctx(), key))
+                        .clicked()
+                        .then_some(to)
+                };
+                let up = Some(Sort {
+                    column: c.id.clone(),
+                    descending: false,
+                });
+                let down = Some(Sort {
+                    column: c.id.clone(),
+                    descending: true,
+                });
+                for (key, to) in [
+                    (&s::SORT_ASCENDING, up),
+                    (&s::SORT_DESCENDING, down),
+                    (&s::SORT_CLEAR, None),
+                ] {
+                    if let Some(to) = entry(ui, key, to) {
+                        sort_to = Some(to);
+                        ui.close();
+                    }
+                }
+            }
+            if let Some(HeaderMenu(add)) = menu {
+                if c.sortable {
+                    ui.separator();
+                }
+                add(ui, &c.id);
+            }
+        });
+        if let Some(to) = sort_to
+            && to.as_ref() != self.sort
+        {
+            self.sort_to = Some(to);
         }
     }
 
@@ -722,6 +1065,13 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
             return;
         }
         let selected = self.selection.contains(&self.rows.key(row));
+        if let Some(c) = self.columns.get(cell.col_nr) {
+            let rect = ui.max_rect();
+            self.tint(ui, &c.id, rect);
+            if ui.rect_contains_pointer(rect) {
+                self.hovered_column = Some(c.id.clone());
+            }
+        }
         ui.add_space(ui.spacing().item_spacing.x);
         self.rows.cell(ui, row, cell.col_nr, selected);
     }
@@ -744,5 +1094,37 @@ mod tests {
         assert_eq!(Sort::next(down.as_ref(), "name"), None);
         assert_eq!(Sort::next(down.as_ref(), "size"), Sort::decode("size"));
         assert_eq!(Sort::decode(""), None);
+    }
+
+    #[test]
+    fn a_header_click_selects_toggles_or_extends_columns() {
+        use egui::Modifiers;
+        let cols: Vec<Column> = ["a", "b", "c", "d"]
+            .iter()
+            .map(|id| Column::new(*id, *id))
+            .collect();
+        let sel = |current: &[&str], anchor, column, mods| {
+            let current: Vec<String> = current.iter().map(|s| s.to_string()).collect();
+            column_selection(&cols, &current, anchor, column, mods)
+        };
+        assert_eq!(sel(&["a"], Some("a"), "c", Modifiers::NONE), ["c"]);
+        assert_eq!(sel(&["c"], Some("c"), "a", Modifiers::COMMAND), ["a", "c"]);
+        assert_eq!(sel(&["a", "c"], Some("a"), "c", Modifiers::COMMAND), ["a"]);
+        assert_eq!(
+            sel(&["b"], Some("b"), "d", Modifiers::SHIFT),
+            ["b", "c", "d"]
+        );
+        assert_eq!(
+            sel(
+                &["a"],
+                Some("c"),
+                "d",
+                Modifiers::SHIFT | Modifiers::COMMAND
+            ),
+            ["a", "c", "d"]
+        );
+        // No anchor yet: the column alone.
+        assert_eq!(sel(&[], None, "b", Modifiers::SHIFT), ["b"]);
+        assert_eq!(column_item("size").as_str(), "column:size");
     }
 }

@@ -163,6 +163,69 @@ files.sort(state.sort());
 assert_eq!(files.0[0].1, "b.txt");
 ```
 
+## Columns
+
+A table can select columns as well as rows, opt-in with
+`DataTable::select_columns(true)`, as in a spreadsheet:
+
+| Gesture | What it does |
+|---|---|
+| Click a header | Selects its column alone |
+| Ctrl+click a header | Adds or removes its column |
+| Shift+click a header | Selects the columns from the last one clicked to it (with Ctrl, adds them) |
+| Right-click a header | Its menu: Sort ascending, Sort descending, Unsorted, then the application's entries |
+
+A header click then selects instead of sorting: the sort is in the
+header's menu, which is there whether columns are selected or not.
+Without `select_columns`, a click sorts as before.
+
+Each change runs the `table.select_columns` step; the output's
+`columns_selected` is set and `TableState::selected_columns` gives the
+columns' ids, in the columns' order (`set_selected_columns` sets them
+without a step). A selected column is tinted from its header to its last
+row, and so is the column under the pointer, over its header or any of
+its cells: the list row's `selected` and `hover` fills at half strength
+(`list-row` in the kit), so a selected row shows through.
+`TableOutput::hovered_column` names the column under the pointer and
+`header_clicked` a header clicked this pass (with or without column
+selection). `DataTable::header_menu(|ui, column| …)` adds the
+application's entries to every header's menu.
+
+`DataTable::shared_columns(&service)` binds the column selection to the
+application-wide selection (`egui_pop_api::selection`): a column is the
+item `column:<id>` (`table::column_item`), selected and hovered there
+like any other, so a column chosen in a table shows in a panel
+listening to the selection, and a column selected elsewhere is tinted
+here. A plain click replaces the whole selection, Ctrl changes only the
+table's columns.
+
+```rust
+use egui_pop::egui;
+use egui_pop::views::table::{Column, DataTable, TableRows, TableState};
+
+# struct Rows;
+# impl TableRows<u32> for Rows {
+#     fn len(&self) -> usize { 0 }
+#     fn key(&self, row: usize) -> u32 { row as u32 }
+#     fn label(&self, row: usize) -> String { row.to_string() }
+#     fn cell(&mut self, _: &mut egui::Ui, _: usize, _: usize, _: bool) {}
+# }
+fn ui(ui: &mut egui::Ui, state: &mut TableState<u32>, rows: &mut Rows) {
+    let columns = [Column::new("time", "Time"), Column::new("speed", "Speed")];
+    let out = DataTable::new("samples", &columns)
+        .select_columns(true)
+        .header_menu(|ui, column| {
+            if ui.button(format!("Plot {column}")).clicked() {
+                ui.close();
+            }
+        })
+        .show(ui, state, rows);
+    if out.columns_selected {
+        let _plotted: &[String] = state.selected_columns();
+    }
+}
+```
+
 ## Steps and signals
 
 Given the application (`.app(…)`) with `ViewsPlugin` connected, each
@@ -176,7 +239,10 @@ veto, redirect, replace or follow; the selection also comes back as
 | `table.select` | `table`, `keys`, `cursor` | sets the selection |
 | `table.sort` | `table`, `column` (`null`: unsorted), `descending` | writes the sort to the store; the output's `sorted` is set |
 | `table.resize` | `table`, `widths` | writes the widths to the store (when a resize ends); vetoed, the columns go back |
+| `table.select_columns` | `table`, `columns` | sets the column selection (a header clicked, `select_columns`); the output's `columns_selected` is set |
 
 The gallery's `table` page shows 10 000 photos sorted and resized
 through the store, cells drawn by the page (stars for the rating), a
-veto on sorting by one column, and a list of keywords.
+veto on sorting by one column, columns selected from their headers
+(shared with the application-wide selection), a header menu, and a list
+of keywords.
