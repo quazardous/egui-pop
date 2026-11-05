@@ -143,6 +143,24 @@ $extensions:
           red: {$value: "#e85881"}
           teal: {$value: "#069bb2"}
           purple: {$value: "#8960da"}
+        palette:
+          log:
+            $type: "color"
+            $description: "The text log's levels, as Rerun's light theme colours them."
+            trace: {$value: "#2c2b2b", $description: "Gray.300: trace_log_text_color"}
+            debug: {$value: "{blue.9}", $description: "Blue.500: debug_log_text_color"}
+            info: {$value: "{green.8}", $description: "Green.475: info_log_text_color is Green.500, at 4.48:1 on white; a step darker reads at 4.5:1"}
+            warn: {$value: "{warning}", $description: "warn_fg_color (#FF7A0C), darkened as `warning` is for contrast on white"}
+            error: {$value: "#ab0116", $description: "error_fg_color"}
+        plot:
+          rest:
+            fill: {$type: "color", $value: "{gray.0}", $description: "Gray.1000: viewport_background, a plot background's default"}
+        table-header-cell:
+          rest:
+            fill: {$type: "color", $value: "{gray.4}", $description: "Gray.850: table_header_bg_fill"}
+            border-color: {$type: "color", $value: "{gray.6}", $description: "Gray.700: table_header_stroke_color"}
+        viewport:
+          background: {$type: "color", $value: "{gray.0}", $description: "Gray.1000: viewport_background, behind a 2D view"}
   org.egui-pop.source:
     repository: "https://github.com/rerun-io/rerun"
     file: "crates/ui_tools/re_ui/data/dark_theme.ron, color_table.ron; src/design_tokens.rs"
@@ -275,3 +293,21 @@ chart:
   red: {$value: "#e04f60"}
   teal: {$value: "#02929a"}
   purple: {$value: "#ae8afe"}
+palette:
+  log:
+    $type: "color"
+    $description: "The text log's levels, as Rerun's dark theme colours them."
+    trace: {$value: "#bfbfbf", $description: "Gray.700: trace_log_text_color"}
+    debug: {$value: "#adbbff", $description: "Blue.700: debug_log_text_color"}
+    info: {$value: "#00da7e", $description: "Green.700: info_log_text_color"}
+    warn: {$value: "{warning}", $description: "warn_fg_color (#FF7A0C)"}
+    error: {$value: "{danger}", $description: "error_fg_color (#AB0116) lifted as `danger` is: Rerun's red does not read on the dark panel"}
+plot:
+  rest:
+    fill: {$type: "color", $value: "{gray.2}", $description: "Gray.100: viewport_background, a plot background's default"}
+table-header-cell:
+  rest:
+    fill: {$type: "color", $value: "{gray.3}", $description: "Gray.150: table_header_bg_fill"}
+    border-color: {$type: "color", $value: "#2c2b2b", $description: "Gray.300: table_header_stroke_color"}
+viewport:
+  background: {$type: "color", $value: "{gray.2}", $description: "Gray.100: viewport_background, behind a 2D view"}

@@ -961,11 +961,11 @@ pub fn logs(ui: &mut Ui, m: &mut Model) {
                     Emphasis::None => {}
                 }
                 let level = match line.level {
-                    Level::Trace => t.text.muted,
-                    Level::Debug => t.status.info,
-                    Level::Info => t.status.success,
-                    Level::Warn => t.status.warning,
-                    Level::Error => t.status.danger,
+                    Level::Trace => t.palette.log.trace,
+                    Level::Debug => t.palette.log.debug,
+                    Level::Info => t.palette.log.info,
+                    Level::Warn => t.palette.log.warn,
+                    Level::Error => t.palette.log.error,
                 };
                 let y = row.center().y;
                 p.text(

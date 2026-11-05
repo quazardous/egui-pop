@@ -69,7 +69,8 @@ One kit, `examples/kits/rerun-like`, holding both variants: its
 `kit.yaml` is Rerun-like Dark and carries Rerun-like Light as its
 counterpart (the manifest's `counterpart`), and `shared.tokens.yaml`
 holds what the two share (sizes, radii, type, the tab bar, the section
-bands). The viewer starts with `ThemeSpec::new("rerun-like-dark")`, and
+bands, the plot's and the table header's shapes, the time cursor). The
+viewer starts with `ThemeSpec::new("rerun-like-dark")`, and
 the View menu's light and dark toggle (and the settings' light, dark or
 system choice) switches between the variants. The settings have no
 theme picker: another theme is picked in code (`ThemeService::kits`
@@ -99,12 +100,22 @@ What was taken from `re_ui` (`dark_theme.ron`, `light_theme.ron`,
 | `size.icon.inline`, `size.title-bar.height` | 14, 24 | 14, 24 | `small_icon_size`, `title_bar_height` |
 | `font.size.xs` to `xl` | 10.5, 11, 12.5, 13, 16 | the same | Typography Small, Eyebrow, Body, Heading 4, Heading 3 |
 | `space.*` | 2, 4, 8, 12, 16: egui-pop's own, already Rerun's 4-point grid | | `view_padding` 12, `item_spacing` 8 |
+| `palette.log.trace`, `.debug`, `.info` | Gray.700, Blue.700, Green.700 | Gray.300, Blue.500, Green.475 | `trace_log_text_color`, `debug_log_text_color`, `info_log_text_color` (light: Green.500 reads at 4.48:1 on white, a step darker at 4.5:1) |
+| `palette.log.warn`, `.error` | `warning`, `danger` | `warning`, `#ab0116` | `warn_fg_color`, `error_fg_color` (lifted or darkened where they fail the contrast checks, as `warning` and `danger` are) |
+| `plot`: `shape` `plain`, no border, no radius, `rest.fill` | Gray.100 | Gray.1000 | no frame around a time series; `viewport_background`, `PlotBackground`'s default colour |
+| `plot-cursor`: `width`, `rest.fill` | 1.5, `text.default` | the same | `paint_time_cursor`: 1.5 times the widgets' stroke, in their foreground colour |
+| `table-header-cell`: `shape` `plain`, a line under it (`indicator-side` bottom), `rest.fill`, `rest.border-color` | Gray.150, Gray.300 | Gray.850, Gray.700 | `table_header_bg_fill`, `table_header_stroke_color` |
+| `viewport.background` (a 2D view) | Gray.100 | Gray.1000 | `viewport_background` |
 
 The kit's components: buttons without an outline (`button_secondary`),
 tabs and the tab bar on the panel's colour with the tab's three text
 greys and no border, rows selected in the solid accent with the
-accent's text, section bands 24 high on the panel's colour. Inter and
-JetBrains Mono, Rerun's fonts, are egui-pop's bundled ones already.
+accent's text, section bands 24 high on the panel's colour. For the
+views: plots without a frame on the view's background with a thin time
+cursor in the text's colour, table headers filled with a line under
+them, the log levels in Rerun's colours and the 2D view's background.
+Inter and JetBrains Mono, Rerun's fonts, are egui-pop's bundled ones
+already.
 
 ## The gaps
 
@@ -187,3 +198,32 @@ worked around, then the small things.
     text fail egui-pop's AA contrast checks (`contrast::check`, which the
     example's test runs on both variants); the kit lifts them, so the dark
     kit's muted text and accent are lighter than Rerun's.
+12. **View tokens the kit cannot give.** Rerun's time series, text log
+    and 2D view use design tokens with no egui-pop counterpart, so the
+    kits leave them out:
+    - **The plot's grid.** The `plot` component draws its grid in its
+      `text` colour, which egui_plot fades by the lines' spacing. Rerun
+      gives the grid a colour of its own (`plot_grid_color`: Gray.850 in
+      light, Gray.200 in dark) and a fade (`plot_grid_fade`, 0.3);
+      egui_plot takes both (`grid_color`, `grid_fade`), the component has
+      no token for them.
+    - **The time cursor's head.** `plot-cursor` is a line (the `tick`
+      handler). Rerun's cursor has a triangle, 10 points wide, at its
+      top, and turns to the strong text colour under the pointer; there
+      is no handler drawing a head, and the cursor has no `hover` state
+      (it is not dragged in the plot).
+    - **Table rows.** The data table's rows are `list-row` boxes, the
+      same as lists': a selected row is the solid accent. Rerun's tables
+      select a row with a quiet fill (`table_interaction_row_selection_fill`:
+      Gray.900 in light, Blue.750 at a tenth in dark) and outline the
+      hovered and pressed ones (`table_interaction_hovered_bg_stroke`,
+      `..._active_bg_stroke`); there is no table row component apart
+      from lists.
+    - **The 2D view's labels and axes.** The viewport has a background,
+      a frame and a guide colour. Rerun's labels sit on the background at
+      half opacity (`spatial_label_bg_opacity`), and its axes take Red,
+      Green and Blue 550 in light, 600 in dark (`axis_color_x`, `_y`,
+      `_z`): no viewport token for either.
+    - **The critical log level.** Rerun draws it in strong text on the
+      error colour; the `log` facade's five levels have tokens
+      (`palette.log.*`), a sixth has none.

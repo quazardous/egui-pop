@@ -1,4 +1,4 @@
-$description: "Rerun-like, both variants: what the dark and the light variant share (sizes, radii, type, the tab bar and the section bands, and the roles both alias the same way)."
+$description: "Rerun-like, both variants: what the dark and the light variant share (sizes, radii, type, the tab bar and the section bands, the plot's and the table header's shapes, the time cursor, and the roles both alias the same way)."
 text:
   $type: "color"
   on-accent: {$value: "{blue.contrast}"}
@@ -50,3 +50,17 @@ section-band:
   rest:
     fill: {$type: "color", $value: "{surface.panel}", $description: "section_header_color"}
     text: {$type: "color", $value: "{text.strong}"}
+plot:
+  shape: {$type: "string", $value: "plain", $description: "No frame: Rerun's plots fill their view."}
+  rest:
+    border-width: {$type: "dimension", $value: {value: 0, unit: "px"}}
+    radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
+plot-cursor:
+  width: {$type: "dimension", $value: {value: 1.5, unit: "px"}, $description: "1.5 times the widgets' stroke, as re_ui's paint_time_cursor draws it"}
+  rest:
+    fill: {$type: "color", $value: "{text.default}", $description: "The widgets' foreground stroke: text_default"}
+table-header-cell:
+  shape: {$type: "string", $value: "plain", $description: "A fill and a line under it."}
+  indicator-side: {$type: "string", $value: "bottom"}
+  rest:
+    border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
