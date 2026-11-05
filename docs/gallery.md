@@ -330,6 +330,20 @@ playhead). See [Timeline](timeline.md).
   </tr>
 </table>
 
+### Tracks and clips
+
+A 40-second edit at 25 fps: a titles track, two video tracks and two audio
+tracks, their clips drawn by the page's painter (pretend thumbnails and a
+waveform); then keys on a clip. See [Timeline](timeline.md#tracks-and-clips).
+
+<table>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/tracks-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/tracks-pop-dark.png" width="200" alt="tracks-pop-dark"></a><br>tracks-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/tracks-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/tracks-pop-light.png" width="200" alt="tracks-pop-light"></a><br>tracks-pop-light</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/tracks-keys-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/tracks-keys-pop-dark.png" width="200" alt="tracks-keys-pop-dark"></a><br>tracks-keys-pop-dark</td>
+  </tr>
+</table>
+
 ### Editors
 
 The text editor, the code editor and the terminal.
