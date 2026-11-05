@@ -3,17 +3,23 @@
 //! (`dock-preview`, its buttons `button`); and its section stacks
 //! ([`crate::sections`]): their bands (`section-band`, the mark
 //! `section-disclosure`, the count `section-count`) and the focus ring of
-//! their boundaries. egui_stack lays them out and takes their input.
+//! their boundaries; and its toolbar rows ([`egui_stack::toolbar`]): their
+//! tools (`toolbar-button`, a row of their More menu `menu-item`), More
+//! button (`toolbar-button`, the More glyph) and separators. egui_stack
+//! lays them out and takes their input.
 
 use egui::{Color32, FontFamily, FontId, Painter, Rect, pos2, vec2};
+use egui_stack::toolbar::ToolKind;
 use egui_stack::{
     DockPainter, DropButtonPaint, DropPaint, DropTargetPaint, PartState, SectionBandPaint,
     SectionBoundaryPaint, SeparatorAxis, SeparatorPaint, Split, TabBarPaint, TabBarTailPaint,
-    TabMeasure, TabPaint,
+    TabMeasure, TabPaint, ToolItemPaint, ToolMorePaint, ToolSeparatorPaint,
 };
 
-use super::{Corners, Glyph, Kit, KitCx, Part, State, paint_ring};
+use super::{Corners, Glyph, Kit, KitCx, Part, State, Tone, paint_ring};
+use crate::icon::Size;
 use crate::indicator;
+use crate::progress::paint_spinner_on;
 use crate::theme::{TextRole, Tokens};
 
 /// The kit's state for egui_stack's flags (`DRAGGED` and `LEAF_FOCUSED`
@@ -24,6 +30,29 @@ fn state(flags: PartState) -> State {
         .with(State::HOVER, flags.contains(PartState::HOVERED))
         .with(State::ACTIVE, flags.contains(PartState::PRESSED))
         .with(State::FOCUS, flags.contains(PartState::FOCUSED))
+        .with(State::DISABLED, flags.contains(PartState::DISABLED))
+}
+
+/// A tool's state: a disabled tool is neither hovered nor pressed (egui
+/// says so of a disabled widget), and `selected` only when `selected`
+/// is kept (a toggle on, not a menu open: the toolbar frames what is on).
+fn tool_state(flags: PartState, selected: bool) -> State {
+    let disabled = flags.contains(PartState::DISABLED);
+    State::REST
+        .with(
+            State::SELECTED,
+            selected && flags.contains(PartState::SELECTED),
+        )
+        .with(
+            State::HOVER,
+            !disabled && flags.contains(PartState::HOVERED),
+        )
+        .with(
+            State::ACTIVE,
+            !disabled && flags.contains(PartState::PRESSED),
+        )
+        .with(State::FOCUS, flags.contains(PartState::FOCUSED))
+        .with(State::DISABLED, disabled)
 }
 
 fn cx(painter: &Painter) -> KitCx<'_> {
@@ -284,6 +313,148 @@ impl DockPainter for Kit {
         crate::focus::own_ring(painter.ctx(), boundary.id);
         let focus = self.section_band.data.states.get(State::FOCUS);
         paint_ring(&cx(painter), boundary.rect, focus, Corners::All);
+    }
+
+    fn tool_item(&self, painter: &Painter, item: &ToolItemPaint<'_>) {
+        let cx = cx(painter);
+        let ctx = painter.ctx();
+        if item.state.contains(PartState::FOCUSED) {
+            // The tool shows its focus itself, as any kit part does.
+            crate::ring::own(ctx, item.id);
+        }
+        if item.in_menu {
+            let on = item.state.contains(PartState::SELECTED) && item.kind != ToolKind::Menu;
+            self.tool_menu_row(painter, item, on);
+            return;
+        }
+        let look = &self.toolbar_button;
+        let state = tool_state(item.state, item.kind != ToolKind::Menu);
+        look.paint(
+            &cx,
+            &Part {
+                rect: item.rect,
+                room: item.rect,
+                state,
+                label: None,
+            },
+        );
+        let color = look.style(state).text;
+        let enabled = !state.contains(State::DISABLED);
+        if item.busy {
+            paint_spinner_on(painter, item.icon_rect, color);
+        } else if let Some(icon) = item.icon {
+            icon.paint(painter, item.icon_rect, color, enabled);
+        }
+        if let Some(label) = item.label {
+            painter.galley(item.label_pos, label.clone(), color);
+        }
+        if item.kind == ToolKind::Menu {
+            // The drop-down mark at the end, as wide as 0.6 icon, a
+            // padding off the edge (the icon's room starts a padding in).
+            let side = item.icon_rect.width() * 0.6;
+            let pad = item.icon_rect.left() - item.rect.left();
+            let at = Rect::from_center_size(
+                pos2(item.rect.right() - pad - side / 2.0, item.rect.center().y),
+                vec2(side, side),
+            );
+            self.glyph(Glyph::Dropdown).paint(painter, at, color);
+        }
+    }
+
+    fn tool_more(&self, painter: &Painter, more: &ToolMorePaint<'_>) {
+        let ctx = painter.ctx();
+        if more.state.contains(PartState::FOCUSED) {
+            crate::ring::own(ctx, more.id);
+        }
+        // Not framed while its menu is open: framed says "on".
+        let state = tool_state(more.state, false);
+        let look = &self.toolbar_button;
+        look.paint(
+            &cx(painter),
+            &Part {
+                rect: more.rect,
+                room: more.rect,
+                state,
+                label: None,
+            },
+        );
+        let side = Size::Toolbar.points(&Tokens::of(ctx));
+        let at = Rect::from_center_size(more.rect.center(), vec2(side, side));
+        self.glyph(Glyph::More)
+            .paint(painter, at, look.style(state).text);
+    }
+
+    fn tool_separator(&self, painter: &Painter, separator: &ToolSeparatorPaint<'_>) {
+        // A line across the separator's room, in the border's colour.
+        let rect = separator.rect;
+        let stroke = egui::Stroke::new(1.0, Tokens::of(painter.ctx()).border.default);
+        let line = if separator.vertical {
+            [rect.left_center(), rect.right_center()]
+        } else {
+            [rect.center_top(), rect.center_bottom()]
+        };
+        painter.line_segment(line, stroke);
+    }
+}
+
+impl Kit {
+    /// A tool as a row of a toolbar's More menu, in the look of a menu's
+    /// items: the `menu-item` box, the icon in the gutter (framed by
+    /// `menu-item-gutter` while on, else a tick or a dot there), the key
+    /// in the `muted` tone.
+    fn tool_menu_row(&self, painter: &Painter, item: &ToolItemPaint<'_>, on: bool) {
+        let cx = cx(painter);
+        let look = &self.menu_item;
+        let state = tool_state(item.state, false);
+        let disabled = state.contains(State::DISABLED);
+        look.paint(
+            &cx,
+            &Part {
+                rect: item.rect,
+                room: item.rect,
+                state,
+                label: None,
+            },
+        );
+        let color = look.style(state).text;
+        // The gutter's mark keeps the item's resting colour, as a menu's.
+        let mark = look.style(State::REST.with(State::DISABLED, disabled)).text;
+        let square = item.icon_rect;
+        if on && item.icon.is_some() && !item.busy {
+            let pad = square.left() - item.rect.left();
+            let frame = Rect::from_center_size(
+                square.center(),
+                vec2(square.width() + 2.0 * pad, item.rect.height()),
+            );
+            self.menu_item_gutter.paint(
+                &cx,
+                &Part {
+                    rect: frame,
+                    room: frame,
+                    state: State::SELECTED.with(State::DISABLED, disabled),
+                    label: None,
+                },
+            );
+        }
+        if item.busy {
+            paint_spinner_on(painter, square, mark);
+        } else if let Some(icon) = item.icon {
+            icon.paint(painter, square, mark, !disabled);
+        } else if on {
+            let glyph = if item.kind == ToolKind::Radio {
+                Glyph::Radio
+            } else {
+                Glyph::Check
+            };
+            self.glyph(glyph).paint(painter, square, mark);
+        }
+        if let Some(label) = item.label {
+            painter.galley(item.label_pos, label.clone(), color);
+        }
+        if let Some(keys) = item.shortcut {
+            let muted = look.style_toned(Tone::Muted, state).text;
+            painter.galley(item.shortcut_pos, keys.clone(), muted);
+        }
     }
 }
 
