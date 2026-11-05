@@ -1,5 +1,6 @@
-//! The Rerun-like example (`docs/rerun-like.md`): its kits are clean and
-//! readable, its keys clash with nothing, a selection made anywhere shows
+//! The Rerun-like example (`docs/rerun-like.md`): its kit is clean and
+//! readable in both variants, the light or dark setting switches them,
+//! its keys clash with nothing, a selection made anywhere shows
 //! everywhere, and its two snapshots (`rerun-like-dark`,
 //! `rerun-like-light`).
 
@@ -37,24 +38,53 @@ fn viewer(spec: ThemeSpec) -> (Harness<'static, App>, Rc<RefCell<Model>>) {
 }
 
 #[test]
-fn the_kits_are_clean_and_readable() {
-    for k in rerun_like::kits() {
-        let problems = kit::check(&k);
-        assert!(problems.is_empty(), "{}: {problems:?}", k.name);
-        let mut themes = Themes::default();
-        themes.add_kit(&k);
-        let tokens = themes.resolve(&ThemeSpec::new(k.name.clone()));
+fn the_kit_is_clean_and_readable() {
+    let k = rerun_like::kit();
+    let problems = kit::check(&k);
+    assert!(problems.is_empty(), "{problems:?}");
+    // One kit, both variants, each the other's counterpart.
+    assert_eq!(k.name, DARK);
+    assert_eq!(k.counterpart.as_ref().map(|c| c.name.as_str()), Some(LIGHT));
+    let mut themes = Themes::default();
+    themes.add_kit(&k);
+    assert_eq!(themes.counterpart_of(DARK), Some(LIGHT));
+    assert_eq!(themes.counterpart_of(LIGHT), Some(DARK));
+    for name in [DARK, LIGHT] {
+        let tokens = themes.resolve(&ThemeSpec::new(name));
         let failures = contrast::check(&tokens, Level::Normal);
-        assert!(failures.is_empty(), "{}: {failures:#?}", k.name);
+        assert!(failures.is_empty(), "{name}: {failures:#?}");
         // Their charts' hues, fitted to their surfaces, stay apart.
         let apart = contrast::check_category(&tokens);
-        assert!(apart.is_empty(), "{}: {apart:#?}", k.name);
+        assert!(apart.is_empty(), "{name}: {apart:#?}");
     }
 }
 
 #[test]
+fn the_light_or_dark_setting_switches_the_variant() {
+    let (mut h, _) = viewer(ThemeSpec::new(DARK));
+    h.run();
+    let base = |h: &Harness<'static, App>| {
+        egui_pop::theme::Tokens::of(&h.ctx)
+            .resolved()
+            .spec()
+            .base
+            .clone()
+    };
+    let service = h.state().handle().theme();
+    assert_eq!(service.counterpart().as_deref(), Some(LIGHT));
+    let names: Vec<String> = service.kits().iter().map(|k| k.name.clone()).collect();
+    assert_eq!(names, [DARK, LIGHT]);
+    service.set_preference(egui::ThemePreference::Light);
+    h.run();
+    assert_eq!(base(&h), LIGHT);
+    service.set_preference(egui::ThemePreference::Dark);
+    h.run();
+    assert_eq!(base(&h), DARK);
+}
+
+#[test]
 fn the_viewer_builds_clean() {
-    let (mut h, _) = viewer(ThemeSpec::pair(DARK, LIGHT));
+    let (mut h, _) = viewer(ThemeSpec::new(DARK));
     h.run();
     let app = h.state();
     assert!(
@@ -77,7 +107,7 @@ fn the_viewer_builds_clean() {
 
 #[test]
 fn a_selection_in_the_tree_shows_everywhere() {
-    let (mut h, model) = viewer(ThemeSpec::pair(DARK, LIGHT));
+    let (mut h, model) = viewer(ThemeSpec::new(DARK));
     h.run();
     // The user picks /camera/detections in the blueprint.
     let key = rerun_like::entity_key(View::Camera, 4);
@@ -102,7 +132,7 @@ fn a_selection_in_the_tree_shows_everywhere() {
 
 #[test]
 fn playback_runs_from_commands() {
-    let (mut h, model) = viewer(ThemeSpec::pair(DARK, LIGHT));
+    let (mut h, model) = viewer(ThemeSpec::new(DARK));
     h.run();
     let start = model.borrow().at();
     let app = h.state_mut();
@@ -127,10 +157,12 @@ fn playback_runs_from_commands() {
 fn snapshots() {
     let mut results = egui_kittest::SnapshotResults::new();
     for (name, spec) in [
-        ("rerun-like-dark", ThemeSpec::pair(DARK, LIGHT)),
-        ("rerun-like-light", ThemeSpec::pair(LIGHT, DARK)),
+        ("rerun-like-dark", egui::ThemePreference::Dark),
+        ("rerun-like-light", egui::ThemePreference::Light),
     ] {
-        let (mut h, model) = viewer(spec);
+        // The kit's variants, as the light or dark setting picks them.
+        let (mut h, model) = viewer(ThemeSpec::new(DARK));
+        h.state().handle().theme().set_preference(spec);
         h.run();
         // Something selected, as a user would have.
         model.borrow_mut().select(Some(Item::Entity(1)));

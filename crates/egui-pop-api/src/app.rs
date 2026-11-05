@@ -269,8 +269,8 @@ impl ThemeService {
     }
 
     /// The kits added (`AppBuilder::kit`, then the user's kits), each a
-    /// theme of [`ThemeService::themes`] under its name: what a theme
-    /// picker lists.
+    /// theme of [`ThemeService::themes`] under its name, a kit holding
+    /// both variants listed once per variant: what a theme picker lists.
     pub fn kits(&self) -> &[egui_pop_core::tokens::kit::KitInfo] {
         &self.kits
     }
@@ -3350,7 +3350,7 @@ impl AppBuilder {
                 }
             }
         }
-        let infos = kits.iter().map(|k| k.data.info()).collect();
+        let infos = kits.iter().flat_map(|k| k.data.infos()).collect();
         app.kits = kits;
         app.reg.offered = self.offered_commands.iter().cloned().collect();
         app.framework(

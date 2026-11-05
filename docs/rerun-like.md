@@ -65,16 +65,17 @@ selection, Reset viewer, and the panels' own focus and toggle commands.
 
 ## The theme: Rerun-like Dark and Light
 
-Two kits, `examples/kits/rerun-like-dark` and
-`examples/kits/rerun-like-light`, each naming the other as its
-counterpart (`org.egui-pop.variant-of`), so the viewer starts with
-`ThemeSpec::pair("rerun-like-dark", "rerun-like-light")` and the View
-menu's light and dark toggle (and the settings' light, dark or
-system choice) switches between them. The settings have no theme
-picker: another theme is picked in code (`ThemeService::kits` lists the
-kits for an application's own picker). Data only; each
-records its source (repository, files, commit, licence) in
-`org.egui-pop.source`.
+One kit, `examples/kits/rerun-like`, holding both variants: its
+`kit.yaml` is Rerun-like Dark and carries Rerun-like Light as its
+counterpart (the manifest's `counterpart`), and `shared.tokens.yaml`
+holds what the two share (sizes, radii, type, the tab bar, the section
+bands). The viewer starts with `ThemeSpec::new("rerun-like-dark")`, and
+the View menu's light and dark toggle (and the settings' light, dark or
+system choice) switches between the variants. The settings have no
+theme picker: another theme is picked in code (`ThemeService::kits`
+lists the kits, a variant each, for an application's own picker). Data
+only; each variant records its source (repository, files, commit,
+licence) in `org.egui-pop.source`.
 
 What was taken from `re_ui` (`dark_theme.ron`, `light_theme.ron`,
 `color_table.ron`, `design_tokens.rs`), token values only:
@@ -156,13 +157,14 @@ worked around, then the small things.
    chart component and no categorical data palette among its tokens:
    the entities' colours are the example's own. Both exist now
    ([Charts](plot.md), [the categorical palette](tokens.md#the-categorical-palette)),
-   and the two kits give their own hues (`chart.*`, fitted to Rerun's
+   and the kit's two variants give their own hues (`chart.*`, fitted to Rerun's
    surfaces); the example still paints its time series and keeps its
    colours, until it moves to `Plot` with the timeline.
-7. **A kit is one variant.** A kit package holds one theme: the light
-   and dark pair is two kit folders naming each other. A token file
-   can carry its counterpart (`org.egui-pop.counterpart`), a kit
-   cannot.
+7. **A kit is one variant** (solved). A kit package held one theme: the
+   light and dark pair was two kit folders naming each other. A kit's
+   manifest may carry its other variant now (`counterpart`), switched
+   by the light, dark or system setting: the example's two folders are
+   one kit.
 8. **The top bar's zone is after the menus only** (solved). Its blocks
    keep the width they took, after the menus; content at the bar's end
    went through `MENU_BAR_END`, as commands only, where Rerun has its
@@ -183,5 +185,5 @@ worked around, then the small things.
 11. **Contrast.** Rerun's subdued text (`#555555` on `#0d0d0d`), its
     error red (`#ab0116`), its focus outline and its accent under white
     text fail egui-pop's AA contrast checks (`contrast::check`, which the
-    example's test runs on both kits); the kits lift them, so the dark
+    example's test runs on both variants); the kit lifts them, so the dark
     kit's muted text and accent are lighter than Rerun's.

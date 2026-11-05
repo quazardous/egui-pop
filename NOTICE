@@ -75,9 +75,8 @@ commit, licence) under "$extensions" -> "org.egui-pop.source".
 Rerun-like kits
 ---------------
 
-The example kits examples/kits/rerun-like-dark and
-examples/kits/rerun-like-light (data only, not in any published crate)
-reuse token values (colours, sizes, font sizes) from the design tokens of
+The example kit examples/kits/rerun-like, dark and light (data only,
+not in any published crate), reuses token values (colours, sizes, font sizes) from the design tokens of
 the Rerun viewer's re_ui crate (https://github.com/rerun-io/rerun,
 crates/ui_tools/re_ui: data/dark_theme.ron, data/light_theme.ron,
 data/color_table.ron, src/design_tokens.rs), Copyright (c) Rerun

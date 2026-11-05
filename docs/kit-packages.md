@@ -54,6 +54,40 @@ Every key is optional. `name` is the kit's theme name (the folder's name
 otherwise; a built-in theme's name gets `-kit` added); `label` is its
 name for people.
 
+**Both variants in one kit.** A kit may hold its light and its dark
+variant: the manifest's `counterpart` gives the other variant's `name`,
+`label` and `tokens` (a token tree, as a theme file's, with its own
+`$extends`; `pop-dark` when not given, so a light variant says
+`pop-light`). It becomes a theme of its own, each variant naming the
+other as its counterpart (`org.egui-pop.variant-of`, set for you), so
+`ThemeSpec::new("brand-dark")` starts on the kit's own variant and the
+light, dark or system setting (the View menu's toggle, the settings)
+switches to the other without a second kit folder. `kit.yaml`'s own
+tokens are its variant's; the folder's other token files and its faces
+serve both, a token the variant gives itself winning (reported as a
+repeat, as in `kit.yaml`). `KitData::counterpart` holds it,
+`Themes::add_kit` and `AppBuilder::kit` add both themes, and
+`KitData::infos` (`ThemeService::kits`) lists both. A `counterpart`
+that cannot be used (no `name` or `tokens`, the kit's own or a built-in
+theme's name) is a `Problem::Manifest`, the kit keeping one variant.
+
+```yaml
+$extends: "pop-dark"
+$extensions:
+  org.egui-pop.kit:
+    name: "brand-dark"
+    label: "Brand Dark"
+    counterpart:
+      name: "brand-light"
+      label: "Brand Light"
+      tokens:
+        $extends: "pop-light"
+        surface:
+          panel: {$type: "color", $value: "#fafafa"}
+surface:
+  panel: {$type: "color", $value: "#101010"}
+```
+
 **Faces.** A face's family and weight come from its manifest entry, or
 else from its file name: `Family-Weight.ext`, the weight a CSS name
 (`Thin`, `ExtraLight`, `Light`, `Regular`, `Medium`, `SemiBold`, `Bold`,

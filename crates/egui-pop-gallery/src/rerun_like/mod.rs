@@ -3,7 +3,7 @@
 //! components, to see what egui-pop's application model lacks for such an
 //! application (`docs/rerun-like.md`). Not pixel-perfect, and no Rerun
 //! code: its theme is a kit made from the token values of Rerun's `re_ui`
-//! (`examples/kits/rerun-like-dark`, `rerun-like-light`).
+//! (`examples/kits/rerun-like`, dark and light in one kit).
 //!
 //! - a top bar: the menus; at its end the recording, play and pause, the
 //!   time, the panel toggles;
@@ -71,12 +71,13 @@ pub fn view_panel(view: View) -> PanelId {
     .expect("a valid panel id")
 }
 
-/// The kits: Rerun-like Dark and Light, each the other's counterpart.
-pub fn kits() -> [KitData; 2] {
-    [
-        egui_pop::tokens::kit!("../../../../examples/kits/rerun-like-dark"),
-        egui_pop::tokens::kit!("../../../../examples/kits/rerun-like-light"),
-    ]
+/// The kit: Rerun-like Dark, carrying Rerun-like Light as its
+/// counterpart.
+pub fn kit() -> KitData {
+    egui_pop::tokens::kit!(
+        "../../../../examples/kits/rerun-like",
+        tokens = ["shared.tokens.yaml"]
+    )
 }
 
 /// What is selected.
@@ -548,11 +549,11 @@ pub fn layout() -> Layout {
 }
 
 /// The application, before it is built: the default plugins, the views'
-/// plugin, the viewer, the two kits, Rerun-like Dark first; its layout,
-/// every area frameless (Rerun's panels run to the window's edges, a
-/// line between them).
+/// plugin, the viewer, the kit, Rerun-like Dark first (the light, dark
+/// or system setting switches to its counterpart); its layout, every area
+/// frameless (Rerun's panels run to the window's edges, a line between
+/// them).
 pub fn builder(viewer: RerunLike) -> AppBuilder {
-    let [dark, light] = kits();
     App::builder()
         .name("Rerun-like viewer")
         .layout(layout())
@@ -560,7 +561,6 @@ pub fn builder(viewer: RerunLike) -> AppBuilder {
         .plugins(DefaultPlugins)
         .plugin(egui_pop::views::ViewsPlugin)
         .plugin(viewer)
-        .kit(dark)
-        .kit(light)
-        .theme(ThemeSpec::pair(DARK, LIGHT))
+        .kit(kit())
+        .theme(ThemeSpec::new(DARK))
 }

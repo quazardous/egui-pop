@@ -1,6 +1,6 @@
 //! Kits as packages: folders and embedded kits read the same, problems
-//! are reported and never stop a kit, user kits are found, and the
-//! default kit is a kit folder.
+//! are reported and never stop a kit, user kits are found, the default
+//! kit is a kit folder, and a kit may hold both its variants.
 
 use egui_pop_tokens::kit::{self, KitData, Origin, Problem};
 use egui_pop_tokens::{Error, ThemeSpec, Themes};
@@ -185,6 +185,143 @@ fn the_example_kits_are_clean() {
     let macos = egui_pop_tokens::kit!("../../../examples/kits/flavour-macos");
     assert!(kit::check(&macos).is_empty(), "{:?}", kit::check(&macos));
     assert_eq!(macos.name, "flavour-macos");
+    let rerun = egui_pop_tokens::kit!(
+        "../../../examples/kits/rerun-like",
+        tokens = ["shared.tokens.yaml"]
+    );
+    assert!(kit::check(&rerun).is_empty(), "{:?}", kit::check(&rerun));
+    assert_eq!(rerun.name, "rerun-like-dark");
+    assert_eq!(
+        rerun.counterpart.as_ref().map(|c| c.name.as_str()),
+        Some("rerun-like-light")
+    );
+}
+
+const PAIR: &str = r##"
+$extends: "pop-dark"
+$extensions:
+  org.egui-pop.kit:
+    name: "brand-dark"
+    label: "Brand Dark"
+    counterpart:
+      name: "brand-light"
+      label: "Brand Light"
+      tokens:
+        $description: "The light one."
+        $extends: "pop-light"
+        surface:
+          panel: {$type: "color", $value: "#fafafa"}
+surface:
+  panel: {$type: "color", $value: "#101010"}
+"##;
+
+const SHARED: &str = r##"
+tab:
+  padding-x: {$type: "dimension", $value: {value: 13, unit: "px"}}
+"##;
+
+fn pair() -> KitData {
+    KitData::embedded(kit::Embedded {
+        dir: "kits/brand",
+        kit: PAIR,
+        tokens: vec![("tab.tokens.yaml".into(), SHARED)],
+        fonts: Vec::new(),
+        license: None,
+    })
+}
+
+#[test]
+fn a_kit_holds_both_variants_in_one_manifest() {
+    let kit = pair();
+    assert!(kit::check(&kit).is_empty(), "{:?}", kit::check(&kit));
+    assert_eq!(kit.name, "brand-dark");
+    let light = kit.counterpart.as_ref().expect("the light variant");
+    assert_eq!(light.name, "brand-light");
+    assert_eq!(light.display_name(), "Brand Light");
+    assert_eq!(light.theme.extends.as_deref(), Some("pop-light"));
+    assert_eq!(light.theme.description.as_deref(), Some("The light one."));
+    // The other token files serve both variants; kit.yaml's own tokens
+    // are its variant's.
+    assert!(kit.theme.tokens.contains_key("tab.padding-x"));
+    assert!(light.theme.tokens.contains_key("tab.padding-x"));
+    // Two themes, each the other's counterpart.
+    let mut themes = Themes::default();
+    themes.add_kit(&kit);
+    assert_eq!(themes.counterpart_of("brand-dark"), Some("brand-light"));
+    assert_eq!(themes.counterpart_of("brand-light"), Some("brand-dark"));
+    let dark = themes.resolve(&ThemeSpec::new("brand-dark"));
+    let light = themes.resolve(&ThemeSpec::new("brand-light"));
+    assert_eq!(
+        dark.color("surface.panel").map(|c| c.to_hex()),
+        Some("#101010".into())
+    );
+    assert_eq!(
+        light.color("surface.panel").map(|c| c.to_hex()),
+        Some("#fafafa".into())
+    );
+    assert_eq!(light.dimension("tab.padding-x"), Some(13.0));
+    // A picker lists both.
+    let infos: Vec<(String, String)> = kit.infos().into_iter().map(|i| (i.name, i.label)).collect();
+    assert_eq!(
+        infos,
+        [
+            ("brand-dark".to_string(), "Brand Dark".to_string()),
+            ("brand-light".to_string(), "Brand Light".to_string())
+        ]
+    );
+}
+
+#[test]
+fn a_counterpart_that_cannot_be_used_leaves_the_kit_one_variant() {
+    for (counterpart, why) in [
+        (r#"{name: "x-light"}"#, "needs a `name` and its `tokens`"),
+        (r#"{tokens: {}}"#, "needs a `name` and its `tokens`"),
+        (r#""x-light""#, "is not a map"),
+        (r#"{name: "x", tokens: {}}"#, "the kit's own name"),
+        (
+            r#"{name: "pop-light", tokens: {}}"#,
+            "a built-in theme's name",
+        ),
+        (r#"{name: "a/b", tokens: {}}"#, "may not contain"),
+    ] {
+        let text = format!(
+            "$extensions:\n  org.egui-pop.kit:\n    name: \"x\"\n    counterpart: {counterpart}\n"
+        );
+        let kit = KitData::from_text("x", &text);
+        assert!(kit.counterpart.is_none(), "{counterpart}");
+        let reported = kit
+            .problems()
+            .iter()
+            .any(|p| matches!(p, Problem::Manifest { reason } if reason.contains(why)));
+        assert!(reported, "{counterpart}: {:?}", kit.problems());
+        // Still a kit, of one theme.
+        assert_eq!(kit.name, "x");
+    }
+}
+
+#[test]
+fn a_counterpart_token_outside_the_vocabulary_is_reported() {
+    let kit = KitData::from_text(
+        "x",
+        r##"
+$extensions:
+  org.egui-pop.kit:
+    counterpart:
+      name: "x-light"
+      tokens:
+        tab:
+          rest:
+            fil: {$type: "color", $value: "#000000"}
+"##,
+    );
+    assert!(kit.counterpart.is_some());
+    assert!(
+        kit.problems()
+            .iter()
+            .any(|p| matches!(p, Problem::UnknownTerm { path, .. } if path == "tab.rest.fil")),
+        "{:?}",
+        kit.problems()
+    );
 }
 
 #[test]

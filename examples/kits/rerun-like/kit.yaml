@@ -1,0 +1,277 @@
+$description: "Rerun-like, dark: the look of the Rerun viewer, from the design tokens of its re_ui crate (dark_theme.ron, color_table.ron and design_tokens.rs; MIT OR Apache-2.0, Copyright (c) Rerun Technologies AB). Token values only, no code; not affiliated with or endorsed by Rerun. Data only."
+$extends: "pop-dark"
+$extensions:
+  org.egui-pop.kit:
+    name: "rerun-like-dark"
+    label: "Rerun-like Dark"
+    counterpart:
+      name: "rerun-like-light"
+      label: "Rerun-like Light"
+      tokens:
+        $description: "Rerun-like, light: the light theme of the Rerun viewer, from the design tokens of its re_ui crate (light_theme.ron, color_table.ron and design_tokens.rs; MIT OR Apache-2.0, Copyright (c) Rerun Technologies AB). Token values only, no code; not affiliated with or endorsed by Rerun. Data only."
+        $extends: "pop-light"
+        $extensions:
+          org.egui-pop.source:
+            repository: "https://github.com/rerun-io/rerun"
+            file: "crates/ui_tools/re_ui/data/light_theme.ron, color_table.ron; src/design_tokens.rs"
+            commit: "7b47acca058797138e5247cd98728557eeeb5107"
+            license: "MIT OR Apache-2.0"
+            note: "Rerun's grey scale runs the other way in its light theme: Gray.1000 is the paper, Gray.0 the ink."
+        gray:
+          $type: "color"
+          $description: "Rerun's neutral greys, white paper first."
+          "0": {$value: "#ffffff", $description: "Gray.1000: panel_bg_color, top_bar_color, viewport_background"}
+          "1": {$value: "#fafafa", $description: "Gray.975"}
+          "2": {$value: "#f5f5f5", $description: "Gray.950: list_item_hovered_bg"}
+          "3": {$value: "#eeeeed", $description: "Gray.900: faint_bg_color"}
+          "4": {$value: "#e6e6e5", $description: "Gray.850: widget_hovered_color"}
+          "5": {$value: "#e0dfdf", $description: "Gray.800"}
+          "6": {$value: "#bfbfbf", $description: "Gray.700: divider_stroke"}
+          "7": {$value: "#adadad", $description: "Gray.650"}
+          "8": {$value: "#939090", $description: "Gray.550"}
+          "9": {$value: "#737070", $description: "Gray.450"}
+          "10": {$value: "#555555", $description: "Gray.375"}
+          "11": {$value: "#272626", $description: "Gray.250: text_default"}
+          "12": {$value: "#000000", $description: "Gray.0: text_strong"}
+        blue:
+          $type: "color"
+          $description: "Rerun's Blue scale, light side first; step 9 is selection_bg_fill (Blue.500)."
+          "1": {$value: "#fcfdff", $description: "Blue.975"}
+          "2": {$value: "#f9faff", $description: "Blue.950"}
+          "3": {$value: "#f0f2ff", $description: "Blue.900"}
+          "4": {$value: "#e4e7ff", $description: "Blue.850"}
+          "5": {$value: "#d4dbff", $description: "Blue.800"}
+          "6": {$value: "#c2ccff", $description: "Blue.750"}
+          "7": {$value: "#96a8ff", $description: "Blue.650"}
+          "8": {$value: "#005ae6", $description: "Blue.450"}
+          "9": {$value: "#186add", $description: "Blue.500: selection_bg_fill"}
+          "10": {$value: "#0062f9", $description: "Blue.475 (Rerun's hover, Blue.525, is too light under white text)"}
+          "11": {$value: "#003084", $description: "Blue.300: info_text_color"}
+          "12": {$value: "#000c30", $description: "Blue.100"}
+          contrast: {$value: "#ffffff"}
+        green:
+          $type: "color"
+          $description: "Rerun's Green scale, light side first; step 11 is success_text_color (Green.300)."
+          "1": {$value: "#f7fff9"}
+          "2": {$value: "#ebfff1"}
+          "3": {$value: "#caffdc"}
+          "4": {$value: "#b2ffcd"}
+          "5": {$value: "#91ffbb"}
+          "6": {$value: "#5cffa5"}
+          "7": {$value: "#00ec89"}
+          "8": {$value: "#007f47"}
+          "9": {$value: "#00894d"}
+          "10": {$value: "#009353"}
+          "11": {$value: "#004021"}
+          "12": {$value: "#001306"}
+          contrast: {$value: "#000000"}
+        red:
+          $type: "color"
+          $description: "Rerun's Red scale, light side first."
+          "1": {$value: "#fffcfd"}
+          "2": {$value: "#fff9f9"}
+          "3": {$value: "#ffeff0"}
+          "4": {$value: "#ffe2e5"}
+          "5": {$value: "#ffd1d6"}
+          "6": {$value: "#ffbdc5"}
+          "7": {$value: "#ff99a6"}
+          "8": {$value: "#db0049"}
+          "9": {$value: "#ec004f"}
+          "10": {$value: "#fd0056"}
+          "11": {$value: "#ab0037"}
+          "12": {$value: "#480012"}
+          contrast: {$value: "#ffffff"}
+        surface:
+          $type: "color"
+          canvas: {$value: "{gray.0}"}
+          panel: {$value: "{gray.0}"}
+          raised: {$value: "{gray.2}"}
+          hover: {$value: "{gray.4}"}
+          active: {$value: "{gray.5}"}
+          overlay: {$value: "{gray.0}"}
+          sunken: {$value: "{gray.3}"}
+        border:
+          $type: "color"
+          default: {$value: "{gray.5}", $description: "Gray.800: Rerun's divider is Gray.700 at half a point; a full point of it would not set the accent apart on a track"}
+          strong: {$value: "{gray.9}"}
+        selection:
+          $type: "color"
+          $value: "{blue.5}"
+          $description: "Blue.800: a selection under ordinary text; selected rows take Rerun's selection_bg_fill (list-row)."
+        warning:
+          $type: "color"
+          $value: "#b35000"
+          $description: "warn_fg_color (#FF7A0C) darkened in OKLCH for contrast on white."
+        focus:
+          $type: "color"
+          ring: {$value: "{blue.9}"}
+        button:
+          rest:
+            fill: {$type: "color", $value: "{gray.4}"}
+            border-width: {$type: "dimension", $value: {value: 0, unit: "px"}}
+          hover:
+            fill: {$type: "color", $value: "{gray.5}"}
+        tab:
+          padding-x: {$type: "dimension", $value: {value: 12, unit: "px"}}
+          rest:
+            fill: {$type: "color", $value: "{surface.panel}"}
+            border-width: {$type: "dimension", $value: {value: 0, unit: "px"}}
+            text: {$type: "color", $value: "{gray.10}"}
+          hover:
+            text: {$type: "color", $value: "{gray.11}"}
+          selected:
+            fill: {$type: "color", $value: "{surface.panel}"}
+            text: {$type: "color", $value: "{gray.12}"}
+        list-row:
+          rest:
+            text: {$type: "color", $value: "{text.default}"}
+          hover:
+            fill: {$type: "color", $value: "{gray.2}", $description: "list_item_hovered_bg"}
+          selected:
+            fill: {$type: "color", $value: "{blue.9}", $description: "selection_bg_fill (Blue.500)"}
+            text: {$type: "color", $value: "{blue.contrast}"}
+        chart:
+          $type: "color"
+          $description: "The categorical palette's hues (palette.category aliases them, in order), egui-pop's own hue per slot with its lightness fitted to Rerun's white surfaces: 3:1 on them, and apart as contrast::check_category asks."
+          blue: {$value: "#066899"}
+          orange: {$value: "#cd7804"}
+          green: {$value: "#01553e"}
+          pink: {$value: "#912a8f"}
+          olive: {$value: "#746304"}
+          periwinkle: {$value: "#3e2da4"}
+          lime: {$value: "#449504"}
+          red: {$value: "#e85881"}
+          teal: {$value: "#069bb2"}
+          purple: {$value: "#8960da"}
+  org.egui-pop.source:
+    repository: "https://github.com/rerun-io/rerun"
+    file: "crates/ui_tools/re_ui/data/dark_theme.ron, color_table.ron; src/design_tokens.rs"
+    commit: "7b47acca058797138e5247cd98728557eeeb5107"
+    license: "MIT OR Apache-2.0"
+    note: "Rerun's 0 to 1000 grey scale mapped onto egui-pop's 0 to 12 steps; the muted text moved from Gray.375 to Gray.600 for contrast (Rerun's own tab text)."
+gray:
+  $type: "color"
+  $description: "Rerun's neutral greys (Gray.0 to Gray.1000), step by step."
+  "0": {$value: "#000000", $description: "Gray.0: extreme_bg_color"}
+  "1": {$value: "#080808", $description: "Gray.50"}
+  "2": {$value: "#0d0d0d", $description: "Gray.100: panel_bg_color, top_bar_color, viewport_background"}
+  "3": {$value: "#171717", $description: "Gray.150: faint_bg_color, list_item_hovered_bg, card_fill"}
+  "4": {$value: "#212121", $description: "Gray.200: plot_grid_color, notification_background_color"}
+  "5": {$value: "#272626", $description: "Gray.250: widget_hovered_color"}
+  "6": {$value: "#353434", $description: "divider_stroke"}
+  "7": {$value: "#454545", $description: "Gray.350: control_fill"}
+  "8": {$value: "#646363", $description: "Gray.400: text_readonly"}
+  "9": {$value: "#827f7f", $description: "Gray.500: list_item_default_icon"}
+  "10": {$value: "#9f9f9f", $description: "Gray.600: the tab's text"}
+  "11": {$value: "#cccccc", $description: "Gray.725: text_default"}
+  "12": {$value: "#ffffff", $description: "Gray.1000: text_strong"}
+blue:
+  $type: "color"
+  $description: "Rerun's Blue scale; step 9 is selection_bg_fill (Blue.500)."
+  "1": {$value: "#00051c", $description: "Blue.50"}
+  "2": {$value: "#000c30", $description: "Blue.100"}
+  "3": {$value: "#001b53", $description: "Blue.200"}
+  "4": {$value: "#003084", $description: "Blue.300"}
+  "5": {$value: "#003da1", $description: "Blue.350"}
+  "6": {$value: "#004bc2", $description: "Blue.400: focus_outline_stroke"}
+  "7": {$value: "#005ae6", $description: "Blue.450"}
+  "8": {$value: "#4676ff", $description: "Blue.525"}
+  "9": {$value: "#5a81ff", $description: "Blue.550: Rerun's accent (Blue.500, #186add) one step lighter, so that it reads as text on the panel and carries dark text"}
+  "10": {$value: "#6b8bff", $description: "Blue.575"}
+  "11": {$value: "#adbbff", $description: "Blue.700: info_text_color"}
+  "12": {$value: "#f0f2ff", $description: "Blue.900: text_color_on_primary"}
+  contrast: {$value: "{gray.0}", $description: "Text on step 9."}
+green:
+  $type: "color"
+  $description: "Rerun's Green scale; step 11 is success_text_color (Green.700)."
+  "1": {$value: "#000803"}
+  "2": {$value: "#001306"}
+  "3": {$value: "#002611"}
+  "4": {$value: "#004021"}
+  "5": {$value: "#00502b"}
+  "6": {$value: "#006236"}
+  "7": {$value: "#007541"}
+  "8": {$value: "#007f47"}
+  "9": {$value: "#00894d"}
+  "10": {$value: "#009353"}
+  "11": {$value: "#00da7e"}
+  "12": {$value: "#caffdc"}
+  contrast: {$value: "{gray.0}"}
+red:
+  $type: "color"
+  $description: "Rerun's Red scale (alert_error uses Red.500)."
+  "1": {$value: "#170003"}
+  "2": {$value: "#290007"}
+  "3": {$value: "#480012"}
+  "4": {$value: "#730022"}
+  "5": {$value: "#8e002c"}
+  "6": {$value: "#ab0037"}
+  "7": {$value: "#cb0043"}
+  "8": {$value: "#db0049"}
+  "9": {$value: "#ec004f"}
+  "10": {$value: "#fd0056"}
+  "11": {$value: "#ff6981"}
+  "12": {$value: "#ffeff0"}
+  contrast: {$value: "{gray.12}"}
+surface:
+  $type: "color"
+  canvas: {$value: "{gray.2}"}
+  panel: {$value: "{gray.2}"}
+  raised: {$value: "{gray.3}"}
+  hover: {$value: "{gray.5}"}
+  active: {$value: "{gray.6}"}
+  overlay: {$value: "{gray.3}"}
+  sunken: {$value: "{gray.0}"}
+border:
+  $type: "color"
+  default: {$value: "{gray.6}"}
+  strong: {$value: "{gray.9}"}
+selection:
+  $type: "color"
+  $value: "{blue.5}"
+  $description: "Blue.350: a selection under ordinary text; selected rows take Rerun's selection_bg_fill (list-row)."
+warning:
+  $type: "color"
+  $value: "#ff7a0c"
+  $description: "warn_fg_color"
+focus:
+  $type: "color"
+  ring: {$value: "{blue.9}", $description: "Rerun's focus_outline_stroke (Blue.400) is too dark on the panel"}
+button:
+  rest:
+    fill: {$type: "color", $value: "{gray.5}", $description: "button_secondary.fill (Gray.300 in Rerun)"}
+    border-width: {$type: "dimension", $value: {value: 0, unit: "px"}}
+  hover:
+    fill: {$type: "color", $value: "{gray.4}"}
+tab:
+  padding-x: {$type: "dimension", $value: {value: 12, unit: "px"}}
+  rest:
+    fill: {$type: "color", $value: "{surface.panel}"}
+    border-width: {$type: "dimension", $value: {value: 0, unit: "px"}}
+    text: {$type: "color", $value: "{gray.10}", $description: "tab.text (Gray.600)"}
+  hover:
+    text: {$type: "color", $value: "#bfbfbf", $description: "tab.text_hovered (Gray.700)"}
+  selected:
+    fill: {$type: "color", $value: "{surface.panel}"}
+    text: {$type: "color", $value: "#e0dfdf", $description: "tab.text_selected (Gray.800)"}
+list-row:
+  rest:
+    text: {$type: "color", $value: "{text.default}"}
+  hover:
+    fill: {$type: "color", $value: "{gray.3}", $description: "list_item_hovered_bg"}
+  selected:
+    fill: {$type: "color", $value: "#186add", $description: "selection_bg_fill (Blue.500)"}
+    text: {$type: "color", $value: "{gray.12}"}
+chart:
+  $type: "color"
+  $description: "The categorical palette's hues (palette.category aliases them, in order), egui-pop's own hue per slot with its lightness fitted to Rerun's dark surfaces: 3:1 on them, and apart as contrast::check_category asks."
+  blue: {$value: "#18b1ff"}
+  orange: {$value: "#e88405"}
+  green: {$value: "#09c88a"}
+  pink: {$value: "#b246a6"}
+  olive: {$value: "#787604"}
+  periwinkle: {$value: "#bec3ff"}
+  lime: {$value: "#afe658"}
+  red: {$value: "#e04f60"}
+  teal: {$value: "#02929a"}
+  purple: {$value: "#ae8afe"}
