@@ -3,8 +3,9 @@
 
 use std::fmt;
 
-use crate::ResolvedTokens;
 pub use crate::color::contrast_ratio;
+use crate::contract::CATEGORY;
+use crate::{Color, ResolvedTokens};
 
 /// What a pair is: text to read, or a user-interface part to see.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -241,6 +242,38 @@ pub const PAIRS: &[Pair] = &[
     ui("curve.point", "curve.background"),
     // A selected node's outline over the node.
     ui("graph.node-selected", "graph.node"),
+    // The categorical palette's series, on the surfaces charts are
+    // drawn on (WCAG 1.4.11, a graphical object).
+    ui("palette.category.0", "surface.canvas"),
+    ui("palette.category.0", "surface.panel"),
+    ui("palette.category.0", "surface.raised"),
+    ui("palette.category.1", "surface.canvas"),
+    ui("palette.category.1", "surface.panel"),
+    ui("palette.category.1", "surface.raised"),
+    ui("palette.category.2", "surface.canvas"),
+    ui("palette.category.2", "surface.panel"),
+    ui("palette.category.2", "surface.raised"),
+    ui("palette.category.3", "surface.canvas"),
+    ui("palette.category.3", "surface.panel"),
+    ui("palette.category.3", "surface.raised"),
+    ui("palette.category.4", "surface.canvas"),
+    ui("palette.category.4", "surface.panel"),
+    ui("palette.category.4", "surface.raised"),
+    ui("palette.category.5", "surface.canvas"),
+    ui("palette.category.5", "surface.panel"),
+    ui("palette.category.5", "surface.raised"),
+    ui("palette.category.6", "surface.canvas"),
+    ui("palette.category.6", "surface.panel"),
+    ui("palette.category.6", "surface.raised"),
+    ui("palette.category.7", "surface.canvas"),
+    ui("palette.category.7", "surface.panel"),
+    ui("palette.category.7", "surface.raised"),
+    ui("palette.category.8", "surface.canvas"),
+    ui("palette.category.8", "surface.panel"),
+    ui("palette.category.8", "surface.raised"),
+    ui("palette.category.9", "surface.canvas"),
+    ui("palette.category.9", "surface.panel"),
+    ui("palette.category.9", "surface.raised"),
 ];
 
 /// A pair under its required ratio, or with a token missing.
@@ -292,4 +325,133 @@ pub fn check(tokens: &ResolvedTokens, level: Level) -> Vec<Failure> {
             })
         })
         .collect()
+}
+
+/// How a colour is seen, for telling the categorical palette's slots
+/// apart.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Vision {
+    /// Full colour vision.
+    Normal,
+    /// No long-wavelength (red) cones.
+    Protanopia,
+    /// No medium-wavelength (green) cones.
+    Deuteranopia,
+}
+
+impl Vision {
+    pub const ALL: [Vision; 3] = [Vision::Normal, Vision::Protanopia, Vision::Deuteranopia];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Vision::Normal => "normal vision",
+            Vision::Protanopia => "protanopia",
+            Vision::Deuteranopia => "deuteranopia",
+        }
+    }
+
+    /// The colour as seen with this vision: Machado, Oliveira and
+    /// Fernandes' model (2009) at severity 1, in linear light.
+    pub fn simulate(self, c: Color) -> Color {
+        const PROTAN: [[f64; 3]; 3] = [
+            [0.152_286, 1.052_583, -0.204_868],
+            [0.114_503, 0.786_281, 0.099_216],
+            [-0.003_882, -0.048_116, 1.051_998],
+        ];
+        const DEUTAN: [[f64; 3]; 3] = [
+            [0.367_322, 0.860_646, -0.227_968],
+            [0.280_085, 0.672_501, 0.047_413],
+            [-0.011_820, 0.042_940, 0.968_881],
+        ];
+        let m = match self {
+            Vision::Normal => return c,
+            Vision::Protanopia => &PROTAN,
+            Vision::Deuteranopia => &DEUTAN,
+        };
+        let rgb = c.to_linear();
+        let row = |i: usize| {
+            (m[i][0] * rgb[0] + m[i][1] * rgb[1] + m[i][2] * rgb[2]).clamp(0.0, 1.0) as f32
+        };
+        Color::from_linear(row(0), row(1), row(2), c.a)
+    }
+}
+
+/// The perceptual distance between two colours, as seen with `vision`:
+/// the Euclidean distance in OKLab, times 100 (ΔE OK). About 2 is the
+/// smallest difference seen side by side; categorical palettes aim for
+/// 15 and more between neighbours.
+pub fn delta_e(a: Color, b: Color, vision: Vision) -> f32 {
+    let [l1, a1, b1] = vision.simulate(a).to_oklab();
+    let [l2, a2, b2] = vision.simulate(b).to_oklab();
+    (((l1 - l2).powi(2) + (a1 - a2).powi(2) + (b1 - b2).powi(2)).sqrt() * 100.0) as f32
+}
+
+/// Between two slots next to each other in the categorical palette
+/// (series 1 and 2 of a chart), with full colour vision.
+pub const CATEGORY_ADJACENT: f32 = 15.0;
+/// Between any two slots of the categorical palette, with full colour
+/// vision: a scatter or a legend puts any two side by side.
+pub const CATEGORY_ANY: f32 = 10.0;
+/// Between two slots next to each other, with protanopia or
+/// deuteranopia.
+pub const CATEGORY_CVD_ADJACENT: f32 = 8.0;
+
+/// Two slots of the categorical palette told apart too little.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Separation {
+    /// The two slots, the lower first.
+    pub slots: (usize, usize),
+    pub vision: Vision,
+    /// The distance reached ([`delta_e`]); `None` when a slot is not a
+    /// colour.
+    pub delta_e: Option<f32>,
+    pub required: f32,
+}
+
+impl fmt::Display for Separation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (a, b) = self.slots;
+        match self.delta_e {
+            Some(d) => write!(
+                f,
+                "palette.category.{a} and .{b} ({}): ΔE {d:.1}, needs {}",
+                self.vision.name(),
+                self.required
+            ),
+            None => write!(f, "palette.category.{a} and .{b}: not two colours"),
+        }
+    }
+}
+
+/// Checks that the categorical palette's slots are told apart: every two
+/// at [`CATEGORY_ANY`] and neighbours at [`CATEGORY_ADJACENT`] with full
+/// colour vision, neighbours at [`CATEGORY_CVD_ADJACENT`] with
+/// protanopia and deuteranopia. Empty when all pass. Their contrast with
+/// the surfaces is in [`PAIRS`].
+pub fn check_category(tokens: &ResolvedTokens) -> Vec<Separation> {
+    let colors: Vec<Option<Color>> = CATEGORY.iter().map(|p| tokens.color(p)).collect();
+    let mut out = Vec::new();
+    for i in 0..colors.len() {
+        for j in i + 1..colors.len() {
+            let adjacent = j == i + 1;
+            for vision in Vision::ALL {
+                let required = match (vision, adjacent) {
+                    (Vision::Normal, true) => CATEGORY_ADJACENT,
+                    (Vision::Normal, false) => CATEGORY_ANY,
+                    (_, true) => CATEGORY_CVD_ADJACENT,
+                    (_, false) => continue,
+                };
+                let d = colors[i].zip(colors[j]).map(|(a, b)| delta_e(a, b, vision));
+                if d.is_none_or(|d| d < required) {
+                    out.push(Separation {
+                        slots: (i, j),
+                        vision,
+                        delta_e: d,
+                        required,
+                    });
+                }
+            }
+        }
+    }
+    out
 }

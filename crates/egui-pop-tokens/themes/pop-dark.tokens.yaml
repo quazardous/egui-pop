@@ -175,6 +175,19 @@ blue:
   contrast:
     $value: "{gray.0}"
     $description: "Text on step 9."
+chart:
+  $type: "color"
+  $description: "The categorical palette's hues for dark surfaces (palette.category aliases them, in its order): each reads at 3:1 on every built-in dark theme's canvas, panel and raised surface."
+  blue: {$value: "#0aa5f8"}
+  orange: {$value: "#f69408"}
+  green: {$value: "#0dbd86"}
+  pink: {$value: "#ff9fea"}
+  olive: {$value: "#958801"}
+  periwinkle: {$value: "#a2b1ff"}
+  lime: {$value: "#a1df60"}
+  red: {$value: "#dd556e"}
+  teal: {$value: "#0398a7"}
+  purple: {$value: "#a477eb"}
 clear:
   $type: "color"
   $value: "#00000000"
@@ -502,7 +515,20 @@ motion:
       $value: {value: 200, unit: "ms"}
       $description: "A toast sliding in from its corner's side, and out again (none under reduced motion)."
 palette:
-  $description: "Palettes and toolboxes floating over the interface, never modal."
+  $description: "Palettes and toolboxes floating over the interface, never modal; and `category`, the colours of a chart's series."
+  category:
+    $description: "The categorical palette: one colour per series, in this order, for what is told apart by identity (docs/tokens.md). Each reads at 3:1 on the canvas, the panel and the raised surface; neighbours are 15 apart (OKLab ΔE) and 8 for protanopia and deuteranopia, any two 10 apart (contrast::check_category)."
+    $type: "color"
+    "0": {$value: "{chart.blue}"}
+    "1": {$value: "{chart.orange}"}
+    "2": {$value: "{chart.green}"}
+    "3": {$value: "{chart.pink}"}
+    "4": {$value: "{chart.olive}"}
+    "5": {$value: "{chart.periwinkle}"}
+    "6": {$value: "{chart.lime}"}
+    "7": {$value: "{chart.red}"}
+    "8": {$value: "{chart.teal}"}
+    "9": {$value: "{chart.purple}"}
   magnet:
     $type: "dimension"
     $value: "{size.magnet}"

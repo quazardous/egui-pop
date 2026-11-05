@@ -193,6 +193,20 @@ const CORE: &[Required] = &[
     sys("info", "color", "information"),
     sys("focus.ring", "color", "the keyboard focus outline"),
     sys("selection", "color", "selected text and items"),
+    sys(
+        "palette.category.0",
+        "color",
+        "the first series of a chart (categorical palette)",
+    ),
+    sys("palette.category.1", "color", "a chart's second series"),
+    sys("palette.category.2", "color", "a chart's third series"),
+    sys("palette.category.3", "color", "a chart's fourth series"),
+    sys("palette.category.4", "color", "a chart's fifth series"),
+    sys("palette.category.5", "color", "a chart's sixth series"),
+    sys("palette.category.6", "color", "a chart's seventh series"),
+    sys("palette.category.7", "color", "a chart's eighth series"),
+    sys("palette.category.8", "color", "a chart's ninth series"),
+    sys("palette.category.9", "color", "a chart's tenth series"),
     sys("radius.widget", "dimension", "corner radius of controls"),
     sys(
         "radius.window",
@@ -704,6 +718,25 @@ fn major_minor(version: &str) -> Option<(u64, u64)> {
 pub const RENAMED: &[Renamed] = &[];
 
 mod kit;
+
+/// The categorical palette, in order: one colour per series of a chart,
+/// for what is told apart by identity (an entity, a sensor, a run), not
+/// by magnitude. A series keeps its slot whatever else is shown, so its
+/// colour follows it. Each slot reads at 3:1 on the canvas, the panel
+/// and the raised surface ([`crate::contrast::PAIRS`]), and slots are
+/// told apart as [`crate::contrast::check_category`] measures.
+pub const CATEGORY: [&str; 10] = [
+    "palette.category.0",
+    "palette.category.1",
+    "palette.category.2",
+    "palette.category.3",
+    "palette.category.4",
+    "palette.category.5",
+    "palette.category.6",
+    "palette.category.7",
+    "palette.category.8",
+    "palette.category.9",
+];
 
 /// Every token a theme must provide: the system tier, the component tier
 /// and the default kit's components. A theme missing one, or giving one

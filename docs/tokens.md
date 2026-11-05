@@ -105,7 +105,9 @@ without it.
    `surface.{canvas, panel, raised, hover, active, overlay, sunken}`,
    `text.{default, muted, strong, on-accent}`, `border.{default, strong}`,
    `accent.{default, hover, active, subtle}`, `danger`, `warning`,
-   `success`, `info`, `focus.ring`, `selection`, `radius.{widget, window}`,
+   `success`, `info`, `focus.ring`, `selection`,
+   `palette.category.0` to `palette.category.9` (the categorical palette,
+   [below](#the-categorical-palette)), `radius.{widget, window}`,
    `shadow.{popup, window, side}.{offset-x, offset-y, blur, spread, color}`
    (egui's popup and window shadows, and a side area lying over the
    centre; their colours alias the `shade.10` and `shade.38` palette
@@ -192,6 +194,59 @@ A weight other than 400 is drawn with the theme's interface font at
 that weight (`fonts::family`), once a theme has installed the fonts;
 egui's bundled font has one weight, which draws them all. The role
 colours are in the contrast pairs, over panels and the raised surface.
+
+## The categorical palette
+
+Charts and data views colour what they tell apart by identity (an
+entity, a sensor, a run) with `palette.category.0` to
+`palette.category.9`, in that order: the first series takes slot 0, the
+second slot 1. A series keeps its slot whatever else is shown, so its
+colour follows it from one view to the next. Code reads them through
+`Tokens::of(ctx).palette` (`DataPalette::series(i)`, which starts again
+from slot 0 past the last). More series than slots repeat colours: name them (a
+legend) or group the smallest.
+
+The slots alias a reference group named by hue, `chart.blue`,
+`chart.orange`, `chart.green`, `chart.pink`, `chart.olive`,
+`chart.periwinkle`, `chart.lime`, `chart.red`, `chart.teal` and
+`chart.purple`, which each base theme gives for its surfaces; a theme
+changes a hue there, or re-aliases a slot.
+
+| Slot | pop-dark | pop-light | pop-high-contrast |
+|---|---|---|---|
+| 0 | `#0aa5f8` | `#014d74` | `#15b3fe` |
+| 1 | `#f69408` | `#b66402` | `#ff942f` |
+| 2 | `#0dbd86` | `#026a52` | `#01c996` |
+| 3 | `#ff9fea` | `#a447a5` | `#feb5f9` |
+| 4 | `#958801` | `#564700` | `#c1b007` |
+| 5 | `#a2b1ff` | `#4157c3` | `#a9bdff` |
+| 6 | `#a1df60` | `#3f8304` | `#bae962` |
+| 7 | `#dd556e` | `#d34d6a` | `#fe8b9e` |
+| 8 | `#0398a7` | `#078997` | `#17f9fe` |
+| 9 | `#a477eb` | `#672b98` | `#cc8ffe` |
+
+Two checks hold them, in every built-in theme (the editor-inspired ones
+take their base's hues):
+
+- **Contrast.** Each slot reads at 3:1 (WCAG 1.4.11, a graphical object)
+  on `surface.canvas`, `surface.panel` and `surface.raised`: pairs of
+  `contrast::PAIRS`, so `contrast::check` and the overview page show
+  them. The high-contrast hues reach 4.5:1 on black.
+- **Separation** (`contrast::check_category`), measured as ΔE OK, the
+  Euclidean distance in OKLab times 100 (`contrast::delta_e`): two
+  neighbouring slots at 15 at least (`CATEGORY_ADJACENT`), any two at 10
+  (`CATEGORY_ANY`), and neighbours at 8 for people with protanopia or
+  deuteranopia (`CATEGORY_CVD_ADJACENT`; `Vision::simulate`, Machado,
+  Oliveira and Fernandes' model at full severity). Each slot is a hue,
+  not a grey (OKLCH chroma 0.08 at least).
+
+Ten hues cannot all stay apart for colour-blind readers: any two slots
+are not checked for them, only neighbours, so the first series of a
+chart are the ones to tell apart, and a legend names them all. The
+built-in hues were searched for together under these checks (the same
+hue per slot in the three themes, the lightness moved for each theme's
+surfaces) and reach 11.9 for any two, 20.9 for neighbours and 9.0 for
+neighbours with colour blindness.
 
 ## A scale from one colour
 

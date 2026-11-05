@@ -301,6 +301,26 @@ pub struct MotionTokens {
     pub toast_slide: f32,
 }
 
+/// The data palettes (`palette.*`): colours for charts and data views.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct DataPalette {
+    /// The categorical palette, `palette.category.0` to `.9`: one colour
+    /// per series, in order (`egui_pop_tokens::CATEGORY`).
+    pub category: [Color32; egui_pop_tokens::CATEGORY.len()],
+}
+
+impl DataPalette {
+    /// Series `index`'s colour: its slot of the categorical palette,
+    /// round again from the first past the last. Give a series the same
+    /// index whatever else is shown, so its colour follows it; more
+    /// series than slots repeat colours, so name them (a legend) or group
+    /// the smallest.
+    pub fn series(&self, index: usize) -> Color32 {
+        self.category[index % self.category.len()]
+    }
+}
+
 /// Shadows under what lies over the interface (`shadow.*`), as egui's.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
@@ -353,6 +373,8 @@ pub struct Tokens {
     pub size: Size,
     pub font: Font,
     pub shadow: ShadowTokens,
+    /// Colours for charts and data views (`palette.*`).
+    pub palette: DataPalette,
     /// `motion.duration` in seconds; zero when motion is reduced.
     pub motion_duration: f32,
     /// The other times of motion.
@@ -484,6 +506,9 @@ impl Tokens {
                     window: sh("window"),
                     side: sh("side"),
                 }
+            },
+            palette: DataPalette {
+                category: egui_pop_tokens::CATEGORY.map(c),
             },
             motion_duration: r.duration_ms("motion.duration").unwrap_or(0.0).max(0.0) / 1000.0,
             motion: {

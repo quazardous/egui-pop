@@ -135,3 +135,72 @@ fn a_pair_generates_each_variant_s_ramp_from_the_same_seed() {
     let bad = themes.resolve(&ThemeSpec::new("pop-dark").accent("#zzz"));
     assert_eq!(bad.problems().len(), 1, "{:?}", bad.problems());
 }
+
+#[egui_pop_test_macros::critical]
+#[test]
+fn every_built_in_theme_tells_its_category_slots_apart() {
+    let themes = Themes::default();
+    let mut failures = Vec::new();
+    for base in BUILT_IN_THEMES {
+        let tokens = themes.resolve(&ThemeSpec::new(*base));
+        for f in contrast::check_category(&tokens) {
+            failures.push(format!("{base}: {f}"));
+        }
+        // Not grey: a slot carries a hue (OKLCH chroma 0.08 at least).
+        for path in egui_pop_tokens::CATEGORY {
+            let [_, a, b] = tokens.color(path).unwrap().to_oklab();
+            let chroma = a.hypot(b);
+            if chroma < 0.08 {
+                failures.push(format!("{base}: {path} is greyish (chroma {chroma:.3})"));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn delta_e_measures_oklab_distance_and_simulates_colour_blindness() {
+    use contrast::Vision;
+    use egui_pop_tokens::Color;
+    let c = |h: &str| Color::from_hex(h).unwrap();
+    // Black to white is the whole lightness axis.
+    let d = contrast::delta_e(Color::BLACK, Color::WHITE, Vision::Normal);
+    assert!((d - 100.0).abs() < 0.5, "{d}");
+    // A pure red and a pure green, far apart for most, close without red
+    // or green cones.
+    let (red, green) = (c("#d03030"), c("#30a030"));
+    let normal = contrast::delta_e(red, green, Vision::Normal);
+    assert!(normal > 30.0, "{normal}");
+    assert!(contrast::delta_e(red, green, Vision::Protanopia) < normal * 0.7);
+    assert!(contrast::delta_e(red, green, Vision::Deuteranopia) < normal * 0.2);
+    // Greys are seen alike.
+    let grey = c("#808080");
+    for v in Vision::ALL {
+        let s = v.simulate(grey).to_srgba_u8();
+        assert!(
+            s[0].abs_diff(128) <= 1 && s[1].abs_diff(128) <= 1,
+            "{v:?} {s:?}"
+        );
+    }
+}
+
+#[test]
+fn a_theme_with_two_close_slots_fails_the_category_check() {
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "twins",
+            r##"
+            $extends: "pop-dark"
+            palette:
+              category:
+                $type: "color"
+                "4": {$value: "{palette.category.3}"}
+            "##,
+        )
+        .unwrap();
+    let tokens = themes.resolve(&ThemeSpec::new("twins"));
+    let failures = contrast::check_category(&tokens);
+    assert!(failures.iter().any(|f| f.slots == (3, 4)), "{failures:?}");
+    assert!(failures[0].to_string().contains("needs"), "{}", failures[0]);
+}
