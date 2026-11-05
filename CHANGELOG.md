@@ -8,6 +8,59 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.7.0 (2026-11-05)
+
+Published: egui-pop-tokens 0.2.3, egui-pop-model 0.5.0, egui-pop-core 0.7.0, egui-pop-api 0.7.0, egui-pop-test 0.7.0, egui-pop-viewport 0.7.0, egui-pop-i18n 0.7.0, egui-pop-editors 0.7.0, egui-pop-platform 0.7.0, egui-pop-views 0.7.0, egui-pop-imaging 0.7.0, egui-pop 0.7.0.
+
+### Breaking changes
+
+- egui-pop, egui-pop-api, egui-pop-core, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-model, egui-pop-platform, egui-pop-test, egui-pop-viewport, egui-pop-views: egui-pop moves to egui_stack 0.24: drops show as zones, and an area's groups are arranged in rows, columns and grids.
+
+  - **Drop zones.** A tab dragged inside an area shows the region it would take on the group under the pointer itself, bordered and tinted, with no buttons: the half of the group near an edge, the whole group elsewhere. It is the kit's `dock-preview`, so it follows the theme; the same tokens feed egui_stack's `OverlayStyle::zone_fill`, `zone_stroke` and `zone_corner_radius`. A tab dropped outside the dock opens in a window of its own when its panel may detach. The cross of buttons is no longer used.
+  - **Rows, columns and grids.** A drop on the edge of a group in a row or a column joins it rather than nesting a split. New commands "Arrange as grid", "Arrange as row" and "Arrange as column" (`workbench.arrange.grid`, `.row`, `.column`, in English and French) lay out the groups beside the focused panel's again, or beside the `panel` an agent names (`columns` for a grid); they go through the new `workbench.arrange` step, `AppHandle::arrange` from code (`workbench::Arrangement`).
+  - **The layout document** saves a grid as a node of kind `grid` (`columns`, `col_shares`, `row_shares`, `children`): `layout::Node` has a new variant, `Node::Grid`. A row or column of more than two is saved as splits nested on their second side. Layouts saved before read as they did.
+
+  Migration: a `match` on `egui_pop::model::layout::Node` needs a `Node::Grid` arm. egui_stack types re-exported by egui-pop are those of 0.24: see its changelog (`Node::Linear` and `Node::Grid` replace `Node::Horizontal` and `Node::Vertical`; `OverlayType::Zones` is the default).
+- egui-pop, egui-pop-views: Tracks and clips on the timeline (`views::timeline`): `TimelineState::tracks` holds rows of `Clip`s (a start, a length, an offset into a source, a label, the source's name and length, a colour) under the ruler, never overlapping on a track, and `TimelineDoc` keeps them, so each change is a step of the history. A `ClipPainter` given with `Timeline::clips` draws a clip's content (a video's thumbnails, an audio waveform, a data plot; a closure is one too), the timeline its box, selection and trimming handles; `PlainClips`, the default, draws the labels. A click selects a clip (Ctrl toggles, Shift adds), a drag moves the selection along a track or across tracks, landing against the nearest edge where it would overlap, and a clip's edges trim it, stopping at its source's ends and its neighbours; clips snap to one another's edges (`Snap::clips`, `ruler::snap_span`). Keys: Page Up and Page Down walk a track's clips, Shift+Up and Shift+Down reach the clip at the playhead on the track above or below, Ctrl+Left and Ctrl+Right move the selection, Ctrl+Up and Ctrl+Down to another track, `[` and `]` trim to the playhead, Delete removes. `TimelineState` gains `add_track`, `add_clip`, `move_clips`, `trim_clip` and `remove_clips` (refusals as `ClipError`), and `Edit` the clip edits (it is now non-exhaustive). Each clip is an accessible button named with its track and times. Agents get `timeline.add_clip`, `move_clip`, `trim_clip`, `remove_clip` and `select_clips`, and the `timeline` collector lists the tracks and clips. New tokens `timeline.track.*` and `timeline.clip.*`. The gallery has a Tracks and clips page.
+
+  Migration: `Snap`, `TimelineState`, `TimelineDoc`, `TimelineTokens` and `TimelineOutput` have new fields (`clips`; `tracks` and `selected_clips`; `tracks`; the track and clip colours and `track_height`; `tracks`): a struct literal needs them or `..Default::default()` (`Snap { grid: false, ..Snap::default() }`). `ruler::Snapped` has a `Clip` variant, and a `match` on `Edit` needs a `_` arm. `Timeline::lanes` is now the height under the tracks, the same as before when there are none.
+
+### Features
+
+- egui-pop-api, egui-pop-tokens: A kit may hold both its variants, light and dark: its manifest's
+  `counterpart` (in `org.egui-pop.kit`) gives the other variant's name,
+  label and tokens. It becomes a theme of its own, each variant naming the
+  other as its counterpart, so the light, dark or system setting switches
+  between them with one kit folder. The kit's other token files and its
+  faces serve both variants. `KitData::counterpart` holds it,
+  `Themes::add_kit` and `AppBuilder::kit` add both themes, and
+  `KitData::infos` (and so `ThemeService::kits`) lists both; a counterpart
+  that cannot be used is a manifest problem, the kit keeping one variant.
+- egui-pop, egui-pop-core, egui-pop-tokens: Log levels have colours: `palette.log.trace`, `palette.log.debug`,
+  `palette.log.info`, `palette.log.warn` and `palette.log.error` are system
+  tokens (`egui_pop_tokens::LOG_LEVELS`), read in code through
+  `Tokens::of(ctx).palette.log` (`LogPalette`). `pop-dark` aliases them to the
+  muted text and the status colours (trace muted, debug `info`, info
+  `success`, warn `warning`, error `danger`), so every built-in theme gives
+  them; `gruvbox-light` darkens info's green for its canvas. Each is checked
+  as text on `surface.canvas` and `surface.panel` (`contrast::PAIRS`).
+- egui-pop-api: Three shell hooks for applications that lay out their own workbench:
+
+  - `AppBuilder::layout` gives the layout an application starts with when
+    none was saved (its panels' areas, tabs and splits, the closed ones,
+    the folded areas), repaired as a saved layout is; the `Default`
+    arrangement resets to it. Listing the shell's zone panels
+    (`PANEL_SIDE_BAR`, `PANEL_MAIN`, `PANEL_INSPECTOR`) among the closed
+    ones leaves them out, without setting a layout after `build`.
+  - `AppBuilder::frameless` draws the areas it names without a frame: no
+    margin around the area, and its panels' bodies without margin, border
+    or rounded corners, so they run to the window's edges with the
+    splitter's line between them (`AppHandle::frameless` reads it).
+  - The `zones::TOP_BAR_END` zone puts widgets at the top bar's end,
+    left to right, before the commands of `MENU_BAR_END`: a document's
+    name, a readout. It keeps the width it took, and shows without the
+    menu bar too.
+
 ## 0.6.0 (2026-11-05)
 
 Published: egui-pop-tokens 0.2.2, egui-pop-core 0.6.0, egui-pop-api 0.6.0, egui-pop-test 0.6.0, egui-pop-viewport 0.6.0, egui-pop-i18n 0.6.0, egui-pop-editors 0.6.0, egui-pop-platform 0.6.0, egui-pop-views 0.6.0, egui-pop-imaging 0.6.0, egui-pop 0.6.0.
