@@ -58,7 +58,7 @@ A row of the dataframe moves the time cursor to its frame.
 | Ctrl+P | The command palette (`app.palette`; Ctrl+Shift+P and F1 stay) | Cmd/Ctrl+P |
 | Ctrl+Shift+B, Ctrl+Shift+S, Ctrl+Shift+T | Toggle the blueprint, the selection, the time panel (the workbench's area toggles; Ctrl+B, Ctrl+Alt+B and Ctrl+J stay) | the same |
 | Ctrl+Shift+R | Reset viewer: the layout, the selection, the time | the same |
-| Ctrl+, | Settings, where the theme is picked | the same |
+| Ctrl+, | Settings (light, dark or the system's) | the same |
 
 Every command is in the palette: the five playback commands, Clear
 selection, Reset viewer, and the panels' own focus and toggle commands.
@@ -69,8 +69,10 @@ Two kits, `examples/kits/rerun-like-dark` and
 `examples/kits/rerun-like-light`, each naming the other as its
 counterpart (`org.egui-pop.variant-of`), so the viewer starts with
 `ThemeSpec::pair("rerun-like-dark", "rerun-like-light")` and the View
-menu's light and dark toggle switches between them; the settings'
-theme picker lists them with the built-in themes. Data only; each
+menu's light and dark toggle (and the settings' light, dark or
+system choice) switches between them. The settings have no theme
+picker: another theme is picked in code (`ThemeService::kits` lists the
+kits for an application's own picker). Data only; each
 records its source (repository, files, commit, licence) in
 `org.egui-pop.source`.
 
