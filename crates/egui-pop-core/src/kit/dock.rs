@@ -1,6 +1,8 @@
 //! The kit paints egui_stack's docks: its tabs (`tab`), tab bars
-//! (`tab-bar`), separators (`splitter`) and drop overlay
-//! (`dock-preview`, its buttons `button`); and its section stacks
+//! (`tab-bar`), separators (`splitter`) and drop zones (`dock-preview`:
+//! the region a dragged tab would take, bordered and tinted, on the node
+//! itself; the buttons of egui_stack's former cross overlay, when an
+//! application asks for it, in `button`); and its section stacks
 //! ([`crate::sections`]): their bands (`section-band`, the mark
 //! `section-disclosure`, the count `section-count`) and the focus ring of
 //! their boundaries; and its toolbar rows ([`egui_stack::toolbar`]): their
@@ -169,8 +171,10 @@ impl DockPainter for Kit {
     }
 
     fn drop_preview(&self, painter: &Painter, drop: &DropPaint<'_>) {
-        // As between areas: the `dock-preview` at rest where the tab may
-        // go, disabled with its label saying why where it may not.
+        // The drop zone, as between areas: the `dock-preview` at rest
+        // (its border and its fill at its opacity, a light tint) over the
+        // region the tab would take, disabled with its label saying why
+        // where it may not go.
         let refusal = drop.refusal;
         let label = refusal.and_then(|r| r.reason.as_ref());
         if drop.from_buttons && refusal.is_none() {

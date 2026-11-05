@@ -158,6 +158,7 @@ pub const STEP_CLOSE_WINDOW: StepId = StepId::from_static("workbench.close_windo
 pub const STEP_ZEN: StepId = StepId::from_static("workbench.zen");
 pub const STEP_FLYOUT: StepId = StepId::from_static("workbench.flyout");
 pub const STEP_FLYOUT_SIZE: StepId = StepId::from_static("workbench.flyout_size");
+pub const STEP_ARRANGE: StepId = StepId::from_static("workbench.arrange");
 
 /// Toggles zen mode: only the centre is shown.
 pub const CMD_ZEN: egui_pop_model::ids::CommandId =
@@ -182,6 +183,17 @@ pub const CMD_PREVIOUS_REGION: egui_pop_model::ids::CommandId =
 
 pub const CMD_LEAVE_ZEN: egui_pop_model::ids::CommandId =
     egui_pop_model::ids::CommandId::from_static("workbench.leave_zen");
+
+/// Lays out the focused panel's group and its neighbours (the row,
+/// column or grid holding it) as a grid.
+pub const CMD_ARRANGE_GRID: egui_pop_model::ids::CommandId =
+    egui_pop_model::ids::CommandId::from_static("workbench.arrange.grid");
+/// Lays out the focused panel's group and its neighbours in a row.
+pub const CMD_ARRANGE_ROW: egui_pop_model::ids::CommandId =
+    egui_pop_model::ids::CommandId::from_static("workbench.arrange.row");
+/// Lays out the focused panel's group and its neighbours in a column.
+pub const CMD_ARRANGE_COLUMN: egui_pop_model::ids::CommandId =
+    egui_pop_model::ids::CommandId::from_static("workbench.arrange.column");
 
 /// The setting: how the bottom panel lines up with the side bars, as
 /// VS Code's panel alignment (see [`PanelAlignment`]).
@@ -288,6 +300,11 @@ pub(crate) fn steps() -> Vec<crate::steps::StepSpec> {
             "A panel's flyout is given a width in points (`panel`, `width`), saved with the layout.",
         )
         .args(json!({ "panel": "app.side-bar", "width": 280.0 })),
+        StepSpec::new(
+            STEP_ARRANGE,
+            "The groups beside a panel's (the row, column or grid holding it) are laid out again (`panel`, `as`: `grid`, `row` or `column`; `columns` for a grid, none for as many as fit a square).",
+        )
+        .args(json!({ "panel": "app.inspector", "as": "grid" })),
         StepSpec::new(
             STEP_DETACH,
             "A panel moves to a window of its own (`panel`).",
@@ -443,6 +460,55 @@ pub enum Change {
     FlyoutSize(PanelId, f32),
     /// Zen mode on (`true`: only the centre is shown) or off.
     Zen(bool),
+    /// The row, column or grid holding a panel's group is laid out again.
+    Arrange(PanelId, Arrangement),
+}
+
+/// How [`Change::Arrange`] lays out the groups beside a panel's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Arrangement {
+    /// In rows and columns, row by row: `columns` of them, or as many as
+    /// the square root of their number, rounded up (`None`).
+    Grid(Option<usize>),
+    /// Side by side.
+    Row,
+    /// One above the other.
+    Column,
+}
+
+impl Arrangement {
+    /// Its name in a step's arguments.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Arrangement::Grid(_) => "grid",
+            Arrangement::Row => "row",
+            Arrangement::Column => "column",
+        }
+    }
+
+    fn from_args(args: &Json) -> Result<Arrangement, String> {
+        let name = args.get("as").and_then(Json::as_str).unwrap_or("grid");
+        match name {
+            "grid" => {
+                let columns = match args.get("columns").filter(|c| !c.is_null()) {
+                    None => None,
+                    Some(c) => Some(
+                        c.as_u64()
+                            .filter(|n| *n > 0)
+                            .ok_or("`columns` is a positive whole number")?
+                            as usize,
+                    ),
+                };
+                Ok(Arrangement::Grid(columns))
+            }
+            "row" => Ok(Arrangement::Row),
+            "column" => Ok(Arrangement::Column),
+            _ => Err(format!(
+                "no arrangement `{name}` (`grid`, `row` or `column`)"
+            )),
+        }
+    }
 }
 
 /// `[x, y]` as a place.
@@ -537,6 +603,13 @@ impl Change {
                 json!({ "panel": p, "pinned": on }),
             ),
             Change::Zen(on) => (STEP_ZEN, json!({ "zen": on })),
+            Change::Arrange(p, how) => {
+                let mut args = json!({ "panel": p, "as": how.as_str() });
+                if let Arrangement::Grid(Some(n)) = how {
+                    args["columns"] = json!(n);
+                }
+                (STEP_ARRANGE, args)
+            }
             Change::Flyout(p, open) => (STEP_FLYOUT, json!({ "panel": p, "open": open })),
             Change::FlyoutSize(p, width) => {
                 (STEP_FLYOUT_SIZE, json!({ "panel": p, "width": width }))
@@ -662,6 +735,7 @@ impl Change {
             "workbench.attach" => Change::Attach(panel),
             "workbench.close_window" => Change::CloseWindow(panel),
             "workbench.hide" => Change::Hide(panel),
+            "workbench.arrange" => Change::Arrange(panel, Arrangement::from_args(args)?),
             _ => Change::Focus(panel),
         })
     }
@@ -1168,6 +1242,22 @@ impl Workbench {
                 f.pinned = *on;
                 json!({ "panel": p, "pinned": on })
             }
+            Change::Arrange(p, how) => {
+                let spec = spec_of(p)?;
+                let (area, node) = self
+                    .layout
+                    .areas
+                    .iter_mut()
+                    .find(|(_, n)| n.panels().contains(&p))
+                    .ok_or_else(|| format!("{} is not in an area", spec.title))?;
+                *node = arrange(node, p, *how)
+                    .ok_or_else(|| format!("{} is alone in its area", spec.title))?;
+                let mut out = json!({ "panel": p, "area": area_name(*area), "as": how.as_str() });
+                if let Arrangement::Grid(columns) = how {
+                    out["columns"] = json!(columns);
+                }
+                out
+            }
             Change::Fold(area, folded) => {
                 if *area == Area::Center && *folded {
                     return Err("the centre never folds".into());
@@ -1530,52 +1620,158 @@ fn refusal(ctx: &egui::Context, spec: &PanelSpec, title: &str, area: Area) -> Op
     })
 }
 
-/// An area's tree of tabs and splits as an `egui_stack` state. The
-/// layout document stays the saved form; the dock is how it is drawn
+/// An area's tree of tabs, splits and grids as an `egui_stack` state.
+/// The layout document stays the saved form; the dock is how it is drawn
 /// and moved by hand.
+///
+/// The tree is built slot by slot: its nodes are first taken as leaves in
+/// one row, then each is given its part of the layout. A chain of splits
+/// of one direction becomes one row or column, as egui_stack keeps them.
 pub(crate) fn to_dock(node: &Node) -> DockState<PanelId> {
-    let mut dock = DockState::new(leading_tabs(node));
-    fill(dock.main_surface_mut(), NodeIndex::root(), node);
+    let Some(any) = node.panels().first().map(|p| (*p).clone()) else {
+        return DockState::new(Vec::new());
+    };
+    let mut dock = DockState::new(vec![any.clone()]);
+    let tree = dock.main_surface_mut();
+    let count = slots(node);
+    let mut free = Vec::new();
+    if count > 1 {
+        let [a, b] = tree.split(
+            NodeIndex::root(),
+            Split::Right,
+            0.5,
+            egui_stack::Node::leaf(any.clone()),
+        );
+        free.extend([a, b]);
+        while free.len() + 1 < count {
+            free.push(tree.insert_child(NodeIndex::root(), 0, egui_stack::Node::leaf(any.clone())));
+        }
+    }
+    let mut free = free.into_iter();
+    build(tree, NodeIndex::root(), node, &mut free);
+    let first = first_leaf(tree);
+    tree.set_focused_node(first);
     dock
 }
 
-/// The tabs a node shows first (its own, or its first child's).
-fn leading_tabs(node: &Node) -> Vec<PanelId> {
+/// The children of a split as one row or column: the splits of the same
+/// direction under it joined, each child with its share.
+fn run<'a>(node: &'a Node, vertical: bool, weight: f32, out: &mut Vec<(&'a Node, f32)>) {
     match node {
-        Node::Tabs { panels, .. } => panels.clone(),
-        Node::Split { a, .. } => leading_tabs(a),
-    }
-}
-
-fn fill(tree: &mut egui_stack::Tree<PanelId>, at: NodeIndex, node: &Node) {
-    match node {
-        Node::Tabs { panels, active } => {
-            if let egui_stack::Node::Leaf(leaf) = &mut tree[at] {
-                leaf.tabs.clone_from(panels);
-                leaf.active = egui_stack::TabIndex((*active).min(panels.len().saturating_sub(1)));
-            }
-        }
         Node::Split {
-            vertical,
+            vertical: v,
             ratio,
             a,
             b,
-        } => {
-            let side = if *vertical {
-                Split::Below
+        } if *v == vertical => {
+            let r = ratio.clamp(0.05, 0.95);
+            run(a, vertical, weight * r, out);
+            run(b, vertical, weight * (1.0 - r), out);
+        }
+        _ => out.push((node, weight)),
+    }
+}
+
+/// The number of egui_stack nodes a node takes.
+fn slots(node: &Node) -> usize {
+    match node {
+        Node::Tabs { .. } => 1,
+        Node::Split { vertical, .. } => {
+            let mut children = Vec::new();
+            run(node, *vertical, 1.0, &mut children);
+            1 + children.iter().map(|(c, _)| slots(c)).sum::<usize>()
+        }
+        Node::Grid { children, .. } => 1 + children.iter().map(slots).sum::<usize>(),
+    }
+}
+
+fn build(
+    tree: &mut egui_stack::Tree<PanelId>,
+    at: NodeIndex,
+    node: &Node,
+    free: &mut impl Iterator<Item = NodeIndex>,
+) {
+    let mut place = |tree: &mut egui_stack::Tree<PanelId>, children: &[&Node]| {
+        let indices: Vec<NodeIndex> = children
+            .iter()
+            .map(|_| free.next().expect("one slot per node"))
+            .collect();
+        for (&child, &index) in children.iter().zip(&indices) {
+            build(tree, index, child, free);
+        }
+        indices
+    };
+    match node {
+        Node::Tabs { panels, active } => {
+            tree[at] = egui_stack::Node::leaf_with(panels.clone());
+            if let egui_stack::Node::Leaf(leaf) = &mut tree[at] {
+                leaf.active = egui_stack::TabIndex((*active).min(panels.len().saturating_sub(1)));
+            }
+        }
+        Node::Split { vertical, .. } => {
+            let mut children = Vec::new();
+            run(node, *vertical, 1.0, &mut children);
+            let (nodes, shares): (Vec<&Node>, Vec<f32>) = children.into_iter().unzip();
+            let indices = place(tree, &nodes);
+            let dir = if *vertical {
+                egui_stack::LinearDir::Vertical
             } else {
-                Split::Right
+                egui_stack::LinearDir::Horizontal
             };
-            let [first, second] = tree.split(
-                at,
-                side,
-                ratio.clamp(0.05, 0.95),
-                egui_stack::Node::leaf_with(leading_tabs(b)),
-            );
-            fill(tree, first, a);
-            fill(tree, second, b);
+            tree[at] = egui_stack::Node::Linear(egui_stack::LinearNode::new(dir, indices, shares));
+        }
+        Node::Grid {
+            columns,
+            col_shares,
+            row_shares,
+            children,
+        } => {
+            let nodes: Vec<&Node> = children.iter().collect();
+            let indices = place(tree, &nodes);
+            let mut grid = egui_stack::GridNode::new(grid_layout(*columns), indices);
+            let fits = |shares: &[f32], n: usize| {
+                shares.len() == n && shares.iter().all(|s| s.is_finite() && *s > 0.0)
+            };
+            if fits(col_shares, grid.columns()) && fits(row_shares, grid.rows()) {
+                grid.set_shares(col_shares.clone(), row_shares.clone());
+            }
+            tree[at] = egui_stack::Node::Grid(grid);
         }
     }
+}
+
+/// A grid's layout from its saved number of columns.
+fn grid_layout(columns: Option<usize>) -> egui_stack::GridLayout {
+    match columns {
+        Some(n) if n > 0 => egui_stack::GridLayout::Columns(n),
+        _ => egui_stack::GridLayout::Auto,
+    }
+}
+
+/// The first leaf of a tree, as drawn (the root for a tree of one).
+fn first_leaf(tree: &egui_stack::Tree<PanelId>) -> NodeIndex {
+    let mut at = NodeIndex::root();
+    while at.0 < tree.len()
+        && let Some(&first) = tree[at].children().first()
+    {
+        at = first;
+    }
+    at
+}
+
+/// An area's tree with the row, column or grid holding `panel`'s group
+/// laid out again; `None` when the group is alone in the area.
+fn arrange(node: &Node, panel: &PanelId, how: Arrangement) -> Option<Node> {
+    let mut dock = to_dock(node);
+    let tree = dock.main_surface_mut();
+    let (leaf, _) = tree.find_tab(panel)?;
+    let container = tree.parent(leaf)?;
+    let done = match how {
+        Arrangement::Grid(columns) => tree.arrange_as_grid(container, grid_layout(columns)),
+        Arrangement::Row => tree.arrange_as_linear(container, egui_stack::LinearDir::Horizontal),
+        Arrangement::Column => tree.arrange_as_linear(container, egui_stack::LinearDir::Vertical),
+    };
+    done.then(|| from_dock(&dock)).flatten()
 }
 
 /// The tree a dock shows now; `None` when it holds no panel.
@@ -1588,23 +1784,74 @@ fn read(tree: &egui_stack::Tree<PanelId>, at: NodeIndex) -> Option<Node> {
         return None;
     }
     match &tree[at] {
-        egui_stack::Node::Empty => None,
         egui_stack::Node::Leaf(leaf) => (!leaf.tabs.is_empty()).then(|| Node::Tabs {
             panels: leaf.tabs.clone(),
             active: leaf.active.0.min(leaf.tabs.len() - 1),
         }),
-        egui_stack::Node::Vertical(s) | egui_stack::Node::Horizontal(s) => {
-            let vertical = matches!(tree[at], egui_stack::Node::Vertical(_));
-            match (read(tree, at.left()), read(tree, at.right())) {
-                (Some(a), Some(b)) => Some(Node::Split {
-                    vertical,
-                    ratio: s.fraction,
-                    a: Box::new(a),
-                    b: Box::new(b),
-                }),
-                (Some(n), None) | (None, Some(n)) => Some(n),
-                (None, None) => None,
+        egui_stack::Node::Linear(linear) => {
+            let vertical = linear.dir == egui_stack::LinearDir::Vertical;
+            let children: Vec<(Node, f32)> = (linear.children().iter().zip(linear.shares()))
+                .filter_map(|(&c, &share)| read(tree, c).map(|n| (n, share.max(0.0))))
+                .collect();
+            chain(vertical, children)
+        }
+        egui_stack::Node::Grid(grid) => {
+            let all = grid.children().len();
+            let mut children: Vec<Node> = grid
+                .children()
+                .iter()
+                .filter_map(|&c| read(tree, c))
+                .collect();
+            match children.len() {
+                0 => None,
+                1 => children.pop(),
+                n => {
+                    // Children gone (their panels closed): even shares.
+                    let kept = n == all;
+                    Some(Node::Grid {
+                        columns: match grid.layout {
+                            egui_stack::GridLayout::Columns(n) => Some(n),
+                            _ => None,
+                        },
+                        col_shares: if kept {
+                            grid.col_shares().to_vec()
+                        } else {
+                            Vec::new()
+                        },
+                        row_shares: if kept {
+                            grid.row_shares().to_vec()
+                        } else {
+                            Vec::new()
+                        },
+                        children,
+                    })
+                }
             }
+        }
+        _ => None,
+    }
+}
+
+/// A row or column as splits nested on their second side.
+fn chain(vertical: bool, mut children: Vec<(Node, f32)>) -> Option<Node> {
+    match children.len() {
+        0 => None,
+        1 => children.pop().map(|(n, _)| n),
+        _ => {
+            let (a, share) = children.remove(0);
+            let rest: f32 = children.iter().map(|(_, s)| s).sum();
+            let ratio = if share + rest > 0.0 {
+                share / (share + rest)
+            } else {
+                0.5
+            };
+            let b = chain(vertical, children)?;
+            Some(Node::Split {
+                vertical,
+                ratio,
+                a: Box::new(a),
+                b: Box::new(b),
+            })
         }
     }
 }
@@ -2212,6 +2459,43 @@ fn tab_beside(node: &Node, panel: &PanelId, back: bool) -> Option<PanelId> {
         Node::Split { a, b, .. } => {
             tab_beside(a, panel, back).or_else(|| tab_beside(b, panel, back))
         }
+        Node::Grid { children, .. } => children.iter().find_map(|c| tab_beside(c, panel, back)),
+    }
+}
+
+/// The arrange commands: the row, column or grid around a panel's group
+/// (`panel` in the arguments, or the focused one) laid out `as` says, a
+/// grid with the arguments' `columns` if any. Nothing to arrange (no
+/// panel focused, or its group alone in its area) is not an error.
+pub(crate) fn arrange_command(app: &AppHandle, args: &Json, how: &str) -> Result<Json, String> {
+    let panel = match args.get("panel").and_then(Json::as_str) {
+        Some(p) => Some(PanelId::new(p).map_err(|e| e.to_string())?),
+        None => app.try_workbench().and_then(|wb| wb.focused.clone()),
+    };
+    let Some(panel) = panel else {
+        return Ok(json!({ "arranged": false }));
+    };
+    let mut step = json!({ "as": how });
+    if let Some(columns) = args.get("columns") {
+        step["columns"] = columns.clone();
+    }
+    let how = Arrangement::from_args(&step)?;
+    let alone = {
+        let layout = app.layout();
+        !(layout.areas.iter()).any(|(_, n)| arrange(n, &panel, how).is_some())
+    };
+    if alone {
+        return Ok(json!({ "arranged": false }));
+    }
+    match app.arrange(&panel, how) {
+        Some(Outcome::Done(Ok(result))) => {
+            let mut result = result;
+            result["arranged"] = json!(true);
+            Ok(result)
+        }
+        Some(Outcome::Done(Err(e))) => Err(e),
+        Some(Outcome::Vetoed { by, reason }) => Err(format!("stopped by `{by}`: {reason}")),
+        _ => Ok(json!({ "arranged": true, "queued": true })),
     }
 }
 
@@ -2764,10 +3048,7 @@ fn first_bar(
     prepared: &HashMap<PanelId, PreparedTab>,
 ) -> Option<TabBar> {
     let tree = dock.main_surface();
-    let mut at = NodeIndex::root();
-    while at.0 < tree.len() && tree[at].is_parent() {
-        at = at.left();
-    }
+    let at = first_leaf(tree);
     if at.0 >= tree.len() {
         return None;
     }
@@ -2806,6 +3087,16 @@ struct Viewer<'a> {
 fn dock_style(style: &egui::Style, kit: &Kit) -> egui_stack::Style {
     let mut s = egui_stack::Style::from_egui(style);
     s.tab_bar.height = kit.tab_bar.data.height.max(kit.tab.data.height);
+    // Drops are shown on the node itself (the region the tab would take,
+    // bordered and tinted), not on a cross of buttons. The kit paints
+    // them (`dock-preview`); the style says the same for anything
+    // egui_stack draws by itself.
+    s.overlay.overlay_type = egui_stack::OverlayType::Zones;
+    let zone = kit.dock_preview.style(egui_pop_core::kit::State::REST);
+    s.overlay.zone_fill = zone.fill.gamma_multiply(kit.dock_preview.data.opacity);
+    s.overlay.zone_stroke = egui::Stroke::new(zone.border_width, zone.border_color);
+    s.overlay.zone_corner_radius =
+        egui::CornerRadius::same(zone.radius.round().clamp(0.0, 255.0) as u8);
     s
 }
 

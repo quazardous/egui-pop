@@ -307,8 +307,10 @@ compiled at install.
   layout, docking, drag and drop and the tabs' input; the kit is its
   `DockPainter` (`kit::dock`): it measures each tab (`tab_width`, the
   kit's padding, no floor of egui_stack's) and paints the bars, the tabs,
-  the separators (`splitter`) and the drop overlay inside an area
-  (`dock-preview`, its buttons `button`) where egui_stack lays them out. Shapes shipped: `box` (joined to its
+  the separators (`splitter`) and the drop zones inside an area
+  (`dock-preview`: the region a dragged tab would take, bordered and
+  tinted; the buttons of egui_stack's former cross overlay, for an
+  application asking for it, in `button`) where egui_stack lays them out. Shapes shipped: `box` (joined to its
   panel, the default, close to egui_dock's own look), `underline`, and
   `plain` for the bar. The gallery's `workbench-kit-underline` snapshot
   is a theme that switches to `underline` with data only. A tab dragged

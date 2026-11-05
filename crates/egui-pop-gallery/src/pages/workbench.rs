@@ -5,6 +5,9 @@
 //! A folded side area's strip shows its panels' icons: a click opens a
 //! panel as a flyout over the centre, and the outline's indicator (new
 //! headings) shows on its icon while the outline is not shown.
+//! A tab dragged over a group shows the region it would take, bordered
+//! and tinted; the bottom area's groups are arranged as a grid, a row or
+//! a column by the workbench's commands.
 
 use egui::Ui;
 use egui_pop::api::dialogs::{Confirm, DIALOGS};
@@ -16,6 +19,7 @@ use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::widgets;
 use egui_pop::model::commands::CommandSpec;
 use egui_pop::model::ids::{CommandId, PanelId, PluginId, StoryId};
+use egui_pop::model::layout::Node;
 use egui_pop::model::panels::{Area, PanelSpec};
 
 use super::section;
@@ -225,6 +229,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     section(ui, "Strip icons and flyouts");
     strip_controls(ui, app);
 
+    section(ui, "Drop zones, rows, columns and grids");
+    arrange_controls(ui, app);
+
     section(ui, "Placement rules");
     egui::Grid::new("gallery.workbench.rules")
         .num_columns(4)
@@ -266,13 +273,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     for (area, node) in &layout.areas {
         ui.horizontal(|ui| {
             ui.strong(workbench::area_name(*area));
-            ui.monospace(
-                node.panels()
-                    .iter()
-                    .map(|p| p.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            );
+            ui.monospace(shape(node));
         });
     }
     for aux in &layout.auxiliary {
@@ -315,6 +316,97 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     for r in runs {
         ui.monospace(r);
     }
+}
+
+/// A node as text: tabs joined by commas, a row's groups by `|`, a
+/// column's by `/`, a grid in `grid(...)` with its number of columns.
+fn shape(node: &Node) -> String {
+    match node {
+        Node::Tabs { panels, .. } => panels
+            .iter()
+            .map(|p| p.as_str())
+            .collect::<Vec<_>>()
+            .join(", "),
+        Node::Split { vertical, .. } => {
+            // A row or column of more than two is splits nested on their
+            // second side: one level shown.
+            let mut parts = Vec::new();
+            let mut at = node;
+            while let Node::Split {
+                vertical: v, a, b, ..
+            } = at
+                && v == vertical
+            {
+                parts.push(shape(a));
+                at = b;
+            }
+            parts.push(shape(at));
+            let join = if *vertical { " / " } else { " | " };
+            format!("[{}]", parts.join(join))
+        }
+        Node::Grid {
+            columns, children, ..
+        } => format!(
+            "grid {}({})",
+            columns.map_or("auto".to_string(), |n| n.to_string()),
+            children.iter().map(shape).collect::<Vec<_>>().join("; ")
+        ),
+    }
+}
+
+/// Puts Console, Notes and Properties in a row of their own in the bottom
+/// area, then arranges the groups around Console as the workbench's
+/// commands do (`workbench.arrange.grid`, `row`, `column`).
+fn arrange_controls(ui: &mut Ui, app: &AppHandle) {
+    ui.weak("Drag a tab over a group: the region it would take is bordered and tinted, half of the group near an edge, all of it elsewhere. A tab dropped outside the dock opens in a window of its own.");
+    ui.horizontal_wrapped(|ui| {
+        if ui.button("Three groups in the bottom area").clicked() {
+            bottom_row(app);
+        }
+        for (label, command) in [
+            ("Bottom: arrange as grid", workbench::CMD_ARRANGE_GRID),
+            ("Bottom: arrange as row", workbench::CMD_ARRANGE_ROW),
+            ("Bottom: arrange as column", workbench::CMD_ARRANGE_COLUMN),
+        ] {
+            if ui.button(label).clicked() {
+                app.run(command, serde_json::json!({ "panel": CONSOLE }));
+            }
+        }
+    });
+}
+
+/// Console, Notes and Properties side by side in the bottom area, after
+/// what was there.
+fn bottom_row(app: &AppHandle) {
+    let mut layout = app.layout();
+    for p in [CONSOLE, NOTES, PROPERTIES] {
+        layout.remove(&p);
+        layout.hidden.retain(|h| *h != p);
+    }
+    let row = Node::Split {
+        vertical: false,
+        ratio: 1.0 / 3.0,
+        a: Box::new(Node::tab(CONSOLE)),
+        b: Box::new(Node::Split {
+            vertical: false,
+            ratio: 0.5,
+            a: Box::new(Node::tab(NOTES)),
+            b: Box::new(Node::tab(PROPERTIES)),
+        }),
+    };
+    match layout.areas.iter_mut().find(|(a, _)| *a == Area::Bottom) {
+        Some((_, node)) => {
+            let before = std::mem::replace(node, Node::tab(CONSOLE));
+            *node = Node::Split {
+                vertical: false,
+                ratio: 0.25,
+                a: Box::new(before),
+                b: Box::new(row),
+            };
+        }
+        None => layout.areas.push((Area::Bottom, row)),
+    }
+    app.set_layout(layout);
 }
 
 /// The strips' controls, near the top of the page so they show without

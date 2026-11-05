@@ -10,7 +10,7 @@ watch it on the journal, veto or redirect it, replace it or follow it.
 
 A plugin declares panels with their rules; the workbench places them in
 areas (the centre, the start and end side bars, the bottom panel), as
-tabs and splits over [egui_stack](https://github.com/quazardous/egui_stack)
+tabs, rows, columns and grids over [egui_stack](https://github.com/quazardous/egui_stack)
 (the continuation of egui_dock),
 saves where the user put them and repairs that layout at the next start.
 The shell's side bar, main and inspector zones are panels of their areas.
@@ -126,8 +126,40 @@ the context key `focusedPanel`, is the panel the keys obey; see
 [The focused panel](#the-focused-panel). The layout
 changes through the steps `workbench.move`, `workbench.show`,
 `workbench.hide`, `workbench.focus`, `workbench.fold`,
-`workbench.place`, `workbench.flyout`, `workbench.flyout_size` and
-`workbench.zen` (`egui_pop::api::workbench`). A tab dragged onto another area moves
+`workbench.place`, `workbench.flyout`, `workbench.flyout_size`,
+`workbench.arrange` and `workbench.zen` (`egui_pop::api::workbench`).
+
+**Drop zones.** A tab dragged inside an area shows where it would go on
+the group under the pointer itself, with no buttons: near an edge (in
+egui_stack's edge band), the half of the group a split would give it,
+bordered and tinted; elsewhere the whole group, to join its tabs; over a
+tab bar, the place among its tabs. The zone is the kit's `dock-preview`
+(its `rest` border and fill, the fill at its `opacity`), so it follows
+the theme like the hint between areas; the same tokens feed egui_stack's
+`OverlayStyle::zone_fill`, `zone_stroke` and `zone_corner_radius`. A tab
+dropped outside the dock opens in a window of its own when its panel
+may detach. A drop on the edge of a group in a row (a column) joins
+that row (that column) rather than nesting a split, and a drop beside a
+group in a grid joins the grid.
+
+**Rows, columns and grids.** An area holds groups of tabs in rows,
+columns and grids, nested. "Arrange as grid" (`workbench.arrange.grid`)
+lays out the row, column or grid holding the focused panel's group in
+rows and columns, row by row: as many columns as the square root of
+their number, rounded up, or `columns` from the command's arguments;
+"Arrange as row" and "Arrange as column" (`workbench.arrange.row`,
+`workbench.arrange.column`) lay them out again side by side or one above
+the other. Each takes a `panel` argument for another group than the
+focused panel's, an agent's way in; a group alone in its area has
+nothing to arrange (`{ "arranged": false }`). They go through the
+`workbench.arrange` step (`panel`, `as`: `grid`, `row` or `column`,
+`columns`), `AppHandle::arrange` from code. The layout document saves a
+grid as a node of kind `grid` (`columns`, `col_shares`, `row_shares`,
+`children`); a row or column of more than two as splits nested on their
+second side, each `ratio` the share of its first side. Layouts saved
+before grids read as they did.
+
+A tab dragged onto another area moves
 there when its rules allow it; otherwise the drop hint says why. Over
 an area it may go to, the hint (the kit's `dock-preview`) carries a
 ghost of the dragged tab (the kit's `tab-preview`, with the tab's title

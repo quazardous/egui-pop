@@ -2406,6 +2406,18 @@ command-workbench-previous-region =
     .description = Amène le clavier à la partie précédente de la fenêtre.
     .title = Aller à la région précédente
 
+command-workbench-arrange-grid =
+    .description = Dispose le groupe du panneau actif et les groupes voisins en lignes et en colonnes.
+    .title = Disposer en grille
+
+command-workbench-arrange-row =
+    .description = Dispose le groupe du panneau actif et les groupes voisins côte à côte.
+    .title = Disposer en ligne
+
+command-workbench-arrange-column =
+    .description = Dispose le groupe du panneau actif et les groupes voisins les uns au-dessus des autres.
+    .title = Disposer en colonne
+
 command-workbench-tab-next =
     .description = Affiche et active l’onglet suivant du groupe du panneau actif.
     .title = Aller à l’onglet suivant

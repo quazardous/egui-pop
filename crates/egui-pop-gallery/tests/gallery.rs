@@ -1841,6 +1841,98 @@ fn the_workbench_page_shows_a_dragged_tab_s_ghost_where_it_would_land() {
 }
 
 #[test]
+fn the_workbench_page_shows_drop_zones_and_arranges_the_bottom_area_as_a_grid() {
+    use egui_pop::model::layout::Node;
+    use egui_pop::model::panels::Area;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    let bottom = |app: &egui_pop::api::AppHandle| {
+        let layout = app.layout();
+        let (_, node) = layout
+            .areas
+            .iter()
+            .find(|(a, _)| *a == Area::Bottom)
+            .cloned()
+            .unwrap();
+        node
+    };
+    let console = egui_pop::model::ids::PanelId::from_static("gallery.console");
+    let notes = egui_pop::model::ids::PanelId::from_static("gallery.notes");
+    let properties = egui_pop::model::ids::PanelId::from_static("gallery.properties");
+    let three = h.get_by_label("Three groups in the bottom area");
+    three.scroll_to_me();
+    h.run();
+    h.get_by_label("Three groups in the bottom area").click();
+    h.run();
+    h.run();
+    let order = |node: &Node| -> Vec<egui_pop::model::ids::PanelId> {
+        node.panels()
+            .into_iter()
+            .filter(|p| [&console, &notes, &properties].contains(p))
+            .cloned()
+            .collect()
+    };
+    assert_eq!(
+        order(&bottom(&app)),
+        [console.clone(), notes.clone(), properties.clone()]
+    );
+    // The Notes tab, held over the left edge of the console's group: the
+    // left half of the group is bordered and tinted.
+    let tab = |h: &Harness<'_, Gallery>, name: &str| {
+        h.get_by_role_and_label(egui::accesskit::Role::Button, name)
+            .rect()
+    };
+    let a = tab(&h, "Notes").center();
+    let body = h.get_by_label("> ready").rect();
+    let b = egui::pos2(body.left() + 6.0, body.center().y);
+    let pointer = |h: &mut Harness<'_, Gallery>, e: egui::Event| {
+        h.input_mut().events.push(e);
+        h.step();
+    };
+    let button = |pos, pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    pointer(&mut h, egui::Event::PointerMoved(a));
+    pointer(&mut h, button(a, true));
+    for i in 1..=8 {
+        pointer(
+            &mut h,
+            egui::Event::PointerMoved(a + (b - a) * (i as f32 / 8.0)),
+        );
+    }
+    h.step();
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("workbench-zone-pop-dark"));
+    pointer(&mut h, button(b, false));
+    h.run();
+    assert_eq!(
+        order(&bottom(&app)),
+        [notes.clone(), console.clone(), properties.clone()]
+    );
+    // The groups around the console's, as a grid.
+    h.get_by_label("Bottom: arrange as grid").click();
+    h.run();
+    h.run();
+    let grid = bottom(&app);
+    assert!(
+        matches!(&grid, Node::Grid { .. })
+            || matches!(&grid, Node::Split { b, .. } if matches!(**b, Node::Grid { .. })),
+        "{grid:?}"
+    );
+    h.remove_cursor();
+    h.run();
+    results.add(h.try_snapshot("workbench-grid-pop-dark"));
+    // And back in a row.
+    h.get_by_label("Bottom: arrange as row").click();
+    h.run();
+    assert!(!format!("{:?}", bottom(&app)).contains("Grid"));
+}
+
+#[test]
 fn the_palettes_page_floats_a_toolbox_a_colour_palette_and_a_navigator() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "palettes"));
     h.run();
