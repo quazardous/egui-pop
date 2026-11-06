@@ -178,3 +178,91 @@ fn a_wheel_over_a_popup_stays_out_of_what_is_under_it() {
     }
     assert_eq!(outer.get(), egui::Vec2::ZERO);
 }
+
+/// A strip scrolling only sideways in a tall page, its place and the page's: under
+/// egui-pop's theme when `themed`, else egui's own style.
+fn strip(themed: bool, offsets: Rc<Cell<(f32, f32)>>) -> Harness<'static> {
+    let h = Harness::builder()
+        .with_size(vec2(300.0, 300.0))
+        .build_ui(move |ui| {
+            let mut strip = 0.0;
+            let page = ScrollArea::vertical().id_salt("page").show(ui, |ui| {
+                let area = ScrollArea::horizontal().id_salt("strip");
+                let out = ui.scroll_area(area, |ui| {
+                    ui.horizontal(|ui| {
+                        for i in 0..40 {
+                            ui.label(format!("Tab {i}"));
+                        }
+                    });
+                });
+                strip = out.state.clamped_offset().x;
+                ui.allocate_space(vec2(100.0, 2000.0));
+            });
+            offsets.set((strip, page.state.clamped_offset().y));
+        });
+    if themed {
+        egui_pop_core::theme::install(&h.ctx, &egui_pop_core::theme::ThemeSpec::new("pop-dark"));
+    }
+    h
+}
+
+#[test]
+fn a_strip_scrolling_only_sideways_takes_the_plain_wheel() {
+    let offsets = Rc::new(Cell::new((0.0, 0.0)));
+    let mut h = strip(true, offsets.clone());
+    h.run();
+    wheel(&mut h, pos2(100.0, 10.0), vec2(0.0, -2.0));
+    let (strip, page) = offsets.get();
+    assert!(strip > 0.0, "the strip moved: {strip}");
+    assert_eq!(page, 0.0, "and the page did not");
+    // At its end, the wheel goes on to the page, as for any area.
+    for _ in 0..40 {
+        wheel(&mut h, pos2(100.0, 10.0), vec2(0.0, -4.0));
+    }
+    assert!(offsets.get().1 > 0.0, "{:?}", offsets.get());
+}
+
+/// What the theme changes: egui's own style wants Shift for a sideways strip.
+#[test]
+fn without_the_theme_a_sideways_strip_wants_shift() {
+    let offsets = Rc::new(Cell::new((0.0, 0.0)));
+    let mut h = strip(false, offsets.clone());
+    h.run();
+    wheel(&mut h, pos2(100.0, 10.0), vec2(0.0, -2.0));
+    let (strip, page) = offsets.get();
+    assert_eq!(strip, 0.0);
+    assert!(page > 0.0, "{page}");
+}
+
+/// egui 0.37 lets a trackpad at an area's end go on to an area around it
+/// (`has_scrolling_ancestor`), rather than stretching it: containment still keeps
+/// it there.
+#[test]
+fn a_contained_area_keeps_a_trackpad_at_its_end_too() {
+    let outer = Rc::new(Cell::new(egui::Vec2::ZERO));
+    let inner = Rc::new(Cell::new(0.0));
+    let seen = inner.clone();
+    let mut h = page(outer.clone(), move |ui| {
+        let out = ui.scroll_area_contained(tall(100.0), |ui| content(ui, 150.0));
+        seen.set(out.state.clamped_offset().y);
+    });
+    h.run();
+    let event = |delta, phase| egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta,
+        modifiers: egui::Modifiers::NONE,
+        phase,
+        source: egui::MouseWheelSource::Trackpad,
+    };
+    h.hover_at(OVER);
+    h.run();
+    h.event(event(egui::Vec2::ZERO, egui::TouchPhase::Start));
+    for _ in 0..8 {
+        h.event(event(vec2(0.0, -30.0), egui::TouchPhase::Move));
+        h.step();
+    }
+    h.event(event(egui::Vec2::ZERO, egui::TouchPhase::End));
+    h.run_steps(30);
+    assert!(inner.get() > 0.0, "it moved itself");
+    assert_eq!(outer.get(), egui::Vec2::ZERO);
+}

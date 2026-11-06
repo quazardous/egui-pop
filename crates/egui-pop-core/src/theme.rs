@@ -50,7 +50,8 @@ use std::sync::{Arc, Mutex};
 
 use egui::{
     Color32, Context, CornerRadius, Margin, Shadow, Stroke, Style, TextStyle, Theme,
-    ThemePreference, Visuals, style::ScrollAnimation,
+    ThemePreference, Visuals,
+    style::{KineticScrollStyle, ScrollAnimation},
 };
 
 use crate::kit::{Kit, Shapes, State};
@@ -965,6 +966,27 @@ pub fn style_with(t: &Tokens, kit: &Kit, base: &Style) -> Style {
     sp.indent = t.size.icon_toolbar;
     // Every scroll area's bars, from the kit's `scroll-bar`.
     sp.scroll = kit.scroll.style(&sp.scroll);
+    // Under reduced motion, a scroll area stops where the finger leaves it: no
+    // coasting after a touch drag, and no stretching past an end on a trackpad
+    // or a touch screen (egui's rubber band). A mouse wheel has neither.
+    // A theme with motion installed over one without gets egui's back.
+    let kinetic = base.spacing.scroll.kinetic;
+    let still = KineticScrollStyle {
+        decay_time: 0.0,
+        rubber_band: false,
+        ..kinetic
+    };
+    sp.scroll.kinetic = if t.motion_duration == 0.0 {
+        still
+    } else if kinetic == still {
+        KineticScrollStyle::default()
+    } else {
+        kinetic
+    };
+    // A strip that scrolls only one way takes the plain wheel: egui's default
+    // wants Shift for a horizontal strip, which nobody finds on a strip with no
+    // bar.
+    style.always_scroll_the_only_direction = true;
     style.animation_time = t.motion_duration;
     if t.motion_duration == 0.0 {
         style.scroll_animation = ScrollAnimation::none();
