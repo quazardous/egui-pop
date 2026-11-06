@@ -13,6 +13,8 @@
 //!     param::param(ui, &d, Mode::Plain(local));
 //!     param::param(ui, &d, Mode::Bound(store, "params/gain"));
 //!     param::param(ui, &d, Mode::Watch(store, "params/gain"));
+//!     // Bound, the descriptor the path was declared with.
+//!     param::bound(ui, store, "params/gain");
 //! }
 //! ```
 
@@ -74,6 +76,32 @@ pub fn is_colour(d: &Descriptor) -> bool {
 /// Draws the editor `d` calls for.
 pub fn param(ui: &mut Ui, d: &Descriptor, mode: Mode<'_>) -> Response {
     param_shown(ui, d, mode, &|c| c.to_string())
+}
+
+/// The editor for a store's path, bound to it ([`Mode::Bound`]), its
+/// descriptor read from the store: the one the path was declared with.
+/// A path nobody declared shows as a warning, named by the path.
+///
+/// ```no_run
+/// use egui_pop_core::param;
+/// use egui_pop_model::ids::OwnerId;
+/// use egui_pop_model::values::{Descriptor, Store};
+///
+/// let mut store = Store::new();
+/// let d = Descriptor::float("Gain", 0.0, 2.0, 1.0);
+/// store.declare(&OwnerId::from_static("demo"), "params/gain", d).unwrap();
+/// let store = std::sync::Arc::new(std::sync::Mutex::new(store));
+/// let ctx = egui::Context::default();
+/// let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+///     param::bound(ui, &store, "params/gain");
+/// });
+/// ```
+pub fn bound(ui: &mut Ui, store: &SharedStore, path: &str) -> Response {
+    let descriptor = crate::lock(store).get(path).map(|e| e.descriptor.clone());
+    match descriptor {
+        Some(d) => param(ui, &d, Mode::Bound(store, path)),
+        None => ui.label(format!("{path}: not declared")),
+    }
 }
 
 /// As [`param`], a choice's values shown through `shown` (a translation:

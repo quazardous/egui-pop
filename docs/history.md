@@ -29,6 +29,13 @@ egui).
   A component registers one for its focus surface
   (`Ctx::local_scope`).
 - **Redo is linear**: a new step drops the redo list of its scope.
+- **A group** makes the writes of one action one step:
+  `AppHandle::group(origin, label, |g| ...)`, or `Call::group(label,
+  |g| ...)` in a command, ends the group when the closure returns `Ok`
+  and cancels it (every write put back) on an error or a panic. It
+  opens through the host (`Host::begin_group`); inside a command, while
+  the host dispatches, through `Host::groups`, which a host keeping its
+  own history gives so that a command's groups reach it.
 
 ## Which history Ctrl+Z undoes
 

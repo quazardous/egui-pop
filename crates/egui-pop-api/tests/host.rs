@@ -281,3 +281,166 @@ fn a_host_on_its_own_bus_answers_the_journal_and_a_bare_host_gets_one() {
     let names: Vec<String> = h.events_since(0).into_iter().map(|e| e.name).collect();
     assert_eq!(names, ["command.dispatched", "command.done"]);
 }
+
+/// A host keeping its own history: its groups are logged, and opened on
+/// the shared store under its own label prefix.
+#[derive(Default)]
+struct Grouping {
+    journal: Journal,
+    store: SharedStore,
+    log: Arc<Mutex<Vec<String>>>,
+}
+
+struct HostGroups {
+    store: SharedStore,
+    log: Arc<Mutex<Vec<String>>>,
+}
+
+impl host::Groups for HostGroups {
+    fn begin(&self, origin: &Origin, label: &str) -> Option<egui_pop_model::values::GestureId> {
+        self.log
+            .lock()
+            .unwrap()
+            .push(format!("begin {label} as {origin}"));
+        Some(
+            egui_pop_core::lock(&self.store).begin_group(origin.clone(), &format!("host: {label}")),
+        )
+    }
+
+    fn end(&self, group: egui_pop_model::values::GestureId, keep: bool) {
+        self.log.lock().unwrap().push(format!("end {keep}"));
+        let mut s = egui_pop_core::lock(&self.store);
+        if keep {
+            s.end(group);
+        } else {
+            s.cancel(group);
+        }
+    }
+}
+
+impl Host for Grouping {
+    fn dispatch(&mut self, d: &Dispatch<'_>) -> Reply {
+        Reply::Done(d.run_local().unwrap_or_else(|| Err("no handler".into())))
+    }
+    fn journal(&self) -> Option<&Journal> {
+        Some(&self.journal)
+    }
+    fn journal_mut(&mut self) -> Option<&mut Journal> {
+        Some(&mut self.journal)
+    }
+    fn store(&self) -> SharedStore {
+        self.store.clone()
+    }
+    fn set_waker(&mut self, _waker: Waker) {}
+    fn groups(&self) -> Option<std::rc::Rc<dyn host::Groups>> {
+        Some(std::rc::Rc::new(HostGroups {
+            store: self.store.clone(),
+            log: self.log.clone(),
+        }))
+    }
+}
+
+const BOTH: CommandId = CommandId::from_static("swatch.both");
+const HALF: CommandId = CommandId::from_static("swatch.half");
+
+struct Pair;
+
+impl Plugin for Pair {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("swatch")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        use egui_pop_model::values::{Change, Descriptor, Value};
+        ctx.value("swatch/a", Descriptor::float("A", 0.0, 10.0, 1.0))?;
+        ctx.value("swatch/b", Descriptor::float("B", 0.0, 10.0, 2.0))?;
+        ctx.command(CommandSpec::new(BOTH, "Both", "Swatch"), |call| {
+            call.group("Both", |g| {
+                g.set("swatch/a", Change::To(Value::Float(5.0)))?;
+                g.set("swatch/b", Change::To(Value::Float(6.0)))?;
+                Ok(Json::Null)
+            })
+        })?;
+        // The second write is refused (out of range is clamped, an
+        // unknown path is not): the first is put back.
+        ctx.command(CommandSpec::new(HALF, "Half", "Swatch"), |call| {
+            call.group("Half", |g| {
+                g.set("swatch/a", Change::To(Value::Float(7.0)))?;
+                g.set("swatch/nowhere", Change::To(Value::Float(1.0)))?;
+                Ok(Json::Null)
+            })
+        })?;
+        Ok(())
+    }
+}
+
+#[test]
+fn a_commands_group_goes_through_the_hosts_groups_and_is_one_step() {
+    let host = Grouping::default();
+    let log = host.log.clone();
+    let mut app = App::builder()
+        .host(host)
+        .plugin(Pair)
+        .build(&egui::Context::default())
+        .unwrap();
+    let h = app.handle().clone();
+    let agent = Origin::Agent("bot".into());
+    assert_eq!(
+        app.run(&BOTH, Json::Null, agent.clone()).now(),
+        Some(Ok(Json::Null))
+    );
+    assert_eq!(h.value::<f64>("swatch/a"), Some(5.0));
+    assert_eq!(h.value::<f64>("swatch/b"), Some(6.0));
+    assert_eq!(
+        *log.lock().unwrap(),
+        ["begin Both as agent:bot", "end true"]
+    );
+    let store = h.store();
+    let steps = egui_pop_core::lock(&store).undo_steps().to_vec();
+    assert_eq!(steps.len(), 1);
+    assert_eq!(
+        (steps[0].label.as_str(), &steps[0].origin),
+        ("host: Both", &agent)
+    );
+
+    // An error cancels the group: the first write is put back.
+    log.lock().unwrap().clear();
+    assert!(matches!(
+        app.run(&HALF, Json::Null, Origin::User).now(),
+        Some(Err(_))
+    ));
+    assert_eq!(h.value::<f64>("swatch/a"), Some(5.0));
+    assert_eq!(*log.lock().unwrap(), ["begin Half as user", "end false"]);
+    assert_eq!(egui_pop_core::lock(&store).undo_steps().len(), 1);
+
+    // Outside a command, the group goes through the host itself (whose
+    // default `begin_group` uses its groups).
+    log.lock().unwrap().clear();
+    h.group(&Origin::User, "Panel", |g| {
+        g.set("swatch/b", egui_pop_model::values::Change::Reset)
+    })
+    .unwrap();
+    assert_eq!(*log.lock().unwrap(), ["begin Panel as user", "end true"]);
+    assert_eq!(h.value::<f64>("swatch/b"), Some(2.0));
+}
+
+#[test]
+fn a_panic_in_a_group_puts_its_writes_back() {
+    let app = App::builder()
+        .plugin(Pair)
+        .build(&egui::Context::default())
+        .unwrap();
+    let h = app.handle().clone();
+    let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _: Result<(), String> = h.group(&Origin::User, "Boom", |g| {
+            g.set(
+                "swatch/a",
+                egui_pop_model::values::Change::To(egui_pop_model::values::Value::Float(9.0)),
+            )?;
+            panic!("in the middle");
+        });
+    }));
+    assert!(caught.is_err());
+    assert_eq!(h.value::<f64>("swatch/a"), Some(1.0));
+    assert!(egui_pop_core::lock(&h.store()).undo_steps().is_empty());
+}

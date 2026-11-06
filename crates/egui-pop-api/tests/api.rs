@@ -336,6 +336,45 @@ fn a_command_declared_once_yields_its_key_menu_palette_and_agent_entries() {
         app.handle().history().last().unwrap().origin,
         Origin::Agent("t".into())
     );
+    // The palette's ranking from code, the recent run first on a tie.
+    let found = app.handle().palette_search("demo go");
+    assert_eq!(found[0].entry.command, go);
+    assert_eq!(found[0].label, "Demo: Go");
+    assert!(app.handle().palette_search("zzzz").is_empty());
+}
+
+#[test]
+fn values_and_settings_are_declared_and_read_in_one_line() {
+    let l = log();
+    let level = SettingId::from_static("demo.level");
+    let app = build(App::builder().plugin(P::new("demo", &l, |ctx| {
+        everything(ctx)?;
+        ctx.value("demo/hue", Descriptor::float("Hue", 0.0, 360.0, 200.0))?;
+        Ok(())
+    })));
+    let h = app.handle();
+    assert_eq!(level.path(), "settings/demo.level");
+    assert_eq!(h.setting::<i64>(&level), Some(3));
+    assert_eq!(h.setting::<bool>(&level), None, "not a bool");
+    assert_eq!(h.value::<f64>("demo/hue"), Some(200.0));
+    assert_eq!(h.value::<f64>("demo/nowhere"), None);
+    let store = h.store();
+    let owner = egui_pop_core::lock(&store)
+        .get("demo/hue")
+        .map(|e| e.owner.clone());
+    assert_eq!(owner.as_ref().map(|o| o.as_str()), Some("demo"));
+    // A path declared twice is refused, as a setting's is.
+    let twice = App::builder()
+        .plugin(P::new("a", &l, |ctx| {
+            ctx.value("x/y", Descriptor::bool("Y", true))?;
+            Ok(())
+        }))
+        .plugin(P::new("b", &l, |ctx| {
+            ctx.value("x/y", Descriptor::bool("Y", true))?;
+            Ok(())
+        }))
+        .build(&egui::Context::default());
+    assert!(twice.is_err());
 }
 
 fn order_of(h: &Harness<'_, App>, labels: &[&str]) -> Vec<String> {

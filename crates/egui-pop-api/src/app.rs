@@ -764,6 +764,8 @@ pub(crate) struct Shared {
     pending_keys: RefCell<Option<String>>,
     /// The host; out of its cell while it dispatches.
     host: RefCell<Option<Box<dyn Host>>>,
+    /// The host's history groups (`Host::groups`) while it dispatches.
+    dispatch_groups: RefCell<Option<Rc<dyn crate::host::Groups>>>,
     /// Events published while the host was dispatching.
     held: RefCell<Vec<Held>>,
     /// The journal kept for a host that keeps none.
@@ -889,6 +891,7 @@ impl AppHandle {
             traces: RefCell::new(Vec::new()),
             pending_keys: RefCell::new(None),
             host: RefCell::new(Some(host)),
+            dispatch_groups: RefCell::new(None),
             held: RefCell::new(Vec::new()),
             journal: RefCell::new(crate::host::Journal::default()),
             running: RefCell::new(BTreeMap::new()),
@@ -1114,6 +1117,18 @@ impl AppHandle {
         self.0.store.clone()
     }
 
+    /// The value at `path` in the store, as `T` (`None`: not declared,
+    /// or not a `T`): `app.value::<f64>("swatch/hue")`.
+    pub fn value<T: egui_pop_core::binding::Bindable>(&self, path: &str) -> Option<T> {
+        egui_pop_core::binding::read(&self.0.store, path)
+    }
+
+    /// A setting's value, as `T` (`None`: not declared, or not a `T`):
+    /// `app.setting::<bool>(&SHOW_CODE)`, read at `settings/<id>`.
+    pub fn setting<T: egui_pop_core::binding::Bindable>(&self, id: &SettingId) -> Option<T> {
+        self.value(&id.path())
+    }
+
     /// The persistence directory (`AppBuilder::persist`), if one was
     /// given.
     pub fn persist(&self) -> Option<Persist> {
@@ -1224,6 +1239,11 @@ impl AppHandle {
     /// Reads the host (`None` while it dispatches a command).
     fn with_host<R>(&self, f: impl FnOnce(&dyn Host) -> R) -> Option<R> {
         self.0.host.borrow().as_deref().map(f)
+    }
+
+    /// The host's history groups while it dispatches a command.
+    pub(crate) fn dispatch_groups(&self) -> Option<Rc<dyn crate::host::Groups>> {
+        self.0.dispatch_groups.borrow().clone()
     }
 
     /// Changes the host (`None` while it dispatches a command).
@@ -1852,6 +1872,14 @@ impl AppHandle {
     /// The palette's entries after the hooks.
     pub fn palette(&self) -> Vec<PaletteEntry> {
         self.0.derived.borrow().palette.clone()
+    }
+
+    /// What the command palette lists for `query`, best first: the
+    /// entries that apply now, matched on their label in the interface's
+    /// language (`Category: Title`), the recent ones winning ties, as
+    /// the palette ranks them (`palette::rank_with`).
+    pub fn palette_search(&self, query: &str) -> Vec<crate::palette::Ranked> {
+        crate::palette::search(self, query)
     }
 
     /// The settings form's entries after the hooks.
@@ -3137,6 +3165,25 @@ impl AppBuilder {
     pub fn persist(mut self, dir: impl Into<std::path::PathBuf>) -> Self {
         self.persist = Some(Persist::new(dir));
         self
+    }
+
+    /// Saves the settings, the layout and the window's place in the
+    /// user's configuration folder, in a folder named `app`
+    /// ([`crate::dirs::config_dir`]: `~/.config/<app>` on Linux), or in
+    /// the temporary folder when the environment names no configuration
+    /// folder. `persist_in_config(env!("CARGO_PKG_NAME"))` names it after
+    /// the crate.
+    pub fn persist_in_config(self, app: &str) -> Self {
+        let dir = crate::dirs::config_dir(app).unwrap_or_else(|| {
+            // The web has no temporary folder (`temp_dir` panics there).
+            let temp = if cfg!(target_arch = "wasm32") {
+                std::path::PathBuf::new()
+            } else {
+                std::env::temp_dir()
+            };
+            temp.join(app)
+        });
+        self.persist(dir)
     }
 
     /// The application's kernel: runs the commands, keeps the journal
@@ -5519,11 +5566,15 @@ impl App {
             .take()
             .expect("a command dispatched from inside a dispatch is queued (AppHandle::run)");
         let acting = ActingFor::new(&self.handle, &origin);
+        // A group the handler opens (`Call::group`) reaches the host's
+        // history through its groups while the host is out of its cell.
+        let groups = self.handle.0.dispatch_groups.replace(host.groups());
         let reply = host.dispatch(
             &Dispatch::new(command, &args, &origin, cx, seq, &self.handle, local)
                 .owned_by(owner.as_ref())
                 .deferring(deferred),
         );
+        *self.handle.0.dispatch_groups.borrow_mut() = groups;
         drop(acting);
         *self.handle.0.host.borrow_mut() = Some(host);
         if deferred && approved.get() {

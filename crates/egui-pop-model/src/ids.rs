@@ -193,6 +193,23 @@ typed_id!(
     /// A setting, also its path in the value store under `settings/`.
     SettingId
 );
+
+/// Where settings live in the value store: a setting `id` is at
+/// `settings/<id>` ([`SettingId::path`]).
+pub const SETTINGS_PREFIX: &str = "settings/";
+
+impl SettingId {
+    /// The setting's path in the value store: `settings/<id>`.
+    ///
+    /// ```
+    /// use egui_pop_model::ids::SettingId;
+    /// let id = SettingId::from_static("swatch.show_code");
+    /// assert_eq!(id.path(), "settings/swatch.show_code");
+    /// ```
+    pub fn path(&self) -> String {
+        format!("{SETTINGS_PREFIX}{}", self.0)
+    }
+}
 typed_id!(
     /// A service plugins share.
     ServiceId

@@ -30,8 +30,10 @@ tested by the same CI, so neither falls behind the API.
 An application is an `App`, built by `App::builder()` from plugins.
 `DefaultPlugins` is the paved road: the command palette, dialogs,
 toasts, the settings window, the window's place and saved layouts.
-`persist` names the folder where the settings, the layout and the
-window's place are kept between runs.
+`persist_in_config` keeps the settings, the layout and the window's
+place between runs, in the user's configuration folder
+(`~/.config/swatch` on Linux, `%APPDATA%\swatch` on Windows); `persist`
+names any other folder.
 
 ```rust,no_run
 use egui_pop::eframe;
@@ -41,7 +43,7 @@ fn main() -> eframe::Result {
     App::builder()
         .name("Swatch")
         .plugins(DefaultPlugins)
-        .persist(std::env::temp_dir().join("swatch"))
+        .persist_in_config("swatch")
         .run_native("Swatch", eframe::NativeOptions::default())
 }
 ```
@@ -67,7 +69,6 @@ entry and its agent surface all come from it.
 
 ```rust
 use egui_pop::api::app::MENU_EDIT;
-use egui_pop::api::palette;
 use egui_pop::egui;
 use egui_pop::prelude::*;
 
@@ -94,7 +95,7 @@ impl Plugin for Swatch {
 let mut app = App::builder().plugins(DefaultPlugins).plugin(Swatch)
     .build(&egui::Context::default()).unwrap();
 // The palette (Ctrl+Shift+P or F1) finds it from a few letters.
-let found = palette::rank(&app.handle().palette(), "reset sw", &[], |_| true);
+let found = app.handle().palette_search("reset sw");
 assert_eq!(found[0].label, "Swatch: Reset the swatch");
 // The key, the menu, the palette and code run the same thing.
 let out = app.run(&RESET, serde_json::Value::Null, Origin::User);
@@ -172,17 +173,16 @@ arrangements (`Ctx::arrangement`) the user switches between.
 A setting is a value with a descriptor: its type, label, range and
 default. `Ctx::setting` puts it in the settings window (`Ctrl+,`),
 under the plugin's title, with a reset and a search; it is saved with
-the rest. The application reads it from the value store, where it lives
-at `settings/<id>`, wherever it needs it: here, while drawing.
+the rest. The application reads it with `AppHandle::setting` wherever
+it needs it: here, while drawing. It lives in the value store at
+`settings/<id>` (`SettingId::path`).
 
 ```rust
-use egui_pop::core::binding;
 use egui_pop::egui;
 use egui_pop::model::values::{Change, Set, Value};
 use egui_pop::prelude::*;
 
 const SHOW_CODE: SettingId = SettingId::from_static("swatch.show_code");
-const SHOW_CODE_PATH: &str = "settings/swatch.show_code";
 
 struct Swatch;
 
@@ -201,13 +201,13 @@ impl Plugin for Swatch {
 
 let app = App::builder().plugins(DefaultPlugins).plugin(Swatch)
     .build(&egui::Context::default()).unwrap();
-let store = app.handle().store();
-// In a panel: `binding::read(&app.store(), SHOW_CODE_PATH)`.
-assert_eq!(binding::read::<bool>(&store, SHOW_CODE_PATH), Some(true));
+let handle = app.handle();
+// In a panel: `app.setting::<bool>(&SHOW_CODE)`.
+assert_eq!(handle.setting::<bool>(&SHOW_CODE), Some(true));
 // The settings window writes it as the user does here.
-let off = Set::new(SHOW_CODE_PATH, Change::To(Value::Bool(false)), Origin::User);
-egui_pop::core::lock(&store).set(off).unwrap();
-assert_eq!(binding::read::<bool>(&store, SHOW_CODE_PATH), Some(false));
+let off = Set::new(&SHOW_CODE.path(), Change::To(Value::Bool(false)), Origin::User);
+egui_pop::core::lock(&handle.store()).set(off).unwrap();
+assert_eq!(handle.setting::<bool>(&SHOW_CODE), Some(false));
 ```
 
 A page laid out by hand, in place of the generated one, is a
@@ -274,14 +274,14 @@ egui-pop's undo is the application's history; Ctrl+Z, the Edit menu
 and the History panel route to it. Without a history of its own, the
 application's state lives in the **value store**: each change is an
 undo step with a label and an origin. Declare the values the plugin
-owns, write them as the user or the command's caller, and group the
-writes of one action into one step.
+owns (`Ctx::value`), and write the changes of one action in a group
+(`Call::group`): one step, named, written as the command's caller,
+undone together; an error puts every write back.
 
 ```rust
 use egui_pop::api::app::CMD_UNDO;
-use egui_pop::core::{binding, lock};
 use egui_pop::egui;
-use egui_pop::model::values::{Change, Set, Value};
+use egui_pop::model::values::{Change, Value};
 use egui_pop::prelude::*;
 
 const HUE: &str = "swatch/hue";
@@ -291,18 +291,13 @@ const RESET: CommandId = CommandId::from_static("swatch.reset");
 #     fn id(&self) -> PluginId { PluginId::from_static("swatch") }
 #     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
 // In `connect`: the value, owned by the plugin.
-let hue = Descriptor::float("Hue", 0.0, 360.0, 200.0).unit("°");
-lock(&ctx.app().store())
-    .declare(ctx.owner(), HUE, hue)
-    .map_err(|e| PluginError::Failed(e.to_string()))?;
+ctx.value(HUE, Descriptor::float("Hue", 0.0, 360.0, 200.0).unit("°"))?;
 ctx.command(CommandSpec::new(RESET, "Reset the swatch", "Swatch"), |call| {
-    let store = call.app.store();
-    let mut s = lock(&store);
-    // Every write until `end` is one step, named, with the caller's origin.
-    let group = s.begin_group(call.origin.clone(), "Reset the swatch");
-    let done = s.set(Set::new(HUE, Change::Reset, call.origin.clone()).gesture(group));
-    s.end(group);
-    done.map(|_| serde_json::Value::Null).map_err(|e| e.to_string())
+    // Every write in the group is one step, with the caller's origin.
+    call.group("Reset the swatch", |g| {
+        g.set(HUE, Change::Reset)?;
+        Ok(serde_json::Value::Null)
+    })
 })?;
 #         Ok(())
 #     }
@@ -310,18 +305,21 @@ ctx.command(CommandSpec::new(RESET, "Reset the swatch", "Swatch"), |call| {
 
 let mut app = App::builder().plugins(DefaultPlugins).plugin(Swatch)
     .build(&egui::Context::default()).unwrap();
-let store = app.handle().store();
-lock(&store).set(Set::new(HUE, Change::To(Value::Float(30.0)), Origin::User)).unwrap();
+let handle = app.handle().clone();
+// Outside a command (a panel, a test), a group names its origin.
+handle.group(&Origin::User, "Warm the swatch", |g| g.set(HUE, Change::To(Value::Float(30.0))))
+    .unwrap();
 app.run(&RESET, serde_json::Value::Null, Origin::User);
-assert_eq!(binding::read::<f64>(&store, HUE), Some(200.0));
+assert_eq!(handle.value::<f64>(HUE), Some(200.0));
 app.run(&CMD_UNDO, serde_json::Value::Null, Origin::User); // Ctrl+Z
-assert_eq!(binding::read::<f64>(&store, HUE), Some(30.0));
+assert_eq!(handle.value::<f64>(HUE), Some(30.0));
 ```
 
-In a panel, a widget bound to the value writes it the same way, one
-step per drag: `param::param(ui, &descriptor, Mode::Bound(&store, HUE))`
-draws the slider, check box or field its descriptor calls for
-(`egui_pop::core::param`). `HistoryPlugin` (`egui_pop::api::history_view`)
+The group goes through the host, so an application keeping its own
+history (as Helios does, below) gets it too. In a panel, a widget bound
+to the value writes it the same way, one step per drag:
+`param::bound(ui, &app.store(), HUE)` draws the slider, check box or
+field the value's descriptor calls for (`egui_pop::core::param`). `HistoryPlugin` (`egui_pop::api::history_view`)
 adds the History panel: every step, a click to go back to one,
 snapshots. More in [History](history.md) and
 [State or event](state-or-event.md).
@@ -378,6 +376,8 @@ let f = app.debug_call("commands", "run", &json!({ "id": "swatch.set", "args": {
 assert!(f.ok, "{}", f.message);
 let agent = json!({ "kind": "agent", "id": "debug-bridge" });
 assert_eq!(f.data, json!({ "hue": 90.0, "by": agent }));
+// As the history and the journal name it.
+assert_eq!(Origin::Agent("debug-bridge".into()).to_string(), "agent:debug-bridge");
 ```
 
 The History panel names the steps an agent made ("Set the swatch
@@ -443,11 +443,21 @@ and compares with it afterwards, within the tolerances of a
 ```rust,ignore
 #[test]
 fn the_window_looks_as_it_did() {
-    let mut h = egui_pop_test::app_wgpu(builder(), egui::vec2(900.0, 560.0));
+    // `None` (the reason printed) where pictures are not compared.
+    let Some(mut h) = egui_pop_test::app_snapshot(builder(), egui::vec2(900.0, 560.0)) else {
+        return;
+    };
     h.run();
     h.snapshot("swatch"); // tests/snapshots/swatch.png
 }
 ```
+
+Pictures are compared on **lavapipe**, Mesa's software Vulkan, which
+draws them the same everywhere (CI included); a GPU draws edges a
+little differently. `app_snapshot` skips with a message where no
+adapter opens or the adapter is a GPU; install lavapipe
+(`mesa-vulkan-drivers`) to compare locally, or set
+`EGUI_POP_SNAPSHOT_ANY_GPU=1` to compare on your GPU.
 
 The template's `src/tests.rs` has both, and the agent's run of step 7.
 More in [Testing](testing.md).

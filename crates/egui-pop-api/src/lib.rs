@@ -130,8 +130,10 @@ pub mod contexts;
 pub mod ctx;
 pub mod devtools;
 pub mod dialogs;
+pub mod dirs;
 pub mod files;
 pub mod frame;
+pub mod group;
 mod groups;
 pub mod history;
 pub mod history_view;
@@ -175,6 +177,7 @@ pub use app::{
     SETTING_ACCENT_COLOR, SETTING_FOCUS, SETTING_THEME_PREFERENCE, THEME, ThemeService,
 };
 pub use ctx::{Ctx, CtxError, ValueWriter};
+pub use group::Group;
 pub use groups::{DefaultPlugins, MinimalPlugins, PluginGroup};
 pub use plugin::{BuildError, Plugin, PluginError, PluginInfo};
 

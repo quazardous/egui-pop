@@ -11,6 +11,7 @@ use egui_pop::core::binding::{self, Binding};
 use egui_pop::eframe;
 use egui_pop::egui;
 use egui_pop::model::panels::{Area, PanelSpec};
+use egui_pop::model::values::{Change, Value};
 use egui_pop::prelude::*;
 
 /// Where the note is kept.
@@ -42,16 +43,9 @@ impl Plugin for Notes {
                 .key("Ctrl+Shift+K")
                 .menu(MENU_EDIT, "5_notes", 0),
             |call| {
-                let store = call.app.store();
-                egui_pop::core::lock(&store)
-                    .set(egui_pop::model::values::Set::new(
-                        "settings/notes.text",
-                        egui_pop::model::values::Change::To(egui_pop::model::values::Value::Text(
-                            String::new(),
-                        )),
-                        call.origin.clone(),
-                    ))
-                    .map_err(|e| e.to_string())?;
+                call.group("Clear the note", |g| {
+                    g.set(&NOTE.path(), Change::To(Value::Text(String::new())))
+                })?;
                 if let Some(t) = call.app.service(&TOASTS) {
                     t.notify(Toast::info("The note is cleared (Ctrl+Z brings it back)."));
                 }
@@ -66,7 +60,7 @@ impl Plugin for Notes {
                 let heading = ui.heading("Note");
                 binding::edit(
                     ui,
-                    Binding::bound(&store, "settings/notes.text"),
+                    Binding::bound(&store, &NOTE.path()),
                     |ui, v: &mut String| {
                         ui.add(egui::TextEdit::multiline(v).desired_width(f32::INFINITY))
                             .labelled_by(heading.id)
@@ -82,10 +76,10 @@ impl Plugin for Notes {
 }
 
 fn main() -> eframe::Result {
-    let dir = std::env::temp_dir().join("egui-pop-minimal");
     App::builder()
         .plugins(DefaultPlugins)
         .plugin(Notes)
-        .persist(dir)
+        // Kept in the user's configuration folder (`~/.config/egui-pop-minimal`).
+        .persist_in_config("egui-pop-minimal")
         .run_native("Notes", eframe::NativeOptions::default())
 }
