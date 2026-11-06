@@ -137,6 +137,7 @@ pub fn step_of(edit: &Edit) -> Option<StepId> {
         Edit::Delete { .. } => Some(STEP_GRAPH_DELETE),
         Edit::Add { .. } => Some(STEP_GRAPH_ADD),
         Edit::Param { .. } => None,
+        _ => None,
     }
 }
 
@@ -203,6 +204,7 @@ pub fn show_graph(
                 EVENT_GRAPH_REFUSED,
                 json!({ "graph": name, "from": from.to_json(), "to": to.to_json(), "reason": reason }),
             ),
+            _ => continue,
         };
         app.publish("graph", None, event, data);
     }
