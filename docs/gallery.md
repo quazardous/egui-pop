@@ -95,7 +95,8 @@ outlines and the loupe), `node-graph` (the node graph editor), `graph-file` (the
 (the live tree), `list-items` (dense rows on their own and in a tree,
 property rows in a selection panel), `table` (lists and tables), `plot` (charts: a time
 series with a time cursor, a scatter and bars), `plot-time` (a plot over a
-timeline's time), `library` (the photo
+timeline's time), `text-log` (a text log on the data table: level chips, a
+filter, the tail followed, the rows at the playhead), `library` (the photo
 library), `timeline` (timelines over seconds, a timecode and bars and beats), `tracks` (tracks of clips), `dj` (two DJ decks: hot cues, loops, sync, the waveform dragged under a fixed playhead), `editor` (a video editor: split, ripple delete, in and out marks, a transport row), `text-editor`,
 `code-editor`, `terminal`, `zones` (zones and blocks), `workbench`,
 `palettes`, `arrangements`, `contexts` (the context stack: places and modes, and the status bar that follows them), `clipboard` (typed items copied between palettes, paste special's previews), `links` (one policy for every link: declared links, links that ask first, local files, an agent's request), `viewer` (help pages, markdown, a safe subset of HTML and images in a panel), `strips` (the activity bar, and status items: live states, a popover, hover cards), `jobs` (a pretend host's
@@ -294,7 +295,9 @@ Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, 
 
 The live tree, list items and property rows, lists and tables, charts (and a plot over a
 timeline's time: its cursor the playhead, a stepped line, an error band, the range shaded, the
-values at the pointer, two million samples decimated per pixel column), and the photo library (a thumbnail grid
+values at the pointer, two million samples decimated per pixel column), a text log (after Rerun's: level chips and a text filter, the rows
+at the playhead highlighted, a click moving the playhead, a multi-line body unfolded), and the
+photo library (a thumbnail grid
 and filmstrip, marks, filter chips, a comparison; a cell's stars
 previewing a lower rating over the current one, [Rating stars](rating.md)).
 
@@ -326,6 +329,12 @@ previewing a lower rating over the current one, [Rating stars](rating.md)).
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/plot-time-large-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/plot-time-large-pop-dark.png" width="200" alt="plot-time-large-pop-dark"></a><br>plot-time-large-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-rating-preview-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-rating-preview-pop-dark.png" width="200" alt="library-rating-preview-pop-dark"></a><br>library-rating-preview-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/text-log-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/text-log-pop-dark.png" width="200" alt="text-log-pop-dark"></a><br>text-log-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/text-log-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/text-log-pop-light.png" width="200" alt="text-log-pop-light"></a><br>text-log-pop-light</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/text-log-pop-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/text-log-pop-high-contrast.png" width="200" alt="text-log-pop-high-contrast"></a><br>text-log-pop-high-contrast</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/text-log-filtered-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/text-log-filtered-pop-dark.png" width="200" alt="text-log-filtered-pop-dark"></a><br>text-log-filtered-pop-dark</td>
   </tr>
 </table>
 

@@ -59,6 +59,7 @@ pub mod story;
 pub mod strips;
 pub mod table;
 pub mod terminal;
+pub mod text_log;
 pub mod theme_editor;
 pub mod timeline;
 pub mod tips;

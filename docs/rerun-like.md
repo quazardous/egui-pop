@@ -33,7 +33,10 @@ The code is the gallery crate's `rerun_like` module
   egui_stack splits two by two: a time series (three scalars on
   egui-pop's plot, its time cursor dragged, their values at the pointer
   in a tooltip), a camera image with moving detection boxes, a dataframe (the
-  views crate's `DataTable`, a row per frame) and a text log.
+  views crate's `DataTable`, a row per frame) and a text log (the views
+  crate's [text log view](table.md#the-text-log): time, entity, level
+  and body, level chips and a filter, the lines at the time cursor
+  highlighted, a multi-line critical line that unfolds).
 - **The Selection**, on the right: the selected entity (its path,
   archetype, latest values at the time cursor, visualizer) or view (its
   class and entities), in collapsible sections of property rows.
@@ -47,7 +50,9 @@ it everywhere: the tree follows, the views outline it, the dataframe
 tints its column, the log and the time panel tint its rows, and the
 Selection panel shows it. Hovering an entity highlights it in every
 view and in the tree. A click on a view's background selects the view.
-A row of the dataframe moves the time cursor to its frame.
+A row of the dataframe moves the time cursor to its frame, and so does
+a line of the log, which also selects its entity; the log's lines at
+the time cursor are selected, and come into view as the cursor moves.
 
 ### Keys and commands
 
@@ -93,6 +98,8 @@ What was taken from `re_ui` (`dark_theme.ron`, `light_theme.ron`,
 | `text.muted` | Gray.600 `#9f9f9f` | Gray.375 `#555555` | the tab's text (dark: Rerun's `text_subdued`, Gray.375, fails egui-pop's contrast checks there) |
 | `accent.*` | Blue.550 `#5a81ff`, hover Blue.575, pressed Blue.525, dark text on it | Blue.500 `#186add`, hover Blue.475, pressed Blue.450, white text | `button_blue`; Rerun's Blue.500 cannot both read as text on its near-black panel and carry white text, as egui-pop's contrast checks ask, so the dark kit's accent is a step lighter |
 | selected rows (`list-row.selected`) | Blue.500 `#186add`, white text | the same | `selection_bg_fill` |
+| a table's selected rows (`table-row.selected`): a quiet fill, the strong text, a 2-point marker on the left in the accent | Blue.750 at a tenth | Gray.900 `#eeeeed` | `table_interaction_row_selection_fill` |
+| a table's row under the pointer (`table-row.hover`): no fill, a 1-point outline | `border.default` | the same | `table_interaction_hovered_bg_stroke`, approximated by the divider |
 | `selection` (text selected, the palette's row) | Blue.350 | Blue.800 | ordinary text must read on it |
 | `focus.ring` | the accent | Blue.500 | `focus_outline_stroke` (Blue.400 is too dark on the dark panel) |
 | `success`, `info`, `warning`, `danger` | Green.700, Blue.700, `#ff7a0c`, Red.600 | Green.300, Blue.300, `#b35000`, Red.400 | `success_text_color`, `info_text_color`, `warn_fg_color`; the reds lifted from `error_fg_color` for contrast |
@@ -123,7 +130,9 @@ under the pointer, so at rest at most one line (a side area's) parts
 two panels. For the
 views: plots without a frame on the view's background, in Rerun's grid
 colour, with a thin time cursor in the text's colour under a triangle, table headers filled with a line under
-them, the log levels in Rerun's colours and the 2D view's background.
+them, table rows selected quietly with a marker on the left and
+outlined under the pointer, the log levels in Rerun's colours and the
+2D view's background.
 Inter and JetBrains Mono, Rerun's fonts, are egui-pop's bundled ones
 already.
 
@@ -226,13 +235,15 @@ worked around, then the small things.
       drags it (`Plot::drag_cursor`, `Plot::timeline`): the kit draws
       Rerun's triangle, 10 points wide, turning to the strong text under
       the pointer.
-    - **Table rows.** The data table's rows are `list-row` boxes, the
-      same as lists': a selected row is the solid accent. Rerun's tables
-      select a row with a quiet fill (`table_interaction_row_selection_fill`:
-      Gray.900 in light, Blue.750 at a tenth in dark) and outline the
-      hovered and pressed ones (`table_interaction_hovered_bg_stroke`,
-      `..._active_bg_stroke`); there is no table row component apart
-      from lists.
+    - **Table rows** (solved). The data table's rows were `list-row`
+      boxes, the same as lists': a selected row was the solid accent.
+      They are a `table-row` now, based on `list-row`: the kit gives
+      Rerun's quiet selection (`table_interaction_row_selection_fill`:
+      Gray.900 in light, Blue.750 at a tenth in dark) with a marker on
+      the left, and outlines the hovered row
+      (`table_interaction_hovered_bg_stroke`). Rerun also outlines a
+      pressed row (`..._active_bg_stroke`); a table row has no pressed
+      state.
     - **The 2D view's labels and axes.** The viewport has a background,
       a frame and a guide colour. Rerun's labels sit on the background at
       half opacity (`spatial_label_bg_opacity`), and its axes take Red,

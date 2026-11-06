@@ -15,6 +15,7 @@ use egui_pop::prelude::*;
 use egui_pop::views::Mode;
 use egui_pop::views::plot::{Plot, Series};
 use egui_pop::views::table::{Column, DataTable, TableRows};
+use egui_pop::views::text_log::{LogSource, TextLog};
 use egui_pop::views::tree::{FilterField, Node, Sink, TreeSource, TreeView};
 
 use super::data::{self, ENTITIES, FRAMES, Kind, Level, View};
@@ -809,100 +810,73 @@ pub fn dataframe(ui: &mut Ui, m: &mut Model) {
         .show(ui, table, &mut rows);
 }
 
-pub fn logs(ui: &mut Ui, m: &mut Model) {
-    let t = Tokens::of(ui.ctx());
-    let at = m.at();
-    let lines: Vec<data::LogLine> = m
-        .log
-        .iter()
-        .filter(|l| l.frame <= at && !m.hidden.contains(&l.entity))
-        .cloned()
-        .collect();
-    let row_h = t.size.control_height - 2.0;
-    let mono = FontId::monospace(t.font.scale.s);
-    let body = FontId::proportional(t.font.scale.m);
-    let cols = [8.0, 56.0, 112.0, 236.0];
-    // The header.
-    let (head, _) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::hover());
-    let p = ui.painter();
-    p.rect_filled(head, 0.0, t.surface.raised);
-    for (x, name) in cols.iter().zip(["frame", "level", "entity", "body"]) {
-        p.text(
-            pos2(head.left() + x, head.center().y),
-            Align2::LEFT_CENTER,
-            name,
-            FontId::proportional(t.font.scale.s),
-            t.text.muted,
-        );
+/// The recording's log lines as the text log view reads them: logged at
+/// their frame, on their entity's path.
+struct Lines<'a>(&'a [data::LogLine]);
+
+impl LogSource for Lines<'_> {
+    fn len(&self) -> usize {
+        self.0.len()
     }
-    let mut clicked = None;
-    let area = egui::ScrollArea::vertical()
-        .id_salt("rerun.logs")
-        .auto_shrink([false, false])
-        .stick_to_bottom(true);
-    ui.scroll_area_rows(area, row_h, lines.len(), |ui, range| {
-        for line in &lines[range] {
-            let (row, r) =
-                ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
-            named(
-                &r,
-                &format!("{} {} {}", line.frame, line.level.name(), line.text),
-            );
-            if r.hovered() {
-                m.hover(line.entity);
-            }
-            if r.clicked() {
-                clicked = Some(line.entity);
-            }
-            let p = ui.painter();
-            match m.emphasis(line.entity) {
-                Emphasis::Selected => {
-                    p.rect_filled(row, 0.0, t.accent.subtle);
-                }
-                Emphasis::Hovered => {
-                    p.rect_filled(row, 0.0, t.surface.hover);
-                }
-                Emphasis::None => {}
-            }
-            let level = match line.level {
-                Level::Trace => t.palette.log.trace,
-                Level::Debug => t.palette.log.debug,
-                Level::Info => t.palette.log.info,
-                Level::Warn => t.palette.log.warn,
-                Level::Error => t.palette.log.error,
-            };
-            let y = row.center().y;
-            p.text(
-                pos2(row.left() + cols[0], y),
-                Align2::LEFT_CENTER,
-                line.frame.to_string(),
-                mono.clone(),
-                t.text.muted,
-            );
-            p.text(
-                pos2(row.left() + cols[1], y),
-                Align2::LEFT_CENTER,
-                line.level.name(),
-                mono.clone(),
-                level,
-            );
-            p.text(
-                pos2(row.left() + cols[2], y),
-                Align2::LEFT_CENTER,
-                ENTITIES[line.entity].path,
-                body.clone(),
-                t.text.muted,
-            );
-            p.text(
-                pos2(row.left() + cols[3], y),
-                Align2::LEFT_CENTER,
-                &line.text,
-                body.clone(),
-                t.text.default,
-            );
-        }
-    });
-    if let Some(e) = clicked {
+
+    fn time(&self, index: usize) -> f64 {
+        f64::from(self.0[index].frame)
+    }
+
+    fn entity(&self, index: usize) -> &str {
+        ENTITIES[self.0[index].entity].path
+    }
+
+    fn level(&self, index: usize) -> Level {
+        self.0[index].level
+    }
+
+    fn body(&self, index: usize) -> &str {
+        &self.0[index].text
+    }
+}
+
+/// The text log: egui-pop's text log view over the recording's lines, the
+/// time cursor's rows selected, a click moving the cursor and selecting
+/// the line's entity.
+pub fn logs(ui: &mut Ui, m: &mut Model) {
+    // The eye in the blueprint hides an entity's lines: filter again
+    // when the hidden entities change.
+    let mut hidden: Vec<usize> = m.hidden.iter().copied().collect();
+    hidden.sort_unstable();
+    if hidden != m.log_hidden {
+        m.log_state.refilter();
+        m.log_hidden = hidden;
+    }
+    let at = m.at();
+    let highlighted = match m.selected {
+        Some(Item::Entity(e)) => Some(ENTITIES[e].path),
+        _ => m.hovered.map(|e| ENTITIES[e].path),
+    };
+    let Model {
+        log,
+        log_state,
+        hidden,
+        ..
+    } = m;
+    let keep = |i: usize| !hidden.contains(&log[i].entity);
+    let lines = Lines(log);
+    let out = TextLog::new("rerun.logs", &lines)
+        .label("Text log")
+        .time_cursor(Some(f64::from(at)))
+        .keep(&keep)
+        .highlight_entity(highlighted)
+        .show(ui, log_state);
+    let hovered = out.hovered.map(|i| m.log[i].entity);
+    let picked = out.picked.map(|i| m.log[i].entity);
+    if let Some(e) = hovered {
+        m.hover(e);
+    }
+    if let Some(t) = out.cursor_moved {
+        m.frame = t.clamp(0.0, f64::from(FRAMES)) as f32;
+        m.playing = false;
+    }
+    if let Some(e) = picked {
         m.select(Some(Item::Entity(e)));
     }
 }

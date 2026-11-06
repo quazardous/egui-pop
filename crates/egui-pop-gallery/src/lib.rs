@@ -40,7 +40,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 66] = [
+pub const PAGES: [&str; 67] = [
     "overview",
     "tokens",
     "builtins",
@@ -78,6 +78,7 @@ pub const PAGES: [&str; 66] = [
     "table",
     "plot",
     "plot-time",
+    "text-log",
     "library",
     "timeline",
     "tracks",
@@ -317,6 +318,16 @@ pub fn builder(options: &Options) -> AppBuilder {
             weight: 80,
             show: pages::plot_time::show,
             playground: Some(pages::plot_time::playground),
+        })
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.text-log"),
+            story: StoryId::from_static("text-log"),
+            title: "Text log",
+            description: "A text log on the data table, after Rerun's: time, entity, level and body columns, level chips and a text filter, the tail followed, the rows at the playhead highlighted and a click moving the playhead, multi-line bodies, a hundred thousand lines.",
+            group: "Components",
+            weight: 81,
+            show: pages::text_log::show,
+            playground: Some(pages::text_log::playground),
         })
         .plugin(egui_pop::views::library::LibraryPlugin)
         .plugin(pages::library::LibraryPage)

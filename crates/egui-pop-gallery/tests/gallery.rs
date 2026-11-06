@@ -4073,6 +4073,60 @@ fn the_plot_over_time_page_draws_two_million_samples_decimated() {
 }
 
 #[test]
+fn the_text_log_page_follows_its_timeline_and_filters() {
+    use egui_pop::views::timeline::TimeScale;
+    use egui_pop_gallery::pages::text_log::line;
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in POP_THEMES {
+        let mut h = harness(options(theme, Density::Comfortable, "text-log"));
+        h.run();
+        egui_pop_test::assert_all_named(&h);
+        h.remove_cursor();
+        h.run();
+        results.add(h.try_snapshot(format!("text-log-{theme}")));
+    }
+    let mut h = harness(options("pop-dark", Density::Comfortable, "text-log"));
+    h.run();
+    h.get_by_label("Playhead 0:21.000");
+    // The rows at the playhead came into view; a click on a row a little
+    // further moves the playhead to its time.
+    let e = line(215, 600);
+    let name = format!(
+        "{} {} {} {}",
+        TimeScale::Seconds.format(e.time),
+        e.level.name(),
+        e.entity,
+        e.body.lines().next().unwrap_or_default()
+    );
+    h.get_by_role_and_label(egui::accesskit::Role::Button, &name)
+        .click();
+    h.run();
+    h.run();
+    h.get_by_label("Playhead 0:21.500");
+    h.get_by_label(&format!("Picked: {} {}", e.level.name(), e.entity));
+    // Debug lines hidden, the bodies filtered.
+    h.get_by_label("Show DEBUG lines").click();
+    h.run();
+    h.get_by_label("Filter").click();
+    h.run();
+    h.get_by_label("Filter").type_text("waypoint");
+    h.run();
+    h.run();
+    assert!(h.query_by_label_contains(" DEBUG ").is_none());
+    assert!(h.query_by_label_contains("heartbeat").is_none());
+    assert!(h.query_by_label_contains("waypoint").is_some());
+    let open = h.query_all_by_label_contains("Show all 3 lines").next();
+    if let Some(open) = open {
+        open.click();
+    }
+    h.run();
+    h.run();
+    h.remove_cursor();
+    h.run();
+    results.add(h.try_snapshot("text-log-filtered-pop-dark"));
+}
+
+#[test]
 fn the_text_editor_page_edits_searches_through_the_keymap_and_vetoes_the_title() {
     use egui::{Key, Modifiers};
     let mut h = harness(options("pop-dark", Density::Comfortable, "text-editor"));
