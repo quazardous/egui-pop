@@ -200,7 +200,9 @@ pub trait TableRows<K: Key> {
     /// Row `row`'s accessible name, searched by type-ahead.
     fn label(&self, row: usize) -> String;
 
-    /// Draws a cell (its row's background is drawn).
+    /// Draws a cell (its row's background is drawn). Its `Ui` truncates
+    /// text: a label too long for the cell is elided with "…" and shows
+    /// the full text on hover.
     fn cell(&mut self, ui: &mut Ui, row: usize, column: usize, selected: bool);
 }
 
@@ -1073,6 +1075,9 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
             }
         }
         ui.add_space(ui.spacing().item_spacing.x);
+        // A text too long for its cell is elided with "…" (an egui label
+        // then shows the full text on hover), not cut at the cell's edge.
+        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
         self.rows.cell(ui, row, cell.col_nr, selected);
     }
 

@@ -82,19 +82,15 @@ pub trait ListRows<K: Key> {
 
     /// Draws row `row` (its background is drawn, with its icon and its
     /// trailing text, [a list item](crate::item)'s; the row is named by
-    /// its label). By default, its label.
+    /// its label). By default, its label on one line, elided with "…"
+    /// when it does not fit, the row then showing the full label on hover.
     fn ui(&mut self, ui: &mut Ui, row: usize, selected: bool) {
         let _ = selected;
-        let rect = ui.max_rect();
-        ui.painter().text(
-            egui::pos2(rect.left(), rect.center().y),
-            egui::Align2::LEFT_CENTER,
-            self.label(row),
-            egui::TextStyle::Body.resolve(ui.style()),
-            ui.visuals()
-                .override_text_color
-                .unwrap_or_else(|| ui.visuals().text_color()),
-        );
+        let color = ui
+            .visuals()
+            .override_text_color
+            .unwrap_or_else(|| ui.visuals().text_color());
+        item::row_label(ui, &self.label(row), color);
     }
 }
 
@@ -345,9 +341,14 @@ impl<'a> ListView<'a> {
                     }
                     rows.ui(&mut child, i, selected);
                     let name = rows.label(i);
+                    let full = item::take_elided(&child).then(|| name.clone());
                     r.widget_info(move || {
                         WidgetInfo::selected(Role::Button, true, selected, &name)
                     });
+                    let r = match full {
+                        Some(label) => item::full_label_tip(r, &label),
+                        None => r,
+                    };
                     if r.clicked() {
                         take_focus = true;
                         let mods = ui.input(|i| i.modifiers);
