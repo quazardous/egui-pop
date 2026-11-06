@@ -1,0 +1,27 @@
+# The application template as the repository builds it: a workspace
+# member, so the gate compiles and tests it against the egui-pop of the
+# same commit. `cargo generate` writes `Cargo.toml.liquid` in its place
+# (this file is ignored, see `cargo-generate.toml`); keep the two in step
+# (a test checks their dependencies match).
+[package]
+name = "egui-pop-app-template"
+version = "0.1.0"
+description = "A first egui-pop application: the end state of docs/first-app.md"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+egui-pop.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+egui = { workspace = true, features = ["default_fonts"] }
+egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
+egui-pop-test = { workspace = true, features = ["wgpu"] }

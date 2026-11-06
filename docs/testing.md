@@ -78,7 +78,6 @@ The rules, per changed file:
 | a crate's `README.md` | as its sources, and `egui-pop::readme_links` |
 | documentation (`docs/**`, `*.md` at the root) | the guides' doctests (`consumer-smoke`), `egui-pop::readme_links`, `egui-pop-gallery::gallery_doc` and `hosts_doc` |
 | the docs site (`book.toml`, `tools/book/**`) | none (the `book` job checks it) |
-| `template/**` | `egui-pop::minimal` |
 | `examples/**` (example kits) | `egui-pop-tokens::kits`, `egui-pop-gallery::gallery` |
 | the workspace (`Cargo.toml`, `Cargo.lock`, `rust-toolchain*`, any root file but Markdown and `book.toml`), `.github/`, `.config/`, `.cargo/`, `xtask/`, the test kit (`egui-pop-test`, `egui-pop-test-macros`), the token files (`crates/egui-pop-tokens/themes/`) | everything |
 | any path no rule names | everything |

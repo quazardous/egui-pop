@@ -20,6 +20,7 @@ members = [
     "crates/egui-pop-gallery",
     "crates/consumer-smoke",
     "templates/extension",
+    "templates/app",
     "xtask",
 ]
 

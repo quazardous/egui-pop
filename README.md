@@ -23,6 +23,12 @@ egui's own widgets from the theme. It is for people building a real tool
 on egui (an editor, a viewer, a control panel) who want that plumbing
 done once. Not an official egui crate.
 
+**New here?** [Your first application](https://github.com/quazardous/egui-pop/blob/main/docs/first-app.md)
+builds a small one in eight steps (a window, a command, panels, a
+setting, a theme, undo, the agent bridge, tests), and
+`cargo generate --git https://github.com/quazardous/egui-pop templates/app`
+starts from where it ends.
+
 [![The egui-pop gallery in pop-dark: the theme overview](https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/overview-pop-dark.png)](https://quazardous.github.io/egui-pop/gallery/)
 
 ## What is stable, what is extra
@@ -81,8 +87,8 @@ fn main() -> eframe::Result {
 
 `DefaultPlugins` brings the command palette, dialogs, toasts, the
 settings window, the window's place and saved layouts. For a fuller
-start (a panel, a setting, a command), see
-[Getting started](https://github.com/quazardous/egui-pop/blob/main/docs/getting-started.md).
+start, step by step, see
+[Your first application](https://github.com/quazardous/egui-pop/blob/main/docs/first-app.md).
 
 ## A command with a shortcut
 

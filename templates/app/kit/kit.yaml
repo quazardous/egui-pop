@@ -1,0 +1,18 @@
+$description: "The application's own look: egui-pop's dark theme with a blue accent and underlined tabs."
+$extends: "pop-dark"
+$extensions:
+  org.egui-pop.kit: {name: "swatch", label: "Swatch"}
+accent:
+  $type: "color"
+  default: {$value: "{blue.9}"}
+  hover: {$value: "{blue.10}"}
+  active: {$value: "{blue.8}"}
+  subtle: {$value: "{blue.3}"}
+tab:
+  shape:
+    $type: "string"
+    $value: "underline"
+  selected:
+    indicator-size:
+      $type: "dimension"
+      $value: {value: 2, unit: "px"}

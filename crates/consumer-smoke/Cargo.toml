@@ -15,3 +15,9 @@ workspace = true
 [dependencies]
 egui-pop = { workspace = true, features = ["viewport", "graph-yaml", "imaging", "views", "editors", "i18n", "platform"] }
 serde_json.workspace = true
+
+# The first-app guide's tests step: the test kit, as an application's
+# dev-dependencies.
+[dev-dependencies]
+egui_kittest.workspace = true
+egui-pop-test.workspace = true

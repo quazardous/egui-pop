@@ -26,6 +26,7 @@ const LAYERS: &[(&str, u32)] = &[
     ("egui-pop-gallery", 6),
     ("consumer-smoke", 6),
     ("egui-pop-extension-template", 6),
+    ("egui-pop-app-template", 6),
     ("xtask", 6),
 ];
 

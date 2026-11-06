@@ -21,6 +21,9 @@ of every crate with every feature on.
 
 ## Guides
 
+- [Your first application](first-app.md): a small application in eight
+  steps, from a window to its tests, following the path a real
+  application took; the application template is its end state.
 - [Getting started](getting-started.md): the application template, a
   plugin application, the command palette and the paved road.
 - [Using parts without App](standalone.md): what a plain egui or eframe

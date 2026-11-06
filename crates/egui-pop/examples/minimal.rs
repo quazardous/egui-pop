@@ -1,7 +1,7 @@
 //! A minimal egui-pop application: one plugin with a panel, a setting
 //! and a command, over the default plugins (palette, dialogs, toasts,
-//! settings, window). The `cargo generate` template starts from this
-//! file (see `template/`).
+//! settings, window). The application template (`templates/app`) goes
+//! further: see `docs/first-app.md`.
 //!
 //! Run it with `cargo run -p egui-pop --example minimal`.
 

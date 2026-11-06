@@ -1,0 +1,20 @@
+# egui_kittest snapshot settings, found by walking up from each crate.
+# Snapshots are rendered by wgpu; CI renders them on lavapipe (Mesa's
+# software Vulkan), so small anti-aliasing differences between GPUs are
+# allowed here rather than failing every run on another machine.
+
+# Per-pixel colour distance under which a pixel counts as equal.
+threshold = 0.6
+# Pixels allowed to differ beyond the threshold.
+max_failed_pixels = 0
+
+[linux]
+max_failed_pixels = 400
+
+[mac]
+threshold = 1.0
+max_failed_pixels = 2000
+
+[windows]
+threshold = 1.0
+max_failed_pixels = 2000
