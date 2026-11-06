@@ -21,6 +21,10 @@
 //!   ways ([`Plot::timeline`]), its range highlighted, and every series'
 //!   value at the pointer in a tooltip ([`Plot::values_tooltip`]);
 //! - stepped lines ([`Kind::Steps`]) and error bands ([`Band`]);
+//! - decimation: a line, a stepped line or a band with more points in
+//!   view than [`DECIMATION_THRESHOLD`] is drawn from the points the
+//!   pixels can show (four a pixel column at most), read in the time
+//!   range in view only when sorted by x ([`Plot::decimation`]);
 //! - the `plots` collector ([`PlotPlugin`]): every plot drawn with its
 //!   series, ranges and hovered point, for agents.
 //!
@@ -65,15 +69,16 @@
 //! ```
 
 use std::collections::BTreeMap;
+use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 
 use egui::{
     Color32, Context, CursorIcon, Id, Order, Pos2, Rect, Response, RichText, Role, Sense, Shape,
-    Stroke, TextStyle, Ui, pos2, vec2,
+    Stroke, TextStyle, Ui, Vec2b, pos2, vec2,
 };
 use egui_plot::{
-    AxisHints, Bar, BarChart, Corner, FilledArea, GridInput, GridMark, Legend, Line, PlotPoint,
-    PlotTransform, Points, Span,
+    AxisHints, Bar, BarChart, Corner, FilledArea, GridInput, GridMark, Legend, Line, PlotMemory,
+    PlotPoint, PlotTransform, Points, Span,
 };
 use egui_pop_api::{Ctx, Plugin, PluginError};
 use egui_pop_core::debug::FnCollector;
@@ -90,9 +95,21 @@ use serde_json::{Value as Json, json};
 use crate::strings as s;
 use crate::timeline::{TimeRange, TimeScale, TimeView, TimelineState, TimelineTokens, ruler};
 
+mod decimate;
+
+use decimate::Window;
+
 /// How far from a point, in points on screen, the pointer still hovers
 /// it.
 pub const HOVER_RADIUS: f32 = 16.0;
+
+/// Above how many points in view a line, a stepped line or a band is
+/// decimated by default ([`Plot::decimation`]).
+pub const DECIMATION_THRESHOLD: usize = 1000;
+
+/// Above how many points a series' order and ranges are kept between
+/// passes, while its points look the same ([`stats`]).
+const STATS_KEPT: usize = 4096;
 
 /// How a series is drawn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -398,6 +415,7 @@ pub struct Plot<'a> {
     bands: &'a [Band],
     values_tooltip: Option<bool>,
     emphasis: Option<usize>,
+    decimation: Option<usize>,
 }
 
 impl<'a> Plot<'a> {
@@ -424,7 +442,25 @@ impl<'a> Plot<'a> {
             bands: &[],
             values_tooltip: None,
             emphasis: None,
+            decimation: Some(DECIMATION_THRESHOLD),
         }
+    }
+
+    /// Decimates the lines, stepped lines and bands with more than
+    /// `threshold` points in view: each pixel column draws at most four
+    /// of its points (the first, the lowest, the highest and the last),
+    /// which cover the same pixels as all of them. `None` draws every
+    /// point. Default: [`DECIMATION_THRESHOLD`].
+    ///
+    /// A series sorted by x (a time series) is read in the x range in
+    /// view only, found by binary search: a pass costs the points in
+    /// view, whatever the series' length. A series that is not sorted is
+    /// drawn whole, as egui_plot draws it. The point under the pointer
+    /// ([`PlotOutput::hovered`]) and the values at the pointer are read
+    /// in the full series, never in the points drawn.
+    pub fn decimation(mut self, threshold: Option<usize>) -> Self {
+        self.decimation = threshold;
+        self
     }
 
     /// Its accessible name (default: "Chart").
@@ -571,6 +607,7 @@ impl<'a> Plot<'a> {
             bands,
             values_tooltip,
             emphasis,
+            decimation,
         } = self;
         let mut looping = false;
         if let Some(state) = timeline.as_deref() {
@@ -600,6 +637,47 @@ impl<'a> Plot<'a> {
             .collect();
         let slot = ui.painter().add(Shape::Noop);
         let legend = legend.unwrap_or(series.len() > 1);
+
+        // What the decimation needs: each series' order and ranges, and
+        // the x range egui_plot showed last pass (the whole data while
+        // its bounds are automatic).
+        let ctx = ui.ctx().clone();
+        let series_stats: Vec<Stats> = series
+            .iter()
+            .enumerate()
+            .map(|(i, s)| stats(&ctx, id.with(("stats", i)), &s.points))
+            .collect();
+        let band_stats: Vec<Stats> = bands
+            .iter()
+            .enumerate()
+            .map(|(b, band)| stats(&ctx, id.with(("band-stats", b)), &band.points))
+            .collect();
+        let memory = PlotMemory::load(&ctx, id);
+        let auto = memory.as_ref().map_or(Vec2b::TRUE, |m| m.auto_bounds);
+        let data_x = series_stats
+            .iter()
+            .chain(&band_stats)
+            .filter_map(|st| st.ranges.map(|r| r.0))
+            .reduce(|a, b| [a[0].min(b[0]), a[1].max(b[1])]);
+        let view_x = if auto.x {
+            data_x
+        } else {
+            memory
+                .as_ref()
+                .map(|m| [m.bounds().min()[0], m.bounds().max()[0]])
+        }
+        .filter(|r| r[0].is_finite() && r[1].is_finite());
+        let reads_view = |kind: Option<Kind>, st: &Stats| {
+            decimation.is_some()
+                && view_x.is_some()
+                && st.sorted
+                && kind.is_none_or(|k| matches!(k, Kind::Line | Kind::Steps))
+        };
+        let trimmed = series
+            .iter()
+            .zip(&series_stats)
+            .any(|(s, st)| reads_view(Some(s.kind), st))
+            || band_stats.iter().any(|st| reads_view(None, st));
         let mut plot = egui_plot::Plot::new(plot_id.as_str())
             .id(id)
             .show_background(false)
@@ -679,6 +757,21 @@ impl<'a> Plot<'a> {
                 [true, false],
             );
         }
+        // A series read in the x range in view only: egui_plot fits an
+        // automatic y to every point of it, as it would to the full one.
+        if auto.y && !auto.x {
+            let kinds = series
+                .iter()
+                .map(|s| Some(s.kind))
+                .chain(bands.iter().map(|_| None));
+            for (kind, st) in kinds.zip(series_stats.iter().chain(&band_stats)) {
+                if reads_view(kind, st)
+                    && let Some((_, y)) = st.ranges
+                {
+                    plot = plot.include_y(y[0]).include_y(y[1]);
+                }
+            }
+        }
         let bar_series: Vec<usize> = (0..series.len())
             .filter(|&i| series[i].kind == Kind::Bars)
             .collect();
@@ -710,18 +803,31 @@ impl<'a> Plot<'a> {
                                 .border(Stroke::new(1.0, edge)),
                         );
                     }
+                    // The pixel columns the decimation reads.
+                    let ppp = p.ctx().pixels_per_point();
+                    let columns = (p.response().rect.width() * ppp).ceil().max(1.0) as usize;
+                    let window = view_x.map(|r| Window::new(r[0], r[1], columns));
+                    let mut drawn = Vec::with_capacity(series.len());
                     for (b, band) in bands.iter().enumerate() {
                         let Some(color) = colors.get(band.series) else {
                             continue;
                         };
-                        let pts: Vec<&[f64; 3]> = band
-                            .points
-                            .iter()
-                            .filter(|q| q.iter().all(|v| v.is_finite()))
-                            .collect();
-                        let xs: Vec<f64> = pts.iter().map(|q| q[0]).collect();
-                        let lo: Vec<f64> = pts.iter().map(|q| q[1].min(q[2])).collect();
-                        let hi: Vec<f64> = pts.iter().map(|q| q[1].max(q[2])).collect();
+                        let rows = match window {
+                            Some(w) if reads_view(None, &band_stats[b]) => {
+                                let range = decimate::span(&band.points, &w);
+                                if decimation.is_some_and(|t| range.len() > t) {
+                                    let mut out = Vec::with_capacity(3 * columns + 2);
+                                    decimate::band(&band.points, &w, &mut out);
+                                    out
+                                } else {
+                                    band_rows(&band.points[range])
+                                }
+                            }
+                            _ => band_rows(&band.points),
+                        };
+                        let xs: Vec<f64> = rows.iter().map(|q| q[0]).collect();
+                        let lo: Vec<f64> = rows.iter().map(|q| q[1]).collect();
+                        let hi: Vec<f64> = rows.iter().map(|q| q[2]).collect();
                         p.add(
                             FilledArea::new("", &xs, &lo, &hi)
                                 .fill_color(color.gamma_multiply(0.25))
@@ -732,9 +838,25 @@ impl<'a> Plot<'a> {
                     for (i, s) in series.iter().enumerate() {
                         let color = colors[i];
                         let emphasized = emphasis == Some(i);
+                        // A line or a stepped line sorted by x: the points
+                        // in view, decimated past the threshold.
+                        let points = match window {
+                            Some(w) if reads_view(Some(s.kind), &series_stats[i]) => {
+                                let range = decimate::span(&s.points, &w);
+                                if decimation.is_some_and(|t| range.len() > t) {
+                                    let mut out = Vec::with_capacity(4 * columns + 2);
+                                    decimate::line(&s.points, &w, &mut out);
+                                    out
+                                } else {
+                                    s.points[range].to_vec()
+                                }
+                            }
+                            _ => s.points.clone(),
+                        };
+                        drawn.push(points.len());
                         match s.kind {
                             Kind::Line => p.line(
-                                Line::new(s.name.clone(), s.points.clone())
+                                Line::new(s.name.clone(), points)
                                     .color(color)
                                     .width(2.0)
                                     .highlight(emphasized)
@@ -744,7 +866,7 @@ impl<'a> Plot<'a> {
                                 // No band: egui_plot draws a dense line as
                                 // one band of its columns' ranges, which
                                 // joins a step's vertical edges into slopes.
-                                Line::new(s.name.clone(), step_points(&s.points))
+                                Line::new(s.name.clone(), step_points(&points))
                                     .color(color)
                                     .width(2.0)
                                     .allow_band(false)
@@ -752,7 +874,7 @@ impl<'a> Plot<'a> {
                                     .id(("series", i)),
                             ),
                             Kind::Points => p.points(
-                                Points::new(s.name.clone(), s.points.clone())
+                                Points::new(s.name.clone(), points)
                                     .color(color)
                                     .radius(3.0)
                                     .filled(true)
@@ -761,8 +883,7 @@ impl<'a> Plot<'a> {
                             ),
                             Kind::Bars => {
                                 let off = bar_offset(i);
-                                let bars = s
-                                    .points
+                                let bars = points
                                     .iter()
                                     .map(|q| {
                                         Bar::new(q[0] + off, q[1])
@@ -782,7 +903,14 @@ impl<'a> Plot<'a> {
                     }
                     let pointer = p.pointer_coordinate().map(|q| [q.x, q.y]);
                     let hovered = p.response().hover_pos().and_then(|pos| {
-                        nearest(series, p.transform(), pos, &|i| bar_offset(i), bar_w)
+                        nearest(
+                            series,
+                            &series_stats,
+                            p.transform(),
+                            pos,
+                            &|i| bar_offset(i),
+                            bar_w,
+                        )
                     });
                     if let Some(h) = &hovered {
                         let s = &series[h.series];
@@ -799,14 +927,30 @@ impl<'a> Plot<'a> {
                                 .allow_hover(false),
                         );
                     }
-                    (hovered, pointer)
+                    (hovered, pointer, drawn, columns)
                 })
             })
             .inner;
         let response = inner.response.clone();
         let transform = inner.transform;
-        let (hovered, pointer) = inner.inner;
+        let (hovered, pointer, drawn, columns) = inner.inner;
         let frame = *transform.frame();
+
+        // Points read for last pass's x range: if this pass panned, zoomed
+        // or resized the plot, draw again with the range it shows now.
+        if trimmed {
+            let auto_now = PlotMemory::load(&ctx, id).is_none_or(|m| m.auto_bounds.x);
+            let b = transform.bounds();
+            let moved = if auto_now {
+                !auto.x
+            } else {
+                auto.x || view_x != Some([b.min()[0], b.max()[0]])
+            };
+            let columns_now = (frame.width() * ctx.pixels_per_point()).ceil().max(1.0) as usize;
+            if moved || columns_now != columns {
+                ctx.request_repaint();
+            }
+        }
 
         // The kit's box under the plot, now that its frame is known.
         kit.plot.paint_under(
@@ -935,13 +1079,15 @@ impl<'a> Plot<'a> {
             }
             values_tooltip_ui(ui, id, pos, v, &colors);
         }
+        let ranges: Vec<Option<([f64; 2], [f64; 2])>> =
+            series_stats.iter().map(|st| st.ranges).collect();
 
         let label = label.unwrap_or_else(|| tr(ui.ctx(), &s::PLOT));
         let cursor_text = time_cursor.filter(|t| t.is_finite()).map(|t| match scale {
             Some(sc) => sc.format(t),
             None => number(t),
         });
-        let summary = summary_with(ui.ctx(), series, cursor_text);
+        let summary = summary_with(ui.ctx(), series, &ranges, cursor_text);
         egui_pop_core::a11y::name(&response, Role::Figure, &label);
         let description = summary.clone();
         ui.ctx()
@@ -959,11 +1105,12 @@ impl<'a> Plot<'a> {
                     .iter()
                     .enumerate()
                     .map(|(i, s)| {
-                        let ranges = s.ranges();
+                        let ranges = ranges[i];
                         json!({
                             "name": s.name,
                             "kind": s.kind,
                             "points": s.points.len(),
+                            "drawn": drawn.get(i),
                             "x": ranges.map(|r| r.0),
                             "y": ranges.map(|r| r.1),
                             "color": format!("#{:02x}{:02x}{:02x}", colors[i].r(), colors[i].g(), colors[i].b()),
@@ -1026,8 +1173,97 @@ fn step_points(points: &[[f64; 2]]) -> Vec<[f64; 2]> {
     out
 }
 
+/// A band's rows to draw: those with every value a number, `min` and
+/// `max` in order.
+fn band_rows(points: &[[f64; 3]]) -> Vec<[f64; 3]> {
+    points
+        .iter()
+        .filter(|q| q.iter().all(|v| v.is_finite()))
+        .map(|q| [q[0], q[1].min(q[2]), q[1].max(q[2])])
+        .collect()
+}
+
+/// What the plot knows of a series' points beyond drawing them.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Stats {
+    /// Every x is a number, none smaller than the one before: the points
+    /// in view are found by binary search.
+    sorted: bool,
+    /// The x and y ranges of the rows whose values are all numbers (a
+    /// band's y range spans its minimums and maximums).
+    ranges: Option<([f64; 2], [f64; 2])>,
+}
+
+fn scan<const N: usize>(points: &[[f64; N]]) -> Stats {
+    let mut sorted = true;
+    let mut previous = f64::NEG_INFINITY;
+    let mut ranges: Option<([f64; 2], [f64; 2])> = None;
+    for p in points {
+        // Not a number is not sorted either.
+        if p[0] >= previous {
+            previous = p[0];
+        } else {
+            sorted = false;
+        }
+        if p.iter().all(|v| v.is_finite()) {
+            let (lo, hi) = p[1..]
+                .iter()
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &v| {
+                    (a.min(v), b.max(v))
+                });
+            ranges = Some(match ranges {
+                None => ([p[0], p[0]], [lo, hi]),
+                Some((x, y)) => (
+                    [x[0].min(p[0]), x[1].max(p[0])],
+                    [y[0].min(lo), y[1].max(hi)],
+                ),
+            });
+        }
+    }
+    Stats { sorted, ranges }
+}
+
+/// A cheap print of a series' points: its buffer, its length and 64 of
+/// its points spread along it.
+fn fingerprint<const N: usize>(points: &[[f64; N]]) -> u64 {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (points.as_ptr() as usize).hash(&mut h);
+    points.len().hash(&mut h);
+    if let Some(last) = points.len().checked_sub(1) {
+        for k in 0..64u64 {
+            let i = (k * last as u64 / 63) as usize;
+            for v in points[i] {
+                v.to_bits().hash(&mut h);
+            }
+        }
+    }
+    h.finish()
+}
+
+/// A series' order and ranges. Past [`STATS_KEPT`] points they are kept
+/// in `ctx` under `key` and read again only when the points' print
+/// changes (another buffer, another length, one of 64 points spread
+/// along it changed), so a pass over a long series costs the points in
+/// view: a long series edited in place where none of these change keeps
+/// its last ranges in the summary until one does.
+fn stats<const N: usize>(ctx: &Context, key: Id, points: &[[f64; N]]) -> Stats {
+    if points.len() <= STATS_KEPT {
+        return scan(points);
+    }
+    let print = fingerprint(points);
+    if let Some((p, st)) = ctx.data(|d| d.get_temp::<(u64, Stats)>(key))
+        && p == print
+    {
+        return st;
+    }
+    let st = scan(points);
+    ctx.data_mut(|d| d.insert_temp(key, (print, st)));
+    st
+}
+
 /// Each line's and stepped line's value at `x` (their points sorted by
-/// x); none outside a series' x range.
+/// x); none outside a series' x range. The points around `x` are found by
+/// binary search.
 pub fn values_at(series: &[Series], x: f64) -> Vec<ValueAt> {
     if !x.is_finite() {
         return Vec::new();
@@ -1036,30 +1272,25 @@ pub fn values_at(series: &[Series], x: f64) -> Vec<ValueAt> {
         .iter()
         .enumerate()
         .filter_map(|(i, s)| {
-            let pts: Vec<&[f64; 2]> = s
-                .points
-                .iter()
-                .filter(|p| p[0].is_finite() && p[1].is_finite())
-                .collect();
-            let first = pts.first()?;
-            let last = pts.last()?;
+            if !matches!(s.kind, Kind::Line | Kind::Steps) {
+                return None;
+            }
+            let finite = |p: &&[f64; 2]| p[0].is_finite() && p[1].is_finite();
+            let first = s.points.iter().find(finite)?;
+            let last = s.points.iter().rev().find(finite)?;
             if x < first[0] || x > last[0] {
                 return None;
             }
-            // The first point past x.
-            let k = pts.partition_point(|p| p[0] <= x);
-            let y = match s.kind {
-                Kind::Line => {
-                    if k >= pts.len() {
-                        last[1]
-                    } else {
-                        let (a, b) = (pts[k - 1], pts[k]);
-                        let f = (x - a[0]) / (b[0] - a[0]);
-                        a[1] + (b[1] - a[1]) * f
-                    }
+            // The first point past x, and the points around it.
+            let k = s.points.partition_point(|p| p[0] <= x || p[0].is_nan());
+            let a = s.points[..k].iter().rev().find(finite)?;
+            let b = s.points[k..].iter().find(finite);
+            let y = match (s.kind, b) {
+                (Kind::Line, Some(b)) => {
+                    let f = (x - a[0]) / (b[0] - a[0]);
+                    a[1] + (b[1] - a[1]) * f
                 }
-                Kind::Steps => pts[k - 1][1],
-                _ => return None,
+                _ => a[1],
             };
             Some(ValueAt {
                 series: i,
@@ -1096,17 +1327,32 @@ fn time_marks(scale: &TimeScale, input: GridInput, digit: f32) -> (ruler::Ticks,
 }
 
 /// The point nearest `pos` on screen, within [`HOVER_RADIUS`]; a bar
-/// is hovered anywhere over it.
+/// is hovered anywhere over it. Read in the full series, never in the
+/// points drawn: a series sorted by x only within the radius' x range,
+/// found by binary search.
 fn nearest(
     series: &[Series],
+    stats: &[Stats],
     transform: &PlotTransform,
     pos: Pos2,
     bar_offset: &dyn Fn(usize) -> f64,
     bar_w: f64,
 ) -> Option<Hovered> {
     let mut best: Option<(f32, usize, usize)> = None;
+    // The x range within reach, a point wider for the rounding.
+    let reach = HOVER_RADIUS + 1.0;
+    let a = transform.value_from_position(pos2(pos.x - reach, pos.y)).x;
+    let b = transform.value_from_position(pos2(pos.x + reach, pos.y)).x;
+    let (lo, hi) = (a.min(b), a.max(b));
     for (i, s) in series.iter().enumerate() {
-        for (j, q) in s.points.iter().enumerate() {
+        let range = if s.kind != Kind::Bars && stats.get(i).is_some_and(|st| st.sorted) {
+            let from = s.points.partition_point(|q| q[0] < lo);
+            from..s.points.partition_point(|q| q[0] <= hi).max(from)
+        } else {
+            0..s.points.len()
+        };
+        for (j, q) in s.points[range.clone()].iter().enumerate() {
+            let j = range.start + j;
             if !(q[0].is_finite() && q[1].is_finite()) {
                 continue;
             }
@@ -1157,21 +1403,29 @@ fn number(v: f64) -> String {
 
 /// The accessible description: each series, then the time cursor.
 pub fn summary(ctx: &Context, series: &[Series], time_cursor: Option<f64>) -> String {
+    let ranges: Vec<_> = series.iter().map(Series::ranges).collect();
     summary_with(
         ctx,
         series,
+        &ranges,
         time_cursor.filter(|t| t.is_finite()).map(number),
     )
 }
 
-/// The description with the time cursor already written (in a time
-/// scale's text, or as a number).
-fn summary_with(ctx: &Context, series: &[Series], time_cursor: Option<String>) -> String {
+/// The description with each series' ranges known and the time cursor
+/// already written (in a time scale's text, or as a number).
+fn summary_with(
+    ctx: &Context,
+    series: &[Series],
+    ranges: &[Option<([f64; 2], [f64; 2])>],
+    time_cursor: Option<String>,
+) -> String {
     let mut parts: Vec<String> = series
         .iter()
-        .map(|s| {
+        .zip(ranges)
+        .map(|(s, ranges)| {
             let kind = s.kind.word(ctx);
-            match s.ranges() {
+            match *ranges {
                 Some((x, y)) => tr_args(
                     ctx,
                     &s::PLOT_SERIES,
@@ -1443,5 +1697,74 @@ mod tests {
         assert_eq!(palette.series(12), palette.category[2]);
         let c = Series::line("c", []).color(Color32::RED);
         assert_eq!(Plot::color_of(&palette, &c, 0), Color32::RED);
+    }
+
+    /// A noisy series of `n` samples over `[0, length]`, sorted by x.
+    fn noisy(n: usize, length: f64) -> Vec<[f64; 2]> {
+        let mut seed: u64 = 0x2545_f491_4f6c_dd1d;
+        (0..n)
+            .map(|i| {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                let noise = (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5;
+                let x = i as f64 * length / (n - 1) as f64;
+                [x, (x * 0.3).sin() + noise]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_series_knows_whether_it_is_sorted() {
+        let st = scan(&[[0.0, 1.0], [1.0, f64::NAN], [1.0, 3.0], [4.0, -2.0]]);
+        assert!(st.sorted);
+        assert_eq!(st.ranges, Some(([0.0, 4.0], [-2.0, 3.0])));
+        assert!(!scan(&[[0.0, 1.0], [2.0, 1.0], [1.0, 1.0]]).sorted);
+        assert!(!scan(&[[0.0, 1.0], [f64::NAN, 1.0], [1.0, 1.0]]).sorted);
+        // A band's y range spans its minimums and maximums.
+        let st = scan(&[[0.0, 1.0, 2.0], [1.0, -1.0, 0.5]]);
+        assert_eq!(st.ranges, Some(([0.0, 1.0], [-1.0, 2.0])));
+        // The same as the series says.
+        let s = Series::line("a", noisy(5_000, 10.0));
+        assert_eq!(scan(&s.points).ranges, s.ranges());
+        // A long series' stats are kept while its points look the same.
+        let ctx = Context::default();
+        let key = Id::unique("stats");
+        let mut points = noisy(10_000, 10.0);
+        assert!(stats(&ctx, key, &points).sorted);
+        points.swap(0, 9_999);
+        assert!(!stats(&ctx, key, &points).sorted);
+    }
+
+    #[test]
+    fn hover_finds_the_true_sample_not_a_decimated_one() {
+        let points = noisy(1_000_000, 100.0);
+        let series = [Series::line("noisy", points.clone())];
+        let frame = Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 200.0));
+        let bounds = egui_plot::PlotBounds::from_min_max([0.0, -2.0], [100.0, 2.0]);
+        let transform = PlotTransform::new(frame, bounds, false);
+        let sorted = [scan(&series[0].points)];
+        assert!(sorted[0].sorted);
+        let unsorted = [Stats {
+            sorted: false,
+            ranges: None,
+        }];
+        let window = Window::new(0.0, 100.0, 800);
+        let mut drawn = Vec::new();
+        decimate::line(&points, &window, &mut drawn);
+        for (x, dy) in [(37.5, 0.2), (61.0, -0.3), (99.9, 0.0), (0.05, 0.1)] {
+            let y = (x * 0.3_f64).sin() + dy;
+            let pos = transform.position_from_point(&PlotPoint::new(x, y));
+            let fast = nearest(&series, &sorted, &transform, pos, &|_| 0.0, 0.8);
+            let full = nearest(&series, &unsorted, &transform, pos, &|_| 0.0, 0.8);
+            assert_eq!(fast, full, "at {x}, {y}");
+            let h = fast.expect("a sample under the pointer");
+            assert_eq!([h.x, h.y], points[h.index]);
+        }
+        // In the dense middle, the nearest sample is none of the column's
+        // four drawn points.
+        let pos = transform.position_from_point(&PlotPoint::new(37.5, (37.5_f64 * 0.3).sin()));
+        let h = nearest(&series, &sorted, &transform, pos, &|_| 0.0, 0.8).expect("a sample");
+        assert!(!drawn.contains(&[h.x, h.y]), "{h:?}");
     }
 }
