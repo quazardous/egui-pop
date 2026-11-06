@@ -636,6 +636,10 @@ pub fn ring_shown(ctx: &Context) -> bool {
 /// area leaves them to it. A widget sensing drags needs none of this, nor does a
 /// text input: a list, a grid or a row of stars does.
 ///
+/// A view whose focusable widget lies around its own scroll area rather than in
+/// it (a list, a grid) calls it inside the area's content: the area then knows
+/// that the view is the Tab stop, and does not become one itself.
+///
 /// upstream: egui's widgets read keys without taking them from the input, so a
 /// scroll area cannot see what a widget inside it has read (docs/upstream.md,
 /// "egui: a scroll area reads no key").
@@ -653,6 +657,16 @@ pub(crate) fn keys_taken_by(ctx: &Context, id: Id) -> bool {
     let mut s = lock(&st);
     rotate(ctx, &mut s);
     s.taking.contains(&id)
+}
+
+/// How many times [`takes_keys`] was called so far this pass: a scroll area
+/// compares it before and after its content, to learn whether a view inside reads
+/// the keys itself.
+pub(crate) fn keys_taken_count(ctx: &Context) -> usize {
+    let st = state(ctx);
+    let mut s = lock(&st);
+    rotate(ctx, &mut s);
+    s.taking.len()
 }
 
 /// Lets Escape through a text input (call it each pass it is drawn):
