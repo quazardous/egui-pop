@@ -800,6 +800,10 @@ egui-pop-pointer-drop 291450cb90400047
 egui-pop-pointer-keep 4d048d056ec0b433
 egui-pop-pointer-overrides-detail 9c4c6cfbe9ad1582
 egui-pop-pointer-overrides-title 0921c009dae8f78e
+egui-pop-rating 36690a4e79cfa166
+egui-pop-rating-clear f97ddab985b51fcf
+egui-pop-rating-set 463f865a3146a90c
+egui-pop-rating-value df2cadf36e533a28
 egui-pop-reset 9213e68cebd60946
 egui-pop-retry 1da925989c6c1be1
 egui-pop-scrollable-content 04fd4cc3732ba481
