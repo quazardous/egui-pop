@@ -6,8 +6,8 @@ which draws the axes, the grid, the legend and the series, and takes the
 pan, the zoom and the box zoom; egui-pop adds its look, an accessible
 summary, the point under the pointer, time (an axis in a timeline's
 scale, a time cursor dragged both ways with a timeline, its range),
-stepped lines, error bands, the values at the pointer and a collector for
-agents.
+stepped lines, error bands, the values at the pointer, decimation for
+series of millions of points and a collector for agents.
 
 ```sh
 cargo add egui-pop --features views
@@ -134,6 +134,43 @@ each by its series' colour, and dots mark them on the lines.
 `Plot::emphasize(Some(index))` draws a series thicker (the one selected
 or hovered elsewhere).
 
+## Many points
+
+A time series may hold millions of points; a plot draws only what its
+pixels can show. A line, a stepped line or an error band with more than
+`DECIMATION_THRESHOLD` points in view (1000) is **decimated** per pixel
+column: each column keeps its first, its lowest, its highest and its last
+point, in order (the M4 scheme), so the line covers the same pixels as
+the full series at the current zoom, and the segment joining two columns
+is the full series' own. A band keeps each column's first and last rows
+and, between them, its lowest minimum and highest maximum, over the same
+columns as the lines. At most four points a column are drawn, whatever
+the series' length. Scatters and bars are drawn whole.
+
+`Plot::decimation(None)` draws every point; `Plot::decimation(Some(n))`
+sets the threshold. The approach follows Rerun's time series view, which
+reads the visible time range only and aggregates the points of a pixel
+column.
+
+**Sorted by x**, the common time series, a series is read in the x range
+in view only, found by binary search, with a point past each edge so the
+lines run off the plot: a pass costs the points in view, not the series'
+length. While egui_plot fits the bounds to the data (before a pan or a
+zoom, and after a double click), the range in view is the whole series.
+A series **not sorted** by x (a path, a Lissajous figure) cannot be cut
+into columns: it is drawn whole, as egui_plot draws it, correct but at the
+cost of every point.
+
+The point under the pointer (`PlotOutput::hovered`) and the values at the
+pointer are read in the full series, never in the points drawn: the true
+nearest sample, found by binary search within the hover radius on a sorted
+series. The accessible summary and the collector count every point; the
+collector adds each series' `drawn`, the points handed to egui_plot this
+pass. A series of more than 4096 points keeps its order and ranges
+between passes while its points look the same (the same buffer and length,
+and 64 points spread along it unchanged); one edited in place where none
+of these change keeps its last ranges in the summary until one does.
+
 ## Accessibility
 
 A plot is one node, a figure named by `Plot::label` ("Chart" by
@@ -160,7 +197,12 @@ bars. The **Plot over time** page puts a timeline and a plot on one
 `TimelineState`: twenty seconds of a robot's speed (an entity colour and
 its error band), a stepped target and a stepped gear, the looping range
 shaded, the playhead the plot's cursor; then kicks on a bars and beats
-axis. Its playground switches the recording to frames or bars and beats.
+axis. Its playground switches the recording to frames or bars and beats,
+and swaps the speed for two million samples (a hundred thousand a
+second, with a vibration and noise), drawn decimated, or whole when the
+decimation is turned off.
+
+![two million samples, decimated](../crates/egui-pop-gallery/tests/snapshots/plot-time-large-pop-dark.png)
 
 ![the plot over time page](../crates/egui-pop-gallery/tests/snapshots/plot-time-pop-dark.png)
 

@@ -177,7 +177,9 @@ worked around, then the small things.
    dragged, the values at the pointer in a tooltip, the entity hovered
    or selected elsewhere drawn thicker); it keeps the entities' own
    colours, which its other views share. Its time panel is still painted
-   by hand (gap 1).
+   by hand (gap 1). Rerun draws series of millions of points, reading the
+   time range in view and aggregating per pixel column; the plot does the
+   same now ([decimation](plot.md#many-points)).
 7. **A kit is one variant** (solved). A kit package held one theme: the
    light and dark pair was two kit folders naming each other. A kit's
    manifest may carry its other variant now (`counterpart`), switched
