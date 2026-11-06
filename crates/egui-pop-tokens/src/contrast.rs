@@ -250,6 +250,15 @@ pub const PAIRS: &[Pair] = &[
         "indicator-dot.tone.danger.fill",
         "indicator-outline.rest.ring-color",
     ),
+    // A rating's stars: a given star and an empty star's outline on the
+    // surfaces they sit on (an empty star is what says the item can be
+    // rated). The preview and the ghost are lighter on purpose, between
+    // the two.
+    ui("rating-star.selected.fill", "surface.panel"),
+    ui("rating-star.selected.fill", "surface.raised"),
+    ui("rating-star.rest.border-color", "surface.panel"),
+    ui("rating-star.rest.border-color", "surface.raised"),
+    ui("rating-star-display.selected.fill", "surface.panel"),
     // A curve and its points over the curve editor's background.
     ui("curve.line", "curve.background"),
     ui("curve.point", "curve.background"),

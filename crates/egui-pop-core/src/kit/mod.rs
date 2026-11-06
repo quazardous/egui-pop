@@ -878,6 +878,15 @@ components! {
     /// A radio button's circle, its mark the `radio` glyph: `selected`
     /// while chosen (`widgets::RadioButton`).
     radio: "radio" => "pill",
+    /// A star of a rating (`rating::RatingStars`), drawn by the `star`
+    /// handler: `rest` an empty star's outline, `selected` a star of the
+    /// value, `hover` a star of the value the pointer previews, and
+    /// `selected` in the `muted` tone a star of the current value past
+    /// the preview (its ghost); `disabled` in a disabled `Ui`.
+    rating_star: "rating-star" => "star",
+    /// A star of a rating shown, not edited (a table's column, a file's
+    /// facts): based on `rating-star`, at rest or `selected`.
+    rating_star_display: "rating-star-display" => "star",
     /// A viewport's pixel readout; its label is the readout's text.
     readout: "readout" => "card",
     /// The scroll bars of every scroll area, which egui draws (handler

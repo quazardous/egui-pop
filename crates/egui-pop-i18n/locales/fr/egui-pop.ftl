@@ -1232,6 +1232,14 @@ egui-pop-picker-close = Fermer le sélecteur
 
 egui-pop-picker-up = Dossier parent
 
+egui-pop-rating = Note
+
+egui-pop-rating-clear = Effacer la note
+
+egui-pop-rating-set = Noter { $stars } sur 5
+
+egui-pop-rating-value = { $stars } sur 5
+
 egui-pop-reset = Réinitialiser
 
 egui-pop-retry = Réessayer

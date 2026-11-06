@@ -495,7 +495,9 @@ pub const FILES_LENS: StrKey = StrKey::new("egui-pop-files-lens", "Lens");
 pub const FILES_EXPOSURE: StrKey = StrKey::new("egui-pop-files-exposure", "Exposure");
 pub const FILES_FOCAL_LENGTH: StrKey = StrKey::new("egui-pop-files-focal-length", "Focal length");
 pub const FILES_RATING: StrKey = StrKey::new("egui-pop-files-rating", "Rating");
-/// A rating's stars, as a screen reader says them.
+/// A rating's stars, as a screen reader said them. No longer shown: the
+/// preview's stars are `egui_pop_core::rating::RatingStars`, read with
+/// `egui_pop_core::strings::RATING_VALUE`; kept for compatibility.
 pub const FILES_RATING_VALUE: StrKey =
     StrKey::new("egui-pop-files-rating-value", "{ $stars } of 5");
 pub const FILES_MODIFIED: StrKey = StrKey::new("egui-pop-files-modified", "Modified");

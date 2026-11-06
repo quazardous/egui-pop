@@ -529,7 +529,11 @@ compiled at install.
   expanded stack's member (its indicator, the cell's outline painted again
   over it); a failed image's icon is the layer's `text`. A pending image
   stays a skeleton (`skeleton.fill`). The flag, labels and stars sit on
-  `thumb-overlay-badge`s. Badges and a stack's count are `pill`s, badges
+  `thumb-overlay-badge`s; the stars are `rating-star`s ([Rating
+  stars](rating.md#kit-components): `rest` an empty outline, `selected`
+  given, `hover` the preview, `selected` in the `muted` tone the
+  current value's ghost; `rating-star-display`, based on it, where a
+  rating is only shown). Badges and a stack's count are `pill`s, badges
   by tone (`info`, `success`, `warning`, `danger`); the `pill` handler
   caps the radius at half the height, so a large radius gives round ends.
   The neutral pill's fill is the overlay surface at 85 %, an alias with
@@ -538,7 +542,7 @@ compiled at install.
   `mark-toggle`s (`selected` while on), the search field a `card` whose
   `focus` ring shows while its text has the keyboard. A comparison's pane
   is `compare-pane`, `selected` for the best image, its ring painted
-  again over the image; the best star is that ring's colour. Stars, flags
+  again over the image; the best star is that ring's colour. Flags
   and colour labels are content and keep their `library.*` colours. The
   `library-kit` snapshot restyles them with data only.
 - **The viewport's widgets** (`thumbnail`, `readout`, `viewport-focus`):

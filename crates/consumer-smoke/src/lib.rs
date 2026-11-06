@@ -53,6 +53,9 @@ pub mod viewport {}
 #[doc = include_str!("../../../docs/sliders.md")]
 pub mod sliders {}
 
+#[doc = include_str!("../../../docs/rating.md")]
+pub mod rating {}
+
 #[doc = include_str!("../../../docs/pointer-gestures.md")]
 pub mod pointer_gestures {}
 

@@ -321,7 +321,7 @@ fn rating_keys_mark_the_selection_and_auto_advance_moves_on() {
     assert_eq!(cursor(&h), Some(3));
     // The stars of a cell rate it.
     h.state_mut().signals.clear();
-    h.query_all_by_label("Rate 2 of 5")
+    h.query_all_by_label("Set 2 of 5")
         .next()
         .expect("stars on the cells")
         .click();
@@ -331,6 +331,19 @@ fn rating_keys_mark_the_selection_and_auto_advance_moves_on() {
             .signals
             .iter()
             .any(|s| matches!(s, Signal::Rate { rating: 2, .. }))
+    );
+    // The star of a cell's rating clears it.
+    h.state_mut().signals.clear();
+    h.query_all_by_label("Clear rating")
+        .next()
+        .expect("a rated cell")
+        .click();
+    h.run();
+    assert!(
+        h.state()
+            .signals
+            .iter()
+            .any(|s| matches!(s, Signal::Rate { rating: 0, .. }))
     );
 }
 

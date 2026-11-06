@@ -57,6 +57,9 @@
 //! - [`latest`]: a slow load following a selection, the latest asked
 //!   winning, nothing run behind a hidden panel;
 //! - [`thumbnail`]: thumbnails and a virtualised grid of them;
+//! - [`rating`]: rating stars, edited (a preview under the pointer, the
+//!   current value as a ghost, a click on it clears) or shown, drawn by
+//!   the kit;
 //! - [`widgets`]: egui's checkbox, radio button, selectable row and
 //!   combo box arrow drawn through the kit, and a toggle chip;
 //! - [`state`]: typed slots for the state kept in egui's memory,
@@ -92,6 +95,7 @@ pub mod placeholder;
 pub mod placement;
 pub mod pointer;
 pub mod progress;
+pub mod rating;
 pub mod regions;
 mod reveal;
 mod ring;

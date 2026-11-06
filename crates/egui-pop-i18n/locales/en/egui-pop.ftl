@@ -1603,6 +1603,14 @@ egui-pop-pointer-overrides-detail = You changed { $count } pointer gestures. Kee
 
 egui-pop-pointer-overrides-title = Pointer profile: { $profile }
 
+egui-pop-rating = Rating
+
+egui-pop-rating-clear = Clear rating
+
+egui-pop-rating-set = Set { $stars } of 5
+
+egui-pop-rating-value = { $stars } of 5
+
 egui-pop-reset = Reset
 
 egui-pop-retry = Retry

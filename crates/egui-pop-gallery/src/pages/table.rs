@@ -6,11 +6,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use egui::{Color32, Ui};
+use egui::Ui;
 use egui_pop::api::selection::{SELECTION, SELECTION_PLUGIN};
 use egui_pop::api::steps::Before;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::rating::RatingStars;
 use egui_pop::core::widgets;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::views::Mode;
@@ -116,18 +117,11 @@ impl TableRows<u32> for Photos {
                 ui.label(&p.date);
             }
             _ => {
-                // Drawn by the application: five stars, painted.
-                let (rect, _) =
-                    ui.allocate_exact_size(egui::vec2(80.0, 14.0), egui::Sense::hover());
-                for i in 0..5u8 {
-                    let c = rect.left_center() + egui::vec2(8.0 + f32::from(i) * 16.0, 0.0);
-                    let color = if i < p.rating {
-                        Color32::from_rgb(230, 180, 60)
-                    } else {
-                        ui.visuals().weak_text_color()
-                    };
-                    ui.painter().circle_filled(c, 4.5, color);
-                }
+                // Shown, not edited: the shared rating stars, read-only.
+                let _ = RatingStars::new(p.rating)
+                    .read_only(true)
+                    .size(14.0)
+                    .show(ui);
             }
         }
     }

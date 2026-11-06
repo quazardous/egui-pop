@@ -26,6 +26,7 @@
 
 use egui::{Key as EKey, Response, Role, Sense, Ui, WidgetInfo, vec2};
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
+use egui_pop_core::rating;
 use egui_pop_core::strings::{StrKey, tr, tr_args};
 use egui_pop_core::theme::Tokens;
 use serde::{Deserialize, Serialize};
@@ -33,8 +34,7 @@ use serde::{Deserialize, Serialize};
 use super::paint::{self, LibraryTokens};
 use crate::strings as s;
 
-/// The highest rating.
-pub const MAX_RATING: u8 = 5;
+pub use egui_pop_core::rating::{EmptyStars, MAX_RATING};
 
 /// Picked, rejected, or neither.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -285,133 +285,56 @@ pub struct MarkResponse<T> {
 
 /// Five stars: a click on a star gives that rating (on the current one,
 /// none); focused, 0 to 5 set it, arrows step it, Home and End go to
-/// the ends. A slider for assistive technologies.
+/// the ends. A slider for assistive technologies. Under the pointer, the
+/// stars up to it preview the value a click gives and the current value
+/// stays as a ghost; each star's tooltip says what a click does.
+///
+/// The shared widget is [`egui_pop_core::rating::RatingStars`] (the
+/// grid's stars, the file dialog's preview and a table's column use it
+/// too); this one returns a [`MarkResponse`] like the other marks.
 #[derive(Clone, Debug)]
 #[must_use = "show it with `show`"]
 pub struct RatingStars {
-    value: u8,
-    label: Option<String>,
-    size: Option<f32>,
+    inner: rating::RatingStars,
 }
 
 impl RatingStars {
     pub fn new(value: u8) -> RatingStars {
         RatingStars {
-            value: value.min(MAX_RATING),
-            label: None,
-            size: None,
+            inner: rating::RatingStars::new(value),
         }
     }
 
     /// Its accessible name ("Rating" by default).
     pub fn label(mut self, label: impl Into<String>) -> RatingStars {
-        self.label = Some(label.into());
+        self.inner = self.inner.label(label);
         self
     }
 
     /// One star's size in points (default: the inline icon size).
     pub fn size(mut self, size: f32) -> RatingStars {
-        self.size = Some(size);
+        self.inner = self.inner.size(size);
+        self
+    }
+
+    /// Shown, not edited ([`rating::RatingStars::read_only`]).
+    pub fn read_only(mut self, read_only: bool) -> RatingStars {
+        self.inner = self.inner.read_only(read_only);
+        self
+    }
+
+    /// When empty stars show ([`EmptyStars::Always`] by default).
+    pub fn empty(mut self, empty: EmptyStars) -> RatingStars {
+        self.inner = self.inner.empty(empty);
         self
     }
 
     pub fn show(self, ui: &mut Ui) -> MarkResponse<u8> {
-        let t = Tokens::of(ui.ctx());
-        let lt = LibraryTokens::of(ui.ctx());
-        let star = self.size.unwrap_or(t.size.icon_inline.max(12.0) + 4.0);
-        let (rect, response) =
-            ui.allocate_exact_size(vec2(star * f32::from(MAX_RATING), star), Sense::click());
-        egui_pop_core::focus::takes_keys(ui.ctx(), response.id);
-        let at = |x: f32| (((x - rect.left()) / star).floor() as i32).clamp(0, 4) as u8 + 1;
-        let hover = response.hover_pos().map(|p| at(p.x));
-        let mut changed = None;
-        if response.clicked()
-            && let Some(p) = response.interact_pointer_pos()
-        {
-            let r = at(p.x);
-            changed = Some(if r == self.value { 0 } else { r });
+        let out = self.inner.show(ui);
+        MarkResponse {
+            response: out.response,
+            changed: out.changed,
         }
-        if response.has_focus() {
-            changed = changed.or_else(|| {
-                ui.input(|i| {
-                    let mut v = None;
-                    for (k, r) in [
-                        (EKey::Num0, 0),
-                        (EKey::Num1, 1),
-                        (EKey::Num2, 2),
-                        (EKey::Num3, 3),
-                        (EKey::Num4, 4),
-                        (EKey::Num5, 5),
-                    ] {
-                        if i.key_pressed(k) {
-                            v = Some(r);
-                        }
-                    }
-                    if i.key_pressed(EKey::ArrowRight) || i.key_pressed(EKey::ArrowUp) {
-                        v = Some((self.value + 1).min(MAX_RATING));
-                    }
-                    if i.key_pressed(EKey::ArrowLeft) || i.key_pressed(EKey::ArrowDown) {
-                        v = Some(self.value.saturating_sub(1));
-                    }
-                    if i.key_pressed(EKey::Home) {
-                        v = Some(0);
-                    }
-                    if i.key_pressed(EKey::End) {
-                        v = Some(MAX_RATING);
-                    }
-                    v
-                })
-            });
-            ui.memory_mut(|m| {
-                m.set_focus_lock_filter(
-                    response.id,
-                    egui::EventFilter {
-                        horizontal_arrows: true,
-                        vertical_arrows: true,
-                        ..Default::default()
-                    },
-                )
-            });
-        }
-        if changed == Some(self.value) {
-            changed = None;
-        }
-        if ui.is_rect_visible(rect) {
-            let painter = ui.painter();
-            let shown = hover.unwrap_or(self.value);
-            for i in 0..MAX_RATING {
-                let c = rect.left_center() + vec2(star * (f32::from(i) + 0.5), 0.0);
-                let fill = if i < shown {
-                    Some(if hover.is_some() {
-                        lt.star.gamma_multiply(0.8)
-                    } else {
-                        lt.star
-                    })
-                } else {
-                    None
-                };
-                paint::star(painter, c, star * 0.45, fill, lt.star_empty);
-            }
-            if response.has_focus() {
-                egui_pop_core::focus::own_ring(ui.ctx(), response.id);
-                painter.rect_stroke(
-                    rect.expand(1.0),
-                    t.radius.widget,
-                    egui::Stroke::new(1.0, t.focus_ring),
-                    egui::StrokeKind::Outside,
-                );
-            }
-        }
-        let label = self.label.unwrap_or_else(|| tr(ui.ctx(), &s::RATING));
-        let value = f64::from(self.value);
-        let enabled = ui.is_enabled();
-        response.widget_info(move || WidgetInfo::slider(enabled, value, &label));
-        ui.ctx().accesskit_node_builder(response.id, |n| {
-            n.set_min_numeric_value(0.0);
-            n.set_max_numeric_value(f64::from(MAX_RATING));
-            n.set_numeric_value_step(1.0);
-        });
-        MarkResponse { response, changed }
     }
 }
 

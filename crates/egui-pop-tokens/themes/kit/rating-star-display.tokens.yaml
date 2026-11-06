@@ -1,0 +1,10 @@
+$description: "The `rating-star-display` component of the default kit (docs/kit.md), layered into pop-dark."
+rating-star-display:
+  $description: "A star of a rating shown, not edited (a table's column, a file's facts). Based on `rating-star`: restyling the rating's stars restyles these; its empty stars are quieter, a decoration saying \"of 5\"."
+  based-on:
+    $type: "string"
+    $value: "rating-star"
+  rest:
+    border-color:
+      $type: "color"
+      $value: "{border.strong}"

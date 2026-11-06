@@ -5160,6 +5160,14 @@ fn a_kit_restyles_the_library() {
                 radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
               selected:
                 border-color: {$type: "color", $value: "{accent.default}"}
+            # The rating's stars in the accent, outlines thicker; a shown
+            # rating's stars follow (based on `rating-star`).
+            rating-star:
+              rest:
+                border-width: {$type: "dimension", $value: {value: 1.5, unit: "px"}}
+              selected:
+                fill: {$type: "color", $value: "{accent.default}"}
+                border-color: {$type: "color", $value: "{accent.default}"}
             search-field:
               rest:
                 radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
@@ -5180,6 +5188,31 @@ fn a_kit_restyles_the_library() {
     h.remove_cursor();
     h.run();
     h.snapshot("library-kit");
+}
+
+#[test]
+fn a_cell_s_stars_preview_a_lower_rating_over_the_current_one() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "library"));
+    h.run();
+    // Four stars on the second image (a click, then 4).
+    h.query_all_by_label("DSC_00001").next().unwrap().click();
+    h.run();
+    h.key_press(egui::Key::Num4);
+    h.run();
+    let cell = h.query_all_by_label("DSC_00001").next().unwrap().rect();
+    let star = |h: &Harness<'static, Gallery>, name: &str| {
+        h.query_all_by_label(name)
+            .map(|n| n.rect())
+            .find(|r| cell.contains_rect(*r))
+            .unwrap_or_else(|| panic!("{name} on the cell"))
+    };
+    // Its fourth star clears it; its first previews one star, the three
+    // others of the current rating staying as ghosts.
+    let _ = star(&h, "Clear rating");
+    let first = star(&h, "Set 1 of 5");
+    h.hover_at(first.center());
+    h.run();
+    h.snapshot("library-rating-preview-pop-dark");
 }
 
 #[test]

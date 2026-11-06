@@ -142,6 +142,10 @@ of every crate with every feature on.
   labels, flags and stacks, the culling keys, a comparison, tag chips
   and input, a search field with filter chips, steps and agent
   commands; the survey behind them.
+- [Rating stars](rating.md): how photo applications rate (empty
+  stars, the preview under the pointer, changing and clearing a
+  rating, the keys, read-only display) and the one widget egui-pop
+  draws ratings with, its kit components.
 - [Text and code editors](editors.md): a text editor and a code
   editor, virtualised, search and replace, a gutter of markers, folding,
   highlighting behind a trait (syntect, tree-sitter), code assist

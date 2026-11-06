@@ -59,6 +59,8 @@ mod progress_fill;
 mod progress_line;
 mod progress_ring;
 mod radio;
+mod rating_star;
+mod rating_star_display;
 mod readout;
 mod scroll_bar;
 mod search_field;
@@ -157,6 +159,8 @@ pub(super) const GROUPS: &[&[Required]] = &[
     progress_line::CONTRACT,
     progress_ring::CONTRACT,
     radio::CONTRACT,
+    rating_star::CONTRACT,
+    rating_star_display::CONTRACT,
     readout::CONTRACT,
     scroll_bar::CONTRACT,
     search_field::CONTRACT,
