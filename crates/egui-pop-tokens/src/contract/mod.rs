@@ -576,6 +576,41 @@ const CORE: &[Required] = &[
     comp("graph.wire", "color", "a wire whose type has no colour"),
     comp("graph.wire-preview", "color", "the wire being drawn"),
     comp("graph.wire-refused", "color", "a wire a port refuses"),
+    comp(
+        "graph.wire-hover.color",
+        "color",
+        "what a hovered wire's colour is lightened toward",
+    ),
+    comp(
+        "graph.wire-hover.width",
+        "dimension",
+        "a hovered wire's stroke",
+    ),
+    comp(
+        "graph.wire-selected.color",
+        "color",
+        "a selected wire, its handles and its ports' rings",
+    ),
+    comp(
+        "graph.wire-selected.width",
+        "dimension",
+        "a selected wire's stroke",
+    ),
+    comp(
+        "graph.wire-selected.glow",
+        "color",
+        "the glow under a selected wire",
+    ),
+    comp(
+        "graph.wire-selected.glow-width",
+        "dimension",
+        "the glow's width",
+    ),
+    comp(
+        "graph.wire-selected.glow-opacity",
+        "number",
+        "the glow's opacity, 0 to 1",
+    ),
     comp("graph.group", "color", "behind a group of nodes"),
     comp("graph.group-border", "color", "a group's outline"),
     comp("graph.band", "color", "the rubber band selecting nodes"),

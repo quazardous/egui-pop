@@ -255,6 +255,9 @@ pub const PAIRS: &[Pair] = &[
     ui("curve.point", "curve.background"),
     // A selected node's outline over the node.
     ui("graph.node-selected", "graph.node"),
+    // A hovered and a selected wire over the canvas.
+    ui("graph.wire-hover.color", "graph.background"),
+    ui("graph.wire-selected.color", "graph.background"),
     // A plot: its axis text and its time cursor over its background.
     text("plot.rest.text", "plot.rest.fill"),
     ui("plot-cursor.rest.fill", "plot.rest.fill"),

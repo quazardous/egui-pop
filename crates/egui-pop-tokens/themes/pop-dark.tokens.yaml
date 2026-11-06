@@ -710,6 +710,35 @@ graph:
   wire-refused:
     $value: "{danger}"
     $description: "The wire being drawn over a port that refuses it."
+  wire-hover:
+    $description: "The wire under the pointer: drawn `width` thick, its own colour mixed halfway toward `color`."
+    color:
+      $value: "{text.strong}"
+      $description: "What a hovered wire's colour is lightened toward (contrast-checked on the canvas)."
+    width:
+      $type: "dimension"
+      $value: {value: 3.5, unit: "px"}
+      $description: "A hovered wire's stroke, in points on screen."
+  wire-selected:
+    $description: "A selected wire: a `width` stroke in `color` over a soft glow, larger handles near its ends, its two ports ringed."
+    color:
+      $value: "{accent.default}"
+      $description: "A selected wire's stroke, its handles and its ports' rings (contrast-checked on the canvas)."
+    width:
+      $type: "dimension"
+      $value: {value: 4, unit: "px"}
+      $description: "A selected wire's stroke, in points on screen."
+    glow:
+      $value: "{accent.default}"
+      $description: "The glow under a selected wire, drawn at `glow-opacity`."
+    glow-width:
+      $type: "dimension"
+      $value: {value: 12, unit: "px"}
+      $description: "The glow's width, in points on screen."
+    glow-opacity:
+      $type: "number"
+      $value: 0.35
+      $description: "The glow's opacity, 0 to 1."
   group:
     $value: "{accent.subtle}"
     $description: "Behind a group of nodes."

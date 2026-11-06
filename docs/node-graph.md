@@ -179,8 +179,8 @@ Pan and zoom follow the pointer profile
 | Drag from a port | Draws a wire, checked as it goes: ports that accept it are ringed, others dimmed, the wire turns to the refusal colour over a port that refuses it |
 | Drag from a connected input | Takes its wire along: dropped nowhere, it disconnects |
 | Click a port, then another | Connects them |
-| Hover a wire | Within 6 points of it (12 on a touch screen), where no node or port is: drawn thicker, its two ports ringed, a tooltip naming its ends ("Load · Image to Blur · Image"), the hint line says what the pointer does |
-| Click a wire | Selects it, and no node (Shift or Ctrl adds or removes it, nodes kept): drawn in the selection's colour with a handle near each end |
+| Hover a wire | Within 6 points of it (12 on a touch screen), where no node or port is: the pointer becomes a hand, the wire is drawn thicker and lighter (`graph.wire-hover`), its two ports ringed, a tooltip at once naming its ends ("Load · Image to Blur · Image"), the hint line says what the pointer does |
+| Click a wire | Selects it, and no node (Shift or Ctrl adds or removes it, nodes kept): drawn thicker in the selection's colour over a soft glow (`graph.wire-selected`), with a larger handle near each end and its two ports ringed: seen even when the wire is short |
 | Drag a wire | Takes its nearer end along (one of an output's several wires too): dropped on a port that accepts it, one `Connect` replacing it; dropped nowhere, a `Disconnect`; Escape puts it back |
 | Delete with wires selected | One `Disconnect` of them all; with nodes selected too, one `Delete` |
 | A group's title | Folds the group into a stack; a click on the stack unfolds it; dragging either moves the group |
@@ -597,6 +597,22 @@ itself (see [upstream](upstream.md)).
 `type-6` (the port types' colours, aliases of the accent and the
 status colours). The minimap draws with `navigator.*`. The selected
 outline is contrast-checked against the node.
+
+The wire under the pointer and the wires selected:
+
+| Token | pop-dark | What |
+|---|---|---|
+| `graph.wire-hover.color` | `{text.strong}` | a hovered wire's colour is its own mixed halfway toward it |
+| `graph.wire-hover.width` | 3.5 px | a hovered wire's stroke (a plain wire: 2) |
+| `graph.wire-selected.color` | `{accent.default}` | a selected wire's stroke, its handles, its ports' rings |
+| `graph.wire-selected.width` | 4 px | a selected wire's stroke |
+| `graph.wire-selected.glow` | `{accent.default}` | the glow under a selected wire |
+| `graph.wire-selected.glow-width` | 12 px | the glow's width |
+| `graph.wire-selected.glow-opacity` | 0.35 | the glow's opacity |
+
+Widths are screen points. Every built-in theme takes them from
+pop-dark through its own accent and text; both colours are
+contrast-checked against the canvas (`graph.background`), 3:1.
 
 ## Why its own (2026-10-13)
 

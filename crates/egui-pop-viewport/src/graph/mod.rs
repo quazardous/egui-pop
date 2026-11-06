@@ -34,10 +34,12 @@
 //!   on a port, then on another, connects too.
 //! - **A wire itself** answers the pointer within 6 points (12 on a touch
 //!   screen), where no node or port is, at the ports and detail levels:
-//!   hovered, it is drawn thicker with its ports ringed and a tooltip
-//!   naming its ends; a click selects it (and no node), Ctrl (Cmd) or
-//!   Shift adds it to the nodes and wires selected; selected, it is drawn
-//!   in the selection's colour with a handle near each end. A drag on it
+//!   hovered, the pointer becomes a hand and the wire is drawn thicker and
+//!   lighter with its ports ringed and a tooltip naming its ends; a click
+//!   selects it (and no node), Ctrl (Cmd) or Shift adds it to the nodes
+//!   and wires selected; selected, it is drawn thicker in the selection's
+//!   colour over a soft glow, with a larger handle near each end and its
+//!   ports ringed (`graph.wire-hover.*`, `graph.wire-selected.*`). A drag on it
 //!   takes its nearer end along (one of an output's several wires too):
 //!   dropped on a port that accepts it, one [`Edit::Connect`] whose
 //!   `replaces` holds the old wire; dropped nowhere, a disconnect. Delete
@@ -211,6 +213,39 @@ impl GraphTokens {
     /// A port type's colour: its token, else the plain wire's.
     pub fn type_color(&self, ctx: &egui::Context, ty: &PortType) -> Color32 {
         Tokens::of(ctx).color(&ty.color).unwrap_or(self.wire)
+    }
+}
+
+/// How a hovered and a selected wire are drawn (`graph.wire-hover.*`,
+/// `graph.wire-selected.*`); widths in screen points.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct WireLook {
+    hover: Color32,
+    hover_width: f32,
+    selected: Color32,
+    selected_width: f32,
+    glow: Color32,
+    glow_width: f32,
+}
+
+impl WireLook {
+    fn of(ctx: &egui::Context) -> WireLook {
+        let t = Tokens::of(ctx);
+        let r = t.resolved();
+        let d = |path: &str, fallback: f32| r.dimension(path).unwrap_or(fallback);
+        let accent = t.accent.default;
+        let opacity = d("graph.wire-selected.glow-opacity", 0.35).clamp(0.0, 1.0);
+        WireLook {
+            hover: t.color("graph.wire-hover.color").unwrap_or(t.text.strong),
+            hover_width: d("graph.wire-hover.width", 3.5).max(0.5),
+            selected: t.color("graph.wire-selected.color").unwrap_or(accent),
+            selected_width: d("graph.wire-selected.width", 4.0).max(0.5),
+            glow: t
+                .color("graph.wire-selected.glow")
+                .unwrap_or(accent)
+                .gamma_multiply(opacity),
+            glow_width: d("graph.wire-selected.glow-width", 12.0).max(0.0),
+        }
     }
 }
 
@@ -652,6 +687,7 @@ impl<'a> GraphEditor<'a> {
             ctx: ctx.clone(),
             id,
             t: GraphTokens::of(&ctx),
+            look: WireLook::of(&ctx),
             keys: keys(&ctx),
             base,
             groups: &groups,
@@ -693,6 +729,9 @@ impl<'a> GraphEditor<'a> {
         let mut response = inner.inner.response;
         cx.canvas(&response, &label);
         let wire_hovered = cx.hover.is_some() && response.hovered();
+        if wire_hovered {
+            ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
         cx.state.over_canvas = response.hovered();
         let reveal = cx.reveal.take();
         let visible = cx.lay.visible;
@@ -994,6 +1033,7 @@ struct Cx<'a, 'g, 'h> {
     ctx: egui::Context,
     id: Id,
     t: GraphTokens,
+    look: WireLook,
     keys: GraphKeys,
     base: Base<'g>,
     groups: &'g [Group],
@@ -1270,17 +1310,30 @@ impl Cx<'_, '_, '_> {
             self.hover = self.wire_at(p).map(|(e, _)| e);
         }
         let width = self.wire_width();
+        let look = self.look;
+        // Screen points to graph units, held near the plain wire's bounds.
+        let px = |w: f32| (w / self.zoom.max(1e-3)).clamp(w * 0.75, w * 6.0);
         for ((edge, a, b, color), line) in drawn.into_iter().zip(lines) {
             let selected = self.state.selected_edges.contains(&edge);
             let hovered = self.hover.as_ref() == Some(&edge);
-            if selected {
-                // The selection's colour around the wire.
+            if selected && look.glow_width > 0.0 {
+                // A soft glow under the wire: seen however short it is.
                 painter.add(egui::Shape::line(
                     line.clone(),
-                    Stroke::new(width * 3.0, self.t.node_selected),
+                    Stroke::new(px(look.glow_width), look.glow),
                 ));
             }
-            let w = if hovered { width * 2.0 } else { width };
+            // Selected: the selection's colour and width; hovered: its own
+            // colour lightened, thicker.
+            let (w, color) = match (selected, hovered) {
+                (true, false) => (px(look.selected_width), look.selected),
+                (true, true) => (
+                    px(look.selected_width.max(look.hover_width)),
+                    look.selected.lerp_to_gamma(look.hover, 0.25),
+                ),
+                (false, true) => (px(look.hover_width), color.lerp_to_gamma(look.hover, 0.5)),
+                (false, false) => (width, color),
+            };
             if self.state.wire_style == WireStyle::Curves {
                 painter.add(egui::epaint::CubicBezierShape::from_points_stroke(
                     export::curve(a, b),
@@ -1359,31 +1412,50 @@ impl Cx<'_, '_, '_> {
         let handle = HANDLE / self.zoom.max(1e-3);
         for (e, line) in &self.paths {
             let hovered = self.hover.as_ref() == Some(e);
-            if !hovered && !self.state.selected_edges.contains(e) {
+            let selected = self.state.selected_edges.contains(e);
+            if !hovered && !selected {
                 continue;
             }
-            let color = self
-                .base
-                .port(&e.from, Side::Output)
-                .map_or(self.t.wire, |(_, p)| self.t.type_color(&self.ctx, &p.ty));
-            if hovered {
-                for (p, side) in [(&e.from, Side::Output), (&e.to, Side::Input)] {
-                    if let Some(at) = self.port_pos(p, side) {
-                        painter.circle_stroke(
-                            at,
-                            PORT_R + 3.0,
-                            Stroke::new(2.0 / self.zoom.max(0.5), color),
-                        );
-                    }
+            let color = if selected {
+                self.look.selected
+            } else {
+                self.base
+                    .port(&e.from, Side::Output)
+                    .map_or(self.t.wire, |(_, p)| self.t.type_color(&self.ctx, &p.ty))
+            };
+            // Its two ports ringed, wider and thicker when selected.
+            let (ring, ring_w) = if selected {
+                (PORT_R + 4.0, 2.5)
+            } else {
+                (PORT_R + 3.0, 2.0)
+            };
+            for (p, side) in [(&e.from, Side::Output), (&e.to, Side::Input)] {
+                if let Some(at) = self.port_pos(p, side) {
+                    painter.circle_stroke(
+                        at,
+                        ring,
+                        Stroke::new(ring_w / self.zoom.max(0.5), color),
+                    );
                 }
             }
             for at in [point_along(line, handle), point_along_back(line, handle)] {
-                painter.circle(
-                    at,
-                    r,
-                    self.t.node,
-                    Stroke::new(1.5 / self.zoom.max(0.5), color),
-                );
+                if selected {
+                    // Larger, filled with the selection's colour, a ring
+                    // of the node's colour around it.
+                    painter.circle(
+                        at,
+                        r * 1.6,
+                        color,
+                        Stroke::new(1.5 / self.zoom.max(0.5), self.t.node),
+                    );
+                } else {
+                    painter.circle(
+                        at,
+                        r,
+                        self.t.node,
+                        Stroke::new(1.5 / self.zoom.max(0.5), color),
+                    );
+                }
             }
         }
     }
