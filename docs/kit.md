@@ -350,8 +350,11 @@ compiled at install.
   Buttons and items are centred above the bar's line
   (`title-bar.rest.border-width`).
 - **Data views** (`list-row`, `list-view`, `table-header-cell`,
-  `table-stripe`, `tree-drop-marker`). One function paints the rows of
-  the tree, the list and the table. A row is `selected`, `hover` (never
+  `table-row`, `table-stripe`, `tree-drop-marker`). One function paints
+  the rows of the tree, the list and the table; a table's rows are
+  `table-row`, based on `list-row` (a kit restyling rows restyles both,
+  a kit giving `table-row` its own tokens styles tables apart: the
+  Rerun-like kits' quiet selection with a marker on the left). A row is `selected`, `hover` (never
   while selected, so the selection stays under the pointer) and `focus`
   for the cursor, whose ring sits inside the row (`ring-offset` -2). The
   view's outline is `list-view`'s focus ring, painted over the rows, so

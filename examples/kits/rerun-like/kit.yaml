@@ -156,6 +156,9 @@ $extensions:
         plot:
           rest:
             fill: {$type: "color", $value: "{gray.0}", $description: "Gray.1000: viewport_background, a plot background's default"}
+        table-row:
+          selected:
+            fill: {$type: "color", $value: "{gray.3}", $description: "Gray.900: table_interaction_row_selection_fill"}
         table-header-cell:
           rest:
             fill: {$type: "color", $value: "{gray.4}", $description: "Gray.850: table_header_bg_fill"}
@@ -307,6 +310,9 @@ palette:
 plot:
   rest:
     fill: {$type: "color", $value: "{gray.2}", $description: "Gray.100: viewport_background, a plot background's default"}
+table-row:
+  selected:
+    fill: {$type: "color", $value: "#c2ccff1a", $description: "Blue.750 at a tenth: table_interaction_row_selection_fill"}
 table-header-cell:
   rest:
     fill: {$type: "color", $value: "{gray.3}", $description: "Gray.150: table_header_bg_fill"}

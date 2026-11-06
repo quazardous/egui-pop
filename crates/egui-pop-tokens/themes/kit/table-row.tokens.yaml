@@ -1,0 +1,6 @@
+$description: "The `table-row` component of the default kit (docs/kit.md), layered into pop-dark."
+table-row:
+  $description: "A row of a data table (a kit component): selected, under the pointer (never while selected, so the selection stays under the pointer), the cursor of a focused table (`focus`). Based on `list-row`: the default kit draws a table's rows as it draws a list's, and a kit restyling the rows restyles both; a kit giving `table-row` its own tokens styles tables apart (a quiet selection, a marker on one side)."
+  based-on:
+    $type: "string"
+    $value: "list-row"

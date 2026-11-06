@@ -935,6 +935,11 @@ components! {
     /// A column's header in a data table: `hover` when the column sorts,
     /// `selected` when the table is sorted by it.
     table_header_cell: "table-header-cell" => "box",
+    /// A row of a data table: `selected`, `hover` (never while
+    /// selected), `focus` for the cursor of a focused table. Based on
+    /// `list-row`, so a table's rows look like a list's unless a kit
+    /// gives them their own look (a quiet selection, a side marker).
+    table_row: "table-row" => "box",
     /// Behind every other row of a data table.
     table_stripe: "table-stripe" => "plain",
     /// A tag or filter chip: selected, hover, focus.
@@ -1547,6 +1552,32 @@ mod tests {
         );
         assert_eq!(kit.table_stripe.style(State::REST).fill, t.surface.raised);
         assert_eq!(kit.table_header_cell.data.align, Align::Start);
+    }
+
+    #[test]
+    fn a_table_row_looks_like_a_list_row_unless_a_kit_says_otherwise() {
+        let t = Tokens::default();
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert_eq!(kit.table_row.shape, "box");
+        // Rest, hovered, selected, the cursor (focus), the selected cursor.
+        for state in [
+            State::REST,
+            State::HOVER,
+            State::SELECTED,
+            State::FOCUS,
+            State::SELECTED | State::FOCUS,
+            State::SELECTED | State::HOVER,
+        ] {
+            assert_eq!(
+                kit.table_row.style(state),
+                kit.list_row.style(state),
+                "{state:?}"
+            );
+        }
+        assert_eq!(
+            kit.table_row.border_room(1.0),
+            kit.list_row.border_room(1.0)
+        );
     }
 
     #[test]

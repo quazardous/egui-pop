@@ -204,6 +204,16 @@ pub trait TableRows<K: Key> {
     /// text: a label too long for the cell is elided with "…" and shows
     /// the full text on hover.
     fn cell(&mut self, ui: &mut Ui, row: usize, column: usize, selected: bool);
+
+    /// Where row `row` starts, from the top of the first row, rows being
+    /// `row_h` high unless the application says otherwise: rows of
+    /// several heights (a row expanded to several lines) give their
+    /// offsets here, `0.0` for row 0, and [`TableRows::len`] gives the
+    /// height of them all. Called for the rows in view and a binary
+    /// search over the rows, so keep it cheap.
+    fn row_top(&self, row: usize, row_h: f32) -> f32 {
+        row as f32 * row_h
+    }
 }
 
 /// A table's state between passes.
@@ -312,6 +322,8 @@ pub struct TableOutput<K> {
     pub hovered_column: Option<String>,
     /// The column whose header was clicked this pass (a primary click).
     pub header_clicked: Option<String>,
+    /// The rows in view this pass (empty before the table's first pass).
+    pub visible_rows: std::ops::Range<usize>,
 }
 
 /// What a header's context menu adds after the sort entries, given the
@@ -346,6 +358,7 @@ pub struct DataTable<'a> {
     select_columns: bool,
     header_menu: Option<HeaderMenu<'a>>,
     shared_columns: Option<&'a SelectionService>,
+    stick_to_bottom: bool,
 }
 
 impl<'a> DataTable<'a> {
@@ -363,7 +376,16 @@ impl<'a> DataTable<'a> {
             select_columns: false,
             header_menu: None,
             shared_columns: None,
+            stick_to_bottom: false,
         }
+    }
+
+    /// Keeps the last row in view as rows are added, until the user
+    /// scrolls up; scrolled back to the end, it follows again (a log's
+    /// tail). Off by default.
+    pub fn stick_to_bottom(mut self, on: bool) -> Self {
+        self.stick_to_bottom = on;
+        self
     }
 
     /// Lets a header click select its column (Ctrl+click toggles it,
@@ -533,7 +555,8 @@ impl<'a> DataTable<'a> {
             .num_rows(len as u64)
             .columns(columns.clone())
             .headers([HeaderRow::new(row_h + 4.0)])
-            .auto_size_mode(egui_table::AutoSizeMode::Never);
+            .auto_size_mode(egui_table::AutoSizeMode::Never)
+            .stick_to_bottom(self.stick_to_bottom);
         if let Some(r) = state.reveal.take() {
             table = table.scroll_to_row(r as u64, None);
         }
@@ -560,6 +583,7 @@ impl<'a> DataTable<'a> {
             header_clicked: None,
             column_click: None,
             header_menu: self.header_menu.take(),
+            visible_rows: 0..0,
         };
         let widths = &state.widths;
         let given = &mut state.given;
@@ -590,7 +614,7 @@ impl<'a> DataTable<'a> {
         // upstream: egui_table says nothing of its scroll area, so what overflows
         // comes from the sizes it was given.
         let wide = state.widths.iter().sum::<f32>();
-        let tall = len as f32 * row_h + row_h + 4.0;
+        let tall = delegate.rows.row_top(len, row_h) + row_h + 4.0;
         egui_pop_core::ui::contain_wheel_in(
             ui,
             inner.rect,
@@ -604,6 +628,7 @@ impl<'a> DataTable<'a> {
         let hovered_column = delegate.hovered_column.take();
         let header_clicked = delegate.header_clicked.take();
         let column_click = delegate.column_click.take();
+        let visible_rows = delegate.visible_rows.clone();
         let page = delegate.page;
         drop(delegate);
         if hovered_column != state.hovered_column {
@@ -808,6 +833,7 @@ impl<'a> DataTable<'a> {
             columns_selected,
             hovered_column,
             header_clicked,
+            visible_rows,
         }
     }
 }
@@ -881,11 +907,13 @@ struct Delegate<'a, K: Key> {
     /// A header click selecting its column, with the modifiers held.
     column_click: Option<(String, egui::Modifiers)>,
     header_menu: Option<HeaderMenu<'a>>,
+    /// The rows in view, as `egui_table` prepared them.
+    visible_rows: std::ops::Range<usize>,
 }
 
 impl<K: Key> Delegate<'_, K> {
     /// The fill a column's parts take when it is selected or hovered:
-    /// the list row's in that state (selected wins), `None` otherwise.
+    /// the table row's in that state (selected wins), `None` otherwise.
     fn column_fill(&self, column: &str) -> Option<egui::Color32> {
         let state = if self.selected_columns.iter().any(|c| c == column) {
             State::SELECTED
@@ -894,7 +922,7 @@ impl<K: Key> Delegate<'_, K> {
         } else {
             return None;
         };
-        Some(self.kit.list_row.style(state).fill)
+        Some(self.kit.table_row.style(state).fill)
     }
 
     /// Tints a cell of a selected or hovered column, at half strength so
@@ -927,6 +955,9 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
             .end
             .saturating_sub(info.visible_rows.start) as usize;
         self.page = n.saturating_sub(2).max(1);
+        let start = (info.visible_rows.start as usize).min(self.len);
+        let end = (info.visible_rows.end as usize).clamp(start, self.len);
+        self.visible_rows = start..end;
     }
 
     fn header_cell_ui(&mut self, ui: &mut Ui, cell: &HeaderCellInfo) {
@@ -1040,10 +1071,10 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
                 },
             );
         }
-        rows::paint(ui, &self.kit.list_row, rect, state);
+        rows::paint(ui, &self.kit.table_row, rect, state);
         if selected {
             ui.visuals_mut().override_text_color =
-                Some(rows::text_color(&self.kit.list_row, state));
+                Some(rows::text_color(&self.kit.table_row, state));
         }
         let name = self.rows.label(row);
         r.widget_info(move || WidgetInfo::selected(Role::Button, true, selected, &name));
@@ -1074,11 +1105,22 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
                 self.hovered_column = Some(c.id.clone());
             }
         }
-        ui.add_space(ui.spacing().item_spacing.x);
+        // The row's border, whatever its state, never moves the content:
+        // the first cell keeps the room of its widest one.
+        let room = if cell.col_nr == 0 {
+            self.kit.table_row.border_room(ui.ctx().pixels_per_point())
+        } else {
+            0.0
+        };
+        ui.add_space(ui.spacing().item_spacing.x + room);
         // A text too long for its cell is elided with "…" (an egui label
         // then shows the full text on hover), not cut at the cell's edge.
         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
         self.rows.cell(ui, row, cell.col_nr, selected);
+    }
+
+    fn row_top_offset(&self, _ctx: &egui::Context, _table_id: Id, row_nr: u64) -> f32 {
+        self.rows.row_top(row_nr as usize, self.row_h)
     }
 
     fn default_row_height(&self) -> f32 {
