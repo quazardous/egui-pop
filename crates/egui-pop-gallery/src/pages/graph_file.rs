@@ -9,6 +9,7 @@ use std::rc::Rc;
 use egui::{RichText, Ui, vec2};
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::ui::UiPop as _;
 use egui_pop::imaging;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::viewport::graph::yaml::YamlGraph;
@@ -99,12 +100,14 @@ pub fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
                 s.graph.version(),
                 s.edits
             ));
-            egui::ScrollArea::both()
-                .id_salt("graph-file-text")
-                .max_height(height - 24.0)
-                .show(ui, |ui| {
+            ui.scroll_area(
+                egui::ScrollArea::both()
+                    .id_salt("graph-file-text")
+                    .max_height(height - 24.0),
+                |ui| {
                     ui.label(RichText::new(s.graph.text()).monospace());
-                });
+                },
+            );
         });
     });
 }

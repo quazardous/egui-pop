@@ -13,6 +13,7 @@ use egui_pop_core::icon::{Icon, Size, Tone};
 use egui_pop_core::lock;
 use egui_pop_core::strings::{self, RETRY, tr, tr_args};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_model::commands::Origin;
 
 use super::page::{Markdown, escape, resolve};
@@ -343,7 +344,7 @@ fn body(ui: &mut Ui, app: &AppHandle, v: &Viewer, actions: &mut Vec<Action>) {
             if let Some(y) = restore {
                 area = area.vertical_scroll_offset(y);
             }
-            let out = area.show(ui, |ui| {
+            let out = ui.scroll_area(area, |ui| {
                 let name = tr(&ctx, &txt::VIEWER_PAGE);
                 ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
                     node.set_role(egui::accesskit::Role::Document);

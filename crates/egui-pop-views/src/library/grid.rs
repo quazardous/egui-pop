@@ -70,6 +70,7 @@ use egui_pop_core::kit::{self, BoxStyle, Corners, Kit, KitCx, Part, Side, State}
 use egui_pop_core::placeholder::SkeletonTokens;
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_model::ids::StepId;
 use serde_json::{Value as Json, json};
 
@@ -669,7 +670,9 @@ impl<'a> ThumbGrid<'a> {
         let mut built = 0;
         let mut wanted: Vec<K> = Vec::new();
         let mut cell_ops: Vec<Op<K>> = Vec::new();
-        let out = area.show_viewport(ui, |ui, viewport| {
+        let out = ui.scroll_area_viewport(area, |ui, viewport| {
+            // The grid is the stop, around the area.
+            egui_pop_core::focus::takes_keys(ui.ctx(), id);
             let origin = ui.max_rect().min;
             if grid {
                 ui.set_min_size(vec2(ui.available_width(), lines as f32 * line));
@@ -997,7 +1000,6 @@ impl<'a> ThumbGrid<'a> {
         // Handed the keyboard, a panel gives it to the grid, not its filters.
         egui_pop_core::focus::prefer(ui.ctx(), id);
         egui_pop_core::a11y::name(&response, Role::Unknown, &label);
-        egui_pop_core::focus::takes_keys(ui.ctx(), id);
         if take_focus {
             response.request_focus();
         }

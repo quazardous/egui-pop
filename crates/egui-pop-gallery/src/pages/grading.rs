@@ -12,6 +12,7 @@ use egui::{Color32, Sense, Ui, vec2};
 use egui_pop::api::steps::Before;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::ui::UiPop as _;
 use egui_pop::imaging::{self, STEP_CURVE, STEP_WHEEL};
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::viewport::curve::{CurveEditor, Pick, PickAction, identity};
@@ -117,9 +118,9 @@ impl Plugin for GradingPage {
 
 /// The page.
 pub fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
-    egui::ScrollArea::vertical()
+    ui.scroll_area(egui::ScrollArea::vertical()
         .auto_shrink([false, false])
-        .show(ui, |ui| {
+        , |ui| {
             ui.label("On the curve: a press adds a point, a drag moves it, a double or right click deletes it, a double click elsewhere resets. Focused: Page Up and Page Down select, the arrows move, Insert adds, Delete removes, R resets.");
             section(ui, "A tone curve over the luminance histogram");
             let pick = ramp(ui, s);

@@ -55,6 +55,7 @@ use egui_pop_core::lock;
 use egui_pop_core::progress::{Tone, paint_ring};
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_model::clock::SharedClock;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{BlockId, CommandId, PluginId, StepId};
@@ -618,9 +619,10 @@ impl Plugin for JobsPlugin {
                     .icon("history")
                     .closed(),
                 |ui, app| {
-                    egui::ScrollArea::vertical()
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| crate::jobs_centre::show(ui, app));
+                    ui.scroll_area(
+                        egui::ScrollArea::vertical().auto_shrink([false, false]),
+                        |ui| crate::jobs_centre::show(ui, app),
+                    );
                 },
             )?;
         }

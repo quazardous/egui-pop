@@ -71,6 +71,7 @@ use egui_pop_core::icon::{Icon, Size, Tone};
 use egui_pop_core::kit::{self, Kit};
 use egui_pop_core::lock;
 use egui_pop_core::strings;
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_model::clock::SharedClock;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, OwnerId, PluginId, SettingId, StepId};
@@ -968,9 +969,9 @@ impl Plugin for TipsPlugin {
                     call.app,
                     crate::dialogs::Custom::closing(&title),
                     |ui, app, _| {
-                        egui::ScrollArea::vertical()
+                        ui.scroll_area(egui::ScrollArea::vertical()
                             .auto_shrink([false, false])
-                            .show(ui, |ui| browser::browser(ui, app));
+                            , |ui| browser::browser(ui, app));
                     },
                 )?;
                 Ok(json!({ "dialog": id }))

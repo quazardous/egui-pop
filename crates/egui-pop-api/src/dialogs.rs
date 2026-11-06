@@ -1682,10 +1682,11 @@ fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open, header: Header<'_>) -> Optio
                 o.highlight = o.highlight.saturating_sub(1);
             }
             ui.add_space(t.space.s);
-            egui::ScrollArea::vertical()
-                .id_salt("egui_pop.choose")
-                .max_height(320.0)
-                .show(ui, |ui| {
+            ui.scroll_area(
+                egui::ScrollArea::vertical()
+                    .id_salt("egui_pop.choose")
+                    .max_height(320.0),
+                |ui| {
                     // Full-width rows, their text left-aligned and wrapped.
                     let rows = egui::Layout::top_down_justified(egui::Align::Min);
                     ui.with_layout(rows, |ui| {
@@ -1711,7 +1712,8 @@ fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open, header: Header<'_>) -> Optio
                     if shown.is_empty() {
                         ui.weak(strings::tr(ui.ctx(), &txt::NOTHING_MATCHES));
                     }
-                });
+                },
+            );
             if enter && let Some(&i) = shown.get(o.highlight) {
                 answer = Some(Answer::Choose { index: i });
             }

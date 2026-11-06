@@ -2236,10 +2236,11 @@ fn pair_bar(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
                     let themes = app.theme();
                     themes.themes().resolve(&c.spec(&themes.spec()))
                 });
-                egui::ScrollArea::vertical()
-                    .id_salt("egui_pop.theme_editor.proposal")
-                    .max_height(160.0)
-                    .show(ui, |ui| {
+                ui.scroll_area(
+                    egui::ScrollArea::vertical()
+                        .id_salt("egui_pop.theme_editor.proposal")
+                        .max_height(160.0),
+                    |ui| {
                         egui::Grid::new("egui_pop.theme_editor.proposal.grid")
                             .num_columns(3)
                             .show(ui, |ui| {
@@ -2267,7 +2268,8 @@ fn pair_bar(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
                                     ui.end_row();
                                 }
                             });
-                    });
+                    },
+                );
             }
             if !proposal.skipped.is_empty() {
                 ui.weak(strings::tr_args(
@@ -2319,11 +2321,12 @@ fn list(ui: &mut Ui, editor: &ThemeEditor, tokens: &ResolvedTokens) {
         (s.filter.to_lowercase(), s.selected.clone(), s.draft.clone())
     };
     let edited = strings::tr(&ctx, &txt::THEME_EDITOR_EDITED);
-    egui::ScrollArea::vertical()
-        .id_salt("egui_pop.theme_editor.list")
-        .max_height(ui.available_height().max(240.0))
-        .auto_shrink([false, true])
-        .show(ui, |ui| {
+    ui.scroll_area(
+        egui::ScrollArea::vertical()
+            .id_salt("egui_pop.theme_editor.list")
+            .max_height(ui.available_height().max(240.0))
+            .auto_shrink([false, true]),
+        |ui| {
             for group in groups(tokens) {
                 let paths: Vec<&String> = group
                     .paths
@@ -2363,7 +2366,8 @@ fn list(ui: &mut Ui, editor: &ThemeEditor, tokens: &ResolvedTokens) {
                         }
                     });
             }
-        });
+        },
+    );
 }
 
 /// A small swatch (nothing for a token that is not a colour).
@@ -3048,11 +3052,14 @@ fn installed_families(
     let first = editor.families(app, role).into_iter().next();
     let row = ui.spacing().interact_size.y;
     let mut picked = None;
-    egui::ScrollArea::vertical()
-        .id_salt("egui_pop.theme_editor.installed")
-        .max_height(row * 8.0)
-        .auto_shrink([false, true])
-        .show_rows(ui, row, faces.len(), |ui, range| {
+    ui.scroll_area_rows(
+        egui::ScrollArea::vertical()
+            .id_salt("egui_pop.theme_editor.installed")
+            .max_height(row * 8.0)
+            .auto_shrink([false, true]),
+        row,
+        faces.len(),
+        |ui, range| {
             for f in &faces[range] {
                 ui.horizontal(|ui| {
                     let first = first
@@ -3069,7 +3076,8 @@ fn installed_families(
                     ui.weak(crate::settings_window::origin_name(&ctx, f.origin));
                 });
             }
-        });
+        },
+    );
     if let Some(name) = picked {
         editor.choose_face(app, role, &name);
     }

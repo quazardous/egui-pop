@@ -2,6 +2,7 @@
 
 use egui::{Align2, Color32, CornerRadius, FontId, Stroke, StrokeKind, Ui, vec2};
 use egui_pop::core::kit::{self, Kit};
+use egui_pop::core::ui::UiPop as _;
 use egui_pop::core::widgets;
 use egui_pop::theme::Tokens;
 use egui_pop::tokens::contrast::{self, Level};
@@ -53,9 +54,9 @@ fn wrapped_row(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
 
 pub fn show(ui: &mut Ui, state: &mut State) {
     let t = Tokens::of(ui.ctx());
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
+    ui.scroll_area(
+        egui::ScrollArea::vertical().auto_shrink([false, false]),
+        |ui| {
             section(ui, "Surfaces");
             wrapped_row(ui, |ui| {
                 let s = &t.surface;
@@ -110,7 +111,8 @@ pub fn show(ui: &mut Ui, state: &mut State) {
                 section(ui, "Contrast");
                 contrast_table(ui, &t);
             }
-        });
+        },
+    );
 }
 
 fn text_samples(ui: &mut Ui, t: &Tokens) {

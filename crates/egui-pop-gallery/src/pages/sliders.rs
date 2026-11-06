@@ -15,6 +15,7 @@ use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::icon::Icon;
 use egui_pop::core::slider::{Gradient, RangeSlider, Slider};
+use egui_pop::core::ui::UiPop as _;
 use egui_pop::model::ids::{PluginId, StoryId};
 use serde_json::json;
 
@@ -104,9 +105,9 @@ impl Plugin for SlidersPage {
 }
 
 fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
-    egui::ScrollArea::vertical()
+    ui.scroll_area(egui::ScrollArea::vertical()
         .auto_shrink([false, false])
-        .show(ui, |ui| {
+        , |ui| {
             ui.set_max_width(560.0);
             ui.label("Drag (Ctrl: finer, Shift: coarser; Escape puts the value back), arrows and Page Up or Down when focused, the wheel when focused or with Alt, Enter to type a value or an expression (x is the current value), double click to reset.");
             section(ui, "The compact row");

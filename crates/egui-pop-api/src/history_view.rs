@@ -58,6 +58,7 @@ use egui::{RichText, Ui};
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, PanelId, PluginId};
@@ -252,9 +253,10 @@ impl Plugin for HistoryPlugin {
                     .icon("history")
                     .closed(),
                 |ui, app| {
-                    egui::ScrollArea::vertical()
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| show(ui, app));
+                    ui.scroll_area(
+                        egui::ScrollArea::vertical().auto_shrink([false, false]),
+                        |ui| show(ui, app),
+                    );
                 },
             )?;
         }

@@ -6,6 +6,7 @@ use std::ops::Range;
 
 use egui::{EventFilter, Id, Rect, Response, ScrollArea, Sense, Ui, pos2, vec2};
 use egui_pop_core::kit::{Component, Kit, KitCx, Part, State};
+use egui_pop_core::ui::UiPop as _;
 
 use crate::nav;
 
@@ -66,7 +67,9 @@ pub(crate) fn show<R>(
         area = area.vertical_scroll_offset(o.max(0.0));
     }
     let kit = Kit::of(ui.ctx());
-    let out = area.show_viewport(ui, |ui, viewport| {
+    let out = ui.scroll_area_viewport(area, |ui, viewport| {
+        // The list is the stop, around the area.
+        egui_pop_core::focus::takes_keys(ui.ctx(), id);
         let origin = ui.max_rect().min;
         let width = ui.available_width();
         ui.set_min_size(vec2(width, count as f32 * row_h));
@@ -92,7 +95,6 @@ pub(crate) fn show<R>(
     scroll.height = out.inner_rect.height();
     let response = ui.interact(out.inner_rect, id, Sense::focusable_noninteractive());
     egui_pop_core::a11y::name(&response, egui::Role::Unknown, label);
-    egui_pop_core::focus::takes_keys(ui.ctx(), id);
     if response.has_focus() {
         ui.memory_mut(|m| {
             m.set_focus_lock_filter(

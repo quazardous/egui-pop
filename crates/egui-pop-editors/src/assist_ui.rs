@@ -8,6 +8,7 @@ use egui::{Align2, Id, Key, Order, Pos2, RichText, Stroke, Ui, vec2};
 use egui_pop_api::AppHandle;
 use egui_pop_core::kit::{Kit, State};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
 use serde_json::json;
 
@@ -613,9 +614,10 @@ pub(crate) fn surfaces(
                 .show(&ctx, |ui| {
                     card(ui, |ui| {
                         ui.set_min_width(220.0);
-                        egui::ScrollArea::vertical()
-                            .max_height(ui.spacing().interact_size.y * 8.0)
-                            .show(ui, |ui| {
+                        ui.scroll_area(
+                            egui::ScrollArea::vertical()
+                                .max_height(ui.spacing().interact_size.y * 8.0),
+                            |ui| {
                                 for (k, (i, label, detail)) in rows.iter().enumerate() {
                                     let r = ui.horizontal(|ui| {
                                         let r = widgets::selectable_label(
@@ -635,7 +637,8 @@ pub(crate) fn surfaces(
                                         accept = Some((items[*i].clone(), start));
                                     }
                                 }
-                            });
+                            },
+                        );
                     });
                 });
         } else if let Some(a) = &m.assist.actions {

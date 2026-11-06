@@ -13,6 +13,7 @@ use egui_pop::api::services::ServiceToken;
 use egui_pop::api::stories::Story;
 use egui_pop::api::system_keys::{KeyStatus, SYSTEM_KEYS, Support};
 use egui_pop::api::{AppBuilder, AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::ui::UiPop as _;
 use egui_pop::model::commands::CommandSpec;
 use egui_pop::model::ids::{CommandId, MenuId, PluginId, StoryId};
 use egui_pop::model::keymap::BindOptions;
@@ -195,9 +196,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     } else {
         "The desktop's own services (--platform)."
     });
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
+    ui.scroll_area(
+        egui::ScrollArea::vertical().auto_shrink([false, false]),
+        |ui| {
             instance_section(ui, app);
             notify_section(ui, app, sim.as_deref());
             tray_section(ui, app, sim.as_deref());
@@ -205,7 +206,8 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             logs_section(ui, app);
             crash_section(ui, app, sim.as_deref());
             focus_section(ui, app);
-        });
+        },
+    );
 }
 
 fn instance_section(ui: &mut Ui, app: &AppHandle) {

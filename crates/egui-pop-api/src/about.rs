@@ -448,9 +448,10 @@ pub fn open(app: &AppHandle) -> Result<u64, String> {
     let mut copied = false;
     dialogs.open_custom(app, spec, move |ui, app, pass| {
         pass.describe(about.info().to_json());
-        egui::ScrollArea::vertical()
-            .auto_shrink([false, false])
-            .show(ui, |ui| copied |= show(ui, app, copied));
+        ui.scroll_area(
+            egui::ScrollArea::vertical().auto_shrink([false, false]),
+            |ui| copied |= show(ui, app, copied),
+        );
     })
 }
 

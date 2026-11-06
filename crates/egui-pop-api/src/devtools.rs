@@ -30,6 +30,7 @@ use std::sync::{Arc, Mutex};
 use egui::Ui;
 use egui_pop_core::lock;
 use egui_pop_core::strings;
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, PanelId, PluginId, SettingId, StepId};
@@ -224,17 +225,19 @@ fn show(ui: &mut Ui, app: &AppHandle, state: &Arc<Mutex<State>>) {
         }
     });
     ui.separator();
-    egui::ScrollArea::vertical()
-        .id_salt("egui_pop.devtools.scroll")
-        .auto_shrink([false, false])
-        .show(ui, |ui| match s.tab {
+    ui.scroll_area(
+        egui::ScrollArea::vertical()
+            .id_salt("egui_pop.devtools.scroll")
+            .auto_shrink([false, false]),
+        |ui| match s.tab {
             0 => keys(ui, app),
             1 => journal(ui, app),
             2 => steps(ui, app),
             3 => focus(ui, app),
             4 => scale(ui, app),
             _ => collectors(ui, app, &mut s),
-        });
+        },
+    );
 }
 
 fn keys(ui: &mut Ui, app: &AppHandle) {

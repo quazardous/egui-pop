@@ -65,6 +65,7 @@ use egui::{ColorImage, RichText, TextureHandle, TextureOptions, Ui};
 use egui_pop_core::lock;
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::ui::UiPop as _;
 use serde_json::{Value as Json, json};
 
 use super::fs::{Meta, SharedFs};
@@ -1423,24 +1424,26 @@ fn body(ui: &mut Ui, ready: &Ready, name: &str) {
         Body::Text { text, truncated } => {
             // In the pane's own scroll area: the wheel stops here, as it does
             // over the list beside it.
-            let out = egui::ScrollArea::vertical()
-                .id_salt("egui_pop.files.preview.text")
-                .max_height(area.y)
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
+            ui.scroll_area_contained(
+                egui::ScrollArea::vertical()
+                    .id_salt("egui_pop.files.preview.text")
+                    .max_height(area.y)
+                    .auto_shrink([false, true]),
+                |ui| {
                     ui.add(egui::Label::new(RichText::new(text).monospace().small()).wrap());
                     if *truncated {
                         ui.weak("…");
                     }
-                });
-            egui_pop_core::ui::contain_wheel(ui, &out);
+                },
+            );
         }
         Body::Markdown(blocks) => {
-            let out = egui::ScrollArea::vertical()
-                .id_salt("egui_pop.files.preview.document")
-                .max_height(area.y)
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
+            ui.scroll_area_contained(
+                egui::ScrollArea::vertical()
+                    .id_salt("egui_pop.files.preview.document")
+                    .max_height(area.y)
+                    .auto_shrink([false, true]),
+                |ui| {
                     for b in blocks {
                         match b {
                             Block::Heading(1, s) => {
@@ -1466,8 +1469,8 @@ fn body(ui: &mut Ui, ready: &Ready, name: &str) {
                             }
                         }
                     }
-                });
-            egui_pop_core::ui::contain_wheel(ui, &out);
+                },
+            );
         }
         Body::Folder { thumbnails, .. } => {
             let side = ((area.x - t.space.xs) / 2.0).floor();

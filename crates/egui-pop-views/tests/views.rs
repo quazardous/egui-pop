@@ -1292,3 +1292,57 @@ fn the_match_count_is_shown_announced_and_reported() {
     assert_eq!(bridge["trees"]["files"]["field"], true);
     egui_pop_test::assert_all_named(&h);
 }
+
+/// A list of 500 rows, 200 points high, under the theme.
+fn tall_list() -> Harness<'static, (ListState<u32>, Rows)> {
+    let h = Harness::builder()
+        .with_size(egui::vec2(400.0, 400.0))
+        .build_ui_state(
+            |ui, (state, rows): &mut (ListState<u32>, Rows)| {
+                ListView::new("rows")
+                    .label("Files")
+                    .height(200.0)
+                    .show(ui, state, rows);
+                let _ = ui.button("After");
+            },
+            (ListState::new(), rows(500)),
+        );
+    egui_pop_core::theme::install(&h.ctx, &egui_pop_core::theme::ThemeSpec::new("pop-dark"));
+    h
+}
+
+/// The list's area answers the scroll area's keys (`UiPop::scroll_area`) under
+/// the pointer, with nothing focused, and leaves the selection alone.
+#[test]
+fn a_list_under_the_pointer_takes_the_page_keys() {
+    let mut h = tall_list();
+    h.run();
+    h.hover_at(egui::pos2(100.0, 75.0));
+    h.run();
+    assert!(h.query_by_label("Row 00000").is_some());
+    h.key_press(Key::PageDown);
+    h.run();
+    assert!(h.query_by_label("Row 00000").is_none(), "a page down");
+    h.key_press(Key::End);
+    h.run();
+    assert!(h.query_by_label("Row 00499").is_some(), "at its end");
+    h.key_press(Key::Home);
+    h.run();
+    assert!(h.query_by_label("Row 00000").is_some(), "back at its start");
+    assert!(h.state().0.selection().is_empty());
+}
+
+/// The list is the Tab stop: its scroll area does not become another.
+#[test]
+fn a_list_is_one_tab_stop_and_its_area_none() {
+    let mut h = tall_list();
+    h.run();
+    h.run();
+    assert!(h.query_by_label("Scrollable content").is_none());
+    h.key_press(Key::Tab);
+    h.run();
+    assert!(h.query_by_label("Files").unwrap().is_focused());
+    h.key_press(Key::Tab);
+    h.run();
+    assert!(h.query_by_label("After").unwrap().is_focused());
+}
