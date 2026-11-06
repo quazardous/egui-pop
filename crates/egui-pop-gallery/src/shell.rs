@@ -3,6 +3,7 @@
 //! the top bar, and commands to move between pages.
 
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use egui::scroll_area::ScrollAreaOutput;
 use egui::{Rect, ScrollArea, Ui};
@@ -40,6 +41,10 @@ pub struct Nav {
     view: Mutex<Option<PageView>>,
     /// The page's playground as drawn last.
     playground: Mutex<Option<PageView>>,
+    /// Where the list drew last, its filter field included.
+    list_rect: Mutex<Option<Rect>>,
+    /// Whether the list is drawn over with the side bar's fill.
+    list_veiled: AtomicBool,
 }
 
 /// How the page shown, or its playground, was drawn last: for the tests.
@@ -68,6 +73,23 @@ impl Nav {
     /// The page's playground as drawn last; `None` before the first frame.
     pub fn playground_view(&self) -> Option<PageView> {
         *lock(&self.playground)
+    }
+
+    /// Where the page list drew last, its filter field included, in the
+    /// window's coordinates; `None` before the first frame or with the side
+    /// bar closed.
+    pub fn list_rect(&self) -> Option<Rect> {
+        *lock(&self.list_rect)
+    }
+
+    /// Draws the page list over with the side bar's fill, or no longer.
+    ///
+    /// For the snapshots of pages: the list is laid out, answers the
+    /// pointer, the keyboard and assistive technologies as usual, but none
+    /// of it shows, so adding a page to the gallery changes only the
+    /// shots of the list itself, not every page's.
+    pub fn veil_list(&self, veiled: bool) {
+        self.list_veiled.store(veiled, Ordering::Relaxed);
     }
 
     /// Whether the list has yet to bring the page shown into view: once
@@ -156,6 +178,8 @@ impl Plugin for Shell {
                 list: Mutex::new(TreeState::new()),
                 view: Mutex::new(None),
                 playground: Mutex::new(None),
+                list_rect: Mutex::new(None),
+                list_veiled: AtomicBool::new(false),
             },
         )?;
         app.set_context("galleryPage", self.first.as_str());
@@ -473,6 +497,14 @@ fn pages(ui: &mut Ui, app: &AppHandle) {
                 .show(ui, &mut list, &PageTree(&stories))
         })
         .inner;
+    let drawn = ui.min_rect();
+    *lock(&nav.list_rect) = Some(drawn);
+    if nav.list_veiled.load(Ordering::Relaxed) {
+        // After the list, on its layer: popups, menus and dialogs above it
+        // still show. A little wider, for what a row draws past its edge.
+        let veil = drawn.expand(4.0).intersect(ui.clip_rect());
+        ui.painter().rect_filled(veil, 0.0, ui.visuals().panel_fill);
+    }
     for signal in out.signals {
         match signal {
             Signal::Activate { key } => {

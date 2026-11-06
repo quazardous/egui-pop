@@ -481,15 +481,30 @@ Zones and blocks, the workbench, the layout controls, palettes, arrangements, th
   </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/viewer-html-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/viewer-html-pop-dark.png" width="200" alt="viewer-html-pop-dark"></a><br>viewer-html-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/page-short-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/page-short-pop-dark.png" width="200" alt="page-short-pop-dark"></a><br>page-short-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-zone-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-zone-pop-dark.png" width="200" alt="workbench-zone-pop-dark"></a><br>workbench-zone-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-grid-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-grid-pop-dark.png" width="200" alt="workbench-grid-pop-dark"></a><br>workbench-grid-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-detached-drop-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-detached-drop-pop-dark.png" width="200" alt="workbench-detached-drop-pop-dark"></a><br>workbench-detached-drop-pop-dark</td>
+  </tr>
+</table>
+
+### The page list
+
+The gallery's side bar: every page in the light and the dark theme, in a
+short window, with a group folded, and filtered. Every other shot veils
+the list, so a page added to the gallery changes only these.
+
+<table>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pages-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pages-pop-dark.png" width="200" alt="pages-pop-dark"></a><br>pages-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pages-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pages-pop-light.png" width="200" alt="pages-pop-light"></a><br>pages-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pages-short-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pages-short-pop-dark.png" width="200" alt="pages-short-pop-dark"></a><br>pages-short-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pages-folded-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pages-folded-pop-dark.png" width="200" alt="pages-folded-pop-dark"></a><br>pages-folded-pop-dark</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/page-short-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/page-short-pop-dark.png" width="200" alt="page-short-pop-dark"></a><br>page-short-pop-dark</td>
   </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pages-filtered-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pages-filtered-pop-dark.png" width="200" alt="pages-filtered-pop-dark"></a><br>pages-filtered-pop-dark</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-zone-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-zone-pop-dark.png" width="200" alt="workbench-zone-pop-dark"></a><br>workbench-zone-pop-dark</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-grid-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-grid-pop-dark.png" width="200" alt="workbench-grid-pop-dark"></a><br>workbench-grid-pop-dark</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-detached-drop-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-detached-drop-pop-dark.png" width="200" alt="workbench-detached-drop-pop-dark"></a><br>workbench-detached-drop-pop-dark</td>
   </tr>
 </table>
 
