@@ -1,6 +1,7 @@
 //! What each panel draws: the blueprint, the selection, the time panel,
-//! the top bar and the four views. Plain egui painting over egui-pop's
-//! tokens where egui-pop has no component (a plot, a timeline).
+//! the top bar and the four views. The time series is egui-pop's plot;
+//! plain egui painting over egui-pop's tokens where egui-pop has no
+//! component (the time panel).
 
 use egui::{
     Align2, Color32, CornerRadius, FontId, Pos2, Rect, Response, RichText, Role, Sense, Stroke,
@@ -11,6 +12,7 @@ use egui_pop::core::icon::{Icon, IconWidget, Size};
 use egui_pop::core::sections::{Section, Sections};
 use egui_pop::prelude::*;
 use egui_pop::views::Mode;
+use egui_pop::views::plot::{Plot, Series};
 use egui_pop::views::table::{Column, DataTable, TableRows};
 use egui_pop::views::tree::{FilterField, Node, Sink, TreeSource, TreeView};
 
@@ -593,148 +595,48 @@ fn canvas(ui: &mut Ui, name: &str) -> (Rect, Response) {
 }
 
 pub fn time_series(ui: &mut Ui, m: &mut Model) {
-    let t = Tokens::of(ui.ctx());
-    let (rect, r) = canvas(ui, "Time series plot");
-    let plot = Rect::from_min_max(rect.min + vec2(44.0, 26.0), rect.max - vec2(12.0, 22.0));
-    if plot.width() < 20.0 || plot.height() < 20.0 {
-        return;
-    }
-    let p = ui.painter_at(rect);
-    let (lo, hi) = (10.0_f32, 100.0_f32);
-    let x_of = |f: f32| plot.left() + plot.width() * f / FRAMES as f32;
-    let y_of = |v: f32| plot.bottom() - plot.height() * (v - lo) / (hi - lo);
-    let grid = Stroke::new(1.0, t.border.default.gamma_multiply(0.6));
-    let small = FontId::monospace(t.font.scale.xs);
-    for v in (20..=100).step_by(20) {
-        let y = y_of(v as f32);
-        p.line_segment([pos2(plot.left(), y), pos2(plot.right(), y)], grid);
-        p.text(
-            pos2(plot.left() - 6.0, y),
-            Align2::RIGHT_CENTER,
-            v.to_string(),
-            small.clone(),
-            t.text.muted,
-        );
-    }
-    for f in (0..=FRAMES).step_by(50) {
-        let x = x_of(f as f32);
-        p.line_segment([pos2(x, plot.top()), pos2(x, plot.bottom())], grid);
-        p.text(
-            pos2(x, plot.bottom() + 4.0),
-            Align2::CENTER_TOP,
-            f.to_string(),
-            small.clone(),
-            t.text.muted,
-        );
-    }
     let shown: Vec<usize> = View::TimeSeries
         .entities()
         .into_iter()
         .filter(|e| !m.hidden.contains(e))
         .collect();
-    // Under the pointer: the nearest line, within a few points.
-    let pointer = r.hover_pos().filter(|p| plot.expand(4.0).contains(*p));
-    let mut near: Option<(usize, f32)> = None;
-    if let Some(pp) = pointer {
-        let f =
-            ((pp.x - plot.left()) / plot.width() * FRAMES as f32).clamp(0.0, FRAMES as f32) as u32;
-        for &e in &shown {
-            let d = (y_of(data::scalar(e, f)) - pp.y).abs();
-            if d < 8.0 && near.is_none_or(|(_, best)| d < best) {
-                near = Some((e, d));
-            }
-        }
+    // x in frames, as the time panel counts them; each entity in its own
+    // colour, the one hovered or selected elsewhere drawn thicker.
+    let series: Vec<Series> = shown
+        .iter()
+        .map(|&e| {
+            let ent = &ENTITIES[e];
+            Series::line(
+                ent.path,
+                (0..=FRAMES)
+                    .step_by(ent.every as usize)
+                    .map(|f| [f64::from(f), f64::from(data::scalar(e, f))]),
+            )
+            .color(ent.color)
+        })
+        .collect();
+    let emphasized = shown.iter().position(|&e| m.emphasis(e) != Emphasis::None);
+    let out = Plot::new("rerun.time_series", &series)
+        .label("Time series plot")
+        .time_cursor(Some(f64::from(m.at())))
+        .drag_cursor(true)
+        .values_tooltip(true)
+        .emphasize(emphasized)
+        .legend(true)
+        .show(ui);
+    if let Some(t) = out.cursor_dragged {
+        m.frame = t.round().clamp(0.0, f64::from(FRAMES)) as f32;
+        m.playing = false;
     }
-    // The legend, which also selects.
-    let mut x = plot.left();
-    let mut legend_hit = None;
-    for &e in &View::TimeSeries.entities() {
-        let ent = &ENTITIES[e];
-        let galley = p.layout_no_wrap(
-            ent.path.to_string(),
-            FontId::proportional(t.font.scale.s),
-            t.text.default,
-        );
-        let item = Rect::from_min_size(
-            pos2(x, rect.top() + 6.0),
-            vec2(14.0 + galley.size().x, 14.0),
-        );
-        if pointer.is_none() && r.hover_pos().is_some_and(|p| item.contains(p)) {
-            legend_hit = Some(e);
-        }
-        let dim = if m.hidden.contains(&e) { 0.35 } else { 1.0 };
-        p.rect_filled(
-            Rect::from_center_size(pos2(item.left() + 5.0, item.center().y), vec2(9.0, 3.0)),
-            1.0,
-            ent.color.gamma_multiply(dim),
-        );
-        let color = if m.emphasis(e) == Emphasis::None {
-            t.text.muted
-        } else {
-            t.text.strong
-        };
-        p.galley(
-            pos2(item.left() + 14.0, item.center().y - galley.size().y / 2.0),
-            galley,
-            color,
-        );
-        x = item.right() + t.space.l;
-    }
-    for &e in &shown {
-        let ent = &ENTITIES[e];
-        let pts: Vec<Pos2> = (0..=FRAMES)
-            .step_by(ent.every as usize)
-            .map(|f| pos2(x_of(f as f32), y_of(data::scalar(e, f))))
-            .collect();
-        let emphasis = m.emphasis(e);
-        if let Some(o) = outline(&t, emphasis) {
-            p.add(egui::Shape::line(pts.clone(), o));
-        }
-        p.add(egui::Shape::line(pts, stroke_for(ent.color, emphasis)));
-    }
-    // The time cursor, and the values under it.
-    let at = m.at();
-    let cx = x_of(at as f32);
-    p.line_segment(
-        [pos2(cx, plot.top()), pos2(cx, plot.bottom())],
-        Stroke::new(1.0, t.text.strong),
-    );
-    for &e in &shown {
-        p.circle_filled(pos2(cx, y_of(data::scalar(e, at))), 3.0, ENTITIES[e].color);
-    }
-    let target = near.map(|(e, _)| e).or(legend_hit);
+    let target = out.hovered.as_ref().map(|h| shown[h.series]);
     if let Some(e) = target {
         m.hover(e);
-        if let (Some(pp), Some(_)) = (pointer, near) {
-            let f = ((pp.x - plot.left()) / plot.width() * FRAMES as f32).clamp(0.0, FRAMES as f32)
-                as u32;
-            let text = format!("{}  frame {f}: {:.2}", ENTITIES[e].path, data::scalar(e, f));
-            tag(&p, &t, pp + vec2(12.0, -18.0), &text);
-        }
     }
-    if r.clicked() {
+    if out.response.clicked() {
         m.select(Some(
             target.map_or(Item::View(View::TimeSeries), Item::Entity),
         ));
     }
-}
-
-/// A small label on a filled tag.
-fn tag(p: &egui::Painter, t: &Tokens, at: Pos2, text: &str) {
-    let galley = p.layout_no_wrap(
-        text.to_string(),
-        FontId::proportional(t.font.scale.s),
-        t.text.strong,
-    );
-    let r = Rect::from_min_size(at, galley.size() + vec2(8.0, 4.0));
-    p.rect_filled(r, t.radius.widget, t.surface.overlay);
-    p.rect_stroke(
-        r,
-        t.radius.widget,
-        Stroke::new(1.0, t.border.default),
-        StrokeKind::Inside,
-    );
-    p.galley(r.min + vec2(4.0, 2.0), galley, t.text.strong);
 }
 
 pub fn camera(ui: &mut Ui, m: &mut Model, texture: &egui::TextureHandle) {

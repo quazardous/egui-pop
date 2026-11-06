@@ -30,8 +30,9 @@ The code is the gallery crate's `rerun_like` module
   tree with its filter field; an eye on a hovered row hides the entity
   from the views.
 - **The viewport**, in the centre: four views, each a panel, as
-  egui_stack splits two by two: a time series (three scalars drawn as
-  lines), a camera image with moving detection boxes, a dataframe (the
+  egui_stack splits two by two: a time series (three scalars on
+  egui-pop's plot, its time cursor dragged, their values at the pointer
+  in a tooltip), a camera image with moving detection boxes, a dataframe (the
   views crate's `DataTable`, a row per frame) and a text log.
 - **The Selection**, on the right: the selected entity (its path,
   archetype, latest values at the time cursor, visualizer) or view (its
@@ -104,7 +105,9 @@ What was taken from `re_ui` (`dark_theme.ron`, `light_theme.ron`,
 | `palette.log.warn`, `.error` | `warning`, `danger` | `warning`, `#ab0116` | `warn_fg_color`, `error_fg_color` (lifted or darkened where they fail the contrast checks, as `warning` and `danger` are) |
 | `palette.log.critical` | Red.900 | Red.200 | `strong_fg_color` on `error_fg_color`: a level's token is a text colour, so the kit takes the red nearest the strong text |
 | `plot`: `shape` `plain`, no border, no radius, `rest.fill` | Gray.100 | Gray.1000 | no frame around a time series; `viewport_background`, `PlotBackground`'s default colour |
-| `plot-cursor`: `width`, `rest.fill` | 1.5, `text.default` | the same | `paint_time_cursor`: 1.5 times the widgets' stroke, in their foreground colour |
+| `plot`: `grid-color`, `grid-fade` | Gray.200, 0.3 | Gray.850, 0.3 | `plot_grid_color`, `plot_grid_fade` |
+| `plot-cursor`: `width`, `rest.fill`, `hover.fill` | 1.5, `text.default`, `text.strong` | the same | `paint_time_cursor`: 1.5 times the widgets' stroke, in their foreground colour, strong under the pointer |
+| `plot-cursor`: `head`, `head-size` | `triangle`, 10 | the same | `paint_time_cursor`'s triangle at the top |
 | `table-header-cell`: `shape` `plain`, a line under it (`indicator-side` bottom), `rest.fill`, `rest.border-color` | Gray.150, Gray.300 | Gray.850, Gray.700 | `table_header_bg_fill`, `table_header_stroke_color` |
 | `viewport.background` (a 2D view) | Gray.100 | Gray.1000 | `viewport_background` |
 
@@ -112,8 +115,8 @@ The kit's components: buttons without an outline (`button_secondary`),
 tabs and the tab bar on the panel's colour with the tab's three text
 greys and no border, rows selected in the solid accent with the
 accent's text, section bands 24 high on the panel's colour. For the
-views: plots without a frame on the view's background with a thin time
-cursor in the text's colour, table headers filled with a line under
+views: plots without a frame on the view's background, in Rerun's grid
+colour, with a thin time cursor in the text's colour under a triangle, table headers filled with a line under
 them, the log levels in Rerun's colours and the 2D view's background.
 Inter and JetBrains Mono, Rerun's fonts, are egui-pop's bundled ones
 already.
@@ -170,8 +173,11 @@ worked around, then the small things.
    the entities' colours are the example's own. Both exist now
    ([Charts](plot.md), [the categorical palette](tokens.md#the-categorical-palette)),
    and the kit's two variants give their own hues (`chart.*`, fitted to Rerun's
-   surfaces); the example still paints its time series and keeps its
-   colours, until it moves to `Plot` with the timeline.
+   surfaces). The example's time series is a `Plot` now (its time cursor
+   dragged, the values at the pointer in a tooltip, the entity hovered
+   or selected elsewhere drawn thicker); it keeps the entities' own
+   colours, which its other views share. Its time panel is still painted
+   by hand (gap 1).
 7. **A kit is one variant** (solved). A kit package held one theme: the
    light and dark pair was two kit folders naming each other. A kit's
    manifest may carry its other variant now (`counterpart`), switched
@@ -202,17 +208,16 @@ worked around, then the small things.
 12. **View tokens the kit cannot give.** Rerun's time series, text log
     and 2D view use design tokens with no egui-pop counterpart, so the
     kits leave them out:
-    - **The plot's grid.** The `plot` component draws its grid in its
-      `text` colour, which egui_plot fades by the lines' spacing. Rerun
-      gives the grid a colour of its own (`plot_grid_color`: Gray.850 in
-      light, Gray.200 in dark) and a fade (`plot_grid_fade`, 0.3);
-      egui_plot takes both (`grid_color`, `grid_fade`), the component has
-      no token for them.
-    - **The time cursor's head.** `plot-cursor` is a line (the `tick`
-      handler). Rerun's cursor has a triangle, 10 points wide, at its
-      top, and turns to the strong text colour under the pointer; there
-      is no handler drawing a head, and the cursor has no `hover` state
-      (it is not dragged in the plot).
+    - **The plot's grid** (solved). The `plot` component drew its grid
+      in its `text` colour; it has a `grid-color` and a `grid-fade` now,
+      and the kit gives Rerun's (`plot_grid_color`: Gray.200 in dark,
+      Gray.850 in light; `plot_grid_fade`, 0.3).
+    - **The time cursor's head** (solved). `plot-cursor` was a line
+      alone and was not dragged in the plot. It has a `head` (`none` or
+      `triangle`, `head-size` wide) and a `hover` state now, and the plot
+      drags it (`Plot::drag_cursor`, `Plot::timeline`): the kit draws
+      Rerun's triangle, 10 points wide, turning to the strong text under
+      the pointer.
     - **Table rows.** The data table's rows are `list-row` boxes, the
       same as lists': a selected row is the solid accent. Rerun's tables
       select a row with a quiet fill (`table_interaction_row_selection_fill`:

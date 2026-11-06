@@ -3890,6 +3890,103 @@ fn the_plot_page_describes_its_plots_and_reports_the_hovered_bar() {
     assert!(h.query_by_label_contains("Last hovered: Run").is_some());
 }
 
+/// The plot over time page's plots, as the `plots` collector shows them.
+fn plot_state(h: &Harness<'_, Gallery>, id: &str) -> serde_json::Value {
+    h.state().app.handle().debug_snapshot()["plots"]["plots"][id].clone()
+}
+
+fn strings(v: &serde_json::Value) -> Vec<String> {
+    v.as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|s| s.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[test]
+fn the_plot_over_time_page_follows_its_timeline_both_ways() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in POP_THEMES {
+        let mut h = harness(options(theme, Density::Comfortable, "plot-time"));
+        h.run();
+        egui_pop_test::assert_all_named(&h);
+        h.remove_cursor();
+        h.run();
+        results.add(h.try_snapshot(format!("plot-time-{theme}")));
+    }
+    let mut h = harness(options("pop-dark", Density::Comfortable, "plot-time"));
+    h.run();
+    // The x axes count in their scales: seconds, then bars.
+    let p = plot_state(&h, "gallery.plot.time");
+    assert_eq!(p["scale"], "seconds", "{p}");
+    let ticks = strings(&p["x_ticks"]);
+    assert!(ticks.iter().any(|t| t == "0:10"), "{ticks:?}");
+    assert!(ticks.iter().all(|t| t.starts_with("0:")), "{ticks:?}");
+    let beats = plot_state(&h, "gallery.plot.beats");
+    assert_eq!(beats["scale"], "beats", "{beats}");
+    let ticks = strings(&beats["x_ticks"]);
+    assert!(
+        ticks.iter().any(|t| t == "1") && ticks.iter().any(|t| t == "5"),
+        "{ticks:?}"
+    );
+    // The playhead is the cursor; the looping range is highlighted.
+    assert_eq!(p["time_cursor"], 6.0, "{p}");
+    assert_eq!(p["range"], serde_json::json!([9.0, 13.0]), "{p}");
+    let d = h
+        .get_by_label("Robot over time")
+        .accesskit_node()
+        .description()
+        .unwrap_or_default();
+    assert!(d.ends_with("Time cursor at 0:06.000"), "{d}");
+
+    // Dragging the cursor on the plot moves the timeline's playhead.
+    let frame = h.get_by_label("Robot over time").rect();
+    let a = h.get_by_label("Time cursor").rect().center();
+    let b = a + egui::vec2(frame.width() * 0.25, 0.0);
+    h.drag_at(a);
+    h.run();
+    for i in 1..=4 {
+        h.hover_at(a + (b - a) * (i as f32 / 4.0));
+        h.run();
+    }
+    h.drop_at(b);
+    h.run();
+    let t = plot_state(&h, "gallery.plot.time")["time_cursor"]
+        .as_f64()
+        .unwrap_or_default();
+    assert!(t > 9.0 && t < 13.0, "the cursor at {t}");
+    let text = egui_pop::views::timeline::TimeScale::Seconds.format(t);
+    h.get_by_label(&format!("Playhead {text}"));
+
+    // And the timeline's playhead moves the cursor: Home on the timeline.
+    h.get_by_label("Recording").click();
+    h.run();
+    h.key_press(egui::Key::Home);
+    h.run();
+    h.run();
+    h.get_by_label("Playhead 0:00.000");
+    assert_eq!(plot_state(&h, "gallery.plot.time")["time_cursor"], 0.0);
+
+    // Over the plot, a tooltip lists every line's value at the pointer.
+    h.hover_at(egui::pos2(
+        frame.left() + frame.width() * 0.4,
+        frame.top() + frame.height() * 0.6,
+    ));
+    h.run();
+    h.run();
+    let values = plot_state(&h, "gallery.plot.time")["values"].clone();
+    let names: Vec<&str> = values["values"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|v| v["name"].as_str()).collect())
+        .unwrap_or_default();
+    assert_eq!(names, ["Speed", "Target", "Gear"], "{values}");
+    assert!(h.query_by_label_contains("Speed: ").is_some());
+    assert!(h.query_by_label_contains("Gear: ").is_some());
+    results.add(h.try_snapshot("plot-time-tooltip-pop-dark"));
+}
+
 #[test]
 fn the_text_editor_page_edits_searches_through_the_keymap_and_vetoes_the_title() {
     use egui::{Key, Modifiers};
