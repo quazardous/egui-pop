@@ -116,43 +116,109 @@ What a drag does decides its cursor, not the widget it starts on: a
 widget names the **drag kind** of each of its drags
 (`egui_pop::model::pointer::DragKind`) and shows its cursors with
 `egui_pop::core::pointer::drag_cursor(&response, kind)` (or
-`UiPop::drag_cursor`). The hover cursor shows while the widget is hovered
-and nothing else is dragged; the drag cursor every pass the response is
+`UiPop::drag_cursor`). The drag cursor shows every pass the response is
 dragged, wherever the pointer is: egui resets the cursor each pass, and
 the pointer leaves a widget it drags. A widget following a drag of its own
-(a state rather than one response) calls `hold_drag_cursor(ctx, kind)`.
+(a state rather than one response) calls `hold_drag_cursor(ctx, kind)`,
+and `hover_drag_cursor(ctx, kind, clicks)` over what it hovers itself.
+
+### The hover rule
+
+Hovered, before any drag, a draggable shows its drag cursor **only when
+dragging is its only action**: nothing happens on a click or a double
+click on it. Where a click does something (select, set a value, move the
+playhead, open, add a point, deselect), the arrow stays until the drag
+starts; then the element shows its drag cursor as any other. This is the
+hover policy `only-action` (`HoverPolicy::OnlyAction`), every kind's
+default but `text`'s (`always`: an I-beam over text). Whether an element
+clicks is read from its response's sense (`Sense::click`), unless the
+widget says so (`.clicks(false)` on a splitter whose click only takes the
+focus).
+
+| Element | Hovered | Dragged |
+|---|---|---|
+| splitters, side area and flyout edges | column resize | column resize |
+| palette edges, dialog grips | resize | resize |
+| item handles | move | move |
+| the navigator's and the graph minimap's view frame | move | move |
+| the histogram (drag only) | horizontal resize | horizontal resize |
+| text (the code editor, the terminal) | I-beam | I-beam |
+| outside the view frame (a click jumps there) | arrow | move |
+| timeline lanes, a DJ deck's content (a click moves the playhead) | arrow | closed hand |
+| timeline clips, markers and trim handles, graph nodes, bands (a click selects) | arrow | move, resize |
+| sliders, the curve editor, the colour wheels (a click sets a value, adds a point) | arrow | horizontal resize, crosshair |
+| the compare view's panes (a double click fits) | arrow | closed hand |
 
 | Kind | Hover | Drag | Where |
 |---|---|---|---|
-| `pan` | open hand | closed hand | the graph's canvas (a pan), the navigator, the graph's minimap, the compare view's panes, a timeline's middle drag |
+| `pan` | open hand | closed hand | the graph's canvas (a pan), the compare view's panes, a timeline's middle drag |
 | `scrub` | open hand | closed hand | a fixed playhead's content (DJ decks) |
-| `move` | move | move | graph nodes, stacks and group titles, timeline clips, bands, item handles |
+| `move` | move | move | graph nodes, stacks and group titles, timeline clips, bands, item handles, the navigator's and the graph minimap's view frame |
 | `carry` | arrow | closed hand | a port's or a wire's end, a tree's drag and drop, a palette's tab |
 | `value` | arrow | horizontal resize | sliders, range sliders, the video's scrub bar, a timeline's scrub |
 | `point` | arrow | crosshair | the curve editor, the colour wheels |
 | `select` | arrow | crosshair | rubber bands (the graph, the thumbnail grid), a timeline's Shift+drag range |
 | `text` | I-beam | I-beam | the code editor's text, the terminal |
-| `resize-horizontal`, `resize-vertical`, `resize-nw-se`, `resize-ne-sw` | resize | resize | splitters, panel, flyout and palette edges, dialog grips, timeline markers and trim handles, the histogram |
+| `resize-horizontal`, `resize-vertical`, `resize-nw-se`, `resize-ne-sw` | resize | resize | panel, palette and window edges, dialog grips, timeline markers and trim handles, the histogram |
+| `split-columns`, `split-rows` | column resize, row resize | the same | splitters between panes, side area and flyout edges |
 
 The image viewport keeps its own tool cursors ([cursors.md](cursors.md));
 egui_stack's dock separators and tabs, and the stacked sections'
 boundaries, set theirs in egui_stack; a window's frame hands its moves
 and resizes to the system.
 
-A profile changes any of them with `drag_cursors`, by kind, a CSS cursor
-name for `hover`, `drag` or both (an empty or unknown name keeps the
-kind's own; `PointerMap::drag_cursor` resolves them). Blender / node
-editors keeps the arrow over what can be panned or moved:
+### Three levels
 
-```json
-"drag_cursors": {
-  "pan": { "hover": "default" },
-  "move": { "hover": "default" }
-}
-```
+Everything above can be changed, at three levels; the most specific one
+wins, and what a level leaves out is the level below's:
+
+1. **The widget**, in code: the value `drag_cursor` returns is applied
+   when it is dropped, at the end of the statement, and changes first:
+
+   ```rust,ignore
+   pointer::drag_cursor(&response, DragKind::Move)
+       .hover(egui::CursorIcon::Grab)          // the cursor hovered
+       .dragging(egui::CursorIcon::Grabbing)   // the cursor dragged
+       .hover_policy(HoverPolicy::Always);     // only-action, always, never
+   ```
+
+2. **The pointer profile**: `drag_cursors`, by kind, a CSS cursor name
+   for `hover`, `drag`, and a `policy` (an empty or unknown name, no
+   policy, keep the level below's; `PointerMap::drag_cursor_over`
+   resolves them). Blender / node editors keeps the arrow over what can
+   be panned or moved; a profile could also show the open hand over a
+   DJ deck's content although a click there seeks:
+
+   ```json
+   "drag_cursors": {
+     "pan": { "hover": "default" },
+     "move": { "hover": "default" },
+     "scrub": { "policy": "always" }
+   }
+   ```
+
+   (Blender's are the first two.)
+
+3. **The kit**: `drag-cursor.<kind>.hover`, `.drag` and `.policy`, string
+   tokens, so that a kit restyles them without code. The default kit
+   gives every kind's own ([`kit.md`](kit.md)); a name that is not a CSS
+   cursor, or a policy that is not one of the three, is reported among
+   the kit's problems and the default kept:
+
+   ```yaml
+   drag-cursor:
+     pan:
+       hover: {$type: "string", $value: "all-scroll"}
+       policy: {$type: "string", $value: "always"}
+   ```
+
+`egui_pop::core::pointer::resolve_drag_cursor(ctx, kind)` gives the kit's
+cursors under the profile's; `drag_cursor_icons` the same as egui's
+cursors.
 
 The gallery's `drag_cursors` test drives each draggable and fails if
-one shows the arrow while it is dragged.
+one shows the arrow while it is dragged, or a cursor hovered other than
+the rule's; one test per level shows it wins over the level below.
 
 ## Changing a gesture
 

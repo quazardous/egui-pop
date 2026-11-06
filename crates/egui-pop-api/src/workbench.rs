@@ -2978,10 +2978,7 @@ fn draw_flyout(
             // pointer's alone: no Tab stop, focused it would show nothing.
             let edge = Rect::from_x_y_ranges(x - reach..=x + reach, rect.y_range());
             let r = ui.interact(edge, id.with("resize"), egui::Sense::DRAG);
-            egui_pop_core::pointer::drag_cursor(
-                &r,
-                egui_pop_core::pointer::DragKind::ResizeHorizontal,
-            );
+            egui_pop_core::pointer::drag_cursor(&r, egui_pop_core::pointer::DragKind::SplitColumns);
             // From where the pointer is, not from its moves: a drag-only
             // target starts dragging on the press, whose move would count.
             let dragged_to = r.interact_pointer_pos().map(|p| {
@@ -3083,10 +3080,7 @@ fn lie_over(
             let reach = ui.style().interaction.resize_grab_radius_side;
             let edge = Rect::from_x_y_ranges(x - reach..=x + reach, rect.y_range());
             let r = ui.interact(edge, id.with("resize"), egui::Sense::DRAG);
-            egui_pop_core::pointer::drag_cursor(
-                &r,
-                egui_pop_core::pointer::DragKind::ResizeHorizontal,
-            );
+            egui_pop_core::pointer::drag_cursor(&r, egui_pop_core::pointer::DragKind::SplitColumns);
             if r.dragged() {
                 let dx = r.drag_delta().x;
                 let w = (width + if start { dx } else { -dx }).clamp(min, max);

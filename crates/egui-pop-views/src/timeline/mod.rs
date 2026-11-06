@@ -1025,9 +1025,8 @@ impl<'a> Timeline<'a> {
                 }
             }
             // The lanes' cursor, set before the clips', markers' and
-            // handles' (theirs win over them): a fixed playhead's content
-            // shows it can be scrubbed, and each drag keeps its own until
-            // let go, wherever the pointer goes.
+            // handles' (theirs win over them): each drag keeps its own
+            // until let go, wherever the pointer goes.
             if response.dragged() {
                 let kind = match mem.drag {
                     Drag::Pan { .. } => Some(DragKind::Pan),
@@ -1042,7 +1041,9 @@ impl<'a> Timeline<'a> {
                     pointer::hold_drag_cursor(&ctx, kind);
                 }
             } else if fixed && ctx.dragged_id().is_none() && ui.rect_contains_pointer(rect) {
-                pointer::hover_drag_cursor(&ctx, DragKind::Scrub);
+                // A click there moves the playhead: the arrow until the
+                // scrub starts, unless the hover policy says otherwise.
+                pointer::hover_drag_cursor(&ctx, DragKind::Scrub, true);
             }
             if response.drag_stopped() {
                 if let (Drag::Range { .. }, Some(r)) = (mem.drag, mem.preview.take())

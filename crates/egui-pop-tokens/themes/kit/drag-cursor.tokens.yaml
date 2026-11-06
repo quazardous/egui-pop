@@ -1,0 +1,116 @@
+$description: "The default kit's drag cursors (docs/pointer-gestures.md): per kind of drag, the cursor hovered and dragged (CSS cursor names) and when the hover one shows (only-action, always, never), layered into pop-dark."
+drag-cursor:
+  $type: "string"
+  $description: "The cursors of each kind of drag; a pointer profile, then the widget, can change them."
+  pan:
+    $description: "Content panned under a fixed frame."
+    hover:
+      $value: "grab"
+    drag:
+      $value: "grabbing"
+    policy:
+      $value: "only-action"
+  scrub:
+    $description: "Content scrubbed under a fixed playhead."
+    hover:
+      $value: "grab"
+    drag:
+      $value: "grabbing"
+    policy:
+      $value: "only-action"
+  move:
+    $description: "An item moved where the pointer takes it, a view frame."
+    hover:
+      $value: "move"
+    drag:
+      $value: "move"
+    policy:
+      $value: "only-action"
+  carry:
+    $description: "An item carried to a place to drop it."
+    hover:
+      $value: "default"
+    drag:
+      $value: "grabbing"
+    policy:
+      $value: "only-action"
+  value:
+    $description: "A value dragged along a line."
+    hover:
+      $value: "default"
+    drag:
+      $value: "ew-resize"
+    policy:
+      $value: "only-action"
+  point:
+    $description: "A point placed under the pointer."
+    hover:
+      $value: "default"
+    drag:
+      $value: "crosshair"
+    policy:
+      $value: "only-action"
+  select:
+    $description: "A rubber band."
+    hover:
+      $value: "default"
+    drag:
+      $value: "crosshair"
+    policy:
+      $value: "only-action"
+  text:
+    $description: "Text selected by dragging over it."
+    hover:
+      $value: "text"
+    drag:
+      $value: "text"
+    policy:
+      $value: "always"
+  resize-horizontal:
+    $description: "An edge resized sideways."
+    hover:
+      $value: "ew-resize"
+    drag:
+      $value: "ew-resize"
+    policy:
+      $value: "only-action"
+  resize-vertical:
+    $description: "An edge resized up and down."
+    hover:
+      $value: "ns-resize"
+    drag:
+      $value: "ns-resize"
+    policy:
+      $value: "only-action"
+  resize-nw-se:
+    $description: "A corner resized along the top-left to bottom-right diagonal."
+    hover:
+      $value: "nwse-resize"
+    drag:
+      $value: "nwse-resize"
+    policy:
+      $value: "only-action"
+  resize-ne-sw:
+    $description: "A corner resized along the top-right to bottom-left diagonal."
+    hover:
+      $value: "nesw-resize"
+    drag:
+      $value: "nesw-resize"
+    policy:
+      $value: "only-action"
+  split-columns:
+    $description: "A separator between panes side by side."
+    hover:
+      $value: "col-resize"
+    drag:
+      $value: "col-resize"
+    policy:
+      $value: "only-action"
+  split-rows:
+    $description: "A separator between panes one above the other."
+    hover:
+      $value: "row-resize"
+    drag:
+      $value: "row-resize"
+    policy:
+      $value: "only-action"

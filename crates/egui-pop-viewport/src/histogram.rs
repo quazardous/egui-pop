@@ -253,10 +253,12 @@ impl<'a> Histogram<'a> {
         let mut changes = Vec::new();
         if draggable {
             drag(ui, &response, rect, step, &mut hook, &mut changes);
+            // A click only takes the focus: dragging is its only action.
             egui_pop_core::pointer::drag_cursor(
                 &response,
                 egui_pop_core::pointer::DragKind::ResizeHorizontal,
-            );
+            )
+            .clicks(false);
             if !changes.is_empty() {
                 response.mark_changed();
             }

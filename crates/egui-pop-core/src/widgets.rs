@@ -771,7 +771,9 @@ impl<'a> Splitter<'a> {
         let mut r = ui.interact(rect, self.id, Sense::click_and_drag());
         let before = *value;
         let sign = if self.after { -1.0 } else { 1.0 };
-        crate::pointer::drag_cursor(&r, crate::pointer::DragKind::ResizeHorizontal);
+        // Its double click resets it, a shortcut behind the drag: dragging
+        // is still its only action, its cursor shows hovered.
+        crate::pointer::drag_cursor(&r, crate::pointer::DragKind::SplitColumns).clicks(false);
         if r.drag_started() {
             ctx.data_mut(|d| d.insert_temp(self.id, before));
         }

@@ -336,6 +336,8 @@ impl<'a> Navigator<'a> {
             .or(m.map(|m| m.image))
             .filter(|i| i[0] > 0.0 && i[1] > 0.0);
         let mut changes = Vec::new();
+        // The view's frame, on screen: dragging is its only action.
+        let mut frame = None;
         if let Some(image) = image {
             let fit = fitted(rect.shrink(2.0), [image[0] as u32, image[1] as u32]);
             let scale = f64::from(fit.width()) / image[0];
@@ -357,6 +359,11 @@ impl<'a> Navigator<'a> {
                 &mut hook,
                 &mut changes,
             );
+            frame = state
+                .mapping()
+                .or(m)
+                .and_then(|m| m.visible())
+                .map(|v| frame_rect(fit, v, scale));
             paint(
                 ui,
                 rect,
@@ -374,7 +381,13 @@ impl<'a> Navigator<'a> {
         if response.clicked() || response.drag_started() {
             response.request_focus();
         }
-        egui_pop_core::pointer::drag_cursor(&response, egui_pop_core::pointer::DragKind::Pan);
+        // Its frame moves the view; elsewhere a click jumps there, the
+        // arrow until the drag starts.
+        let over_frame = response
+            .hover_pos()
+            .is_some_and(|p| frame.is_some_and(|f: Rect| f.contains(p)));
+        egui_pop_core::pointer::drag_cursor(&response, egui_pop_core::pointer::DragKind::Move)
+            .clicks(!over_frame);
         if !changes.is_empty() {
             response.mark_changed();
         }
@@ -583,6 +596,15 @@ fn finish(
     }
 }
 
+/// The frame of the part in view (`visible`, in image pixels) on screen.
+fn frame_rect(fit: Rect, v: [f64; 4], scale: f64) -> Rect {
+    let s = scale as f32;
+    Rect::from_min_max(
+        pos2(fit.left() + v[0] as f32 * s, fit.top() + v[1] as f32 * s),
+        pos2(fit.left() + v[2] as f32 * s, fit.top() + v[3] as f32 * s),
+    )
+}
+
 /// The image, the veil over what is out of view, the frame.
 fn paint(
     ui: &Ui,
@@ -609,11 +631,7 @@ fn paint(
         );
     }
     if let Some(v) = m.and_then(|m| m.visible()) {
-        let s = scale as f32;
-        let frame = Rect::from_min_max(
-            pos2(fit.left() + v[0] as f32 * s, fit.top() + v[1] as f32 * s),
-            pos2(fit.left() + v[2] as f32 * s, fit.top() + v[3] as f32 * s),
-        );
+        let frame = frame_rect(fit, v, scale);
         // The veil: four bands around the frame.
         let veil = t.veil.gamma_multiply(0.6);
         for band in [
