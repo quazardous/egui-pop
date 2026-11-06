@@ -258,9 +258,12 @@ pub const PAIRS: &[Pair] = &[
     // A hovered and a selected wire over the canvas.
     ui("graph.wire-hover.color", "graph.background"),
     ui("graph.wire-selected.color", "graph.background"),
-    // A plot: its axis text and its time cursor over its background.
+    // A plot: its axis text and its time cursor, at rest and under the
+    // pointer, over its background. Its grid (`plot.grid-color`) is a
+    // decoration, as `border.default` is: not checked.
     text("plot.rest.text", "plot.rest.fill"),
     ui("plot-cursor.rest.fill", "plot.rest.fill"),
+    ui("plot-cursor.hover.fill", "plot.rest.fill"),
     // The categorical palette's series, on the surfaces charts are
     // drawn on (WCAG 1.4.11, a graphical object).
     ui("palette.category.0", "surface.canvas"),

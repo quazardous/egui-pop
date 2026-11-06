@@ -1,10 +1,18 @@
 $description: "The `plot` component of the default kit (docs/kit.md), layered into pop-dark."
 plot:
-  $description: "A chart's plot area (a kit component): its background and frame, its axis text and grid in `text`; its time cursor is `plot-cursor`. The series take the categorical palette (`palette.category.*`)."
+  $description: "A chart's plot area (a kit component): its background and frame, its axis text in `text`, its grid in `grid-color` faded by `grid-fade`; its time cursor is `plot-cursor`. The series take the categorical palette (`palette.category.*`)."
   shape:
     $type: "string"
     $value: "box"
     $description: "The handler that draws its background and frame: box or plain."
+  grid-color:
+    $type: "color"
+    $value: "{text.muted}"
+    $description: "The grid lines at their strongest; denser lines fade (a decoration, not contrast-checked)."
+  grid-fade:
+    $type: "number"
+    $value: 0.5
+    $description: "0: every grid line as strong as the sparsest; 1: denser lines much fainter (egui_plot's grid_fade)."
   rest:
     fill:
       $type: "color"
