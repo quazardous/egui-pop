@@ -44,8 +44,8 @@
 
 use egui::epaint::{Mesh, Vertex, WHITE_UV};
 use egui::{
-    Color32, CursorIcon, Pos2, Rect, Response, Role, Sense, Shape, Stroke, StrokeKind, Ui, Vec2,
-    Widget, WidgetInfo, pos2, vec2,
+    Color32, Pos2, Rect, Response, Role, Sense, Shape, Stroke, StrokeKind, Ui, Vec2, Widget,
+    WidgetInfo, pos2, vec2,
 };
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
@@ -253,9 +253,10 @@ impl<'a> Histogram<'a> {
         let mut changes = Vec::new();
         if draggable {
             drag(ui, &response, rect, step, &mut hook, &mut changes);
-            if response.hovered() || response.dragged() {
-                ui.ctx().set_cursor_icon(CursorIcon::ResizeHorizontal);
-            }
+            egui_pop_core::pointer::drag_cursor(
+                &response,
+                egui_pop_core::pointer::DragKind::ResizeHorizontal,
+            );
             if !changes.is_empty() {
                 response.mark_changed();
             }

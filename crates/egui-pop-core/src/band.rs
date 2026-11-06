@@ -31,7 +31,7 @@
 //! out.textures_delta.clear();
 //! ```
 
-use egui::{CursorIcon, Id, Rect, Response, Role, Sense, Shape, Ui, Vec2};
+use egui::{Id, Rect, Response, Role, Sense, Shape, Ui, Vec2};
 
 use crate::icon::Icon;
 use crate::kit::{Kit, KitCx, Part, State};
@@ -114,9 +114,7 @@ pub fn begin<R>(
     let inner = add(ui, band.state());
     band.bottom = ui.min_rect().bottom() + style.gap;
     ui.add_space(2.0 * style.gap);
-    if response.hovered() || response.dragged() {
-        ui.ctx().set_cursor_icon(CursorIcon::Move);
-    }
+    crate::pointer::drag_cursor(&response, crate::pointer::DragKind::Move);
     (inner, band)
 }
 

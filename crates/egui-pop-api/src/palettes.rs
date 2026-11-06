@@ -599,13 +599,14 @@ fn resize_edges(
         ));
     }
     for (r, edges) in &out {
-        if r.hovered() || r.dragged() {
-            ui.ctx().set_cursor_icon(match edges {
-                [true, true] => egui::CursorIcon::ResizeNwSe,
-                [true, false] => egui::CursorIcon::ResizeHorizontal,
-                _ => egui::CursorIcon::ResizeVertical,
-            });
-        }
+        egui_pop_core::pointer::drag_cursor(
+            r,
+            match edges {
+                [true, true] => egui_pop_core::pointer::DragKind::ResizeNwSe,
+                [true, false] => egui_pop_core::pointer::DragKind::ResizeHorizontal,
+                _ => egui_pop_core::pointer::DragKind::ResizeVertical,
+            },
+        );
     }
     out
 }
@@ -1255,6 +1256,7 @@ fn tabs_row(
 /// a drag takes it out of its tabs.
 fn tab(ui: &mut Ui, title: &str, panel: &PanelId, selected: bool, asked: &mut Asked) {
     let r = widgets::selectable_label(ui, selected, title).interact(egui::Sense::drag());
+    egui_pop_core::pointer::drag_cursor(&r, egui_pop_core::pointer::DragKind::Carry);
     if r.clicked() {
         asked.show = Some(panel.clone());
     }

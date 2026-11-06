@@ -13,7 +13,9 @@
 //! Lightroom Classic, Blender / node editors and Trackpad, each
 //! following the application it is named after. A retired id still
 //! names its successor ([`ALIASES`]: `adobe` is `lightroom`). The
-//! user's overrides are ordinary user-layer bindings on top.
+//! user's overrides are ordinary user-layer bindings on top. A profile
+//! also says which cursor each kind of drag shows, hovered and dragged
+//! ([`DragKind`], [`PointerMap::drag_cursor`]).
 //!
 //! A canvas reads the resolved table, a [`PointerMap`], built from the
 //! keymap ([`PointerMap::from_keymap`]) or from a profile alone
@@ -31,6 +33,7 @@
 //! assert_eq!(document.command(SCOPE_IMAGE, &wheel).unwrap().as_str(), "gesture.image.pan");
 //! ```
 
+use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
 use serde::{Deserialize, Serialize};
@@ -373,6 +376,161 @@ pub struct ValueKeys {
     pub coarse: String,
 }
 
+/// What a drag does to what it holds: the meaning a drag's cursor is
+/// keyed by, whatever the widget. A widget names the kind of each of its
+/// drags; the profile in force says which cursor each kind shows,
+/// hovered and dragged ([`DragKind::cursors`], [`Profile::drag_cursors`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum DragKind {
+    /// Content panned under a fixed frame: an image, a graph's canvas,
+    /// a timeline's lanes. An open hand, closed while dragging.
+    Pan,
+    /// Content scrubbed under a fixed playhead (a deck's waveform). An
+    /// open hand, closed while dragging.
+    Scrub,
+    /// An item moved where the pointer takes it: a node, a clip, a band.
+    Move,
+    /// An item carried to a place to drop it: a row, a tab, a wire's
+    /// end. The arrow until it moves, then a closed hand.
+    Carry,
+    /// A value dragged along a line: a slider, a playhead on a ruler.
+    /// The arrow until it moves, then a horizontal resize.
+    Value,
+    /// A point placed under the pointer: a colour wheel's puck, a
+    /// curve's point. The arrow until it moves, then a crosshair.
+    Point,
+    /// A rubber band selecting what it covers. The arrow until it moves,
+    /// then a crosshair.
+    Select,
+    /// Text selected by dragging over it. An I-beam.
+    Text,
+    /// An edge or a separator resized sideways.
+    ResizeHorizontal,
+    /// An edge or a separator resized up and down.
+    ResizeVertical,
+    /// A corner resized along the top-left to bottom-right diagonal.
+    ResizeNwSe,
+    /// A corner resized along the top-right to bottom-left diagonal.
+    ResizeNeSw,
+}
+
+impl DragKind {
+    /// Every kind, in the order the docs list them.
+    pub const ALL: [DragKind; 12] = [
+        DragKind::Pan,
+        DragKind::Scrub,
+        DragKind::Move,
+        DragKind::Carry,
+        DragKind::Value,
+        DragKind::Point,
+        DragKind::Select,
+        DragKind::Text,
+        DragKind::ResizeHorizontal,
+        DragKind::ResizeVertical,
+        DragKind::ResizeNwSe,
+        DragKind::ResizeNeSw,
+    ];
+
+    /// Its name in a profile document: `pan`, `resize-horizontal`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DragKind::Pan => "pan",
+            DragKind::Scrub => "scrub",
+            DragKind::Move => "move",
+            DragKind::Carry => "carry",
+            DragKind::Value => "value",
+            DragKind::Point => "point",
+            DragKind::Select => "select",
+            DragKind::Text => "text",
+            DragKind::ResizeHorizontal => "resize-horizontal",
+            DragKind::ResizeVertical => "resize-vertical",
+            DragKind::ResizeNwSe => "resize-nw-se",
+            DragKind::ResizeNeSw => "resize-ne-sw",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<DragKind> {
+        DragKind::ALL.into_iter().find(|k| k.as_str() == text)
+    }
+
+    /// The cursors it shows unless a profile says otherwise, as CSS
+    /// cursor names ([`CURSOR_NAMES`]).
+    pub fn cursors(self) -> DragCursor {
+        let (hover, drag) = match self {
+            DragKind::Pan | DragKind::Scrub => ("grab", "grabbing"),
+            DragKind::Move => ("move", "move"),
+            DragKind::Carry => ("default", "grabbing"),
+            DragKind::Value => ("default", "ew-resize"),
+            DragKind::Point | DragKind::Select => ("default", "crosshair"),
+            DragKind::Text => ("text", "text"),
+            DragKind::ResizeHorizontal => ("ew-resize", "ew-resize"),
+            DragKind::ResizeVertical => ("ns-resize", "ns-resize"),
+            DragKind::ResizeNwSe => ("nwse-resize", "nwse-resize"),
+            DragKind::ResizeNeSw => ("nesw-resize", "nesw-resize"),
+        };
+        DragCursor {
+            hover: hover.into(),
+            drag: drag.into(),
+        }
+    }
+}
+
+/// The cursor names a profile may give: CSS's (`grab`, `ew-resize`),
+/// which egui shows on every platform.
+pub const CURSOR_NAMES: [&str; 35] = [
+    "alias",
+    "all-scroll",
+    "cell",
+    "context-menu",
+    "copy",
+    "crosshair",
+    "default",
+    "grab",
+    "grabbing",
+    "help",
+    "move",
+    "no-drop",
+    "none",
+    "not-allowed",
+    "pointer",
+    "progress",
+    "ew-resize",
+    "nesw-resize",
+    "nwse-resize",
+    "ns-resize",
+    "e-resize",
+    "se-resize",
+    "s-resize",
+    "sw-resize",
+    "w-resize",
+    "nw-resize",
+    "n-resize",
+    "ne-resize",
+    "col-resize",
+    "row-resize",
+    "text",
+    "vertical-text",
+    "wait",
+    "zoom-in",
+    "zoom-out",
+];
+
+/// The cursors of a drag kind: hovered, and while dragging (kept until
+/// the drag ends, wherever the pointer goes). Names from
+/// [`CURSOR_NAMES`]; in a profile, an empty one keeps the kind's own
+/// ([`DragKind::cursors`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DragCursor {
+    /// Over what can be dragged, nothing being dragged; `default` asks
+    /// for none (the arrow, or what another widget asks for).
+    pub hover: String,
+    /// While dragging.
+    pub drag: String,
+}
+
 /// A pointer profile, as shipped or saved: the `pointer-profile`
 /// document.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -389,6 +547,10 @@ pub struct Profile {
     pub input: InputModifiers,
     #[serde(default)]
     pub value_keys: ValueKeys,
+    /// The drag cursors it changes, by kind (`{"move": {"hover":
+    /// "default"}}`); the others keep their own ([`DragKind::cursors`]).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub drag_cursors: BTreeMap<DragKind, DragCursor>,
     /// Default-layer bindings, as in a keymap document.
     #[serde(default)]
     pub bindings: Vec<DocBinding>,
@@ -503,6 +665,9 @@ pub struct PointerMap {
     /// points a line.
     pub wheel_speed: f32,
     pub bindings: Vec<PointerBinding>,
+    /// The profile's drag cursors ([`Profile::drag_cursors`]); read them
+    /// with [`PointerMap::drag_cursor`].
+    pub drag_cursors: BTreeMap<DragKind, DragCursor>,
 }
 
 impl Default for PointerMap {
@@ -548,7 +713,24 @@ impl PointerMap {
             wheel_device: WheelDevice::Auto,
             wheel_speed: 1.0,
             bindings,
+            drag_cursors: profile.drag_cursors.clone(),
         }
+    }
+
+    /// The cursors a drag kind shows: the profile's, each name it leaves
+    /// empty or does not know the kind's own ([`DragKind::cursors`]).
+    pub fn drag_cursor(&self, kind: DragKind) -> DragCursor {
+        let mut c = kind.cursors();
+        if let Some(o) = self.drag_cursors.get(&kind) {
+            let known = |n: &String| CURSOR_NAMES.contains(&n.as_str());
+            if known(&o.hover) {
+                c.hover.clone_from(&o.hover);
+            }
+            if known(&o.drag) {
+                c.drag.clone_from(&o.drag);
+            }
+        }
+        c
     }
 
     /// The command a pointer chord runs in a scope.

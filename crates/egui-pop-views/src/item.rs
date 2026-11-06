@@ -50,11 +50,12 @@
 
 use egui::accesskit::{self, Role};
 use egui::{
-    Align2, AsIdSalt, Color32, CursorIcon, EventFilter, FontSelection, Id, IdSalt, Key, Modifiers,
-    Pos2, Rect, Response, Sense, TextStyle, Ui, UiBuilder, WidgetInfo, pos2, vec2,
+    Align2, AsIdSalt, Color32, EventFilter, FontSelection, Id, IdSalt, Key, Modifiers, Pos2, Rect,
+    Response, Sense, TextStyle, Ui, UiBuilder, WidgetInfo, pos2, vec2,
 };
 use egui_pop_core::icon::{Icon, Size, Source};
 use egui_pop_core::kit::{Glyph, Kit, KitCx, Part, State, Tone};
+use egui_pop_core::pointer::{self, DragKind};
 use egui_pop_core::strings::tr_args;
 use egui_pop_core::theme::Tokens;
 
@@ -469,12 +470,7 @@ impl ListItem {
 
         let handle = placed.handle.map(|r| {
             let h = ui.interact(r, id.with("handle"), Sense::DRAG);
-            if h.hovered() {
-                ui.ctx().set_cursor_icon(CursorIcon::Grab);
-            }
-            if h.dragged() {
-                ui.ctx().set_cursor_icon(CursorIcon::Grabbing);
-            }
+            pointer::drag_cursor(&h, DragKind::Move);
             let name = tr_args(ui.ctx(), &s::ITEM_MOVE, &[("name", &self.label)]);
             h.widget_info(move || WidgetInfo::labeled(Role::Button, enabled, &name));
             h

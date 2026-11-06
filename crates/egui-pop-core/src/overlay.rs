@@ -87,12 +87,12 @@
 use std::collections::{BTreeSet, HashMap};
 
 use egui::{
-    Context, CursorIcon, Event, Id, Key, LayerId, NumExt as _, Rect, Sense, Ui, UiBuilder, Vec2,
-    ViewportId,
+    Context, Event, Id, Key, LayerId, NumExt as _, Rect, Sense, Ui, UiBuilder, Vec2, ViewportId,
 };
 use serde::Serialize;
 
 use crate::placement::{Placement, Side, place};
+use crate::pointer::DragKind;
 use crate::state::{forget_window, lock, pass, shared, shared_of_window};
 
 /// What kind of overlay.
@@ -319,12 +319,12 @@ impl Grip {
         )
     }
 
-    fn cursor(self) -> CursorIcon {
+    fn drag_kind(self) -> DragKind {
         match (self.x, self.y) {
-            (0, _) => CursorIcon::ResizeVertical,
-            (_, 0) => CursorIcon::ResizeHorizontal,
-            (a, b) if a == b => CursorIcon::ResizeNwSe,
-            _ => CursorIcon::ResizeNeSw,
+            (0, _) => DragKind::ResizeVertical,
+            (_, 0) => DragKind::ResizeHorizontal,
+            (a, b) if a == b => DragKind::ResizeNwSe,
+            _ => DragKind::ResizeNeSw,
         }
     }
 
@@ -1293,9 +1293,7 @@ fn grips(
             Sense::DRAG
         };
         let r = ui.interact(grip.zone(rect, reach, side + reach / 2.0), id, sense);
-        if r.hovered() || r.dragged() {
-            ctx.set_cursor_icon(grip.cursor());
-        }
+        crate::pointer::drag_cursor(&r, grip.drag_kind());
         if r.drag_started() {
             grabbed = Some(rect);
         }

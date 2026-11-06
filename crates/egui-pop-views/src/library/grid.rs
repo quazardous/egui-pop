@@ -713,6 +713,16 @@ impl<'a> ThumbGrid<'a> {
                     b.1 = p - origin;
                 }
             }
+            if bg.dragged()
+                && band
+                    .as_ref()
+                    .is_some_and(|(a, b, _)| (*b - *a).length() >= BAND_MIN)
+            {
+                egui_pop_core::pointer::hold_drag_cursor(
+                    ui.ctx(),
+                    egui_pop_core::pointer::DragKind::Select,
+                );
+            }
             // A drag-only area starts dragging on the press: a band is one
             // once the pointer has moved (a click is not a band).
             let band_cells: Vec<usize> = band

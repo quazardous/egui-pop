@@ -254,6 +254,7 @@ impl<K: Key> CompareView<K> {
             // Zoom around the pointer, pan by dragging, fit on a double
             // click.
             let pr = ui.interact(area, id.with(("pane", i)), Sense::click_and_drag());
+            egui_pop_core::pointer::drag_cursor(&pr, egui_pop_core::pointer::DragKind::Pan);
             let pane_name = pane.label.clone();
             pr.widget_info(move || WidgetInfo::labeled(Role::Unknown, true, &pane_name));
             if pr.double_clicked() {

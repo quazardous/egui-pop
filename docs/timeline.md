@@ -181,6 +181,10 @@ deck up, dragged back slows it down; released, it plays on at its speed.
 The play state and the speed are left as they were; the playhead moves
 (`playhead_moved`), not quantized, as playing does not.
 
+Over the lanes the pointer is an open hand, closed for the whole drag
+(the `scrub` drag kind, [pointer-gestures.md](pointer-gestures.md#drag-cursors)),
+even once it leaves the timeline.
+
 Snapping pulls a time to a marker, the range's ends, the playhead or a
 clip's edge within 8 points (`SNAP_REACH`), the nearest first; otherwise
 onto the grid (the ruler's small ticks). A scrub does not snap to the
@@ -323,6 +327,7 @@ With the pointer:
 | Click on a clip | selects it alone; Ctrl: in or out of the selection; Shift: added |
 | Drag a clip | moves the selection along its track or to others, snapped; where it does not fit, it lands against the nearest edge that lets it (another clip's, the bounds'); one step when dropped |
 | Drag a clip's edge | trims it (the cursor turns to a resize arrow over an edge) |
+| Hover or drag a clip | the move cursor, kept for the whole drag ([drag cursors](pointer-gestures.md#drag-cursors)) |
 | Press on a track, off the clips | lets the clips go, and moves the playhead as anywhere |
 | Middle drag on a clip | pans |
 | Alt held | no snapping |

@@ -486,6 +486,7 @@ pub fn time_panel(ui: &mut Ui, app: &AppHandle, m: &mut Model) {
         Sense::click_and_drag(),
     );
     named(&scrub, "Time ruler");
+    egui_pop::core::pointer::drag_cursor(&scrub, egui_pop::core::pointer::DragKind::Value);
     for f in (0..=FRAMES).step_by(10) {
         let x = x_of(f as f32);
         let major = f % 50 == 0;

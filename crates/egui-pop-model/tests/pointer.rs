@@ -318,3 +318,30 @@ fn keymap_documents_of_version_2_read_as_version_3() {
         pointer::default_profile()
     );
 }
+
+#[test]
+fn a_profile_changes_the_drag_cursors_it_names() {
+    use egui_pop_model::pointer::{CURSOR_NAMES, DragKind};
+    for k in DragKind::ALL {
+        assert_eq!(DragKind::parse(k.as_str()), Some(k));
+        let c = k.cursors();
+        assert!(CURSOR_NAMES.contains(&c.hover.as_str()), "{k:?}");
+        assert!(CURSOR_NAMES.contains(&c.drag.as_str()), "{k:?}");
+        assert_ne!(c.drag, "default", "{k:?} shows the arrow while dragged");
+    }
+    let document = PointerMap::from_profile(pointer::default_profile());
+    assert_eq!(document.drag_cursor(DragKind::Move).hover, "move");
+    let blender = PointerMap::from_profile(pointer::profile("blender").unwrap());
+    let moving = blender.drag_cursor(DragKind::Move);
+    assert_eq!(
+        (moving.hover.as_str(), moving.drag.as_str()),
+        ("default", "move")
+    );
+    assert_eq!(blender.drag_cursor(DragKind::Pan).drag, "grabbing");
+    // An unknown name keeps the kind's own.
+    let text = r#"{"kind": "pointer-profile", "version": 1, "id": "odd", "title": "Odd",
+        "drag_cursors": {"pan": {"drag": "spinning-wheel"}, "scrub": {"hover": "pointer"}}}"#;
+    let odd = PointerMap::from_profile(&pointer::parse_profile(text).unwrap());
+    assert_eq!(odd.drag_cursor(DragKind::Pan).drag, "grabbing");
+    assert_eq!(odd.drag_cursor(DragKind::Scrub).hover, "pointer");
+}

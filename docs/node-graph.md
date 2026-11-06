@@ -160,6 +160,11 @@ the hook, the `events` (`Selection`, `WireSelection`, `Level`,
 A drag never writes: the nodes follow the pointer in the editor, and
 one `Move` comes at the end (Escape during the drag drops it).
 
+Each drag keeps its cursor until it ends, wherever the pointer goes
+([drag cursors](pointer-gestures.md#drag-cursors)): move over a node, a
+stack or a group's title; a closed hand for a wire's end and a pan; a
+crosshair for the rubber band.
+
 ### Gestures
 
 Pan and zoom follow the pointer profile

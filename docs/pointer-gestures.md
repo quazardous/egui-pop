@@ -110,6 +110,50 @@ let app = App::builder()
 assert_eq!(egui_pop::api::pointer::profile_id(app.handle()), "darktable");
 ```
 
+## Drag cursors
+
+What a drag does decides its cursor, not the widget it starts on: a
+widget names the **drag kind** of each of its drags
+(`egui_pop::model::pointer::DragKind`) and shows its cursors with
+`egui_pop::core::pointer::drag_cursor(&response, kind)` (or
+`UiPop::drag_cursor`). The hover cursor shows while the widget is hovered
+and nothing else is dragged; the drag cursor every pass the response is
+dragged, wherever the pointer is: egui resets the cursor each pass, and
+the pointer leaves a widget it drags. A widget following a drag of its own
+(a state rather than one response) calls `hold_drag_cursor(ctx, kind)`.
+
+| Kind | Hover | Drag | Where |
+|---|---|---|---|
+| `pan` | open hand | closed hand | the graph's canvas (a pan), the navigator, the graph's minimap, the compare view's panes, a timeline's middle drag |
+| `scrub` | open hand | closed hand | a fixed playhead's content (DJ decks) |
+| `move` | move | move | graph nodes, stacks and group titles, timeline clips, bands, item handles |
+| `carry` | arrow | closed hand | a port's or a wire's end, a tree's drag and drop, a palette's tab |
+| `value` | arrow | horizontal resize | sliders, range sliders, the video's scrub bar, a timeline's scrub |
+| `point` | arrow | crosshair | the curve editor, the colour wheels |
+| `select` | arrow | crosshair | rubber bands (the graph, the thumbnail grid), a timeline's Shift+drag range |
+| `text` | I-beam | I-beam | the code editor's text, the terminal |
+| `resize-horizontal`, `resize-vertical`, `resize-nw-se`, `resize-ne-sw` | resize | resize | splitters, panel, flyout and palette edges, dialog grips, timeline markers and trim handles, the histogram |
+
+The image viewport keeps its own tool cursors ([cursors.md](cursors.md));
+egui_stack's dock separators and tabs, and the stacked sections'
+boundaries, set theirs in egui_stack; a window's frame hands its moves
+and resizes to the system.
+
+A profile changes any of them with `drag_cursors`, by kind, a CSS cursor
+name for `hover`, `drag` or both (an empty or unknown name keeps the
+kind's own; `PointerMap::drag_cursor` resolves them). Blender / node
+editors keeps the arrow over what can be panned or moved:
+
+```json
+"drag_cursors": {
+  "pan": { "hover": "default" },
+  "move": { "hover": "default" }
+}
+```
+
+The gallery's `drag_cursors` test drives each draggable and fails if
+one shows the arrow while it is dragged.
+
 ## Changing a gesture
 
 The shortcuts editor (`Ctrl+,`, then *Keyboard shortcuts*) lists every

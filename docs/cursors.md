@@ -8,6 +8,9 @@ window's scale, and a loupe on the pixels under the pointer.
 
 ## Cursors
 
+The viewport's cursors are its own; every other draggable shows the
+cursor of its kind of drag ([drag cursors](pointer-gestures.md#drag-cursors)).
+
 A `cursor::Cursor` is one of:
 
 | Variant | What it is | How it reaches the screen |

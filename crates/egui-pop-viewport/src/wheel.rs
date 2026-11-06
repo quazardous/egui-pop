@@ -271,6 +271,7 @@ impl<'a> ColorWheel<'a> {
             if response.clicked() || response.drag_started() {
                 response.request_focus();
             }
+            egui_pop_core::pointer::drag_cursor(&response, egui_pop_core::pointer::DragKind::Point);
             if *value != before {
                 response.mark_changed();
             }
