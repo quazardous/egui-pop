@@ -163,6 +163,86 @@ files.sort(state.sort());
 assert_eq!(files.0[0].1, "b.txt");
 ```
 
+### Rows: their look, their heights, the tail
+
+A table's rows are the kit's `table-row` component: `selected`, `hover`
+(never while selected: the selection stays under the pointer) and
+`focus` for the cursor of a focused table. It is based on `list-row`, so
+a table looks like a list until a kit gives `table-row` tokens of its
+own; the Rerun-like kits select quietly, a faint fill and a thin marker
+on the left, and outline the row under the pointer. Whatever the state,
+the content keeps its place: the first cell keeps the room of the
+row's widest border (`Component::border_room`).
+
+`TableRows::row_top(row, row_h)` gives rows of several heights (a row
+unfolded to several lines): where each row starts, `0.0` for the first
+(by default `row * row_h`). `DataTable::stick_to_bottom(true)` keeps the
+last row in view as rows come in, until the user scrolls up, and again
+once back at the end. `TableOutput::visible_rows` says which rows were
+in view.
+
+## The text log
+
+`egui_pop::views::text_log` is a log view on the data table, after the
+Rerun viewer's text log view (`re_view_text_log`, MIT OR Apache-2.0: its
+design, none of its code): a row per entry, with its time, entity path,
+level and body.
+
+| Part | What it does |
+|---|---|
+| Time | written in a timeline's scale (`TextLog::time_scale`, or a bound timeline's: `1:02.500`, a timecode, bars and beats), else as a plain number (a frame) |
+| Entity | the entity path, tinted where it is the one highlighted elsewhere (`TextLog::highlight_entity`) |
+| Level | a chip in the level's colour (`palette.log.*`, six levels from trace to critical) |
+| Body | its first line; a multi-line body shows how many lines it hides and unfolds with its arrow (`TextLogState::set_expanded`) |
+| Level chips | a toggle chip per level, with how many lines of it match the text (`TextLogState::set_level_shown`) |
+| Filter | shows the lines whose body or entity path holds the text, case aside (`TextLogState::set_filter`) |
+| Follow | on by default: the last line stays in view as lines come in, until the user scrolls up; scrolled back to the end it follows again (`TextLogOutput::following`) |
+| Time cursor | the rows at the latest time not after the cursor are the table's selection, drawn by `table-row`, and come into view when the cursor moves elsewhere; a click or the arrow keys move the cursor to a row's time (`TextLogOutput::cursor_moved`) |
+
+The application owns the entries: `LogSource` (implemented for a slice
+of `LogEntry`), in time order. The filter keeps its result between
+passes and scans only the entries added at the end, so a log of a
+hundred thousand lines costs a screenful of rows a pass;
+`TextLogState::refilter` starts it over (the entries changed otherwise,
+or the application's own filter, `TextLog::keep`, did). Its strings
+(the columns, the chips' names, the count, the disclosure) are
+translated.
+
+```rust
+use egui_pop::egui;
+use egui_pop::views::text_log::{Level, LogEntry, TextLog, TextLogState};
+use egui_pop::views::timeline::{TimeScale, TimelineState};
+
+fn show_log(ui: &mut egui::Ui, log: &[LogEntry], state: &mut TextLogState, timeline: &mut TimelineState) {
+    // The timeline's playhead is the time cursor: a row picked moves it.
+    let out = TextLog::new("robot.log", log)
+        .label("Robot log")
+        .timeline(timeline)
+        .show(ui, state);
+    if let Some(entry) = out.picked {
+        let _ = &log[entry].entity;
+    }
+}
+
+let log = vec![
+    LogEntry::new(0.0, "/robot", Level::Info, "started"),
+    LogEntry::new(1.5, "/robot/arm", Level::Warn, "joint 2 near its limit"),
+    LogEntry::new(2.0, "/robot", Level::Critical, "emergency stop\nreason: no answer"),
+];
+let mut state = TextLogState::new();
+let mut timeline = TimelineState::new(TimeScale::Seconds, 10.0);
+let ctx = egui::Context::default();
+let mut frame = ctx.run_ui(egui::RawInput::default(), |ui| {
+    show_log(ui, &log, &mut state, &mut timeline)
+});
+frame.textures_delta.clear();
+assert_eq!(state.shown().len(), 3);
+```
+
+The gallery's `text-log` page shows a robot's minute under a timeline,
+and its playground streams lines in or swaps in a hundred thousand; the
+[Rerun-like viewer](rerun-like.md)'s text log is this view.
+
 ## Columns
 
 A table can select columns as well as rows, opt-in with
@@ -184,8 +264,8 @@ Each change runs the `table.select_columns` step; the output's
 columns' ids, in the columns' order (`set_selected_columns` sets them
 without a step). A selected column is tinted from its header to its last
 row, and so is the column under the pointer, over its header or any of
-its cells: the list row's `selected` and `hover` fills at half strength
-(`list-row` in the kit), so a selected row shows through.
+its cells: the table row's `selected` and `hover` fills at half strength
+(`table-row` in the kit), so a selected row shows through.
 `TableOutput::hovered_column` names the column under the pointer and
 `header_clicked` a header clicked this pass (with or without column
 selection). `DataTable::header_menu(|ui, column| …)` adds the

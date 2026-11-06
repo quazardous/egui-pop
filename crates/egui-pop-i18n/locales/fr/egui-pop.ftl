@@ -2821,6 +2821,30 @@ command-timeline-toggle-play =
     .description = Demande à une ligne de temps de lire en avant à 1, ou de se mettre en pause quand elle lit, comme Espace.
     .title = Lire ou mettre en pause une ligne de temps
 
+egui-pop-views-text-log = Journal
+
+egui-pop-views-text-log-body = Message
+
+egui-pop-views-text-log-collapse = Afficher la première ligne
+
+egui-pop-views-text-log-count = { $count } lignes sur { $total }
+
+egui-pop-views-text-log-entity = Entité
+
+egui-pop-views-text-log-expand = Afficher les { $count } lignes
+
+egui-pop-views-text-log-filter = Filtrer
+
+egui-pop-views-text-log-follow = Suivre
+
+egui-pop-views-text-log-level = Niveau
+
+egui-pop-views-text-log-more = +{ $count } lignes
+
+egui-pop-views-text-log-show-level = Afficher les lignes { $level }
+
+egui-pop-views-text-log-time = Temps
+
 egui-pop-views-timeline = Ligne de temps
 
 egui-pop-views-timeline-add-clip = Ajouter un clip

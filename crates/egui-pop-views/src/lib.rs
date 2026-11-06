@@ -5,6 +5,9 @@
 //! - [`list`]: a list of rows the application draws;
 //! - [`table`]: a data table (on `egui_table`), sorted and resized
 //!   through the host's value store, cells drawn by the application;
+//! - [`text_log`]: a text log on the data table: time, entity, level and
+//!   body columns, filters by level and text, the tail followed, the rows
+//!   at a time cursor highlighted and a click moving the cursor;
 //! - [`item`]: the dense row they draw with, also a widget of its own
 //!   ([`item::ListItem`]: an icon, a label, weak trailing text, action
 //!   buttons shown on hover, indent guides, an arrow, a drag handle);
@@ -60,6 +63,7 @@ mod shared;
 pub mod steps;
 pub mod strings;
 pub mod table;
+pub mod text_log;
 pub mod timeline;
 pub mod tree;
 pub mod video;

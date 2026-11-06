@@ -2291,6 +2291,30 @@ egui-pop-views-sorted-up = { $column }, sorted ascending
 
 egui-pop-views-table = Table
 
+egui-pop-views-text-log = Text log
+
+egui-pop-views-text-log-body = Body
+
+egui-pop-views-text-log-collapse = Show the first line
+
+egui-pop-views-text-log-count = { $count } of { $total } lines
+
+egui-pop-views-text-log-entity = Entity
+
+egui-pop-views-text-log-expand = Show all { $count } lines
+
+egui-pop-views-text-log-filter = Filter
+
+egui-pop-views-text-log-follow = Follow
+
+egui-pop-views-text-log-level = Level
+
+egui-pop-views-text-log-more = +{ $count } lines
+
+egui-pop-views-text-log-show-level = Show { $level } lines
+
+egui-pop-views-text-log-time = Time
+
 egui-pop-views-timeline = Timeline
 
 egui-pop-views-timeline-add-clip = Add clip
