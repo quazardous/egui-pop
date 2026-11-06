@@ -2241,6 +2241,8 @@ egui-pop-views-plot = Chart
 
 egui-pop-views-plot-bars = bars
 
+egui-pop-views-plot-cursor = Time cursor
+
 egui-pop-views-plot-line = line
 
 egui-pop-views-plot-points = points
@@ -2248,6 +2250,8 @@ egui-pop-views-plot-points = points
 egui-pop-views-plot-series = { $name } ({ $kind }): { $count } points, x from { $x_min } to { $x_max }, y from { $y_min } to { $y_max }
 
 egui-pop-views-plot-series-empty = { $name } ({ $kind }): no points
+
+egui-pop-views-plot-steps = steps
 
 egui-pop-views-plot-time-cursor = Time cursor at { $time }
 
