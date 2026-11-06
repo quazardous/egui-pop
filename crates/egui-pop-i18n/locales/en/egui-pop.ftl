@@ -603,6 +603,14 @@ command-timeline-add-marker =
     .description = Adds a marker to a timeline at `seconds` or `time` (else at the playhead), named `label`, of `kind` `marker` or `cue`, in `color` (`#rrggbb`, else the theme's). Answers its `id` in `added`. One step of the history.
     .title = Add a marker to a timeline
 
+command-timeline-go-to-end =
+    .description = Moves a timeline's playhead to its bounds' end, as End does.
+    .title = Go to a timeline's end
+
+command-timeline-go-to-start =
+    .description = Moves a timeline's playhead to its bounds' start, as Home does.
+    .title = Go to a timeline's start
+
 command-timeline-move-clip =
     .description = Moves a timeline's clip `id` to start at `seconds` or `time`, and to track `track` (its id); what is not given stays. Refused where it would overlap a clip or leave the bounds. One step of the history.
     .title = Move a clip on a timeline
@@ -639,9 +647,33 @@ command-timeline-set-time =
     .description = Moves a timeline's playhead (`timeline`, its id) to `seconds`, to `time` (text in the timeline's scale: `1:02.5`, `00:01:02:12`, `17.2.480`), or by `by` seconds; kept inside its bounds.
     .title = Move a timeline's playhead
 
+command-timeline-shuttle-backward =
+    .description = Asks a timeline to play backward at 1, or twice as fast when it already does, as J does.
+    .title = Shuttle a timeline backward
+
+command-timeline-shuttle-forward =
+    .description = Asks a timeline to play forward at 1, or twice as fast when it already does (up to 32×), as L does.
+    .title = Shuttle a timeline forward
+
 command-timeline-split-clip =
     .description = Splits a timeline's clip `id`, or the clips `ids`, at `seconds` or `time` (else at the playhead): each ends there and a new clip starts there, reading its source on. Refused unless the time is inside each, a frame or more from its ends. Answers the new clips' ids in `added`. One step of the history together.
     .title = Split clips on a timeline
+
+command-timeline-step-backward =
+    .description = Moves a timeline's playhead one unit back, or Shift's bigger step with `big`, and pauses, as Left does.
+    .title = Step a timeline backward
+
+command-timeline-step-forward =
+    .description = Moves a timeline's playhead one unit on (a frame, a beat, a second), or Shift's bigger step with `big`, and pauses, as Right does.
+    .title = Step a timeline forward
+
+command-timeline-toggle-loop =
+    .description = Turns a timeline's looping round its range on, or off, as Ctrl+L does. One step of the history.
+    .title = Loop a timeline's range or not
+
+command-timeline-toggle-play =
+    .description = Asks a timeline to play forward at 1, or to pause when it plays, as Space does.
+    .title = Play or pause a timeline
 
 command-timeline-trim-clip =
     .description = Moves a timeline's clip `id` start to `start` and its end to `end` (seconds on the timeline; either or both). Its offset into its source follows its start; it stops at its source's ends, its neighbours and the bounds. One step of the history each.
@@ -2290,6 +2322,26 @@ egui-pop-views-timeline-split-clip = Split clip
 egui-pop-views-timeline-split-clips = Split clips
 
 egui-pop-views-timeline-trim-clip = Trim clip
+
+egui-pop-views-transport-end = Go to end
+
+egui-pop-views-transport-keys = { $action } ({ $keys })
+
+egui-pop-views-transport-loop = Loop
+
+egui-pop-views-transport-pause = Pause
+
+egui-pop-views-transport-play = Play
+
+egui-pop-views-transport-play-backward = Play backward
+
+egui-pop-views-transport-start = Go to start
+
+egui-pop-views-transport-step-back = Step back
+
+egui-pop-views-transport-step-forward = Step forward
+
+egui-pop-views-transport-stop = Stop
 
 egui-pop-views-tree = Tree
 

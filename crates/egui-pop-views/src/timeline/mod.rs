@@ -71,6 +71,7 @@ mod scale;
 mod state;
 mod tokens;
 mod tracks;
+mod transport;
 
 use egui::accesskit::{Action, ActionData, Role};
 use egui::{
@@ -86,9 +87,11 @@ use egui_pop_model::ids::OwnerId;
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
 
 pub use plugin::{
-    CMD_ADD_CLIP, CMD_ADD_MARKER, CMD_MOVE_CLIP, CMD_PAUSE, CMD_PLAY, CMD_REMOVE_CLIP,
-    CMD_REMOVE_MARKER, CMD_RIPPLE_DELETE, CMD_SELECT_CLIPS, CMD_SET_RANGE, CMD_SET_TIME,
-    CMD_SPLIT_CLIP, CMD_TRIM_CLIP, PLUGIN, TimelinePlugin, Timelines, describe,
+    CMD_ADD_CLIP, CMD_ADD_MARKER, CMD_GO_TO_END, CMD_GO_TO_START, CMD_MOVE_CLIP, CMD_PAUSE,
+    CMD_PLAY, CMD_REMOVE_CLIP, CMD_REMOVE_MARKER, CMD_RIPPLE_DELETE, CMD_SELECT_CLIPS,
+    CMD_SET_RANGE, CMD_SET_TIME, CMD_SHUTTLE_BACKWARD, CMD_SHUTTLE_FORWARD, CMD_SPLIT_CLIP,
+    CMD_STEP_BACKWARD, CMD_STEP_FORWARD, CMD_TOGGLE_LOOP, CMD_TOGGLE_PLAY, CMD_TRIM_CLIP, PLUGIN,
+    TimelinePlugin, Timelines, describe,
 };
 pub use ruler::{Snapped, Ticks};
 pub use scale::{FrameRate, Tempo, TimeScale};
@@ -100,6 +103,7 @@ pub use tracks::{
     Clip, ClipEdge, ClipError, ClipMove, ClipPaint, ClipPainter, ClipPlace, ClipSpan, PlainClips,
     Track,
 };
+pub use transport::{Transport, TransportButton, TransportOutput};
 
 use crate::strings as txt;
 
@@ -108,6 +112,33 @@ pub const SURFACE: &str = "timeline";
 /// How near, in points, a time is pulled to a marker, the playhead or a
 /// range's end.
 pub const SNAP_REACH: f32 = 8.0;
+/// How much of a drag's own speed a nudge adds to playing
+/// ([`Timeline::nudge_on_drag`]).
+pub const NUDGE_GAIN: f64 = 0.25;
+
+/// How the view follows the playhead ([`Timeline::follow_mode`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum Follow {
+    /// The view stays where the user puts it.
+    Off,
+    /// While it plays, the view turns a page when the playhead leaves it
+    /// (editors' habit).
+    #[default]
+    Page,
+    /// The playhead stays at this fraction of the width (0.5 the middle, a
+    /// third `1.0 / 3.0`), playing or not, and the content scrolls under
+    /// it (DJ decks' habit). The view may then reach past the bounds. A
+    /// drag moves the content (the playhead with it, relative to where the
+    /// drag began), a click on the ruler or the lanes moves the playhead
+    /// there, the wheel steps it by a unit (onto the grid) while paused,
+    /// and zooming keeps it in place.
+    Fixed(f32),
+}
+
+impl Follow {
+    /// The playhead in the middle.
+    pub const CENTRE: Follow = Follow::Fixed(0.5);
+}
 
 /// What a timeline snaps to; Alt held snaps to nothing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -152,6 +183,16 @@ enum Op {
     Play(f64),
     Pause,
     Shuttle(bool),
+    /// One unit (or a bigger step) forward or back, pausing.
+    Step {
+        forward: bool,
+        big: bool,
+    },
+    /// The bounds' start.
+    Home,
+    /// The bounds' end.
+    End,
+    ToggleLoop,
     SetRange(Option<TimeRange>),
     SetLoop(bool),
     AddMarker(Marker),
@@ -216,6 +257,20 @@ fn apply(state: &mut TimelineState, op: Op) -> Applied {
         Op::Play(speed) => state.play_at(speed),
         Op::Pause => state.pause(),
         Op::Shuttle(forward) => state.shuttle(forward),
+        Op::Step { forward, big } => {
+            let by = state.scale.step(big);
+            state.step_by(if forward { by } else { -by });
+        }
+        Op::Home => {
+            state.set_playhead(state.home());
+        }
+        Op::End => {
+            state.set_playhead(state.end());
+        }
+        Op::ToggleLoop => {
+            state.looping = !state.looping;
+            done.edits.push(Edit::LoopSet(state.looping));
+        }
         Op::SetRange(range) => {
             let to = range.map(|r| TimeRange::new(state.clamp(r.start), state.clamp(r.end)));
             if to != state.range {
@@ -458,6 +513,13 @@ enum Drag {
         start: f64,
         x: f32,
     },
+    /// The content dragged under the playhead, or nudged while playing:
+    /// the time the drag puts the playhead at (unsnapped) and the pointer's
+    /// last x.
+    Content {
+        at: f64,
+        last: f32,
+    },
     Marker {
         id: u64,
         from: f64,
@@ -485,6 +547,8 @@ struct Memory {
     text: Option<String>,
     /// The clips a drag moves, as they were when it began.
     moving: Vec<tracks::Origin>,
+    /// Wheel lines not yet stepped ([`Follow::Fixed`]).
+    wheel: f32,
 }
 
 /// A timeline drawn over a [`TimelineState`] the application keeps.
@@ -500,7 +564,9 @@ pub struct Timeline<'a> {
     history: Option<String>,
     surface: &'a str,
     take_focus: bool,
-    follow: bool,
+    follow: Follow,
+    scrub_on_drag: bool,
+    nudge_on_drag: bool,
     track_height: Option<f32>,
     painter: Option<&'a mut dyn ClipPainter>,
 }
@@ -555,7 +621,9 @@ impl<'a> Timeline<'a> {
             history: None,
             surface: SURFACE,
             take_focus: false,
-            follow: true,
+            follow: Follow::Page,
+            scrub_on_drag: false,
+            nudge_on_drag: false,
             track_height: None,
             painter: None,
         }
@@ -621,9 +689,38 @@ impl<'a> Timeline<'a> {
         self
     }
 
-    /// While it plays, the view follows the playhead (on by default).
+    /// While it plays, the view follows the playhead a page at a time (on
+    /// by default): [`Follow::Page`], else [`Follow::Off`].
     pub fn follow(mut self, on: bool) -> Self {
-        self.follow = on;
+        self.follow = if on { Follow::Page } else { Follow::Off };
+        self
+    }
+
+    /// How the view follows the playhead ([`Follow::Page`] by default);
+    /// [`Follow::Fixed`] keeps the playhead in place and scrolls the content
+    /// under it.
+    pub fn follow_mode(mut self, follow: Follow) -> Self {
+        self.follow = follow;
+        self
+    }
+
+    /// A drag on a clip scrubs as a drag on the lanes does, instead of
+    /// moving or trimming it (off by default): the clips are locked to the
+    /// pointer, still selected by a click. With [`Follow::Fixed`], the
+    /// content follows the pointer and the playhead stays.
+    pub fn scrub_on_drag(mut self, on: bool) -> Self {
+        self.scrub_on_drag = on;
+        self
+    }
+
+    /// While it plays, a drag on the ruler or the lanes (and the clips with
+    /// [`scrub_on_drag`](Self::scrub_on_drag)) nudges instead of scrubbing
+    /// (off by default): it adds [`NUDGE_GAIN`] of its own speed to the
+    /// playing, dragging the content forward (to the left) speeding up and
+    /// back slowing down, as a jog wheel's edge does; released, the playing
+    /// goes on at its speed. Play and speed are not changed.
+    pub fn nudge_on_drag(mut self, on: bool) -> Self {
+        self.nudge_on_drag = on;
         self
     }
 
@@ -667,9 +764,16 @@ impl<'a> Timeline<'a> {
             surface: _,
             take_focus,
             follow,
+            scrub_on_drag,
+            nudge_on_drag,
             track_height,
             painter: clip_painter,
         } = self;
+        let anchor = match follow {
+            Follow::Fixed(at) if at.is_finite() => Some(f64::from(at.clamp(0.0, 1.0))),
+            _ => None,
+        };
+        let fixed = anchor.is_some();
         let ctx = ui.ctx().clone();
         let tk = TimelineTokens::of(&ctx);
         let key = match &id {
@@ -742,27 +846,60 @@ impl<'a> Timeline<'a> {
                 .x
         };
 
-        state.view = state.fit_view(state.view);
+        state.view = match anchor {
+            Some(at) => fixed_view(state, at),
+            None => state.fit_view(state.view),
+        };
         let view_before = state.view;
         let enabled = ui.is_enabled();
-        let (hover, mods, zoom, scroll, press, primary_pressed, middle_down) = ui.input(|i| {
-            (
-                i.pointer.interact_pos(),
-                i.modifiers,
-                i.zoom_delta(),
-                i.smooth_scroll_delta,
-                i.pointer.press_origin(),
-                i.pointer.primary_pressed(),
-                i.pointer.button_down(PointerButton::Middle),
-            )
-        });
+        let line = ctx.options(|o| o.input_options.line_scroll_speed);
+        let (hover, mods, zoom, scroll, press, primary_pressed, middle_down, lines) =
+            ui.input(|i| {
+                (
+                    i.pointer.interact_pos(),
+                    i.modifiers,
+                    i.zoom_delta(),
+                    i.smooth_scroll_delta,
+                    i.pointer.press_origin(),
+                    i.pointer.primary_pressed(),
+                    i.pointer.button_down(PointerButton::Middle),
+                    wheel_lines(i, line),
+                )
+            });
         let time_at = |view: &TimeView, x: f32| view.time_at(x - rect.left(), width);
 
         // Zoom and pan by the wheel and pinch (over a clip too).
         if enabled && (response.hovered() || ui.rect_contains_pointer(rect)) {
             if zoom != 1.0 {
-                let at = hover.map_or(state.playhead, |p| time_at(&state.view, p.x));
+                let at = match anchor {
+                    Some(_) => state.playhead,
+                    None => hover.map_or(state.playhead, |p| time_at(&state.view, p.x)),
+                };
                 state.view = state.fit_view(state.view.zoomed(f64::from(zoom), at));
+                if let Some(at) = anchor {
+                    state.view = fixed_view(state, at);
+                }
+            } else if fixed {
+                // The view is the playhead's: the wheel steps it, paused.
+                ui.input_mut(|i| i.smooth_scroll_delta = egui::Vec2::ZERO);
+                if state.is_playing() {
+                    mem.wheel = 0.0;
+                } else {
+                    mem.wheel += lines;
+                    let n = mem.wheel.trunc();
+                    mem.wheel -= n;
+                    if n != 0.0 {
+                        // Wheel up goes back, as panning does.
+                        let unit = state.scale.step(false);
+                        let from = if mods.alt {
+                            state.playhead
+                        } else {
+                            state.scale.round_to(state.playhead, unit)
+                        };
+                        let t = from - f64::from(n) * unit;
+                        pass.run(&ctx, state, &mut mem, Op::SetTime(t), &Origin::User);
+                    }
+                }
             } else if scroll.x != 0.0 || scroll.y != 0.0 {
                 let per_point = state.view.duration / f64::from(width);
                 state.view.start -= f64::from(scroll.x + scroll.y) * per_point;
@@ -784,22 +921,58 @@ impl<'a> Timeline<'a> {
                 response.request_focus();
             }
             let pressed_here = primary_pressed && response.is_pointer_button_down_on();
-            if pressed_here && !mods.shift && !mods.command && !mods.ctrl {
+            let plain = !mods.shift && !mods.command && !mods.ctrl;
+            if pressed_here && plain {
                 response.request_focus();
                 // A press on the lanes, off the clips, lets them go.
                 if hover.is_some_and(|p| lanes_rect.contains(p)) {
                     state.selected_clips.clear();
                 }
-                if let Some(p) = hover {
+                // It moves the playhead there, unless the content is dragged
+                // under a fixed playhead or nudged (a click does then).
+                if let Some(p) = hover
+                    && !fixed
+                    && !(nudge_on_drag && state.is_playing())
+                {
                     let t = snapper(state, ticks, time_at(&state.view, p.x), None, true);
                     pass.run(&ctx, state, &mut mem, Op::SetTime(t), &Origin::User);
                 }
             } else if pressed_here {
                 response.request_focus();
             }
+            if response.clicked()
+                && plain
+                && (fixed || (nudge_on_drag && state.is_playing()))
+                && let Some(p) = hover
+            {
+                let t = snapper(state, ticks, time_at(&state.view, p.x), None, true);
+                pass.run(&ctx, state, &mut mem, Op::SetTime(t), &Origin::User);
+            }
             if response.drag_started() {
                 let origin_x = press.map_or(rect.center().x, |p| p.x);
-                mem.drag = if middle_down || mods.command || mods.ctrl {
+                let pan = middle_down || mods.command || mods.ctrl;
+                mem.drag = if fixed
+                    || (nudge_on_drag && state.is_playing() && plain && !middle_down)
+                {
+                    if mods.shift && !pan {
+                        Drag::Range {
+                            anchor: snapper(
+                                state,
+                                ticks,
+                                time_at(&state.view, origin_x),
+                                None,
+                                false,
+                            ),
+                        }
+                    } else {
+                        // The content follows the pointer: panning a fixed
+                        // view moves the playhead too.
+                        Drag::Content {
+                            at: state.playhead,
+                            last: origin_x,
+                        }
+                    }
+                } else if pan {
                     Drag::Pan {
                         start: state.view.start,
                         x: origin_x,
@@ -829,6 +1002,23 @@ impl<'a> Timeline<'a> {
                         scrubbing = true;
                         let t = snapper(state, ticks, time_at(&state.view, p.x), None, true);
                         pass.run(&ctx, state, &mut mem, Op::SetTime(t), &Origin::User);
+                    }
+                    Drag::Content { at, last } => {
+                        let per_point = state.view.duration / f64::from(width);
+                        let by = -f64::from(p.x - last) * per_point;
+                        scrubbing = drag_content(
+                            &ctx,
+                            state,
+                            &mut pass,
+                            &mut mem,
+                            ContentDrag {
+                                at,
+                                by,
+                                x: p.x,
+                                nudge: nudge_on_drag,
+                            },
+                            |state, t| snapper(state, ticks, t, None, true),
+                        );
                     }
                     Drag::None | Drag::Marker { .. } | Drag::Clips { .. } | Drag::Trim { .. } => {}
                 }
@@ -946,11 +1136,14 @@ impl<'a> Timeline<'a> {
                 let track = state.tracks[hit.row].name.clone();
                 let name = clip_name(&ctx, state, &clip, &track);
                 let selected = state.selected_clips.contains(&hit.id);
-                let r = ui.interact(
-                    hit.visible,
-                    key.with(("clip", hit.id)),
-                    Sense::click_and_drag(),
-                );
+                // Locked to the pointer, a clip lets its drags through to the
+                // lanes (a scrub).
+                let sense = if scrub_on_drag {
+                    Sense::click()
+                } else {
+                    Sense::click_and_drag()
+                };
+                let r = ui.interact(hit.visible, key.with(("clip", hit.id)), sense);
                 r.widget_info(|| egui::WidgetInfo::selected(Role::Button, true, selected, &name));
                 if r.hovered() {
                     hovered_clip = Some(hit.id);
@@ -1065,8 +1258,13 @@ impl<'a> Timeline<'a> {
                     mem.drag = Drag::None;
                     mem.moving.clear();
                 }
-                // Its edges, over it.
-                for (edge, handle) in hit.handles() {
+                // Its edges, over it (none when locked).
+                let handles = if scrub_on_drag {
+                    Vec::new()
+                } else {
+                    hit.handles()
+                };
+                for (edge, handle) in handles {
                     let h = ui.interact(
                         handle,
                         key.with(("clip-edge", hit.id, edge)),
@@ -1191,8 +1389,11 @@ impl<'a> Timeline<'a> {
             }
         }
 
-        // Playing, the view follows the playhead a page at a time.
-        if follow
+        // The view follows the playhead: kept in place, or a page at a time
+        // while it plays.
+        if let Some(at) = anchor {
+            state.view = fixed_view(state, at);
+        } else if follow == Follow::Page
             && state.is_playing()
             && mem.drag == Drag::None
             && !state.view.contains(state.playhead)
@@ -1290,6 +1491,82 @@ impl<'a> Timeline<'a> {
     }
 }
 
+/// The view of a [`Follow::Fixed`] timeline: the playhead at `at` of its
+/// width, the duration within the zoom limits.
+fn fixed_view(state: &TimelineState, at: f64) -> TimeView {
+    let duration = state.fit_view(state.view).duration;
+    TimeView::new(state.playhead - at * duration, duration)
+}
+
+/// The wheel's motion this pass, in lines (a notch is one), Ctrl's
+/// (zooming) left out.
+fn wheel_lines(i: &egui::InputState, line: f32) -> f32 {
+    i.events
+        .iter()
+        .filter_map(|e| match e {
+            Event::MouseWheel {
+                unit,
+                delta,
+                modifiers,
+                ..
+            } if !modifiers.command && !modifiers.ctrl => {
+                let d = delta.x + delta.y;
+                Some(match unit {
+                    egui::MouseWheelUnit::Point => d / line.max(1.0),
+                    egui::MouseWheelUnit::Line | egui::MouseWheelUnit::Page => d,
+                })
+            }
+            _ => None,
+        })
+        .sum()
+}
+
+/// A pass of a content drag.
+struct ContentDrag {
+    /// Where the drag puts the playhead so far, unsnapped.
+    at: f64,
+    /// The seconds the pointer moved the content by (forward positive).
+    by: f64,
+    /// The pointer's x.
+    x: f32,
+    /// Playing, a nudge rather than a scrub.
+    nudge: bool,
+}
+
+/// Moves the playhead by a content drag: paused, with the content (snapped,
+/// whether it scrubs is answered); playing, by the drag's motion, a
+/// [`NUDGE_GAIN`] of it when nudging.
+fn drag_content(
+    ctx: &egui::Context,
+    state: &mut TimelineState,
+    pass: &mut Pass<'_>,
+    mem: &mut Memory,
+    d: ContentDrag,
+    snap: impl Fn(&TimelineState, f64) -> f64,
+) -> bool {
+    let inside = |state: &TimelineState, t: f64| state.bounds.map_or(t, |b| b.clamp(t));
+    if state.is_playing() {
+        // Not quantized, as playing is not.
+        let gain = if d.nudge { NUDGE_GAIN } else { 1.0 };
+        let to = inside(state, state.playhead + d.by * gain);
+        if to != state.playhead {
+            state.playhead = to;
+            pass.moved = true;
+        }
+        mem.drag = Drag::Content {
+            at: state.playhead,
+            last: d.x,
+        };
+        false
+    } else {
+        let at = inside(state, d.at + d.by);
+        let t = snap(state, at);
+        pass.run(ctx, state, mem, Op::SetTime(t), &Origin::User);
+        mem.drag = Drag::Content { at, last: d.x };
+        true
+    }
+}
+
 /// Runs a key's act.
 fn key_run(
     ctx: &egui::Context,
@@ -1306,18 +1583,17 @@ fn key_run(
         KeyAct::Toggle => run(state, mem, Op::Toggle),
         KeyAct::Pause => run(state, mem, Op::Pause),
         KeyAct::Shuttle(forward) => run(state, mem, Op::Shuttle(forward)),
-        KeyAct::Step(sign, big) => {
-            let by = sign * state.scale.step(big);
-            run(state, mem, Op::StepBy(by));
-        }
-        KeyAct::Home => {
-            let t = state.home();
-            run(state, mem, Op::SetTime(t));
-        }
-        KeyAct::End => {
-            let t = state.end();
-            run(state, mem, Op::SetTime(t));
-        }
+        // The same ops as the transport's commands.
+        KeyAct::Step(sign, big) => run(
+            state,
+            mem,
+            Op::Step {
+                forward: sign > 0.0,
+                big,
+            },
+        ),
+        KeyAct::Home => run(state, mem, Op::Home),
+        KeyAct::End => run(state, mem, Op::End),
         KeyAct::In => {
             let r = state.in_at(state.playhead);
             run(state, mem, Op::SetRange(Some(r)));
@@ -1333,10 +1609,7 @@ fn key_run(
             }
         }
         KeyAct::ClearRange => run(state, mem, Op::SetRange(None)),
-        KeyAct::ToggleLoop => {
-            let on = !state.looping;
-            run(state, mem, Op::SetLoop(on));
-        }
+        KeyAct::ToggleLoop => run(state, mem, Op::ToggleLoop),
         KeyAct::AddMarker => {
             let label = new_marker_label(ctx, state);
             let m = Marker::new(0, state.playhead, label);

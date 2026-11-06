@@ -12,8 +12,8 @@ use egui_pop_api::{App, history};
 use egui_pop_core::lock;
 use egui_pop_model::commands::Origin;
 use egui_pop_views::timeline::{
-    Clip, ClipPaint, Edit, Marker, MarkerKind, PlayState, TimeRange, TimeScale, Timeline,
-    TimelinePlugin, TimelineState, Timelines, Track,
+    Clip, ClipPaint, Edit, Follow, Marker, MarkerKind, NUDGE_GAIN, PlayState, TimeRange, TimeScale,
+    Timeline, TimelinePlugin, TimelineState, Timelines, Track, Transport,
 };
 use serde_json::{Value, json};
 
@@ -677,4 +677,250 @@ fn agents_add_move_trim_select_and_remove_clips() {
             "Remove clips"
         ]
     );
+}
+
+/// What a deck test keeps: a timeline with its playhead fixed in the
+/// middle, its clips locked to the pointer, nudged while it plays.
+struct Deck {
+    tl: TimelineState,
+    moved: bool,
+}
+
+/// Thirty seconds at 120 BPM (a beat is half a second), one clip over all
+/// of it, eight seconds in view, the playhead at 10 s.
+fn deck() -> Harness<'static, Deck> {
+    let mut tl = TimelineState::new(TimeScale::beats(120.0), 30.0);
+    let t = tl.add_track(Track::new(0, "Deck"));
+    tl.add_clip(t, Clip::new(0, 0.0, 30.0, "Song")).unwrap();
+    tl.view = egui_pop_views::timeline::TimeView::new(0.0, 8.0);
+    tl.playhead = 10.0;
+    let mut h = Harness::builder()
+        .with_size(vec2(800.0, 160.0))
+        .build_ui_state(
+            |ui, k: &mut Deck| {
+                let out = Timeline::new(&mut k.tl)
+                    .id("deck")
+                    .follow_mode(Follow::CENTRE)
+                    .scrub_on_drag(true)
+                    .nudge_on_drag(true)
+                    .show(ui);
+                k.moved |= out.playhead_moved;
+            },
+            Deck { tl, moved: false },
+        );
+    h.run();
+    h
+}
+
+/// The timeline's rect and its seconds per point.
+fn deck_rect(h: &Harness<'_, Deck>) -> (egui::Rect, f64) {
+    let rect = h.get_by_role_and_label(Role::Slider, "Timeline").rect();
+    (rect, h.state().tl.view.duration / f64::from(rect.width()))
+}
+
+#[test]
+fn a_fixed_playhead_stays_in_the_middle_and_a_drag_moves_the_content() {
+    let mut h = deck();
+    let (rect, per_point) = deck_rect(&h);
+    // The playhead in the middle, the view around it.
+    assert_eq!(h.state().tl.view.start, 6.0);
+    // A drag on the (locked) clip, 100 points to the left: the content
+    // follows the pointer, the playhead moves on with it.
+    let y = rect.bottom() - 10.0;
+    let x = rect.center().x + 50.0;
+    h.drag_at(Pos2::new(x, y));
+    h.run();
+    assert_eq!(h.state().tl.playhead, 10.0, "a press does not move it");
+    for dx in [-50.0, -100.0] {
+        h.hover_at(Pos2::new(x + dx, y));
+        h.run();
+    }
+    h.drop_at(Pos2::new(x - 100.0, y));
+    h.run();
+    let want = 10.0 + 100.0 * per_point;
+    let t = h.state().tl.playhead;
+    assert!((t - want).abs() < 0.1, "{t} vs {want}");
+    assert_eq!(h.state().tl.view.start, t - 4.0, "still in the middle");
+    // The clip did not move.
+    let c = h.state().tl.clip(1).unwrap();
+    assert_eq!((c.start, c.length), (0.0, 30.0));
+    // A click on the ruler moves the playhead there.
+    let at = h.state().tl.view.start + 2.0;
+    let p = Pos2::new(rect.left() + (2.0 / per_point) as f32, rect.top() + 4.0);
+    h.drag_at(p);
+    h.run();
+    h.drop_at(p);
+    h.run();
+    assert!((h.state().tl.playhead - at).abs() < 0.1);
+}
+
+#[test]
+fn a_drag_while_playing_nudges_and_lets_the_speed_be() {
+    let mut h = deck();
+    h.state_mut().tl.play_at(1.0);
+    h.run();
+    let (rect, per_point) = deck_rect(&h);
+    let (y, x) = (rect.bottom() - 10.0, rect.center().x);
+    h.drag_at(Pos2::new(x, y));
+    h.run();
+    assert_eq!(h.state().tl.playhead, 10.0);
+    for dx in [-40.0, -80.0] {
+        h.hover_at(Pos2::new(x + dx, y));
+        h.run();
+    }
+    // Dragged forward: a quarter of the drag added to the playing.
+    let nudged = 10.0 + 80.0 * per_point * NUDGE_GAIN;
+    assert!((h.state().tl.playhead - nudged).abs() < 1e-6);
+    // Dragged back: slowed down.
+    h.hover_at(Pos2::new(x, y));
+    h.run();
+    assert!((h.state().tl.playhead - 10.0).abs() < 1e-6);
+    h.drop_at(Pos2::new(x, y));
+    h.run();
+    let tl = &h.state().tl;
+    assert_eq!((tl.play, tl.speed), (PlayState::Playing, 1.0));
+    assert!(h.state().moved);
+}
+
+#[test]
+fn the_wheel_steps_a_paused_fixed_playhead_by_beats() {
+    let mut h = deck();
+    h.state_mut().tl.playhead = 10.2;
+    h.run();
+    let (rect, _) = deck_rect(&h);
+    h.hover_at(rect.center());
+    h.run();
+    let wheel = |h: &mut Harness<'_, Deck>, lines: f32| {
+        h.event(Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, lines),
+            modifiers: Modifiers::NONE,
+            phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Wheel,
+        });
+        h.run();
+    };
+    // Down a notch: onto the beat, then the next one.
+    wheel(&mut h, -1.0);
+    assert_eq!(h.state().tl.playhead, 10.5);
+    wheel(&mut h, 2.0);
+    assert_eq!(h.state().tl.playhead, 9.5);
+    // Playing, the wheel leaves it.
+    h.state_mut().tl.play_at(1.0);
+    wheel(&mut h, -1.0);
+    assert_eq!(h.state().tl.playhead, 9.5);
+}
+
+/// A transport over the timeline `song`, through the commands with an
+/// application, else directly.
+fn transport(with_app: bool) -> Harness<'static, Kept> {
+    let mut h = Harness::builder()
+        .with_size(vec2(800.0, 200.0))
+        .build_ui_state(
+            |ui, k: &mut Kept| {
+                if k.with_app {
+                    let app = k.app.get_or_insert_with(|| {
+                        App::builder()
+                            .plugin(TimelinePlugin)
+                            .build(ui.ctx())
+                            .unwrap()
+                    });
+                    app.logic(ui.ctx());
+                    Transport::new(&mut k.tl)
+                        .app(app.handle())
+                        .timeline("song")
+                        .show(ui);
+                    Timeline::new(&mut k.tl)
+                        .id("song")
+                        .app(app.handle())
+                        .history("doc/song")
+                        .show(ui);
+                } else {
+                    Transport::new(&mut k.tl).show(ui);
+                    Timeline::new(&mut k.tl).id("song").show(ui);
+                }
+            },
+            Kept {
+                tl: song(),
+                app: None,
+                with_app,
+                edits: Vec::new(),
+            },
+        );
+    h.run();
+    h
+}
+
+fn click(h: &mut Harness<'_, Kept>, button: &str) {
+    h.get_by_role_and_label(Role::Button, button).click();
+    h.run();
+    h.run();
+}
+
+#[test]
+fn each_transport_button_runs_its_keys_command() {
+    for with_app in [true, false] {
+        let mut h = transport(with_app);
+        let tl = |h: &Harness<'_, Kept>| {
+            let t = &h.state().tl;
+            (t.playhead, t.play, t.speed)
+        };
+        click(&mut h, "Step forward");
+        assert_eq!(tl(&h).0, 10.04, "a frame on");
+        click(&mut h, "Step back");
+        click(&mut h, "Step back");
+        assert_eq!(tl(&h).0, 9.96);
+        click(&mut h, "Go to end");
+        assert_eq!(tl(&h).0, 60.0);
+        click(&mut h, "Go to start");
+        assert_eq!(tl(&h).0, 0.0);
+        click(&mut h, "Play");
+        assert_eq!(tl(&h), (0.0, PlayState::Playing, 1.0));
+        // Playing, the button pauses.
+        click(&mut h, "Pause");
+        assert_eq!(tl(&h).1, PlayState::Paused);
+        click(&mut h, "Play backward");
+        click(&mut h, "Play backward");
+        assert_eq!(tl(&h), (0.0, PlayState::Playing, -2.0));
+        assert!(
+            h.get_by_role_and_label(Role::Button, "Play backward")
+                .accesskit_node()
+                .toggled()
+                == Some(egui::accesskit::Toggled::True)
+        );
+        click(&mut h, "Stop");
+        assert_eq!(tl(&h), (0.0, PlayState::Paused, 1.0));
+        click(&mut h, "Loop");
+        assert!(h.state().tl.looping);
+        if with_app {
+            // Ctrl+L's step of the history.
+            let app = h.state().app.as_ref().unwrap().handle().clone();
+            assert_eq!(undo_steps(&app), ["Loop the range"]);
+        }
+        click(&mut h, "Loop");
+        assert!(!h.state().tl.looping);
+    }
+}
+
+#[test]
+fn the_transport_commands_are_the_keys() {
+    let mut h = harness(song(), true);
+    let app = h.state().app.as_ref().unwrap().handle().clone();
+    let run = |h: &mut Harness<'_, Kept>, id: &str| {
+        let args = json!({ "timeline": "song" });
+        let f = app.debug_call("commands", "run", &json!({ "id": id, "args": args }));
+        assert!(f.ok, "{id}: {f:?}");
+        h.run();
+    };
+    run(&mut h, "timeline.shuttle_forward");
+    run(&mut h, "timeline.shuttle_forward");
+    assert_eq!(h.state().tl.speed, 2.0);
+    run(&mut h, "timeline.toggle_play");
+    assert_eq!(h.state().tl.play, PlayState::Paused);
+    run(&mut h, "timeline.step_backward");
+    assert_eq!(h.state().tl.playhead, 9.96);
+    run(&mut h, "timeline.go_to_end");
+    assert_eq!(h.state().tl.playhead, 60.0);
+    run(&mut h, "timeline.toggle_loop");
+    assert!(h.state().tl.looping);
 }

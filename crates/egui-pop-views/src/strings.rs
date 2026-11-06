@@ -313,6 +313,22 @@ pub const TIMELINE_RIPPLE_DELETE: StrKey =
     StrKey::new("egui-pop-views-timeline-ripple-delete", "Ripple delete");
 /// The speed shown beside the playhead while shuttling: `2×`, `-4×`.
 pub const TIMELINE_SPEED: StrKey = StrKey::new("egui-pop-views-timeline-speed", "{ $speed }×");
+/// A timeline transport's buttons, their accessible names.
+pub const TRANSPORT_START: StrKey = StrKey::new("egui-pop-views-transport-start", "Go to start");
+pub const TRANSPORT_STEP_BACK: StrKey =
+    StrKey::new("egui-pop-views-transport-step-back", "Step back");
+pub const TRANSPORT_PLAY_BACKWARD: StrKey =
+    StrKey::new("egui-pop-views-transport-play-backward", "Play backward");
+pub const TRANSPORT_STOP: StrKey = StrKey::new("egui-pop-views-transport-stop", "Stop");
+pub const TRANSPORT_PLAY: StrKey = StrKey::new("egui-pop-views-transport-play", "Play");
+pub const TRANSPORT_PAUSE: StrKey = StrKey::new("egui-pop-views-transport-pause", "Pause");
+pub const TRANSPORT_STEP_FORWARD: StrKey =
+    StrKey::new("egui-pop-views-transport-step-forward", "Step forward");
+pub const TRANSPORT_END: StrKey = StrKey::new("egui-pop-views-transport-end", "Go to end");
+pub const TRANSPORT_LOOP: StrKey = StrKey::new("egui-pop-views-transport-loop", "Loop");
+/// A transport button's tooltip: what it does and its keys.
+pub const TRANSPORT_KEYS: StrKey =
+    StrKey::new("egui-pop-views-transport-keys", "{ $action } ({ $keys })");
 
 /// Every string the views show, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
@@ -421,6 +437,16 @@ pub const ALL: &[StrKey] = &[
     TIMELINE_LOOP_ON,
     TIMELINE_LOOP_OFF,
     TIMELINE_SPEED,
+    TRANSPORT_START,
+    TRANSPORT_STEP_BACK,
+    TRANSPORT_PLAY_BACKWARD,
+    TRANSPORT_STOP,
+    TRANSPORT_PLAY,
+    TRANSPORT_PAUSE,
+    TRANSPORT_STEP_FORWARD,
+    TRANSPORT_END,
+    TRANSPORT_LOOP,
+    TRANSPORT_KEYS,
     TIMELINE_CLIP,
     TIMELINE_ADD_CLIP,
     TIMELINE_MOVE_CLIP,
