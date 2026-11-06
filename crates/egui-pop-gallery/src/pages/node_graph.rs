@@ -317,6 +317,7 @@ impl Pipeline {
             } => {
                 self.values.insert((node.clone(), param.clone()), *to);
             }
+            _ => {}
         }
     }
 }

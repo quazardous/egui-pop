@@ -128,7 +128,8 @@ fn graph_panel(ui: &mut egui::Ui, graph: &mut Pipeline, state: &mut GraphState) 
                 graph.nodes.retain(|n| !nodes.contains(&n.id));
                 graph.edges.retain(|e| !edges.contains(e));
             }
-            Edit::Add { .. } | Edit::Param { .. } => {}
+            // Adding nodes, parameters, and edits to come.
+            _ => {}
         }
     }
     // The minimap shares the editor's state, like the image navigator.

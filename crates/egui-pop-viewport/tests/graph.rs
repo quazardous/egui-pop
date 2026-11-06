@@ -87,6 +87,7 @@ impl Pipeline {
             }
             Edit::Add { .. } => {}
             Edit::Param { to, .. } => self.radius = *to,
+            _ => {}
         }
     }
 }
