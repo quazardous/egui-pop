@@ -71,6 +71,7 @@
 - [Scrolling survey](scrolling-survey.md)
 - [Web survey](web-survey.md)
 - [Video survey](video-survey.md)
+- [Graph wires survey](graph-wires-survey.md)
 - [API stability](stability.md)
 - [Changesets and releases](releasing.md)
 - [How quality is held](quality.md)
