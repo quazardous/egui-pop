@@ -10,6 +10,7 @@ use egui::{
 use egui_pop::api::AppHandle;
 use egui_pop::core::icon::{Icon, IconWidget, Size};
 use egui_pop::core::sections::{Section, Sections};
+use egui_pop::core::ui::UiPop as _;
 use egui_pop::prelude::*;
 use egui_pop::views::Mode;
 use egui_pop::views::plot::{Plot, Series};
@@ -835,72 +836,72 @@ pub fn logs(ui: &mut Ui, m: &mut Model) {
         );
     }
     let mut clicked = None;
-    egui::ScrollArea::vertical()
+    let area = egui::ScrollArea::vertical()
         .id_salt("rerun.logs")
         .auto_shrink([false, false])
-        .stick_to_bottom(true)
-        .show_rows(ui, row_h, lines.len(), |ui, range| {
-            for line in &lines[range] {
-                let (row, r) =
-                    ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
-                named(
-                    &r,
-                    &format!("{} {} {}", line.frame, line.level.name(), line.text),
-                );
-                if r.hovered() {
-                    m.hover(line.entity);
-                }
-                if r.clicked() {
-                    clicked = Some(line.entity);
-                }
-                let p = ui.painter();
-                match m.emphasis(line.entity) {
-                    Emphasis::Selected => {
-                        p.rect_filled(row, 0.0, t.accent.subtle);
-                    }
-                    Emphasis::Hovered => {
-                        p.rect_filled(row, 0.0, t.surface.hover);
-                    }
-                    Emphasis::None => {}
-                }
-                let level = match line.level {
-                    Level::Trace => t.palette.log.trace,
-                    Level::Debug => t.palette.log.debug,
-                    Level::Info => t.palette.log.info,
-                    Level::Warn => t.palette.log.warn,
-                    Level::Error => t.palette.log.error,
-                };
-                let y = row.center().y;
-                p.text(
-                    pos2(row.left() + cols[0], y),
-                    Align2::LEFT_CENTER,
-                    line.frame.to_string(),
-                    mono.clone(),
-                    t.text.muted,
-                );
-                p.text(
-                    pos2(row.left() + cols[1], y),
-                    Align2::LEFT_CENTER,
-                    line.level.name(),
-                    mono.clone(),
-                    level,
-                );
-                p.text(
-                    pos2(row.left() + cols[2], y),
-                    Align2::LEFT_CENTER,
-                    ENTITIES[line.entity].path,
-                    body.clone(),
-                    t.text.muted,
-                );
-                p.text(
-                    pos2(row.left() + cols[3], y),
-                    Align2::LEFT_CENTER,
-                    &line.text,
-                    body.clone(),
-                    t.text.default,
-                );
+        .stick_to_bottom(true);
+    ui.scroll_area_rows(area, row_h, lines.len(), |ui, range| {
+        for line in &lines[range] {
+            let (row, r) =
+                ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
+            named(
+                &r,
+                &format!("{} {} {}", line.frame, line.level.name(), line.text),
+            );
+            if r.hovered() {
+                m.hover(line.entity);
             }
-        });
+            if r.clicked() {
+                clicked = Some(line.entity);
+            }
+            let p = ui.painter();
+            match m.emphasis(line.entity) {
+                Emphasis::Selected => {
+                    p.rect_filled(row, 0.0, t.accent.subtle);
+                }
+                Emphasis::Hovered => {
+                    p.rect_filled(row, 0.0, t.surface.hover);
+                }
+                Emphasis::None => {}
+            }
+            let level = match line.level {
+                Level::Trace => t.palette.log.trace,
+                Level::Debug => t.palette.log.debug,
+                Level::Info => t.palette.log.info,
+                Level::Warn => t.palette.log.warn,
+                Level::Error => t.palette.log.error,
+            };
+            let y = row.center().y;
+            p.text(
+                pos2(row.left() + cols[0], y),
+                Align2::LEFT_CENTER,
+                line.frame.to_string(),
+                mono.clone(),
+                t.text.muted,
+            );
+            p.text(
+                pos2(row.left() + cols[1], y),
+                Align2::LEFT_CENTER,
+                line.level.name(),
+                mono.clone(),
+                level,
+            );
+            p.text(
+                pos2(row.left() + cols[2], y),
+                Align2::LEFT_CENTER,
+                ENTITIES[line.entity].path,
+                body.clone(),
+                t.text.muted,
+            );
+            p.text(
+                pos2(row.left() + cols[3], y),
+                Align2::LEFT_CENTER,
+                &line.text,
+                body.clone(),
+                t.text.default,
+            );
+        }
+    });
     if let Some(e) = clicked {
         m.select(Some(Item::Entity(e)));
     }

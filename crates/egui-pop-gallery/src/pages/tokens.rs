@@ -1,6 +1,7 @@
 //! Every resolved token, by tier.
 
 use egui::Ui;
+use egui_pop::core::ui::UiPop as _;
 use egui_pop::core::widgets;
 use egui_pop::theme::{Tokens, color32};
 use egui_pop::tokens::{Tier, Value};
@@ -57,9 +58,9 @@ pub fn show(ui: &mut Ui, state: &mut State) {
         .collect();
     rows.sort_by_cached_key(|tok| natural_key(&tok.path));
     ui.weak(format!("{} of {} tokens", rows.len(), r.len()));
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
+    ui.scroll_area(
+        egui::ScrollArea::vertical().auto_shrink([false, false]),
+        |ui| {
             egui::Grid::new("tokens.table")
                 .num_columns(5)
                 .striped(true)
@@ -90,7 +91,8 @@ pub fn show(ui: &mut Ui, state: &mut State) {
                         ui.end_row();
                     }
                 });
-        });
+        },
+    );
 }
 
 /// Sort key reading numeric path segments as numbers, so `gray.2` comes

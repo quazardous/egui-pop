@@ -3,6 +3,7 @@
 
 use egui::{Sense, Ui, vec2};
 use egui_pop::core::icon::{self, Icon, Size, Tone};
+use egui_pop::core::ui::UiPop as _;
 use egui_pop::core::widgets;
 use egui_pop::theme::Tokens;
 
@@ -69,9 +70,9 @@ pub fn show(ui: &mut Ui, state: &mut State) {
     section(ui, "Every icon");
     let side = state.size.points(&t);
     let cell = vec2(side.max(t.size.icon_toolbar) * 6.5, side + t.space.m);
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
+    ui.scroll_area(
+        egui::ScrollArea::vertical().auto_shrink([false, false]),
+        |ui| {
             egui::Grid::new("icons.grid")
                 .num_columns(4)
                 .spacing([t.space.l, t.space.s])
@@ -100,5 +101,6 @@ pub fn show(ui: &mut Ui, state: &mut State) {
                         }
                     }
                 });
-        });
+        },
+    );
 }

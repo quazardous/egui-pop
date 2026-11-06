@@ -3,6 +3,7 @@
 //! radio, selectable rows, toggle chips, the combo box's arrow).
 
 use egui::Ui;
+use egui_pop::core::ui::UiPop as _;
 use egui_pop::core::widgets::{self, ToggleChip};
 
 use super::section;
@@ -59,11 +60,12 @@ pub fn playground(ui: &mut Ui, state: &mut State) {
 }
 
 pub fn show(ui: &mut Ui, state: &mut State) {
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
+    ui.scroll_area(
+        egui::ScrollArea::vertical().auto_shrink([false, false]),
+        |ui| {
             ui.add_enabled_ui(state.enabled, |ui| widgets(ui, state));
-        });
+        },
+    );
 }
 
 fn widgets(ui: &mut Ui, state: &mut State) {

@@ -40,6 +40,7 @@ use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::fuzzy::{self, Match};
 use egui_pop_model::ids::{BlockId, CommandId, PluginId};
@@ -460,97 +461,88 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             chosen = hits.get(selected).map(|h| h.entry.command.clone());
         }
         ui.separator();
-        egui::ScrollArea::vertical()
-            .max_height(320.0)
-            .show(ui, |ui| {
-                // Justified, left-aligned: a line without keys keeps its
-                // label at the start, as the others.
-                ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
-                    let kit = Kit::of(ui.ctx());
-                    let row = &kit.command_palette_row;
-                    // egui's margin keeps room for its own border: kept,
-                    // unseen; the kit paints the row's box under it.
-                    let border = ui.visuals().widgets.inactive.bg_stroke.width;
-                    // The commands' icons, and a column for them while
-                    // one of the matches has one.
-                    let icons: Vec<Option<(Icon, String)>> = hits
-                        .iter()
-                        .map(|h| {
-                            let declared = app.command(&h.entry.command)?.icon?;
-                            let name = crate::layout_controls::command_icon(
-                                app,
-                                &h.entry.command,
-                                &declared,
-                            )
-                            .to_string();
-                            Some((IconRef::from(&name).or_placeholder("palette"), name))
-                        })
-                        .collect();
-                    let side = Tokens::of(ui.ctx()).size.icon_inline;
-                    let column = icons.iter().any(Option::is_some);
-                    for (i, h) in hits.iter().enumerate() {
-                        let on = i == selected;
-                        let state = row_state(ui, on);
-                        let under = ui.painter().add(egui::Shape::Noop);
-                        let slot =
-                            egui::Id::unique(("egui_pop_palette_icon", h.entry.command.as_str()));
-                        let label = highlighted(row, state, &h.label, &h.positions);
-                        let mut atoms: Vec<egui::Atom<'_>> = Vec::with_capacity(2);
-                        if column {
-                            atoms.push(egui::Atom::custom(
-                                egui::IdSalt::new(slot),
-                                egui::vec2(side, side),
-                            ));
-                        }
-                        atoms.push(label.into());
-                        let mut b = egui::Button::new(egui::Atoms::from(atoms))
-                            .selected(on)
-                            .frame_when_inactive(on)
-                            .fill(Color32::TRANSPARENT)
-                            .stroke(egui::Stroke::new(border, Color32::TRANSPARENT));
-                        let mut keys = h.entry.keys.first().cloned().unwrap_or_default();
-                        if h.recent && s.query.trim().is_empty() {
-                            keys = if keys.is_empty() {
-                                strings::tr(&ctx, &txt::PALETTE_RECENT)
-                            } else {
-                                strings::tr_args(
-                                    &ctx,
-                                    &txt::PALETTE_RECENT_KEYS,
-                                    &[("keys", &keys)],
-                                )
-                            };
-                        }
-                        if !keys.is_empty() {
-                            let muted = row.style_toned(Tone::Muted, state).text;
-                            b = b.shortcut_text(egui::RichText::new(keys).color(muted));
-                        }
-                        let r = b.atom_ui(ui);
-                        if let (Some(rect), Some((icon, name))) =
-                            (r.rect(egui::IdSalt::new(slot)), &icons[i])
-                        {
-                            icon.paint(ui.painter(), rect, row.style(state).text);
-                            egui_pop_core::icon::registry::record(&ctx, "palette", &h.label, name);
-                        }
-                        let r = r.response;
-                        let part = Part {
-                            rect: r.rect,
-                            room: r.rect,
-                            state,
-                            label: None,
+        ui.scroll_area(egui::ScrollArea::vertical().max_height(320.0), |ui| {
+            // Justified, left-aligned: a line without keys keeps its
+            // label at the start, as the others.
+            ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
+                let kit = Kit::of(ui.ctx());
+                let row = &kit.command_palette_row;
+                // egui's margin keeps room for its own border: kept,
+                // unseen; the kit paints the row's box under it.
+                let border = ui.visuals().widgets.inactive.bg_stroke.width;
+                // The commands' icons, and a column for them while
+                // one of the matches has one.
+                let icons: Vec<Option<(Icon, String)>> = hits
+                    .iter()
+                    .map(|h| {
+                        let declared = app.command(&h.entry.command)?.icon?;
+                        let name =
+                            crate::layout_controls::command_icon(app, &h.entry.command, &declared)
+                                .to_string();
+                        Some((IconRef::from(&name).or_placeholder("palette"), name))
+                    })
+                    .collect();
+                let side = Tokens::of(ui.ctx()).size.icon_inline;
+                let column = icons.iter().any(Option::is_some);
+                for (i, h) in hits.iter().enumerate() {
+                    let on = i == selected;
+                    let state = row_state(ui, on);
+                    let under = ui.painter().add(egui::Shape::Noop);
+                    let slot =
+                        egui::Id::unique(("egui_pop_palette_icon", h.entry.command.as_str()));
+                    let label = highlighted(row, state, &h.label, &h.positions);
+                    let mut atoms: Vec<egui::Atom<'_>> = Vec::with_capacity(2);
+                    if column {
+                        atoms.push(egui::Atom::custom(
+                            egui::IdSalt::new(slot),
+                            egui::vec2(side, side),
+                        ));
+                    }
+                    atoms.push(label.into());
+                    let mut b = egui::Button::new(egui::Atoms::from(atoms))
+                        .selected(on)
+                        .frame_when_inactive(on)
+                        .fill(Color32::TRANSPARENT)
+                        .stroke(egui::Stroke::new(border, Color32::TRANSPARENT));
+                    let mut keys = h.entry.keys.first().cloned().unwrap_or_default();
+                    if h.recent && s.query.trim().is_empty() {
+                        keys = if keys.is_empty() {
+                            strings::tr(&ctx, &txt::PALETTE_RECENT)
+                        } else {
+                            strings::tr_args(&ctx, &txt::PALETTE_RECENT_KEYS, &[("keys", &keys)])
                         };
-                        row.paint_under(ui, under, &part, None);
-                        if i == selected && edit.changed() {
-                            r.scroll_to_me(None);
-                        }
-                        if r.clicked() {
-                            chosen = Some(h.entry.command.clone());
-                        }
                     }
-                    if hits.is_empty() {
-                        ui.weak(strings::tr(&ctx, &txt::PALETTE_NO_MATCH));
+                    if !keys.is_empty() {
+                        let muted = row.style_toned(Tone::Muted, state).text;
+                        b = b.shortcut_text(egui::RichText::new(keys).color(muted));
                     }
-                });
+                    let r = b.atom_ui(ui);
+                    if let (Some(rect), Some((icon, name))) =
+                        (r.rect(egui::IdSalt::new(slot)), &icons[i])
+                    {
+                        icon.paint(ui.painter(), rect, row.style(state).text);
+                        egui_pop_core::icon::registry::record(&ctx, "palette", &h.label, name);
+                    }
+                    let r = r.response;
+                    let part = Part {
+                        rect: r.rect,
+                        room: r.rect,
+                        state,
+                        label: None,
+                    };
+                    row.paint_under(ui, under, &part, None);
+                    if i == selected && edit.changed() {
+                        r.scroll_to_me(None);
+                    }
+                    if r.clicked() {
+                        chosen = Some(h.entry.command.clone());
+                    }
+                }
+                if hits.is_empty() {
+                    ui.weak(strings::tr(&ctx, &txt::PALETTE_NO_MATCH));
+                }
             });
+        });
         if let Some(c) = chosen {
             let spec = app.command(&c);
             let args = spec.as_ref().map(arguments).unwrap_or_default();

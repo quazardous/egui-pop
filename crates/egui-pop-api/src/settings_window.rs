@@ -471,12 +471,13 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     }
                 });
                 ui.separator();
-                egui::ScrollArea::vertical()
-                    .id_salt("egui_pop.settings.form")
-                    .max_height(height)
-                    .max_width(form_width)
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
+                ui.scroll_area(
+                    egui::ScrollArea::vertical()
+                        .id_salt("egui_pop.settings.form")
+                        .max_height(height)
+                        .max_width(form_width)
+                        .auto_shrink([false, false]),
+                    |ui| {
                         ui.set_width(form_width - 16.0);
                         // Top-down here (the row around is left to right), so
                         // descriptions wrap.
@@ -550,7 +551,8 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                                 }
                             }
                         });
-                    });
+                    },
+                );
             });
             app.capture_keys(
                 s.capture.is_some() || s.capture_search || s.pointer_capture.is_some(),

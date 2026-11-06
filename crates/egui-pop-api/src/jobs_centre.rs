@@ -203,19 +203,21 @@ fn plain_log(ui: &mut Ui, jobs: &JobsService, job: &Job) {
     Kit::of(&ctx)
         .job_log
         .show(ui, State::REST, egui::Shadow::NONE, |ui| {
-            egui::ScrollArea::vertical()
-                .id_salt(("egui_pop_job_log", &job.id))
-                .max_height(LOG_HEIGHT)
-                .stick_to_bottom(true)
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
+            ui.scroll_area(
+                egui::ScrollArea::vertical()
+                    .id_salt(("egui_pop_job_log", &job.id))
+                    .max_height(LOG_HEIGHT)
+                    .stick_to_bottom(true)
+                    .auto_shrink([false, true]),
+                |ui| {
                     if lines.is_empty() {
                         ui.weak(strings::tr(&ctx, &txt::JOB_NO_LOG));
                     }
                     for l in &lines {
                         ui.label(RichText::new(plain(l)).monospace());
                     }
-                });
+                },
+            );
         });
 }
 
@@ -414,10 +416,12 @@ pub(crate) fn popover(ui: &mut Ui, app: &AppHandle, response: &egui::Response) {
                 });
             });
             ui.separator();
-            egui::ScrollArea::vertical()
-                .max_height(360.0)
-                .auto_shrink([false, true])
-                .show(ui, |ui| show(ui, app));
+            ui.scroll_area(
+                egui::ScrollArea::vertical()
+                    .max_height(360.0)
+                    .auto_shrink([false, true]),
+                |ui| show(ui, app),
+            );
             egui_pop_core::focus::keep_tab(ui);
         });
 }

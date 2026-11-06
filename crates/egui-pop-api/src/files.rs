@@ -4035,15 +4035,17 @@ impl FilePicker {
             // Places.
             ui.vertical(|ui| {
                 ui.set_width(PLACES_WIDTH);
-                egui::ScrollArea::vertical()
-                    .id_salt("egui_pop.files.places")
-                    .max_height(list_height)
-                    .auto_shrink([false, true])
-                    .show(ui, |ui| {
+                ui.scroll_area(
+                    egui::ScrollArea::vertical()
+                        .id_salt("egui_pop.files.places")
+                        .max_height(list_height)
+                        .auto_shrink([false, true]),
+                    |ui| {
                         if let Some(a) = self.side_bar(ui, places) {
                             answer = Some(a);
                         }
-                    });
+                    },
+                );
             });
             // Not a separator: in a row it takes the row's height, which
             // grows with it in a modal.
@@ -4104,11 +4106,12 @@ impl FilePicker {
                 ui.vertical(|ui| {
                     ui.set_width(pane_width);
                     // As high as the list, whatever the preview's facts.
-                    egui::ScrollArea::vertical()
-                        .id_salt("egui_pop.files.pane")
-                        .max_height(list_height)
-                        .auto_shrink([false, true])
-                        .show(ui, |ui| {
+                    ui.scroll_area(
+                        egui::ScrollArea::vertical()
+                            .id_salt("egui_pop.files.pane")
+                            .max_height(list_height)
+                            .auto_shrink([false, true]),
+                        |ui| {
                             // Named, for a screen reader to find it.
                             let name = strings::tr(ui.ctx(), &txt::FILES_PREVIEW);
                             ui.scope_builder(
@@ -4117,7 +4120,8 @@ impl FilePicker {
                                     .accessibility_label(name),
                                 |ui| self.preview_pane(ui),
                             );
-                        });
+                        },
+                    );
                 });
             }
         });
@@ -4721,10 +4725,11 @@ impl FilePicker {
             ui.set_width(room.ceil().min(CRUMB_MENU_WIDTH));
             let on_path = list.iter().position(|c| self.dir.starts_with(&c.path));
             let mut ids = Vec::with_capacity(list.len());
-            egui::ScrollArea::vertical()
-                .id_salt("egui_pop.files.crumb_menu")
-                .max_height(CRUMB_MENU_HEIGHT)
-                .show(ui, |ui| {
+            ui.scroll_area(
+                egui::ScrollArea::vertical()
+                    .id_salt("egui_pop.files.crumb_menu")
+                    .max_height(CRUMB_MENU_HEIGHT),
+                |ui| {
                     for (n, item) in list.iter().enumerate() {
                         let r = ui.add(
                             egui::Button::new(&item.name)
@@ -4737,7 +4742,8 @@ impl FilePicker {
                         }
                         ids.push(r.id);
                     }
-                });
+                },
+            );
             if chosen.is_some() {
                 ui.close();
             }

@@ -11,6 +11,7 @@ use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::a11y::{self, Politeness};
 use egui_pop::core::overlay::{self, Anchor, Kind, OverlaySpec};
 use egui_pop::core::placement::Side;
+use egui_pop::core::ui::UiPop as _;
 use egui_pop::core::widgets;
 use egui_pop::core::{fault, focus};
 use egui_pop::model::ids::{PluginId, StoryId};
@@ -122,13 +123,15 @@ fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
     }
     let snapshot = app.debug_snapshot();
     let text = serde_json::to_string_pretty(&snapshot[s.collector.as_str()]).unwrap_or_default();
-    egui::ScrollArea::vertical()
-        .id_salt("snapshot")
-        .max_height(super::fitted_height(ui, 220.0))
-        .auto_shrink([false, true])
-        .show(ui, |ui| {
+    ui.scroll_area(
+        egui::ScrollArea::vertical()
+            .id_salt("snapshot")
+            .max_height(super::fitted_height(ui, 220.0))
+            .auto_shrink([false, true]),
+        |ui| {
             ui.label(RichText::new(text).monospace().size(t.font.small));
-        });
+        },
+    );
     if let Some(f) = &s.feedback {
         ui.add_space(t.space.s);
         ui.strong("Last call");

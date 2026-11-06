@@ -14,6 +14,7 @@ use egui_pop::core::lock;
 use egui_pop::core::overlay::{self, Kind, OverlaySpec};
 use egui_pop::core::slider::{RangeSlider, Slider};
 use egui_pop::core::tab::{self, ScopeKind, TabStop};
+use egui_pop::core::ui::UiPop as _;
 use egui_pop::model::field::{Baseline, FieldState};
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::model::values::Descriptor;
@@ -146,15 +147,16 @@ fn row(ui: &mut Ui, label: &str, add: impl FnOnce(&mut Ui)) {
 }
 
 fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
+    ui.scroll_area(
+        egui::ScrollArea::vertical().auto_shrink([false, false]),
+        |ui| {
             ui.columns(2, |cols| {
                 decorators(&mut cols[0], app, s);
                 states(&mut cols[1], s);
             });
             tab_order(ui, s);
-        });
+        },
+    );
     modal(ui, s);
 }
 

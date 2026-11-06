@@ -16,6 +16,7 @@ use egui_pop_core::kit::{Kit, State};
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_model::ids::StepId;
 
 use crate::assist::Location;
@@ -368,26 +369,26 @@ fn text_area(
         rows as f32 * g.row_h + g.row_h,
     );
     let reveal = std::mem::take(&mut state.lock().view.reveal);
-    let out = ScrollArea::both()
+    let scroll = ScrollArea::both()
         .id_salt(id.with("scroll"))
         .max_height(height)
         .min_scrolled_height(height)
-        .auto_shrink([false, false])
-        .show_viewport(ui, |ui, viewport| {
-            let origin = ui.max_rect().min;
-            let full = Rect::from_min_size(origin, content.max(viewport.size()));
-            ui.allocate_rect(full, Sense::hover());
-            // The widget is what is in view (its accessible bounds too).
-            let visible = Rect::from_min_size(origin + viewport.min.to_vec2(), viewport.size());
-            let response = ui.interact(visible, id, Sense::click_and_drag());
-            if response.clicked() && !response.has_focus() {
-                response.request_focus();
-            }
-            area(
-                ui, state, o, &g, &t, id, origin, viewport, reveal, focused, &response, signals,
-            );
-            response
-        });
+        .auto_shrink([false, false]);
+    let out = ui.scroll_area_viewport(scroll, |ui, viewport| {
+        let origin = ui.max_rect().min;
+        let full = Rect::from_min_size(origin, content.max(viewport.size()));
+        ui.allocate_rect(full, Sense::hover());
+        // The widget is what is in view (its accessible bounds too).
+        let visible = Rect::from_min_size(origin + viewport.min.to_vec2(), viewport.size());
+        let response = ui.interact(visible, id, Sense::click_and_drag());
+        if response.clicked() && !response.has_focus() {
+            response.request_focus();
+        }
+        area(
+            ui, state, o, &g, &t, id, origin, viewport, reveal, focused, &response, signals,
+        );
+        response
+    });
     egui_pop_core::ui::contain_wheel(ui, &out);
     let response = out.inner;
     let label = o

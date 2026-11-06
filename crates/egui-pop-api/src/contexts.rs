@@ -81,6 +81,7 @@ use egui_pop_core::lock;
 use egui_pop_core::persist::Persist;
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
 
 /// The view generation a scroll area last applied its saved offset for.
@@ -1277,7 +1278,7 @@ pub fn scroll_area<R>(
         area = area.vertical_scroll_offset(saved.unwrap_or(0.0));
         slot.set(ui.ctx(), generation);
     }
-    let out = area.show(ui, add);
+    let out = ui.scroll_area(area, add);
     let y = out.state.clamped_offset().y;
     let changed = match saved {
         Some(s) => (s - y).abs() > 0.5,

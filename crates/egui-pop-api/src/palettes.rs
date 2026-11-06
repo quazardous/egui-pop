@@ -92,6 +92,7 @@ use egui_pop_core::kit::{Glyph, Kit, KitCx, Part, State};
 use egui_pop_core::lock;
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PanelId, SettingId, StepId};
@@ -553,13 +554,15 @@ fn size_limits(ctx: &egui::Context, least_width: f32, pos: Pos2, content: Rect) 
 /// area scrolls by its bar and the wheel, not by a drag.
 fn scrolled(ui: &mut Ui, id: Id, height: f32, add: impl FnOnce(&mut Ui)) {
     use egui::scroll_area::ScrollSource;
-    egui::ScrollArea::vertical()
-        .id_salt(id.with("scroll"))
-        .scroll_source(ScrollSource::SCROLL_BAR | ScrollSource::MOUSE_WHEEL)
-        .auto_shrink([false, false])
-        .max_height(height)
-        .min_scrolled_height(height)
-        .show(ui, add);
+    ui.scroll_area(
+        egui::ScrollArea::vertical()
+            .id_salt(id.with("scroll"))
+            .scroll_source(ScrollSource::SCROLL_BAR | ScrollSource::MOUSE_WHEEL)
+            .auto_shrink([false, false])
+            .max_height(height)
+            .min_scrolled_height(height),
+        add,
+    );
 }
 
 /// A palette's resize edges, over its frame drawn at `rect`, `grip`

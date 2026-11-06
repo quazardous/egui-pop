@@ -29,6 +29,7 @@ use std::rc::Rc;
 use egui::Ui;
 use egui_pop_core::inspect::{self as picker, Pick};
 use egui_pop_core::strings;
+use egui_pop_core::ui::UiPop as _;
 use egui_pop_model::clipboard::{ClipItem, FormatId, Repr, TEXT};
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{BlockId, CommandId};
@@ -507,10 +508,11 @@ fn body(ui: &mut Ui, app: &AppHandle, pass: &mut crate::dialogs::CustomPass) {
         }
     });
     ui.separator();
-    egui::ScrollArea::vertical()
-        .id_salt("egui_pop.inspect.rows")
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
+    ui.scroll_area(
+        egui::ScrollArea::vertical()
+            .id_salt("egui_pop.inspect.rows")
+            .auto_shrink([false, false]),
+        |ui| {
             egui::Grid::new("egui_pop.inspect.grid")
                 .num_columns(2)
                 .striped(true)
@@ -521,7 +523,8 @@ fn body(ui: &mut Ui, app: &AppHandle, pass: &mut crate::dialogs::CustomPass) {
                         ui.end_row();
                     }
                 });
-        });
+        },
+    );
 }
 
 /// The hint at the top of the window.
