@@ -208,7 +208,9 @@ impl Pipeline {
             ("blur", Some("detail")),
             ("sharpen", Some("detail")),
         ];
-        let col = 240.0;
+        // Wide columns: at the ports' level a wire between two nodes is
+        // long enough (well over 120 points) to see and to click.
+        let col = 360.0;
         let row = 130.0;
         for r in 0..6 {
             let y = r as f32 * row;
@@ -443,6 +445,8 @@ pub struct State {
     selected: Option<bool>,
     /// The graph before each edit, the last on top: one edit, one undo.
     pub undo: Vec<Pipeline>,
+    /// Whether a wire was ever selected: the hint by the canvas goes.
+    wire_selected_once: bool,
 }
 
 impl Default for State {
@@ -457,6 +461,7 @@ impl Default for State {
             exported: String::new(),
             selected: None,
             undo: Vec::new(),
+            wire_selected_once: false,
         }
     }
 }
@@ -601,8 +606,12 @@ fn show(ui: &mut Ui, app: &AppHandle, s: &mut State, asked: &Cell<Option<(bool, 
                     )
                 })
                 .collect();
+            s.wire_selected_once |= !wires.is_empty();
             if !wires.is_empty() {
                 ui.label(format!("Wires selected: {}", wires.join(", ")));
+            } else if !s.wire_selected_once {
+                // Until the first wire selected: wires are targets too.
+                ui.weak("Click a wire to select it");
             }
             ui.horizontal(|ui| {
                 let menu = ui.button("Export");

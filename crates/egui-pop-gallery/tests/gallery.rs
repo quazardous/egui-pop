@@ -1559,6 +1559,39 @@ fn the_node_graph_page_exports_the_graph_as_svg() {
     assert!(svg.contains("data-param=\"radius\""), "{svg}");
 }
 
+/// How many pixels around `region` (points), outside `except`, differ
+/// plainly (by more than 48 in a channel) between two renders: what an
+/// eye sees change, not a rounding.
+fn changed_pixels(
+    a: &image::RgbaImage,
+    b: &image::RgbaImage,
+    region: egui::Rect,
+    except: Option<egui::Rect>,
+    ppp: f32,
+) -> usize {
+    let r = region.expand(8.0);
+    let (x0, y0) = (
+        (r.min.x * ppp).max(0.0) as u32,
+        (r.min.y * ppp).max(0.0) as u32,
+    );
+    let x1 = ((r.max.x * ppp) as u32).min(a.width().min(b.width()));
+    let y1 = ((r.max.y * ppp) as u32).min(a.height().min(b.height()));
+    let mut n = 0;
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let at = egui::pos2(x as f32 / ppp, y as f32 / ppp);
+            if except.is_some_and(|e| e.contains(at)) {
+                continue;
+            }
+            let (p, q) = (a.get_pixel(x, y).0, b.get_pixel(x, y).0);
+            if (0..3).any(|c| p[c].abs_diff(q[c]) > 48) {
+                n += 1;
+            }
+        }
+    }
+    n
+}
+
 #[test]
 fn the_node_graph_page_selects_deletes_and_undoes_wires() {
     use egui_pop::imaging::graph::{CMD_GRAPH_READ, CMD_GRAPH_SELECT, CMD_GRAPH_VIEW};
@@ -1599,16 +1632,38 @@ fn the_node_graph_page_selects_deletes_and_undoes_wires() {
         egui::accesskit::Role::Button,
         "a wire is an item"
     );
-    let at = wire.rect().center();
+    let region = wire.rect();
+    let at = region.center();
+    // Columns wide enough that a wire is long enough to see and click.
+    assert!(region.width() >= 120.0, "a wire of {region:?}");
     egui_pop_test::assert_all_named(&h);
+    assert!(
+        h.query_by_label("Click a wire to select it").is_some(),
+        "the hint, until a wire is selected"
+    );
+    let rest = h.render().expect("render");
 
-    // Hovered: thicker, its ports ringed, its ends named.
+    // Hovered: thicker and lighter, its ports ringed, its ends named.
     h.input_mut().events.push(egui::Event::PointerMoved(at));
     h.run();
+    let tip = h
+        .query_by_label("Load 1 · Image to Exposure 1 · Image")
+        .map(|t| t.rect().expand(12.0))
+        .expect("the tooltip");
+    assert_eq!(
+        h.output().platform_output.cursor_icon,
+        egui::CursorIcon::PointingHand,
+        "a hand over a wire"
+    );
+    let hovered = h.render().expect("render");
+    let ppp = h.ctx.pixels_per_point();
+    // The wire itself, not its tooltip.
+    let seen = changed_pixels(&rest, &hovered, region, Some(tip), ppp);
+    // As much as a band 1.5 points wide along the whole wire.
+    let wire_px = region.width() * ppp;
     assert!(
-        h.query_by_label("Load 1 · Image to Exposure 1 · Image")
-            .is_some(),
-        "the tooltip"
+        seen as f32 >= wire_px * 1.5 * ppp,
+        "a hovered wire stands out: {seen} pixels changed along {wire_px}"
     );
     let mut results = egui_kittest::SnapshotResults::new();
     results.add(h.try_snapshot("node-graph-wire-hover-pop-dark"));
@@ -1647,6 +1702,17 @@ fn the_node_graph_page_selects_deletes_and_undoes_wires() {
         .events
         .push(egui::Event::PointerMoved(at + egui::vec2(0.0, 60.0)));
     h.run();
+    let selected = h.render().expect("render");
+    let seen = changed_pixels(&rest, &selected, region, None, ppp);
+    // As much as a band 6 points wide along the whole wire: the glow.
+    assert!(
+        seen as f32 >= wire_px * 6.0 * ppp,
+        "a selected wire stands out: {seen} pixels changed along {wire_px}"
+    );
+    assert!(
+        h.query_by_label("Click a wire to select it").is_none(),
+        "the hint goes once a wire was selected"
+    );
     results.add(h.try_snapshot("node-graph-wire-selected-pop-dark"));
     h.key_press(egui::Key::Delete);
     h.run();

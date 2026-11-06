@@ -1,4 +1,4 @@
-$description: "Rerun-like, both variants: what the dark and the light variant share (sizes, radii, type, the tab bar and the section bands, the plot's and the table header's shapes, the time cursor, and the roles both alias the same way)."
+$description: "Rerun-like, both variants: what the dark and the light variant share (sizes, radii, type, the tab bar and the section bands, the plot's and the table header's shapes, the time cursor, the node graph's hovered and selected wires, and the roles both alias the same way)."
 text:
   $type: "color"
   on-accent: {$value: "{blue.contrast}"}
@@ -64,3 +64,13 @@ table-header-cell:
   indicator-side: {$type: "string", $value: "bottom"}
   rest:
     border-width: {$type: "dimension", $value: {value: 1, unit: "px"}}
+graph:
+  wire-hover:
+    color: {$type: "color", $value: "{text.strong}", $description: "Rerun highlights what is hovered toward the strong text"}
+    width: {$type: "dimension", $value: {value: 3, unit: "px"}}
+  wire-selected:
+    color: {$type: "color", $value: "{blue.9}", $description: "The selection's blue"}
+    width: {$type: "dimension", $value: {value: 3, unit: "px"}}
+    glow: {$type: "color", $value: "{blue.9}"}
+    glow-width: {$type: "dimension", $value: {value: 10, unit: "px"}}
+    glow-opacity: {$type: "number", $value: 0.3}
