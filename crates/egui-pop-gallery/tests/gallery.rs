@@ -7075,6 +7075,117 @@ fn the_dj_page_sets_hot_cues_loops_and_syncs_a_deck_from_its_keys() {
 }
 
 #[test]
+fn the_dj_decks_waveform_is_dragged_nudged_and_stepped_by_the_wheel() {
+    use egui::accesskit::Role;
+    use egui::{Pos2, vec2};
+    let mut results = egui_kittest::SnapshotResults::new();
+    let mut h = harness(options("pop-dark", Density::Comfortable, "dj"));
+    h.run();
+    let deck_b = |h: &Harness<'_, Gallery>| {
+        h.state().app.handle().debug_snapshot()["timeline"]["timelines"]["deck-b"].clone()
+    };
+    let seconds = |h: &Harness<'_, Gallery>| deck_b(h)["playhead"]["seconds"].as_f64().unwrap();
+    let rect = h.get_by_role_and_label(Role::Slider, "Deck B").rect();
+    let (x, y) = (rect.center().x, rect.bottom() - 16.0);
+    // Paused, the waveform dragged 120 points to the left: the playhead
+    // stays in the middle, the song moves on under it.
+    let before = seconds(&h);
+    let view = &deck_b(&h)["view"];
+    let middle = view["start"].as_f64().unwrap() + view["duration"].as_f64().unwrap() / 2.0;
+    assert!((middle - before).abs() < 1e-6, "{view}");
+    h.drag_at(Pos2::new(x, y));
+    h.run();
+    for dx in [-60.0, -120.0] {
+        h.hover_at(Pos2::new(x + dx, y));
+        h.run();
+    }
+    h.drop_at(Pos2::new(x - 120.0, y));
+    h.run();
+    let dragged = seconds(&h);
+    assert!(dragged > before + 0.5, "{before} -> {dragged}");
+    assert_eq!(deck_b(&h)["tracks"][0]["clips"][0]["seconds"], 0.0);
+    // The wheel steps it a beat at a time, onto the grid.
+    h.hover_at(Pos2::new(x, y));
+    h.run();
+    h.event(egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: vec2(0.0, -2.0),
+        modifiers: egui::Modifiers::NONE,
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
+    });
+    h.run();
+    let text = deck_b(&h)["playhead"]["text"].as_str().unwrap().to_string();
+    assert!(text.ends_with(".000"), "{text}");
+    // Play (the transport's, `timeline.toggle_play`), then a drag nudges.
+    h.get_by_role_and_label(Role::Button, "Play").click();
+    h.run();
+    h.run();
+    assert_eq!(deck_b(&h)["play"], "playing");
+    let playing = seconds(&h);
+    h.drag_at(Pos2::new(x, y));
+    h.run();
+    for dx in [-40.0, -80.0] {
+        h.hover_at(Pos2::new(x + dx, y));
+        h.run();
+    }
+    h.drop_at(Pos2::new(x - 80.0, y));
+    h.run();
+    let nudged = seconds(&h);
+    assert!(nudged > playing, "{playing} -> {nudged}");
+    assert_eq!(
+        (deck_b(&h)["play"].as_str(), deck_b(&h)["speed"].as_f64()),
+        (Some("playing"), Some(1.0))
+    );
+    results.add(h.try_snapshot("dj-drag-pop-dark"));
+    // Cue while playing: back to the cue point (the start), paused.
+    h.query_all_by_label("Cue").nth(1).unwrap().click();
+    h.run();
+    assert_eq!(deck_b(&h)["play"], "paused");
+}
+
+#[test]
+fn the_editor_pages_transport_runs_the_keys_commands() {
+    use egui::accesskit::Role;
+    let mut results = egui_kittest::SnapshotResults::new();
+    let mut h = harness(options("pop-dark", Density::Comfortable, "editor"));
+    h.run();
+    let seq = |h: &Harness<'_, Gallery>| {
+        h.state().app.handle().debug_snapshot()["timeline"]["timelines"]["sequence"].clone()
+    };
+    let click = |h: &mut Harness<'_, Gallery>, name: &str| {
+        h.get_by_role_and_label(Role::Button, name).click();
+        h.run();
+        h.run();
+    };
+    for (button, text) in [
+        ("Go to end", "00:01:00:00"),
+        ("Step back", "00:00:59:24"),
+        ("Go to start", "00:00:00:00"),
+        ("Step forward", "00:00:00:01"),
+    ] {
+        click(&mut h, button);
+        assert_eq!(seq(&h)["playhead"]["text"], text, "{button}");
+    }
+    click(&mut h, "Play backward");
+    assert_eq!(seq(&h)["speed"], -1.0);
+    click(&mut h, "Stop");
+    assert_eq!(seq(&h)["play"], "paused");
+    click(&mut h, "Play");
+    assert_eq!(seq(&h)["play"], "playing");
+    click(&mut h, "Pause");
+    assert_eq!(seq(&h)["play"], "paused");
+    click(&mut h, "Loop");
+    assert_eq!(seq(&h)["looping"], true);
+    // The tooltips name the keys.
+    h.get_by_role_and_label(Role::Button, "Play backward")
+        .hover();
+    h.run_steps(45);
+    assert!(h.query_by_label("Play backward (J)").is_some());
+    results.add(h.try_snapshot("editor-transport-pop-dark"));
+}
+
+#[test]
 fn the_editor_page_splits_at_the_playhead_and_ripple_deletes() {
     use egui::accesskit::Role;
     use egui_pop::model::commands::Origin;
