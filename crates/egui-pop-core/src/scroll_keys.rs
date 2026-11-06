@@ -17,7 +17,8 @@
 //! - **A stop only when nothing else can be** ([`stop`]): with nothing focusable
 //!   inside and something to scroll, the area takes the focus itself, as a
 //!   browser's scroller does, and then has the arrows too. With nothing to scroll
-//!   it is no stop, as it would answer no key.
+//!   it is no stop, as it would answer no key, and neither is it when a view inside
+//!   says it reads the keys ([`focus::takes_keys`]): the view is the stop.
 //!
 //! A move shows in the next pass, and is not animated, as when the focus comes
 //! into view. An area whose bars are hidden (`ScrollBarVisibility::AlwaysHidden`),
@@ -47,22 +48,40 @@ enum Reach {
     Pages,
 }
 
-/// How many widgets this pass drew so far in `ui`'s layer: where the area's own
-/// start, to pass to [`answer`].
-pub(crate) fn start(ui: &Ui) -> usize {
+/// Where an area's content starts, to pass to [`answer`]: how many widgets this
+/// pass drew so far in `ui`'s layer, and how many said they take the keys.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Start {
+    widgets: usize,
+    taking: usize,
+}
+
+/// See [`Start`].
+pub(crate) fn start(ui: &Ui) -> Start {
+    Start {
+        widgets: drawn(ui),
+        taking: focus::keys_taken_count(ui.ctx()),
+    }
+}
+
+/// How many widgets this pass drew so far in `ui`'s layer.
+fn drawn(ui: &Ui) -> usize {
     let layer = ui.layer_id();
     ui.ctx()
         .viewport(|v| v.this_pass.widgets.get_layer(layer).count())
 }
 
 /// Makes the area just drawn a stop if it should be, and answers the keys.
-pub(crate) fn answer<R>(ui: &mut Ui, out: &ScrollAreaOutput<R>, start: usize) {
+pub(crate) fn answer<R>(ui: &mut Ui, out: &ScrollAreaOutput<R>, from: Start) {
     if !ui.is_enabled() {
         return;
     }
     let ctx = ui.ctx().clone();
     let layer = ui.layer_id();
-    let end = self::start(ui);
+    let (start, end) = (from.widgets, drawn(ui));
+    // A view inside reading the keys itself (a list, a grid) is the stop, even
+    // when its focusable widget is drawn around the area rather than in it.
+    let view_inside = focus::keys_taken_count(&ctx) > from.taking;
     let axes = axes(&ctx, out);
     if !axes[0] && !axes[1] {
         return;
@@ -75,7 +94,7 @@ pub(crate) fn answer<R>(ui: &mut Ui, out: &ScrollAreaOutput<R>, start: usize) {
             .take(end - start)
             .any(crate::place::can_focus)
     });
-    if empty {
+    if empty && !view_inside {
         stop(ui, own, out.inner_rect);
     }
     let Some(reach) = reach(ui, out.inner_rect, own, layer, start..end) else {

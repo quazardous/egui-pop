@@ -26,8 +26,13 @@
 //! The helpers are few on purpose, so `Ui`'s completion list stays
 //! short; [`role_text`] and [`Space::points`] serve the rest.
 
+use std::ops::Range;
+
 use egui::scroll_area::ScrollAreaOutput;
-use egui::{ComboBox, InnerResponse, Rect, Response, RichText, ScrollArea, Shadow, Ui, WidgetText};
+use egui::{
+    ComboBox, InnerResponse, Rect, Response, RichText, ScrollArea, Shadow, Ui, UiBuilder,
+    WidgetText,
+};
 
 use crate::fonts::{self, Role, Weight};
 use crate::kit::{Kit, State};
@@ -255,6 +260,31 @@ pub trait UiPop: sealed::Sealed {
         add: impl FnOnce(&mut Ui) -> R,
     ) -> ScrollAreaOutput<R>;
 
+    /// [`UiPop::scroll_area`] for a view drawing only what is in view: egui's
+    /// `ScrollArea::show_viewport`, `add` given the rectangle in view, in the
+    /// content's own coordinates.
+    ///
+    /// A view whose focusable widget lies around the area rather than in it (a
+    /// list, a grid) says it reads the keys with
+    /// [`focus::takes_keys`](crate::focus::takes_keys), inside `add`, so that the
+    /// area does not become a Tab stop of its own.
+    fn scroll_area_viewport<R>(
+        &mut self,
+        area: ScrollArea,
+        add: impl FnOnce(&mut Ui, Rect) -> R,
+    ) -> ScrollAreaOutput<R>;
+
+    /// [`UiPop::scroll_area`] for `rows` rows `row_height` high, the `Ui`'s item
+    /// spacing apart: egui's `ScrollArea::show_rows`, `add` given the rows in
+    /// view.
+    fn scroll_area_rows<R>(
+        &mut self,
+        area: ScrollArea,
+        row_height: f32,
+        rows: usize,
+        add: impl FnOnce(&mut Ui, Range<usize>) -> R,
+    ) -> ScrollAreaOutput<R>;
+
     /// [`UiPop::scroll_area`] keeping the wheel at its ends ([`contain_wheel`]),
     /// for what nests in something else that scrolls: a list in a panel, a
     /// preview in a pane. A plain body keeps [`UiPop::scroll_area`], as a sizeable
@@ -333,6 +363,14 @@ impl UiPop for Ui {
         area: ScrollArea,
         add: impl FnOnce(&mut Ui) -> R,
     ) -> ScrollAreaOutput<R> {
+        self.scroll_area_viewport(area, |ui, _| add(ui))
+    }
+
+    fn scroll_area_viewport<R>(
+        &mut self,
+        area: ScrollArea,
+        add: impl FnOnce(&mut Ui, Rect) -> R,
+    ) -> ScrollAreaOutput<R> {
         // upstream: egui's `ScrollStyle` has no colours, the bars take
         // the widget states' (docs/upstream.md, "scroll bar colours").
         // egui paints the bars with the visuals of the `Ui` the area is
@@ -341,14 +379,47 @@ impl UiPop for Ui {
         let style = self.style().clone();
         self.scoped(Stock::ScrollBar, Tone::Neutral, |ui| {
             let start = crate::scroll_keys::start(ui);
-            let out = area.show(ui, |ui| {
+            let out = area.show_viewport(ui, |ui, viewport| {
                 ui.set_style(style);
-                add(ui)
+                add(ui, viewport)
             });
             crate::scroll_keys::answer(ui, &out, start);
             out
         })
         .inner
+    }
+
+    fn scroll_area_rows<R>(
+        &mut self,
+        area: ScrollArea,
+        row_height: f32,
+        rows: usize,
+        add: impl FnOnce(&mut Ui, Range<usize>) -> R,
+    ) -> ScrollAreaOutput<R> {
+        // egui's `show_rows`, over `show_viewport`.
+        let spacing = self.spacing().item_spacing.y;
+        let pitch = row_height + spacing;
+        self.scroll_area_viewport(area, |ui, viewport| {
+            ui.set_height((pitch * rows as f32 - spacing).max(0.0));
+            let mut first = (viewport.min.y / pitch).floor() as usize;
+            let mut last = (viewport.max.y / pitch).ceil() as usize + 1;
+            if last > rows {
+                let span = last.saturating_sub(first);
+                last = rows;
+                first = rows.saturating_sub(span);
+            }
+            let top = ui.max_rect().top();
+            let rect = Rect::from_x_y_ranges(
+                ui.max_rect().x_range(),
+                top + first as f32 * pitch..=top + last as f32 * pitch,
+            );
+            ui.scope_builder(UiBuilder::new().max_rect(rect), |ui| {
+                // The same ids, wherever the view starts.
+                ui.skip_ahead_auto_ids(first);
+                add(ui, first..last)
+            })
+            .inner
+        })
     }
 
     fn scroll_area_contained<R>(
