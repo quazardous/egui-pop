@@ -2,6 +2,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use egui::accesskit;
 use egui::{Key, vec2};
@@ -11,6 +12,7 @@ use egui_pop_core::theme::{Density, ThemeSpec};
 use egui_pop_test::walk::{self, SHIFT_TAB, TAB};
 use egui_pop_test::{assert_all_named, themed};
 use egui_pop_views::item::{ItemAction, ListItem, row_height};
+use egui_pop_views::list::{ListRows, ListState, ListView};
 use egui_pop_views::property::PropertyRow;
 use egui_pop_views::tree::{Node, Sink, TreeSource, TreeState, TreeView};
 
@@ -367,4 +369,203 @@ fn tab_from_a_tree_reaches_the_cursor_s_actions() {
     walk::press(&mut h, TAB);
     walk::press(&mut h, walk::Press::key(Key::Enter));
     assert_eq!(seen.borrow().actions, ["hide sky"]);
+}
+
+/// A label too long for its row.
+const LONG: &str = "A layer whose name is far too long for the row it is drawn in";
+
+/// The galley painted for `text`, elided or whole as `elided` asks, and
+/// where it was painted.
+fn painted(
+    h: &egui_kittest::Harness<'_>,
+    text: &str,
+    elided: bool,
+) -> Option<(Arc<egui::Galley>, egui::Rect)> {
+    h.output().shapes.iter().find_map(|c| match &c.shape {
+        egui::Shape::Text(t) if t.galley.job.text == text && t.galley.elided == elided => {
+            Some((t.galley.clone(), c.shape.visual_bounding_rect()))
+        }
+        _ => None,
+    })
+}
+
+/// The last character a galley draws.
+fn last_char(galley: &egui::Galley) -> Option<char> {
+    galley.rows.last()?.glyphs.last().map(|g| g.chr)
+}
+
+/// Hovers `at` past egui's tooltip delay.
+fn hover_long(h: &mut egui_kittest::Harness<'_>, at: egui::Pos2) {
+    h.hover_at(at);
+    h.run();
+    h.run_steps(45);
+}
+
+/// Asserts the row named `name` keeps its full name, with no description
+/// added by its tooltip.
+fn named_in_full(h: &egui_kittest::Harness<'_>, name: &str) {
+    let rows: Vec<_> = h
+        .query_all_by_label(name)
+        .filter(|n| n.accesskit_node().role() != accesskit::Role::Label)
+        .collect();
+    assert_eq!(rows.len(), 1, "one row named {name:?}");
+    assert_eq!(rows[0].accesskit_node().description(), None);
+}
+
+#[test]
+fn a_long_item_label_is_elided_before_its_controls_and_shown_on_hover() {
+    let mut h = themed(&ThemeSpec::default(), vec2(260.0, 120.0), move |ui| {
+        for name in ["Short", LONG] {
+            let _ = ListItem::new(name)
+                .icon(Icon::File)
+                .trailing("12 points")
+                .action(eye(name).pinned(true))
+                .id_salt(name)
+                .show(ui);
+        }
+    });
+    h.run();
+    // The short label whole, the long one elided with "…".
+    assert!(painted(&h, "Short", false).is_some());
+    let (galley, text) = painted(&h, LONG, true).expect("the long label, elided");
+    assert_eq!(last_char(&galley), Some('…'));
+    // The trailing text and the button stay whole, inside the row, after
+    // the label.
+    let row = h.get_by_label(LONG).rect();
+    let button = h.get_by_label(&format!("Hide {LONG}")).rect();
+    assert!(row.contains_rect(button), "{button:?} in {row:?}");
+    let (_, trailing) = painted(&h, "12 points", false).expect("the trailing text");
+    assert!(trailing.right() <= button.left() + 0.5);
+    assert!(
+        text.right() <= trailing.left() + 0.5,
+        "{text:?} before {trailing:?}"
+    );
+    // The name stays the full label.
+    named_in_full(&h, LONG);
+    // Hovering shows the full label; a short one has no tooltip.
+    hover_long(&mut h, row.left_center() + vec2(40.0, 0.0));
+    assert!(
+        h.query_by_role_and_label(accesskit::Role::Label, LONG)
+            .is_some(),
+        "the full label in a tooltip"
+    );
+    named_in_full(&h, LONG);
+    let short = h.get_by_label("Short").rect();
+    hover_long(&mut h, short.left_center() + vec2(40.0, 0.0));
+    assert!(
+        h.query_by_role_and_label(accesskit::Role::Label, "Short")
+            .is_none()
+    );
+}
+
+/// One branch holding a leaf with a long name.
+struct Long;
+
+impl TreeSource<String> for Long {
+    fn load(&self, parent: Option<&String>, sink: Sink<String>) {
+        sink.deliver(match parent {
+            None => vec![Node::branch("root".into(), "Root")],
+            Some(_) => vec![Node::leaf("long".into(), LONG)],
+        });
+    }
+}
+
+#[test]
+fn a_long_tree_label_is_elided_before_its_controls_and_shown_on_hover() {
+    let mut state = TreeState::<String>::new();
+    state.set_expanded(&"root".to_string(), true);
+    let mut h = themed(&ThemeSpec::default(), vec2(260.0, 200.0), move |ui| {
+        TreeView::<String>::new("long")
+            .label("Layers")
+            .trailing(|n| (!n.branch).then(|| "layer".to_string()))
+            .actions(|n| {
+                if n.branch {
+                    Vec::new()
+                } else {
+                    vec![eye(&n.label).pinned(true)]
+                }
+            })
+            .show(ui, &mut state, &Long);
+    });
+    h.run();
+    h.run();
+    let (galley, text) = painted(&h, LONG, true).expect("the long label, elided");
+    assert_eq!(last_char(&galley), Some('…'));
+    let row = h.get_by_label(LONG).rect();
+    let button = h.get_by_label(&format!("Hide {LONG}")).rect();
+    assert!(row.contains_rect(button), "{button:?} in {row:?}");
+    let (_, trailing) = painted(&h, "layer", false).expect("the trailing text");
+    assert!(trailing.right() <= button.left() + 0.5);
+    assert!(
+        text.right() <= trailing.left() + 0.5,
+        "{text:?} before {trailing:?}"
+    );
+    named_in_full(&h, LONG);
+    hover_long(&mut h, row.left_center() + vec2(60.0, 0.0));
+    assert!(
+        h.query_by_role_and_label(accesskit::Role::Label, LONG)
+            .is_some(),
+        "the full label in a tooltip"
+    );
+    named_in_full(&h, LONG);
+}
+
+/// Two rows, the second with a long label and a trailing count.
+struct LongRows;
+
+impl ListRows<u32> for LongRows {
+    fn len(&self) -> usize {
+        2
+    }
+    fn key(&self, row: usize) -> u32 {
+        row as u32
+    }
+    fn label(&self, row: usize) -> String {
+        if row == 0 { "Short" } else { LONG }.to_string()
+    }
+    fn trailing(&self, _: usize) -> Option<String> {
+        Some("12".to_string())
+    }
+}
+
+#[test]
+fn a_long_list_label_is_elided_before_its_trailing_text_and_shown_on_hover() {
+    let mut state = ListState::<u32>::new();
+    let mut h = themed(&ThemeSpec::default(), vec2(260.0, 200.0), move |ui| {
+        ListView::new("long").show(ui, &mut state, &mut LongRows);
+    });
+    h.run();
+    assert!(painted(&h, "Short", false).is_some());
+    let (galley, text) = painted(&h, LONG, true).expect("the long label, elided");
+    assert_eq!(last_char(&galley), Some('…'));
+    let row = h.get_by_label(LONG).rect();
+    let trailing: Vec<egui::Rect> = h
+        .output()
+        .shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.job.text == "12" => {
+                Some(c.shape.visual_bounding_rect())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(trailing.len(), 2, "both counts whole");
+    let count = trailing
+        .iter()
+        .find(|r| r.center().y > row.top() && r.center().y < row.bottom())
+        .expect("the long row's count");
+    assert!(row.contains_rect(*count), "{count:?} in {row:?}");
+    assert!(
+        text.right() <= count.left() + 0.5,
+        "{text:?} before {count:?}"
+    );
+    named_in_full(&h, LONG);
+    hover_long(&mut h, row.left_center() + vec2(40.0, 0.0));
+    assert!(
+        h.query_by_role_and_label(accesskit::Role::Label, LONG)
+            .is_some(),
+        "the full label in a tooltip"
+    );
+    named_in_full(&h, LONG);
 }

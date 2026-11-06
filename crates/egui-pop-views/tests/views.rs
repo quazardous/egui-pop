@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use egui::{Key, Modifiers};
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable as _;
+use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_api::steps::Before;
 use egui_pop_api::{App, AppHandle, Ctx, Plugin, PluginError};
 use egui_pop_core::icon::Icon;
@@ -1345,4 +1345,61 @@ fn a_list_is_one_tab_stop_and_its_area_none() {
     h.key_press(Key::Tab);
     h.run();
     assert!(h.query_by_label("After").unwrap().is_focused());
+}
+
+#[test]
+fn a_long_cell_text_is_elided_and_shown_on_hover() {
+    const LONG: &str = "A file whose name is far too long for its column";
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(400.0, 200.0))
+        .build_ui_state(
+            |ui, (state, rows): &mut (TableState<u32>, Rows)| {
+                let columns = COLUMNS();
+                DataTable::new("files", &columns).show(ui, state, rows);
+            },
+            (
+                TableState::new(),
+                Rows(vec![(0, "Short".into(), 1), (1, LONG.into(), 2)]),
+            ),
+        );
+    h.run();
+    let painted = |h: &Harness<'_, _>, text: &str| {
+        h.output().shapes.iter().find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.job.text == text => {
+                Some((t.galley.clone(), c.shape.visual_bounding_rect()))
+            }
+            _ => None,
+        })
+    };
+    let (short, _) = painted(&h, "Short").expect("the short name");
+    assert!(!short.elided);
+    let (long, text) = painted(&h, LONG).expect("the long name");
+    assert!(long.elided, "elided in its column");
+    let last = long
+        .rows
+        .last()
+        .and_then(|r| r.glyphs.last())
+        .map(|g| g.chr);
+    assert_eq!(last, Some('…'));
+    // Within the name column (160 points from the table's left), the
+    // size column whole after it.
+    let (size, size_rect) = painted(&h, "2 KB").expect("the size");
+    assert!(!size.elided);
+    assert!(
+        text.right() <= size_rect.left(),
+        "{text:?} before {size_rect:?}"
+    );
+    // The row and the cell keep the full text as their names.
+    assert!(row(&h, LONG).accesskit_node().description().is_none());
+    let cell = h.get_by_role_and_label(egui::accesskit::Role::Label, LONG);
+    // Hovering the cell shows the full text.
+    h.hover_at(cell.rect().center());
+    h.run();
+    h.run_steps(45);
+    assert_eq!(
+        h.query_all_by_role_and_label(egui::accesskit::Role::Label, LONG)
+            .count(),
+        2,
+        "the cell and its tooltip"
+    );
 }

@@ -1204,6 +1204,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                                 pos2(right.max(left), rect.bottom()),
                             );
                             let editing = renaming.as_ref().is_some_and(|r| r.key == key);
+                            let mut elided = false;
                             if editing {
                                 let ren = renaming.as_mut().expect("renaming");
                                 let mut child = ui.new_child(
@@ -1233,22 +1234,13 @@ impl<'a, K: Key> TreeView<'a, K> {
                                 }
                             } else {
                                 let font = egui::TextStyle::Body.resolve(ui.style());
-                                let painter = ui
-                                    .painter()
-                                    .with_clip_rect(text_rect.intersect(ui.clip_rect()));
                                 let hits = if model.is_filtered() {
                                     query.positions(&node.label)
                                 } else {
                                     Vec::new()
                                 };
-                                if hits.is_empty() {
-                                    painter.text(
-                                        pos2(text_rect.left(), text_rect.center().y),
-                                        egui::Align2::LEFT_CENTER,
-                                        &node.label,
-                                        font,
-                                        color,
-                                    );
+                                elided = if hits.is_empty() {
+                                    item::paint_label(ui, rect, left, right, &node.label, color)
                                 } else {
                                     // What matches, in the row's accent tone,
                                     // underlined (as the palette marks it).
@@ -1264,18 +1256,18 @@ impl<'a, K: Key> TreeView<'a, K> {
                                         color,
                                         strong,
                                     );
-                                    let galley = painter.layout_job(job);
-                                    let at = pos2(
-                                        text_rect.left(),
-                                        text_rect.center().y - galley.size().y / 2.0,
-                                    );
-                                    painter.galley(at, galley, color);
-                                }
+                                    item::paint_label_job(ui, rect, left, right, job, color)
+                                };
                             }
                             let name = node.label.clone();
                             r.widget_info(move || {
                                 WidgetInfo::selected(Role::Button, true, selected, &name)
                             });
+                            let r = if elided {
+                                item::full_label_tip(r, &node.label)
+                            } else {
+                                r
+                            };
                             let labels: Vec<String> =
                                 row_actions.iter().map(|a| a.label().to_string()).collect();
                             item::custom_actions(ui, r.id, &labels);

@@ -47,11 +47,17 @@
 //! cursor's buttons, Shift+Tab goes back to the tree. Screen readers also
 //! find each action on the row itself, as a custom action named by its
 //! label.
+//!
+//! A label that does not fit draws on one line, elided with "…" before
+//! the row's trailing text and buttons, which stay whole; hovering the row
+//! then shows the full label. The row's accessible name is always the
+//! full label.
 
 use egui::accesskit::{self, Role};
+use egui::text::{LayoutJob, TextWrapping};
 use egui::{
-    Align2, AsIdSalt, Color32, EventFilter, FontSelection, Id, IdSalt, Key, Modifiers, Pos2, Rect,
-    Response, Sense, TextStyle, Ui, UiBuilder, WidgetInfo, pos2, vec2,
+    AsIdSalt, Color32, EventFilter, FontSelection, Id, IdSalt, Key, Modifiers, Rect, Response,
+    Sense, TextStyle, Ui, UiBuilder, WidgetInfo, pos2, vec2,
 };
 use egui_pop_core::icon::{Icon, Size, Source};
 use egui_pop_core::kit::{Glyph, Kit, KitCx, Part, State, Tone};
@@ -441,12 +447,17 @@ impl ListItem {
         } else if rects.is_empty() {
             right -= ui.spacing().item_spacing.x;
         }
-        paint_label(ui, rect, placed.left, right, &self.label, placed.color);
+        let elided = paint_label(ui, rect, placed.left, right, &self.label, placed.color);
 
         // The row's accessible node, before its buttons'.
         let label = self.label.clone();
         let (selected, role) = (self.selected, self.role);
         response.widget_info(move || WidgetInfo::selected(role, enabled, selected, &label));
+        let response = if elided {
+            full_label_tip(response, &self.label)
+        } else {
+            response
+        };
         let open = self.disclosure == Disclosure::Open;
         let depth = self.depth;
         let labels: Vec<String> = self.actions.iter().map(|a| a.label.clone()).collect();
@@ -705,18 +716,85 @@ pub(crate) fn paint_trailing(
     start - pad
 }
 
-/// Paints a row's label from `left`, cut at `right`.
-pub(crate) fn paint_label(ui: &Ui, rect: Rect, left: f32, right: f32, text: &str, color: Color32) {
+/// Paints a row's label from `left` on one line, elided with "…" when it
+/// does not fit before `right`; returns whether it was elided (the row
+/// then shows the full label on hover, [`full_label_tip`]).
+pub(crate) fn paint_label(
+    ui: &Ui,
+    rect: Rect,
+    left: f32,
+    right: f32,
+    text: &str,
+    color: Color32,
+) -> bool {
+    let job = LayoutJob::simple(
+        text.to_owned(),
+        TextStyle::Body.resolve(ui.style()),
+        color,
+        f32::INFINITY,
+    );
+    paint_label_job(ui, rect, left, right, job, color)
+}
+
+/// [`paint_label`] for a label already laid out in sections (a filter's
+/// matches, highlighted).
+pub(crate) fn paint_label_job(
+    ui: &Ui,
+    rect: Rect,
+    left: f32,
+    right: f32,
+    mut job: LayoutJob,
+    color: Color32,
+) -> bool {
+    let width = (right - left).max(0.0);
+    job.wrap = TextWrapping::truncate_at_width(width);
+    let galley = ui.painter().layout_job(job);
+    let elided = galley.elided;
     let clip = Rect::from_min_max(pos2(left, rect.top()), pos2(right.max(left), rect.bottom()));
     ui.painter()
         .with_clip_rect(clip.intersect(ui.clip_rect()))
-        .text(
-            Pos2::new(left, rect.center().y),
-            Align2::LEFT_CENTER,
-            text,
-            TextStyle::Body.resolve(ui.style()),
+        .galley(
+            pos2(left, rect.center().y - galley.size().y / 2.0),
+            galley,
             color,
         );
+    elided
+}
+
+/// Shows a row's full label as its tooltip, for a label drawn elided. The
+/// row's accessible node is left as it is (its name is already the full
+/// label; egui's `on_hover_text` would add it again as a description).
+pub(crate) fn full_label_tip(response: Response, label: &str) -> Response {
+    let label = label.to_owned();
+    let tip = move |ui: &mut Ui| {
+        ui.set_max_width(ui.spacing().tooltip_width);
+        ui.add(egui::Label::new(label));
+    };
+    if response.enabled() {
+        response.on_hover_ui(tip)
+    } else {
+        response.on_disabled_hover_ui(tip)
+    }
+}
+
+/// Where a list's default row drawing leaves "its label was elided" for
+/// the list (keyed by the row's `Ui`).
+const ELIDED: &str = "egui_pop_row_label_elided";
+
+/// Draws a row's label in `ui`'s whole rect (a list's default row), elided
+/// as [`paint_label`] does; the list reads [`take_elided`] afterwards.
+pub(crate) fn row_label(ui: &Ui, text: &str, color: Color32) {
+    let rect = ui.max_rect();
+    if paint_label(ui, rect, rect.left(), rect.right(), text, color) {
+        ui.data_mut(|d| d.insert_temp(ui.scope_id().with(ELIDED), true));
+    }
+}
+
+/// Whether [`row_label`] elided the label it drew in `ui` (and forgets
+/// it).
+pub(crate) fn take_elided(ui: &Ui) -> bool {
+    ui.data_mut(|d| d.remove_temp::<bool>(ui.scope_id().with(ELIDED)))
+        .unwrap_or(false)
 }
 
 /// Lists a row's actions on its accessible node, as custom actions
