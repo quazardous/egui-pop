@@ -294,7 +294,7 @@ Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, 
 
 The live tree, list items and property rows, lists and tables, charts (and a plot over a
 timeline's time: its cursor the playhead, a stepped line, an error band, the range shaded, the
-values at the pointer), and the photo library (a thumbnail grid
+values at the pointer, two million samples decimated per pixel column), and the photo library (a thumbnail grid
 and filmstrip, marks, filter chips, a comparison).
 
 <table>
@@ -321,6 +321,9 @@ and filmstrip, marks, filter chips, a comparison).
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/plot-time-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/plot-time-pop-light.png" width="200" alt="plot-time-pop-light"></a><br>plot-time-pop-light</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/plot-time-pop-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/plot-time-pop-high-contrast.png" width="200" alt="plot-time-pop-high-contrast"></a><br>plot-time-pop-high-contrast</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/plot-time-tooltip-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/plot-time-tooltip-pop-dark.png" width="200" alt="plot-time-tooltip-pop-dark"></a><br>plot-time-tooltip-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/plot-time-large-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/plot-time-large-pop-dark.png" width="200" alt="plot-time-large-pop-dark"></a><br>plot-time-large-pop-dark</td>
   </tr>
 </table>
 

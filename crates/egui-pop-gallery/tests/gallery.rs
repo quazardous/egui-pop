@@ -3988,6 +3988,65 @@ fn the_plot_over_time_page_follows_its_timeline_both_ways() {
 }
 
 #[test]
+fn the_plot_over_time_page_draws_two_million_samples_decimated() {
+    use egui::accesskit::Role;
+    use egui_pop_gallery::pages::plot_time::{LARGE_RATE, large_speed};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "plot-time"));
+    h.run();
+    h.get_by_role_and_label(Role::CheckBox, "Two million samples")
+        .click();
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    h.remove_cursor();
+    h.run();
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("plot-time-large-pop-dark"));
+    // Two million and one samples, drawn as at most four a pixel column.
+    let p = plot_state(&h, "gallery.plot.time");
+    let speed = &p["series"][0];
+    assert_eq!(speed["points"], 2_000_001, "{speed}");
+    let frame = h.get_by_label("Robot over time").rect();
+    let columns = (frame.width() * h.ctx.pixels_per_point()).ceil() as u64;
+    let drawn = speed["drawn"].as_u64().unwrap_or(u64::MAX);
+    assert!(
+        drawn <= 4 * columns + 2,
+        "{drawn} points drawn across {columns} columns"
+    );
+    // The summary still counts every sample.
+    let d = h
+        .get_by_label("Robot over time")
+        .accesskit_node()
+        .description()
+        .unwrap_or_default();
+    assert!(d.starts_with("Speed (line): 2000001 points"), "{d}");
+    // The point under the pointer is one of the two million, not a
+    // decimated one.
+    let at = |v: &serde_json::Value, k: usize| v[k].as_f64().unwrap_or_default();
+    let (min, max) = (&p["bounds"]["min"], &p["bounds"]["max"]);
+    let i = 730_000_u64;
+    let (x, y) = (i as f64 / LARGE_RATE, large_speed(i));
+    let pos = egui::pos2(
+        frame.left() + ((x - at(min, 0)) / (at(max, 0) - at(min, 0))) as f32 * frame.width(),
+        frame.bottom() - ((y - at(min, 1)) / (at(max, 1) - at(min, 1))) as f32 * frame.height(),
+    );
+    h.hover_at(pos);
+    h.run();
+    h.run();
+    let hovered = plot_state(&h, "gallery.plot.time")["hovered"].clone();
+    assert_eq!(hovered["series"], 0, "{hovered}");
+    let index = hovered["index"]
+        .as_u64()
+        .expect("a sample under the pointer");
+    assert_eq!(
+        hovered["x"].as_f64(),
+        Some(index as f64 / LARGE_RATE),
+        "{hovered}"
+    );
+    assert_eq!(hovered["y"].as_f64(), Some(large_speed(index)), "{hovered}");
+    assert!(index.abs_diff(i) <= 50_000, "{hovered}");
+}
+
+#[test]
 fn the_text_editor_page_edits_searches_through_the_keymap_and_vetoes_the_title() {
     use egui::{Key, Modifiers};
     let mut h = harness(options("pop-dark", Density::Comfortable, "text-editor"));
