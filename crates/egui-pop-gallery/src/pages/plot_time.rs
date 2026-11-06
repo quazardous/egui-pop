@@ -3,11 +3,12 @@
 //! plot's time cursor, dragging either moves both, the timeline's looping
 //! range is highlighted on the plot), with a line in an entity's colour
 //! and its error band, a target and a stepped gear; then a plot whose
-//! axis counts bars and beats.
+//! axis counts bars and beats. The playground swaps the speed for two
+//! million samples, drawn decimated per pixel column.
 
 use egui::Ui;
 use egui_pop::core::widgets;
-use egui_pop::views::plot::{Band, Plot, Series};
+use egui_pop::views::plot::{Band, DECIMATION_THRESHOLD, Plot, Series};
 use egui_pop::views::timeline::{TimeRange, TimeScale, Timeline, TimelineState};
 
 use super::section;
@@ -15,12 +16,32 @@ use super::section;
 /// The recording's length, in seconds.
 pub const LENGTH: f64 = 20.0;
 
+/// How many samples a second the large recording takes.
+pub const LARGE_RATE: f64 = 100_000.0;
+
 /// The page's state: the timeline both views follow.
 #[derive(Debug)]
 pub struct PlotTimeState {
     pub timeline: TimelineState,
     /// The values the plot last gave, as said under it.
     pub values: Option<String>,
+    /// The speed sampled [`LARGE_RATE`] times a second: two million
+    /// samples.
+    pub large: bool,
+    /// The plot decimates its lines and bands per pixel column.
+    pub decimate: bool,
+    /// The large recording, made the first time it is shown.
+    large_recording: Option<Large>,
+}
+
+/// The large recording's series and band.
+struct Large(Vec<Series>, Vec<Band>);
+
+impl std::fmt::Debug for Large {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let points: usize = self.0.iter().map(|s| s.points.len()).sum();
+        write!(f, "Large({points} points)")
+    }
 }
 
 impl Default for PlotTimeState {
@@ -32,8 +53,44 @@ impl Default for PlotTimeState {
         Self {
             timeline,
             values: None,
+            large: false,
+            decimate: true,
+            large_recording: None,
         }
     }
+}
+
+/// The large recording's speed at sample `i`: the speed, a vibration and
+/// a deterministic noise (a hash of the index), the same on every run.
+pub fn large_speed(i: u64) -> f64 {
+    let t = i as f64 / LARGE_RATE;
+    let mut h = i.wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    h ^= h >> 31;
+    h = h.wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    h ^= h >> 29;
+    let noise = (h >> 11) as f64 / (1u64 << 53) as f64 - 0.5;
+    speed(t) + 0.12 * (t * 2.0 * std::f64::consts::PI * 3.1).sin() + 0.18 * noise
+}
+
+/// The recording with the speed sampled [`LARGE_RATE`] times a second
+/// (two million and one samples) and its band as many.
+pub fn large_recording() -> (Vec<Series>, Vec<Band>) {
+    let (mut series, _) = recording();
+    let n = (LENGTH * LARGE_RATE) as u64;
+    series[0] = Series::line(
+        "Speed",
+        (0..=n).map(|i| [i as f64 / LARGE_RATE, large_speed(i)]),
+    )
+    .entity("/robot/speed");
+    let band = Band::new(
+        0,
+        (0..=n).map(|i| {
+            let v = large_speed(i);
+            let e = 0.08 + 0.06 * v.abs();
+            [i as f64 / LARGE_RATE, v - e, v + e]
+        }),
+    );
+    (series, vec![band])
 }
 
 /// The robot's speed, every tenth of a second.
@@ -110,10 +167,21 @@ pub fn show(ui: &mut Ui, s: &mut PlotTimeState) {
         .id("gallery.plot-time")
         .label("Recording")
         .show(ui);
-    let (series, bands) = recording();
-    let out = Plot::new("gallery.plot.time", &series)
+    let small = (!s.large).then(recording);
+    let (series, bands) = match &small {
+        Some((series, bands)) => (series, bands),
+        None => {
+            let Large(series, bands) = s.large_recording.get_or_insert_with(|| {
+                let (series, bands) = large_recording();
+                Large(series, bands)
+            });
+            (&*series, &*bands)
+        }
+    };
+    let out = Plot::new("gallery.plot.time", series)
         .label("Robot over time")
-        .bands(&bands)
+        .bands(bands)
+        .decimation(s.decimate.then_some(DECIMATION_THRESHOLD))
         .timeline(&mut s.timeline)
         .height(170.0)
         .show(ui);
@@ -160,4 +228,7 @@ pub fn playground(ui: &mut Ui, s: &mut PlotTimeState) {
     if widgets::checkbox(ui, &mut looping, "Loop the range").changed() {
         s.timeline.looping = looping;
     }
+    ui.label("The speed's samples:");
+    widgets::checkbox(ui, &mut s.large, "Two million samples");
+    widgets::checkbox(ui, &mut s.decimate, "Decimate per pixel column");
 }
