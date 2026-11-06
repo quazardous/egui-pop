@@ -278,6 +278,14 @@ impl fmt::Display for Refused {
 
 impl std::error::Error for Refused {}
 
+/// A refusal as its message, so `?` turns it into the `String` error a
+/// command handler returns.
+impl From<Refused> for String {
+    fn from(r: Refused) -> Self {
+        r.to_string()
+    }
+}
+
 /// Why a path could not be declared.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DeclareError {

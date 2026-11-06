@@ -300,4 +300,26 @@ fn the_generated_manifest_matches_the_built_one() {
         out
     };
     assert_eq!(deps(&built), deps(&liquid));
+    // The versions `cargo generate` offers are the repository's.
+    let workspace = std::fs::read_to_string(dir.join("../../Cargo.toml")).unwrap();
+    let version_of = |name: &str| {
+        let line = workspace
+            .lines()
+            .find(|l| l.starts_with(&format!("{name} = ")))
+            .unwrap();
+        let v = line.split("version = \"").nth(1).unwrap();
+        v[..v.find('"').unwrap()].to_string()
+    };
+    let generate = std::fs::read_to_string(dir.join("cargo-generate.toml")).unwrap();
+    let pop = version_of("egui-pop");
+    let pop_minor = pop.rsplit_once('.').unwrap().0;
+    assert!(
+        generate.contains(&format!("default = \"{pop_minor}\"")),
+        "egui-pop is {pop}"
+    );
+    let egui = version_of("egui");
+    assert!(
+        generate.contains(&format!("default = \"{egui}\"")),
+        "egui is {egui}"
+    );
 }

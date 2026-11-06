@@ -213,6 +213,20 @@ pub fn rank(
     })
 }
 
+/// The palette's list for `query` in this application, now
+/// (`AppHandle::palette_search`).
+pub(crate) fn search(app: &AppHandle, query: &str) -> Vec<Ranked> {
+    let ctx = app.egui();
+    let cx = app.when_context();
+    rank_with(
+        &app.palette(),
+        query,
+        &recent(app),
+        |c| app.applies(c, &cx),
+        |e| shown(&ctx, e),
+    )
+}
+
 /// As [`rank`], each entry shown and matched as `label` gives it (the
 /// palette passes the label in the interface's language: [`shown`]).
 pub fn rank_with(

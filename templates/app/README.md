@@ -24,6 +24,21 @@ cargo test     # headless; the picture is rendered with wgpu
 After changing what the window shows, write the picture again with
 `UPDATE_SNAPSHOTS=1 cargo test` and look at it.
 
+### The picture and the GPU
+
+The snapshot test (`the_window_looks_as_it_did`) renders the window
+with wgpu and compares it with `tests/snapshots/swatch.png`, which was
+drawn by **lavapipe**, Mesa's software Vulkan (as egui-pop's CI draws
+its pictures). A GPU draws edges a little differently, past the
+tolerances of `kittest.toml`, so the test compares only on lavapipe:
+without it (no adapter, or a GPU) it prints why it skipped and passes.
+
+- To compare here, install lavapipe: `mesa-vulkan-drivers` (Debian,
+  Ubuntu, Fedora), `vulkan-swrast` (Arch); wgpu picks it over a GPU.
+- To compare on your GPU anyway, set `EGUI_POP_SNAPSHOT_ANY_GPU=1`,
+  after writing the picture there (`UPDATE_SNAPSHOTS=1`).
+- Keep the picture your CI checks drawn by the same adapter as the CI.
+
 ## Make it yours
 
 1. Pick your plugin's id (`PLUGIN`) and change every id built on it:
@@ -36,4 +51,7 @@ After changing what the window shows, write the picture again with
 4. Pick your licence.
 
 The settings, the layout and the window's place are kept in your
-configuration folder, in a folder named after the crate.
+configuration folder, in a folder named after the crate
+(`AppBuilder::persist_in_config`: `~/.config/<crate>` on Linux,
+`~/Library/Application Support/<crate>` on macOS, `%APPDATA%\<crate>`
+on Windows).

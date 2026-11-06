@@ -41,6 +41,8 @@ pub enum CtxError {
         zone: ZoneId,
         by: OwnerId,
     },
+    /// A setting or a value the store refused to declare (`Ctx::setting`,
+    /// `Ctx::value`).
     Setting(DeclareError),
     Service {
         id: String,
@@ -460,14 +462,45 @@ impl<'a> Ctx<'a> {
         self
     }
 
-    /// Declares a setting at `settings/<id>`, applied live, with its
-    /// reset; shown in the settings form under the plugin's title.
+    /// Declares a value of the application's state at `path`, owned by
+    /// the plugin and removed with it: each change is an undo step, and
+    /// widgets bind to it (`egui_pop_core::param::bound`). Its value
+    /// starts at the descriptor's default. A setting, saved and in the
+    /// settings window, is a [`Ctx::setting`].
+    ///
+    /// ```
+    /// use egui_pop_api::{App, Ctx, Plugin, PluginError};
+    /// use egui_pop_model::ids::PluginId;
+    /// use egui_pop_model::values::Descriptor;
+    ///
+    /// struct Swatch;
+    /// impl Plugin for Swatch {
+    ///     fn id(&self) -> PluginId { PluginId::from_static("swatch") }
+    ///     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+    ///         ctx.value("swatch/hue", Descriptor::float("Hue", 0.0, 360.0, 200.0))?;
+    ///         Ok(())
+    ///     }
+    /// }
+    ///
+    /// let app = App::builder().plugin(Swatch).build(&egui::Context::default()).unwrap();
+    /// assert_eq!(app.handle().value::<f64>("swatch/hue"), Some(200.0));
+    /// ```
+    pub fn value(&mut self, path: &str, descriptor: Descriptor) -> Result<&mut Self, CtxError> {
+        egui_pop_core::lock(&self.app.store())
+            .declare(&self.owner, path, descriptor)
+            .map_err(CtxError::Setting)?;
+        Ok(self)
+    }
+
+    /// Declares a setting at `settings/<id>` ([`SettingId::path`]),
+    /// applied live, with its reset; shown in the settings form under the
+    /// plugin's title. Read it with `AppHandle::setting`.
     pub fn setting(
         &mut self,
         id: SettingId,
         descriptor: Descriptor,
     ) -> Result<&mut Self, CtxError> {
-        let path = format!("settings/{id}");
+        let path = id.path();
         egui_pop_core::lock(&self.app.store())
             .declare(&self.owner, &path, descriptor)
             .map_err(CtxError::Setting)?;
@@ -476,7 +509,7 @@ impl<'a> Ctx<'a> {
             .insert(&self.owner, id, path)
             .map_err(|t| {
                 CtxError::Setting(DeclareError::Taken {
-                    path: format!("settings/{}", t.id),
+                    path: t.id.path(),
                     by: t.by,
                 })
             })?;

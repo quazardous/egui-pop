@@ -25,6 +25,9 @@
 //!   `docs/upstream.md`);
 //! - `SharedGpu::shared_wgpu` and `gpu_lock` (feature `wgpu`): one wgpu
 //!   device per test process (see `docs/testing.md`);
+//! - `app_snapshot` and `snapshot_skip_reason` (feature `wgpu`): a
+//!   snapshot test that skips, with its reason, where no adapter opens
+//!   or the adapter is a GPU rather than lavapipe;
 //! - [`SCALES`], [`app_at`], [`set_native_scale`], [`at_scales`],
 //!   [`rects_of`]: tests at several scales (1, 1.25, 1.5, 2), a window
 //!   moved to a screen of another scale, rectangles in points to compare
@@ -55,7 +58,10 @@
 #[cfg(feature = "wgpu")]
 mod gpu;
 #[cfg(feature = "wgpu")]
-pub use gpu::{SharedGpu, gpu_lock, shared_renderer, shared_setup};
+pub use gpu::{
+    ANY_GPU, SharedGpu, gpu_lock, shared_renderer, shared_setup, snapshot_skip_reason,
+    try_shared_setup,
+};
 
 pub mod hosts;
 pub mod jobs;
@@ -285,6 +291,26 @@ pub fn app_wgpu(builder: AppBuilder, size: Vec2) -> Harness<'static, App> {
         .with_size(size)
         .shared_wgpu()
         .build_ui_state(|ui, app: &mut App| app.show(ui), app)
+}
+
+/// As [`app_wgpu`], for a snapshot test that skips where pictures are
+/// not compared ([`snapshot_skip_reason`]: no adapter, or a GPU rather
+/// than lavapipe): `None` then, the reason printed.
+///
+/// ```ignore
+/// let Some(mut h) = egui_pop_test::app_snapshot(builder(), egui::vec2(900.0, 560.0)) else {
+///     return;
+/// };
+/// h.run();
+/// h.snapshot("window");
+/// ```
+#[cfg(feature = "wgpu")]
+pub fn app_snapshot(builder: AppBuilder, size: Vec2) -> Option<Harness<'static, App>> {
+    if let Some(reason) = snapshot_skip_reason() {
+        eprintln!("snapshot skipped: {reason}");
+        return None;
+    }
+    Some(app_wgpu(builder, size))
 }
 
 /// A harness drawing `ui` with a theme installed before the first frame.

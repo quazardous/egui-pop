@@ -8,7 +8,7 @@
 //! | macOS | `~/Library/Application Support/<app>` | `~/Library/Logs/<app>` |
 //! | Windows | `%LOCALAPPDATA%\<app>` | `<state>\logs` |
 //!
-//! Crash reports go to `<state>/crashes`. Compiled files go to the
+//! Settings go to the configuration folder ([`config_dir`]). Crash reports go to `<state>/crashes`. Compiled files go to the
 //! platform's cache directory ([`cache_dir`], `egui_pop_tokens::cache`). Inside a Flatpak sandbox,
 //! `XDG_STATE_HOME` points into the application's own directory, so the
 //! same code finds the sandbox's place.
@@ -28,6 +28,11 @@
 //! ```
 
 use std::path::{Path, PathBuf};
+
+/// The application's configuration folder, where its settings are kept
+/// (`AppBuilder::persist_in_config`): `~/.config/<app>`,
+/// `~/Library/Application Support/<app>`, `%APPDATA%\<app>`.
+pub use egui_pop_api::dirs::{config_dir, config_dir_with};
 
 /// The application's state directory, from the environment `env` gives
 /// (none: the variables it needs are missing).

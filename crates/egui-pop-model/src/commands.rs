@@ -52,6 +52,27 @@ pub enum Origin {
     Remote(String),
 }
 
+impl fmt::Display for Origin {
+    /// The origin as the journal and the history name it: `user`,
+    /// `agent:<session>`, `script:<name>`, `device:<name>`,
+    /// `remote:<name>`.
+    ///
+    /// ```
+    /// use egui_pop_model::commands::Origin;
+    /// assert_eq!(Origin::User.to_string(), "user");
+    /// assert_eq!(Origin::Agent("debug-bridge".into()).to_string(), "agent:debug-bridge");
+    /// ```
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Origin::User => f.write_str("user"),
+            Origin::Agent(n) => write!(f, "agent:{n}"),
+            Origin::Script(n) => write!(f, "script:{n}"),
+            Origin::Device(n) => write!(f, "device:{n}"),
+            Origin::Remote(n) => write!(f, "remote:{n}"),
+        }
+    }
+}
+
 impl Origin {
     /// Who writes a value for this origin (ADR 0016): a person writes
     /// through the framework, which may write any path; anyone else

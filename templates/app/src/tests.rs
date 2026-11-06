@@ -4,8 +4,8 @@
 
 use egui_kittest::kittest::Queryable as _;
 use egui_pop::api::App;
-use egui_pop::core::binding;
 use egui_pop::egui;
+use egui_pop::model::values::{Change, Value};
 use egui_pop::prelude::*;
 use serde_json::{Value as Json, json};
 
@@ -15,7 +15,7 @@ use crate::swatch::*;
 const SIZE_PX: egui::Vec2 = egui::vec2(900.0, 560.0);
 
 fn read(app: &App, path: &str) -> f64 {
-    binding::read(&app.handle().store(), path).unwrap()
+    app.handle().value(path).unwrap()
 }
 
 #[test]
@@ -61,14 +61,12 @@ fn the_setting_hides_the_code() {
         h.query_by_label_contains("#").is_some(),
         "the code is shown"
     );
-    let set = egui_pop::model::values::Set::new(
-        SHOW_CODE_PATH,
-        egui_pop::model::values::Change::To(egui_pop::model::values::Value::Bool(false)),
-        Origin::User,
-    );
-    egui_pop::core::lock(&h.state().handle().store())
-        .set(set)
-        .unwrap();
+    // Written as the user would, in the settings window.
+    let app = h.state().handle().clone();
+    app.group(&Origin::User, "Hide the code", |g| {
+        g.set(&SHOW_CODE.path(), Change::To(Value::Bool(false)))
+    })
+    .unwrap();
     h.run();
     assert!(
         h.query_by_label_contains("#").is_none(),
@@ -110,9 +108,15 @@ fn the_kit_is_clean() {
     assert!(problems.is_empty(), "{problems:?}");
 }
 
+/// The picture is compared where it was made: on lavapipe, Mesa's
+/// software Vulkan, as CI renders it. Without it (no adapter, or a GPU)
+/// the test says so and passes; `EGUI_POP_SNAPSHOT_ANY_GPU=1` compares
+/// on any GPU, within `kittest.toml`'s tolerances.
 #[test]
 fn the_window_looks_as_it_did() {
-    let mut h = egui_pop_test::app_wgpu(builder(), SIZE_PX);
+    let Some(mut h) = egui_pop_test::app_snapshot(builder(), SIZE_PX) else {
+        return;
+    };
     h.run();
     h.snapshot("swatch");
 }

@@ -92,6 +92,7 @@
 
 use std::collections::VecDeque;
 use std::fmt;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use egui_pop_core::binding::SharedStore;
@@ -449,16 +450,35 @@ pub trait Host {
 
     /// Opens a history group labelled `label` ("Paste a colour"): what is
     /// written in it until [`Host::end_group`] is one undo step. egui-pop
-    /// opens one around a paste and around a cut's delete; the writes
-    /// carry it (`Set::gesture`). The default opens a group of the store;
-    /// `None`: the host groups nothing.
+    /// opens one around a paste and around a cut's delete, and
+    /// `AppHandle::group` opens one for the application; the writes
+    /// carry it (`Set::gesture`). The default opens one through
+    /// [`Host::groups`], else a group of the store; `None`: the host
+    /// groups nothing.
     fn begin_group(&mut self, origin: &Origin, label: &str) -> Option<GestureId> {
+        if let Some(groups) = self.groups() {
+            return groups.begin(origin, label);
+        }
         Some(lock(&self.store()).begin_group(origin.clone(), label))
+    }
+
+    /// The history groups of a host keeping its own history, for the
+    /// groups a command opens while the host dispatches it
+    /// (`Call::group`). `None` (the default): such groups are the
+    /// store's, as the default [`Host::begin_group`]'s are; a host
+    /// overriding `begin_group` gives its groups here too, so a
+    /// command's groups reach its history.
+    fn groups(&self) -> Option<Rc<dyn Groups>> {
+        None
     }
 
     /// Ends a history group: kept as one undo step, or (`keep` false)
     /// put back as it was.
     fn end_group(&mut self, group: GestureId, keep: bool) {
+        if let Some(groups) = self.groups() {
+            groups.end(group, keep);
+            return;
+        }
         let store = self.store();
         let mut s = lock(&store);
         if keep {
@@ -467,6 +487,18 @@ pub trait Host {
             s.cancel(group);
         }
     }
+}
+
+/// Opens and ends a host's history groups without the host itself:
+/// while the host dispatches a command it is out of reach, and a
+/// command's `AppHandle::group` (`Call::group`) goes through this.
+/// A host keeping its own history hands one out from [`Host::groups`];
+/// the default [`Host::begin_group`] and [`Host::end_group`] use it too.
+pub trait Groups {
+    /// Opens a group (see [`Host::begin_group`]); `None`: nothing grouped.
+    fn begin(&self, origin: &Origin, label: &str) -> Option<GestureId>;
+    /// Ends a group: kept, or (`keep` false) put back as it was.
+    fn end(&self, group: GestureId, keep: bool);
 }
 
 /// The layout's document when the host names none of its own.
@@ -542,15 +574,9 @@ impl Host for LocalHost {
 }
 
 /// The journal's name for an origin: `user`, `agent:<session>`,
-/// `script:<name>`...
+/// `script:<name>`... (the origin's `Display`).
 pub fn source_of(origin: &Origin) -> String {
-    match origin {
-        Origin::User => "user".into(),
-        Origin::Agent(n) => format!("agent:{n}"),
-        Origin::Script(n) => format!("script:{n}"),
-        Origin::Device(n) => format!("device:{n}"),
-        Origin::Remote(n) => format!("remote:{n}"),
-    }
+    origin.to_string()
 }
 
 #[cfg(test)]

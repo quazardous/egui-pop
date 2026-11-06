@@ -2,11 +2,10 @@
 //! its own, and goes away if it is disconnected.
 
 use egui_pop::api::app::MENU_EDIT;
-use egui_pop::core::param::{self, Mode};
-use egui_pop::core::{binding, lock};
+use egui_pop::core::param;
 use egui_pop::egui;
 use egui_pop::model::panels::{Area, PanelSpec};
-use egui_pop::model::values::{Change, Set, Value};
+use egui_pop::model::values::{Change, Value};
 use egui_pop::prelude::*;
 use serde_json::{Value as Json, json};
 
@@ -16,10 +15,9 @@ pub const PLUGIN: PluginId = PluginId::from_static("swatch");
 pub const HUE: &str = "swatch/hue";
 /// The swatch's side, in points.
 pub const SIZE: &str = "swatch/size";
-/// Whether the colour's code is shown under the swatch: a setting.
+/// Whether the colour's code is shown under the swatch: a setting, kept
+/// in the store at `SHOW_CODE.path()` (`settings/swatch.show_code`).
 pub const SHOW_CODE: SettingId = SettingId::from_static("swatch.show_code");
-/// Where the setting is kept in the store.
-pub const SHOW_CODE_PATH: &str = "settings/swatch.show_code";
 /// Puts the hue and the size back to their defaults, as one undo step.
 pub const RESET: CommandId = CommandId::from_static("swatch.reset");
 /// Sets the hue and the size (`hue`, `size`); offered to agents.
@@ -51,14 +49,10 @@ impl Plugin for Swatch {
     }
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
-        // The state: two values of the store, written as one owner, each
+        // The state: two values of the store, owned by the plugin, each
         // change an undo step.
-        let store = ctx.app().store();
-        for (path, descriptor) in [(HUE, hue()), (SIZE, size())] {
-            lock(&store)
-                .declare(ctx.owner(), path, descriptor)
-                .map_err(|e| PluginError::Failed(e.to_string()))?;
-        }
+        ctx.value(HUE, hue())?;
+        ctx.value(SIZE, size())?;
         // A setting: in the settings window (Ctrl+,), saved, with a reset.
         ctx.setting(
             SHOW_CODE,
@@ -105,28 +99,21 @@ impl Plugin for Swatch {
 }
 
 /// Writes `changes` as one undo step named `label`, as the caller (the
-/// user, an agent): all of them, or none.
+/// user, an agent): all of them, or none (an error puts them back).
 fn write(call: &Call<'_>, label: &str, changes: &[(&str, Change)]) -> Result<Json, String> {
-    let store = call.app.store();
-    let mut s = lock(&store);
-    let group = s.begin_group(call.origin.clone(), label);
-    for (path, change) in changes {
-        let set = Set::new(path, change.clone(), call.origin.clone()).gesture(group);
-        if let Err(e) = s.set(set) {
-            s.cancel(group);
-            return Err(e.to_string());
+    call.group(label, |g| {
+        for (path, change) in changes {
+            g.set(path, change.clone())?;
         }
-    }
-    s.end(group);
-    Ok(Json::Null)
+        Ok(Json::Null)
+    })
 }
 
 /// The swatch, its colour read from the store each frame.
 fn view(ui: &mut egui::Ui, app: &AppHandle) {
-    let store = app.store();
-    let hue: f64 = binding::read(&store, HUE).unwrap_or(200.0);
-    let size: f64 = binding::read(&store, SIZE).unwrap_or(160.0);
-    let show_code: bool = binding::read(&store, SHOW_CODE_PATH).unwrap_or(true);
+    let hue: f64 = app.value(HUE).unwrap_or(200.0);
+    let size: f64 = app.value(SIZE).unwrap_or(160.0);
+    let show_code: bool = app.setting(&SHOW_CODE).unwrap_or(true);
     let [r, g, b] = egui::ecolor::rgb_from_hsv((hue as f32 / 360.0, 0.6, 0.85))
         .map(|c| (c * 255.0).round() as u8);
     let colour = egui::Color32::from_rgb(r, g, b);
@@ -149,12 +136,12 @@ fn view(ui: &mut egui::Ui, app: &AppHandle) {
     });
 }
 
-/// The parameters, each widget bound to its value: a drag is one undo
-/// step.
+/// The parameters, each widget bound to its value (the editor its
+/// descriptor calls for): a drag is one undo step.
 fn parameters(ui: &mut egui::Ui, app: &AppHandle) {
     let store = app.store();
-    param::param(ui, &hue(), Mode::Bound(&store, HUE));
-    param::param(ui, &size(), Mode::Bound(&store, SIZE));
+    param::bound(ui, &store, HUE);
+    param::bound(ui, &store, SIZE);
     if ui.button("Reset").clicked() {
         app.run(RESET, Json::Null);
     }

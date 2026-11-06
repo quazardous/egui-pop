@@ -18,8 +18,6 @@ mod swatch;
 #[cfg(test)]
 mod tests;
 
-use std::path::PathBuf;
-
 use egui_pop::api::history_view::HistoryPlugin;
 use egui_pop::eframe;
 use egui_pop::prelude::*;
@@ -49,19 +47,10 @@ fn builder() -> AppBuilder {
         .plugin(Swatch)
 }
 
-/// Where the settings, the layout and the window's place are kept: the
-/// user's configuration folder, in a folder named after the crate.
-fn settings_dir() -> PathBuf {
-    let base = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("APPDATA").map(PathBuf::from))
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
-        .unwrap_or_else(std::env::temp_dir);
-    base.join(env!("CARGO_PKG_NAME"))
-}
-
 fn main() -> eframe::Result {
     builder()
-        .persist(settings_dir())
+        // The settings, the layout and the window's place, kept in the
+        // user's configuration folder (`~/.config/<crate>` on Linux).
+        .persist_in_config(env!("CARGO_PKG_NAME"))
         .run_native(NAME, eframe::NativeOptions::default())
 }
