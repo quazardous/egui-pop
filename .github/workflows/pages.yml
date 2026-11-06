@@ -109,7 +109,13 @@ jobs:
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.retry.outputs.page_url }}
     steps:
+      # GitHub sometimes times out while it syncs the site's files; one
+      # more try is enough then, and a real failure fails both
       - id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - id: retry
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
