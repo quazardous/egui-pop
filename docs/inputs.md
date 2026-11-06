@@ -205,8 +205,11 @@ stop. A side area's resize line is still one, as egui draws it.
 
 ### Keys on a scroll area
 
-`UiPop::scroll_area` answers the keys egui's own scroll area does not. The others,
-on `egui::ScrollArea` directly, do not yet.
+`UiPop::scroll_area` answers the keys egui's own scroll area does not, and every
+scroll area of egui-pop's own goes through it: its panels, dialogs and lists, and
+the views (`scroll_area_viewport` and `scroll_area_rows` are its forms for a view
+drawing only what is in view). An application's area on `egui::ScrollArea`
+directly has none of this.
 
 | Key | Moves it |
 |---|---|
@@ -226,7 +229,9 @@ A move is not animated, whatever the motion setting, and a held key goes on.
 - **A widget inside goes first**: a text input, or a focused widget sensing drags (a
   slider, a canvas, an editor, a terminal), keeps these keys. So does one naming
   itself with `focus::takes_keys` (each pass, as it is drawn): a list, a grid, a row
-  of stars. Another focused widget (a button, a link) leaves the pages, Home and
+  of stars. A view whose focusable widget lies around its area (the list, the tree,
+  the library's grid) calls it inside the area, which then makes the view the Tab
+  stop rather than itself. Another focused widget (a button, a link) leaves the pages, Home and
   End to the area, and the arrows to egui, which moves the focus.
 - **A Tab stop only when nothing else can be**, as a browser's scroller: an area
   overflowing, with nothing focusable inside, takes the focus (role `ScrollView`,
@@ -248,13 +253,34 @@ another widget. So what nests keeps it:
   thumbnail grid, the table, the editor, a section's body. The terminal takes every
   wheel over it.
 - **An area of yours**: `ui.scroll_area_contained(area, add)` in place of
-  `ui.scroll_area`, or `ui::contain_wheel(ui, &out)` after one you show yourself
-  (`show_viewport`, `show_rows`).
+  `ui.scroll_area`, or `ui::contain_wheel(ui, &out)` after `scroll_area_viewport`,
+  `scroll_area_rows` or one you show yourself.
 - **Only the ways it can go.** A list with nothing to scroll hands the wheel on, and
   a sideways wheel goes on past an area that only scrolls down. An area with its bars
   hidden holds nothing, as it has no bar to say which ways it goes.
 - **Popups and dialogs** need none of this: each is a layer of its own, and what
   scrolls under it does not see the wheel.
+- **A trackpad** too: egui 0.37 hands a trackpad at an area's end on to the area
+  around it rather than stretching the area, and containment keeps it there all the
+  same.
+
+### A strip that scrolls only sideways
+
+egui-pop's themes turn on egui's `always_scroll_the_only_direction`: an area that
+scrolls one way only takes the plain wheel that way, so a strip of tabs or a
+filmstrip scrolls sideways without Shift, which nobody finds on a strip with no bar.
+At its end the wheel goes on to the area around it, as for any area. Shift still
+works.
+
+### Trackpads and touch screens
+
+egui 0.37 scrolls a trackpad and a touch drag with momentum: a touch drag coasts
+after the release, and a trackpad or a touch drag stretches an area past its end and
+springs back (`KineticScrollStyle`). A mouse wheel does neither. Under reduced
+motion (`ThemeSpec::reduced_motion`) the theme turns both off: an area stops where
+the finger leaves it, and at its ends. A panel that wants no stretch even with
+motion on (a column of sliders, say) sets
+`ui.spacing_mut().scroll.kinetic.rubber_band = false` before its area.
 
 ### Arrows stay in their region
 
