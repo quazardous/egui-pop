@@ -414,7 +414,6 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
             p.refilter();
         }
         widgets::checkbox(ui, &mut p.auto_advance, "Auto-advance");
-        widgets::checkbox(ui, &mut p.empty_stars, "Empty stars on every cell");
         if widgets::selectable_label(ui, !p.comparing, "Grid").clicked() {
             p.comparing = false;
         }
@@ -478,6 +477,9 @@ fn library(ui: &mut Ui, app: &AppHandle, p: &mut PageState, thumbs: &Thumbs) {
     p.handle(signals);
     // The marks of the image under the cursor, edited for the selection.
     section(ui, "Marks");
+    // The grid's empty stars: under the pointer (the default) or on every
+    // cell.
+    widgets::checkbox(ui, &mut p.empty_stars, "Empty stars on every cell");
     let Some(cursor) = p.state.selection().cursor().copied() else {
         ui.weak("No image under the cursor.");
         return;
