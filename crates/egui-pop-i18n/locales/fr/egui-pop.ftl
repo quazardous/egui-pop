@@ -1660,6 +1660,8 @@ egui-pop-viewport-graph-delete = Supprimer
 
 egui-pop-viewport-graph-disconnect = Déconnecter
 
+egui-pop-viewport-graph-disconnected = { $from } déconnecté de { $to }
+
 egui-pop-viewport-graph-duplicate = Dupliquer
 
 egui-pop-viewport-graph-exists = le lien existe déjà
@@ -1698,9 +1700,15 @@ egui-pop-viewport-graph-role-output = port de sortie
 
 egui-pop-viewport-graph-role-stack = pile
 
+egui-pop-viewport-graph-role-wire = lien
+
 egui-pop-viewport-graph-same-node = un nœud ne peut pas s’alimenter lui-même
 
 egui-pop-viewport-graph-same-side = deux entrées ou deux sorties
+
+egui-pop-viewport-graph-select-destination = Sélectionner la destination
+
+egui-pop-viewport-graph-select-source = Sélectionner la source
 
 egui-pop-viewport-graph-types-differ = les types diffèrent ({ $from }, { $to })
 
@@ -1708,7 +1716,21 @@ egui-pop-viewport-graph-unfold = Déplier { $group } ({ $count } nœuds)
 
 egui-pop-viewport-graph-value = { $nodes } nœuds, { $wires } liens, { $level }
 
+egui-pop-viewport-graph-wire-hint = Clic : sélectionner le lien · Ctrl+clic : l’ajouter · Glisser : déplacer son extrémité la plus proche · Clic droit : son menu
+
+egui-pop-viewport-graph-wire-input-picked = Lien depuis { $from } détaché de { $to } : choisissez une entrée
+
+egui-pop-viewport-graph-wire-keys = Suppr pour déconnecter, Entrée pour déplacer son extrémité d’entrée, Maj+Entrée pour déplacer son extrémité de sortie
+
+egui-pop-viewport-graph-wire-name = { $from } vers { $to }
+
+egui-pop-viewport-graph-wire-output-picked = Lien vers { $to } détaché de { $from } : choisissez une sortie
+
 egui-pop-viewport-graph-wire-started = Lien depuis { $port } : choisissez un port
+
+egui-pop-viewport-graph-wire-tip = { $from_node } · { $from_port } vers { $to_node } · { $to_port }
+
+egui-pop-viewport-graph-wires-selected = { $count } liens sélectionnés
 
 egui-pop-viewport-histogram-clipped-highlights = hautes lumières écrêtées : { $percent } %
 

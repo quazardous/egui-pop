@@ -1560,6 +1560,115 @@ fn the_node_graph_page_exports_the_graph_as_svg() {
 }
 
 #[test]
+fn the_node_graph_page_selects_deletes_and_undoes_wires() {
+    use egui_pop::imaging::graph::{CMD_GRAPH_READ, CMD_GRAPH_SELECT, CMD_GRAPH_VIEW};
+    use egui_pop::model::commands::Origin;
+    let agent = || Origin::Agent("test".into());
+    let mut h = harness(options("pop-dark", Density::Comfortable, "node-graph"));
+    h.run();
+    let read = |h: &mut Harness<'_, Gallery>| {
+        h.state_mut()
+            .app
+            .run(
+                &CMD_GRAPH_READ,
+                serde_json::json!({ "graph": "gallery" }),
+                agent(),
+            )
+            .now()
+            .expect("answered now")
+            .expect("read")
+    };
+    // The ports' level, around the first row.
+    for args in [
+        serde_json::json!({ "graph": "gallery", "level": "ports" }),
+        serde_json::json!({ "graph": "gallery", "focus": "exposure-1" }),
+    ] {
+        let _ = h.state_mut().app.run(&CMD_GRAPH_VIEW, args, agent());
+    }
+    h.run();
+    h.run();
+    assert_eq!(read(&mut h)["level"], "ports");
+    let edges = read(&mut h)["edges"]
+        .as_array()
+        .map(Vec::len)
+        .expect("edges");
+    let name = "Load 1, output Image to Exposure 1, input Image";
+    let wire = h.get_by_label(name);
+    assert_eq!(
+        wire.accesskit_node().role(),
+        egui::accesskit::Role::Button,
+        "a wire is an item"
+    );
+    let at = wire.rect().center();
+    egui_pop_test::assert_all_named(&h);
+
+    // Hovered: thicker, its ports ringed, its ends named.
+    h.input_mut().events.push(egui::Event::PointerMoved(at));
+    h.run();
+    assert!(
+        h.query_by_label("Load 1 · Image to Exposure 1 · Image")
+            .is_some(),
+        "the tooltip"
+    );
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_snapshot("node-graph-wire-hover-pop-dark"));
+
+    // An agent selects a wire; graph.read says so.
+    let other = serde_json::json!({
+        "from": { "node": "load-2", "port": "image" },
+        "to": { "node": "exposure-2", "port": "image" },
+    });
+    let _ = h.state_mut().app.run(
+        &CMD_GRAPH_SELECT,
+        serde_json::json!({ "graph": "gallery", "edges": [other] }),
+        agent(),
+    );
+    h.run();
+    assert_eq!(read(&mut h)["selected_edges"], serde_json::json!([other]));
+    // A click selects the hovered wire alone, Delete disconnects it: one
+    // graph.disconnect step, one undo.
+    let button = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    h.input_mut().events.push(button(true));
+    h.step();
+    h.input_mut().events.push(button(false));
+    h.run();
+    let first = serde_json::json!({
+        "from": { "node": "load-1", "port": "image" },
+        "to": { "node": "exposure-1", "port": "image" },
+    });
+    assert_eq!(read(&mut h)["selected_edges"], serde_json::json!([first]));
+    // Off the wire, so the selection shows as it is.
+    h.input_mut()
+        .events
+        .push(egui::Event::PointerMoved(at + egui::vec2(0.0, 60.0)));
+    h.run();
+    results.add(h.try_snapshot("node-graph-wire-selected-pop-dark"));
+    h.key_press(egui::Key::Delete);
+    h.run();
+    h.run();
+    let t = last_trace_of(&h, "graph.disconnect");
+    assert_eq!(t.args["edges"], serde_json::json!([first]), "{t:?}");
+    assert_eq!(t.args["cause"], "key");
+    let graph = read(&mut h);
+    assert_eq!(graph["edges"].as_array().map(Vec::len), Some(edges - 1));
+    assert_eq!(graph["selected_edges"], serde_json::json!([]));
+    h.get_by_label("Undo").click();
+    h.run();
+    h.run();
+    assert_eq!(
+        read(&mut h)["edges"].as_array().map(Vec::len),
+        Some(edges),
+        "one edit, one undo"
+    );
+    assert!(h.query_by_label(name).is_some());
+}
+
+#[test]
 fn the_graph_file_page_writes_an_edit_into_the_file() {
     use egui_pop::imaging::graph::CMD_GRAPH_EDIT;
     use egui_pop::model::commands::Origin;

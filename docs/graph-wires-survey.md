@@ -11,6 +11,9 @@ plan. It answers issue
 [#227](https://github.com/quazardous/egui-pop/issues/227), "diagram
 connectors cannot be edited" (select, delete, disconnect, reconnect).
 
+Status: items 1 and 2 of the plan below are built (2026-11-06; see
+[node-graph.md](node-graph.md)); items 3 to 7 are not started.
+
 Read on 2026-11-06, against egui-pop's `main`. Nothing was built or run:
 every point about another editor comes from its documentation (linked),
 its source, or, where marked *(community)*, a forum or third-party page.

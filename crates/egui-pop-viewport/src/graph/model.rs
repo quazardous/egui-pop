@@ -378,8 +378,8 @@ pub struct NewNode {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Edit {
     /// A wire from an output to an input; `replaces` are the wires it
-    /// takes the place of (the input's old wire, or the wire dragged off
-    /// another input), to remove first.
+    /// takes the place of (the input's old wire, or the wire whose end
+    /// was moved), to remove first: a reconnection is one edit.
     Connect {
         from: PortRef,
         to: PortRef,
@@ -580,6 +580,8 @@ impl Level {
 pub enum GraphEvent {
     /// The selected nodes changed (now these).
     Selection(Vec<String>),
+    /// The selected wires changed (now these).
+    WireSelection(Vec<Edge>),
     /// The zoom crossed into another level.
     Level(Level),
     /// A wire was refused before any edit: the ports' types differ, the
@@ -598,8 +600,10 @@ pub enum Request {
     /// Propose an edit: a connection is type-checked, then the edit goes
     /// through the hook like the user's.
     Edit(Edit),
-    /// Select these nodes.
+    /// Select these nodes (the wires selected stay).
     Select(Vec<String>),
+    /// Select these wires (the nodes selected stay).
+    SelectWires(Vec<Edge>),
     /// Fit the whole graph in view.
     Fit,
     /// Zoom to show a level around the view's centre.

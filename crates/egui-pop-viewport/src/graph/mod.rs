@@ -32,6 +32,19 @@
 //!   it connects (replacing an input's wire); a drag off a connected
 //!   input takes its wire along, dropped nowhere it disconnects. A click
 //!   on a port, then on another, connects too.
+//! - **A wire itself** answers the pointer within 6 points (12 on a touch
+//!   screen), where no node or port is, at the ports and detail levels:
+//!   hovered, it is drawn thicker with its ports ringed and a tooltip
+//!   naming its ends; a click selects it (and no node), Ctrl (Cmd) or
+//!   Shift adds it to the nodes and wires selected; selected, it is drawn
+//!   in the selection's colour with a handle near each end. A drag on it
+//!   takes its nearer end along (one of an output's several wires too):
+//!   dropped on a port that accepts it, one [`Edit::Connect`] whose
+//!   `replaces` holds the old wire; dropped nowhere, a disconnect. Delete
+//!   removes the wires selected as one [`Edit::Disconnect`] (with nodes,
+//!   one [`Edit::Delete`]); its menu disconnects it or selects the node at
+//!   either end. A click on the canvas clears the selection, nodes and
+//!   wires.
 //! - **Groups**: a frame around the group's nodes, whose title folds
 //!   them into a stack (a click on the stack unfolds it).
 //! - **Keyboard** ([`GraphKeys`]): Tab goes through the nodes and their
@@ -39,13 +52,19 @@
 //!   Shift with the arrows moves the selection; on a port the arrows go
 //!   to the node's other ports, Enter or Space picks it as a wire's end
 //!   (twice: connected), Delete disconnects it and Escape goes back to
-//!   the node. Delete removes the selection, Ctrl+D duplicates it,
+//!   the node. After a connected input, Tab reaches each of its wires:
+//!   Delete disconnects it, Enter picks its input end up and Shift+Enter
+//!   its output end (then a port, as above), the menu key opens its menu,
+//!   Escape goes back to the port. Delete removes the selection, Ctrl+D duplicates it,
 //!   Ctrl+A selects everything, Home fits. A large graph is one Tab stop
 //!   ([`TabStops`]): Tab enters and leaves it, Enter goes into a node's
 //!   parts and Escape back.
 //! - **Accessibility**: the canvas is a group named by its label, each
 //!   node a group (role description "node") with its ports as buttons,
-//!   their type and wires as the value; refusals and wires are announced.
+//!   their type and wires as the value, and each wire into an input a
+//!   button after it (role description "wire", named by its two ports,
+//!   its keys as the description, selected or not); refusals, wires made
+//!   or removed and the wires selected are announced.
 //!
 //! ```
 //! use egui_pop_viewport::graph::{Edge, Edit, GraphEditor, GraphModel, GraphState, Node};
@@ -131,6 +150,12 @@ const PORT_R: f32 = 5.0;
 const PORT_HIT: f32 = 16.0;
 /// How near a port a dragged wire is dropped on it.
 const DROP: f32 = 14.0;
+/// How near a wire (screen points) the pointer is on it.
+const WIRE_HIT: f32 = 6.0;
+/// As [`WIRE_HIT`], on a touch screen.
+const WIRE_HIT_TOUCH: f32 = 12.0;
+/// How far from each end of a wire its handles are drawn (screen points).
+const HANDLE: f32 = 18.0;
 /// Around a group's nodes.
 const GROUP_PAD: f32 = 14.0;
 /// A group's title band.
@@ -523,6 +548,9 @@ impl<'a> GraphEditor<'a> {
         let mut edits = Vec::new();
         let mut events = Vec::new();
         let before_selection = self.state.selection.clone();
+        // Wires gone from the graph are no longer selected.
+        self.state.selected_edges.retain(|e| edges.contains(e));
+        let before_wires = self.state.selected_edges.clone();
 
         // Requests: selections and views first, edits once checked.
         let base = Base {
@@ -537,6 +565,10 @@ impl<'a> GraphEditor<'a> {
                         .into_iter()
                         .filter(|n| nodes.iter().any(|m| m.id == *n))
                         .collect();
+                }
+                Request::SelectWires(list) => {
+                    self.state.selected_edges =
+                        list.into_iter().filter(|e| edges.contains(e)).collect();
                 }
                 Request::Fit => self.state.fit = true,
                 Request::Level(level) => {
@@ -563,10 +595,14 @@ impl<'a> GraphEditor<'a> {
                 }
                 Request::Edit(e) => {
                     let e = match e {
-                        Edit::Connect { from, to, .. } => {
+                        Edit::Connect { from, to, replaces } => {
                             let a = (from.clone(), Side::Output);
                             let b = (to.clone(), Side::Input);
-                            match base.connect(&a, &b, None) {
+                            // The wires it names that are there: a
+                            // reconnection, as one edit.
+                            let moved: Vec<Edge> =
+                                replaces.into_iter().filter(|e| edges.contains(e)).collect();
+                            match base.connect(&a, &b, &moved) {
                                 Ok(e) => e,
                                 Err(Refusal::Exists) => continue,
                                 Err(refusal) => {
@@ -634,6 +670,8 @@ impl<'a> GraphEditor<'a> {
             reveal: None,
             gestures,
             one_stop,
+            paths: Vec::new(),
+            hover: None,
         };
         // The scene draws; the profile moves it (above and in `canvas`):
         // its zoom held where it is, its own pan off, the wheel taken.
@@ -654,6 +692,8 @@ impl<'a> GraphEditor<'a> {
         };
         let mut response = inner.inner.response;
         cx.canvas(&response, &label);
+        let wire_hovered = cx.hover.is_some() && response.hovered();
+        cx.state.over_canvas = response.hovered();
         let reveal = cx.reveal.take();
         let visible = cx.lay.visible;
         drop(cx);
@@ -673,6 +713,21 @@ impl<'a> GraphEditor<'a> {
                 self.state.selection.iter().cloned().collect(),
             ));
         }
+        if self.state.selected_edges != before_wires {
+            let count = self.state.selected_edges.len();
+            a11y::announce(
+                &ctx,
+                tr_args(
+                    &ctx,
+                    &s::GRAPH_WIRES_SELECTED,
+                    &[("count", &count.to_string())],
+                ),
+                Politeness::Polite,
+            );
+            events.push(GraphEvent::WireSelection(
+                self.state.selected_edges.iter().cloned().collect(),
+            ));
+        }
         if !edits.is_empty() {
             response.mark_changed();
         }
@@ -687,7 +742,11 @@ impl<'a> GraphEditor<'a> {
             )
         });
         let hint = if response.hovered() {
-            let hint = crate::gestures::hint(&ctx, egui_pop_core::model::pointer::SCOPE_GRAPH);
+            let hint = if wire_hovered {
+                tr(&ctx, &s::GRAPH_WIRE_HINT)
+            } else {
+                crate::gestures::hint(&ctx, egui_pop_core::model::pointer::SCOPE_GRAPH)
+            };
             egui_pop_core::pointer::show_hint(&ctx, &hint);
             hint
         } else {
@@ -848,17 +907,17 @@ impl<'g> Base<'g> {
         self.model.can_connect(from, to)
     }
 
-    /// The edit a wire from `a` to `b` makes (`detached`: the wire it was
-    /// dragged off).
+    /// The edit a wire from `a` to `b` makes (`detached`: the wires whose
+    /// end it moves).
     fn connect(
         &self,
         a: &(PortRef, Side),
         b: &(PortRef, Side),
-        detached: Option<&Edge>,
+        detached: &[Edge],
     ) -> Result<Edit, Refusal> {
         self.check(a, b)?;
         let (out, inp) = if a.1 == Side::Output { (a, b) } else { (b, a) };
-        let mut replaces: Vec<Edge> = detached.into_iter().cloned().collect();
+        let mut replaces: Vec<Edge> = detached.to_vec();
         let multiple = self
             .port(&inp.0, Side::Input)
             .is_some_and(|(_, p)| p.multiple);
@@ -957,6 +1016,11 @@ struct Cx<'a, 'g, 'h> {
     gestures: crate::gestures::ViewGestures,
     /// The graph is one Tab stop ([`TabStops`]).
     one_stop: bool,
+    /// The wires that answer the pointer this frame, as drawn (graph
+    /// units): not in the overview, nor into a stack.
+    paths: Vec<(Edge, Vec<Pos2>)>,
+    /// The wire under the pointer.
+    hover: Option<Edge>,
 }
 
 impl Cx<'_, '_, '_> {
@@ -1067,6 +1131,7 @@ impl Cx<'_, '_, '_> {
                 None => self.stack_ui(ui, &painter, &placed),
             }
         }
+        self.paint_wire_ends(&painter);
         self.wire_ui(ui, &painter);
         if let Some([a, b]) = self.state.band {
             let r = Rect::from_two_pos(a, b);
@@ -1150,33 +1215,176 @@ impl Cx<'_, '_, '_> {
     }
 
     fn paint_wires(&mut self, painter: &egui::Painter) {
-        let detached = self.state.wire.as_ref().and_then(|w| w.detached.as_ref());
-        let drawn: Vec<(Edge, Pos2, Pos2, Color32)> =
-            wires_drawn(self.base.nodes, self.base.edges, &self.lay, detached)
-                .into_iter()
-                .map(|(e, a, b)| {
-                    let color = self
-                        .base
-                        .port(&e.from, Side::Output)
-                        .map_or(self.t.wire, |(_, p)| self.t.type_color(&self.ctx, &p.ty));
-                    (e.clone(), a, b, color)
-                })
-                .collect();
+        let detached = self.state.wire.as_ref().and_then(|w| w.detached.clone());
+        let drawn: Vec<(Edge, Pos2, Pos2, Color32)> = wires_drawn(
+            self.base.nodes,
+            self.base.edges,
+            &self.lay,
+            detached.as_ref(),
+        )
+        .into_iter()
+        .map(|(e, a, b)| {
+            let color = self
+                .base
+                .port(&e.from, Side::Output)
+                .map_or(self.t.wire, |(_, p)| self.t.type_color(&self.ctx, &p.ty));
+            (e.clone(), a, b, color)
+        })
+        .collect();
         self.state.drawn.routes.clear();
-        if self.state.wire_style != WireStyle::Orthogonal {
-            for (_, a, b, color) in drawn {
-                self.wire_line(painter, a, b, color);
-            }
-            return;
+        let routes = if self.state.wire_style == WireStyle::Orthogonal {
+            // Around every box drawn (nodes and stacks), cached by layout.
+            let boxes: Vec<Rect> = self.lay.boxes.iter().map(|b| b.rect).collect();
+            let ends: Vec<(Pos2, Pos2)> = drawn.iter().map(|&(_, a, b, _)| (a, b)).collect();
+            self.state.routes.routes(&boxes, &ends).to_vec()
+        } else {
+            Vec::new()
+        };
+        // Each wire as a line of points, to draw and to hit.
+        let lines: Vec<Vec<Pos2>> = drawn
+            .iter()
+            .enumerate()
+            .map(|(k, &(_, a, b, _))| match self.state.wire_style {
+                WireStyle::Orthogonal => routes.get(k).cloned().unwrap_or_else(|| vec![a, b]),
+                WireStyle::Straight => vec![a, b],
+                WireStyle::Curves => flatten(export::curve(a, b)),
+            })
+            .collect();
+        self.paths = drawn
+            .iter()
+            .zip(&lines)
+            .filter(|((e, ..), _)| self.wire_answers(e))
+            .map(|((e, ..), line)| (e.clone(), line.clone()))
+            .collect();
+        // The wire under the pointer, when nothing else is under way.
+        let idle = self.state.wire.is_none()
+            && self.state.moving.is_none()
+            && self.state.band.is_none()
+            && self.ctx.dragged_id().is_none();
+        self.hover = None;
+        if idle
+            && self.state.over_canvas
+            && let Some(p) = self.pointer()
+            && self.lay.visible.contains(p)
+        {
+            self.hover = self.wire_at(p).map(|(e, _)| e);
         }
-        // Around every box drawn (nodes and stacks), cached by layout.
-        let boxes: Vec<Rect> = self.lay.boxes.iter().map(|b| b.rect).collect();
-        let ends: Vec<(Pos2, Pos2)> = drawn.iter().map(|&(_, a, b, _)| (a, b)).collect();
-        let routes = self.state.routes.routes(&boxes, &ends).to_vec();
         let width = self.wire_width();
-        for ((edge, _, _, color), route) in drawn.into_iter().zip(routes) {
-            painter.add(egui::Shape::line(route.clone(), Stroke::new(width, color)));
-            self.state.drawn.routes.push((edge, route));
+        for ((edge, a, b, color), line) in drawn.into_iter().zip(lines) {
+            let selected = self.state.selected_edges.contains(&edge);
+            let hovered = self.hover.as_ref() == Some(&edge);
+            if selected {
+                // The selection's colour around the wire.
+                painter.add(egui::Shape::line(
+                    line.clone(),
+                    Stroke::new(width * 3.0, self.t.node_selected),
+                ));
+            }
+            let w = if hovered { width * 2.0 } else { width };
+            if self.state.wire_style == WireStyle::Curves {
+                painter.add(egui::epaint::CubicBezierShape::from_points_stroke(
+                    export::curve(a, b),
+                    false,
+                    Color32::TRANSPARENT,
+                    Stroke::new(w, color),
+                ));
+            } else {
+                painter.add(egui::Shape::line(line.clone(), Stroke::new(w, color)));
+            }
+            if self.state.wire_style == WireStyle::Orthogonal {
+                self.state.drawn.routes.push((edge, line));
+            }
+        }
+    }
+
+    /// Whether a wire answers the pointer and the keyboard: between two
+    /// nodes whose ports are drawn, or collapsed, not into a stack nor in
+    /// the overview.
+    fn wire_answers(&self, e: &Edge) -> bool {
+        if self.level == Level::Overview {
+            return false;
+        }
+        let shown = |node: &str| {
+            self.base
+                .nodes
+                .iter()
+                .position(|n| n.id == node)
+                .and_then(|i| self.lay.box_of[i])
+                .is_some_and(|b| self.lay.boxes[b].node.is_some())
+        };
+        shown(&e.from.node) && shown(&e.to.node)
+    }
+
+    /// The wire near a point (graph units), and whether the point is
+    /// nearer its output end: within 6 points on screen (12 on a touch
+    /// screen), where no node or port is.
+    fn wire_at(&self, p: Pos2) -> Option<(Edge, bool)> {
+        if self.lay.boxes.iter().any(|b| b.rect.contains(p)) {
+            return None;
+        }
+        let near_port = self.lay.ports.iter().any(|(&(i, _, _), &at)| {
+            self.lay.box_of[i].is_some_and(|b| self.ports_shown(&self.lay.boxes[b]))
+                && Rect::from_center_size(at, Vec2::splat(PORT_HIT)).contains(p)
+        });
+        if near_port {
+            return None;
+        }
+        let touch = self.ctx.input(|i| i.has_touch_screen());
+        let reach = if touch { WIRE_HIT_TOUCH } else { WIRE_HIT } / self.zoom.max(1e-3);
+        let mut best: Option<(f32, usize, bool)> = None;
+        for (k, (_, line)) in self.paths.iter().enumerate() {
+            if let Some((d, along)) = distance_along(line, p)
+                && d <= reach
+                && best.is_none_or(|(bd, ..)| d < bd)
+            {
+                best = Some((d, k, along < 0.5));
+            }
+        }
+        best.map(|(_, k, out)| (self.paths[k].0.clone(), out))
+    }
+
+    /// A wire's line as drawn this frame.
+    fn path_of(&self, e: &Edge) -> Option<&[Pos2]> {
+        self.paths
+            .iter()
+            .find(|(x, _)| x == e)
+            .map(|(_, l)| l.as_slice())
+    }
+
+    /// Over the nodes: the hovered wire's ports ringed, and on the hovered
+    /// and selected wires a handle near each end (a drag there moves that
+    /// end).
+    fn paint_wire_ends(&self, painter: &egui::Painter) {
+        let r = 3.5 / self.zoom.max(0.25);
+        let handle = HANDLE / self.zoom.max(1e-3);
+        for (e, line) in &self.paths {
+            let hovered = self.hover.as_ref() == Some(e);
+            if !hovered && !self.state.selected_edges.contains(e) {
+                continue;
+            }
+            let color = self
+                .base
+                .port(&e.from, Side::Output)
+                .map_or(self.t.wire, |(_, p)| self.t.type_color(&self.ctx, &p.ty));
+            if hovered {
+                for (p, side) in [(&e.from, Side::Output), (&e.to, Side::Input)] {
+                    if let Some(at) = self.port_pos(p, side) {
+                        painter.circle_stroke(
+                            at,
+                            PORT_R + 3.0,
+                            Stroke::new(2.0 / self.zoom.max(0.5), color),
+                        );
+                    }
+                }
+            }
+            for at in [point_along(line, handle), point_along_back(line, handle)] {
+                painter.circle(
+                    at,
+                    r,
+                    self.t.node,
+                    Stroke::new(1.5 / self.zoom.max(0.5), color),
+                );
+            }
         }
     }
 
@@ -1622,6 +1830,187 @@ impl Cx<'_, '_, '_> {
             }
         } else {
             self.state.selection = BTreeSet::from([node.to_string()]);
+            self.state.selected_edges.clear();
+        }
+    }
+
+    /// A click on a wire: selects it alone, or with Ctrl (Cmd) or Shift
+    /// adds it to the selection (or takes it out).
+    fn click_wire(&mut self, e: &Edge, add: bool) {
+        if add {
+            if !self.state.selected_edges.remove(e) {
+                self.state.selected_edges.insert(e.clone());
+            }
+        } else {
+            self.state.selection.clear();
+            self.state.selected_edges = BTreeSet::from([e.clone()]);
+        }
+    }
+
+    /// Picks a wire's end up, as a wire being drawn from its other end: its
+    /// output end (`output`) or its input end.
+    fn pick_end(&mut self, e: &Edge, output: bool, by_pointer: bool) {
+        let (from, side) = if output {
+            (e.to.clone(), Side::Input)
+        } else {
+            (e.from.clone(), Side::Output)
+        };
+        self.state.wire = Some(Wire {
+            from,
+            side,
+            by_pointer,
+            detached: Some(e.clone()),
+        });
+        let (f, t) = self.wire_ends(e);
+        let key = if output {
+            &s::GRAPH_WIRE_OUTPUT_PICKED
+        } else {
+            &s::GRAPH_WIRE_INPUT_PICKED
+        };
+        a11y::announce(
+            &self.ctx,
+            tr_args(&self.ctx, key, &[("from", &f), ("to", &t)]),
+            Politeness::Polite,
+        );
+    }
+
+    /// A wire's tooltip: "Load · Image to Blur · Image".
+    fn wire_tip(&self, e: &Edge) -> String {
+        let part = |p: &PortRef, side: Side| match self.base.port(p, side) {
+            Some((n, q)) => (n.title.clone(), q.label.clone()),
+            None => (p.node.clone(), p.port.clone()),
+        };
+        let (a, b) = (part(&e.from, Side::Output), part(&e.to, Side::Input));
+        tr_args(
+            &self.ctx,
+            &s::GRAPH_WIRE_TIP,
+            &[
+                ("from_node", &a.0),
+                ("from_port", &a.1),
+                ("to_node", &b.0),
+                ("to_port", &b.1),
+            ],
+        )
+    }
+
+    /// A connected input's wire as a part of its node, after the port: the
+    /// keyboard reaches it, an assistive technology names it. Delete
+    /// disconnects it, Enter picks its input end up and Shift+Enter its
+    /// output end, Escape goes back to the port.
+    fn wire_stop(&mut self, ui: &mut Ui, painter: &egui::Painter, e: &Edge, port: Id, at: Pos2) {
+        let wid = self.id.with(("wire", e));
+        // Not under the pointer: the canvas answers it on the wire.
+        let resp = ui.interact(
+            Rect::from_center_size(at, Vec2::splat(1.0)),
+            wid,
+            Sense::focusable_noninteractive(),
+        );
+        let (f, t) = self.wire_ends(e);
+        let name = tr_args(&self.ctx, &s::GRAPH_WIRE_NAME, &[("from", &f), ("to", &t)]);
+        let selected = self.state.selected_edges.contains(e);
+        let enabled = ui.is_enabled();
+        resp.widget_info(|| {
+            let mut info = egui::WidgetInfo::labeled(egui::Role::Button, enabled, &name);
+            info.selected = Some(selected);
+            info
+        });
+        let role = tr(&self.ctx, &s::GRAPH_ROLE_WIRE);
+        let keys = tr(&self.ctx, &s::GRAPH_WIRE_KEYS);
+        self.ctx.accesskit_node_builder(wid, |node| {
+            node.set_role_description(role);
+            node.set_description(keys);
+            node.set_selected(selected);
+        });
+        let line = self.path_of(e).map(<[Pos2]>::to_vec);
+        let bounds = line
+            .as_ref()
+            .map_or(Rect::from_center_size(at, Vec2::splat(PORT_HIT)), |l| {
+                Rect::from_points(l)
+            });
+        self.bounds(wid, bounds);
+        if resp.gained_focus() {
+            self.reveal = Some(bounds);
+        }
+        if !resp.has_focus() {
+            return;
+        }
+        egui_pop_core::focus::own_ring(&resp.ctx, resp.id);
+        if let Some(l) = line {
+            painter.add(egui::Shape::line(
+                l,
+                Stroke::new(self.wire_width() * 2.5, self.t.focus),
+            ));
+        }
+        lock_keys(ui, wid, true);
+        let k = self.keys;
+        let (delete, output, input, cancel) = ui.input_mut(|i| {
+            // Shift+Enter first: a plain Enter's pattern takes it too.
+            let output = i.consume_key(Modifiers::SHIFT, Key::Enter);
+            (
+                k.delete
+                    .iter()
+                    .any(|key| i.consume_key(Modifiers::NONE, *key)),
+                output,
+                !output && i.consume_key(Modifiers::NONE, Key::Enter),
+                i.consume_key(Modifiers::NONE, k.cancel),
+            )
+        });
+        if delete {
+            self.disconnect(vec![e.clone()], Cause::Key);
+            ui.memory_mut(|m| m.request_focus(port));
+        } else if input || output {
+            self.pick_end(e, output, false);
+        } else if cancel && self.state.wire.take().is_none() {
+            ui.memory_mut(|m| m.request_focus(port));
+        }
+        let _ = claim::context_menu(&resp, |ui| self.wire_menu_items(ui, e));
+    }
+
+    /// A wire's ports' names.
+    fn wire_ends(&self, e: &Edge) -> (String, String) {
+        let name = |p: &PortRef, side: Side| match self.base.port(p, side) {
+            Some((n, q)) => port_label(&self.ctx, n, q, side),
+            None => format!("{}.{}", p.node, p.port),
+        };
+        (name(&e.from, Side::Output), name(&e.to, Side::Input))
+    }
+
+    /// Removes wires: one edit, announced.
+    fn disconnect(&mut self, edges: Vec<Edge>, cause: Cause) {
+        if edges.is_empty() {
+            return;
+        }
+        for e in &edges {
+            let (f, t) = self.wire_ends(e);
+            a11y::announce(
+                &self.ctx,
+                tr_args(
+                    &self.ctx,
+                    &s::GRAPH_DISCONNECTED,
+                    &[("from", &f), ("to", &t)],
+                ),
+                Politeness::Polite,
+            );
+        }
+        self.propose(Edit::Disconnect { edges }, cause);
+    }
+
+    /// A wire's menu: disconnect it, select the node at either end.
+    fn wire_menu_items(&mut self, ui: &mut Ui, e: &Edge) {
+        let ctx = self.ctx.clone();
+        if ui.button(tr(&ctx, &s::GRAPH_DISCONNECT)).clicked() {
+            self.disconnect(vec![e.clone()], Cause::Command);
+            ui.close();
+        }
+        for (key, node) in [
+            (&s::GRAPH_SELECT_SOURCE, &e.from.node),
+            (&s::GRAPH_SELECT_DESTINATION, &e.to.node),
+        ] {
+            if ui.button(tr(&ctx, key)).clicked() {
+                self.state.selection = BTreeSet::from([node.clone()]);
+                self.state.selected_edges.clear();
+                ui.close();
+            }
         }
     }
 
@@ -1647,6 +2036,7 @@ impl Cx<'_, '_, '_> {
         if let Some(c) = chosen {
             if !self.state.selection.contains(&n.id) {
                 self.state.selection = BTreeSet::from([n.id.clone()]);
+                self.state.selected_edges.clear();
             }
             if c == 0 {
                 self.duplicate(Cause::Command);
@@ -1761,6 +2151,13 @@ impl Cx<'_, '_, '_> {
                 self.click_port(&pref, side, &name);
             }
             self.port_menu(&pr, &pref, side);
+            if side == Side::Input {
+                for e in base.wires_at(&pref, side) {
+                    if self.wire_answers(&e) {
+                        self.wire_stop(ui, painter, &e, pid, at);
+                    }
+                }
+            }
         }
     }
 
@@ -1810,19 +2207,13 @@ impl Cx<'_, '_, '_> {
     fn finish_wire(&mut self, w: &Wire, p: &PortRef, side: Side, cause: Cause) {
         let a = (w.from.clone(), w.side);
         let b = (p.clone(), side);
-        match self.base.connect(&a, &b, w.detached.as_ref()) {
+        match self.base.connect(&a, &b, w.detached.as_slice()) {
             Ok(edit) => {
                 if let Edit::Connect { from, to, .. } = &edit {
+                    let (f, t) = self.wire_ends(&Edge::new(from.clone(), to.clone()));
                     a11y::announce(
                         &self.ctx,
-                        tr_args(
-                            &self.ctx,
-                            &s::GRAPH_CONNECTED,
-                            &[
-                                ("from", &self.base.port_name(&self.ctx, from)),
-                                ("to", &self.base.port_name(&self.ctx, to)),
-                            ],
-                        ),
+                        tr_args(&self.ctx, &s::GRAPH_CONNECTED, &[("from", &f), ("to", &t)]),
                         Politeness::Polite,
                     );
                 }
@@ -2080,6 +2471,8 @@ impl Cx<'_, '_, '_> {
         }
     }
 
+    /// Deletes the selection: the nodes with their wires and the wires
+    /// selected, one edit (a `Disconnect` when only wires are selected).
     fn delete(&mut self, cause: Cause) {
         let nodes: Vec<String> = self
             .state
@@ -2088,14 +2481,22 @@ impl Cx<'_, '_, '_> {
             .filter(|id| self.base.node(id).is_some())
             .cloned()
             .collect();
+        let wires: Vec<Edge> = self
+            .base
+            .edges
+            .iter()
+            .filter(|e| self.state.selected_edges.contains(e))
+            .cloned()
+            .collect();
         if nodes.is_empty() {
+            self.disconnect(wires, cause);
             return;
         }
         let edges = self
             .base
             .edges
             .iter()
-            .filter(|e| nodes.iter().any(|n| e.touches(n)))
+            .filter(|e| nodes.iter().any(|n| e.touches(n)) || wires.contains(e))
             .cloned()
             .collect();
         self.propose(Edit::Delete { nodes, edges }, cause);
@@ -2159,7 +2560,14 @@ impl Cx<'_, '_, '_> {
         } else if response.drag_started_by(egui::PointerButton::Primary)
             && let Some(p) = pointer
         {
-            self.state.band = Some([p, p]);
+            // On a wire, its nearer end follows; elsewhere a rubber band.
+            let origin = ctx
+                .input(|i| i.pointer.press_origin())
+                .map_or(p, |o| to_scene * o);
+            match self.wire_at(origin) {
+                Some((e, output)) => self.pick_end(&e, output, true),
+                None => self.state.band = Some([p, p]),
+            }
         }
         if let Some(band) = &mut self.state.band
             && let Some(p) = pointer
@@ -2173,6 +2581,7 @@ impl Cx<'_, '_, '_> {
             let add = ctx.input(|i| i.modifiers.shift || i.modifiers.command);
             if !add {
                 self.state.selection.clear();
+                self.state.selected_edges.clear();
             }
             for placed in &self.lay.boxes {
                 if !placed.rect.intersects(r) {
@@ -2192,10 +2601,28 @@ impl Cx<'_, '_, '_> {
         }
         if response.clicked() {
             response.request_focus();
-            if !ctx.input(|i| i.modifiers.shift || i.modifiers.command) {
-                self.state.selection.clear();
+            let add = ctx.input(|i| i.modifiers.shift || i.modifiers.command);
+            match self.hover.clone() {
+                Some(e) => self.click_wire(&e, add),
+                None if !add => {
+                    self.state.selection.clear();
+                    self.state.selected_edges.clear();
+                }
+                None => {}
             }
             self.state.wire = None;
+        }
+        if let Some(e) = &self.hover
+            && response.hovered()
+        {
+            let tip = self.wire_tip(e);
+            egui::Tooltip::always_open(
+                ctx.clone(),
+                response.layer_id,
+                response.id.with("wire-tip"),
+                egui::PopupAnchor::Pointer,
+            )
+            .show(|ui| ui.label(tip));
         }
         if response.double_clicked()
             && self
@@ -2218,9 +2645,17 @@ impl Cx<'_, '_, '_> {
         }
         if claim::opens_context_menu(response) {
             self.state.menu_at = pointer;
+            // On a wire, its menu.
+            self.state.menu_wire = if response.secondary_clicked() {
+                self.hover.clone()
+            } else {
+                None
+            };
         }
         let kinds = self.base.model.kinds();
-        if !kinds.is_empty() {
+        if let Some(e) = self.state.menu_wire.clone() {
+            let _ = claim::context_menu(response, |ui| self.wire_menu_items(ui, &e));
+        } else if !kinds.is_empty() {
             let mut chosen = None;
             let _ = claim::context_menu(response, |ui| {
                 ui.label(tr(&ctx, &s::GRAPH_ADD_NODE));
@@ -2579,6 +3014,70 @@ fn param_h(ctx: &egui::Context) -> f32 {
     ctx.global_style().spacing.interact_size.y + 4.0
 }
 
+/// A cubic Bézier curve as a line of points.
+fn flatten(c: [Pos2; 4]) -> Vec<Pos2> {
+    const STEPS: usize = 24;
+    (0..=STEPS)
+        .map(|k| {
+            let t = k as f32 / STEPS as f32;
+            let u = 1.0 - t;
+            let w = [u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t];
+            pos2(
+                w[0] * c[0].x + w[1] * c[1].x + w[2] * c[2].x + w[3] * c[3].x,
+                w[0] * c[0].y + w[1] * c[1].y + w[2] * c[2].y + w[3] * c[3].y,
+            )
+        })
+        .collect()
+}
+
+/// How far a point is from a line of points, and where along it the
+/// nearest point is (0 at its start, 1 at its end).
+fn distance_along(line: &[Pos2], p: Pos2) -> Option<(f32, f32)> {
+    let total: f32 = line.windows(2).map(|w| w[0].distance(w[1])).sum();
+    let mut best: Option<(f32, f32)> = None;
+    let mut walked = 0.0;
+    for w in line.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let ab = b - a;
+        let len = ab.length();
+        let t = if len > 0.0 {
+            ((p - a).dot(ab) / (len * len)).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let d = p.distance(a + ab * t);
+        if best.is_none_or(|(bd, _)| d < bd) {
+            let along = if total > 0.0 {
+                (walked + len * t) / total
+            } else {
+                0.0
+            };
+            best = Some((d, along));
+        }
+        walked += len;
+    }
+    best
+}
+
+/// The point `dist` along a line from its start (its end, if shorter).
+fn point_along(line: &[Pos2], dist: f32) -> Pos2 {
+    let mut left = dist;
+    for w in line.windows(2) {
+        let len = w[0].distance(w[1]);
+        if len >= left && len > 0.0 {
+            return w[0] + (w[1] - w[0]) * (left / len);
+        }
+        left -= len;
+    }
+    line.last().copied().unwrap_or(Pos2::ZERO)
+}
+
+/// The point `dist` along a line from its end.
+fn point_along_back(line: &[Pos2], dist: f32) -> Pos2 {
+    let back: Vec<Pos2> = line.iter().rev().copied().collect();
+    point_along(&back, dist)
+}
+
 /// Keeps the arrows (and Escape, on a port) on a focused part of the
 /// graph: egui would move the focus, or drop it.
 fn lock_keys(ui: &Ui, id: Id, escape: bool) {
@@ -2596,7 +3095,8 @@ fn lock_keys(ui: &Ui, id: Id, escape: bool) {
 }
 
 /// The graph as drawn: nodes (place, ports and their wires, group,
-/// collapsed, selected, parameters), wires, groups, the selection, the
+/// collapsed, selected, parameters), wires, groups, the selection (nodes,
+/// and wires as `selected_edges`), the
 /// view and the level; the wire style, and each wire's route when it is
 /// orthogonal. What `graph.read` answers.
 pub fn describe(
@@ -2651,6 +3151,7 @@ pub fn describe(
             .map(|k| json!({ "id": k.id, "title": k.title }))
             .collect::<Vec<_>>(),
         "selection": state.selection.iter().collect::<Vec<_>>(),
+        "selected_edges": state.selected_edges.iter().map(Edge::to_json).collect::<Vec<_>>(),
         "level": state.level.map(Level::name),
         "zoom": state.drawn.zoom,
         "visible": [v.min.x, v.min.y, v.max.x, v.max.y],

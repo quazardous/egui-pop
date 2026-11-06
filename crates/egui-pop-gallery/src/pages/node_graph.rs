@@ -3,7 +3,7 @@
 //! blends to one output), shown with the node editor and its minimap.
 //! The page keeps the graph and applies the editor's edits; each runs
 //! its `graph.*` step, and the page's plugin refuses to delete the
-//! output. Its Export menu saves the graph, or the selection, as an
+//! output. Each edit is one step of the page's own undo. Its Export menu saves the graph, or the selection, as an
 //! SVG image, or as PNG and PDF when built with them.
 
 use std::cell::{Cell, RefCell};
@@ -155,7 +155,7 @@ fn kind(id: &str) -> Option<&'static KindDef> {
 }
 
 /// The page's graph: what the application keeps.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Pipeline {
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,
@@ -440,6 +440,8 @@ pub struct State {
     exported: String,
     /// Whether nodes were selected, as last told to the menu.
     selected: Option<bool>,
+    /// The graph before each edit, the last on top: one edit, one undo.
+    pub undo: Vec<Pipeline>,
 }
 
 impl Default for State {
@@ -453,6 +455,7 @@ impl Default for State {
             export: None,
             exported: String::new(),
             selected: None,
+            undo: Vec::new(),
         }
     }
 }
@@ -535,6 +538,7 @@ impl Plugin for NodeGraphPage {
 /// The page.
 fn show(ui: &mut Ui, app: &AppHandle, s: &mut State, asked: &Cell<Option<(bool, Format)>>) {
     ui.label("Wheel to pan, Ctrl and the wheel to zoom: zoomed out the overview folds groups into stacks, zoomed in the detail shows each node's parameters. Drag from a port to wire (types are checked), drag nodes, drag the canvas for a rubber band; Delete, Ctrl+D, Ctrl+A. The page's plugin refuses to delete the output.");
+    ui.label("Wires: hover one to see its ends, click to select it (Ctrl or Shift adds), Delete disconnects the wires selected, right-click for its menu (disconnect, select either end's node). Drag a wire to move its nearer end to another port; dropped nowhere, it is disconnected. From the keyboard, Tab past a connected input reaches its wires: Delete, Enter (move the input end), Shift+Enter (the output end), Escape. Each edit is one step of Undo.");
     let mini = vec2(200.0, 110.0);
     let width = ui.available_width().max(320.0);
     let height = (ui.available_height() - mini.y - 12.0).max(260.0);
@@ -551,6 +555,23 @@ fn show(ui: &mut Ui, app: &AppHandle, s: &mut State, asked: &Cell<Option<(bool, 
         });
     let out = imaging::show_graph(app, GRAPH, editor, ui);
     for e in &out.edits {
+        // One finished edit, one undo step (a slider's drag once, from
+        // the value before it).
+        match e {
+            Edit::Param {
+                node,
+                param,
+                from,
+                done: true,
+                ..
+            } => {
+                let mut before = s.graph.clone();
+                before.values.insert((node.clone(), param.clone()), *from);
+                s.undo.push(before);
+            }
+            Edit::Param { .. } => {}
+            _ => s.undo.push(s.graph.clone()),
+        }
         s.graph.apply(e);
     }
     s.level = Some(out.level);
@@ -568,10 +589,32 @@ fn show(ui: &mut Ui, app: &AppHandle, s: &mut State, asked: &Cell<Option<(bool, 
             if !selected.is_empty() {
                 ui.label(format!("Selected: {}", selected.join(", ")));
             }
-            let menu = ui.button("Export");
-            if menu.clicked() {
-                menus::popup_at(app, &EXPORT_MENU, menu.rect);
+            let wires: Vec<String> = s
+                .view
+                .selected_edges
+                .iter()
+                .map(|e| {
+                    format!(
+                        "{}.{} to {}.{}",
+                        e.from.node, e.from.port, e.to.node, e.to.port
+                    )
+                })
+                .collect();
+            if !wires.is_empty() {
+                ui.label(format!("Wires selected: {}", wires.join(", ")));
             }
+            ui.horizontal(|ui| {
+                let menu = ui.button("Export");
+                if menu.clicked() {
+                    menus::popup_at(app, &EXPORT_MENU, menu.rect);
+                }
+                let undo = ui.add_enabled(!s.undo.is_empty(), egui::Button::new("Undo"));
+                if undo.on_hover_text("Undoes the graph's last edit").clicked()
+                    && let Some(before) = s.undo.pop()
+                {
+                    s.graph = before;
+                }
+            });
             if !s.exported.is_empty() {
                 ui.weak(&s.exported);
             }

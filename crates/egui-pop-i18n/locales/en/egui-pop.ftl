@@ -2027,6 +2027,8 @@ egui-pop-viewport-graph-delete = Delete
 
 egui-pop-viewport-graph-disconnect = Disconnect
 
+egui-pop-viewport-graph-disconnected = { $from } disconnected from { $to }
+
 egui-pop-viewport-graph-duplicate = Duplicate
 
 egui-pop-viewport-graph-exists = the wire is already there
@@ -2065,9 +2067,15 @@ egui-pop-viewport-graph-role-output = output port
 
 egui-pop-viewport-graph-role-stack = stack
 
+egui-pop-viewport-graph-role-wire = wire
+
 egui-pop-viewport-graph-same-node = a node cannot feed itself
 
 egui-pop-viewport-graph-same-side = two inputs or two outputs
+
+egui-pop-viewport-graph-select-destination = Select the destination
+
+egui-pop-viewport-graph-select-source = Select the source
 
 egui-pop-viewport-graph-types-differ = the types differ ({ $from }, { $to })
 
@@ -2075,7 +2083,21 @@ egui-pop-viewport-graph-unfold = Unfold { $group } ({ $count } nodes)
 
 egui-pop-viewport-graph-value = { $nodes } nodes, { $wires } wires, { $level }
 
+egui-pop-viewport-graph-wire-hint = Click: select the wire · Ctrl+click: add it · Drag: move its nearer end · Right-click: its menu
+
+egui-pop-viewport-graph-wire-input-picked = Wire from { $from } taken off { $to }: choose an input
+
+egui-pop-viewport-graph-wire-keys = Delete to disconnect, Enter to move its input end, Shift+Enter to move its output end
+
+egui-pop-viewport-graph-wire-name = { $from } to { $to }
+
+egui-pop-viewport-graph-wire-output-picked = Wire to { $to } taken off { $from }: choose an output
+
 egui-pop-viewport-graph-wire-started = Wire from { $port }: choose a port
+
+egui-pop-viewport-graph-wire-tip = { $from_node } · { $from_port } to { $to_node } · { $to_port }
+
+egui-pop-viewport-graph-wires-selected = { $count } wires selected
 
 egui-pop-viewport-hint-fit = fit
 
