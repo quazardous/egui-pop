@@ -101,7 +101,8 @@ from its player's clock or its own; `TimelineState::advance(dt)` does it
 the usual way (round the range when looping, otherwise stopping and
 pausing at the bounds), and the application repaints while it plays.
 While it plays, the view follows the playhead a page at a time
-(`Timeline::follow`).
+(`Timeline::follow`), or keeps it in place (`Follow::Fixed`,
+[below](#a-fixed-playhead-dj-decks)).
 
 ## The widget
 
@@ -118,6 +119,9 @@ While it plays, the view follows the playhead a page at a time
 | `surface(name)` | `timeline` | its focus surface, for key bindings |
 | `take_focus(bool)` | off | takes the keyboard focus this pass |
 | `follow(bool)` | on | the view follows the playhead while it plays |
+| `follow_mode(Follow)` | `Follow::Page` | how: `Off`, `Page` (a page at a time while it plays) or `Fixed(at)` (the playhead kept at `at` of the width, [below](#a-fixed-playhead-dj-decks)) |
+| `scrub_on_drag(bool)` | off | a drag on a clip scrubs instead of moving or trimming it: the clips are locked to the pointer |
+| `nudge_on_drag(bool)` | off | while it plays, a drag nudges instead of scrubbing |
 
 `show(ui)` draws it; `show_with(ui, |ui, lanes| ...)` draws what goes in
 the lanes too (rows of data, a beat grid), before the clips, the markers
@@ -146,6 +150,32 @@ screen, for what an application draws beside them.
 | Drag a marker | moves it: one step of the history when dropped |
 | Double click on the markers' lane | adds a marker there |
 | Alt held | no snapping (frames still land on whole frames) |
+
+#### A fixed playhead: DJ decks
+
+With `follow_mode(Follow::Fixed(at))` (`Follow::CENTRE` is `Fixed(0.5)`),
+the playhead stays at `at` of the width, playing or not, and the content
+scrolls under it; the view may reach past the bounds (the song's start
+in the middle of a deck). The pointer then moves the content rather than
+the playhead:
+
+| Gesture | Does |
+|---|---|
+| Press | nothing yet (the playhead does not jump) |
+| Click on the ruler or the lanes | moves the playhead there (snapped) |
+| Drag, Ctrl+drag, middle drag | the content follows the pointer, the playhead moving with it (snapped): a drag to the left goes on in time |
+| Wheel, paused | steps the playhead a unit (a beat, a frame, a second) per notch, onto the grid first (Alt: from where it is); wheel up goes back |
+| Ctrl+wheel, pinch | zooms, the playhead kept in place |
+
+`scrub_on_drag(true)` locks the clips to the pointer: a drag on a clip
+scrubs (moves the content, under a fixed playhead) instead of moving it,
+and its edges do not trim; a click still selects it, and the keys still
+edit it. `nudge_on_drag(true)`: while it plays, a drag adds
+`NUDGE_GAIN` (a quarter) of its own speed to the playing, as a jog
+wheel's edge does: the content dragged forward (to the left) speeds the
+deck up, dragged back slows it down; released, it plays on at its speed.
+The play state and the speed are left as they were; the playhead moves
+(`playhead_moved`), not quantized, as playing does not.
 
 Snapping pulls a time to a marker, the range's ends, the playhead or a
 clip's edge within 8 points (`SNAP_REACH`), the nearest first; otherwise
@@ -185,6 +215,54 @@ application binds on the timeline's surface runs its command instead.
 | Ctrl+K | splits the selected clips at the playhead; none selected: every clip there | Premiere's Add Edit |
 | Escape | lets the selected marker and clips go | |
 | `+` / `-` | zooms in / out around the playhead | |
+
+Each transport key has its `timeline.*` command (Space `toggle_play`, L
+and J `shuttle_forward` and `shuttle_backward`, K `pause`, → and ←
+`step_forward` and `step_backward`, Home and End `go_to_start` and
+`go_to_end`, Ctrl+L `toggle_loop`): the palette, agents and the
+[transport's buttons](#transport) run the same thing as the key.
+
+### Transport
+
+`Transport` is a row of buttons over a `TimelineState`, the playhead's
+text beside them:
+
+```rust,ignore
+use egui_pop::views::timeline::{Timeline, Transport, TransportButton};
+
+// Each button runs its key's command on the timeline `sequence`.
+Transport::new(&mut seq).app(app).timeline("sequence").show(ui);
+Timeline::new(&mut seq).id("sequence").app(app).history("doc/seq").show(ui);
+
+// A deck: play or pause only, no timecode.
+Transport::new(&mut deck)
+    .app(app)
+    .timeline("deck-a")
+    .buttons(&[TransportButton::PlayPause])
+    .timecode(false)
+    .show(ui);
+```
+
+| Button | Key | Command |
+|---|---|---|
+| `Start` | Home | `timeline.go_to_start` |
+| `StepBack` | ← | `timeline.step_backward` |
+| `PlayBackward` | J | `timeline.shuttle_backward` (shown on while playing backward) |
+| `Stop` | K | `timeline.pause` |
+| `PlayPause` | Space | `timeline.toggle_play` (Play, or Pause while playing) |
+| `StepForward` | → | `timeline.step_forward` |
+| `End` | End | `timeline.go_to_end` |
+| `Loop` | Ctrl+L | `timeline.toggle_loop` (shown on while looping) |
+
+`buttons(&[...])` picks them, in order (`TransportButton::ALL` by
+default); `timecode(false)` leaves the text out. With `app` and
+`timeline` (the timeline's id, the `TimelinePlugin` connected) a click
+runs the command, applied at the timeline's next pass (a loop toggled is
+a step of the history, as Ctrl+L's); without them it changes the state
+directly. Each button is an accessible button named by what it does
+("Play backward"), its tooltip naming its keys ("Play backward (J)");
+the glyphs are painted in the theme's button colours. `TransportOutput`
+gives the row's response and the button clicked.
 
 ### Tracks and clips
 
@@ -338,7 +416,12 @@ widgets work without it. A timeline is reached by its `id`.
 | `timeline.add_marker` | `timeline`, `seconds` or `time` (else the playhead), `label`, `kind` (`marker`, `cue`), `color` (`#rrggbb`) | adds a marker, answers its id in `added` |
 | `timeline.remove_marker` | `timeline`, `id` | removes a marker |
 | `timeline.play` | `timeline`, `speed` | asks to play |
-| `timeline.pause` | `timeline` | asks to pause |
+| `timeline.pause` | `timeline` | asks to pause (K) |
+| `timeline.toggle_play` | `timeline` | plays forward at 1, or pauses (Space) |
+| `timeline.shuttle_forward`, `timeline.shuttle_backward` | `timeline` | plays that way, twice as fast when it already does (L, J) |
+| `timeline.step_forward`, `timeline.step_backward` | `timeline`, `big` | one unit on or back, pausing (→, ←; `big`: Shift's step) |
+| `timeline.go_to_start`, `timeline.go_to_end` | `timeline` | the bounds' start or end (Home, End) |
+| `timeline.toggle_loop` | `timeline` | loops the range, or no longer (Ctrl+L), a step of the history |
 | `timeline.add_clip` | `timeline`, `track`, `seconds` or `time` (else the playhead), `length`, `offset`, `label`, `source`, `source_length`, `color` | adds a clip, answers its id in `added`; refused where it would overlap |
 | `timeline.move_clip` | `timeline`, `id`, `seconds` or `time`, `track` | moves a clip (what is not given stays); refused where it would overlap or leave the bounds |
 | `timeline.trim_clip` | `timeline`, `id`, `start`, `end` | moves a clip's start or end (seconds on the timeline), stopping as a drag does |
@@ -382,7 +465,14 @@ under a beat grid with the bars brighter. Hot cues 1 to 8 are cue points
 coloured per pad (set on the nearest beat, or jumped to), the loop is the
 range (I and O, halved and doubled from its start), the pitch fader
 scales the pretend clock, and Sync gives a deck the other's tempo and
-moves it by less than half a beat onto the other's phase. The deck's keys
+moves it by less than half a beat onto the other's phase. Each deck keeps
+its playhead in the middle (`Follow::CENTRE`) with its song locked to the
+pointer (`scrub_on_drag`) and nudged while it plays (`nudge_on_drag`):
+dragging the waveform moves it under the playhead, or nudges a playing
+deck; the wheel steps by beats. A `Transport` with the play button only
+plays and pauses it (`timeline.toggle_play`), beside the page's Cue
+(playing: back to the cue point and paused; paused: the cue point set on
+the nearest beat). The deck's keys
 (1 to 8, Shift with them, `[`, `]`, S) are commands of the page bound on
 the decks' surface (`Timeline::surface`); J/K/L, I, O and Ctrl+L stay the
 timeline's.
@@ -394,18 +484,20 @@ video clip under the playhead (its source and source timecode) with the
 title over it. Ctrl+K splits, Shift+Delete ripple deletes, I and O mark
 the in and out points (their duration beside the monitor), J/K/L
 shuttle; its buttons run the same edits through the `timeline.*`
-commands, so each is one step of the history either way.
+commands, so each is one step of the history either way. Under the
+monitor, a `Transport` row (start, step back, play backward, stop, play,
+step forward, end, loop) runs the transport keys' commands.
 
 ## What comes next
 
 What the DJ decks needed that the timeline does not give, worked around
 by the page:
 
-- **A view centred on the playhead**: `follow` turns pages; a deck keeps
-  its playhead in the middle and scrolls under it, which the page does by
-  moving `view` each frame.
-- **Locked tracks or clips**: a deck's song can be dragged, trimmed or
-  deleted like any clip; the page puts it back after each pass.
+- **Locked tracks or clips**: `scrub_on_drag` locks the clips to the
+  pointer, but the keys (Delete, Ctrl+K) still edit a deck's song; the
+  page puts it back after each pass.
+- **A main cue point**: CUE is the page's own (a time of the deck's);
+  the timeline has cue points as markers but no transport cue.
 - **Which timeline a surface key is for**: a command bound on a surface
   two timelines share is not told which one has the focus; the page
   remembers the deck whose timeline had it last.

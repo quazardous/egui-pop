@@ -1862,6 +1862,26 @@ egui-pop-views-sorted-up = { $column }, tri croissant
 
 egui-pop-views-table = Tableau
 
+egui-pop-views-transport-end = Aller à la fin
+
+egui-pop-views-transport-keys = { $action } ({ $keys })
+
+egui-pop-views-transport-loop = Boucle
+
+egui-pop-views-transport-pause = Pause
+
+egui-pop-views-transport-play = Lire
+
+egui-pop-views-transport-play-backward = Lire à rebours
+
+egui-pop-views-transport-start = Aller au début
+
+egui-pop-views-transport-step-back = Reculer d’un pas
+
+egui-pop-views-transport-step-forward = Avancer d’un pas
+
+egui-pop-views-transport-stop = Arrêter
+
 egui-pop-views-tree = Arborescence
 
 egui-pop-views-tree-filter = Filtrer
@@ -2756,6 +2776,38 @@ command-timeline-split-clip =
 command-timeline-trim-clip =
     .description = Amène le début du clip `id` d’une ligne de temps à `start` et sa fin à `end` (en secondes sur la ligne de temps ; l’un, l’autre ou les deux). Son décalage dans sa source suit son début ; il s’arrête aux bouts de sa source, à ses voisins et aux bornes. Un pas de l’historique chacun.
     .title = Découper un clip sur une ligne de temps
+
+command-timeline-go-to-end =
+    .description = Place la tête de lecture d’une ligne de temps à la fin de ses bornes, comme Fin.
+    .title = Aller à la fin d’une ligne de temps
+
+command-timeline-go-to-start =
+    .description = Place la tête de lecture d’une ligne de temps au début de ses bornes, comme Début.
+    .title = Aller au début d’une ligne de temps
+
+command-timeline-shuttle-backward =
+    .description = Demande à une ligne de temps de lire à rebours à 1, ou deux fois plus vite quand elle le fait déjà, comme J.
+    .title = Faire défiler une ligne de temps à rebours
+
+command-timeline-shuttle-forward =
+    .description = Demande à une ligne de temps de lire en avant à 1, ou deux fois plus vite quand elle le fait déjà (jusqu’à 32×), comme L.
+    .title = Faire défiler une ligne de temps en avant
+
+command-timeline-step-backward =
+    .description = Recule la tête de lecture d’une ligne de temps d’une unité, ou du grand pas de Maj avec `big`, et met en pause, comme Gauche.
+    .title = Reculer une ligne de temps d’un pas
+
+command-timeline-step-forward =
+    .description = Avance la tête de lecture d’une ligne de temps d’une unité (une image, un temps, une seconde), ou du grand pas de Maj avec `big`, et met en pause, comme Droite.
+    .title = Avancer une ligne de temps d’un pas
+
+command-timeline-toggle-loop =
+    .description = Active ou coupe la lecture en boucle d’une ligne de temps sur sa plage, comme Ctrl+L. Un pas de l’historique.
+    .title = Boucler ou non la plage d’une ligne de temps
+
+command-timeline-toggle-play =
+    .description = Demande à une ligne de temps de lire en avant à 1, ou de se mettre en pause quand elle lit, comme Espace.
+    .title = Lire ou mettre en pause une ligne de temps
 
 egui-pop-views-timeline = Ligne de temps
 

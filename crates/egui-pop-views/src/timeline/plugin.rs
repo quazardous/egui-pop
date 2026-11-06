@@ -9,7 +9,12 @@
 //! | `timeline.add_marker` | `timeline`, `seconds` or `time` (else the playhead), `label`, `kind` (`marker`, `cue`), `color` (`#rrggbb`) | adds a marker; answers its `id` |
 //! | `timeline.remove_marker` | `timeline`, `id` | removes a marker |
 //! | `timeline.play` | `timeline`, `speed` (1 by default, negative backwards) | asks to play |
-//! | `timeline.pause` | `timeline` | asks to pause |
+//! | `timeline.pause` | `timeline` | asks to pause (K) |
+//! | `timeline.toggle_play` | `timeline` | plays forward at 1, or pauses (Space) |
+//! | `timeline.shuttle_forward`, `timeline.shuttle_backward` | `timeline` | plays that way, twice as fast again (L, J) |
+//! | `timeline.step_forward`, `timeline.step_backward` | `timeline`, `big` | one unit on or back, pausing (Right, Left; `big`: Shift's step) |
+//! | `timeline.go_to_start`, `timeline.go_to_end` | `timeline` | the bounds' start or end (Home, End) |
+//! | `timeline.toggle_loop` | `timeline` | loops the range, or no longer (Ctrl+L) |
 //! | `timeline.add_clip` | `timeline`, `track`, `seconds` or `time` (else the playhead), `length`, `offset`, `label`, `source`, `source_length`, `color` | adds a clip to a track; answers its `id` |
 //! | `timeline.move_clip` | `timeline`, `id`, `seconds` or `time`, `track` | moves a clip along its track or to another |
 //! | `timeline.trim_clip` | `timeline`, `id`, `start`, `end` (seconds) | moves a clip's start or end |
@@ -56,6 +61,14 @@ pub const CMD_REMOVE_CLIP: CommandId = CommandId::from_static("timeline.remove_c
 pub const CMD_SELECT_CLIPS: CommandId = CommandId::from_static("timeline.select_clips");
 pub const CMD_SPLIT_CLIP: CommandId = CommandId::from_static("timeline.split_clip");
 pub const CMD_RIPPLE_DELETE: CommandId = CommandId::from_static("timeline.ripple_delete");
+pub const CMD_TOGGLE_PLAY: CommandId = CommandId::from_static("timeline.toggle_play");
+pub const CMD_SHUTTLE_FORWARD: CommandId = CommandId::from_static("timeline.shuttle_forward");
+pub const CMD_SHUTTLE_BACKWARD: CommandId = CommandId::from_static("timeline.shuttle_backward");
+pub const CMD_STEP_FORWARD: CommandId = CommandId::from_static("timeline.step_forward");
+pub const CMD_STEP_BACKWARD: CommandId = CommandId::from_static("timeline.step_backward");
+pub const CMD_GO_TO_START: CommandId = CommandId::from_static("timeline.go_to_start");
+pub const CMD_GO_TO_END: CommandId = CommandId::from_static("timeline.go_to_end");
+pub const CMD_TOGGLE_LOOP: CommandId = CommandId::from_static("timeline.toggle_loop");
 
 /// Passes a timeline may go undrawn before agents no longer see it.
 const GONE_AFTER: u64 = 3;
@@ -415,6 +428,10 @@ fn scale_of(t: &Timelines, timeline: Option<&str>) -> Result<super::TimeScale, S
     target(&mut reg, timeline, pass).map(|(_, e)| e.state.scale)
 }
 
+/// A transport key's command: its id, title, description and op (given
+/// `big`).
+type TransportCommand = (CommandId, &'static str, &'static str, fn(bool) -> Op);
+
 fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     const CAT: &str = "Timeline";
     let timeline = "song (optional: the timeline that last had the focus)";
@@ -514,6 +531,81 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
             .description("Asks a timeline to pause.")
             .args(json!({ "timeline": timeline })),
         |call| timelines(call).run(name(call.args), Op::Pause, call.origin),
+    )?;
+    // The transport's keys, one command each (a `Transport`'s buttons run
+    // them): what they do is the key's, applied at the timeline's pass.
+    let transport: [TransportCommand; 7] = [
+        (
+            CMD_TOGGLE_PLAY,
+            "Play or pause a timeline",
+            "Asks a timeline to play forward at 1, or to pause when it plays, as Space does.",
+            |_| Op::Toggle,
+        ),
+        (
+            CMD_SHUTTLE_FORWARD,
+            "Shuttle a timeline forward",
+            "Asks a timeline to play forward at 1, or twice as fast when it already does (up to 32×), as L does.",
+            |_| Op::Shuttle(true),
+        ),
+        (
+            CMD_SHUTTLE_BACKWARD,
+            "Shuttle a timeline backward",
+            "Asks a timeline to play backward at 1, or twice as fast when it already does, as J does.",
+            |_| Op::Shuttle(false),
+        ),
+        (
+            CMD_STEP_FORWARD,
+            "Step a timeline forward",
+            "Moves a timeline's playhead one unit on (a frame, a beat, a second), or Shift's bigger step with `big`, and pauses, as Right does.",
+            |big| Op::Step { forward: true, big },
+        ),
+        (
+            CMD_STEP_BACKWARD,
+            "Step a timeline backward",
+            "Moves a timeline's playhead one unit back, or Shift's bigger step with `big`, and pauses, as Left does.",
+            |big| Op::Step {
+                forward: false,
+                big,
+            },
+        ),
+        (
+            CMD_GO_TO_START,
+            "Go to a timeline's start",
+            "Moves a timeline's playhead to its bounds' start, as Home does.",
+            |_| Op::Home,
+        ),
+        (
+            CMD_GO_TO_END,
+            "Go to a timeline's end",
+            "Moves a timeline's playhead to its bounds' end, as End does.",
+            |_| Op::End,
+        ),
+    ];
+    for (id, title, description, op) in transport {
+        let args = if matches!(op(false), Op::Step { .. }) {
+            json!({ "timeline": timeline, "big": false })
+        } else {
+            json!({ "timeline": timeline })
+        };
+        ctx.command(
+            CommandSpec::new(id, title, CAT)
+                .description(description)
+                .args(args),
+            move |call| {
+                let big = call
+                    .args
+                    .get("big")
+                    .and_then(Json::as_bool)
+                    .unwrap_or(false);
+                timelines(call).run(name(call.args), op(big), call.origin)
+            },
+        )?;
+    }
+    ctx.command(
+        CommandSpec::new(CMD_TOGGLE_LOOP, "Loop a timeline's range or not", CAT)
+            .description("Turns a timeline's looping round its range on, or off, as Ctrl+L does. One step of the history.")
+            .args(json!({ "timeline": timeline })),
+        |call| timelines(call).run(name(call.args), Op::ToggleLoop, call.origin),
     )?;
     ctx.command(
         CommandSpec::new(CMD_ADD_CLIP, "Add a clip to a timeline", CAT)
