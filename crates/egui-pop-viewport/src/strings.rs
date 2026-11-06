@@ -176,6 +176,54 @@ pub const GRAPH_DELETE: StrKey = StrKey::new("egui-pop-viewport-graph-delete", "
 /// A port's menu: remove its wires.
 pub const GRAPH_DISCONNECT: StrKey =
     StrKey::new("egui-pop-viewport-graph-disconnect", "Disconnect");
+/// A wire's accessible role description.
+pub const GRAPH_ROLE_WIRE: StrKey = StrKey::new("egui-pop-viewport-graph-role-wire", "wire");
+/// A wire's accessible name: its two ports' names.
+pub const GRAPH_WIRE_NAME: StrKey =
+    StrKey::new("egui-pop-viewport-graph-wire-name", "{ $from } to { $to }");
+/// A wire's tooltip: its ends, node and port.
+pub const GRAPH_WIRE_TIP: StrKey = StrKey::new(
+    "egui-pop-viewport-graph-wire-tip",
+    "{ $from_node } · { $from_port } to { $to_node } · { $to_port }",
+);
+/// What the keys do on a focused wire (its accessible description).
+pub const GRAPH_WIRE_KEYS: StrKey = StrKey::new(
+    "egui-pop-viewport-graph-wire-keys",
+    "Delete to disconnect, Enter to move its input end, Shift+Enter to move its output end",
+);
+/// What the pointer does on a wire, in the canvas's hint.
+pub const GRAPH_WIRE_HINT: StrKey = StrKey::new(
+    "egui-pop-viewport-graph-wire-hint",
+    "Click: select the wire · Ctrl+click: add it · Drag: move its nearer end · Right-click: its menu",
+);
+/// Announced when wires are removed.
+pub const GRAPH_DISCONNECTED: StrKey = StrKey::new(
+    "egui-pop-viewport-graph-disconnected",
+    "{ $from } disconnected from { $to }",
+);
+/// Announced when the wires selected change.
+pub const GRAPH_WIRES_SELECTED: StrKey = StrKey::new(
+    "egui-pop-viewport-graph-wires-selected",
+    "{ $count } wires selected",
+);
+/// Announced when a wire's input end is picked up.
+pub const GRAPH_WIRE_INPUT_PICKED: StrKey = StrKey::new(
+    "egui-pop-viewport-graph-wire-input-picked",
+    "Wire from { $from } taken off { $to }: choose an input",
+);
+/// Announced when a wire's output end is picked up.
+pub const GRAPH_WIRE_OUTPUT_PICKED: StrKey = StrKey::new(
+    "egui-pop-viewport-graph-wire-output-picked",
+    "Wire to { $to } taken off { $from }: choose an output",
+);
+/// A wire's menu: select the node it comes from.
+pub const GRAPH_SELECT_SOURCE: StrKey =
+    StrKey::new("egui-pop-viewport-graph-select-source", "Select the source");
+/// A wire's menu: select the node it goes to.
+pub const GRAPH_SELECT_DESTINATION: StrKey = StrKey::new(
+    "egui-pop-viewport-graph-select-destination",
+    "Select the destination",
+);
 /// The graph minimap's accessible name, unless the application gives one.
 pub const GRAPH_MINIMAP: StrKey =
     StrKey::new("egui-pop-viewport-graph-minimap-label", "Graph overview");
@@ -257,6 +305,17 @@ pub const ALL: &[StrKey] = &[
     GRAPH_DUPLICATE,
     GRAPH_DELETE,
     GRAPH_DISCONNECT,
+    GRAPH_ROLE_WIRE,
+    GRAPH_WIRE_NAME,
+    GRAPH_WIRE_TIP,
+    GRAPH_WIRE_KEYS,
+    GRAPH_WIRE_HINT,
+    GRAPH_DISCONNECTED,
+    GRAPH_WIRES_SELECTED,
+    GRAPH_WIRE_INPUT_PICKED,
+    GRAPH_WIRE_OUTPUT_PICKED,
+    GRAPH_SELECT_SOURCE,
+    GRAPH_SELECT_DESTINATION,
     GRAPH_MINIMAP,
     GRAPH_MINIMAP_VALUE,
 ];

@@ -16,13 +16,16 @@
 //! changes go through as they are.
 //!
 //! Events on the journal: `graph.selection_changed` (`graph`, `nodes`),
+//! `graph.wire_selection_changed` (`graph`, `edges`),
 //! `graph.level_changed` (`graph`, `level`), `graph.refused` (`graph`,
 //! `from`, `to`, `reason`).
 //!
 //! Commands, for agents (`graph` names an editor shown with
 //! [`show_graph`]; without it, the only one): `graph.read` (the graph
-//! as drawn), `graph.edit` (an edit, done at the editor's next frame as
-//! the user's: type-checked, then its step), `graph.select`,
+//! as drawn, the wires selected as `selected_edges`), `graph.edit` (an
+//! edit, done at the editor's next frame as the user's: type-checked,
+//! then its step; a `connect` whose `replaces` names a wire there moves
+//! that wire's end, one edit), `graph.select` (nodes and wires),
 //! `graph.view` (fit, a level, a node to focus) and `graph.export` (the
 //! graph as an SVG image, from the copy the editor kept at its last
 //! frame; PNG and PDF, base64-encoded, behind the `graph-png` and
@@ -38,7 +41,7 @@ use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, StepId};
 use egui_pop_viewport::change::{Cause, Verdict};
 use egui_pop_viewport::graph::{
-    Edit, ExportOptions, GraphEditor, GraphEvent, GraphExport, GraphOutput, Level, Request,
+    Edge, Edit, ExportOptions, GraphEditor, GraphEvent, GraphExport, GraphOutput, Level, Request,
     WireStyle,
 };
 use serde_json::{Value as Json, json};
@@ -51,6 +54,7 @@ pub const STEP_GRAPH_ADD: StepId = StepId::from_static("graph.add");
 
 /// Events published on the journal (not steps: nothing to veto).
 pub const EVENT_GRAPH_SELECTION: &str = "graph.selection_changed";
+pub const EVENT_GRAPH_WIRE_SELECTION: &str = "graph.wire_selection_changed";
 pub const EVENT_GRAPH_LEVEL: &str = "graph.level_changed";
 pub const EVENT_GRAPH_REFUSED: &str = "graph.refused";
 
@@ -184,6 +188,13 @@ pub fn show_graph(
                 EVENT_GRAPH_SELECTION,
                 json!({ "graph": name, "nodes": nodes }),
             ),
+            GraphEvent::WireSelection(edges) => (
+                EVENT_GRAPH_WIRE_SELECTION,
+                json!({
+                    "graph": name,
+                    "edges": edges.iter().map(Edge::to_json).collect::<Vec<_>>(),
+                }),
+            ),
             GraphEvent::Level(level) => (
                 EVENT_GRAPH_LEVEL,
                 json!({ "graph": name, "level": level.name() }),
@@ -285,7 +296,7 @@ pub(crate) fn connect(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
     ctx.service(&GRAPHS, Graphs::default())?;
     ctx.command(
         CommandSpec::new(CMD_GRAPH_READ, "Read the graph", CAT)
-            .description("The graph a node editor drew last: nodes (place, ports, group, parameters), wires, groups, the kinds it can add, the selection, the level and the part in view.")
+            .description("The graph a node editor drew last: nodes (place, ports, group, parameters), wires, groups, the kinds it can add, the selection (`selection`: nodes, `selected_edges`: wires), the level and the part in view.")
             .hidden()
             .read_only()
             .args(json!({ "graph": "main" })),
@@ -298,7 +309,7 @@ pub(crate) fn connect(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
     )?;
     ctx.command(
         CommandSpec::new(CMD_GRAPH_EDIT, "Edit the graph", CAT)
-            .description("Asks a node editor for an edit, done at its next frame as the user's (a connection type-checked, then its graph.* step): `edit` is `connect` (`from`, `to`), `disconnect` (`edges`), `move` (`moves`), `delete` (`nodes`, `edges`) or `add` (`nodes`).")
+            .description("Asks a node editor for an edit, done at its next frame as the user's (a connection type-checked, then its graph.* step): `edit` is `connect` (`from`, `to`, and `replaces`: wires whose end it moves, one edit), `disconnect` (`edges`), `move` (`moves`), `delete` (`nodes`, `edges`) or `add` (`nodes`).")
             .hidden()
             .args(json!({
                 "graph": "main",
@@ -323,21 +334,43 @@ pub(crate) fn connect(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
         },
     )?;
     ctx.command(
-        CommandSpec::new(CMD_GRAPH_SELECT, "Select nodes", CAT)
-            .description("Selects nodes of a node editor (`nodes`, their ids) at its next frame.")
+        CommandSpec::new(CMD_GRAPH_SELECT, "Select nodes and wires", CAT)
+            .description("Selects nodes (`nodes`, their ids) and wires (`edges`: [{from, to}]) of a node editor at its next frame: what is named is the selection, nodes and wires; give one of them or both.")
             .hidden()
-            .args(json!({ "graph": "main", "nodes": ["blur"] })),
+            .args(json!({
+                "graph": "main",
+                "nodes": ["blur"],
+                "edges": [{
+                    "from": { "node": "load", "port": "image" },
+                    "to": { "node": "blur", "port": "image" },
+                }],
+            })),
         |call| {
             let (graphs, name) = target(call)?;
-            let nodes = call
-                .args
-                .get("nodes")
-                .and_then(Json::as_array)
-                .ok_or("`nodes` is missing")?
-                .iter()
-                .filter_map(|n| n.as_str().map(str::to_string))
-                .collect();
+            let (nodes, edges) = (call.args.get("nodes"), call.args.get("edges"));
+            if nodes.is_none() && edges.is_none() {
+                return Err("give `nodes`, `edges` or both".into());
+            }
+            let nodes = match nodes {
+                Some(v) => v
+                    .as_array()
+                    .ok_or("`nodes` is not a list")?
+                    .iter()
+                    .filter_map(|n| n.as_str().map(str::to_string))
+                    .collect(),
+                None => Vec::new(),
+            };
+            let edges = match edges {
+                Some(v) => v
+                    .as_array()
+                    .ok_or("`edges` is not a list")?
+                    .iter()
+                    .map(|e| Edge::from_json(e).ok_or_else(|| format!("not a wire: {e}")))
+                    .collect::<Result<Vec<_>, _>>()?,
+                None => Vec::new(),
+            };
             graphs.request(&name, Request::Select(nodes));
+            graphs.request(&name, Request::SelectWires(edges));
             Ok(json!({ "graph": name, "queued": "select" }))
         },
     )?;

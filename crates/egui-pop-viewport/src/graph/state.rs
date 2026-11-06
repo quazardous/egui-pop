@@ -54,6 +54,9 @@ pub struct GraphState {
     pub view: Rect,
     /// The selected nodes.
     pub selection: BTreeSet<String>,
+    /// The selected wires (beside the nodes: a click on a wire selects it
+    /// alone, Ctrl or Shift adds it to the nodes and wires selected).
+    pub selected_edges: BTreeSet<Edge>,
     /// Nodes drawn as their title bar only.
     pub collapsed: BTreeSet<String>,
     /// Groups folded into a stack in the ports and detail views.
@@ -67,6 +70,10 @@ pub struct GraphState {
     pub(crate) band: Option<[Pos2; 2]>,
     /// Where the canvas's menu was opened (graph units).
     pub(crate) menu_at: Option<Pos2>,
+    /// The wire the canvas's menu was opened on, if any.
+    pub(crate) menu_wire: Option<Edge>,
+    /// The pointer was over the canvas at the last frame.
+    pub(crate) over_canvas: bool,
     pub(crate) level: Option<Level>,
     pub(crate) drawn: Drawn,
     pub(crate) requests: Vec<Request>,
@@ -96,6 +103,7 @@ impl Default for GraphState {
         GraphState {
             view: Rect::NOTHING,
             selection: BTreeSet::new(),
+            selected_edges: BTreeSet::new(),
             collapsed: BTreeSet::new(),
             folded: BTreeSet::new(),
             unfolded: BTreeSet::new(),
@@ -103,6 +111,8 @@ impl Default for GraphState {
             moving: None,
             band: None,
             menu_at: None,
+            menu_wire: None,
+            over_canvas: false,
             level: None,
             drawn: Drawn::default(),
             requests: Vec::new(),

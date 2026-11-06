@@ -139,18 +139,20 @@ fn graph_panel(ui: &mut egui::Ui, graph: &mut Pipeline, state: &mut GraphState) 
 `GraphState` is the view: the part of the graph in view (`view`), the
 selection, the collapsed nodes and the folded groups, all for the
 application to keep; `request` asks for something at the next frame
-(`Request::Fit`, `Level`, `Select`, `Focus`, or an `Edit` as if the user
-made it). `GraphOutput` gives the edits after the hook, the `events`
-(`Selection`, `Level`, `Refused`), the `level` and the `zoom`.
+(`Request::Fit`, `Level`, `Select`, `SelectWires`, `Focus`, or an `Edit`
+as if the user made it). `GraphState::selected_edges` holds the wires
+selected, beside `selection`'s nodes. `GraphOutput` gives the edits after
+the hook, the `events` (`Selection`, `WireSelection`, `Level`,
+`Refused`), the `level` and the `zoom`.
 
 ### Edits
 
 | Edit | When | Fields |
 |---|---|---|
-| `Connect` | a wire dropped on a port that accepts it, two ports clicked, Enter on two ports | `from` (an output), `to` (an input), `replaces`: the wires it takes the place of |
-| `Disconnect` | a wire dragged off an input and dropped nowhere, Delete on a port, a port's menu | `edges` |
+| `Connect` | a wire dropped on a port that accepts it, two ports clicked, Enter on two ports; a wire's end moved to another port | `from` (an output), `to` (an input), `replaces`: the wires it takes the place of (the input's old wire, the wire whose end moved) |
+| `Disconnect` | a wire dragged off an input or by its end and dropped nowhere, Delete on a port or with only wires selected, a port's or a wire's menu | `edges` |
 | `Move` | the end of a drag of nodes, a stack or a group's title; Shift and the arrows | `moves`: each node's `from` and `to` (snapped with `snap`) |
-| `Delete` | Delete or Backspace, a node's menu | `nodes`, and the `edges` touching them |
+| `Delete` | Delete or Backspace, a node's menu | `nodes`, and the `edges` touching them and the wires selected |
 | `Add` | the canvas's menu (at the pointer), Ctrl+D (copies, `copy_of`) | `nodes`: `kind`, `at`, `copy_of` |
 | `Param` | a parameter's slider in the detail view | `node`, `param`, `from`, `to`, `done` (a drag's frames are not done) |
 
@@ -168,7 +170,7 @@ Pan and zoom follow the pointer profile
 | Ctrl (Cmd) and the wheel, a pinch | Zooms around the pointer |
 | Drag with the middle button, or with Space held | Pans |
 | Drag on the canvas | A rubber band: selects the nodes it touches (Shift or Ctrl adds) |
-| Click on the canvas | Clears the selection, drops a wire begun with a click |
+| Click on the canvas | Clears the selection (nodes and wires), drops a wire begun with a click |
 | Double click on the canvas | Fits the graph (`gesture.graph.fit`) |
 | Click on a node | Selects it (Shift or Ctrl adds or removes it) |
 | Drag a node | Moves the selection |
@@ -176,8 +178,18 @@ Pan and zoom follow the pointer profile
 | Drag from a port | Draws a wire, checked as it goes: ports that accept it are ringed, others dimmed, the wire turns to the refusal colour over a port that refuses it |
 | Drag from a connected input | Takes its wire along: dropped nowhere, it disconnects |
 | Click a port, then another | Connects them |
+| Hover a wire | Within 6 points of it (12 on a touch screen), where no node or port is: drawn thicker, its two ports ringed, a tooltip naming its ends ("Load · Image to Blur · Image"), the hint line says what the pointer does |
+| Click a wire | Selects it, and no node (Shift or Ctrl adds or removes it, nodes kept): drawn in the selection's colour with a handle near each end |
+| Drag a wire | Takes its nearer end along (one of an output's several wires too): dropped on a port that accepts it, one `Connect` replacing it; dropped nowhere, a `Disconnect`; Escape puts it back |
+| Delete with wires selected | One `Disconnect` of them all; with nodes selected too, one `Delete` |
 | A group's title | Folds the group into a stack; a click on the stack unfolds it; dragging either moves the group |
-| Secondary click | The canvas's menu (add a node), a node's (duplicate, delete), a port's (disconnect) |
+| Secondary click | The canvas's menu (add a node), a node's (duplicate, delete), a port's (disconnect), a wire's (disconnect, select the source, select the destination) |
+
+Wires answer the pointer at the ports and detail levels, between nodes
+(not into a folded group's stack). A node selection and a wire selection
+live side by side: a plain click on either selects it alone, Ctrl or
+Shift adds to both, the rubber band selects nodes (keeping the wires
+with Ctrl or Shift).
 
 ### Wires
 
@@ -235,6 +247,12 @@ unfolded there (`GraphState::unfolded`).
 | Enter, Space | a port | Begins a wire there; on a second port, connects (or says why not) |
 | Delete, Backspace | a port | Disconnects it |
 | Escape | a port | Drops the wire begun, else back to the node |
+| Tab | a connected input | To each of its wires, then on to the next port |
+| Delete, Backspace | a wire | Disconnects it (`Disconnect`), back to its input |
+| Enter | a wire | Picks its input end up: choose an input as above (Enter on it reconnects, one `Connect` replacing the wire) |
+| Shift+Enter | a wire | Picks its output end up: choose an output |
+| Menu key, Shift+F10 | a wire | Its menu |
+| Escape | a wire | Drops the end picked up, else back to its input |
 | Delete, Backspace | a node, the canvas | Deletes the selection (the focused node when it is not selected) |
 | Ctrl+D | a node, the canvas | Duplicates the selection |
 | Ctrl+A | a node, the canvas | Selects every node |
@@ -271,7 +289,7 @@ edit handed back; an after-hook follows it. A parameter's slider is not
 a step. `cause` is `drag`, `click`, `key`, `command`...
 
 Events on the journal: `graph.selection_changed` (`graph`, `nodes`),
-`graph.level_changed` (`graph`, `level`), `graph.refused` (`graph`,
+`graph.wire_selection_changed` (`graph`, `edges`), `graph.level_changed` (`graph`, `level`), `graph.refused` (`graph`,
 `from`, `to`, `reason`).
 
 ```rust
@@ -325,9 +343,9 @@ a connection is type-checked, then the edit runs its step.
 
 | Command | Arguments | Result |
 |---|---|---|
-| `graph.read` | `graph` | the graph as drawn: `nodes` (place, ports, group, collapsed, selected, parameters), `edges`, `groups`, `kinds`, `selection`, `level`, `zoom`, `visible` |
-| `graph.edit` | `graph`, `edit` (`connect`, `disconnect`, `move`, `delete`, `add`) and the edit's fields | `queued` |
-| `graph.select` | `graph`, `nodes` | `queued` |
+| `graph.read` | `graph` | the graph as drawn: `nodes` (place, ports, group, collapsed, selected, parameters), `edges`, `groups`, `kinds`, `selection`, `selected_edges`, `level`, `zoom`, `visible` |
+| `graph.edit` | `graph`, `edit` (`connect`, `disconnect`, `move`, `delete`, `add`) and the edit's fields; a `connect` whose `replaces` names a wire there moves that wire's end, one edit | `queued` |
+| `graph.select` | `graph`, `nodes`, `edges` (`[{from, to}]`): one or both, what is named becomes the selection | `queued` |
 | `graph.view` | `graph`, and `fit: true`, `level` or `focus` (a node) | `queued` |
 | `graph.export` | `graph`, `format` (`svg`, `png`, `pdf`), `selection`, `level`, `wires`, `background`, `title`, `scale` | `svg` as text, or `png` or `pdf` base64-encoded: the graph as an image (see [Export](#export)) |
 
@@ -557,13 +575,15 @@ records `text()` before an edit and reads it back to undo.
 | The canvas | group | its label ("Node graph") | nodes, wires and the level |
 | A node | group, described as "node", selected or not | its title | its inputs, outputs and wires |
 | A port | button, described as "input port" or "output port" | "Blur, input Image" | its type and wires |
+| A wire, after its input | button, described as "wire", selected or not; its keys as the description | "Load, output Image to Blur, input Image" | |
 | The chevron | button | "Collapse Blur", "Expand Blur" | |
 | A group's title | button | "Fold Detail" | |
 | A stack | button, described as "stack" | "Unfold Detail (12 nodes)" | |
 | A parameter | slider | its label | its value |
 | The minimap | scroll view | "Graph overview" | the zoom |
 
-A wire begun, made or refused is announced (a live region). The
+A wire begun, made, refused, removed or picked up by an end, and the
+number of wires selected, are announced (a live region). The
 editor's widgets sit in the `Scene`'s transformed layer, whose
 AccessKit bounds egui reports untransformed: the editor sets them
 itself (see [upstream](upstream.md)).
