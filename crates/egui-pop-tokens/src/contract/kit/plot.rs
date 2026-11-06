@@ -15,6 +15,16 @@ pub(crate) const CONTRACT: &[Required] = &[
     comp(
         "plot.rest.text",
         "color",
-        "a plot's axis text, its grid and its crosshair",
+        "a plot's axis text and its crosshair",
+    ),
+    comp(
+        "plot.grid-color",
+        "color",
+        "a plot's grid lines, at their strongest (decoration)",
+    ),
+    comp(
+        "plot.grid-fade",
+        "number",
+        "how much fainter a plot's denser grid lines are, 0 (as strong as the sparsest) to 1",
     ),
 ];

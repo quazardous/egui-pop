@@ -52,13 +52,19 @@ section-band:
     text: {$type: "color", $value: "{text.strong}"}
 plot:
   shape: {$type: "string", $value: "plain", $description: "No frame: Rerun's plots fill their view."}
+  grid-color: {$type: "color", $value: "{gray.4}", $description: "plot_grid_color: Gray.200 in dark, Gray.850 in light, step 4 of either variant's scale"}
+  grid-fade: {$type: "number", $value: 0.3, $description: "plot_grid_fade"}
   rest:
     border-width: {$type: "dimension", $value: {value: 0, unit: "px"}}
     radius: {$type: "dimension", $value: {value: 0, unit: "px"}}
 plot-cursor:
   width: {$type: "dimension", $value: {value: 1.5, unit: "px"}, $description: "1.5 times the widgets' stroke, as re_ui's paint_time_cursor draws it"}
+  head: {$type: "string", $value: "triangle", $description: "paint_time_cursor's triangle at the top"}
+  head-size: {$type: "dimension", $value: {value: 10, unit: "px"}, $description: "The triangle's width"}
   rest:
     fill: {$type: "color", $value: "{text.default}", $description: "The widgets' foreground stroke: text_default"}
+  hover:
+    fill: {$type: "color", $value: "{text.strong}", $description: "Under the pointer or dragged: the strong text"}
 table-header-cell:
   shape: {$type: "string", $value: "plain", $description: "A fill and a line under it."}
   indicator-side: {$type: "string", $value: "bottom"}

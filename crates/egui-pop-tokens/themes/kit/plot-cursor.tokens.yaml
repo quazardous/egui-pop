@@ -1,13 +1,24 @@
 $description: "The `plot-cursor` component of the default kit (docs/kit.md), layered into pop-dark."
 plot-cursor:
-  $description: "A plot's time cursor: a vertical line across its area at the time the application gives, `width` thick (a kit component)."
+  $description: "A plot's time cursor: a vertical line across its area at the time the application gives, `width` thick (a kit component), with an optional head at its top; `hover` under the pointer and while dragged."
   shape:
     $type: "string"
     $value: "tick"
   width:
     $type: "dimension"
     $value: {value: 2, unit: "px"}
+  head:
+    $type: "string"
+    $value: "none"
+    $description: "The mark at the cursor's top: none or triangle (pointing down, `head-size` wide)."
+  head-size:
+    $type: "dimension"
+    $value: {value: 10, unit: "px"}
   rest:
+    fill:
+      $type: "color"
+      $value: "{accent.default}"
+  hover:
     fill:
       $type: "color"
       $value: "{accent.default}"
