@@ -771,9 +771,7 @@ impl<'a> Splitter<'a> {
         let mut r = ui.interact(rect, self.id, Sense::click_and_drag());
         let before = *value;
         let sign = if self.after { -1.0 } else { 1.0 };
-        if r.hovered() || r.dragged() {
-            ctx.set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
-        }
+        crate::pointer::drag_cursor(&r, crate::pointer::DragKind::ResizeHorizontal);
         if r.drag_started() {
             ctx.data_mut(|d| d.insert_temp(self.id, before));
         }

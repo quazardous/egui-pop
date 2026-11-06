@@ -911,6 +911,7 @@ pub(crate) fn drag(
 ) -> Drag {
     let acc = DRAG_ACC.keyed(response.id);
     let start = DRAG_START.keyed(response.id);
+    crate::pointer::drag_cursor(response, crate::pointer::DragKind::Value);
     if response.drag_started() {
         acc.set(ui.ctx(), spec.frac(value));
         start.set(ui.ctx(), value);

@@ -116,6 +116,7 @@ use egui::{
 };
 use egui_pop_core::a11y::{self, Politeness};
 use egui_pop_core::icon::Icon;
+use egui_pop_core::pointer::DragKind;
 use egui_pop_core::pointer::claim::{self, Secondary};
 use egui_pop_core::slider::{self, Slider};
 use egui_pop_core::state::Slot;
@@ -1488,6 +1489,11 @@ impl Cx<'_, '_, '_> {
 
     /// A drag of a box or a frame: moves, then one edit at its end.
     fn drag_move(&mut self, ui: &Ui, r: &Response) {
+        if r.dragged_by(egui::PointerButton::Primary) && self.state.moving.is_some() {
+            egui_pop_core::pointer::hold_drag_cursor(&self.ctx, DragKind::Move);
+        } else if !r.dragged() {
+            egui_pop_core::pointer::drag_cursor(r, DragKind::Move);
+        }
         if r.dragged_by(egui::PointerButton::Primary)
             && let Some(m) = &mut self.state.moving
         {
@@ -2219,6 +2225,7 @@ impl Cx<'_, '_, '_> {
             if pr.drag_started_by(egui::PointerButton::Primary) {
                 self.start_wire(&pref, side, port.multiple, true);
             }
+            egui_pop_core::pointer::drag_cursor(&pr, DragKind::Carry);
             if pr.clicked() {
                 self.click_port(&pref, side, &name);
             }
@@ -2645,6 +2652,16 @@ impl Cx<'_, '_, '_> {
             && let Some(p) = pointer
         {
             band[1] = p;
+        }
+        // The canvas's drags keep their cursor wherever the pointer goes.
+        if panning {
+            egui_pop_core::pointer::hold_drag_cursor(&ctx, DragKind::Pan);
+        } else if response.dragged() {
+            if self.state.band.is_some() {
+                egui_pop_core::pointer::hold_drag_cursor(&ctx, DragKind::Select);
+            } else if self.state.wire.as_ref().is_some_and(|w| w.by_pointer) {
+                egui_pop_core::pointer::hold_drag_cursor(&ctx, DragKind::Carry);
+            }
         }
         if response.drag_stopped()
             && let Some([a, b]) = self.state.band.take()

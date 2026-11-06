@@ -131,6 +131,7 @@ impl<'a> GraphMinimap<'a> {
         if response.clicked() || response.drag_started() {
             response.request_focus();
         }
+        egui_pop_core::pointer::drag_cursor(&response, egui_pop_core::pointer::DragKind::Pan);
         if changed {
             response.mark_changed();
         }

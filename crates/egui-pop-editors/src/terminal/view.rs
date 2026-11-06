@@ -397,8 +397,8 @@ impl<'a> Terminal<'a> {
         let ctrl = ui.input(|i| i.modifiers.command || i.modifiers.ctrl);
         if link.is_some() && ctrl {
             ctx.set_cursor_icon(CursorIcon::PointingHand);
-        } else if response.hovered() {
-            ctx.set_cursor_icon(CursorIcon::Text);
+        } else {
+            egui_pop_core::pointer::drag_cursor(response, egui_pop_core::pointer::DragKind::Text);
         }
         if response.triple_clicked() {
             if let Some(p) = response.interact_pointer_pos() {

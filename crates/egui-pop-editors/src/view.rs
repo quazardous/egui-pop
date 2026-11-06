@@ -774,6 +774,22 @@ fn pointer(
             response.clone().on_hover_text_at_pointer(msg);
         }
     }
+    // An I-beam over the text, and for a selection's whole drag; the
+    // gutter keeps the arrow.
+    {
+        use egui_pop_core::pointer::{self, DragKind};
+        if response.dragged() {
+            if !IN_GUTTER.keyed(id).get(ui.ctx()).unwrap_or(false) {
+                pointer::hold_drag_cursor(ui.ctx(), DragKind::Text);
+            }
+        } else if response.hovered()
+            && response
+                .hover_pos()
+                .is_some_and(|p| p.x >= gutter_left + g.gutter_w)
+        {
+            pointer::drag_cursor(response, DragKind::Text);
+        }
+    }
     if o.code {
         let over = response.hover_pos().and_then(|p| {
             let (k, line) = at(p)?;

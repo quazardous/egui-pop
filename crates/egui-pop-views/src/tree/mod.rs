@@ -1840,6 +1840,7 @@ fn dragging<K: Key>(
     allows: &Allows<'_, K>,
 ) {
     d.target = None;
+    egui_pop_core::pointer::hold_drag_cursor(ui.ctx(), egui_pop_core::pointer::DragKind::Carry);
     let Some(p) = pointer else { return };
     let Some(i) = visible
         .range

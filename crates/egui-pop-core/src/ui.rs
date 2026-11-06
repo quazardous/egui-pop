@@ -266,6 +266,12 @@ pub trait UiPop: sealed::Sealed {
         area: ScrollArea,
         add: impl FnOnce(&mut Ui) -> R,
     ) -> ScrollAreaOutput<R>;
+
+    /// Shows the cursor of a drag of `kind` for `response`: its hover
+    /// cursor while hovered, its drag cursor for the whole drag, even
+    /// once the pointer has left the widget, both from the pointer
+    /// profile in force ([`pointer::drag_cursor`](crate::pointer::drag_cursor)).
+    fn drag_cursor(&self, response: &Response, kind: crate::pointer::DragKind);
 }
 
 impl UiPop for Ui {
@@ -353,6 +359,10 @@ impl UiPop for Ui {
         let out = self.scroll_area(area, add);
         contain_wheel(self, &out);
         out
+    }
+
+    fn drag_cursor(&self, response: &Response, kind: crate::pointer::DragKind) {
+        crate::pointer::drag_cursor(response, kind);
     }
 }
 

@@ -13,6 +13,10 @@
     "horizontal_scroll": "Shift",
     "vertical_scroll": "Alt"
   },
+  "drag_cursors": {
+    "pan": { "hover": "default" },
+    "move": { "hover": "default" }
+  },
   "bindings": [
     {
       "keys": "Wheel",

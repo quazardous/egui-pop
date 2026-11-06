@@ -81,6 +81,7 @@ use egui::{
 use egui_pop_api::AppHandle;
 use egui_pop_core::a11y::{self, Politeness};
 use egui_pop_core::lock;
+use egui_pop_core::pointer::{self, DragKind};
 use egui_pop_core::strings::{StrKey, tr, tr_args};
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::OwnerId;
@@ -1023,6 +1024,26 @@ impl<'a> Timeline<'a> {
                     Drag::None | Drag::Marker { .. } | Drag::Clips { .. } | Drag::Trim { .. } => {}
                 }
             }
+            // The lanes' cursor, set before the clips', markers' and
+            // handles' (theirs win over them): a fixed playhead's content
+            // shows it can be scrubbed, and each drag keeps its own until
+            // let go, wherever the pointer goes.
+            if response.dragged() {
+                let kind = match mem.drag {
+                    Drag::Pan { .. } => Some(DragKind::Pan),
+                    Drag::Content { .. } => Some(DragKind::Scrub),
+                    Drag::Range { .. } => Some(DragKind::Select),
+                    Drag::Scrub => Some(DragKind::Value),
+                    Drag::None | Drag::Marker { .. } | Drag::Clips { .. } | Drag::Trim { .. } => {
+                        None
+                    }
+                };
+                if let Some(kind) = kind {
+                    pointer::hold_drag_cursor(&ctx, kind);
+                }
+            } else if fixed && ctx.dragged_id().is_none() && ui.rect_contains_pointer(rect) {
+                pointer::hover_drag_cursor(&ctx, DragKind::Scrub);
+            }
             if response.drag_stopped() {
                 if let (Drag::Range { .. }, Some(r)) = (mem.drag, mem.preview.take())
                     && r.duration() > 0.0
@@ -1078,9 +1099,7 @@ impl<'a> Timeline<'a> {
             }
             let r = ui.interact(*flag, key.with(("marker", id)), Sense::CLICK | Sense::DRAG);
             a11y::name(&r, Role::Button, name);
-            if r.hovered() || r.dragged() {
-                ctx.set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
-            }
+            pointer::drag_cursor(&r, DragKind::ResizeHorizontal);
             if r.clicked() || r.drag_started() {
                 state.selected = Some(*id);
                 state.selected_clips.clear();
@@ -1148,6 +1167,15 @@ impl<'a> Timeline<'a> {
                 if r.hovered() {
                     hovered_clip = Some(hit.id);
                 }
+                if r.dragged() {
+                    let kind = match mem.drag {
+                        Drag::Pan { .. } => DragKind::Pan,
+                        _ => DragKind::Move,
+                    };
+                    pointer::hold_drag_cursor(&ctx, kind);
+                } else if !scrub_on_drag {
+                    pointer::drag_cursor(&r, DragKind::Move);
+                }
                 if r.clicked() {
                     select_clip(state, hit.id, mods);
                     ui.memory_mut(|m| m.request_focus(response.id));
@@ -1195,7 +1223,6 @@ impl<'a> Timeline<'a> {
                             state.view = state.fit_view(state.view);
                         }
                         Drag::Clips { lead, grab } => {
-                            ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
                             if let Some(o) = mem.moving.iter().find(|o| o.id == lead).copied() {
                                 let skip: Vec<u64> = mem.moving.iter().map(|o| o.id).collect();
                                 let raw = time_at(&state.view, p.x) - grab;
@@ -1270,8 +1297,8 @@ impl<'a> Timeline<'a> {
                         key.with(("clip-edge", hit.id, edge)),
                         Sense::click_and_drag(),
                     );
+                    pointer::drag_cursor(&h, DragKind::ResizeHorizontal);
                     if h.hovered() || h.dragged() {
-                        ctx.set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
                         hovered_edge = Some((hit.id, edge));
                     }
                     if h.clicked() {

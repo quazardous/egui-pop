@@ -509,6 +509,7 @@ impl<'a> CurveEditor<'a> {
         if response.clicked() || response.drag_started() {
             response.request_focus();
         }
+        egui_pop_core::pointer::drag_cursor(&response, egui_pop_core::pointer::DragKind::Point);
         if !ed.changes.is_empty() {
             response.mark_changed();
         }

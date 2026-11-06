@@ -18,6 +18,9 @@
 //! rect ([`claim`]): context menus and the canvases' profile bindings
 //! leave that click or drag to it.
 //!
+//! A draggable shows the cursor of its kind of drag ([`drag`]), which
+//! the profile may change: [`drag_cursor`], or `UiPop::drag_cursor`.
+//!
 //! ```
 //! use egui_pop_core::pointer;
 //! use egui_pop_model::keymap::Pointer;
@@ -40,8 +43,13 @@ use egui_pop_model::pointer::{InputModifiers, PointerMap, WheelDevice};
 use crate::state::Slot;
 
 pub mod claim;
+pub mod drag;
 
 pub use claim::{Secondary, SecondaryClaim, claim_secondary, claimed};
+pub use drag::{
+    DragCursor, DragKind, cursor_icon, drag_cursor, drag_cursor_icons, hold_drag_cursor,
+    hover_drag_cursor,
+};
 
 const MAP: Slot<Arc<PointerMap>> = Slot::new("core.pointer.map");
 
