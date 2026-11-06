@@ -4018,7 +4018,8 @@ fn the_plot_over_time_page_draws_two_million_samples_decimated() {
         .accesskit_node()
         .description()
         .unwrap_or_default();
-    assert!(d.starts_with("Speed (line): 2000001 points"), "{d}");
+    // (Counts are written in the locale's digit groups.)
+    assert!(d.starts_with("Speed (line): 2,000,001 points"), "{d}");
     // The point under the pointer is one of the two million, not a
     // decimated one.
     let at = |v: &serde_json::Value, k: usize| v[k].as_f64().unwrap_or_default();
