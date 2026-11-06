@@ -104,11 +104,13 @@ differ from "hover" only for keys and code.
   mice from trackpads for canvases.
 - **Reduced motion** sets `animation_time` to 0 and `scroll_animation` to none
   (`theme.rs`). It covers bars' widening and `scroll_to_*`, not the wheel's
-  smoothing, which is egui's constant. Nothing in egui-pop reads the system's
-  preference: `ThemeSpec::reduced_motion` is up to the application.
-- **Colours reach few areas.** Two call sites use `UiPop::scroll_area`
-  (sections, the gallery's `scoped` page); about 25 library scroll areas call
-  `egui::ScrollArea` directly and keep the button's colours.
+  smoothing, which is egui's constant; since item 14, egui 0.37's coasting and
+  rubber band too. Nothing in egui-pop reads the system's preference:
+  `ThemeSpec::reduced_motion` is up to the application.
+- **Colours reached few areas**, as this page was written. Two call sites used
+  `UiPop::scroll_area` (sections, the gallery's `scoped` page); about 25 library
+  scroll areas called `egui::ScrollArea` directly and kept the button's colours.
+  Since item 9 they all go through it.
 
 ### Where the gallery and Helios scroll, and whether anything says so
 
@@ -550,10 +552,17 @@ Sizes: S is under a day, M a few days. One pull request each.
    `egui_pop_platform::wheel_lines` reads `WheelScrollLines` from the registry
    rather than calling `SPI_GETWHEELSCROLLLINES`, as `text_scale` does, which keeps
    the crate free of `unsafe`. "One screen at a time" counts as 3.
-9. **The library's scroll areas go through `UiPop::scroll_area`.** About 25 in
-   `egui-pop-api`, `-views`, `-viewport`, `-editors`: mechanical, and it gives a
-   kit's thumb colours and items 6 and 7 a single way in. A view that draws in
-   `show_viewport` needs that form added. Size: M.
+9. **Done: the library's scroll areas go through `UiPop::scroll_area`.** All 27
+   in `egui-pop-api`, `-core`, `-views` and `-editors` (`-viewport` had none), and
+   the gallery's pages, so a kit's thumb colours and item 6's keys reach every list,
+   panel and dialog. The forms a view needs are added: `scroll_area_viewport`
+   (`show_viewport`: the list, the tree, the library's grid and filmstrip, the
+   editor) and `scroll_area_rows` (`show_rows`: the thumbnail grid, the theme
+   editor's font list). The views keep calling `ui::contain_wheel` after their
+   area, and the file picker's previews take `scroll_area_contained`. A view whose
+   focusable widget lies around its area (the list, the tree, the grid) calls
+   `focus::takes_keys` inside it, so that the area does not become a second Tab
+   stop; with nothing focused, the pointer over such a view pages it.
 10. **The system's "always show".** In `egui-pop-platform`, alongside
    `text_scale`, with the same sources: on GNOME the portal's
    `org.gnome.desktop.interface` `overlay-scrolling` (and its change signal), on
@@ -564,17 +573,29 @@ Sizes: S is under a day, M a few days. One pull request each.
     `SPI_GETCLIENTAREAANIMATION`, macOS's accessibility flag, into
     `ThemeSpec::reduced_motion` until the user sets it. Wider than scrolling, and
     worth doing for itself. Size: S.
-12. **Only one direction, any wheel.** `always_scroll_the_only_direction` on in
-    the theme's style, so that a horizontal strip takes a plain wheel; egui's
-    default wants Shift, and nobody finds that on a strip with no bar. Sections
-    already read this flag. Size: S.
+12. **Done: only one direction, any wheel.** `always_scroll_the_only_direction` on
+    in the theme's style (`theme::style_with`), so that a horizontal strip takes a
+    plain wheel; egui's default wants Shift, and nobody finds that on a strip with
+    no bar. Sections and `contain_wheel_in` already read this flag. It reaches every
+    scroll area moving one way only, the filmstrip among them, and at its end the
+    wheel goes on to the area around it. The dock's tab strip and the timeline
+    already took a plain wheel, by their own code.
 13. **Upstream, as drafts for a person to post.** A `ScrollArea` option to keep
     the wheel at its end (`docs/upstream.md` has "not filed yet"), and a way to
     turn off the wheel's smoothing, for reduced motion. Size: S.
-14. **At the bump to egui 0.37.** `ScrollStyle::kinetic`: `rubber_band` and
-    `decay_time` off under reduced motion, and the bounce decided for panels of
-    sliders (a bounce there has no use); `contain_wheel` retested against
-    `has_scrolling_ancestor`. Part of the bump's pull request. Size: S.
+14. **Done: egui 0.37's kinetic scrolling, checked.** Tests (`kinetic.rs`) found it
+    as egui documents it: a trackpad stretches an area past its end while the
+    fingers push and it springs back, a touch drag coasts after the release, and a
+    mouse wheel does neither, whatever the theme. Under reduced motion it was all
+    still on, as the theme set only `animation_time` and `scroll_animation`: the
+    theme now turns `rubber_band` and `decay_time` off with them, and gives egui's
+    back when motion returns. The bounce on panels of sliders is left on: it shows
+    only on a trackpad or a touch screen past an end, moves no value (a slider
+    holding the wheel takes it before the area sees it), and a panel that wants it
+    off sets `kinetic.rubber_band` on its own `Ui`
+    ([inputs](inputs.md#trackpads-and-touch-screens)). `contain_wheel` holds
+    against `has_scrolling_ancestor`: egui 0.37 hands a trackpad at an area's end on
+    to the area around it, and containment keeps it there, which a test holds.
 15. **Fade tokens.** Only if a theme asks. Also check that a fade's colour is right
     on a list drawn over another fill than the frames', as egui takes the frames'.
     Size: S.
@@ -612,8 +633,8 @@ Sizes: S is under a day, M a few days. One pull request each.
 - **Blocks in shell zones.** Anything it puts in `SIDE_BAR`, `MAIN` or `INSPECTOR`
   has no scroll area when alone there: to check against item 2.
 - **Its six plain `ScrollArea`** (`params`, `modules`, `queue`, `decisions`,
-  `duplicates`, `stack_review`) move to `ui.scroll_area` once item 9 has set the
-  way, so that keys and colours reach them.
+  `duplicates`, `stack_review`) move to `ui.scroll_area`, as item 9 did for
+  egui-pop's own, so that keys and colours reach them.
 - **The parameter panel's edge.** The complaints of darktable and Lightroom are
   about this very place: a thin bar next to something that hides the panel. Helios
   should keep the panel's grip and any hide control away from the bar: its
