@@ -862,19 +862,16 @@ impl TableRows<usize> for Rows<'_> {
                 let more = lines.count();
                 if more > 0 {
                     let open = self.expanded.contains(&e);
-                    let (mark, name) = if open {
-                        ("▾", tr(ui.ctx(), &s::TEXT_LOG_COLLAPSE))
+                    let name = if open {
+                        tr(ui.ctx(), &s::TEXT_LOG_COLLAPSE)
                     } else {
-                        (
-                            "▸",
-                            tr_args(
-                                ui.ctx(),
-                                &s::TEXT_LOG_EXPAND,
-                                &[("count", &(more + 1).to_string())],
-                            ),
+                        tr_args(
+                            ui.ctx(),
+                            &s::TEXT_LOG_EXPAND,
+                            &[("count", &(more + 1).to_string())],
                         )
                     };
-                    let r = ui.add(egui::Button::new(mark).frame(false).small());
+                    let r = disclosure(ui, open, self.body_font.size);
                     a11y::name(&r, Role::Button, &name);
                     if r.clicked() {
                         self.toggle = Some(e);
@@ -917,4 +914,36 @@ impl TableRows<usize> for Rows<'_> {
         };
         row as f32 * row_h + extra
     }
+}
+
+/// A body's disclosure: a small triangle, pointing down when open,
+/// right when folded, in the text's colour (strong under the pointer).
+fn disclosure(ui: &mut Ui, open: bool, size: f32) -> Response {
+    let (rect, r) = ui.allocate_exact_size(vec2(size, size), egui::Sense::click());
+    let color = if r.hovered() {
+        ui.visuals().strong_text_color()
+    } else {
+        ui.visuals().text_color()
+    };
+    let c = rect.center();
+    let h = size * 0.3;
+    let points = if open {
+        vec![
+            pos2(c.x - h, c.y - h * 0.6),
+            pos2(c.x + h, c.y - h * 0.6),
+            pos2(c.x, c.y + h * 0.7),
+        ]
+    } else {
+        vec![
+            pos2(c.x - h * 0.6, c.y - h),
+            pos2(c.x + h * 0.7, c.y),
+            pos2(c.x - h * 0.6, c.y + h),
+        ]
+    };
+    ui.painter().add(egui::Shape::convex_polygon(
+        points,
+        color,
+        egui::Stroke::NONE,
+    ));
+    r
 }

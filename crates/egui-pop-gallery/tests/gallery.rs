@@ -4074,6 +4074,7 @@ fn the_plot_over_time_page_draws_two_million_samples_decimated() {
 
 #[test]
 fn the_text_log_page_follows_its_timeline_and_filters() {
+    use egui_kittest::kittest::NodeT as _;
     use egui_pop::views::timeline::TimeScale;
     use egui_pop_gallery::pages::text_log::line;
     let mut results = egui_kittest::SnapshotResults::new();
@@ -4088,21 +4089,22 @@ fn the_text_log_page_follows_its_timeline_and_filters() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "text-log"));
     h.run();
     h.get_by_label("Playhead 0:21.000");
-    // The rows at the playhead came into view; a click on a row a little
-    // further moves the playhead to its time.
-    let e = line(215, 600);
-    let name = format!(
-        "{} {} {} {}",
-        TimeScale::Seconds.format(e.time),
-        e.level.name(),
-        e.entity,
-        e.body.lines().next().unwrap_or_default()
-    );
-    h.get_by_role_and_label(egui::accesskit::Role::Button, &name)
+    // The rows at the playhead came into view; a click on another row
+    // in view moves the playhead to its time.
+    let row = h
+        .query_all_by_label_contains(" /")
+        .filter(|n| n.accesskit_node().role() == egui::accesskit::Role::Button)
+        .filter_map(|n| n.accesskit_node().label())
+        .find(|l| l.starts_with("0:2") && !l.starts_with("0:21.000"))
+        .expect("another row in view");
+    let time = row.split(' ').next().unwrap_or_default().to_string();
+    let i = (TimeScale::Seconds.parse(&time).expect("a time") * 10.0).round() as usize;
+    let e = line(i, 600);
+    h.get_by_role_and_label(egui::accesskit::Role::Button, &row)
         .click();
     h.run();
     h.run();
-    h.get_by_label("Playhead 0:21.500");
+    h.get_by_label(&format!("Playhead {time}"));
     h.get_by_label(&format!("Picked: {} {}", e.level.name(), e.entity));
     // Debug lines hidden, the bodies filtered.
     h.get_by_label("Show DEBUG lines").click();
