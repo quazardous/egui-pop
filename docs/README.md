@@ -127,7 +127,8 @@ of every crate with every feature on.
   height token, and property rows with their names aligned.
 - [Lists and tables](table.md): a list and a data table, virtualised,
   sorting and widths in the value store, cells drawn by the
-  application, steps.
+  application, steps; a text log on the data table (levels, filters,
+  the tail followed, a time cursor).
 - [Charts](plot.md): time series, scatters and bars on egui_plot, in
   the kit's colours and the categorical palette, an accessible summary,
   a time cursor, the `plots` collector.

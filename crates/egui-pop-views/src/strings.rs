@@ -265,6 +265,41 @@ pub const VIEWER_PAGE: StrKey = StrKey::new("egui-pop-views-viewer-page", "Page"
 /// A code block's accessible name.
 pub const VIEWER_CODE_BLOCK: StrKey = StrKey::new("egui-pop-views-viewer-code-block", "Code block");
 
+/// A text log's accessible name, unless the application gives one.
+pub const TEXT_LOG: StrKey = StrKey::new("egui-pop-views-text-log", "Text log");
+/// A text log's columns: when a line was logged.
+pub const TEXT_LOG_TIME: StrKey = StrKey::new("egui-pop-views-text-log-time", "Time");
+/// A text log's columns: the entity a line was logged on.
+pub const TEXT_LOG_ENTITY: StrKey = StrKey::new("egui-pop-views-text-log-entity", "Entity");
+/// A text log's columns: a line's level.
+pub const TEXT_LOG_LEVEL: StrKey = StrKey::new("egui-pop-views-text-log-level", "Level");
+/// A text log's columns: a line's text.
+pub const TEXT_LOG_BODY: StrKey = StrKey::new("egui-pop-views-text-log-body", "Body");
+/// A text log's text filter: its placeholder and accessible name.
+pub const TEXT_LOG_FILTER: StrKey = StrKey::new("egui-pop-views-text-log-filter", "Filter");
+/// A text log's level chip: its accessible name (`$level`: `WARN`...).
+pub const TEXT_LOG_SHOW_LEVEL: StrKey = StrKey::new(
+    "egui-pop-views-text-log-show-level",
+    "Show { $level } lines",
+);
+/// A text log's toggle keeping the last line in view.
+pub const TEXT_LOG_FOLLOW: StrKey = StrKey::new("egui-pop-views-text-log-follow", "Follow");
+/// Beside a text log's filters: how many lines are shown of how many.
+pub const TEXT_LOG_COUNT: StrKey = StrKey::new(
+    "egui-pop-views-text-log-count",
+    "{ $count } of { $total } lines",
+);
+/// A multi-line body's disclosure, folded: its accessible name.
+pub const TEXT_LOG_EXPAND: StrKey = StrKey::new(
+    "egui-pop-views-text-log-expand",
+    "Show all { $count } lines",
+);
+/// A multi-line body's disclosure, unfolded: its accessible name.
+pub const TEXT_LOG_COLLAPSE: StrKey =
+    StrKey::new("egui-pop-views-text-log-collapse", "Show the first line");
+/// After a folded body's first line: how many lines it hides.
+pub const TEXT_LOG_MORE: StrKey = StrKey::new("egui-pop-views-text-log-more", "+{ $count } lines");
+
 /// A timeline's accessible name, unless the application gives one.
 pub const TIMELINE: StrKey = StrKey::new("egui-pop-views-timeline", "Timeline");
 /// A timeline's marker: its accessible name, and what is announced when the
@@ -339,6 +374,18 @@ pub const TRANSPORT_KEYS: StrKey =
 
 /// Every string the views show, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
+    TEXT_LOG,
+    TEXT_LOG_TIME,
+    TEXT_LOG_ENTITY,
+    TEXT_LOG_LEVEL,
+    TEXT_LOG_BODY,
+    TEXT_LOG_FILTER,
+    TEXT_LOG_SHOW_LEVEL,
+    TEXT_LOG_FOLLOW,
+    TEXT_LOG_COUNT,
+    TEXT_LOG_EXPAND,
+    TEXT_LOG_COLLAPSE,
+    TEXT_LOG_MORE,
     TREE,
     TREE_FILTER,
     TREE_FILTER_COUNT,
