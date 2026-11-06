@@ -9,6 +9,12 @@
 //! 1 to 8 set or jump to a hot cue, Shift with them clears it, `[` and `]`
 //! halve and double the loop, S syncs. What the timeline already has
 //! (J/K/L, I and O, Ctrl+L) stays the timeline's.
+//!
+//! A deck's timeline keeps its playhead in the middle (`Follow::CENTRE`):
+//! the waveform scrolls under it. Dragged, the waveform moves the playhead
+//! with it while paused, and nudges the deck while it plays; the wheel
+//! steps it by beats. The song's clip is locked to the pointer
+//! (`scrub_on_drag`).
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -23,8 +29,8 @@ use egui_pop::model::ids::{CommandId, PluginId, StoryId};
 use egui_pop::model::keymap::BindOptions;
 use egui_pop::theme::Tokens;
 use egui_pop::views::timeline::{
-    Clip, ClipPaint, ClipPainter, Marker, MarkerKind, PlayState, Tempo, TimeRange, TimeScale,
-    TimeView, Timeline, TimelineState, Track,
+    Clip, ClipPaint, ClipPainter, Follow, Marker, MarkerKind, PlayState, Tempo, TimeRange,
+    TimeScale, TimeView, Timeline, TimelineState, Track, Transport, TransportButton,
 };
 use serde_json::json;
 
@@ -85,7 +91,9 @@ pub struct Deck {
     /// The pitch fader, in percent: the song plays `1 + pitch / 100` as
     /// fast.
     pub pitch: f64,
-    /// The song's clip, put back if a drag moved or trimmed it.
+    /// The main cue point (CUE), apart from the hot cues.
+    pub cue: f64,
+    /// The song's clip, put back if a key moved or trimmed it.
     song: Clip,
 }
 
@@ -104,7 +112,20 @@ impl Deck {
             name,
             tl,
             pitch: 0.0,
+            cue: 0.0,
             song,
+        }
+    }
+
+    /// CUE, as on a CD player: playing, back to the cue point and paused;
+    /// paused, the cue point set at the playhead (on the nearest beat).
+    pub fn press_main_cue(&mut self) {
+        if self.tl.is_playing() {
+            self.tl.pause();
+            self.tl.set_playhead(self.cue);
+        } else {
+            self.cue = self.nearest_beat(self.tl.playhead);
+            self.tl.set_playhead(self.cue);
         }
     }
 
@@ -218,8 +239,9 @@ impl Deck {
         self.tl.playhead = self.tl.clamp(t.offset + beats * t.beat());
     }
 
-    /// Puts the song back where it was if a drag moved, trimmed or removed
-    /// it: a deck's track is not an edit.
+    /// Puts the song back where it was if a key moved, trimmed, split or
+    /// removed it: a deck's track is not an edit (the pointer cannot, the
+    /// clip being locked to it).
     fn keep_song(&mut self) {
         let track = &mut self.tl.tracks[0];
         if track.clips.len() != 1 || track.clips[0] != self.song {
@@ -408,7 +430,7 @@ fn sync(state: &mut State, d: usize) {
     if d == 0 { a.sync_to(b) } else { b.sync_to(a) }
 }
 
-pub fn show(ui: &mut Ui, _app: &AppHandle, state: &mut State) {
+pub fn show(ui: &mut Ui, app: &AppHandle, state: &mut State) {
     let ctx = ui.ctx().clone();
     // The application moves the time: a pretend player on the motion clock,
     // each deck as fast as its pitch.
@@ -425,14 +447,14 @@ pub fn show(ui: &mut Ui, _app: &AppHandle, state: &mut State) {
         ctx.request_repaint();
     }
 
-    ui.label("Click a deck's waveform, then: 1 to 8 set a hot cue on the nearest beat or jump to it, Shift+1 to 8 clear it; I and O set a loop, Ctrl+L turns it on or off, [ and ] halve and double it; J, K and L shuttle, Space plays or pauses; S syncs the deck to the other's tempo and beat. The pads, the loop buttons and the pitch fader do the same with the pointer.");
+    ui.label("Drag a deck's waveform to move it under the playhead, or to nudge the deck while it plays; the wheel steps by beats. Click it, then: 1 to 8 set a hot cue on the nearest beat or jump to it, Shift+1 to 8 clear it; I and O set a loop, Ctrl+L turns it on or off, [ and ] halve and double it; J, K and L shuttle, Space plays or pauses; S syncs the deck to the other's tempo and beat. The pads, the loop buttons and the pitch fader do the same with the pointer.");
 
     for d in 0..2 {
-        deck_ui(ui, state, d);
+        deck_ui(ui, app, state, d);
     }
 }
 
-fn deck_ui(ui: &mut Ui, state: &mut State, d: usize) {
+fn deck_ui(ui: &mut Ui, app: &AppHandle, state: &mut State, d: usize) {
     let t = Tokens::of(ui.ctx());
     let id = if d == 0 { "deck-a" } else { "deck-b" };
     let deck = &state.decks[d];
@@ -457,13 +479,19 @@ fn deck_ui(ui: &mut Ui, state: &mut State, d: usize) {
     let mut sync_now = false;
     let deck = &mut state.decks[d];
     ui.horizontal(|ui| {
-        let play = if deck.tl.is_playing() {
-            "Pause"
-        } else {
-            "Play"
-        };
-        if ui.button(play).clicked() {
-            deck.tl.toggle();
+        // Play runs `timeline.toggle_play` on the deck, as Space does.
+        Transport::new(&mut deck.tl)
+            .app(app)
+            .timeline(id)
+            .buttons(&[TransportButton::PlayPause])
+            .timecode(false)
+            .show(ui);
+        if ui
+            .button("Cue")
+            .on_hover_text("Playing: back to the cue point, paused; paused: sets it here")
+            .clicked()
+        {
+            deck.press_main_cue();
         }
         if ui.button("Sync").clicked() {
             sync_now = true;
@@ -522,18 +550,15 @@ fn deck_ui(ui: &mut Ui, state: &mut State, d: usize) {
         };
         ui.colored_label(t.text.muted, beats);
     });
-    // A deck keeps its playhead in the middle while it plays.
-    if deck.tl.is_playing() {
-        let around = deck.tl.view.duration;
-        deck.tl.view.start = deck.tl.playhead - around / 2.0;
-    }
     let tempo = deck.tempo();
     let mut painter = DeckPainter { tempo };
     let out = Timeline::new(&mut deck.tl)
         .id(id)
         .label(deck.name)
         .surface(DECK_SURFACE)
-        .follow(false)
+        .follow_mode(Follow::CENTRE)
+        .scrub_on_drag(true)
+        .nudge_on_drag(true)
         .lanes(0.0)
         .clips(&mut painter)
         .show(ui);

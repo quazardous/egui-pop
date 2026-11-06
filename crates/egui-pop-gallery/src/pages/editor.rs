@@ -2,7 +2,8 @@
 //! track, two video tracks, two audio tracks) on the timeline, a pretend
 //! program monitor showing the frame under the playhead, and the editing
 //! commands of video editors: split at the playhead, ripple delete, in and
-//! out marks, J/K/L. Nothing plays: the clock is the motion clock, frozen
+//! out marks, J/K/L, and a transport row under the monitor whose buttons
+//! run the same `timeline.*` commands as the keys. Nothing plays: the clock is the motion clock, frozen
 //! in the tests. Each change is a step of the application's history.
 
 use std::cell::RefCell;
@@ -16,7 +17,7 @@ use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::theme::Tokens;
 use egui_pop::views::timeline::{
     CMD_RIPPLE_DELETE, CMD_SET_RANGE, CMD_SPLIT_CLIP, Clip, Marker, PlayState, TimeRange,
-    TimeScale, Timeline, TimelineState, Track,
+    TimeScale, Timeline, TimelineState, Track, Transport,
 };
 use serde_json::json;
 
@@ -163,15 +164,17 @@ pub fn show(ui: &mut Ui, app: &AppHandle, state: &mut State) {
     let t = Tokens::of(ui.ctx());
     ui.add_space(t.space.s);
     ui.horizontal(|ui| {
-        monitor(ui, &state.seq);
+        ui.vertical(|ui| {
+            monitor(ui, &state.seq);
+            // The transport: each button runs its key's `timeline.*` command.
+            Transport::new(&mut state.seq)
+                .app(app)
+                .timeline(SEQUENCE)
+                .show(ui);
+        });
         ui.add_space(t.space.group);
         ui.vertical(|ui| {
             let seq = &state.seq;
-            ui.label(
-                egui::RichText::new(seq.scale.format(seq.playhead))
-                    .monospace()
-                    .size(t.font.scale.xl),
-            );
             let asked = match seq.play {
                 PlayState::Playing if seq.speed != 1.0 => format!("playing at {}×", seq.speed),
                 PlayState::Playing => "playing".into(),
