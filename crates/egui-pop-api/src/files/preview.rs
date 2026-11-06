@@ -1343,63 +1343,15 @@ pub(super) fn pane_for(
         });
 }
 
-/// A rating as five stars, those rated filled; read as "3 of 5".
+/// A rating as five stars, those rated filled, the rest outlines; read
+/// as "3 of 5". Shown, not edited.
 fn rating_stars(ui: &mut Ui, stars: u8) -> egui::Response {
-    let t = Tokens::of(ui.ctx());
     let side = ui.text_style_height(&egui::TextStyle::Body);
-    let gap = t.space.xs;
-    let size = egui::vec2(5.0 * side + 4.0 * gap, side);
-    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
-    let said = tr_args(
-        ui.ctx(),
-        &txt::FILES_RATING_VALUE,
-        &[("stars", &stars.to_string())],
-    );
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &said));
-    if ui.is_rect_visible(rect) {
-        let p = ui.painter();
-        for k in 0..5u8 {
-            let c = rect.left_center() + egui::vec2(side / 2.0 + f32::from(k) * (side + gap), 0.0);
-            let points = star_points(c, side * 0.5, side * 0.2);
-            if k < stars {
-                // Convex pieces: the pentagon inside and a triangle per point.
-                let inner: Vec<egui::Pos2> = points.iter().skip(1).step_by(2).copied().collect();
-                p.add(egui::Shape::convex_polygon(
-                    inner,
-                    t.text.default,
-                    egui::Stroke::NONE,
-                ));
-                for i in 0..5 {
-                    let tip = points[2 * i];
-                    let a = points[(2 * i + 9) % 10];
-                    let b = points[2 * i + 1];
-                    p.add(egui::Shape::convex_polygon(
-                        vec![a, tip, b],
-                        t.text.default,
-                        egui::Stroke::NONE,
-                    ));
-                }
-            } else {
-                p.add(egui::Shape::closed_line(
-                    points,
-                    egui::Stroke::new(1.0, t.text.muted),
-                ));
-            }
-        }
-    }
-    response
-}
-
-/// A five-pointed star's outline, its first point up: points and inner corners
-/// in turn, clockwise.
-fn star_points(center: egui::Pos2, outer: f32, inner: f32) -> Vec<egui::Pos2> {
-    (0..10)
-        .map(|i| {
-            let r = if i % 2 == 0 { outer } else { inner };
-            let a = -std::f32::consts::FRAC_PI_2 + i as f32 * std::f32::consts::PI / 5.0;
-            center + egui::vec2(a.cos(), a.sin()) * r
-        })
-        .collect()
+    egui_pop_core::rating::RatingStars::new(stars)
+        .read_only(true)
+        .size(side)
+        .show(ui)
+        .response
 }
 
 /// A size that fits `image` in `area`, keeping its proportions, never

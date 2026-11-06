@@ -68,13 +68,14 @@ use egui_pop_api::AppHandle;
 use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{self, BoxStyle, Corners, Kit, KitCx, Part, Side, State};
 use egui_pop_core::placeholder::SkeletonTokens;
+use egui_pop_core::rating::RatingStars;
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::ui::UiPop as _;
 use egui_pop_model::ids::StepId;
 use serde_json::{Value as Json, json};
 
-use super::marks::{ColorLabel, CullAction, CullKeymap, Flag, MAX_RATING, Marks};
+use super::marks::{ColorLabel, CullAction, CullKeymap, EmptyStars, Flag, MAX_RATING, Marks};
 use super::paint::{self, LibraryTokens};
 use super::plugin::{self as lib, LIBRARIES, Request};
 use crate::select::{self, Key, Mode, Proposal, Selection};
@@ -421,6 +422,7 @@ pub struct ThumbGrid<'a> {
     keymap: CullKeymap,
     captions: bool,
     overlays: bool,
+    empty_stars: EmptyStars,
 }
 
 impl<'a> ThumbGrid<'a> {
@@ -436,6 +438,7 @@ impl<'a> ThumbGrid<'a> {
             keymap: CullKeymap::lightroom(),
             captions: true,
             overlays: true,
+            empty_stars: EmptyStars::OnHover,
         }
     }
 
@@ -489,6 +492,15 @@ impl<'a> ThumbGrid<'a> {
     /// Ratings, labels, flags, stacks and badges over the thumbnails.
     pub fn overlays(mut self, on: bool) -> Self {
         self.overlays = on;
+        self
+    }
+
+    /// When an unrated cell's empty stars show: under the pointer
+    /// ([`EmptyStars::OnHover`], the default, as Lightroom's compact
+    /// cells), or on every cell ([`EmptyStars::Always`]: large cells, a
+    /// culling pass where every image gets a rating).
+    pub fn empty_stars(mut self, empty: EmptyStars) -> Self {
+        self.empty_stars = empty;
         self
     }
 
@@ -851,6 +863,13 @@ impl<'a> ThumbGrid<'a> {
                     }
                     if overlays {
                         let star = (size / 10.0).clamp(10.0, 16.0);
+                        let stars_rect = Rect::from_min_size(
+                            pos2(image.left() + star * 0.25, image.bottom() - star * 1.25),
+                            RatingStars::size_for(star),
+                        );
+                        // The cell or its stars under the pointer: the
+                        // stars' own hit areas take the cell's hover.
+                        let hot = r.hovered() || ui.rect_contains_pointer(stars_rect);
                         overlay(
                             &cx,
                             &kit,
@@ -859,36 +878,22 @@ impl<'a> ThumbGrid<'a> {
                             image,
                             &marks,
                             &items.badges(i),
-                            r.hovered(),
+                            hot || self.empty_stars == EmptyStars::Always,
                             star,
                             &small,
                         );
-                        // The stars, clickable.
-                        for j in 0..MAX_RATING {
-                            let c = pos2(
-                                image.left() + star * (f32::from(j) + 0.75),
-                                image.bottom() - star * 0.75,
-                            );
-                            let sr = ui.interact(
-                                Rect::from_center_size(c, vec2(star, star)),
-                                id.with(("star", &key, j)),
-                                Sense::CLICK,
-                            );
-                            let n_stars = j + 1;
-                            let sname = tr_args(
-                                ui.ctx(),
-                                &s::RATE_STARS,
-                                &[("stars", &n_stars.to_string())],
-                            );
-                            sr.widget_info(move || WidgetInfo::labeled(Role::Button, true, &sname));
-                            if sr.clicked() {
-                                let rating = if marks.rating == n_stars { 0 } else { n_stars };
-                                let keys = targets_of(selection, &key);
-                                cell_ops.push(Op::Run(
-                                    lib::LIBRARY_RATE,
-                                    json!({ "keys": keys, "rating": rating }),
-                                ));
-                            }
+                        let stars = RatingStars::new(marks.rating)
+                            .id(id.with(("stars", &key)))
+                            .focusable(false)
+                            .empty(self.empty_stars)
+                            .item_hovered(hot)
+                            .show_at(ui, stars_rect);
+                        if let Some(rating) = stars.changed {
+                            let keys = targets_of(selection, &key);
+                            cell_ops.push(Op::Run(
+                                lib::LIBRARY_RATE,
+                                json!({ "keys": keys, "rating": rating }),
+                            ));
                         }
                         if let Some(st) = stack.as_ref().filter(|st| st.top == key && st.count > 1)
                         {
@@ -1462,7 +1467,7 @@ fn overlay(
     image: Rect,
     marks: &Marks,
     badges: &[Badge],
-    hovered: bool,
+    stars_shown: bool,
     star: f32,
     small: &egui::FontId,
 ) {
@@ -1501,22 +1506,14 @@ fn overlay(
             paint::label(painter, *l, c, 5.0, lt.label(*l));
         }
     }
-    if marks.rating > 0 || hovered {
+    // The box behind the stars; the stars are `RatingStars`, drawn over
+    // it by the cell.
+    if marks.rating > 0 || stars_shown {
         let back = Rect::from_min_size(
             pos2(image.left() + star * 0.25, image.bottom() - star * 1.25),
             vec2(star * f32::from(MAX_RATING) + star * 0.5, star),
         );
         badge(back);
-        for j in 0..MAX_RATING {
-            let c = pos2(
-                image.left() + star * (f32::from(j) + 0.75),
-                image.bottom() - star * 0.75,
-            );
-            let fill = (j < marks.rating).then_some(lt.star);
-            if fill.is_some() || hovered {
-                paint::star(painter, c, star * 0.45, fill, lt.star_empty);
-            }
-        }
     }
     let mut right = image.right() - pad;
     for b in badges.iter().rev() {

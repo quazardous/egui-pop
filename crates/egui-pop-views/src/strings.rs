@@ -87,7 +87,10 @@ pub const FILMSTRIP: StrKey = StrKey::new("egui-pop-views-filmstrip", "Filmstrip
 pub const COMPARE: StrKey = StrKey::new("egui-pop-views-compare", "Compare");
 /// The rating stars' name, and the filter menu's rating entry.
 pub const RATING: StrKey = StrKey::new("egui-pop-views-rating", "Rating");
-/// A star of a thumbnail, rating its image.
+/// A star of a thumbnail, rating its image. No longer shown: the
+/// thumbnails' stars are `egui_pop_core::rating::RatingStars`, named
+/// with `egui_pop_core::strings::RATING_SET` and `RATING_CLEAR`; kept
+/// for compatibility.
 pub const RATE_STARS: StrKey = StrKey::new("egui-pop-views-rate-stars", "Rate { $stars } of 5");
 /// The colour labels' names.
 pub const RED: StrKey = StrKey::new("egui-pop-views-red", "Red");

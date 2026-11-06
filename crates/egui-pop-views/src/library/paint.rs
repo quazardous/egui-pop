@@ -17,9 +17,12 @@ use super::marks::ColorLabel;
 /// (`egui_pop_core::kit::Kit`: `thumb-cell`, `pill`, `tag-chip`...).
 #[derive(Clone, Debug, PartialEq)]
 pub struct LibraryTokens {
-    /// A star given (`library.star`, else `status.warning`).
+    /// A star given (`library.star`, else `status.warning`). The rating
+    /// stars no longer read it: they are the kit's `rating-star`
+    /// (`egui_pop_core::rating`).
     pub star: Color32,
-    /// A star not given, shown under the pointer (`library.star-empty`).
+    /// A pick or reject toggle when off (`library.star-empty`, else
+    /// `text.muted`); the rating's empty stars are the kit's.
     pub star_empty: Color32,
     /// The pick flag (`library.pick`, else `text.strong`).
     pub pick: Color32,

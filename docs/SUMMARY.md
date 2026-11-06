@@ -40,6 +40,7 @@
 - [Video](video.md)
 - [Timeline](timeline.md)
 - [The photo library](library.md)
+- [Rating stars](rating.md)
 - [Text and code editors](editors.md)
 - [Micro-indicators](indicators.md)
 - [Collapsible sections](sections.md)

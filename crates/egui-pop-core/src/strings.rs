@@ -132,6 +132,14 @@ pub const FIELD_RESET: StrKey = StrKey::new("egui-pop-field-reset", "Reset { $la
 pub const FIELD_PENDING: StrKey = StrKey::new("egui-pop-field-pending", "Being checked");
 pub const FIELD_DISABLED: StrKey =
     StrKey::new("egui-pop-field-disabled", "Unavailable: { $reason }");
+/// Rating stars' accessible name (`rating::RatingStars`).
+pub const RATING: StrKey = StrKey::new("egui-pop-rating", "Rating");
+/// A rating as read aloud, and a shown rating's name: "3 of 5".
+pub const RATING_VALUE: StrKey = StrKey::new("egui-pop-rating-value", "{ $stars } of 5");
+/// A star's tooltip and name: what a click on it gives.
+pub const RATING_SET: StrKey = StrKey::new("egui-pop-rating-set", "Set { $stars } of 5");
+/// The tooltip and name of the star of the current rating: a click clears it.
+pub const RATING_CLEAR: StrKey = StrKey::new("egui-pop-rating-clear", "Clear rating");
 
 /// Every string egui-pop core shows, for catalogues and tests.
 pub const ALL: &[StrKey] = &[
@@ -179,6 +187,10 @@ pub const ALL: &[StrKey] = &[
     FIELD_RESET,
     FIELD_PENDING,
     FIELD_DISABLED,
+    RATING,
+    RATING_VALUE,
+    RATING_SET,
+    RATING_CLEAR,
 ];
 
 /// Gives the text of a key in the current language, if it has one.

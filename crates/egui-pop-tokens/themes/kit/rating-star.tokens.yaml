@@ -1,0 +1,45 @@
+$description: "The `rating-star` component of the default kit (docs/kit.md), layered into pop-dark."
+rating-star:
+  $description: "A star of a rating (a kit component, drawn by the `star` handler: its fill, then its outline). `rest` an empty star, an outline; `selected` a star of the value; `hover` a star of the value the pointer previews; `selected` in the `muted` tone a star of the current value past the preview, its ghost (docs/rating.md)."
+  shape:
+    $type: "string"
+    $value: "star"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{transparent}"
+    border-color:
+      $type: "color"
+      $value: "{text.muted}"
+      $description: "An empty star's outline: faint, yet seen (checked at 3:1 on the panel)."
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+  selected:
+    fill:
+      $type: "color"
+      $value: "{warning}"
+    border-color:
+      $type: "color"
+      $value: "{warning}"
+  hover:
+    fill:
+      $type: "color"
+      $value: "{warning}"
+      $extensions: {org.egui-pop.alpha: 0.55}
+      $description: "The value a click would give, lighter than a given star."
+    border-color:
+      $type: "color"
+      $value: "{warning}"
+  tone:
+    muted:
+      selected:
+        fill:
+          $type: "color"
+          $value: "{warning}"
+          $extensions: {org.egui-pop.alpha: 0.25}
+          $description: "The current value's ghost past a lower preview."
+        border-color:
+          $type: "color"
+          $value: "{warning}"
+          $extensions: {org.egui-pop.alpha: 0.6}

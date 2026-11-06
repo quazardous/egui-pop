@@ -295,7 +295,8 @@ Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, 
 The live tree, list items and property rows, lists and tables, charts (and a plot over a
 timeline's time: its cursor the playhead, a stepped line, an error band, the range shaded, the
 values at the pointer, two million samples decimated per pixel column), and the photo library (a thumbnail grid
-and filmstrip, marks, filter chips, a comparison).
+and filmstrip, marks, filter chips, a comparison; a cell's stars
+previewing a lower rating over the current one, [Rating stars](rating.md)).
 
 <table>
   <tr>
@@ -324,6 +325,7 @@ and filmstrip, marks, filter chips, a comparison).
   </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/plot-time-large-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/plot-time-large-pop-dark.png" width="200" alt="plot-time-large-pop-dark"></a><br>plot-time-large-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-rating-preview-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-rating-preview-pop-dark.png" width="200" alt="library-rating-preview-pop-dark"></a><br>library-rating-preview-pop-dark</td>
   </tr>
 </table>
 

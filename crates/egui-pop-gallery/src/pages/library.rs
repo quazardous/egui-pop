@@ -15,7 +15,7 @@ use egui_pop::core::widgets;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::views::library::compare::{CompareState, CompareView, Pane};
 use egui_pop::views::library::filter::{Candidate, Filter, SearchField, SearchState};
-use egui_pop::views::library::marks::{ColorLabels, FlagToggle, RatingStars};
+use egui_pop::views::library::marks::{ColorLabels, EmptyStars, FlagToggle, RatingStars};
 use egui_pop::views::library::tags::{TagInput, TagInputState};
 use egui_pop::views::library::{
     Badge, Change, ColorLabel, CullKeymap, Flag, Labels, LibraryItems, LibraryState, Marks, Signal,
@@ -218,6 +218,8 @@ pub struct PageState {
     comparing: bool,
     synced: bool,
     auto_advance: bool,
+    /// Empty stars on every cell, not only under the pointer.
+    empty_stars: bool,
     best: Option<u32>,
     thumbs: Option<Thumbs>,
     log: Vec<String>,
@@ -247,6 +249,7 @@ impl Default for PageState {
             comparing: false,
             synced: true,
             auto_advance: false,
+            empty_stars: false,
             best: None,
             thumbs: None,
             log: Vec::new(),
@@ -411,6 +414,7 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
             p.refilter();
         }
         widgets::checkbox(ui, &mut p.auto_advance, "Auto-advance");
+        widgets::checkbox(ui, &mut p.empty_stars, "Empty stars on every cell");
         if widgets::selectable_label(ui, !p.comparing, "Grid").clicked() {
             p.comparing = false;
         }
@@ -453,6 +457,11 @@ fn library(ui: &mut Ui, app: &AppHandle, p: &mut PageState, thumbs: &Thumbs) {
             .label("Images")
             .app(app)
             .keymap(keymap.clone())
+            .empty_stars(if p.empty_stars {
+                EmptyStars::Always
+            } else {
+                EmptyStars::OnHover
+            })
             .height(super::fitted_height(ui, 300.0))
             .show(ui, &mut p.state, &items, thumbs)
             .signals;

@@ -113,8 +113,9 @@ binds to a command never reaches it):
 The pointer: a click selects, Shift extends a range, Ctrl toggles; a
 drag across the cells draws a rubber band selecting what it touches
 (with Ctrl or Shift held at its start, added to the selection). A
-cell's stars rate it (the star of its rating clears it) and its stack
-chip expands or collapses the stack. Marks made on a selected cell
+cell's stars rate it (the star of its rating clears it; under the
+pointer they preview the value a click gives, [Rating stars](rating.md))
+and its stack chip expands or collapses the stack. Marks made on a selected cell
 apply to the whole selection.
 
 ### The culling keymap
@@ -145,7 +146,8 @@ its own commands and runs `library.rate` and the other steps through
 Over each thumbnail (from 64 points up): the flag (a pennant, or a
 cross, the image dimmed when rejected) in the top left corner, the
 labels in the top right one, the stars in the bottom left one (empty
-stars under the pointer), the badges (`Badge::new("RAW")`, toned with
+stars as outlines under the pointer, or on every cell with
+`ThumbGrid::empty_stars(EmptyStars::Always)`), the badges (`Badge::new("RAW")`, toned with
 `Tone`) in the bottom right one. Colour labels have a shape each
 (circle, triangle, square, diamond, hexagon), so they never read by
 colour alone.
@@ -158,9 +160,9 @@ command); `LibraryState::set_expanded` does it without a step.
 
 ### Colours
 
-The marks' colours come from the theme, through optional component
-tokens falling back on system ones: `library.star` (`status.warning`),
-`library.pick` (`text.strong`), `library.reject` (`status.danger`),
+The stars are the kit's `rating-star` ([Rating stars](rating.md#kit-components)).
+The other marks' colours come from the theme, through optional component
+tokens falling back on system ones: `library.pick` (`text.strong`), `library.reject` (`status.danger`),
 `library.label-red`, `-yellow`, `-green`, `-blue` (the status colours)
 and `-purple`, `library.band`. `LibraryTokens::of(ctx)` reads them.
 The boxes they sit on are the kit's (`docs/kit.md`): `thumb-cell`,
@@ -173,7 +175,9 @@ The boxes they sit on are the kit's (`docs/kit.md`): `thumb-cell`,
 `RatingStars`, `ColorLabels` and `FlagToggle` edit one image's marks
 (a metadata panel, a loupe): each takes the current value and returns
 the one asked for in `changed`. Focused, the stars take 0 to 5, the
-arrows, Home and End; each label and flag is a toggle button.
+arrows, Home and End; each label and flag is a toggle button. The
+stars are the shared `egui_pop::core::rating::RatingStars`
+([Rating stars](rating.md)), as on the cells.
 
 To run such a change through the library's steps (so hooks see it as
 they see the grid's), call `change`:

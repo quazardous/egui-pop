@@ -14,6 +14,7 @@ mod plain;
 mod progress;
 mod scoped;
 mod section;
+mod star;
 mod tab;
 mod traffic_light;
 
@@ -57,6 +58,8 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("radio", "pill", Arc::new(pill::Pill));
     shapes.insert("scroll-bar", "scoped", Arc::new(scoped::Scoped));
     shapes.insert("section-band", "section", Arc::new(section::SectionBand));
+    shapes.insert("rating-star", "star", Arc::new(star::Star));
+    shapes.insert("rating-star-display", "star", Arc::new(star::Star));
     shapes.insert("section-count", "box", Arc::new(cell::BoxCell));
     shapes.insert("section-count", "pill", Arc::new(pill::Pill));
     shapes.insert("selectable-row", "box", Arc::new(cell::BoxCell));
