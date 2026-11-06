@@ -478,7 +478,7 @@ fn rows(ui: &mut Ui, app: &AppHandle, view: egui::Id) {
             } else {
                 (RichText::new(snap.name.as_str()), &restore_hint)
             };
-            let r = ui.add(widgets::SelectableRow::new(false, text).steady());
+            let r = ui.add(widgets::SelectableRow::new(false, text));
             let r = previewed(r, app, view, &scope, At::Snapshot(snap.id), hint);
             if r.clicked() {
                 act = Some(Act::Restore(snap.id));
@@ -524,14 +524,17 @@ fn rows(ui: &mut Ui, app: &AppHandle, view: egui::Id) {
             let label = history::label_text(&ctx, &r.step.label);
             let text = strings::tr_args(&ctx, &txt::HISTORY_REPLACED, &[("label", &label)]);
             let text = RichText::new(text).color(muted).italics();
-            let row = ui.add(widgets::SelectableRow::new(false, text).steady());
+            let row = ui.add(widgets::SelectableRow::new(false, text));
             if previewed(row, app, view, &scope, At::Step(r.step.id), &hint).clicked() {
                 *act = Some(Act::Jump(r.step.id));
             }
         }
     };
     let start = strings::tr(&ctx, &txt::HISTORY_START);
-    let r = ui.add(widgets::SelectableRow::new(line.undo.is_empty(), start.as_str()).steady());
+    let r = ui.add(widgets::SelectableRow::new(
+        line.undo.is_empty(),
+        start.as_str(),
+    ));
     if previewed(r, app, view, &scope, At::Step(0), &hint).clicked() && !line.undo.is_empty() {
         act = Some(Act::Jump(0));
     }
@@ -540,7 +543,7 @@ fn rows(ui: &mut Ui, app: &AppHandle, view: egui::Id) {
     let undo_this = strings::tr(&ctx, &txt::HISTORY_UNDO_THIS);
     for step in &line.undo {
         let here = step.id == head;
-        let r = ui.add(widgets::SelectableRow::new(here, row_text(&ctx, step)).steady());
+        let r = ui.add(widgets::SelectableRow::new(here, row_text(&ctx, step)));
         let r = previewed(r, app, view, &scope, At::Step(step.id), &hint);
         if r.clicked() && !here {
             act = Some(Act::Jump(step.id));
@@ -557,7 +560,7 @@ fn rows(ui: &mut Ui, app: &AppHandle, view: egui::Id) {
     }
     for step in line.redo.iter().rev() {
         let text = RichText::new(row_text(&ctx, step)).color(muted);
-        let r = ui.add(widgets::SelectableRow::new(false, text).steady());
+        let r = ui.add(widgets::SelectableRow::new(false, text));
         if previewed(r, app, view, &scope, At::Step(step.id), &hint).clicked() {
             act = Some(Act::Jump(step.id));
         }

@@ -1472,15 +1472,10 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     }
 }
 
-/// One row of a choice: a selectable row of the same size whether it is
-/// at rest, hovered or highlighted.
-///
-/// upstream: a selectable button is smaller at rest than framed
-/// (docs/upstream.md); with the theme's 1 px border a row grew by 2 px
-/// under the pointer and its text could wrap differently. A steady row
-/// keeps the framed size in every state.
+/// One row of a choice: a selectable row, wrapped, of the same size
+/// whether it is at rest, hovered or highlighted (as every row is).
 fn choice_row(ui: &mut Ui, selected: bool, text: egui::WidgetText) -> egui::Response {
-    ui.add(widgets::SelectableRow::new(selected, text).steady().wrap())
+    ui.add(widgets::SelectableRow::new(selected, text).wrap())
 }
 
 /// A custom dialog's state between passes, as its body left it.

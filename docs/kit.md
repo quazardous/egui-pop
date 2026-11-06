@@ -76,6 +76,17 @@ states (a selected tab under the pointer) takes `rest`, then `selected`,
 `hover`, `focus`, `active`, `disabled`, in that order, a later one
 winning.
 
+**A state restyles, it never moves.** A state changes how a part is
+painted (its fill, its border's colour and width, its radius, its
+ring, its shadow), never its layout: the content's inset keeps room for
+the widest border any state gives (`Component::border_room`), so a part
+with no border at rest has one there all the same, present but
+invisible, and its text stays in place when the pointer comes. Borders
+may be as wide, as bright and as different between states as a kit
+likes; only the layout is the same in every state. A test walks every
+component of every built-in theme and example kit, at rest and in each
+state, and checks that its content does not move.
+
 ## Components based on another
 
 A component that is a kind of another names it: `based-on`, a string.

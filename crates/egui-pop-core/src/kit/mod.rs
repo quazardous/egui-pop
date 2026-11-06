@@ -279,6 +279,20 @@ impl States {
     pub fn toned(&self) -> bool {
         self.1.is_some()
     }
+
+    /// The widest border among every state and tone, in points: the room
+    /// a part keeps for its border whatever its state, so that a state
+    /// restyles the border (its colour, its width up to this one) without
+    /// moving the content. A part with no border at rest still keeps it,
+    /// the border then present but invisible.
+    pub fn widest_border(&self) -> f32 {
+        let tones = self.1.iter().flat_map(|t| t.iter().flatten());
+        self.0
+            .iter()
+            .chain(tones)
+            .map(|b| b.border_width)
+            .fold(0.0, f32::max)
+    }
 }
 
 /// What a part is asked to paint.
@@ -451,6 +465,20 @@ impl Component {
         label_rect(&self.data, part, size)
     }
 
+    /// The room a part keeps for its border at `ppp` physical pixels per
+    /// point, whatever its state: its widest border
+    /// ([`States::widest_border`]) on whole physical pixels, zero when
+    /// no state gives one. A widget laying out content in the part
+    /// insets it by this, never by the current state's border.
+    pub fn border_room(&self, ppp: f32) -> f32 {
+        let w = self.data.states.widest_border();
+        if w > 0.0 {
+            crate::scale::snap(w, ppp)
+        } else {
+            0.0
+        }
+    }
+
     /// The box of a state (in the tone it carries).
     pub fn style(&self, state: State) -> &BoxStyle {
         self.data.states.get(state)
@@ -470,10 +498,12 @@ impl Component {
     /// physical pixels, as the kit's own painting does) and corner
     /// radius, the padding (`padding-x`, `padding-y`) as its inner
     /// margin. No shadow: egui's own, from `Visuals`, is the caller's to
-    /// add. For a container that takes a frame; a part egui lays out
-    /// around its content is better shown with [`Component::show`],
-    /// which also paints the focus ring and honours a handler of the
-    /// theme's.
+    /// add. For a container that takes a frame in one state; a part egui
+    /// lays out around its content is better shown with
+    /// [`Component::show`], which also paints the focus ring, honours a
+    /// handler of the theme's and keeps the content in place across
+    /// states (this frame's border is its state's own, so its size
+    /// follows the state's border width).
     pub fn frame(&self, state: State, ppp: f32) -> Frame {
         let b = self.style(state);
         let m = |p: f32| p.round().clamp(-128.0, 127.0) as i8;
@@ -493,13 +523,18 @@ impl Component {
     }
 
     /// Shows `add` inside the component's box in `state`, laid out by egui
-    /// (the part is as large as its content and padding), with egui's
-    /// `shadow` under it ([`Shadow::NONE`] for none).
+    /// (the part is as large as its content, its padding and its
+    /// border), with egui's `shadow` under it ([`Shadow::NONE`] for none).
+    ///
+    /// The layout keeps room for the widest border of any state
+    /// ([`Component::border_room`]): the state restyles the box by paint
+    /// alone, and the content never moves when the state changes.
     ///
     /// The built-in `card` handler is egui's [`Frame`] of the box, then
-    /// the state's focus ring. Another handler paints once the content is
-    /// laid out, its shapes moved under the content: what it draws needs
-    /// one allocation per part and frame, which `card` does not.
+    /// the state's focus ring, when the state's border is the widest.
+    /// Otherwise the handler paints once the content is laid out, its
+    /// shapes moved under the content: what it draws needs one
+    /// allocation per part and frame, which egui's frame does not.
     pub fn show<R>(
         &self,
         ui: &mut Ui,
@@ -509,7 +544,13 @@ impl Component {
     ) -> InnerResponse<R> {
         let ppp = ui.ctx().pixels_per_point();
         let b = *self.style(state);
-        if self.egui_frame {
+        let room = self.border_room(ppp);
+        let own = if b.border_width > 0.0 {
+            crate::scale::snap(b.border_width, ppp)
+        } else {
+            0.0
+        };
+        if self.egui_frame && own == room {
             let r = self.frame(state, ppp).shadow(shadow).show(ui, add);
             let cx = KitCx {
                 painter: ui.painter(),
@@ -527,11 +568,12 @@ impl Component {
             return r;
         }
         let slot = ui.painter().add(Shape::Noop);
-        // The box's room kept (padding and border), nothing painted.
-        let frame = self.frame(state, ppp);
-        let r = frame
+        // The box's room kept (padding and the widest border), nothing
+        // painted.
+        let r = self
+            .frame(state, ppp)
             .fill(Color32::TRANSPARENT)
-            .stroke(Stroke::new(frame.stroke.width, Color32::TRANSPARENT))
+            .stroke(Stroke::new(room, Color32::TRANSPARENT))
             .show(ui, add);
         let rect = r.response.rect;
         let shadow = (shadow != Shadow::NONE).then(|| Shape::from(shadow.as_shape(rect, b.radius)));
@@ -626,6 +668,12 @@ macro_rules! components {
         pub const COMPONENTS: &[(&str, &str)] = &[$(($name, $default),)*];
 
         impl Kit {
+            /// Every component of the kit, in [`COMPONENTS`]' order: what
+            /// a check walks.
+            pub fn components(&self) -> impl Iterator<Item = &Component> {
+                [$(&self.$field,)*].into_iter()
+            }
+
             fn compile_components(
                 mut component: impl FnMut(&str, &str) -> Component,
                 glyphs: Glyphs,

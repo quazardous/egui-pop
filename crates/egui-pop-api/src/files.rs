@@ -5011,11 +5011,7 @@ impl FilePicker {
             .push_id(&e.path, |ui| {
                 ui.spacing_mut().icon_spacing = t.space.m;
                 ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
-                    ui.add(
-                        widgets::SelectableRow::new(on, atoms)
-                            .name(label.clone())
-                            .steady(),
-                    )
+                    ui.add(widgets::SelectableRow::new(on, atoms).name(label.clone()))
                 })
                 .inner
             })
