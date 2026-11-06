@@ -74,7 +74,7 @@ fn a_theme_with_a_poor_pair_fails_the_check() {
     assert!(
         // The muted text, the editor and field tokens aliasing it, and
         // the badge text on the muted badge's fill, the meta text role, the
-        // trace level's colour.
+        // trace level's colour, an empty rating star's outline.
         failures.iter().all(|f| f.pair.foreground.contains("muted")
             || f.pair.background.contains("muted")
             || [
@@ -83,7 +83,8 @@ fn a_theme_with_a_poor_pair_fails_the_check() {
                 "field.tone.muted.text",
                 "text-role.meta.color",
                 "plot.rest.text",
-                "palette.log.trace"
+                "palette.log.trace",
+                "rating-star.rest.border-color"
             ]
             .contains(&f.pair.foreground)),
         "{failures:?}"
