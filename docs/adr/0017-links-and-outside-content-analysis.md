@@ -283,7 +283,7 @@ A panel (`links.viewer`), detachable, one page at a time:
   page stays inside, a web link goes outside;
 - anchors (`#section`) scroll to the heading;
 - remote images replaced by a placeholder and one bar, "Images from
-  <host> are not loaded: Load", remembered per host.
+  `<host>` are not loaded: Load", remembered per host.
 
 What renders without a web engine: markdown (egui_commonmark), the HTML
 subset (html5ever, ammonia, our mapping), images (egui's loaders). What
@@ -448,14 +448,14 @@ still emitted.
 
 The agent calls `links.open` with a dry run: the answer says kind
 `File`, how `Reveal`, confirmation required. It calls again without the
-dry run: the dialog says "Agent <name> asks to show
+dry run: the dialog says "Agent `<name>` asks to show
 `<path>` in the file manager". The user accepts; the file manager opens;
 the agent receives the result. Refused: the agent receives the refusal.
 
 ### A docs page offline, with a remote image
 
 The user opens "Documentation". The viewer shows the shipped page; an
-image on another host is a placeholder with "Images from <host> are not
+image on another host is a placeholder with "Images from `<host>` are not
 loaded: Load". Nothing has left the machine. Load: the image is fetched
 through our loader; the choice is remembered for that host.
 
