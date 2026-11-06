@@ -22,6 +22,7 @@ mod dialog;
 mod dialog_grip;
 mod dialog_header;
 mod dock_preview;
+mod drag_cursor;
 mod editor_frame;
 mod empty_state;
 mod fault_card;
@@ -122,6 +123,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     dialog_grip::CONTRACT,
     dialog_header::CONTRACT,
     dock_preview::CONTRACT,
+    drag_cursor::CONTRACT,
     editor_frame::CONTRACT,
     empty_state::CONTRACT,
     fault_card::CONTRACT,

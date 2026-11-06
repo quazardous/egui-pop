@@ -9,7 +9,14 @@ window's scale, and a loupe on the pixels under the pointer.
 ## Cursors
 
 The viewport's cursors are its own; every other draggable shows the
-cursor of its kind of drag ([drag cursors](pointer-gestures.md#drag-cursors)).
+cursor of its kind of drag ([drag cursors](pointer-gestures.md#drag-cursors)):
+always while it is dragged, and hovered only when dragging is its only
+action (a splitter, a resize grip, a view frame), the arrow staying until
+the drag starts where a click does something (select, seek, set a
+value). The widget, the pointer profile and the kit
+(`drag-cursor.<kind>.hover`, `.drag`, `.policy`) can each change the
+cursors and that rule, the most specific winning
+([three levels](pointer-gestures.md#three-levels)).
 
 A `cursor::Cursor` is one of:
 

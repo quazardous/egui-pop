@@ -602,6 +602,7 @@ fn resize_edges(
         ));
     }
     for (r, edges) in &out {
+        // A click on an edge does nothing: dragging is its only action.
         egui_pop_core::pointer::drag_cursor(
             r,
             match edges {
@@ -609,7 +610,8 @@ fn resize_edges(
                 [true, false] => egui_pop_core::pointer::DragKind::ResizeHorizontal,
                 _ => egui_pop_core::pointer::DragKind::ResizeVertical,
             },
-        );
+        )
+        .clicks(false);
     }
     out
 }

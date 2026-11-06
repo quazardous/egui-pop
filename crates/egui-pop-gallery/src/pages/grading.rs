@@ -174,10 +174,12 @@ pub fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
 fn ramp(ui: &mut Ui, s: &mut State) -> Option<Pick> {
     ui.label("Targeted adjustment: point at the ramp, press and drag up or down.");
     let (rect, response) = ui.allocate_exact_size(vec2(260.0, 22.0), Sense::drag());
+    // A press selects or adds a point: the arrow until it drags.
     egui_pop::core::pointer::drag_cursor(
         &response,
         egui_pop::core::pointer::DragKind::ResizeVertical,
-    );
+    )
+    .clicks(true);
     if ui.is_rect_visible(rect) {
         let steps = 32;
         for i in 0..steps {

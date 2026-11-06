@@ -345,3 +345,42 @@ fn a_profile_changes_the_drag_cursors_it_names() {
     assert_eq!(odd.drag_cursor(DragKind::Pan).drag, "grabbing");
     assert_eq!(odd.drag_cursor(DragKind::Scrub).hover, "pointer");
 }
+
+#[test]
+fn a_profile_changes_when_the_hover_cursor_shows() {
+    use egui_pop_model::pointer::{DragCursor, DragKind, HoverPolicy};
+    for p in HoverPolicy::ALL {
+        assert_eq!(HoverPolicy::parse(p.as_str()), Some(p));
+    }
+    // By default, only over what does nothing else; text always.
+    assert_eq!(
+        DragKind::Pan.cursors().policy,
+        Some(HoverPolicy::OnlyAction)
+    );
+    assert_eq!(DragKind::Text.cursors().policy, Some(HoverPolicy::Always));
+    assert!(HoverPolicy::OnlyAction.shows(false));
+    assert!(!HoverPolicy::OnlyAction.shows(true));
+    assert!(HoverPolicy::Always.shows(true));
+    assert!(!HoverPolicy::Never.shows(false));
+    // The splits are column and row resizes.
+    assert_eq!(DragKind::SplitColumns.cursors().hover, "col-resize");
+    assert_eq!(DragKind::SplitRows.cursors().drag, "row-resize");
+    let text = r#"{"kind": "pointer-profile", "version": 1, "id": "eager", "title": "Eager",
+        "drag_cursors": {"move": {"policy": "always"}, "pan": {"hover": "all-scroll"}}}"#;
+    let eager = PointerMap::from_profile(&pointer::parse_profile(text).unwrap());
+    let moving = eager.drag_cursor(DragKind::Move);
+    assert_eq!(moving.policy, Some(HoverPolicy::Always));
+    assert_eq!(moving.hover, "move");
+    // What the profile leaves out stays the level below's (a kit's).
+    let kit = DragCursor {
+        hover: "cell".into(),
+        drag: "crosshair".into(),
+        policy: Some(HoverPolicy::Never),
+    };
+    let pan = eager.drag_cursor_over(DragKind::Pan, kit.clone());
+    assert_eq!(
+        (pan.hover.as_str(), pan.drag.as_str(), pan.policy),
+        ("all-scroll", "crosshair", Some(HoverPolicy::Never))
+    );
+    assert_eq!(eager.drag_cursor_over(DragKind::Scrub, kit.clone()), kit);
+}

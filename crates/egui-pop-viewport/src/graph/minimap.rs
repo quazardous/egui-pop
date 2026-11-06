@@ -83,6 +83,8 @@ impl<'a> GraphMinimap<'a> {
         let radius = Tokens::of(ui.ctx()).radius.widget;
         ui.painter().rect_filled(rect, radius, nav.background);
         let mut changed = false;
+        // The view's frame, on screen: dragging is its only action.
+        let mut view_frame = None;
         if world.is_positive() && drawn.visible.is_positive() {
             let scale = (inner.size() / world.size()).min_elem();
             let origin = inner.center() - world.size() * scale / 2.0;
@@ -99,6 +101,7 @@ impl<'a> GraphMinimap<'a> {
                 painter.rect_stroke(s, 1.0, Stroke::new(1.0, g.node_border), StrokeKind::Inside);
             }
             let frame = map.rect(state.drawn.visible).intersect(inner);
+            view_frame = Some(frame);
             // The veil over what is out of view.
             let veil = nav.veil.gamma_multiply(0.55);
             for r in [
@@ -131,7 +134,13 @@ impl<'a> GraphMinimap<'a> {
         if response.clicked() || response.drag_started() {
             response.request_focus();
         }
-        egui_pop_core::pointer::drag_cursor(&response, egui_pop_core::pointer::DragKind::Pan);
+        // Its frame moves the view; elsewhere a click jumps there, the
+        // arrow until the drag starts.
+        let over_frame = response
+            .hover_pos()
+            .is_some_and(|p| view_frame.is_some_and(|f: egui::Rect| f.contains(p)));
+        egui_pop_core::pointer::drag_cursor(&response, egui_pop_core::pointer::DragKind::Move)
+            .clicks(!over_frame);
         if changed {
             response.mark_changed();
         }

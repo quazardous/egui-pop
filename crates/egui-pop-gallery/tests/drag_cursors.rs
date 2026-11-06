@@ -2,6 +2,10 @@
 //! the cursor read hovered, mid-drag over the widget, and mid-drag once
 //! the pointer has left it. A draggable never shows the arrow while it is
 //! dragged, and keeps its drag's cursor wherever the pointer goes.
+//! Hovered, it shows its drag's cursor only when dragging is its only
+//! action: where a click does something (select, seek, set a value), the
+//! arrow stays until the drag starts. The widget, the pointer profile and
+//! the kit can each change that, the most specific winning.
 //!
 //! `cargo test -p egui-pop-gallery --test drag_cursors -- --nocapture`
 //! prints the table.
@@ -12,12 +16,12 @@ use std::rc::Rc;
 use egui::{CursorIcon, Event, Modifiers, PointerButton, Pos2, Rect, Ui, pos2, vec2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
-use egui_pop::core::pointer::{self, DragKind};
+use egui_pop::core::pointer::{self, DragCursorFor, DragKind, HoverPolicy};
 use egui_pop::core::slider::{RangeSlider, Slider};
 use egui_pop::core::widgets::Splitter;
 use egui_pop::editors::terminal::{Console, Terminal, TerminalState};
 use egui_pop::editors::{CodeEditor, EditorState};
-use egui_pop::model::pointer::{PointerMap, profile};
+use egui_pop::model::pointer::{DragCursor, PointerMap, profile};
 use egui_pop::viewport::curve::CurveEditor;
 use egui_pop::viewport::graph::{
     Edge, GraphEditor, GraphMinimap, GraphModel, GraphState, Node, Param, Port, PortType,
@@ -304,7 +308,8 @@ fn cases() -> Vec<Case> {
         [0.5, 0.5],
         [3.0, 0.5],
         [100.0, 50.0],
-        want_kind(DragKind::ResizeHorizontal),
+        // Drag only (its double click resets it): its cursor hovered.
+        want_kind(DragKind::SplitColumns),
         move |ui| {
             let rect = Rect::from_min_size(pos2(100.0, 20.0), vec2(10.0, 100.0));
             let id = egui::Id::unique("splitter");
@@ -325,7 +330,8 @@ fn cases() -> Vec<Case> {
         [0.6, 0.8],
         [0.4, 0.8],
         [-200.0, 100.0],
-        want_kind(DragKind::Scrub),
+        // A click seeks: the arrow until the scrub starts.
+        want(CursorIcon::Default, kind(DragKind::Scrub).1),
         move |ui| {
             Timeline::new(&mut deck)
                 .id("deck")
@@ -386,7 +392,8 @@ fn cases() -> Vec<Case> {
         [0.5, 0.5],
         [3.0, 0.5],
         [-300.0, 150.0],
-        want_kind(DragKind::ResizeHorizontal),
+        // A click selects it.
+        want(CursorIcon::Default, kind(DragKind::ResizeHorizontal).1),
         move |ui| Timeline::new(&mut tl).id("song").show(ui).response.rect,
     ));
     v.last_mut().unwrap().locate = Some(marker_rect);
@@ -399,7 +406,8 @@ fn cases() -> Vec<Case> {
         [0.35, 0.5],
         [0.45, 0.5],
         [-100.0, 150.0],
-        want_kind(DragKind::Move),
+        // A click selects it.
+        want(CursorIcon::Default, kind(DragKind::Move).1),
         move |ui| {
             let rect = Timeline::new(&mut tl).id("song").show(ui).response.rect;
             // The clip spans 20 s to 50 s on the first track.
@@ -468,7 +476,8 @@ fn cases() -> Vec<Case> {
         [0.5, 0.5],
         [0.6, 0.6],
         [100.0, 100.0],
-        want_kind(DragKind::Pan),
+        // From inside the view's frame (the whole image is in view): move.
+        want_kind(DragKind::Move),
         move |ui| {
             Viewport::new("v")
                 .image_size([1200, 800])
@@ -508,7 +517,8 @@ fn cases() -> Vec<Case> {
         from: [0.5, 0.2],
         to: [0.8, 0.6],
         off: [400.0, 300.0],
-        want: want_kind(DragKind::Move),
+        // A click selects it.
+        want: want(CursorIcon::Default, kind(DragKind::Move).1),
         locate: Some(node_rect),
     });
     let (harness, spot) = graph("Graph: rubber band", "canvas", None);
@@ -547,7 +557,8 @@ fn cases() -> Vec<Case> {
         from: [0.5, 0.5],
         to: [0.6, 0.6],
         off: [300.0, 0.0],
-        want: want_kind(DragKind::Pan),
+        // From inside the view's frame: move.
+        want: want_kind(DragKind::Move),
         locate: None,
     });
 
@@ -629,4 +640,201 @@ fn a_profile_changes_the_drag_cursors() {
         pointer::drag_cursor_icons(&ctx, DragKind::Pan),
         (CursorIcon::Default, CursorIcon::Grabbing)
     );
+}
+
+/// What a widget changes of its drag cursor ([`DragCursorFor`]).
+type Tune = fn(DragCursorFor<'_>) -> DragCursorFor<'_>;
+
+/// A plain draggable area, sensing `sense`, showing the cursor of a drag
+/// of `kind` as `tune` changes it, under a pointer map and a kit when
+/// given (a theme layered on pop-dark).
+fn area(
+    name: &'static str,
+    sense: egui::Sense,
+    kind: DragKind,
+    tune: Tune,
+    map: Option<PointerMap>,
+    kit: Option<&str>,
+    want: Probe,
+) -> Case {
+    let c = primary(
+        name,
+        [300.0, 200.0],
+        [0.5, 0.5],
+        [0.7, 0.5],
+        [100.0, 100.0],
+        want,
+        move |ui| {
+            if let Some(m) = &map {
+                pointer::set_map(ui.ctx(), m.clone());
+            }
+            let rect = Rect::from_min_size(pos2(40.0, 40.0), vec2(160.0, 80.0));
+            let r = ui.interact(rect, egui::Id::unique(name), sense);
+            drop(tune(pointer::drag_cursor(&r, kind)));
+            rect
+        },
+    );
+    if let Some(kit) = kit {
+        let mut themes = egui_pop::tokens::Themes::default();
+        themes
+            .add_text("drag-kit", &format!("$extends: \"pop-dark\"\n{kit}"))
+            .expect("the test theme reads");
+        let tokens = egui_pop::theme::Tokens::new(
+            themes.resolve(&egui_pop::tokens::ThemeSpec::new("drag-kit")),
+        );
+        egui_pop::theme::install_tokens(&c.harness.ctx, tokens);
+    }
+    c
+}
+
+fn as_is(c: DragCursorFor<'_>) -> DragCursorFor<'_> {
+    c
+}
+
+/// A profile changing the cursors of a drag of `kind`.
+fn profile_with(kind: DragKind, c: DragCursor) -> PointerMap {
+    let mut map = PointerMap::from_profile(profile("document").unwrap());
+    map.drag_cursors.insert(kind, c);
+    map
+}
+
+/// The kit's `drag-cursor.move`: the cell cursor hovered, always.
+const KIT_MOVE: &str = r#"drag-cursor:
+  move:
+    hover: {$type: "string", $value: "cell"}
+    policy: {$type: "string", $value: "always"}
+"#;
+
+fn check(cases: Vec<Case>) {
+    let mut wrong = Vec::new();
+    for mut c in cases {
+        let got = drive(&mut c);
+        if got != c.want {
+            wrong.push(format!("{}: got {got:?}, want {:?}", c.name, c.want));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+#[test]
+fn only_a_drag_only_element_shows_its_cursor_hovered() {
+    check(vec![
+        area(
+            "Drag only",
+            egui::Sense::drag(),
+            DragKind::Pan,
+            as_is,
+            None,
+            None,
+            want(CursorIcon::Grab, CursorIcon::Grabbing),
+        ),
+        area(
+            "Click and drag",
+            egui::Sense::click_and_drag(),
+            DragKind::Pan,
+            as_is,
+            None,
+            None,
+            want(CursorIcon::Default, CursorIcon::Grabbing),
+        ),
+        // The widget says its click does nothing.
+        area(
+            "Click sensed for the focus only",
+            egui::Sense::click_and_drag(),
+            DragKind::SplitRows,
+            |c| c.clicks(false),
+            None,
+            None,
+            want(CursorIcon::ResizeRow, CursorIcon::ResizeRow),
+        ),
+        // Text keeps its I-beam: its kind's policy is always.
+        area(
+            "Text",
+            egui::Sense::click_and_drag(),
+            DragKind::Text,
+            as_is,
+            None,
+            None,
+            want(CursorIcon::Text, CursorIcon::Text),
+        ),
+    ]);
+}
+
+#[test]
+fn the_kit_wins_over_the_kinds_own() {
+    check(vec![area(
+        "Kit: move always shows the cell",
+        egui::Sense::click_and_drag(),
+        DragKind::Move,
+        as_is,
+        None,
+        Some(KIT_MOVE),
+        want(CursorIcon::Cell, CursorIcon::Move),
+    )]);
+}
+
+#[test]
+fn the_profile_wins_over_the_kit() {
+    let never = DragCursor {
+        policy: Some(HoverPolicy::Never),
+        drag: "grabbing".into(),
+        ..DragCursor::default()
+    };
+    let alias = DragCursor {
+        hover: "alias".into(),
+        ..DragCursor::default()
+    };
+    check(vec![
+        area(
+            "Profile: never, over the kit's always",
+            egui::Sense::click_and_drag(),
+            DragKind::Move,
+            as_is,
+            Some(profile_with(DragKind::Move, never)),
+            Some(KIT_MOVE),
+            want(CursorIcon::Default, CursorIcon::Grabbing),
+        ),
+        area(
+            "Profile: alias, over the kit's cell",
+            egui::Sense::click_and_drag(),
+            DragKind::Move,
+            as_is,
+            Some(profile_with(DragKind::Move, alias)),
+            Some(KIT_MOVE),
+            want(CursorIcon::Alias, CursorIcon::Move),
+        ),
+    ]);
+}
+
+#[test]
+fn the_widget_wins_over_the_profile() {
+    let never = DragCursor {
+        hover: "alias".into(),
+        policy: Some(HoverPolicy::Never),
+        ..DragCursor::default()
+    };
+    check(vec![
+        area(
+            "Widget: always, help, wait, over the profile's never",
+            egui::Sense::drag(),
+            DragKind::Move,
+            |c| {
+                c.hover_policy(HoverPolicy::Always)
+                    .hover(CursorIcon::Help)
+                    .dragging(CursorIcon::Wait)
+            },
+            Some(profile_with(DragKind::Move, never)),
+            Some(KIT_MOVE),
+            want(CursorIcon::Help, CursorIcon::Wait),
+        ),
+        area(
+            "Widget: never, over the kit's always",
+            egui::Sense::drag(),
+            DragKind::Move,
+            |c| c.hover_policy(HoverPolicy::Never),
+            None,
+            Some(KIT_MOVE),
+            want(CursorIcon::Default, CursorIcon::Move),
+        ),
+    ]);
 }

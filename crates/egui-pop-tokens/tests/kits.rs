@@ -161,7 +161,8 @@ fn the_default_kit_is_a_kit_folder() {
                 || egui_pop_tokens::kit::COMPONENT_TERMS
                     .iter()
                     .any(|(t, _)| *t == second)
-                || component == "glyph")
+                || component == "glyph"
+                || component == "drag-cursor")
     };
     for path in pop_dark.tokens.keys() {
         if in_vocabulary(path) {

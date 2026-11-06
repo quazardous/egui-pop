@@ -298,10 +298,16 @@ pub trait UiPop: sealed::Sealed {
     ) -> ScrollAreaOutput<R>;
 
     /// Shows the cursor of a drag of `kind` for `response`: its hover
-    /// cursor while hovered, its drag cursor for the whole drag, even
-    /// once the pointer has left the widget, both from the pointer
-    /// profile in force ([`pointer::drag_cursor`](crate::pointer::drag_cursor)).
-    fn drag_cursor(&self, response: &Response, kind: crate::pointer::DragKind);
+    /// cursor while hovered when dragging is its only action, its drag
+    /// cursor for the whole drag, even once the pointer has left the
+    /// widget, from the kit and the pointer profile in force; the
+    /// widget may change them before it is dropped
+    /// ([`pointer::drag_cursor`](crate::pointer::drag_cursor)).
+    fn drag_cursor<'a>(
+        &self,
+        response: &'a Response,
+        kind: crate::pointer::DragKind,
+    ) -> crate::pointer::DragCursorFor<'a>;
 }
 
 impl UiPop for Ui {
@@ -432,8 +438,12 @@ impl UiPop for Ui {
         out
     }
 
-    fn drag_cursor(&self, response: &Response, kind: crate::pointer::DragKind) {
-        crate::pointer::drag_cursor(response, kind);
+    fn drag_cursor<'a>(
+        &self,
+        response: &'a Response,
+        kind: crate::pointer::DragKind,
+    ) -> crate::pointer::DragCursorFor<'a> {
+        crate::pointer::drag_cursor(response, kind)
     }
 }
 

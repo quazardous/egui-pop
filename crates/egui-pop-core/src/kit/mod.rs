@@ -38,6 +38,7 @@ use crate::state::Slot;
 use crate::theme::Tokens;
 
 mod dock;
+mod drag;
 mod glyph;
 mod paint;
 mod scoped;
@@ -47,6 +48,7 @@ mod source;
 mod tone;
 mod window;
 
+pub use drag::DragCursorKit;
 pub use glyph::{Glyph, Glyphs};
 
 pub use paint::{Corners, label_rect, paint_box, paint_indicator, paint_label, paint_ring};
@@ -650,6 +652,9 @@ macro_rules! components {
             /// The window's own terms (`title-bar.buttons-side`,
             /// `title-bar.buttons-hover`, `window.corners`).
             pub window: WindowKit,
+            /// The drag cursors by kind (`drag-cursor.<kind>.hover`,
+            /// `.drag`, `.policy`), under the pointer profile's.
+            pub drag_cursors: DragCursorKit,
             /// The scroll bars' terms (`scroll-bar.width`, `width-rest`,
             /// `opacity-rest`, `room`, `min-length`, `margin`, `placement`,
             /// `visibility`, `track-fill`): egui's
@@ -683,6 +688,7 @@ macro_rules! components {
                     $($field: component($name, $default),)*
                     glyphs,
                     window: WindowKit::default(),
+                    drag_cursors: DragCursorKit::default(),
                     scroll: ScrollBarKit::default(),
                     scoped: ScopedKit::default(),
                     problems,
@@ -1112,6 +1118,7 @@ impl Kit {
         let mut kit = Kit::compile_components(component, Glyphs::default(), Vec::new());
         kit.glyphs = Glyphs::compile(t, &mut problems);
         kit.window = WindowKit::compile(t, &mut problems);
+        kit.drag_cursors = DragCursorKit::compile(t, &mut problems);
         kit.scroll = ScrollBarKit::compile(t, &kit.scroll_bar.data, &mut problems);
         kit.scoped = ScopedKit::compile(&kit);
         problems.extend(egui_losses(t, &kit));

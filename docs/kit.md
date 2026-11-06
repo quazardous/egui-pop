@@ -566,6 +566,12 @@ compiled at install.
   alone. The marks they draw by default (`circle`, `disc`, `square`,
   `triangle`, `diamond`, `asterisk`, `corner`) are icons of the set. The tree, the menus and the find bar
   ask for roles, and so do the table's sort arrows.
+- **Drag cursors** (`kit::DragCursorKit`, `drag-cursor.<kind>.hover`,
+  `.drag` and `.policy` tokens): per kind of drag, the CSS cursor names
+  shown hovered and dragged, and when the hover one shows (`only-action`,
+  `always`, `never`). The default kit gives every kind's own; the
+  pointer profile, then the widget, can still change them
+  ([drag cursors](pointer-gestures.md#three-levels)).
 - **egui's small widgets** (`checkbox`, `radio`, `combo-arrow`,
   `selectable-row`, `toggle-chip`), [below](#eguis-small-widgets).
 - **egui's widgets in a scope** (`combo-box`, `toggle-button`, and

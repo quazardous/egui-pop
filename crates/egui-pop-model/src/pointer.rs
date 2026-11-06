@@ -379,7 +379,8 @@ pub struct ValueKeys {
 /// What a drag does to what it holds: the meaning a drag's cursor is
 /// keyed by, whatever the widget. A widget names the kind of each of its
 /// drags; the profile in force says which cursor each kind shows,
-/// hovered and dragged ([`DragKind::cursors`], [`Profile::drag_cursors`]).
+/// hovered and dragged, and when the hover cursor shows
+/// ([`DragKind::cursors`], [`Profile::drag_cursors`], [`HoverPolicy`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]
@@ -390,7 +391,8 @@ pub enum DragKind {
     /// Content scrubbed under a fixed playhead (a deck's waveform). An
     /// open hand, closed while dragging.
     Scrub,
-    /// An item moved where the pointer takes it: a node, a clip, a band.
+    /// An item moved where the pointer takes it: a node, a clip, a band,
+    /// a navigator's view frame. Move (a four-way arrow).
     Move,
     /// An item carried to a place to drop it: a row, a tab, a wire's
     /// end. The arrow until it moves, then a closed hand.
@@ -414,11 +416,17 @@ pub enum DragKind {
     ResizeNwSe,
     /// A corner resized along the top-right to bottom-left diagonal.
     ResizeNeSw,
+    /// A separator between panes side by side, dragged sideways: a
+    /// splitter, a side area's or a flyout's edge. A column resize.
+    SplitColumns,
+    /// A separator between panes one above the other, dragged up and
+    /// down. A row resize.
+    SplitRows,
 }
 
 impl DragKind {
     /// Every kind, in the order the docs list them.
-    pub const ALL: [DragKind; 12] = [
+    pub const ALL: [DragKind; 14] = [
         DragKind::Pan,
         DragKind::Scrub,
         DragKind::Move,
@@ -431,6 +439,8 @@ impl DragKind {
         DragKind::ResizeVertical,
         DragKind::ResizeNwSe,
         DragKind::ResizeNeSw,
+        DragKind::SplitColumns,
+        DragKind::SplitRows,
     ];
 
     /// Its name in a profile document: `pan`, `resize-horizontal`.
@@ -448,6 +458,8 @@ impl DragKind {
             DragKind::ResizeVertical => "resize-vertical",
             DragKind::ResizeNwSe => "resize-nw-se",
             DragKind::ResizeNeSw => "resize-ne-sw",
+            DragKind::SplitColumns => "split-columns",
+            DragKind::SplitRows => "split-rows",
         }
     }
 
@@ -455,8 +467,11 @@ impl DragKind {
         DragKind::ALL.into_iter().find(|k| k.as_str() == text)
     }
 
-    /// The cursors it shows unless a profile says otherwise, as CSS
-    /// cursor names ([`CURSOR_NAMES`]).
+    /// The cursors it shows unless a kit or a profile says otherwise, as
+    /// CSS cursor names ([`CURSOR_NAMES`]), with its hover policy:
+    /// [`HoverPolicy::Always`] for text (an I-beam over text, which a
+    /// click also places the caret in), [`HoverPolicy::OnlyAction`] for
+    /// the others.
     pub fn cursors(self) -> DragCursor {
         let (hover, drag) = match self {
             DragKind::Pan | DragKind::Scrub => ("grab", "grabbing"),
@@ -469,10 +484,68 @@ impl DragKind {
             DragKind::ResizeVertical => ("ns-resize", "ns-resize"),
             DragKind::ResizeNwSe => ("nwse-resize", "nwse-resize"),
             DragKind::ResizeNeSw => ("nesw-resize", "nesw-resize"),
+            DragKind::SplitColumns => ("col-resize", "col-resize"),
+            DragKind::SplitRows => ("row-resize", "row-resize"),
+        };
+        let policy = match self {
+            DragKind::Text => HoverPolicy::Always,
+            _ => HoverPolicy::OnlyAction,
         };
         DragCursor {
             hover: hover.into(),
             drag: drag.into(),
+            policy: Some(policy),
+        }
+    }
+}
+
+/// When a draggable shows its hover cursor, before any drag. While it is
+/// dragged it always shows its drag cursor.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum HoverPolicy {
+    /// Only when dragging is the element's only action: nothing happens
+    /// on a click or a double click on it (a splitter, a resize grip, an
+    /// item's handle). Where a click does something (select, set a
+    /// value, move the playhead), the arrow stays until the drag starts.
+    /// The default.
+    #[default]
+    OnlyAction,
+    /// Whenever it is hovered, whatever a click does.
+    Always,
+    /// Never: the arrow until the drag starts.
+    Never,
+}
+
+impl HoverPolicy {
+    /// Every policy.
+    pub const ALL: [HoverPolicy; 3] = [
+        HoverPolicy::OnlyAction,
+        HoverPolicy::Always,
+        HoverPolicy::Never,
+    ];
+
+    /// Its name in a profile or a kit: `only-action`, `always`, `never`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            HoverPolicy::OnlyAction => "only-action",
+            HoverPolicy::Always => "always",
+            HoverPolicy::Never => "never",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<HoverPolicy> {
+        HoverPolicy::ALL.into_iter().find(|p| p.as_str() == text)
+    }
+
+    /// Whether the hover cursor shows over an element that also does
+    /// something on a click or a double click (`clicks`), or not.
+    pub fn shows(self, clicks: bool) -> bool {
+        match self {
+            HoverPolicy::OnlyAction => !clicks,
+            HoverPolicy::Always => true,
+            HoverPolicy::Never => false,
         }
     }
 }
@@ -518,9 +591,10 @@ pub const CURSOR_NAMES: [&str; 35] = [
 ];
 
 /// The cursors of a drag kind: hovered, and while dragging (kept until
-/// the drag ends, wherever the pointer goes). Names from
-/// [`CURSOR_NAMES`]; in a profile, an empty one keeps the kind's own
-/// ([`DragKind::cursors`]).
+/// the drag ends, wherever the pointer goes), and when the hover one
+/// shows. Names from [`CURSOR_NAMES`]; in a kit or a profile, an empty
+/// or unknown name and no policy keep the level below's
+/// ([`DragCursor::over`]).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DragCursor {
@@ -529,6 +603,35 @@ pub struct DragCursor {
     pub hover: String,
     /// While dragging.
     pub drag: String,
+    /// When the hover cursor shows ([`HoverPolicy`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub policy: Option<HoverPolicy>,
+}
+
+impl DragCursor {
+    /// `self` with what `over` gives on top: each of its names that is
+    /// one of [`CURSOR_NAMES`], its policy if it has one. How each level
+    /// (the kind's own, the kit's, the profile's) overrides the one
+    /// below.
+    #[must_use]
+    pub fn over(mut self, over: &DragCursor) -> DragCursor {
+        let known = |n: &String| CURSOR_NAMES.contains(&n.as_str());
+        if known(&over.hover) {
+            self.hover.clone_from(&over.hover);
+        }
+        if known(&over.drag) {
+            self.drag.clone_from(&over.drag);
+        }
+        if over.policy.is_some() {
+            self.policy = over.policy;
+        }
+        self
+    }
+
+    /// Its policy, the default one when it has none.
+    pub fn hover_policy(&self) -> HoverPolicy {
+        self.policy.unwrap_or_default()
+    }
 }
 
 /// A pointer profile, as shipped or saved: the `pointer-profile`
@@ -548,7 +651,8 @@ pub struct Profile {
     #[serde(default)]
     pub value_keys: ValueKeys,
     /// The drag cursors it changes, by kind (`{"move": {"hover":
-    /// "default"}}`); the others keep their own ([`DragKind::cursors`]).
+    /// "default"}}`, `{"pan": {"policy": "always"}}`); the others keep
+    /// the kit's ([`DragKind::cursors`] by default).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub drag_cursors: BTreeMap<DragKind, DragCursor>,
     /// Default-layer bindings, as in a keymap document.
@@ -718,19 +822,20 @@ impl PointerMap {
     }
 
     /// The cursors a drag kind shows: the profile's, each name it leaves
-    /// empty or does not know the kind's own ([`DragKind::cursors`]).
+    /// empty or does not know, and its policy when it gives none, the
+    /// kind's own ([`DragKind::cursors`]).
     pub fn drag_cursor(&self, kind: DragKind) -> DragCursor {
-        let mut c = kind.cursors();
-        if let Some(o) = self.drag_cursors.get(&kind) {
-            let known = |n: &String| CURSOR_NAMES.contains(&n.as_str());
-            if known(&o.hover) {
-                c.hover.clone_from(&o.hover);
-            }
-            if known(&o.drag) {
-                c.drag.clone_from(&o.drag);
-            }
+        self.drag_cursor_over(kind, kind.cursors())
+    }
+
+    /// The profile's cursors of a drag kind over `below` (a kit's):
+    /// what the profile gives wins, the rest is `below`'s
+    /// ([`DragCursor::over`]).
+    pub fn drag_cursor_over(&self, kind: DragKind, below: DragCursor) -> DragCursor {
+        match self.drag_cursors.get(&kind) {
+            Some(o) => below.over(o),
+            None => below,
         }
-        c
     }
 
     /// The command a pointer chord runs in a scope.
