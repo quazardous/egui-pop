@@ -21,10 +21,8 @@ selected; `graph.select` takes `edges`, `graph.read` gives
 
 To move: `Request` gains `SelectWires` and `GraphEvent` gains
 `WireSelection` (`graph.wire_selection_changed` on the journal), and
-`Request`, `GraphEvent` and `Edit` are now `#[non_exhaustive]`, so the
-next ones come without a break: a `match` on any of them outside the
-crate needs a wildcard arm (`_ => {}`; for `Edit`, an edit the
-application does not know is best ignored). `graph.select` with `nodes` alone
-now also clears the wires selected. `Edit`, `GraphEvent` and `Request` are now `#[non_exhaustive]`, so a
-`match` on them outside the crate needs a `_` arm; later edits and
-requests will no longer be breaking.
+`Request`, `GraphEvent` and `Edit` are now `#[non_exhaustive]`, so later
+edits and requests will no longer be breaking: a `match` on any of them
+outside the crate needs a wildcard arm (`_ => {}`; an edit the
+application does not know is best ignored). `graph.select` with `nodes`
+alone now also clears the wires selected.
