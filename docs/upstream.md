@@ -111,27 +111,6 @@ limit.
   in progress stops there.
 - **Remove when**: egui's scroll state can be given an offset.
 
-## egui: a selectable button changes size under the pointer
-
-- **Compensated**: `Button::selectable` draws no frame at rest (neither
-  selected nor hovered), and its frameless margin is the button padding
-  plus the state's expansion minus its stroke width, where the framed
-  margin comes to the padding alone. A theme with a stroke at rest
-  (egui-pop's 1 px border) makes the button 2 px smaller at rest than
-  hovered: a list of them changes height under the pointer, and a
-  wrapped label can wrap differently.
-- **Upstream**: <https://github.com/emilk/egui/issues/8125> (open). Fixed
-  on egui's main and in 0.37.0: the default style hides the inactive frame
-  with `Frame::invisible`, keeping its stroke and margins
-  (`theme/default_style.rs`).
-- **Workaround**: egui-pop's selectable rows (`widgets::SelectableRow`)
-  keep egui's sizes, and `SelectableRow::steady` keeps the framed size
-  in every state: the rows of a `Choose` dialog are steady
-  (`dialogs::choice_row`, `// upstream:`).
-- **Remove when**: now, egui-pop being on egui 0.37 (check that a
-  selectable row keeps its size under the pointer); a follow-up of the
-  move (issue #24).
-
 ## egui: input in the pass of an AccessKit focus is lost
 
 - **Compensated**: an AccessKit `Focus` action on a text field (from a

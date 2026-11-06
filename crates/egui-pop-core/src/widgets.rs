@@ -358,7 +358,6 @@ pub struct SelectableRow<'a> {
     atoms: Atoms<'a>,
     toggle: bool,
     glyph: Option<Icon>,
-    steady: bool,
     wrap: bool,
     name: Option<String>,
 }
@@ -378,7 +377,6 @@ impl<'a> SelectableRow<'a> {
             atoms: atoms.into_atoms(),
             toggle: false,
             glyph: None,
-            steady: false,
             wrap: false,
             name: None,
         }
@@ -392,13 +390,11 @@ impl<'a> SelectableRow<'a> {
         self
     }
 
-    /// Keeps the row's size in every state. Like egui's selectable
-    /// button, a row is otherwise its border's width smaller on each side
-    /// at rest than chosen, hovered or pressed (docs/upstream.md): a list
-    /// of steady rows does not move under the pointer.
+    /// Keeps the row's size in every state: what every row does now, its
+    /// layout never depending on its state.
+    #[deprecated(note = "every row keeps its size in every state; drop the call")]
     #[inline]
-    pub fn steady(mut self) -> Self {
-        self.steady = true;
+    pub fn steady(self) -> Self {
         self
     }
 
@@ -483,7 +479,6 @@ impl Widget for ToggleChip<'_> {
             atoms,
             toggle: true,
             glyph,
-            steady: false,
             wrap: false,
             name: None,
         };
@@ -496,9 +491,10 @@ impl Widget for ToggleChip<'_> {
     }
 }
 
-/// Lays a selectable row out as egui lays out a selectable button
-/// (egui's button padding less its resting border, at least egui's
-/// interaction height), then paints its box, its label and its glyph.
+/// Lays a selectable row out as egui lays out a framed button (egui's
+/// button padding, at least the room of the component's widest border,
+/// and at least egui's interaction height), the same in every state, then
+/// paints its box, its label and its glyph.
 fn row_ui(
     ui: &mut Ui,
     component: &Component,
@@ -510,26 +506,15 @@ fn row_ui(
         atoms,
         toggle,
         glyph,
-        steady,
         wrap,
         name: _,
     } = row;
     let text = atoms.text().map(String::from);
-    // upstream: as egui's selectable button, the row is framed (its
-    // margin the button padding) when chosen or in any state but rest
-    // in the last pass, and unframed at rest (the padding less the
-    // resting border): its size changes under the pointer unless steady
-    // (docs/upstream.md).
-    let last = ui
-        .ctx()
-        .read_response(ui.next_auto_id())
-        .map(|r| r.widget_state())
-        .unwrap_or_default();
-    let framed = steady || selected || last != egui::widget_style::WidgetState::Inactive;
-    let mut padding = ui.spacing().button_padding;
-    if !framed {
-        padding -= Vec2::splat(ui.visuals().widgets.inactive.bg_stroke.width);
-    }
+    // The content's inset never depends on the state: the border of any
+    // state is painted inside the padding, which keeps room for the
+    // widest one.
+    let room = component.border_room(ui.ctx().pixels_per_point());
+    let padding = ui.spacing().button_padding.max(Vec2::splat(room));
     let mut prepared = WidgetAtom::new(atoms)
         .sense(Sense::click())
         .fallback_font(
