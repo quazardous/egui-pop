@@ -375,6 +375,7 @@ pub struct NewNode {
 }
 
 /// What the editor asks the application to do to its graph.
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Edit {
     /// A wire from an output to an input; `replaces` are the wires it
@@ -576,6 +577,7 @@ impl Level {
 }
 
 /// What the editor reports besides edits.
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum GraphEvent {
     /// The selected nodes changed (now these).
@@ -595,6 +597,7 @@ pub enum GraphEvent {
 
 /// What an application (or an agent, through a command) asks of the
 /// editor, done at its next frame as if the user had done it.
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Request {
     /// Propose an edit: a connection is type-checked, then the edit goes
