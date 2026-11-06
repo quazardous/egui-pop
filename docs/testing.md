@@ -164,7 +164,11 @@ each run (the `junit` artifact) list every test's time.
 - **Snapshots** (`crates/egui-pop-gallery/tests/snapshots`): the gallery's
   pages rendered with wgpu, per theme; thresholds per operating system in
   `kittest.toml`. Regenerate with `UPDATE_SNAPSHOTS=1 cargo test -p
-  egui-pop-gallery` and look at the images in the diff.
+  egui-pop-gallery` and look at the images in the diff. A page's shot
+  veils the side bar's page list (`Nav::veil_list`): the list is laid
+  out and answers as usual, but it is drawn over with the side bar's
+  fill, so a page added to the gallery changes only the list's own
+  shots (`pages-*`, which lift the veil), not every page's.
 
 ## Keyboard walks
 

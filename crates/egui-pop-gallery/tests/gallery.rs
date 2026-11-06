@@ -37,8 +37,31 @@ fn harness_from(
             // Motion moves only when a test says: the same frames on
             // every run.
             egui_pop::core::motion::freeze(&cc.egui_ctx, 0.0);
-            Gallery::from_creation_context(cc, options).expect("the gallery builds")
+            veiled(Gallery::from_creation_context(cc, options).expect("the gallery builds"))
         })
+}
+
+/// The gallery with its page list veiled (`Nav::veil_list`): a page's
+/// snapshot shows the page, the top bar and the side bar's place, but not
+/// the list, so a page added to the gallery leaves the other pages' shots
+/// alone. The list's own shots lift it with [`unveil`].
+fn veiled(gallery: Gallery) -> Gallery {
+    nav(&gallery).veil_list(true);
+    gallery
+}
+
+/// Shows the page list again, for a shot of the list itself.
+fn unveil(h: &mut Harness<'_, Gallery>) {
+    nav(h.state()).veil_list(false);
+    h.run();
+}
+
+fn nav(gallery: &Gallery) -> std::sync::Arc<egui_pop_gallery::shell::Nav> {
+    gallery
+        .app
+        .handle()
+        .service(&egui_pop_gallery::shell::NAV)
+        .expect("the gallery's navigation")
 }
 
 fn options(theme: &str, density: Density, page: &str) -> Options {
@@ -1292,11 +1315,13 @@ fn the_scale_page_sets_the_interface_zoom_and_draws_at_twice_the_pixels() {
         .with_pixels_per_point(2.0)
         .shared_wgpu()
         .build_eframe(|cc| {
-            Gallery::new(
-                &cc.egui_ctx,
-                options("pop-dark", Density::Comfortable, "overview"),
+            veiled(
+                Gallery::new(
+                    &cc.egui_ctx,
+                    options("pop-dark", Density::Comfortable, "overview"),
+                )
+                .expect("the gallery builds"),
             )
-            .expect("the gallery builds")
         });
     h.run();
     results.add(h.try_snapshot("overview-pop-dark@2x"));
@@ -6295,7 +6320,7 @@ fn sized_window(
         .shared_wgpu()
         .build_eframe(move |cc| {
             egui_pop::core::motion::freeze(&cc.egui_ctx, 0.0);
-            Gallery::from_creation_context(cc, options).expect("the gallery builds")
+            veiled(Gallery::from_creation_context(cc, options).expect("the gallery builds"))
         });
     h.run();
     h
@@ -6344,6 +6369,7 @@ fn the_page_list_draws_its_bar_at_rest_in_a_short_window() {
     // and a row reaches under the bar: measured from where the text starts.
     let (end, limit) = page_title_room(&h);
     assert!(limit >= end, "{limit}, {end}");
+    unveil(&mut h);
     h.snapshot("pages-short-pop-dark");
 }
 
@@ -6925,6 +6951,54 @@ fn titled(h: &Harness<'_, Gallery>, title: &str) -> usize {
     h.query_all_by_label(title).count()
 }
 
+/// The page list's own shots, in the light and the dark theme. With the
+/// list's other shots (`pages-short`, `pages-folded`, `pages-filtered`),
+/// they are the only ones a page added to the gallery changes: every other
+/// shot veils the list. In a window tall enough for every page, cropped to
+/// the list; every page has its row there.
+#[test]
+fn the_page_list_lists_every_page() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        // A row per page and per group, with room to spare.
+        let height = 160.0 + 26.0 * (PAGES.len() as f32 + 12.0);
+        let mut h = sized_window(theme, Density::Comfortable, "overview", height);
+        unveil(&mut h);
+        let list = nav(h.state()).list_rect().expect("the list is drawn");
+        let mut bottom = list.top();
+        for page in PAGES {
+            let title = title(&h, page);
+            let row = h
+                .query_all_by_label(&title)
+                .map(|n| n.rect())
+                .find(|r| list.contains(r.center()))
+                .unwrap_or_else(|| panic!("{theme}: `{page}` has no row in the list"));
+            bottom = bottom.max(row.bottom());
+        }
+        let image = h.render().expect("render");
+        let ppp = h.ctx.pixels_per_point();
+        let shown = egui::Rect::from_min_max(list.min, egui::pos2(list.right(), bottom))
+            .expand(4.0)
+            .intersect(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(image.width() as f32, image.height() as f32) / ppp,
+            ));
+        let px = |v: f32| (v * ppp).round() as u32;
+        let cropped = image::imageops::crop_imm(
+            &image,
+            px(shown.left()),
+            px(shown.top()),
+            px(shown.width()),
+            px(shown.height()),
+        )
+        .to_image();
+        results.add(egui_kittest::try_image_snapshot(
+            &cropped,
+            format!("pages-{theme}"),
+        ));
+    }
+}
+
 #[test]
 fn the_page_list_folds_its_groups_and_remembers() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "overview"));
@@ -6935,6 +7009,7 @@ fn the_page_list_folds_its_groups_and_remembers() {
     assert_eq!(titled(&h, "Icons"), 0, "folded");
     assert_eq!(titled(&h, "Tokens table"), 1, "the others stay");
     assert_eq!(h.state().page(), StoryId::from_static("overview"));
+    unveil(&mut h);
     h.snapshot("pages-folded-pop-dark");
     // With the window's layout: a new window finds it folded...
     let reopened = |page: &str, data: egui::util::IdTypeMap| {
@@ -7109,6 +7184,7 @@ fn the_page_list_filter_finds_a_page_by_its_description() {
     h.event(egui::Event::Text("tool".into()));
     h.run();
     h.run();
+    unveil(&mut h);
     h.snapshot("pages-filtered-pop-dark");
     // Nothing found says so.
     h.event(egui::Event::Text("zzz".into()));
