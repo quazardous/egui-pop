@@ -86,6 +86,7 @@ mod tab;
 mod tab_bar;
 mod tab_preview;
 mod table_header_cell;
+mod table_row;
 mod table_stripe;
 mod tag_chip;
 mod terminal_frame;
@@ -189,6 +190,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     tab_bar::CONTRACT,
     tab_preview::CONTRACT,
     table_header_cell::CONTRACT,
+    table_row::CONTRACT,
     table_stripe::CONTRACT,
     tag_chip::CONTRACT,
     terminal_frame::CONTRACT,
