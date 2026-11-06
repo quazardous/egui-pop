@@ -128,6 +128,10 @@ the lanes too (rows of data, a beat grid), before the clips, the markers
 and the playhead are drawn over it: `Lanes::x_of` and `time_at` map time and
 points. Rerun-like time panels draw their rows of data ticks this way.
 
+A plot follows a timeline with `Plot::timeline(&mut state)`: its x axis
+in the scale, the playhead as its time cursor (dragging it moves the
+playhead) and the range shaded ([Charts](plot.md#time)).
+
 `TimelineOutput` says what happened: `playhead_moved`, `scrubbing`,
 `transport_changed`, `play`, `speed`, `view_changed`, and `edits`, the
 document's changes (`Edit::MarkerAdded`, `MarkerMoved`, `MarkerRemoved`,

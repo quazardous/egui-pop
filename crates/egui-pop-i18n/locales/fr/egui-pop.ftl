@@ -1824,6 +1824,8 @@ egui-pop-views-plot = Graphique
 
 egui-pop-views-plot-bars = barres
 
+egui-pop-views-plot-cursor = Curseur temporel
+
 egui-pop-views-plot-line = ligne
 
 egui-pop-views-plot-points = points
@@ -1831,6 +1833,8 @@ egui-pop-views-plot-points = points
 egui-pop-views-plot-series = { $name } ({ $kind }) : { $count } points, x de { $x_min } à { $x_max }, y de { $y_min } à { $y_max }
 
 egui-pop-views-plot-series-empty = { $name } ({ $kind }) : aucun point
+
+egui-pop-views-plot-steps = paliers
 
 egui-pop-views-plot-time-cursor = Curseur temporel à { $time }
 

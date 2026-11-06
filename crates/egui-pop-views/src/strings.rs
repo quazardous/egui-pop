@@ -59,6 +59,10 @@ pub const PLOT_LINE: StrKey = StrKey::new("egui-pop-views-plot-line", "line");
 pub const PLOT_POINTS: StrKey = StrKey::new("egui-pop-views-plot-points", "points");
 /// A plot series' kind: bars.
 pub const PLOT_BARS: StrKey = StrKey::new("egui-pop-views-plot-bars", "bars");
+/// A plot series' kind: a stepped line.
+pub const PLOT_STEPS: StrKey = StrKey::new("egui-pop-views-plot-steps", "steps");
+/// A plot's draggable time cursor, its accessible name.
+pub const PLOT_CURSOR: StrKey = StrKey::new("egui-pop-views-plot-cursor", "Time cursor");
 /// A plot series in the plot's accessible summary.
 pub const PLOT_SERIES: StrKey = StrKey::new(
     "egui-pop-views-plot-series",
@@ -353,6 +357,8 @@ pub const ALL: &[StrKey] = &[
     PLOT_LINE,
     PLOT_POINTS,
     PLOT_BARS,
+    PLOT_STEPS,
+    PLOT_CURSOR,
     PLOT_SERIES,
     PLOT_SERIES_EMPTY,
     PLOT_TIME_CURSOR,
