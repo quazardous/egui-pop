@@ -40,7 +40,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 65] = [
+pub const PAGES: [&str; 66] = [
     "overview",
     "tokens",
     "builtins",
@@ -77,6 +77,7 @@ pub const PAGES: [&str; 65] = [
     "list-items",
     "table",
     "plot",
+    "plot-time",
     "library",
     "timeline",
     "tracks",
@@ -306,6 +307,16 @@ pub fn builder(options: &Options) -> AppBuilder {
             weight: 79,
             show: pages::plot::show,
             playground: Some(pages::plot::playground),
+        })
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.plot-time"),
+            story: StoryId::from_static("plot-time"),
+            title: "Plot over time",
+            description: "A plot over a timeline's time: an x axis in seconds, timecode or bars and beats, the playhead as a time cursor dragged both ways, the looping range shaded, a stepped line, an error band, entity colours and every line's value at the pointer.",
+            group: "Components",
+            weight: 80,
+            show: pages::plot_time::show,
+            playground: Some(pages::plot_time::playground),
         })
         .plugin(egui_pop::views::library::LibraryPlugin)
         .plugin(pages::library::LibraryPage)

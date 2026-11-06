@@ -171,3 +171,58 @@ fn snapshots() {
         results.add(h.try_snapshot(name));
     }
 }
+
+#[test]
+fn the_plot_takes_rerun_s_grid_and_cursor_head() {
+    use egui_pop::core::kit::{Kit, State};
+    use egui_pop::views::plot::{CursorHead, CursorLook, GridLook};
+    // The default kit: the grid in the muted text at egui_plot's fade, a
+    // cursor without a head, the same accent under the pointer.
+    let ctx = egui::Context::default();
+    egui_pop::theme::install_with(&ctx, &Themes::default(), &ThemeSpec::new("pop-dark"));
+    let t = egui_pop::theme::Tokens::of(&ctx);
+    let grid = GridLook::of(&ctx);
+    assert_eq!((grid.color, grid.fade), (t.text.muted, 0.5));
+    assert_eq!(CursorLook::of(&ctx).head, CursorHead::None);
+    let kit = Kit::of(&ctx);
+    assert_eq!(
+        kit.plot_cursor.style(State::HOVER).fill,
+        kit.plot_cursor.style(State::REST).fill
+    );
+    // The Rerun-like kit: Rerun's grid colour and fade, its triangle, the
+    // strong text under the pointer.
+    for name in [DARK, LIGHT] {
+        let (mut h, _) = viewer(ThemeSpec::new(name));
+        h.run();
+        let t = egui_pop::theme::Tokens::of(&h.ctx);
+        let grid = GridLook::of(&h.ctx);
+        assert_eq!(Some(grid.color), t.color("gray.4"), "{name}");
+        assert_eq!(grid.fade, 0.3, "{name}");
+        let look = CursorLook::of(&h.ctx);
+        assert_eq!((look.head, look.head_size), (CursorHead::Triangle, 10.0));
+        let kit = Kit::of(&h.ctx);
+        assert_eq!(kit.plot_cursor.style(State::HOVER).fill, t.text.strong);
+        assert_eq!(kit.plot_cursor.style(State::REST).fill, t.text.default);
+    }
+}
+
+#[test]
+fn the_time_series_cursor_is_dragged() {
+    let (mut h, model) = viewer(ThemeSpec::new(DARK));
+    h.run();
+    let start = model.borrow().at();
+    let plot = h.get_by_label("Time series plot").rect();
+    let a = h.get_by_label("Time cursor").rect().center();
+    let b = a + egui::vec2(plot.width() * 0.3, 0.0);
+    h.drag_at(a);
+    h.run();
+    for i in 1..=4 {
+        h.hover_at(a + (b - a) * (i as f32 / 4.0));
+        h.run();
+    }
+    h.drop_at(b);
+    h.run();
+    let now = model.borrow().at();
+    assert!(now > start + 30, "from frame {start} to {now}");
+    assert!(!model.borrow().playing);
+}
