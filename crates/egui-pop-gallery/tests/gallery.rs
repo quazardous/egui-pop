@@ -4090,12 +4090,19 @@ fn the_text_log_page_follows_its_timeline_and_filters() {
     h.run();
     h.get_by_label("Playhead 0:21.000");
     // The rows at the playhead came into view; a click on another row
-    // in view moves the playhead to its time.
+    // in view moves the playhead to its time. The row nearest the
+    // playhead is taken, not one at the edge of the view, which the
+    // view may clip.
     let row = h
         .query_all_by_label_contains(" /")
         .filter(|n| n.accesskit_node().role() == egui::accesskit::Role::Button)
         .filter_map(|n| n.accesskit_node().label())
-        .find(|l| l.starts_with("0:2") && !l.starts_with("0:21.000"))
+        .filter_map(|l| {
+            let t = TimeScale::Seconds.parse(l.split(' ').next()?)?;
+            ((t - 21.0).abs() > 0.05).then_some(((t - 21.0).abs(), l))
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, l)| l)
         .expect("another row in view");
     let time = row.split(' ').next().unwrap_or_default().to_string();
     let i = (TimeScale::Seconds.parse(&time).expect("a time") * 10.0).round() as usize;
