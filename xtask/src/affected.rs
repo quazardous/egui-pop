@@ -70,13 +70,10 @@ const DOC_READERS: &[(&str, &str)] = &[
 ];
 
 /// Data outside the crates, and the test binaries that read it.
-const DATA_READERS: &[(&str, &[(&str, &str)])] = &[
-    ("template/", &[("egui-pop", "minimal")]),
-    (
-        "examples/",
-        &[("egui-pop-tokens", "kits"), ("egui-pop-gallery", "gallery")],
-    ),
-];
+const DATA_READERS: &[(&str, &[(&str, &str)])] = &[(
+    "examples/",
+    &[("egui-pop-tokens", "kits"), ("egui-pop-gallery", "gallery")],
+)];
 
 /// A workspace package, as `cargo metadata --no-deps` gives it.
 #[derive(Clone, Debug, Default)]

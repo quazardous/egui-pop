@@ -6,15 +6,18 @@ looks like.
 ## Start an application
 
 A [cargo-generate](https://github.com/cargo-generate/cargo-generate)
-template makes a new application: one plugin with a panel, a setting and
-a command, over `DefaultPlugins`.
+template makes a new application: a plugin with two panels, a setting,
+a command for people and one for agents, undo, a kit of its own and its
+tests, over `DefaultPlugins`.
 
 ```sh
-cargo generate --git https://github.com/quazardous/egui-pop template
+cargo generate --git https://github.com/quazardous/egui-pop templates/app
 ```
 
-It is the `minimal` example (`cargo run -p egui-pop --example minimal`),
-kept identical to it by a test.
+It is the end state of [Your first application](first-app.md), which
+builds it step by step. The `minimal` example (`cargo run -p egui-pop
+--example minimal`) is smaller still: one plugin with a panel, a
+setting and a command.
 
 To add egui-pop to an existing crate instead:
 

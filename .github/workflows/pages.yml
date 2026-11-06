@@ -57,6 +57,7 @@ jobs:
           cargo doc --workspace --no-deps --all-features --locked
           --exclude xtask --exclude consumer-smoke
           --exclude egui-pop-gallery --exclude egui-pop-extension-template
+          --exclude egui-pop-app-template
       - name: Build the gallery
         working-directory: crates/egui-pop-gallery
         run: trunk build --release --public-url /${{ github.event.repository.name }}/gallery/

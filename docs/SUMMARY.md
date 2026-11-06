@@ -4,6 +4,7 @@
 
 # Guides
 
+- [Your first application](first-app.md)
 - [Getting started](getting-started.md)
 - [Using parts without App](standalone.md)
 - [Themes](themes.md)

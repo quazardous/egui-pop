@@ -25,7 +25,7 @@
 | `docs/adr/` | Architecture decisions. Read them before changing a registry. |
 | `.changeset/`, `knope.toml` | Pending changesets and the release configuration: knope raises the versions, `cargo xtask release-notes` writes `CHANGELOG.md` (`docs/releasing.md`). |
 | `docs/tokens.md` | The token tiers and how to add a theme. |
-| `template/` | The `cargo generate` application template, identical to `crates/egui-pop/examples/minimal.rs` (a test checks it). |
+| `templates/app` | The application template: the end state of `docs/first-app.md` (a plugin with panels, a setting, commands for people and agents, undo, a kit, kittest tests and a snapshot), a workspace member so the gate keeps it building; `cargo generate` writes its `Cargo.toml.liquid`. |
 | `templates/extension` | The extension template: a third-party crate (a plugin, a component with tokens and strings, a story, a step, an agent command, kittest tests), a workspace member so the gate keeps it building; `cargo generate` writes its `Cargo.toml.liquid`. |
 | `book.toml`, `docs/SUMMARY.md`, `tools/book/` | The docs site: `docs/` as an mdBook under `/docs/` on GitHub Pages, the workspace's rustdoc (every feature) under `/api/`; `tools/book/links.py` turns links out of `docs/` into GitHub links and fails on a broken one; `tools/book/summary.py` checks that `docs/SUMMARY.md` lists every page `docs/README.md` links. |
 | `tools/site/` | The site's landing page (`index.html`, static, at the root of GitHub Pages, beside the gallery under `/gallery/`), and `links.py`, which checks its links in the assembled site. |
