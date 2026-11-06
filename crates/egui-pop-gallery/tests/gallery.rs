@@ -5921,7 +5921,10 @@ fn sized_window(
     height: f32,
 ) -> Harness<'static, Gallery> {
     let options = options(theme, density, page);
+    // The font pairs page draws a box where a face lacks a sample's letter
+    // (see `the_font_pairs_page_compares_each_pair_and_measures_their_digits`).
     let mut h = Harness::builder()
+        .allow_missing_glyphs()
         .with_size(egui::vec2(1100.0, height))
         .with_max_steps(8)
         .shared_wgpu()
@@ -6247,13 +6250,27 @@ fn check_short_page(theme: &str, density: Density, page: &str) -> Result<bool, S
     if !diagnostics.is_empty() {
         return Err(format!("{page}: {diagnostics:?}"));
     }
+    // A page that panicked shows an error card in its place: what fits the
+    // window then is the card, not the page.
+    let faults = egui_pop::core::fault::faults(&h.ctx);
+    if !faults.is_empty() {
+        return Err(format!("{page} panicked: {faults:?}"));
+    }
     Ok(scrolls)
 }
 
-fn every_page_ends_in_a_short_window(theme: &str, density: Density) {
+/// The pages of [`every_page_ends_in_a_short_window`], in two halves: each
+/// page opens two windows, and a whole walk in one test outgrows CI's
+/// limit on a test's time as pages are added.
+fn half(second: bool) -> &'static [&'static str] {
+    let (first, rest) = PAGES.split_at(PAGES.len() / 2);
+    if second { rest } else { first }
+}
+
+fn every_page_ends_in_a_short_window(theme: &str, density: Density, pages: &[&str]) {
     let mut problems = Vec::new();
     let mut scrolling = 0;
-    for page in PAGES {
+    for page in pages {
         match check_short_page(theme, density, page) {
             Ok(true) => scrolling += 1,
             Ok(false) => {}
@@ -6265,18 +6282,32 @@ fn every_page_ends_in_a_short_window(theme: &str, density: Density) {
         "{theme} {density:?}:\n{}",
         problems.join("\n")
     );
-    // Not all of it for nothing: most pages are longer than this window.
-    assert!(scrolling >= 25, "only {scrolling} pages scrolled");
+    // Not all of it for nothing: many pages are longer than this window.
+    assert!(
+        scrolling * 3 >= pages.len(),
+        "only {scrolling} of {} pages scrolled",
+        pages.len()
+    );
 }
 
 #[test]
-fn every_page_ends_in_a_short_window_in_pop_dark() {
-    every_page_ends_in_a_short_window("pop-dark", Density::Comfortable);
+fn every_page_ends_in_a_short_window_in_pop_dark_first_half() {
+    every_page_ends_in_a_short_window("pop-dark", Density::Comfortable, half(false));
 }
 
 #[test]
-fn every_page_ends_in_a_short_window_in_pop_high_contrast() {
-    every_page_ends_in_a_short_window("pop-high-contrast", Density::Comfortable);
+fn every_page_ends_in_a_short_window_in_pop_dark_second_half() {
+    every_page_ends_in_a_short_window("pop-dark", Density::Comfortable, half(true));
+}
+
+#[test]
+fn every_page_ends_in_a_short_window_in_pop_high_contrast_first_half() {
+    every_page_ends_in_a_short_window("pop-high-contrast", Density::Comfortable, half(false));
+}
+
+#[test]
+fn every_page_ends_in_a_short_window_in_pop_high_contrast_second_half() {
+    every_page_ends_in_a_short_window("pop-high-contrast", Density::Comfortable, half(true));
 }
 
 #[test]
