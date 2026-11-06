@@ -41,6 +41,7 @@ use egui_pop::model::panels::{Area, PanelSpec};
 use egui_pop::prelude::*;
 use egui_pop::tokens::kit::KitData;
 use egui_pop::views::table::TableState;
+use egui_pop::views::text_log::TextLogState;
 use egui_pop::views::tree::TreeState;
 
 use data::{ENTITIES, FRAMES, View};
@@ -105,6 +106,10 @@ pub struct Model {
     pub table: TableState<u32>,
     table_selection: Option<u32>,
     pub log: Vec<data::LogLine>,
+    /// The text log view's filters, Follow and expanded lines.
+    pub log_state: TextLogState,
+    /// The hidden entities the log was last filtered for, sorted.
+    log_hidden: Vec<usize>,
     image: Option<egui::TextureHandle>,
 }
 
@@ -139,6 +144,8 @@ impl Default for Model {
             table: TableState::new(),
             table_selection: None,
             log: data::log(),
+            log_state: TextLogState::new(),
+            log_hidden: Vec::new(),
             image: None,
         }
     }

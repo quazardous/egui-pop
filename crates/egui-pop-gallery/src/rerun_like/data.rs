@@ -202,27 +202,8 @@ pub fn detections(frame: u32) -> Vec<(&'static str, [f32; 4])> {
     ]
 }
 
-/// How severe a log line is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Level {
-    Trace,
-    Debug,
-    Info,
-    Warn,
-    Error,
-}
-
-impl Level {
-    pub fn name(self) -> &'static str {
-        match self {
-            Level::Trace => "TRACE",
-            Level::Debug => "DEBUG",
-            Level::Info => "INFO",
-            Level::Warn => "WARN",
-            Level::Error => "ERROR",
-        }
-    }
-}
+/// How severe a log line is: the text log view's six levels.
+pub use egui_pop::views::text_log::Level;
 
 /// A line of the text log.
 #[derive(Clone, Debug)]
@@ -269,6 +250,10 @@ pub fn log() -> Vec<LogLine> {
                 1 => (
                     Level::Debug,
                     format!("robot: joint error {:.3} rad", noise(5, frame).abs() * 0.02),
+                ),
+                2 if frame == 243 => (
+                    Level::Critical,
+                    "robot: emergency stop\nreason: the gripper did not answer three times\nstate: arm halted, waiting for a reset".to_string(),
                 ),
                 2 if frame > 200 => (Level::Error, "robot: gripper did not answer".to_string()),
                 2 => (Level::Info, "robot: gripper closed".to_string()),

@@ -361,3 +361,87 @@ fn at_most_one_line_between_two_panels_at_rest() {
         assert!(*leaves <= 1, "{theme} between two panels: {seen:?}");
     }
 }
+
+#[test]
+fn table_rows_take_rerun_s_quiet_selection() {
+    use egui_pop::core::kit::{Kit, State};
+    for name in [DARK, LIGHT] {
+        let (mut h, _) = viewer(ThemeSpec::new(name));
+        h.run();
+        let t = egui_pop::theme::Tokens::of(&h.ctx);
+        let kit = Kit::of(&h.ctx);
+        let row = &kit.table_row;
+        // Selected: a quiet fill, not the list rows' solid blue, and a
+        // marker on the left in the accent.
+        let selected = row.style(State::SELECTED);
+        assert_ne!(selected.fill, kit.list_row.style(State::SELECTED).fill);
+        assert_eq!(selected.text, t.text.strong, "{name}");
+        assert_eq!(
+            (selected.indicator_color, selected.indicator_size),
+            (t.accent.default, 2.0),
+            "{name}"
+        );
+        assert_eq!(
+            row.data.indicator_side,
+            egui_pop::core::kit::Side::Left,
+            "{name}"
+        );
+        // Hovered: an outline, no fill; the content keeps its place.
+        let hover = row.style(State::HOVER);
+        assert_eq!(hover.fill, egui::Color32::TRANSPARENT, "{name}");
+        assert_eq!(hover.border_width, 1.0, "{name}");
+        assert_eq!(row.style(State::REST).border_width, 0.0, "{name}");
+        assert_eq!(row.border_room(1.0), 1.0, "{name}");
+        // The cursor of a focused table: the list rows' ring.
+        let cursor = row.style(State::SELECTED | State::FOCUS);
+        assert_eq!(cursor.fill, selected.fill);
+        assert_eq!(
+            cursor.ring_width,
+            kit.list_row.style(State::FOCUS).ring_width
+        );
+    }
+    // Light: Rerun's Gray.900; dark: Blue.750 at a tenth.
+    let (mut h, _) = viewer(ThemeSpec::new(LIGHT));
+    h.run();
+    let t = egui_pop::theme::Tokens::of(&h.ctx);
+    assert_eq!(
+        Some(Kit::of(&h.ctx).table_row.style(State::SELECTED).fill),
+        t.color("gray.3")
+    );
+}
+
+#[test]
+fn a_log_row_moves_the_time_cursor_and_selects_its_entity() {
+    use egui_kittest::kittest::NodeT as _;
+    let (mut h, model) = viewer(ThemeSpec::new(DARK));
+    h.run();
+    h.run();
+    let start = model.borrow().at();
+    // The robot's heartbeat lines: a row of the text log, named by its
+    // frame first.
+    let rows: Vec<(String, egui::Rect)> = h
+        .query_all_by_label_contains("TRACE /robot/status robot: heartbeat")
+        .filter(|n| n.accesskit_node().role() == egui::accesskit::Role::Button)
+        .map(|n| (n.accesskit_node().label().unwrap_or_default(), n.rect()))
+        .collect();
+    let (name, _) = rows
+        .iter()
+        .find(|(name, _)| !name.starts_with(&format!("{start} ")))
+        .expect("a heartbeat row in view")
+        .clone();
+    let frame: u32 = name
+        .split(' ')
+        .next()
+        .and_then(|f| f.parse().ok())
+        .expect("the row starts with its frame");
+    h.get_by_role_and_label(egui::accesskit::Role::Button, &name)
+        .click();
+    h.run();
+    h.run();
+    assert_eq!(model.borrow().at(), frame);
+    let robot = ENTITIES
+        .iter()
+        .position(|e| e.path == "/robot/status")
+        .expect("the robot's entity");
+    assert_eq!(model.borrow().selected, Some(Item::Entity(robot)));
+}
