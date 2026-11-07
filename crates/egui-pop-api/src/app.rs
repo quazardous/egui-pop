@@ -750,6 +750,11 @@ pub(crate) struct Shared {
     active_window: std::cell::Cell<egui::ViewportId>,
     /// The shell panels' starting sizes (`AppBuilder::shell_panel_size`).
     shell_sizes: RefCell<Vec<(PanelId, f32)>>,
+    /// The shell panels' least and largest sizes
+    /// (`AppBuilder::shell_panel_min_size`, `shell_panel_max_size`).
+    shell_bounds: RefCell<Vec<(PanelId, crate::workbench::ShellBounds)>>,
+    /// The centre's least width (`AppBuilder::centre_min_size`).
+    centre_min: std::cell::Cell<Option<crate::workbench::ShellSize>>,
     /// The panels' commands and their shared texts, installed on each
     /// context drawing the application.
     pub(crate) panel_commands: RefCell<strings::PanelCommands>,
@@ -883,6 +888,8 @@ impl AppHandle {
             system_file_chooser: std::cell::Cell::new(false),
             active_window: std::cell::Cell::new(egui::ViewportId::ROOT),
             shell_sizes: RefCell::default(),
+            shell_bounds: RefCell::default(),
+            centre_min: std::cell::Cell::new(None),
             panel_commands: RefCell::default(),
             name: RefCell::default(),
             app_id: RefCell::default(),
@@ -2434,6 +2441,17 @@ impl AppHandle {
         self.0.bare_strips.borrow().contains(&area)
     }
 
+    /// The shell panels' least and largest sizes the application set.
+    pub(crate) fn shell_bounds(&self) -> Vec<(PanelId, crate::workbench::ShellBounds)> {
+        self.0.shell_bounds.borrow().clone()
+    }
+
+    /// The centre's least width the application set
+    /// ([`AppBuilder::centre_min_size`]).
+    pub fn centre_min_size(&self) -> Option<crate::workbench::ShellSize> {
+        self.0.centre_min.get()
+    }
+
     /// The system's text scaling the text size was seeded from
     /// (`AppBuilder::system_text_scale`; 1 when none was given).
     pub fn system_text_scale(&self) -> crate::text::SystemTextScale {
@@ -2794,6 +2812,8 @@ pub struct AppBuilder {
     menu_bar: bool,
     system_file_chooser: bool,
     shell_sizes: Vec<(PanelId, f32)>,
+    shell_bounds: Vec<(PanelId, crate::workbench::ShellBounds)>,
+    centre_min: Option<crate::workbench::ShellSize>,
     folded: Vec<Area>,
     over: Vec<Area>,
     wrap: Option<WrapUi>,
@@ -2890,6 +2910,8 @@ impl AppBuilder {
             menu_bar: true,
             system_file_chooser: false,
             shell_sizes: Vec::new(),
+            shell_bounds: Vec::new(),
+            centre_min: None,
             folded: Vec::new(),
             over: Vec::new(),
             wrap: None,
@@ -3072,6 +3094,64 @@ impl AppBuilder {
         self.shell_sizes.retain(|(p, _)| *p != panel);
         self.shell_sizes.push((panel, size));
         self
+    }
+
+    /// The least size of a panel across its area (`workbench::PANEL_SIDE_BAR`,
+    /// `PANEL_INSPECTOR`: their width), in points or as a share of the
+    /// window ([`ShellSize`](crate::workbench::ShellSize)), instead of
+    /// egui-pop's (120 points for the side bar, 160 for the inspector) or
+    /// the panel's own `PanelSpec::min_size`. Dragging stops there.
+    ///
+    /// ```
+    /// use egui_pop_api::App;
+    /// use egui_pop_api::workbench::{PANEL_SIDE_BAR, ShellSize};
+    ///
+    /// let app = App::builder()
+    ///     .shell_panel_min_size(PANEL_SIDE_BAR, 230.0)
+    ///     .shell_panel_max_size(PANEL_SIDE_BAR, ShellSize::Share(0.6))
+    ///     .build(&egui::Context::default())
+    ///     .unwrap();
+    /// # let _ = app;
+    /// ```
+    pub fn shell_panel_min_size(
+        mut self,
+        panel: PanelId,
+        size: impl Into<crate::workbench::ShellSize>,
+    ) -> Self {
+        self.bounds_of(panel).min = Some(size.into());
+        self
+    }
+
+    /// The largest size of a panel across its area, in points or as a
+    /// share of the window; none by default. Dragging stops there; a
+    /// least size larger wins.
+    pub fn shell_panel_max_size(
+        mut self,
+        panel: PanelId,
+        size: impl Into<crate::workbench::ShellSize>,
+    ) -> Self {
+        self.bounds_of(panel).max = Some(size.into());
+        self
+    }
+
+    /// The centre's least width, in points or as a share of the window:
+    /// the side areas give way to it, each down to its own least width
+    /// (a window too narrow for all of them squeezes the centre). None by
+    /// default.
+    pub fn centre_min_size(mut self, size: impl Into<crate::workbench::ShellSize>) -> Self {
+        self.centre_min = Some(size.into());
+        self
+    }
+
+    fn bounds_of(&mut self, panel: PanelId) -> &mut crate::workbench::ShellBounds {
+        let at = match self.shell_bounds.iter().position(|(p, _)| *p == panel) {
+            Some(at) => at,
+            None => {
+                self.shell_bounds.push((panel, Default::default()));
+                self.shell_bounds.len() - 1
+            }
+        };
+        &mut self.shell_bounds[at].1
     }
 
     /// Areas folded to their strip when the application starts with no
@@ -3402,6 +3482,8 @@ impl AppBuilder {
             .system_file_chooser
             .set(self.system_file_chooser);
         *app.handle.0.shell_sizes.borrow_mut() = self.shell_sizes;
+        *app.handle.0.shell_bounds.borrow_mut() = self.shell_bounds;
+        app.handle.0.centre_min.set(self.centre_min);
         {
             let mut wb = app.handle.workbench_mut();
             let given = self.layout.is_some();
