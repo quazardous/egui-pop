@@ -6,7 +6,7 @@
 //! (chained to the one before it). A panic writes `panic-<pid>.json`:
 //! the application's name and version, the OS and its release, the
 //! thread, the message, where, a backtrace, the last log lines (from
-//! [`crate::logs`] when installed) and the tail of the host's journal.
+//! the app's [`crate::logs`]) and the tail of the host's journal.
 //! A clean exit (the `app.exit` step) takes the marker and the panics of
 //! the session away: a panic a fault boundary caught does not make a
 //! report.
@@ -271,13 +271,15 @@ pub fn collect(dir: &Path, log_file: Option<&Path>) -> Vec<PathBuf> {
     out
 }
 
-/// What the panic hook reads: this session's report so far and where to
-/// write it. Shared with the hook (process-wide).
+/// What the panic hook reads: this session's report so far, where to
+/// write it and the app's logs. Shared with the hook (process-wide).
 #[derive(Debug, Default)]
 struct HookState {
     dir: Option<PathBuf>,
     report: Report,
     journal: VecDeque<Json>,
+    #[cfg(feature = "logs")]
+    logs: Option<crate::logs::Logs>,
 }
 
 static HOOK: RwLock<Option<Arc<Mutex<HookState>>>> = RwLock::new(None);
@@ -329,7 +331,7 @@ fn write_panic(info: &std::panic::PanicHookInfo<'_>) {
     s.report.kind = "panic".into();
     s.report.panics.push(panic);
     #[cfg(feature = "logs")]
-    if let Some(l) = crate::logs::installed() {
+    if let Some(l) = s.logs.clone() {
         let tail = l.tail();
         s.report.log = tail[tail.len().saturating_sub(LOG_TAIL)..].to_vec();
         l.flush();
@@ -491,10 +493,13 @@ impl Plugin for CrashPlugin {
             )
             .args(json!({ "path": "report.json", "report": { "app": "Demo", "kind": "panic" } })),
         )?;
+        // The app's own logs, not the process's: several apps in one
+        // process (tests) each quote theirs.
+        #[cfg(feature = "logs")]
+        let logs = ctx.app().service(&crate::logs::LOGS).map(|l| (*l).clone());
         let log_file = None::<PathBuf>;
         #[cfg(feature = "logs")]
-        let log_file =
-            log_file.or_else(|| crate::logs::installed().map(|l| l.path().to_path_buf()));
+        let log_file = log_file.or_else(|| logs.as_ref().map(|l| l.path().to_path_buf()));
         let crashes = Crashes {
             dir: dir.clone(),
             log_file,
@@ -543,11 +548,15 @@ impl Plugin for CrashPlugin {
             dir: Some(dir.clone()),
             report,
             journal: VecDeque::new(),
+            #[cfg(feature = "logs")]
+            logs,
         }));
-        *HOOK
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(state.clone());
+        // The hook is the process's: only an app that installs it is
+        // written to, not one that turned it off (a test beside others).
         if self.hook {
+            *HOOK
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(state.clone());
             install_hook();
         }
         self.state = Some(state.clone());

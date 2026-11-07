@@ -8,7 +8,8 @@
 //! beyond [`Logs::keep`] goes) and a new one starts.
 //!
 //! [`LogsPlugin`] installs it as the process's logger (the router is
-//! installed once; another plugin instance takes it over), declares the
+//! installed once; another plugin instance takes it over; with
+//! [`LogsPlugin::install`] off, it stays the app's own), declares the
 //! `developer.log_level` setting (`error`, `warn`, `info`, `debug`,
 //! `trace`), the `logs.reveal` command (opens the folder) and the `logs`
 //! debug collector (the file, the level, the tail). An application on
@@ -328,6 +329,7 @@ pub fn installed() -> Option<Logs> {
 #[derive(Debug)]
 pub struct LogsPlugin {
     logs: Logs,
+    install: bool,
 }
 
 impl LogsPlugin {
@@ -339,12 +341,22 @@ impl LogsPlugin {
         let name = app.rsplit('.').next().unwrap_or(app).to_lowercase();
         Self {
             logs: Logs::new(dir, &name),
+            install: true,
         }
     }
 
     /// Other logs (another directory, size, files kept).
     pub fn logs(mut self, logs: Logs) -> Self {
         self.logs = logs;
+        self
+    }
+
+    /// Whether the logs become the process's logger (on by default).
+    /// Off, they hold only what is written to them ([`Logs::write`]):
+    /// several apps in one process (tests, a simulated desktop) each keep
+    /// their own, the `log` facade's lines from the others staying out.
+    pub fn install(mut self, on: bool) -> Self {
+        self.install = on;
         self
     }
 }
@@ -365,10 +377,16 @@ impl Plugin for LogsPlugin {
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         let logs = self.logs.clone();
-        if let Err(e) = logs.install() {
-            // Still kept: the application may feed it.
-            logs.write(Level::Warn, "egui_pop", &e);
-        }
+        let routed = if self.install {
+            logs.install()
+                .inspect_err(|e| {
+                    // Still kept: the application may feed it.
+                    logs.write(Level::Warn, "egui_pop", e);
+                })
+                .is_ok()
+        } else {
+            false
+        };
         ctx.setting(
             SETTING_LEVEL,
             Descriptor::choice("Log level", &LEVELS, "info").description(
@@ -413,7 +431,12 @@ impl Plugin for LogsPlugin {
             ),
         )?;
         ctx.service(&LOGS, logs.clone())?;
-        log::info!(target: "egui_pop", "logging to {}", logs.path().display());
+        let line = format!("logging to {}", logs.path().display());
+        if routed {
+            log::info!(target: "egui_pop", "{line}");
+        } else {
+            logs.write(Level::Info, "egui_pop", &line);
+        }
         Ok(())
     }
 
