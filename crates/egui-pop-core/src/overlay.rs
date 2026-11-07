@@ -1919,10 +1919,10 @@ impl DialogLayout {
     }
 
     /// The height the body has before it scrolls: the room, less the
-    /// footer and the space above it.
+    /// footer. The footer's measure holds the space after it, as much as
+    /// the body keeps before it: the footer ends on the room's bottom.
     pub fn body_height(&self, ui: &Ui) -> f32 {
-        let spacing = ui.spacing().item_spacing.y;
-        (self.height - (ui.cursor().min.y - self.top) - self.footer - spacing).max(0.0)
+        (self.height - (ui.cursor().min.y - self.top) - self.footer).max(0.0)
     }
 
     /// Draws the body, `add` given the height it has before it scrolls
