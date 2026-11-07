@@ -7,6 +7,10 @@ section-count:
   padding-x:
     $type: "dimension"
     $value: "{space.inline}"
+  placement:
+    $type: "string"
+    $value: "end"
+    $description: "Where the count goes on the band: end (at the band's end, the title clipped before it) or after-title (right after the title, `space.inline` from it)."
   rest:
     fill:
       $type: "color"

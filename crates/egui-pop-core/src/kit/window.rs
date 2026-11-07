@@ -53,6 +53,39 @@ impl WindowCorners {
     }
 }
 
+/// Where a section's count goes on its band (`section-count.placement`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CountPlacement {
+    /// At the band's end, the title clipped before it. The default.
+    #[default]
+    End,
+    /// Right after the title, `space.inline` from it; the title still
+    /// clips to the band's room, the count after what shows of it.
+    AfterTitle,
+}
+
+/// The sections' terms of a kit beside their components' boxes.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct SectionsKit {
+    pub count_placement: CountPlacement,
+}
+
+impl SectionsKit {
+    pub(super) fn compile(t: &Tokens, problems: &mut Vec<String>) -> SectionsKit {
+        SectionsKit {
+            count_placement: choice(
+                t,
+                "section-count.placement",
+                &[
+                    ("end", CountPlacement::End),
+                    ("after-title", CountPlacement::AfterTitle),
+                ],
+                problems,
+            ),
+        }
+    }
+}
+
 /// The window's terms of a kit.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct WindowKit {

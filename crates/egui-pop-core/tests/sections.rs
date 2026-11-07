@@ -1810,3 +1810,56 @@ fn settle(h: &mut Harness<'_>) {
     }
     panic!("never settled");
 }
+
+/// Where the band's title and count are painted, in a theme placing the
+/// count `placement`.
+fn title_and_count(placement: &str) -> (egui::Rect, egui::Rect, egui::Rect) {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(300.0, 200.0))
+        .build_ui(|ui| {
+            Sections::new(NAME).show(ui, |stack| {
+                stack.section(Section::new("live", "Live").count(7), |ui| {
+                    ui.label("live row");
+                });
+            });
+        });
+    egui_pop_core::theme::install(
+        &h.ctx,
+        &egui_pop_core::theme::ThemeSpec::new("pop-dark")
+            .override_token("section-count.placement", serde_json::json!(placement)),
+    );
+    h.run();
+    h.run();
+    let painted = |text: &str| {
+        h.output()
+            .shapes
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.job.text == text => {
+                    Some(c.shape.visual_bounding_rect())
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("`{text}` painted"))
+    };
+    let band = h.get_by_role(Role::Button).rect();
+    (painted("LIVE"), painted("7"), band)
+}
+
+#[test]
+fn a_count_goes_at_the_band_s_end_or_right_after_the_title() {
+    let gap = egui_pop_core::theme::Tokens::default().space.inline;
+    let (title, count, band) = title_and_count("end");
+    assert!(band.right() - count.right() < 20.0, "{count:?} {band:?}");
+    assert!(
+        count.left() - title.right() > 3.0 * gap,
+        "{title:?} {count:?}"
+    );
+    let (title2, count2, _) = title_and_count("after-title");
+    // The title stays; the count follows it: the gap, then the pill's
+    // own padding before its text.
+    assert_eq!(title2, title);
+    let after = count2.left() - title2.right();
+    assert!(after >= gap && after < 3.0 * gap, "{title2:?} {count2:?}");
+    assert!(count2.right() < count.right());
+}

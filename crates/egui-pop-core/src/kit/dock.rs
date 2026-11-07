@@ -311,9 +311,8 @@ impl DockPainter for Kit {
         self.glyph(glyph)
             .paint(painter, mark_rect, mark.style(state).text);
 
-        // The count at the end.
-        let mut end = rect.right() - data.padding_x;
-        if let Some(n) = band.count {
+        // The count, measured first: at the end, or after the title.
+        let count = band.count.map(|n| {
             let count = &self.section_count;
             let size = if count.data.font_size > 0.0 {
                 count.data.font_size
@@ -326,23 +325,10 @@ impl DockPainter for Kit {
                 Color32::PLACEHOLDER,
             );
             let measured = count.measure(galley.size());
-            let pill = Rect::from_min_size(
-                pos2(end - measured.x, rect.center().y - measured.y / 2.0),
-                measured,
-            );
-            count.paint_part(
-                &cx,
-                &Part {
-                    rect: pill,
-                    room: pill,
-                    state: State::REST,
-                    label: Some(&galley),
-                },
-            );
-            end = pill.left() - gap;
-        }
+            (galley, measured)
+        });
 
-        // The title between them, clipped to its room.
+        // The title, after the mark.
         let role = tokens.text_role.get(TextRole::Section);
         let size = if data.font_size > 0.0 {
             data.font_size
@@ -355,6 +341,33 @@ impl DockPainter for Kit {
             FontId::new(size, family),
             Color32::PLACEHOLDER,
         );
+        let title_left = mark_rect.right() + gap;
+
+        // Where the title's room ends, and where the count goes.
+        let mut end = rect.right() - data.padding_x;
+        if let Some((count_galley, measured)) = &count {
+            end -= measured.x + gap;
+            let left = match self.sections.count_placement {
+                super::CountPlacement::End => end + gap,
+                super::CountPlacement::AfterTitle => {
+                    // After what shows of the title.
+                    let shown = galley.size().x.min(end - title_left).max(0.0);
+                    title_left + shown + gap
+                }
+            };
+            let pill =
+                Rect::from_min_size(pos2(left, rect.center().y - measured.y / 2.0), *measured);
+            self.section_count.paint_part(
+                &cx,
+                &Part {
+                    rect: pill,
+                    room: pill,
+                    state: State::REST,
+                    label: Some(count_galley),
+                },
+            );
+        }
+
         // The label's room, less the padding `paint_label` takes off.
         let start = mark_rect.right() + gap - data.padding_x;
         let room = Rect::from_x_y_ranges(start..=(end + data.padding_x).max(start), rect.y_range());
