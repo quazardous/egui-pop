@@ -1,0 +1,47 @@
+name: Promote next to main
+
+# `next` is the buffer branch between pull requests and `main`
+# (docs/testing.md, "The next branch"). Once CI passes on a push to `next`,
+# `main` fast-forwards to that exact commit, so `main` only ever holds
+# commits that passed everything. A push made with the workflow's token
+# starts no other workflow, so the site's deployment is asked for by hand.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [next]
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: promote
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Fast-forward main
+    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Fast-forward main to the commit CI passed
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          git fetch origin next
+          if git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "main already holds $SHA"; exit 0
+          fi
+          git merge-base --is-ancestor origin/main "$SHA" \
+            || { echo "::error::main has commits next lacks; merge main into next first"; exit 1; }
+          git push origin "$SHA:refs/heads/main"
+          echo "main is now $SHA"
+      - name: Deploy the site from main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main -R "${{ github.repository }}"

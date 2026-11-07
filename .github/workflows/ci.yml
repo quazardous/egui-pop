@@ -2,11 +2,20 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # `next` is the buffer branch: pull requests merge there on the quick
+    # checks, every push to it runs everything, and `main` fast-forwards to
+    # it once that is green (promote.yml; docs/testing.md, "The next branch").
+    branches: [main, next]
   pull_request:
     # `labeled`: adding the ci:full label runs everything at once, and
     # the internal label lets the changeset check pass.
     types: [opened, synchronize, reopened, labeled]
+
+# One run per push to `next`: a newer push cancels the running one, so a
+# batch of merges is checked once. Pull requests and `main` are not cancelled.
+concurrency:
+  group: ci-${{ github.event_name == 'push' && github.ref == 'refs/heads/next' && 'next' || github.run_id }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -49,11 +58,22 @@ jobs:
         env:
           FULL: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
           BASE: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           if [ "$FULL" = true ]; then
             cargo xtask affected --full --github
           else
             cargo xtask affected --base "$BASE" --github
+          fi
+          # A pull request into `next` gets the quick checks only (format,
+          # clippy, the guides' docs, licences, changesets, title): the
+          # long jobs run on `next` itself once it is merged. The last value
+          # written to GITHUB_OUTPUT wins.
+          if [ "$FULL" != true ] && [ "$BASE_REF" = next ]; then
+            for job in test book wasm package semver; do
+              echo "$job=false" >> "$GITHUB_OUTPUT"
+            done
+            echo "Into next: quick checks only; tests, docs site, wasm, packaging and semver run on next."
           fi
 
   fmt:
