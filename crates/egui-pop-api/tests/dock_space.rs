@@ -348,8 +348,9 @@ fn a_detached_window_takes_a_tab_as_a_tab_even_at_its_edge() {
     h.run();
     // kittest embeds the window in the main one: it sees the drag.
     let from = tab(&h, "Search").center();
-    let body = h.get_by_label("console body").rect();
-    let to = egui::pos2(body.left() + 2.0, body.center().y);
+    // The body's label, at the top-left of a window at least 320 points
+    // wide: in its left quarter, where an area would split.
+    let to = h.get_by_label("console body").rect().center();
     drag(&mut h, from, to);
     let over = app.window_drop().expect("the window shows its drop zone");
     assert_eq!(over.zone, DropZone::Center, "a window holds tabs, no split");
