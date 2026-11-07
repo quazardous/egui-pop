@@ -161,6 +161,14 @@ pub struct CommandSpec {
     /// toggle whose icon is the eye).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon_on: Option<String>,
+    /// A note at the end of its menu entries, muted, in the keys' column
+    /// (a version, "sessions kept"); its keys, if any, come first.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub menu_note: Option<String>,
+    /// It opens a page outside the application: its menu entries end
+    /// with ↗.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub opens_link: bool,
 }
 
 impl CommandSpec {
@@ -180,6 +188,8 @@ impl CommandSpec {
             args: Json::Null,
             icon: None,
             icon_on: None,
+            menu_note: None,
+            opens_link: false,
         }
     }
 
@@ -194,6 +204,19 @@ impl CommandSpec {
     /// The icon shown while its `checked` clause holds, by name.
     pub fn icon_on(mut self, name: &str) -> Self {
         self.icon_on = Some(name.into());
+        self
+    }
+
+    /// A note at the end of its menu entries ([`CommandSpec::menu_note`]).
+    pub fn menu_note(mut self, note: &str) -> Self {
+        self.menu_note = Some(note.into());
+        self
+    }
+
+    /// Its menu entries end with ↗: it opens a page outside the
+    /// application ([`CommandSpec::opens_link`]).
+    pub fn opens_link(mut self, link: bool) -> Self {
+        self.opens_link = link;
         self
     }
 

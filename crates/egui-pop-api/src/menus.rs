@@ -879,7 +879,9 @@ pub(crate) fn draw_popup(ctx: &Context, app: &AppHandle) {
         .open_bool(&mut open)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
-            ui.set_min_width(200.0);
+            // The kit's least width, else egui-pop's 200 points.
+            let least = Kit::of(ui.ctx()).menu_item.data.width;
+            ui.set_min_width(if least > 0.0 { least } else { 200.0 });
             show_with(ui, app, &p.menu, &p.context, &p.args);
         });
         open
@@ -978,10 +980,11 @@ pub(crate) fn rows(
         })
         .collect();
     let columns = Columns::of(ui.ctx(), app, &shown, &lists);
+    let separator = item_metrics(ui);
     for shown in shown {
         match shown {
             Shown::Separator => {
-                ui.separator();
+                ui.add(separator_line(separator));
             }
             Shown::Item {
                 item,
@@ -1056,6 +1059,47 @@ pub(crate) fn rows(
     }
 }
 
+/// Sets a menu's metrics from the kit's `menu-item` on the menu's `Ui`:
+/// its least width (`width`), a row's height (`height`) and the label's
+/// room (`padding-x`, `padding-y`); each left to egui when not given.
+/// Returns how far a separator grows past the rows into the menu's
+/// margin, from `menu-item.separator-inset` (0: edge to edge); `None`:
+/// egui's separator.
+fn item_metrics(ui: &mut Ui) -> Option<f32> {
+    let kit = Kit::of(ui.ctx());
+    let data = &kit.menu_item.data;
+    if data.width > 0.0 {
+        ui.set_min_width(data.width);
+    }
+    let s = ui.spacing_mut();
+    if data.height > 0.0 {
+        s.interact_size.y = data.height;
+    }
+    if data.padding_x > 0.0 {
+        s.button_padding.x = data.padding_x;
+    }
+    if data.padding_y > 0.0 {
+        s.button_padding.y = data.padding_y;
+    }
+    // The menu's frame keeps its margin around the rows: the line grows
+    // into it, up to the inset asked.
+    let margin = ui.style().spacing.menu_margin.leftf();
+    Tokens::of(ui.ctx())
+        .resolved()
+        .dimension("menu-item.separator-inset")
+        .map(|inset| margin - inset.max(0.0))
+}
+
+/// A menu's separator, grown by `grow` past the rows ([`item_metrics`]).
+fn separator_line(grow: Option<f32>) -> egui::Separator {
+    let separator = egui::Separator::default().horizontal();
+    match grow {
+        Some(g) if g >= 0.0 => separator.grow(g),
+        Some(g) => separator.shrink(-g),
+        None => separator,
+    }
+}
+
 /// How the rows of one menu line up: worked out once for the whole menu,
 /// so every row starts its label at the same x.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1096,14 +1140,16 @@ impl Columns {
             }
         }
         let t = Tokens::of(ctx);
-        let gutter = if icons || marks {
+        // A kit whose gutter is 0 keeps none: no icons, no marks.
+        let none = t.resolved().dimension("menu-item-gutter.width") == Some(0.0);
+        let gutter = if !none && (icons || marks) {
             Kit::of(ctx).menu_gutter(&t)
         } else {
             0.0
         };
         Columns {
             gutter,
-            icons,
+            icons: icons && !none,
             arrow,
         }
     }
@@ -1312,6 +1358,9 @@ fn command_row(
     let kit = Kit::of(&ctx);
     let item = &kit.menu_item;
     let shortcut = app.keys_for(id).first().cloned();
+    let note = spec.as_ref().and_then(|s| s.menu_note.clone());
+    let link = spec.as_ref().is_some_and(|s| s.opens_link);
+    let link_id = tick.with("link");
     // egui lays the item out and takes its clicks; the kit paints its box
     // under it (`slot`), in the state egui's button draws with.
     let slot = ui.painter().add(Shape::Noop);
@@ -1322,15 +1371,19 @@ fn command_row(
             let mut atoms: Vec<Atom<'_>> = Vec::with_capacity(5);
             atoms.extend(columns.gutter_atom(tick, side));
             atoms.push(label.atom_id(egui::IdSalt::new(text_id)));
-            if shortcut.is_some() || columns.arrow {
+            if shortcut.is_some() || note.is_some() || link || columns.arrow {
                 atoms.push(Atom::grow());
             }
+            let muted = item.style_toned(Tone::Muted, state).text;
             if let Some(k) = shortcut {
-                atoms.push(
-                    RichText::new(k)
-                        .color(item.style_toned(Tone::Muted, state).text)
-                        .into(),
-                );
+                atoms.push(RichText::new(k).color(muted).into());
+            }
+            if let Some(n) = &note {
+                atoms.push(RichText::new(n.as_str()).color(muted).into());
+            }
+            if link {
+                let s = side * 0.75;
+                atoms.push(Atom::custom(egui::IdSalt::new(link_id), vec2(s, s)));
             }
             if columns.arrow {
                 atoms.push(Atom::custom(egui::IdSalt::new(blank), vec2(side, side)));
@@ -1342,6 +1395,13 @@ fn command_row(
         })
         .inner;
     paint_item(ui, item, slot, r.response.rect, state);
+    if let Some(rect) = r.rect(egui::IdSalt::new(link_id)) {
+        paint_link(
+            ui.painter(),
+            rect,
+            item.style_toned(Tone::Muted, state).text,
+        );
+    }
     // A run waiting for the host: a spinner in the gutter, after the
     // delay.
     let busy = crate::busy::busy_shown(app, &ctx, tick, id);
@@ -1438,6 +1498,17 @@ fn command_row(
         ));
     }
     response.clicked()
+}
+
+/// The ↗ ending an entry that opens a page outside the application: an
+/// arrow up and to the right, drawn rather than a glyph a font may lack.
+fn paint_link(painter: &egui::Painter, rect: Rect, color: Color32) {
+    let r = rect.shrink(rect.width() * 0.15);
+    let stroke = Stroke::new((r.width() / 8.0).max(1.0), color);
+    painter.line_segment([r.left_bottom(), r.right_top()], stroke);
+    let head = r.width() * 0.55;
+    painter.line_segment([r.right_top(), r.right_top() + vec2(-head, 0.0)], stroke);
+    painter.line_segment([r.right_top(), r.right_top() + vec2(0.0, head)], stroke);
 }
 
 /// The state a menu item's egui button draws with this pass: its
