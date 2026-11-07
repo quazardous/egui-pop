@@ -549,6 +549,19 @@ fn size_limits(ctx: &egui::Context, least_width: f32, pos: Pos2, content: Rect) 
     (least, most)
 }
 
+/// Where the least width a palette's content took is kept, `id` being
+/// its area's.
+fn least_width_id(id: Id) -> Id {
+    id.with("least_content_width")
+}
+
+/// The least width a palette's content took, measured when it was given
+/// less room (`0` until then), `id` being its area's.
+fn least_content_width(ctx: &egui::Context, id: Id) -> f32 {
+    ctx.data(|d| d.get_temp::<f32>(least_width_id(id)))
+        .unwrap_or(0.0)
+}
+
 /// Draws `add` in a vertical scroll area `height` high, as wide as the
 /// room: a resized palette's content. Its band drags the palette, so the
 /// area scrolls by its bar and the wheel, not by a drag.
@@ -656,6 +669,9 @@ fn follow_resize(
             fl.size = Some([size.x, size.y]);
         }
         if mine.is_none() {
+            // Measured again from the new drag on: the content may have
+            // become narrower.
+            ctx.data_mut(|d| d.remove::<f32>(least_width_id(area_id(&lead))));
             wb.palette_resize = Some(PaletteResize {
                 panel: lead,
                 saved: g.size,
@@ -883,11 +899,15 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
             .panels()
             .map(|p| (p.clone(), app.panel_title(ctx, p)))
             .collect();
-        let min = specs.iter().map(|s| s.min_size).fold(0.0, f32::max);
+        // The least width: its panels' declared one, or the width their
+        // content took when it could not shrink to the room it was given
+        // (a row that does not wrap), whichever is wider.
+        let measured = least_content_width(ctx, id);
+        let min = specs.iter().map(|s| s.min_size).fold(measured, f32::max);
         let max = specs
             .iter()
             .map(|s| s.default_size.unwrap_or(320.0).max(s.min_size))
-            .fold(0.0, f32::max);
+            .fold(min, f32::max);
         // Its size once resized, between its limits.
         let margin = Kit::of(ctx)
             .palette_window
@@ -1027,6 +1047,15 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
                 edges = resize_edges(ui, id, framed.response.rect, grip, unrolled);
             });
         let rect = shown.response.rect;
+        // Content wider than the room it was given widens the frame past
+        // the band's row, whose buttons stay at the room's end: its width
+        // becomes the least one, and the pass is drawn again with it.
+        let room = inner.map_or(max, |i| i.x);
+        let took = rect.width() - margin.x;
+        if took > room + 0.5 && took > measured + 0.5 {
+            ctx.data_mut(|d| d.insert_temp(least_width_id(id), took));
+            ctx.request_discard("a palette's content is wider than its room");
+        }
         for p in g.panels() {
             rects.insert(p.clone(), rect);
         }
