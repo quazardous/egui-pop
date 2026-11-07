@@ -306,3 +306,62 @@ fn a_closing_custom_dialog_has_a_close_button() {
     assert!(s.d.is_empty());
     assert!(s.runs.borrow().is_empty());
 }
+
+/// A harness of a window size and scale, with the dialogs service.
+fn sized(window: egui::Vec2, ppp: f32) -> (Harness<'static, App>, dialogs::Dialogs, AppHandle) {
+    let app = App::builder()
+        .plugins(DefaultPlugins)
+        .plugin(Doc(Runs::default()))
+        .build(&egui::Context::default())
+        .unwrap();
+    let handle = app.handle().clone();
+    let d = (*handle.service(&dialogs::DIALOGS).unwrap()).clone();
+    let h = Harness::builder()
+        .with_size(window)
+        .with_pixels_per_point(ppp)
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    (h, d, handle)
+}
+
+/// Whether the buttons named are whole in the window.
+fn buttons_whole(h: &Harness<'static, App>, labels: &[&str], what: &str) {
+    let shell = h.ctx.content_rect();
+    for label in labels {
+        let button = h
+            .get_by_role_and_label(egui::accesskit::Role::Button, label)
+            .rect();
+        assert!(
+            shell.contains_rect(button),
+            "{what}: {label} {button:?} in {shell:?}"
+        );
+    }
+}
+
+/// A custom dialog of a set size in a window too short for it, and a
+/// confirmation: their buttons whole in the window, at one and two
+/// physical pixels a point.
+#[test]
+fn a_dialog_s_footer_stays_whole_in_a_short_window() {
+    for ppp in [1.0, 2.0] {
+        for window in [egui::vec2(900.0, 700.0), egui::vec2(640.0, 300.0)] {
+            let what = format!("{ppp} {window:?}");
+            let (mut h, d, handle) = sized(window, ppp);
+            d.open_custom(
+                &handle,
+                Custom::new("Export preview", "Export 3 images", GO).size(440.0, 600.0),
+                |ui, _, _| {
+                    ui.label("The body of the dialog");
+                },
+            )
+            .unwrap();
+            h.run();
+            h.run();
+            buttons_whole(&h, &["Cancel", "Export 3 images"], &what);
+            let (mut h, d, _) = sized(window, ppp);
+            d.open(Confirm::new("Delete?", "Delete", GO).detail("It goes for good."));
+            h.run();
+            h.run();
+            buttons_whole(&h, &["Cancel", "Delete"], &what);
+        }
+    }
+}

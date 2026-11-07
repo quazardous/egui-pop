@@ -905,13 +905,22 @@ pub fn modal_resizing(ctx: &Context, id: Id) -> bool {
 /// The largest size a modal's content can have in the window being
 /// drawn: a size above it is held back.
 pub fn modal_max_size(ctx: &Context) -> Vec2 {
+    (modal_bounds(ctx).size() - dialog_chrome(ctx)).at_least(Vec2::ZERO)
+}
+
+/// What a dialog's frame takes around its content, both sides summed:
+/// the kit `dialog`'s padding (`padding-x`, `padding-y`) and the room it
+/// keeps for its widest border of any state, on whole physical pixels
+/// (`Component::border_room`, what `Component::show` keeps). A dialog's
+/// outer size is its content's plus this; every modal is sized with it.
+pub fn dialog_chrome(ctx: &Context) -> Vec2 {
     let kit = crate::kit::Kit::of(ctx);
     let dialog = &kit.dialog;
-    let chrome = dialog
-        .frame(crate::kit::State::REST, ctx.pixels_per_point())
-        .total_margin()
-        .sum();
-    (modal_bounds(ctx).size() - chrome).at_least(Vec2::ZERO)
+    let ppp = ctx.pixels_per_point();
+    let padding = egui::vec2(dialog.data.padding_x, dialog.data.padding_y);
+    // `Frame` rounds its margin to whole points, as egui lays it out.
+    let padding = egui::vec2(padding.x.round(), padding.y.round());
+    2.0 * (padding + Vec2::splat(dialog.border_room(ppp)))
 }
 
 /// Where a resizable modal stays: the window, less the dialog's padding.
@@ -1206,10 +1215,7 @@ fn resizable_modal<R>(
     let kit = crate::kit::Kit::of(ctx);
     let rest = crate::kit::State::REST;
     let dialog = &kit.dialog;
-    let chrome = dialog
-        .frame(rest, ctx.pixels_per_point())
-        .total_margin()
-        .sum();
+    let chrome = dialog_chrome(ctx);
     let bounds = modal_bounds(ctx);
     let geometry = {
         let mut s = lock(&st);
@@ -1845,5 +1851,102 @@ mod tests {
             assert!(block_window(ui.ctx()).is_none());
             assert_eq!(ui.ctx().input(|i| i.events.len()), 1);
         });
+    }
+}
+
+/// A dialog's content laid out footer first: the footer (its buttons, a
+/// status line) always gets its whole height, at the bottom of the room,
+/// and the body takes what is left above it, scrolled when it needs more.
+///
+/// ```
+/// # let ctx = egui::Context::default();
+/// # let _ = ctx.run_ui(Default::default(), |ui| {
+/// use egui_pop_core::overlay::DialogLayout;
+///
+/// let layout = DialogLayout::new(ui, "my.dialog").fill(true);
+/// layout.body(ui, |ui, _height| {
+///     ui.label("a long body");
+/// });
+/// layout.footer(ui, |ui| {
+///     let _ = ui.button("OK");
+/// });
+/// # });
+/// ```
+///
+/// The footer's height is the one it was last drawn at (a first estimate:
+/// a row of buttons); a change asks for another pass.
+#[derive(Clone, Copy, Debug)]
+pub struct DialogLayout {
+    id: Id,
+    top: f32,
+    height: f32,
+    footer: f32,
+    fill: bool,
+}
+
+impl DialogLayout {
+    /// The layout of the content of `ui`, from where its cursor is, in the
+    /// height it has left; `id_salt` tells its footer's measure apart.
+    pub fn new(ui: &Ui, id_salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
+        let id = ui.scope_id().with(("egui_pop.dialog_layout", id_salt));
+        let spacing = ui.spacing().item_spacing.y;
+        let footer = ui
+            .ctx()
+            .data(|d| d.get_temp::<f32>(id))
+            .unwrap_or(ui.spacing().interact_size.y + spacing);
+        Self {
+            id,
+            top: ui.cursor().min.y,
+            height: ui.available_height(),
+            footer,
+            fill: false,
+        }
+    }
+
+    /// Whether the body fills the room, the footer at its bottom (a
+    /// dialog of a set size); else the body is as tall as its content, up
+    /// to the room, and the footer follows it.
+    pub fn fill(mut self, fill: bool) -> Self {
+        self.fill = fill;
+        self
+    }
+
+    /// At most this height for the body and the footer together (a
+    /// dialog sized by its content, held to the window).
+    pub fn max_height(mut self, height: f32) -> Self {
+        self.height = self.height.min(height.max(0.0));
+        self
+    }
+
+    /// The height the body has before it scrolls: the room, less the
+    /// footer and the space above it.
+    pub fn body_height(&self, ui: &Ui) -> f32 {
+        let spacing = ui.spacing().item_spacing.y;
+        (self.height - (ui.cursor().min.y - self.top) - self.footer - spacing).max(0.0)
+    }
+
+    /// Draws the body, `add` given the height it has before it scrolls
+    /// (the scroll area's own `Ui` has no end below).
+    pub fn body<R>(&self, ui: &mut Ui, add: impl FnOnce(&mut Ui, f32) -> R) -> R {
+        let height = self.body_height(ui);
+        let area = egui::ScrollArea::vertical()
+            .id_salt(self.id.with("body"))
+            .max_height(height)
+            .auto_shrink([false, !self.fill]);
+        crate::ui::UiPop::scroll_area(ui, area, |ui| add(ui, height)).inner
+    }
+
+    /// Draws the footer, after the body (at the room's bottom when the
+    /// body fills it), and keeps its height for the next pass.
+    pub fn footer<R>(self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+        let start = ui.cursor().min.y;
+        let r = add(ui);
+        let height = ui.cursor().min.y - start;
+        let kept = ui.ctx().data(|d| d.get_temp::<f32>(self.id));
+        if kept.is_none_or(|k| (k - height).abs() > 0.5) {
+            ui.ctx().data_mut(|d| d.insert_temp(self.id, height));
+            ui.ctx().request_repaint();
+        }
+        r
     }
 }

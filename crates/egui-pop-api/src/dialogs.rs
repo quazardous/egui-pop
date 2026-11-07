@@ -1403,7 +1403,11 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     // The ✕ is shown only where Escape works.
     let closable = closable && spec.dismiss_on_escape;
     if let Dialog::Custom(c) = &open_dialog.dialog {
-        spec = spec.width(c.body_size(ctx.content_rect().size()).x);
+        spec = spec.width(
+            c.body_size(ctx.content_rect().size())
+                .x
+                .min(overlay::modal_max_size(&ctx).x),
+        );
         if c.claims_key(ClaimKey::Escape) {
             // The body sees Escape first; the dialog cancels after it.
             spec = spec.keep_on_escape();
@@ -1506,7 +1510,19 @@ fn custom_body(
         let command = i.modifiers.command || i.modifiers.ctrl;
         (pressed && !command && !i.modifiers.alt, pressed && command)
     });
-    let size = c.body_size(ui.ctx().content_rect().size());
+    // The body's size, held to what the window leaves it once the frame,
+    // the header above and the footer below have theirs: the footer stays
+    // whole in the window.
+    let size = {
+        let t = Tokens::of(ui.ctx());
+        let spacing = ui.spacing().item_spacing.y;
+        let above = ui.cursor().min.y - ui.min_rect().top();
+        let below = t.space.m + ui.spacing().interact_size.y + 2.0 * spacing;
+        let room = overlay::modal_max_size(ui.ctx()) - egui::vec2(0.0, above + below);
+        c.body_size(ui.ctx().content_rect().size())
+            .min(room)
+            .max(Vec2::ZERO)
+    };
     let mut pass = CustomPass {
         values: std::mem::take(values),
         ready: *ready,

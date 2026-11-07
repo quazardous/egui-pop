@@ -4087,3 +4087,71 @@ fn setting_native(app: &egui_pop_api::AppHandle) -> Option<bool> {
         .get(&format!("settings/{}", files::SETTING_NATIVE))
         .and_then(|e| e.value.as_bool())
 }
+
+/// The picker's footer, its buttons whole, inside the dialog and the
+/// window: at the default size and at the least, in a window too short for
+/// the least, at one and two physical pixels a point, choosing a folder (an
+/// empty one, whose list says it shows nothing) and a file.
+#[test]
+fn the_footer_stays_whole_at_every_size_and_scale() {
+    let root = tree("footer-sizes");
+    std::fs::create_dir_all(root.join("empty")).unwrap();
+    for ppp in [1.0, 2.0] {
+        for (window, request) in [
+            (
+                egui::vec2(1280.0, 800.0),
+                FileRequest::open("Open").directory(&root),
+            ),
+            (
+                egui::vec2(1280.0, 800.0),
+                FileRequest::folder("Folder").directory(root.join("empty")),
+            ),
+            // Shorter than the picker's least size: the window holds it.
+            (
+                egui::vec2(700.0, 300.0),
+                FileRequest::folder("Folder").directory(root.join("empty")),
+            ),
+        ] {
+            let app = App::builder()
+                .plugin(FilesPlugin::in_app())
+                .build(&egui::Context::default())
+                .map(no_system_places)
+                .unwrap();
+            let mut h = Harness::builder()
+                .with_size(window)
+                .with_pixels_per_point(ppp)
+                .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+            let folder = request.kind == files::ChooseKind::Folder;
+            let _p = choose(&mut h, request);
+            let shell = h.ctx.content_rect();
+            let at = dialog(&h);
+            assert!(
+                shell.contains_rect(at),
+                "{ppp} {window:?}: {at:?} in {shell:?}"
+            );
+            let verb = if folder { "Choose this folder" } else { "Open" };
+            for label in ["Cancel", verb] {
+                let button = h.get_by_role_and_label(Role::Button, label).rect();
+                assert!(
+                    at.contains_rect(button),
+                    "{ppp} {window:?}: {label} {button:?} in {at:?}"
+                );
+            }
+            // At the least size too, where the window allows it.
+            drag(
+                &mut h,
+                at.max - egui::vec2(2.0, 2.0),
+                egui::vec2(-2000.0, -2000.0),
+            );
+            let least = dialog(&h);
+            for label in ["Cancel", verb] {
+                let button = h.get_by_role_and_label(Role::Button, label).rect();
+                assert!(
+                    least.contains_rect(button),
+                    "{ppp} {window:?} least: {label} {button:?} in {least:?}"
+                );
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+}
