@@ -2660,7 +2660,6 @@ pub struct FilePicker {
     /// The splitter is being dragged.
     pane_dragging: bool,
     /// The height of what comes below the list, as last drawn.
-    footer_height: Option<f32>,
     /// The cells in a row of the grid, as last drawn.
     columns: usize,
     /// The grid brings the highlighted cell into view at the next frame.
@@ -2752,7 +2751,6 @@ impl FilePicker {
             ctx: None,
             focused: false,
             pane_dragging: false,
-            footer_height: None,
             columns: 1,
             reveal_cell: false,
             focus_cell: false,
@@ -3731,13 +3729,40 @@ impl FilePicker {
         (own, None)
     }
 
-    /// Draws the picker; its answer when given.
+    /// Draws the picker; its answer when given. Drawn to fill its room
+    /// (`fill`, a dialog), its footer keeps its whole height at the
+    /// bottom and what is above it scrolls when the room runs short
+    /// ([`overlay::DialogLayout`]).
     pub fn show(&mut self, ui: &mut Ui, places: &Places) -> Option<PickerAnswer> {
+        let mut answer = None;
+        if self.fill {
+            let layout = overlay::DialogLayout::new(ui, "egui_pop.files.picker").fill(true);
+            layout.body(ui, |ui, height| {
+                self.show_body(ui, places, Some(height), &mut answer);
+            });
+            layout.footer(ui, |ui| self.show_footer(ui, &mut answer));
+        } else {
+            self.show_body(ui, places, None, &mut answer);
+            self.show_footer(ui, &mut answer);
+        }
+        answer
+    }
+
+    /// The picker above its footer: the toolbar, the path field, the
+    /// places, the list and the preview; the list takes what `height`
+    /// leaves (none: `LIST_HEIGHT`).
+    fn show_body(
+        &mut self,
+        ui: &mut Ui,
+        places: &Places,
+        height: Option<f32>,
+        answer: &mut Option<PickerAnswer>,
+    ) {
+        let top = ui.cursor().min.y;
         let t = Tokens::of(ui.ctx());
         self.ctx = Some(ui.ctx().clone());
         let first = !self.focused;
         self.focused = true;
-        let mut answer = None;
         // Under its question: drawn, but neither the pointer nor the keys
         // are its own.
         let waiting = self.asking.is_some();
@@ -3885,7 +3910,7 @@ impl FilePicker {
             };
             let r = ui.button(strings::tr(ui.ctx(), label));
             if r.clicked() {
-                answer = Some(PickerAnswer::Bookmark(self.dir.clone(), !bookmarked));
+                *answer = Some(PickerAnswer::Bookmark(self.dir.clone(), !bookmarked));
                 self.refocus |= by_pointer(&r);
             }
             if self.makes_folders() {
@@ -3907,10 +3932,10 @@ impl FilePicker {
         }
         let mut back_to_field = false;
         if self.naming.is_some() {
-            back_to_field = self.naming_row(ui, &mut answer);
+            back_to_field = self.naming_row(ui, answer);
         }
         if bookmark {
-            answer = Some(PickerAnswer::Bookmark(self.dir.clone(), !bookmarked));
+            *answer = Some(PickerAnswer::Bookmark(self.dir.clone(), !bookmarked));
         }
         if parent {
             self.up();
@@ -4021,15 +4046,11 @@ impl FilePicker {
             self.reveal_cell = true;
         }
         ui.add_space(t.space.s);
-        let list_height = if self.fill {
-            // What comes below the list keeps its room: its height as
-            // last drawn, or the row of buttons and the space above it.
-            let footer = self.footer_height.unwrap_or_else(|| {
-                ui.spacing().interact_size.y + t.space.m + ui.spacing().item_spacing.y
-            });
-            (ui.available_height() - footer).max(ui.spacing().interact_size.y)
-        } else {
-            LIST_HEIGHT
+        // The list takes what the room leaves under what is above it (the
+        // footer is kept apart, see `show`); at its least, the body scrolls.
+        let list_height = match height {
+            Some(h) => (h - (ui.cursor().min.y - top)).max(ui.spacing().interact_size.y),
+            None => LIST_HEIGHT,
         };
         ui.horizontal_top(|ui| {
             // Places.
@@ -4042,7 +4063,7 @@ impl FilePicker {
                         .auto_shrink([false, true]),
                     |ui| {
                         if let Some(a) = self.side_bar(ui, places) {
-                            answer = Some(a);
+                            *answer = Some(a);
                         }
                     },
                 );
@@ -4096,9 +4117,9 @@ impl FilePicker {
                     &sorted
                 };
                 if grid {
-                    self.grid(ui, shown, height, &mut answer);
+                    self.grid(ui, shown, height, answer);
                 } else {
-                    self.list(ui, shown, &columns, row_width, height, &mut answer);
+                    self.list(ui, shown, &columns, row_width, height, answer);
                 }
             });
             if let Some(pane_width) = pane_width {
@@ -4136,12 +4157,17 @@ impl FilePicker {
             let _ = self.select_all();
         }
         if enter && answer.is_none() {
-            answer = self.activate();
+            *answer = self.activate();
         }
         if accept && answer.is_none() {
-            answer = self.accept();
+            *answer = self.accept();
         }
-        let footer_top = ui.cursor().min.y;
+    }
+
+    /// The picker's footer: an error, the selection's line, the choices,
+    /// the filters, the toggles and the buttons.
+    fn show_footer(&mut self, ui: &mut Ui, answer: &mut Option<PickerAnswer>) {
+        let t = Tokens::of(ui.ctx());
         if let Some(e) = &self.error {
             ui.colored_label(t.status.danger, e);
         }
@@ -4234,19 +4260,13 @@ impl FilePicker {
                     ChooseKind::Folder => &txt::PICKER_CHOOSE_FOLDER,
                 };
                 if ui.button(strings::tr(ui.ctx(), verb)).clicked() {
-                    answer = answer.take().or_else(|| self.accept());
+                    *answer = answer.take().or_else(|| self.accept());
                 }
                 if ui.button(strings::tr(ui.ctx(), &CANCEL)).clicked() {
-                    answer = Some(PickerAnswer::Cancel);
+                    *answer = Some(PickerAnswer::Cancel);
                 }
             });
         });
-        let footer = ui.cursor().min.y - footer_top;
-        if self.footer_height != Some(footer) {
-            self.footer_height = Some(footer);
-            ui.ctx().request_repaint();
-        }
-        answer
     }
 }
 

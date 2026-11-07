@@ -419,7 +419,14 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                 .filter(|c| secs.contains(c))
                 .unwrap_or_else(|| secs[0].clone());
             let filter = s.filter.trim().to_string();
-            let height = (ui.ctx().content_rect().height() * 0.6).max(240.0);
+            // 60 % of the window, 240 points at least, but never more than
+            // the modal has left under what is above the form: the
+            // window is the limit.
+            let above = ui.cursor().min.y - ui.min_rect().top();
+            let left = egui_pop_core::overlay::modal_max_size(ui.ctx()).y - above;
+            let height = (ui.ctx().content_rect().height() * 0.6)
+                .max(240.0)
+                .min(left.max(0.0));
             // The form's width: the window's, less the tree (a scroll area in
             // a modal would otherwise grow without end).
             let form_width = (ui.max_rect().width() - 220.0).max(240.0);
