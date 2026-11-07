@@ -210,6 +210,13 @@ fn the_rows_at_the_time_cursor_are_selected_and_a_click_moves_the_cursor() {
     h.run();
     h.run();
     assert_eq!(h.state().cursor, Some(9.0));
+    // A click on a row's text picks the row too: the cells' labels do
+    // not take the click to select their text.
+    h.get_by_label("line 000011").click();
+    h.run();
+    h.run();
+    assert_eq!(h.state().cursor, Some(11.0));
+    assert_eq!(h.state().picked, Some(11));
 
     // Every line at the cursor's time.
     h.state_mut().cursor = Some(20.5);

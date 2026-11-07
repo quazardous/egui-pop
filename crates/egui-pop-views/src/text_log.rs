@@ -828,6 +828,10 @@ impl TableRows<usize> for Rows<'_> {
                 .layout(Layout::left_to_right(Align::Center)),
         );
         let ui = &mut child;
+        // A selectable label senses clicks and sits above the row: a
+        // click on a time, an entity or a body would select its text
+        // instead of picking the row.
+        ui.style_mut().interaction.selectable_labels = false;
         match column {
             0 => {
                 let text = format_time(self.scale, self.source.time(e));
