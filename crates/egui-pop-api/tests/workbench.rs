@@ -506,11 +506,12 @@ fn an_application_bounds_the_shell_panels_and_keeps_room_for_the_centre() {
     assert!((start - 220.0).abs() < 2.0, "{start}");
     assert!((end - 240.0).abs() < 2.0, "{end}");
     // A least size above the starting one: the area starts at its least.
-    let (start, ..) = sides(
-        builder(false).shell_panel_min_size(PANEL_SIDE_BAR, 260.0),
+    // (The side bar zone has no block here: the start side is the tree's.)
+    let (_, _, end) = sides(
+        builder(false).shell_panel_min_size(PANEL_INSPECTOR, 300.0),
         1280.0,
     );
-    assert!((start - 260.0).abs() < 2.0, "{start}");
+    assert!((end - 300.0).abs() < 2.0, "{end}");
     // A largest size as a share of the window.
     let (_, _, end) = sides(
         builder(false)
@@ -526,8 +527,7 @@ fn an_application_bounds_the_shell_panels_and_keeps_room_for_the_centre() {
     // their own least.
     let (start, centre, end) = sides(
         builder(false)
-            .shell_panel_size(PANEL_SIDE_BAR, 600.0)
-            .shell_panel_size(PANEL_INSPECTOR, 600.0)
+            .shell_panel_size(PANEL_INSPECTOR, 1000.0)
             .shell_panel_min_size(PANEL_INSPECTOR, 260.0)
             .centre_min_size(320.0),
         1280.0,
