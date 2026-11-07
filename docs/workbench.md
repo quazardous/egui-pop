@@ -15,6 +15,19 @@ tabs, rows, columns and grids over [egui_stack](https://github.com/quazardous/eg
 saves where the user put them and repairs that layout at the next start.
 The shell's side bar, main and inspector zones are panels of their areas.
 
+**One dock space.** The areas are the named docks of one egui_stack
+`DockSpace` (`center`, `start_side`, `end_side`, `bottom`). The
+workbench lays the areas out (a side area's width, its fold and flyout,
+an area lying over the centre, the bottom panel's alignment) and draws
+each area's dock where it put the area; the docks share one drag, so a
+tab goes from any area to any other as it goes inside one. Each area's
+rules are its dock's: any split, as inside one area; never one of
+egui_stack's floating windows (a panel leaves the main window through
+Detach, into a window of its own); kept when it is empty, so a closed
+area stays a drop target. The layout document keeps one tree per area,
+as before the space: a layout saved before reads as it did, each area's
+tree becoming its dock's.
+
 **The starting layout.** Without a saved layout, every panel starts in
 its default area. `AppBuilder::layout` gives the layout to start with
 instead (the panels' areas, tabs and splits, the closed panels, the
@@ -157,10 +170,9 @@ tab bar, the place among its tabs. The zone is the kit's `dock-preview`
 (its `rest` border and fill, the fill at its `opacity`), so it follows
 the theme like the hint between areas; the same tokens feed egui_stack's
 `OverlayStyle::zone_fill`, `zone_stroke` and `zone_corner_radius`. A tab
-dropped outside the dock opens in a window of its own when its panel
-may detach. A drop on the edge of a group in a row (a column) joins
-that row (that column) rather than nesting a split, and a drop beside a
-group in a grid joins the grid.
+dropped outside every area stays where it was. A drop on the edge of a
+group in a row (a column) joins that row (that column) rather than
+nesting a split, and a drop beside a group in a grid joins the grid.
 
 **Rows, columns and grids.** An area holds groups of tabs in rows,
 columns and grids, nested. "Arrange as grid" (`workbench.arrange.grid`)
@@ -179,25 +191,29 @@ grid as a node of kind `grid` (`columns`, `col_shares`, `row_shares`,
 second side, each `ratio` the share of its first side. Layouts saved
 before grids read as they did.
 
-A tab dragged onto another area moves
-there when its rules allow it; otherwise the drop hint says why. Over
-an area it may go to, the hint (the kit's `dock-preview`) carries a
-ghost of the dragged tab (the kit's `tab-preview`, with the tab's title
-and width as laid out once per drag) where the drop puts it: after the
-last tab of the area's first tab bar, or at the top of an area drawn
-bare or closed. A refused drop shows no ghost. The tabs already there
-are not pushed aside, and the ghost is always at the end: egui_stack
-only follows a drag within its own area, so it gives no insertion
-index for a tab coming from another one, and a drop on an area appends
-to its first tabs (making room live and dropping between tabs are
-possible follow-ups). A palette dragged over an area it docks in gets
-the same ghost. The hint is published like an overlay:
-`AppHandle::drop_hint` (panel, area, rect, refusal, and `preview`, the
-ghost's area, index among the tabs it joins and rect), `overlay_rects`
+**Between areas.** A tab dragged onto another area gets the same zones
+there, with the same preview: the middle of a group joins its tabs, an
+edge splits the group on that side, a tab bar takes it between two tabs.
+An area its panel stays out of (`PanelSpec::only_in`, or content the
+area cannot host) refuses it: the zone shows disabled, with the reason
+("Log stays out of the start side bar"), and a drop there changes
+nothing. A closed side or bottom area is offered along the areas' edge
+(a band of 48 points), an area drawn bare (a zone alone, without a tab
+bar) over its whole rect: dropped there, the tab joins its tabs. Once
+the tab is dropped in another area, the move goes through the
+`workbench.move` step (`panel`, `area`): a plugin's veto puts the tab
+back where it was, a redirect sends it to the area the step names. A
+palette dragged over an area it docks in shows the hint with a ghost of
+its tab (the kit's `tab-preview`) after the area's first tabs.
+
+The hint is published like an overlay: `AppHandle::drop_hint` (panel,
+area, rect, refusal, `zone`, the egui_stack `DropZone` (`Center` to join
+tabs, an edge to split), `index` among the tabs it would join, and for a
+palette `preview`, its ghost's area, index and rect), `overlay_rects`
 (kind `DropHint`, named `drop:<panel>:<area>`), and the debug bridge's
-`workbench` collector (`drop_hint.preview: {area, index, rect}`), which
-also shows the layout, each area's rect, the focused panel and the tab
-being dragged.
+`workbench` collector (`drop_hint: {name, panel, area, rect, refusal,
+zone, index, preview}`), which also shows the layout, each area's rect,
+the focused panel and the tab being dragged.
 
 ### The focused panel
 

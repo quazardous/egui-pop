@@ -4,8 +4,10 @@ Status: analysis, 2026-11-03. Nothing here is decided; the sections and
 toolbars direction is accepted in [ADR 0022](adr/0022-sections-and-toolbars-in-egui-stack.md).
 Since then egui-pop has moved to egui 0.37 and draws its docks with
 egui_stack, which has the first changes listed at the end of this page;
-the workarounds those changes allow egui-pop to drop are still in place,
-to be removed one by one.
+the workarounds those changes allow egui-pop to drop are removed one by
+one. Since 2026-11-07 the workbench's areas are the docks of one
+egui_stack `DockSpace` (2.1, direction D): the drag between areas, the
+private drag id and the drop hint drawn by egui-pop are gone.
 
 [egui_stack](https://github.com/quazardous/egui_stack) continues
 [egui_dock](https://github.com/anhosh/egui_dock) (MIT, its full history
@@ -37,13 +39,13 @@ holds for the other.
 | `crates/egui-pop-api/src/workbench.rs:127` | The one import: `DockArea`, `DockState`, `NodeIndex`, `Split`, `TabViewer`. |
 | `workbench.rs:1528-1600` | `to_dock`, `fill`, `from_dock`, `read`: egui-pop's own layout tree converted to a `DockState` and read back. |
 | `workbench.rs:798-830` | `layout`, `read_back`, `project`: the layout document is the truth, the docks a projection of it, rebuilt when it changed outside them. |
-| `workbench.rs:1230-1243` | `take_dock`, `put_dock`: one `DockState` per area, taken out while drawn. |
-| `workbench.rs:1258-1274` | `dragged_tab`: rebuilds egui_dock's private drag id (`show/leaf.rs`) to know which tab egui is dragging. |
+| `workbench.rs:1230-1243` | `take_dock`, `put_dock`: one `DockState` per area, taken out while drawn (since 2026-11-07, one `DockSpace` for every area). |
+| `workbench.rs:1258-1274` | `dragged_tab`: rebuilds egui_dock's private drag id (`show/leaf.rs`) to know which tab egui is dragging (gone 2026-11-07: `DockArea::dragged_tab`). |
 | `workbench.rs:2571-2614` | `draw_dock`: one `DockArea` per area with close, add, close-all and collapse buttons off, then the kit paints over it. |
 | `workbench.rs:2668-2694` | `dock_style`: egui_dock's tab painting made transparent. |
 | `workbench.rs:2785-2850` | `paint_tabs`: the kit paints the bars and tabs over what egui_dock laid out. |
 | `workbench.rs:2852-2970` | `TabViewer` for panels: `id`, `title`, `ui`, `on_tab_button`, `tab_style_override`, `context_menu`, `allowed_in_windows`. |
-| `workbench.rs:2972-3093` | `follow_drag`, `drop_hint`: drops between areas, the veto, the hint and the ghost tab, done by egui-pop. |
+| `workbench.rs:2972-3093` | `follow_drag`, `drop_hint`: drops between areas, the veto, the hint and the ghost tab, done by egui-pop (gone 2026-11-07: the space's drag, `dock_drop_allowed`). |
 | `crates/egui-pop-api/tests/theme_pairs.rs:183`, `crates/egui-pop-gallery/tests/gallery.rs:1766` | Tests that lean on egui_dock's drag timing. |
 
 egui-pop builds egui_dock without features (`Cargo.toml:87`): it never
@@ -184,7 +186,7 @@ layout document and arranges by command (`workbench.arrange`).
 **Today.** egui_stack's only veto is `allowed_in_windows(tab)` (egui_stack
 `src/widgets/tab_viewer.rs:93`, read at `show/mod.rs:222-230` and
 `leaf.rs:1414-1423`) and the global `AllowedSplits`
-([upstream](upstream.md#egui_stack-no-drop-between-two-docks)).
+(an entry of [upstream](upstream.md) until 2026-11-07).
 egui-pop panels declare the areas they may live in, so each area is a
 dock of its own, windows are refused (`workbench.rs:2965`), and a drag
 leaving an area is followed by egui-pop: it guesses the dragged tab by
@@ -217,6 +219,32 @@ Removes: `dragged_tab`, `follow_drag`'s guesswork, the ghost at the end,
 the workaround entry in `docs/upstream.md`. (1) and (2) are small; (3)
 is a redesign of the workbench's drawing and is worth it only after (1)
 has proved itself.
+
+**Done (2026-11-07), (3) in another shape.** egui_stack 0.25.1's
+`DockSpace`: several named docks, each a surface of one `DockState`,
+each drawn by its own `DockArea::dock(&mut space, name)` call wherever
+the application lays it out, sharing one drag (the first call of a pass
+resolves it for every dock). No fixed nodes were needed: an area is a
+dock, not a split of one tree, so egui-pop keeps laying the areas out
+(widths, folds, flyouts, an area lying over the centre) and draws each
+dock in its area. What changed in egui-pop:
+
+- each area is a dock named after it, with `DockRules` (any split, no
+  floating window, kept when empty); a panel's area rules are
+  `TabViewer::dock_drop_allowed`, a refusal shown on the zone with its
+  reason;
+- a closed area is an empty dock drawn along the areas' edge while a tab
+  drags, an area drawn bare (a zone alone) a second, empty dock over it
+  whose drops join the area's tabs;
+- the move between areas is still the `workbench.move` step, run after
+  egui_stack's drop: a veto puts the areas back as they were (the
+  `on_move` hook above stays a possible egui_stack addition);
+- gone: `dragged_tab` and its private id (`DockArea::dragged_tab` on the
+  space's id), `area_at`, the cross-area move and the hint and ghost
+  drawn by egui-pop; the drop hint is now what egui_stack resolved
+  (`DropHint::zone`, `index`), its rect where the kit painted the zone;
+- the layout document is unchanged: each area's tree becomes its dock
+  through `DockSpace::from_states`.
 
 ### 2.2 Tab context menus and commands
 
@@ -591,7 +619,7 @@ Ranked by benefit for cost, risk last.
 | 6 | **S** A versioned plain `LayoutTree<T>` (4) | Medium | Low to medium | Low |
 | 7 | **P** Sections and a toolbar row as plain-egui cores (5, ADR 0022) | High for egui_stack, medium for egui-pop | Medium | Medium |
 | 8 | **N** n-ary linear nodes with shares, stable ids, a sections container kind (6) | High, long term | High | High |
-| 9 | **D** One dock for the whole workbench, moves through a hook (2.1, item 3) | Medium: insertion and splits across areas | High | Medium |
+| 9 | **D** One dock for the whole workbench, moves through a hook (2.1, item 3); done 2026-11-07 as a `DockSpace` | Medium: insertion and splits across areas | High | Medium |
 | 10 | **W** OS windows through a host hook, then drops between windows (2.6, 3) | Medium, later | High, partly blocked upstream | Medium |
 
 ## Recommended order
@@ -607,7 +635,9 @@ Ranked by benefit for cost, risk last.
    2026-11-04, egui_stack 0.22.2), then the toolbar row, once sections'
    behaviour has settled.
 5. S, the layout value, folded into egui-pop's `layout` document version 3.
-6. N, then D, as one redesign of the tree, decided by its own ADR.
+6. N, then D, as one redesign of the tree, decided by its own ADR (D
+   done first, 2026-11-07, as egui_stack's `DockSpace`: no tree redesign
+   needed).
 7. W when eframe can drag between viewports.
 
 ## First egui_stack changes, issue-sized
