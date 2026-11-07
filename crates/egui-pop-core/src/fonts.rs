@@ -34,9 +34,17 @@
 //! the regular weight of `ui` and `mono`, so egui's own widgets follow the
 //! theme too.
 //!
-//! [`install`] runs with the theme (`theme::install_tokens`); it replaces
-//! egui's font definitions only when the families or the registered faces
-//! changed (one slow frame: egui rebuilds its atlas).
+//! Where a role's glyphs sit in their row is the theme's too
+//! (`font.baseline-offset.ui`, `font.baseline-offset.mono`, a share of
+//! the size, 0 by default): every face of the role's chain, egui's
+//! fallbacks included, is drawn that much lower (`FontTweak::y_offset_factor`),
+//! under a key of its own ([`BaselineOffsets`]). It moves the glyphs, not
+//! the row: the layout keeps its sizes.
+//!
+//! [`install_with_offsets`] runs with the theme (`theme::install_tokens`);
+//! it replaces egui's font definitions only when the families, their
+//! offsets or the registered faces changed (one slow frame: egui rebuilds
+//! its atlas).
 //!
 //! Any family can also be drawn by name, outside the theme's roles, as a
 //! [`specimen`] (a picker drawing each name in its own face, a page
@@ -84,6 +92,27 @@ impl Role {
         match self {
             Role::Ui => "font.family.ui",
             Role::Mono => "font.family.mono",
+        }
+    }
+}
+
+/// How far each role's glyphs are drawn below their place, a share of
+/// the text's size (`font.baseline-offset.ui`, `font.baseline-offset.mono`):
+/// 0.1 at 14 points moves them 1.4 points down, a negative share moves
+/// them up. The text's row keeps its height; only the glyphs move, as
+/// egui's `FontTweak::y_offset_factor` does. 0 for both by default.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct BaselineOffsets {
+    pub ui: f32,
+    pub mono: f32,
+}
+
+impl BaselineOffsets {
+    /// A role's offset.
+    pub fn get(self, role: Role) -> f32 {
+        match role {
+            Role::Ui => self.ui,
+            Role::Mono => self.mono,
         }
     }
 }
@@ -741,7 +770,7 @@ pub fn register_files(ctx: &Context, files: &[FontFile]) -> Vec<String> {
 /// changed.
 pub fn reinstall(ctx: &Context) -> Option<Arc<Report>> {
     let (key, _) = INSTALLED.get(ctx)?;
-    Some(install(ctx, &key.ui, &key.mono))
+    Some(install_with_offsets(ctx, &key.ui, &key.mono, key.offsets))
 }
 
 /// The egui family drawing a family by its name at a weight, outside
@@ -1206,6 +1235,7 @@ struct Key {
     /// The faces given as the system's ([`set_system_faces`]), 0 for
     /// the system's own.
     system: u64,
+    offsets: BaselineOffsets,
 }
 
 const GENERIC: [&str; 5] = [
@@ -1218,8 +1248,26 @@ const GENERIC: [&str; 5] = [
 
 /// Installs the families named by the theme's tokens, with the
 /// registered faces, unless they are already installed. In use from the
-/// next pass. The icon font (`icon::install`) is kept.
+/// next pass. The icon font (`icon::install`) is kept, and so are the
+/// baseline offsets installed last ([`install_with_offsets`]; none at
+/// first).
 pub fn install(ctx: &Context, ui: &[String], mono: &[String]) -> Arc<Report> {
+    let offsets = INSTALLED
+        .get(ctx)
+        .map(|(k, _)| k.offsets)
+        .unwrap_or_default();
+    install_with_offsets(ctx, ui, mono, offsets)
+}
+
+/// [`install`], each role's glyphs drawn `offsets` of their size lower
+/// ([`BaselineOffsets`]): what the theme's `font.baseline-offset.*`
+/// tokens give.
+pub fn install_with_offsets(
+    ctx: &Context,
+    ui: &[String],
+    mono: &[String],
+    offsets: BaselineOffsets,
+) -> Arc<Report> {
     let registered = REGISTERED.get_or_default(ctx);
     let specimens = SPECIMENS.get_or_default(ctx);
     let preview = PREVIEW.get_or_default(ctx);
@@ -1231,6 +1279,7 @@ pub fn install(ctx: &Context, ui: &[String], mono: &[String]) -> Arc<Report> {
         preview: preview.clone(),
         generation: registered.generation,
         system: system.generation(),
+        offsets,
     };
     if let Some((k, report)) = INSTALLED.get(ctx)
         && k == key
@@ -1238,7 +1287,7 @@ pub fn install(ctx: &Context, ui: &[String], mono: &[String]) -> Arc<Report> {
         return report;
     }
     let (mut defs, mut report, drawing) =
-        definitions_and_faces(&registered.faces, ui, mono, &preview, &system);
+        definitions_and_faces(&registered.faces, ui, mono, &preview, &system, offsets);
     add_specimens(
         &mut defs,
         &mut report,
@@ -1468,6 +1517,30 @@ fn preview_family_name(role: Role, weight: Weight) -> FontFamily {
     )
 }
 
+/// A chain's faces drawn `offset` of their size lower: each face under a
+/// key of its own (`<key>@y<offset>`), the same bytes with the offset
+/// added to its tweak, so a face both roles share moves for one only.
+/// The keys unchanged at 0.
+fn offset_keys(defs: &mut FontDefinitions, keys: Vec<String>, offset: f32) -> Vec<String> {
+    if offset == 0.0 {
+        return keys;
+    }
+    keys.into_iter()
+        .map(|k| {
+            let moved = format!("{k}@y{offset}");
+            if !defs.font_data.contains_key(&moved) {
+                let Some(data) = defs.font_data.get(&k) else {
+                    return k;
+                };
+                let mut data = (**data).clone();
+                data.tweak.y_offset_factor += offset;
+                defs.font_data.insert(moved.clone(), Arc::new(data));
+            }
+            moved
+        })
+        .collect()
+}
+
 /// Adds faces to a chain, each once: a face already in it (egui's
 /// Ubuntu named by the theme, then reached again through `sans-serif`)
 /// keeps its first place, so egui never gets the same face twice in a
@@ -1488,7 +1561,8 @@ fn definitions(
     preview: &Previews,
     system: &System,
 ) -> (FontDefinitions, Report) {
-    let (defs, report, _) = definitions_and_faces(faces, ui, mono, preview, system);
+    let (defs, report, _) =
+        definitions_and_faces(faces, ui, mono, preview, system, BaselineOffsets::default());
     (defs, report)
 }
 
@@ -1500,6 +1574,7 @@ fn definitions_and_faces(
     mono: &[String],
     preview: &Previews,
     system: &System,
+    offsets: BaselineOffsets,
 ) -> (FontDefinitions, Report, [Vec<InstalledFace>; 2]) {
     let mut drawing: [Vec<InstalledFace>; 2] = Default::default();
     let mut defs = FontDefinitions::default();
@@ -1568,6 +1643,8 @@ fn definitions_and_faces(
                     }
                 }
             }
+            let offset = offsets.get(role);
+            let chain = offset_keys(&mut defs, chain, offset);
             let fam = family(role, weight);
             if let FontFamily::Name(n) = &fam {
                 report.primary.push((n.to_string(), primary));
@@ -1586,8 +1663,8 @@ fn definitions_and_faces(
             // never empty, never less than what the role draws.
             let previewed = match &preview[at] {
                 Some(list) => {
-                    let mut c =
-                        chain_at(&mut defs, list, weight, faces, &bundled_faces, system).keys;
+                    let c = chain_at(&mut defs, list, weight, faces, &bundled_faces, system).keys;
+                    let mut c = offset_keys(&mut defs, c, offset);
                     extend_unique(&mut c, &chain);
                     c
                 }
@@ -2795,5 +2872,66 @@ mod tests {
         assert_eq!(json["weight"], 400);
         assert!(json["path"].as_str().unwrap().ends_with("inter.ttf"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The first glyph of `text` in a role at `size`: where egui places
+    /// it in its row, and how far down its image is drawn from there.
+    fn glyph_at(ctx: &Context, role: Role, size: f32, text: &str) -> (f32, f32, egui::Vec2) {
+        let galley = ctx.fonts_mut(|f| {
+            f.layout_no_wrap(
+                text.into(),
+                font_id(role, Weight::REGULAR, size),
+                Color32::WHITE,
+            )
+        });
+        let g = galley.rows[0].glyphs[0];
+        (g.pos.y, g.uv_rect.offset.y, galley.size())
+    }
+
+    #[test]
+    fn a_baseline_offset_moves_a_role_s_glyphs_by_its_share_of_the_size() {
+        let ctx = Context::default();
+        let t = crate::theme::install(&ctx, &crate::theme::ThemeSpec::new("pop-dark"));
+        // The built-in themes move nothing: the faces keep their keys.
+        assert_eq!(t.font.baseline_offsets, BaselineOffsets::default());
+        assert!(
+            report(&ctx)
+                .unwrap()
+                .chains
+                .iter()
+                .all(|(_, keys)| keys.iter().all(|k| !k.contains("@y"))),
+            "no face moved by default"
+        );
+        pass(&ctx);
+        let ui_before = glyph_at(&ctx, Role::Ui, 20.0, "H");
+        let mono_before = glyph_at(&ctx, Role::Mono, 20.0, "H");
+        let t = crate::theme::install(
+            &ctx,
+            &crate::theme::ThemeSpec::new("pop-dark")
+                .override_token("font.baseline-offset.ui", serde_json::json!(0.1)),
+        );
+        assert_eq!(t.font.baseline_offsets.ui, 0.1);
+        assert_eq!(t.font.baseline_offsets.mono, 0.0);
+        pass(&ctx);
+        let ui_after = glyph_at(&ctx, Role::Ui, 20.0, "H");
+        let mono_after = glyph_at(&ctx, Role::Mono, 20.0, "H");
+        // 0.1 of 20 points: the glyph's image 2 points lower, its place
+        // in the row and the row's size unchanged.
+        assert!(
+            (ui_after.1 - ui_before.1 - 2.0).abs() < 0.05,
+            "{ui_before:?} -> {ui_after:?}"
+        );
+        assert_eq!(ui_after.0, ui_before.0);
+        assert_eq!(ui_after.2, ui_before.2);
+        // The other role does not move.
+        assert_eq!(mono_after, mono_before);
+        // A reinstall (a face registered since) keeps the offset; a theme
+        // without it puts the glyphs back.
+        reinstall(&ctx);
+        pass(&ctx);
+        assert_eq!(glyph_at(&ctx, Role::Ui, 20.0, "H"), ui_after);
+        crate::theme::install(&ctx, &crate::theme::ThemeSpec::new("pop-dark"));
+        pass(&ctx);
+        assert_eq!(glyph_at(&ctx, Role::Ui, 20.0, "H"), ui_before);
     }
 }

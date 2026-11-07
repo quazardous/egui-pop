@@ -400,6 +400,16 @@ const CORE: &[Required] = &[
     sys("font.family.ui", "fontFamily", "interface text"),
     sys("font.family.mono", "fontFamily", "numbers and code"),
     sys(
+        "font.baseline-offset.ui",
+        "number",
+        "interface text: how far its glyphs sit below their place, a share of the size",
+    ),
+    sys(
+        "font.baseline-offset.mono",
+        "number",
+        "numbers and code: how far their glyphs sit below their place, a share of the size",
+    ),
+    sys(
         "font.numeric",
         "string",
         "how values line their digits up: \"mono\" or \"ui\"",

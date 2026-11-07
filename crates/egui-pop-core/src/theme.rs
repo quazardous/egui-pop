@@ -248,6 +248,9 @@ pub struct Font {
     pub family_mono: Vec<String>,
     /// How values line their digits up (`font.numeric`).
     pub numeric: crate::fonts::Numeric,
+    /// How far each role's glyphs are drawn below their place, a share
+    /// of the size (`font.baseline-offset.ui`, `font.baseline-offset.mono`).
+    pub baseline_offsets: crate::fonts::BaselineOffsets,
 }
 
 /// The size scale's five steps, in points (`font.size.xs` to `xl`).
@@ -370,6 +373,14 @@ pub struct ShadowTokens {
     /// A side area lying over the centre, its `offset` towards the
     /// centre as for the start side.
     pub side: Shadow,
+}
+
+/// A role's baseline offset (`font.baseline-offset.*`): a share of the
+/// size, kept between -1 and 1; 0 when missing or not a number.
+fn baseline_offset(r: &ResolvedTokens, path: &str) -> f32 {
+    r.dimension(path)
+        .filter(|v| v.is_finite())
+        .map_or(0.0, |v| v.clamp(-1.0, 1.0))
 }
 
 /// The shadow a group of tokens gives (`<prefix>offset-x`, `offset-y`,
@@ -535,6 +546,10 @@ impl Tokens {
                         crate::fonts::Numeric::parse(s).unwrap_or_default()
                     }
                     _ => crate::fonts::Numeric::default(),
+                },
+                baseline_offsets: crate::fonts::BaselineOffsets {
+                    ui: baseline_offset(r, "font.baseline-offset.ui"),
+                    mono: baseline_offset(r, "font.baseline-offset.mono"),
                 },
             },
             shadow: {
@@ -1077,7 +1092,12 @@ pub fn install_variants(ctx: &Context, tokens: Tokens, counterpart: Option<Token
         });
     }
     TOKENS.set(ctx, variants);
-    crate::fonts::install(ctx, &tokens.font.family_ui, &tokens.font.family_mono);
+    crate::fonts::install_with_offsets(
+        ctx,
+        &tokens.font.family_ui,
+        &tokens.font.family_mono,
+        tokens.font.baseline_offsets,
+    );
     crate::icon_set::install(ctx, &tokens);
     tokens
 }

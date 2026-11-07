@@ -465,6 +465,15 @@ font:
     mono:
       $value: ["monospace"]
       $description: "Numbers and code: families by name, in order; `monospace` is the bundled monospace face (JetBrains Mono NL with egui-pop's bundled fonts, else egui's Hack)."
+  baseline-offset:
+    $type: "number"
+    $description: "Where a family's glyphs sit in their row: drawn this share of the size lower (0.1 at 14 px: 1.4 px down; negative: up). The row keeps its height. 0 draws each face where it places itself."
+    ui:
+      $value: 0
+      $description: "Interface text."
+    mono:
+      $value: 0
+      $description: "Numbers and code."
   numeric:
     $type: "string"
     $value: "mono"
