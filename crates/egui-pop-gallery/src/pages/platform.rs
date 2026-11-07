@@ -95,6 +95,10 @@ pub fn add(builder: AppBuilder, real: bool, first: Option<Instance>) -> AppBuild
                 egui_pop::platform::dirs::pid()
             )),
         };
+        // A process of another run may have had the same id (a container
+        // starts its processes with the same ids): what it left there is
+        // not this gallery's past.
+        let _ = std::fs::remove_dir_all(&sim.scratch);
         builder
             .plugin(NotifyPlugin::new("egui-pop gallery").backend(sim.notify.clone()))
             .plugin(TrayPlugin::new("egui-pop gallery").backend(sim.tray.clone()))
