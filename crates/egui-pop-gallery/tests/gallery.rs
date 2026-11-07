@@ -4121,9 +4121,17 @@ fn the_text_log_page_follows_its_timeline_and_filters() {
     h.get_by_label("Filter").type_text("waypoint");
     h.run();
     h.run();
-    assert!(h.query_by_label_contains(" DEBUG ").is_none());
-    assert!(h.query_by_label_contains("heartbeat").is_none());
-    assert!(h.query_by_label_contains("waypoint").is_some());
+    // The rows' names, not the chips' ("Show DEBUG lines") nor the
+    // filter's text.
+    let rows: Vec<String> = h
+        .query_all_by_label_contains(" /")
+        .filter(|n| n.accesskit_node().role() == egui::accesskit::Role::Button)
+        .filter_map(|n| n.accesskit_node().label())
+        .collect();
+    assert!(!rows.is_empty());
+    assert!(rows.iter().all(|r| !r.contains(" DEBUG ")), "{rows:?}");
+    assert!(rows.iter().all(|r| !r.contains("heartbeat")), "{rows:?}");
+    assert!(rows.iter().all(|r| r.contains("waypoint")), "{rows:?}");
     let open = h.query_all_by_label_contains("Show all 3 lines").next();
     if let Some(open) = open {
         open.click();
