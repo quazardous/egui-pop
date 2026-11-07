@@ -501,8 +501,10 @@ compiled at install.
   handler draws its fill and its border as a line along its top and its
   bottom edges, so two stacked bands share one line. Its mark is the
   `disclosure-*` glyph role in `section-disclosure`'s `text`, `width`
-  across; its count a `section-count`, based on `indicator-badge`. The
-  `sections` snapshots.
+  across; its count a `section-count`, based on `indicator-badge`, at
+  the band's end, or right after the title (`space.inline` from it)
+  with `section-count.placement: after-title`, the title still clipped
+  to the band's room. The `sections` snapshots.
 - **Sliders** (`slider`, `slider-fill`, `slider-thumb`, `slider-value`,
   `slider-toggle`). The bar is a box with its label at the start
   (`align`), `hover`, `active` while dragged and `focus` (a ring inside
@@ -747,6 +749,12 @@ them two ways:
   where they are the thumb's `rest`, `hover` (under the pointer) and
   `active` (dragged) fills, its `radius` and the `track-fill`; the
   content is drawn in the style outside the scope.
+- **Along the track, through `UiPop::scroll_area`.** `margin-track`
+  keeps the thumb that far from both ends of the track. egui's
+  `ScrollStyle` has no such field: `UiPop::scroll_area` gives egui the
+  bar's rectangle (`ScrollArea::scroll_bar_rect`), the area's last
+  inner rectangle shortened at both ends; an application's own
+  `egui::ScrollArea` keeps the whole length.
 
 | Token | Meaning | Default |
 |---|---|---|
@@ -756,6 +764,7 @@ them two ways:
 | `scroll-bar.room` | the content's width kept for the bar while it shows, under `rest` | 6 |
 | `scroll-bar.min-length` | the thumb at its shortest | 24 |
 | `scroll-bar.margin` | between the bar and the scroll area's edge | 0 |
+| `scroll-bar.margin-track` | kept free at both ends of the track, along the bar (through `UiPop::scroll_area`) | 0 |
 | `scroll-bar.placement` | `over`: floats over the content, which runs to the edge under it; `beside`: takes room, the content is narrower by the bar, its margin and egui's 4 point gap | `over` |
 | `scroll-bar.visibility` | `always`: at rest too, at full width; `rest`: at rest too, thin and quiet with no track, whenever the content overflows, wide over the bar; `hover`: while the pointer is over the scroll area, thin until it is over the bar (egui's own); `scroll`: while scrolling | `rest` |
 | `scroll-bar.track-fill` | the track; transparent for none, in every scroll area | `{surface.sunken}` |

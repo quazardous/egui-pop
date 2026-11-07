@@ -149,7 +149,7 @@ without it.
    `skeleton.*` and `skeleton-shimmer.*`, `dialog.*`, `palette-window.*`,
    `toast.*`, `scroll-bar.*` (every scroll area's bars: `width`,
    `width-rest`, `opacity-rest`, `room`, `min-length`, `margin`,
-   `placement`, `visibility`, `track-fill`, the thumb's
+   `margin-track`, `placement`, `visibility`, `track-fill`, the thumb's
    `rest`, `hover` and `active` fill and its radius;
    [kit.md](kit.md#scroll-bars)). Content drawn in code keeps flat names: `editor.*` and `syntax.*` (one colour per kind of code:
    keywords on the accent, strings on `success`, numbers on `warning`,

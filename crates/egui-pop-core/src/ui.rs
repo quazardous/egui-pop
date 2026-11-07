@@ -383,12 +383,31 @@ impl UiPop for Ui {
         // shown in, and builds its content's `Ui` from it: the content
         // gets the style outside the scope back.
         let style = self.style().clone();
+        let kit = crate::kit::Kit::of(self.ctx());
         self.scoped(Stock::ScrollBar, Tone::Neutral, |ui| {
             let start = crate::scroll_keys::start(ui);
+            // The track's inset along the bar (`scroll-bar.margin-track`):
+            // egui takes the bar's rectangle before it lays the area out,
+            // so it is the one the area showed in on the last pass.
+            let track = ui.next_auto_id().with("egui_pop.scroll_track");
+            let mut area = area;
+            if kit.scroll.margin_track > 0.0
+                && let Some(inner) = ui.data(|d| d.get_temp::<Rect>(track))
+                && let Some(rect) = kit.scroll.track_rect(inner)
+            {
+                area = area.scroll_bar_rect(rect);
+            }
             let out = area.show_viewport(ui, |ui, viewport| {
                 ui.set_style(style);
                 add(ui, viewport)
             });
+            if kit.scroll.margin_track > 0.0 {
+                let before = ui.data_mut(|d| d.get_temp::<Rect>(track));
+                if before != Some(out.inner_rect) {
+                    ui.data_mut(|d| d.insert_temp(track, out.inner_rect));
+                    ui.ctx().request_repaint();
+                }
+            }
             crate::scroll_keys::answer(ui, &out, start);
             out
         })

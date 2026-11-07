@@ -319,3 +319,56 @@ fn a_scoped_theme_s_scroll_bar_follows_the_scope() {
     // The scoped theme's thumb, at rest.
     assert!(painted(&out.expect("a frame ran"), THUMB));
 }
+
+#[test]
+fn a_track_margin_keeps_the_thumb_from_both_ends_of_the_track() {
+    // Where the thumb is at the top and at the bottom, with a margin
+    // along the track or none.
+    let ends = |yaml: &str| {
+        let ctx = Context::default();
+        theme::install_tokens(&ctx, tokens("tvty", yaml));
+        let mut inner = Rect::NOTHING;
+        let mut at = |offset: f32| {
+            let mut out = None;
+            for _ in 0..3 {
+                out = Some(frame(&ctx, |ui| {
+                    inner = ui
+                        .scroll_area(tall_area().vertical_scroll_offset(offset), tall_content)
+                        .inner_rect;
+                }));
+            }
+            let drawn = rects(&out.expect("a frame ran"), THUMB);
+            assert_eq!(drawn.len(), 1, "one thumb: {drawn:?}");
+            drawn[0]
+        };
+        let top = at(0.0);
+        let bottom = at(10_000.0);
+        (inner, top, bottom)
+    };
+    let (inner, top, bottom) = ends(TVTY);
+    assert_eq!(top.top(), inner.top(), "egui's own: from the area's top");
+    assert_eq!(bottom.bottom(), inner.bottom());
+    let with = TVTY.replace(
+        "  margin: {$type",
+        "  margin-track: {$type: \"dimension\", $value: {value: 4, unit: \"px\"}}\n  margin: {$type",
+    );
+    let (inner, top2, bottom2) = ends(&with);
+    assert_eq!(top2.top(), inner.top() + 4.0, "{top2:?} in {inner:?}");
+    assert_eq!(
+        bottom2.bottom(),
+        inner.bottom() - 4.0,
+        "{bottom2:?} in {inner:?}"
+    );
+    // Across the bar, nothing changes.
+    assert_eq!(top2.x_range(), top.x_range());
+    assert_eq!(
+        Kit::of(&{
+            let ctx = Context::default();
+            theme::install_tokens(&ctx, tokens("tvty", &with));
+            ctx
+        })
+        .scroll
+        .margin_track,
+        4.0
+    );
+}

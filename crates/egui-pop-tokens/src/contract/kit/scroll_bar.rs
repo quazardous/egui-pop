@@ -39,6 +39,11 @@ pub(crate) const CONTRACT: &[Required] = &[
         "between a scroll bar and the edge of its scroll area",
     ),
     comp(
+        "scroll-bar.margin-track",
+        "dimension",
+        "kept free at both ends of a scroll bar's track, along it",
+    ),
+    comp(
         "scroll-bar.placement",
         "string",
         "`over` the content (floating) or `beside` it (taking room)",

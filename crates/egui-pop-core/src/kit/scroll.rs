@@ -65,6 +65,13 @@ pub struct ScrollBarKit {
     /// Points between the bar and the scroll area's edge
     /// (`scroll-bar.margin`).
     pub margin: f32,
+    /// Points kept free at both ends of the track, along the bar
+    /// (`scroll-bar.margin-track`): the thumb's range is that much shorter
+    /// at each end. egui's `ScrollStyle` has none: [`UiPop::scroll_area`]
+    /// gives it to egui as the bar's rectangle ([`ScrollBarKit::track_rect`]).
+    ///
+    /// [`UiPop::scroll_area`]: crate::ui::UiPop::scroll_area
+    pub margin_track: f32,
     /// The track behind the thumb (`scroll-bar.track-fill`); none when
     /// transparent.
     pub track: Color32,
@@ -83,6 +90,7 @@ impl Default for ScrollBarKit {
             room: ScrollStyle::thin().floating_allocated_width,
             min_length: egui.handle_min_length,
             margin: egui.bar_outer_margin,
+            margin_track: 0.0,
             track: Color32::TRANSPARENT,
         }
     }
@@ -166,10 +174,29 @@ impl ScrollBarKit {
             margin: r
                 .dimension("scroll-bar.margin")
                 .map_or(egui.margin, |m| m.max(0.0)),
+            margin_track: r
+                .dimension("scroll-bar.margin-track")
+                .map_or(egui.margin_track, |m| m.max(0.0)),
             track: t
                 .color("scroll-bar.track-fill")
                 .unwrap_or(Color32::TRANSPARENT),
         }
+    }
+
+    /// The rectangle egui draws a scroll area's bars along
+    /// (`ScrollArea::scroll_bar_rect`), for an area whose content is shown
+    /// in `inner`: shorter by `margin-track` at both ends of each axis;
+    /// `None` without a margin, egui's own then.
+    pub fn track_rect(&self, inner: egui::Rect) -> Option<egui::Rect> {
+        if self.margin_track <= 0.0 {
+            return None;
+        }
+        // Never shorter than nothing: a tiny area keeps its centre.
+        let m = egui::vec2(
+            self.margin_track.min(inner.width() / 2.0),
+            self.margin_track.min(inner.height() / 2.0),
+        );
+        Some(inner.shrink2(m))
     }
 
     /// These terms for a bar that must be seen as soon as its content
