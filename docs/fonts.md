@@ -86,6 +86,27 @@ weight, step)` is the `FontId` of a step (`fonts::Step`), next to
 `fonts::font_id(role, weight, size)`; `Tokens::font.scale` holds the
 sizes. The user's text size (below) multiplies the scale.
 
+## Where text sits in its row (built)
+
+egui places a face's glyphs in their row by the face's own ascent and
+descent; another toolkit may centre them differently (GPUI lays a text
+out in a line box and centres it there), and the same text then lands a
+pixel or two lower or higher. `font.baseline-offset.ui` and
+`font.baseline-offset.mono` (numbers, 0 in every built-in theme) move a
+family's glyphs down by that share of the size: 0.1 at 14 px is 1.4 px
+lower, a negative share moves them up. Every face of the family's
+chain, egui's fallbacks included, gets it as egui's
+`FontTweak::y_offset_factor`, under a key of its own (a face both roles
+share moves for one only). Only the glyphs move: the row keeps its
+height and the layout its sizes, so a widget's box does not change. At 0
+the faces keep their keys, and nothing is drawn differently.
+
+egui has no per-face line height to centre on: a row's height comes
+from the face's metrics (`TextFormat::line_height` is per text, not per
+family), so there is no line-height token. In code,
+`Tokens::font.baseline_offsets` holds the shares, and
+`fonts::install_with_offsets` installs families with them.
+
 ## Text size (built)
 
 The text size is a user setting, `appearance.text_size` in Settings ›

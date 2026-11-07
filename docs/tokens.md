@@ -124,7 +124,9 @@ without it.
    `size.toast.width`, `font.size.{xs, s, m, l, xl}` (the size scale)
    and `font.text-style.{small, body, button, heading, monospace}`
    (egui's text styles, each an alias of a step),
-   `font.family.{ui, mono}`, `font.numeric` (`"mono"` or `"ui"`: how
+   `font.family.{ui, mono}`, `font.baseline-offset.{ui, mono}` (where
+   a family's glyphs sit in their row, a share of the size; 0 by
+   default, [Fonts](fonts.md)), `font.numeric` (`"mono"` or `"ui"`: how
    values line their digits up, [Fonts](fonts.md)), `motion.duration`,
    `motion.spinner.{delay, min, turn}` (300 ms before a busy indicator
    shows, 500 ms at least once shown, a spinner's turn),
