@@ -2585,9 +2585,10 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
 /// While a tab drags, the areas a dock does not draw as targets: a closed
 /// side or bottom area along the areas' edge (its empty dock), an area
 /// drawn bare over its whole rect (its bare target, where the tab joins
-/// its tabs). Drawn last, so they win over the docks beneath.
+/// its tabs). Drawn last, so they win over the docks beneath, and the
+/// closed areas' bands after the bare areas, so they win at the edges.
 fn drop_targets(app: &AppHandle, ui: &mut Ui, zen: bool) {
-    let targets: Vec<(&'static str, Rect)> = {
+    let mut targets: Vec<(&'static str, Rect)> = {
         let wb = app.workbench_mut();
         Area::ALL
             .into_iter()
@@ -2607,6 +2608,7 @@ fn drop_targets(app: &AppHandle, ui: &mut Ui, zen: bool) {
             })
             .collect()
     };
+    targets.sort_by_key(|(dock, _)| !dock.ends_with(".bare"));
     let ctx = ui.ctx().clone();
     let kit = Kit::of(&ctx);
     let style = dock_style(ui.style(), &kit);
