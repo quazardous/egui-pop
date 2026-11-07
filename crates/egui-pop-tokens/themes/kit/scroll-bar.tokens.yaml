@@ -26,6 +26,10 @@ scroll-bar:
   margin:
     $type: "dimension"
     $value: {value: 0, unit: "px"}
+  margin-track:
+    $type: "dimension"
+    $value: {value: 0, unit: "px"}
+    $description: "Kept free at both ends of the track, along the bar: the thumb starts and ends that far from the area's ends (drawn through `UiPop::scroll_area`)."
   placement:
     $type: "string"
     $value: "over"

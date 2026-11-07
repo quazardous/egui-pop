@@ -140,6 +140,7 @@ pub const COMPONENT_TERMS: &[(&str, &str)] = &[
     ("shadow-spread", "dimension"),
     ("shadow-color", "color"),
     ("margin", "dimension"),
+    ("margin-track", "dimension"),
     ("placement", "string"),
     ("visibility", "string"),
     ("track-fill", "color"),
