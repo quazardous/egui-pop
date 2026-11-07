@@ -1403,3 +1403,40 @@ fn a_long_cell_text_is_elided_and_shown_on_hover() {
         "the cell and its tooltip"
     );
 }
+
+#[test]
+fn a_click_on_a_cell_s_text_selects_its_row() {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(400.0, 200.0))
+        .build_ui_state(
+            |ui, (state, rows): &mut (TableState<u32>, Rows)| {
+                let columns = COLUMNS();
+                DataTable::new("files", &columns).show(ui, state, rows);
+            },
+            (
+                TableState::new(),
+                Rows(vec![(0, "First".into(), 1), (1, "Second".into(), 2)]),
+            ),
+        );
+    h.run();
+    // A real press and release on the text, not an accessibility click
+    // on the row.
+    for (text, key) in [("Second", 1), ("1 KB", 0)] {
+        let at = h
+            .get_by_role_and_label(egui::accesskit::Role::Label, text)
+            .rect()
+            .center();
+        h.hover_at(at);
+        h.run();
+        h.drag_at(at);
+        h.run();
+        h.drop_at(at);
+        h.run();
+        h.run();
+        assert!(
+            h.state().0.selection().contains(&key),
+            "{text}: {:?}",
+            h.state().0.selection()
+        );
+    }
+}

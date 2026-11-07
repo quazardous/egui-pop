@@ -1116,6 +1116,10 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
         // A text too long for its cell is elided with "…" (an egui label
         // then shows the full text on hover), not cut at the cell's edge.
         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+        // A selectable label senses clicks and sits above the row: a
+        // click on a cell's text would select the text instead of the
+        // row. An elided label still shows its full text on hover.
+        ui.style_mut().interaction.selectable_labels = false;
         self.rows.cell(ui, row, cell.col_nr, selected);
     }
 
