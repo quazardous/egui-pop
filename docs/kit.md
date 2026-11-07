@@ -444,6 +444,16 @@ compiled at install.
   state the frame around the icon of a checked command (`surface.active`
   with a 1 point `accent.default` border, so the state does not rest on
   the fill alone).
+  A theme sets a menu's metrics on `menu-item`, each left to egui when
+  not given: `height` a row's least height, `padding-x` and `padding-y`
+  the room around a label, `width` the menu's least width (else egui's,
+  and 200 points for a popup menu), and `separator-inset` how far a
+  separator stays from the menu's edges (0: edge to edge; not given:
+  egui's, inside the menu's margin). A `menu-item-gutter.width` of 0
+  keeps no gutter at all: no icons and no marks, whatever the
+  `menus.icons` setting (a checked item still says so to assistive
+  technology). A command's `CommandSpec::menu_note` ends its entries,
+  muted, in the keys' column after its keys, and `opens_link` adds a ↗.
 - **Frames** (`card`, `dialog`, `backdrop`, `popover`, `fault-card`, `toast`,
   `palette-window`, `tip-card`, `job-log`, `fullscreen-exit` (the
   strip at the top of a full screen window showing no title bar),

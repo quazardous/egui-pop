@@ -640,6 +640,9 @@ pub(crate) struct Derived {
 
 /// What a block or a handler asks of the application, done before the
 /// next frame.
+// A declaration carries a whole `CommandSpec`; requests are few and short
+// lived, so it is not boxed (boxing would change the public variant).
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Request {
     Run {

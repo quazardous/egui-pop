@@ -509,3 +509,124 @@ fn the_context_menu_key_opens_the_focused_widgets_menu_under_it() {
         );
     }
 }
+
+const TV_ABOUT: CommandId = CommandId::from_static("tv.about");
+const TV_BOARD: CommandId = CommandId::from_static("tv.board");
+const TV_QUIT: CommandId = CommandId::from_static("tv.quit");
+const TV: MenuId = MenuId::from_static("tv.menu");
+
+/// tvty's menu: a note after an item, a link, two groups.
+struct Tv;
+
+impl Plugin for Tv {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("tv")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        for spec in [
+            CommandSpec::new(TV_ABOUT, "About", "Tv").menu_note("0.7.0"),
+            CommandSpec::new(TV_BOARD, "Board", "Tv")
+                .menu_note("aiball")
+                .opens_link(true),
+            CommandSpec::new(TV_QUIT, "Quit", "Tv").icon("close"),
+        ] {
+            ctx.command(spec, |_| Ok(Json::Null))?;
+        }
+        ctx.menu_item(MenuItem::command(TV, "1", 0, TV_ABOUT))?;
+        ctx.menu_item(MenuItem::command(TV, "1", 1, TV_BOARD))?;
+        ctx.menu_item(MenuItem::command(TV, "2", 0, TV_QUIT))?;
+        Ok(())
+    }
+}
+
+/// The menu opened in a theme; the rows' rects by label, the separator's
+/// span, what the rows say.
+fn tv_menu(
+    spec: egui_pop_core::theme::ThemeSpec,
+) -> (Harness<'static, App>, egui::Rect, Vec<menus::RowTrace>) {
+    let app = App::builder()
+        .theme(spec)
+        .plugin(Tv)
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(700.0, 500.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    let app = h.state().handle().clone();
+    assert!(menus::popup_at(&app, &TV, egui::pos2(100.0, 100.0)));
+    h.run();
+    h.run();
+    let menu = app
+        .overlay_rects()
+        .into_iter()
+        .find(|o| o.kind == OverlayKind::Menu)
+        .expect("the popup is reported")
+        .rect;
+    let rows = menus::rows_drawn(&h.ctx);
+    (h, menu, rows)
+}
+
+#[test]
+fn a_theme_sets_a_menu_s_rows_width_separator_and_gutter_and_items_carry_notes() {
+    let (h, menu, rows) = tv_menu(egui_pop_core::theme::ThemeSpec::new("pop-dark"));
+    // Today's menu: at least 200 wide, a gutter (Quit has an icon).
+    assert!(menu.width() >= 200.0, "{menu:?}");
+    assert!(rows.iter().all(|r| r.gutter > 0.0), "{rows:?}");
+    let about = h.get_by_label_contains("About").rect();
+    let default_height = about.height();
+    // The note ends its row, in the keys' column, past the label.
+    let text = |h: &Harness<'_, App>, t: &str| {
+        h.output()
+            .shapes
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Text(s) if s.galley.job.text == t => {
+                    Some(c.shape.visual_bounding_rect())
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("`{t}` painted"))
+    };
+    let (label, note) = (text(&h, "About"), text(&h, "0.7.0"));
+    assert!(note.left() > label.right() + 40.0, "{label:?} {note:?}");
+    assert!(about.right() - note.right() < 30.0, "{note:?} in {about:?}");
+
+    let tvty = egui_pop_core::theme::ThemeSpec::new("pop-dark")
+        .override_token("menu-item.height", json!({"value": 31, "unit": "px"}))
+        .override_token("menu-item.padding-x", json!({"value": 12, "unit": "px"}))
+        .override_token("menu-item.width", json!({"value": 336, "unit": "px"}))
+        .override_token(
+            "menu-item.separator-inset",
+            json!({"value": 0, "unit": "px"}),
+        )
+        .override_token("menu-item-gutter.width", json!({"value": 0, "unit": "px"}));
+    let (h, menu, rows) = tv_menu(tvty);
+    assert!(menu.width() >= 336.0, "{menu:?}");
+    assert!(rows.iter().all(|r| r.gutter == 0.0), "no gutter: {rows:?}");
+    assert!(rows.iter().all(|r| r.icon.is_none()), "{rows:?}");
+    let about = h.get_by_label_contains("About").rect();
+    assert!(about.height() >= 31.0 - 0.5, "{about:?}");
+    assert!(about.height() > default_height, "{about:?}");
+    // The label 12 points into its row.
+    let about_row = rows.iter().find(|r| r.label == "About").expect("drawn");
+    assert!((about_row.label_x - 12.0).abs() < 0.5, "{about_row:?}");
+    // The separator across the whole menu.
+    let line = h
+        .output()
+        .shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::LineSegment { points, .. }
+                if points[0].y == points[1].y
+                    && menu.expand(1.0).contains(points[0])
+                    && menu.expand(1.0).contains(points[1]) =>
+            {
+                Some((points[1].x - points[0].x).abs())
+            }
+            _ => None,
+        })
+        .fold(0.0_f32, f32::max);
+    assert!(line >= menu.width() - 2.0, "separator {line} in {menu:?}");
+}
