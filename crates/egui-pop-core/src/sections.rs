@@ -11,7 +11,8 @@
 //!   folds or opens its section; Left folds it and Right opens it. A
 //!   folded section keeps its band in place; open sections fill the
 //!   panel's height, so the bands of folded sections below the last open
-//!   one sit at the panel's bottom.
+//!   one sit at the panel's bottom, unless the stack is sized by its
+//!   content ([`Sections::fill`]).
 //! - A section's height is set by hand, in points, or sized by the list:
 //!   those never set by hand share what the others leave, and the last
 //!   open section always takes what is left. Each keeps a least height
@@ -28,7 +29,9 @@
 //!   then those set by hand, from the bottom up; their stored heights
 //!   come back with the room, until the next drag aligns them on what is
 //!   shown. When even the least heights do not fit, the whole stack
-//!   scrolls, with a scrollbar then only (the kit's, seen at rest).
+//!   scrolls, with a scrollbar then only (the kit's, seen at rest). Every
+//!   bar of the stack is drawn as `UiPop::scroll_area` draws one: the
+//!   theme's thumb and track, and `scroll-bar.margin-track`.
 //! - [`Sections::grab_titles`] (off by default) makes the titles drag too:
 //!   a press that moves resizes as the line above does, one that does not
 //!   folds, and a double click drops the heights set by hand.
@@ -272,6 +275,7 @@ pub struct Sections {
     capitals: bool,
     grab_titles: bool,
     keep_titles: bool,
+    fill: bool,
 }
 
 impl Sections {
@@ -283,7 +287,21 @@ impl Sections {
             capitals: true,
             grab_titles: false,
             keep_titles: false,
+            fill: true,
         }
+    }
+
+    /// Whether the stack fills the room it is given (yes by default):
+    /// the last open section takes what the others leave, and the bands
+    /// of folded sections below it sit at the bottom. Off, it is sized by
+    /// its content: an open section sized by the list is never taller
+    /// than what its body lays out, the long ones share what is left, the
+    /// folded bands follow right under the last open section, and the
+    /// room left stays empty under the last band. A section set by hand
+    /// keeps its height ([`egui_stack::sections::Sections::fill`]).
+    pub fn fill(mut self, fill: bool) -> Self {
+        self.fill = fill;
+        self
     }
 
     /// Whether titles are drawn in capitals (yes by default, as a code
@@ -341,8 +359,13 @@ impl Sections {
             .capitals(self.capitals)
             .grab_titles(self.grab_titles)
             .keep_titles(self.keep_titles)
+            .fill(self.fill)
             .pull_when(move |modifiers, button| pulls(&map, modifiers, button))
-            .overflow_scroll(kit.scroll.seen_at_rest().style(&bodies));
+            .overflow_scroll(kit.scroll.seen_at_rest().style(&bodies))
+            // The bars as `UiPop::scroll_area` draws them: the kit's thumb
+            // and track in a `ScrollBar` scope, inset along the track.
+            .bar_style(bar_style(ui, &kit))
+            .bar_track_inset(kit.scroll.margin_track);
         if kit.section_band.data.height > 0.0 {
             stack = stack.band_height(kit.section_band.data.height);
         }
@@ -356,6 +379,20 @@ impl Sections {
             layout: response.layout.into(),
         }
     }
+}
+
+/// The style a scroll bar is drawn in: the `Ui`'s, its widget visuals the
+/// kit's `ScrollBar` scope's (`UiPop::scroll_area`).
+fn bar_style(ui: &Ui, kit: &Kit) -> std::sync::Arc<egui::Style> {
+    let mut style = (**ui.style()).clone();
+    kit.scoped
+        .get(crate::kit::Stock::ScrollBar, crate::kit::Tone::Neutral)
+        .apply(
+            &mut style.visuals,
+            ui.is_enabled(),
+            ui.ctx().pixels_per_point(),
+        );
+    std::sync::Arc::new(style)
 }
 
 /// Whether these keys and this button make a drag pull, in the map in force.

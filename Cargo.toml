@@ -97,7 +97,7 @@ image = { version = "0.25", default-features = false }
 # section stacks egui-pop wraps (`sections`); 0.24 the n-ary tree, the
 # grid container and the zones drop overlay; 0.25 the body borders the
 # painter draws (`DockPainter::tab_body`), the kit's `dock-body`.
-egui_stack = { version = "0.25.0", default-features = false }
+egui_stack = { version = "0.25.2", default-features = false }
 egui-pop = { version = "0.7.0", path = "crates/egui-pop" }
 
 [workspace.lints.rust]
