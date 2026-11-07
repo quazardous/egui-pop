@@ -1976,7 +1976,7 @@ fn the_layout_controls_mirror_their_icons_with_the_primary_side_bar() {
 }
 
 #[test]
-fn the_workbench_page_shows_a_dragged_tab_s_ghost_where_it_would_land() {
+fn the_workbench_page_shows_where_a_tab_dragged_to_another_area_would_land() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
     h.run();
     h.get_by_label("Open the demonstration panels").click();
@@ -1989,14 +1989,13 @@ fn the_workbench_page_shows_a_dragged_tab_s_ghost_where_it_would_land() {
         h.get_by_role_and_label(egui::accesskit::Role::Button, name)
             .rect()
     };
-    let properties = tab(&h, "Properties");
     let notes_tab = tab(&h, "Notes");
-    // The Notes tab, from the bottom panel over the end side bar, held
-    // there.
+    // The Notes tab, from the bottom panel over the middle of the end
+    // side bar's group, held there.
     let a = notes_tab.center();
-    let b = h
-        .get_by_label("Properties of the selection.")
-        .rect()
+    let b = app
+        .area_rect(egui_pop::model::panels::Area::EndSide)
+        .expect("the end side bar is drawn")
         .center();
     // Event by event, a frame each, as egui_stack follows a tab's drag.
     let pointer = |h: &mut Harness<'_, Gallery>, e: egui::Event| {
@@ -2020,16 +2019,14 @@ fn the_workbench_page_shows_a_dragged_tab_s_ghost_where_it_would_land() {
     h.step();
     let hint = app.drop_hint().expect("a hint while dragging");
     assert_eq!((hint.panel.clone(), hint.area), (notes.clone(), "end_side"));
-    let ghost = hint.preview.expect("the tab's ghost");
-    assert_eq!(
-        (ghost.area, ghost.index),
-        ("end_side", 2),
-        "after Inspector and Properties"
-    );
-    assert!(ghost.rect.left() >= properties.right() - 0.5);
-    assert!((ghost.rect.top() - properties.top()).abs() < 0.5);
+    assert_eq!(hint.index, Some(2), "after Inspector and Properties");
+    assert!(hint.rect.contains(b));
     let snap = app.debug_snapshot();
-    assert_eq!(snap["workbench"]["drop_hint"]["preview"]["index"], 2);
+    assert_eq!(
+        snap["workbench"]["drop_hint"]["zone"], "center",
+        "joins its tabs"
+    );
+    assert_eq!(snap["workbench"]["drop_hint"]["index"], 2);
     h.snapshot("workbench-drag-pop-dark");
     pointer(&mut h, button(b, false));
     h.run();

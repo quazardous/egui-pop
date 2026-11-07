@@ -556,30 +556,6 @@ limit.
   `Ctrl+Alt+0`, rebindable like any command.
 - **Remove when**: never; this is egui-pop's design.
 
-## egui_stack: no drop between two docks
-
-- **Compensated**: egui-pop panels declare the areas they may live in,
-  and egui_dock had no hook to refuse dropping a given tab in a given
-  place (only `allowed_in_windows` and the global `AllowedSplits`), so
-  each area is a dock of its own. A dock follows a tab's drag only inside
-  itself.
-- **Upstream**: egui_dock's <https://github.com/anhosh/egui_dock/issues/351>
-  (related to #163 there). egui-pop now draws its docks with
-  [egui_stack](https://github.com/quazardous/egui_stack), which continues
-  egui_dock and adds the veto: `TabViewer::drop_allowed(tab, destination)`
-  and a public `DockArea::dragged_tab`. Using them means one dock for the
-  whole workbench, its areas the main surface's splits ("fixed" nodes, the
-  move still a `workbench.move` step): see
-  [egui_stack directions](egui-stack-directions.md), 2.1.
-- **Workaround**: each area is a dock of its own, its tabs never allowed
-  into egui_stack's windows; a tab dropped over another area is moved
-  there by the workbench (`egui_pop_api::workbench`) when the panel's
-  rules allow it, and refused otherwise, with the drop hint saying why
-  and the refusal reported (no silent no-op, ADR 0003). `Layout::repair`
-  moves panels found in an area they may not be in.
-- **Remove when**: the workbench draws its areas in one egui_stack dock,
-  with `drop_allowed` as the veto.
-
 ## egui: symbols missing from the default fonts
 
 - **Compensated**: symbols such as ✓ ▸ ◆ ● render as missing glyphs with

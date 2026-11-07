@@ -2545,7 +2545,9 @@ impl AppHandle {
         self.0.derived.borrow().panels.clone()
     }
 
-    /// The drop hint on screen, while a tab is dragged over another area.
+    /// The drop hint on screen, while a tab is dragged (where it would
+    /// land, in its area or another) or a palette over an area it docks
+    /// in.
     pub fn drop_hint(&self) -> Option<crate::workbench::DropHint> {
         self.workbench_mut().hint.clone()
     }
@@ -4513,7 +4515,7 @@ impl App {
         b.register(
             FnCollector::new(
                 "workbench",
-                "The workbench: the layout (areas, folded, closed and detached panels, flyout widths), where each area was drawn (points), the focused panel, the side areas' strip icons (`strips`: each panel's title, icon, key, whether it shows, and its indicator with `marked` when the icon shows it), the flyout open (its panel and rect), the tab being dragged and the drop hint (its rect, name and refusal).",
+                "The workbench: the layout (areas, folded, closed and detached panels, flyout widths), where each area was drawn (points), the focused panel, the side areas' strip icons (`strips`: each panel's title, icon, key, whether it shows, and its indicator with `marked` when the icon shows it), the flyout open (its panel and rect), the tab being dragged and the drop hint (its rect, name, refusal, zone and index among the tabs it joins).",
             )
             .snapshot(move |_| {
                 let Ok(app) = up(&w) else { return Json::Null };
@@ -4549,6 +4551,8 @@ impl App {
                         "area": h.area,
                         "rect": [h.rect.min.x, h.rect.min.y, h.rect.max.x, h.rect.max.y],
                         "refusal": h.refusal,
+                        "zone": format!("{:?}", h.zone).to_lowercase(),
+                        "index": h.index,
                         "preview": h.preview.as_ref().map(|p| json!({
                             "area": p.area,
                             "index": p.index,
