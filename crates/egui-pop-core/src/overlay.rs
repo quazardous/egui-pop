@@ -1858,7 +1858,9 @@ mod tests {
 /// status line) always gets its whole height, at the bottom of the room,
 /// and the body takes what is left above it, scrolled when it needs more.
 ///
-/// ```
+/// (Compiled, not run: a frame needs the kit's fonts and textures.)
+///
+/// ```no_run
 /// # let ctx = egui::Context::default();
 /// # let _ = ctx.run_ui(Default::default(), |ui| {
 /// use egui_pop_core::overlay::DialogLayout;
