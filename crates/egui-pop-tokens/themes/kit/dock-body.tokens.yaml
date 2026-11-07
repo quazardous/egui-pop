@@ -1,0 +1,16 @@
+$description: "The `dock-body` component of the default kit (docs/kit.md), layered into pop-dark."
+dock-body:
+  $description: "The border of a panel's body in a dock, below its tab bar (a kit component): `border-width`, `border-color` and `radius` per state, `rest`, `hover` under the pointer and `focus` for the dock's focused panel, and a glow (`ring-color`, `ring-width`, `ring-offset`, inside the body when negative). Its top edge stays hidden under the tab bar, whose corners its top ones join. No border in a frameless area. The default kit outlines every body in the border colour, in every state."
+  shape:
+    $type: "string"
+    $value: "plain"
+  rest:
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.widget}"

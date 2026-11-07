@@ -1,5 +1,6 @@
 //! The kit paints egui_stack's docks: its tabs (`tab`), tab bars
-//! (`tab-bar`), separators (`splitter`) and drop zones (`dock-preview`:
+//! (`tab-bar`), the borders of the panels' bodies (`dock-body`),
+//! separators (`dock-separator`) and drop zones (`dock-preview`:
 //! the region a dragged tab would take, bordered and tinted, on the node
 //! itself; the buttons of egui_stack's former cross overlay, when an
 //! application asks for it, in `button`); and its section stacks
@@ -10,12 +11,14 @@
 //! button (`toolbar-button`, the More glyph) and separators. egui_stack
 //! lays them out and takes their input.
 
-use egui::{Color32, FontFamily, FontId, Painter, Rect, pos2, vec2};
+use egui::{
+    Color32, CornerRadius, FontFamily, FontId, Painter, Rect, Stroke, StrokeKind, pos2, vec2,
+};
 use egui_stack::toolbar::ToolKind;
 use egui_stack::{
     DockPainter, DropButtonPaint, DropPaint, DropTargetPaint, PartState, SectionBandPaint,
     SectionBoundaryPaint, SeparatorAxis, SeparatorPaint, Split, TabBarPaint, TabBarTailPaint,
-    TabMeasure, TabPaint, ToolItemPaint, ToolMorePaint, ToolSeparatorPaint,
+    TabBodyPaint, TabMeasure, TabPaint, ToolItemPaint, ToolMorePaint, ToolSeparatorPaint,
 };
 
 use super::{Corners, Glyph, Kit, KitCx, Part, State, Tone, paint_ring};
@@ -55,6 +58,67 @@ fn tool_state(flags: PartState, selected: bool) -> State {
         )
         .with(State::FOCUS, flags.contains(PartState::FOCUSED))
         .with(State::DISABLED, disabled)
+}
+
+/// A panel body's border in a dock, the kit's `dock-body` in the body's
+/// state (`hover` under the pointer, `focus` for the dock's focused
+/// leaf): drawn inside the body, its top edge hidden under the tab bar as
+/// egui_stack's own border is, its free corners rounded by the state's
+/// `radius` (those joining the tab bar stay square), then its glow (the
+/// state's ring). Nothing when the state has neither.
+fn paint_body(kit: &Kit, painter: &Painter, body: &TabBodyPaint<'_>) {
+    let flags = body.state;
+    let state = State::REST
+        .with(State::HOVER, flags.contains(PartState::HOVERED))
+        .with(
+            State::FOCUS,
+            flags.contains(PartState::FOCUSED) || flags.contains(PartState::LEAF_FOCUSED),
+        );
+    let look = kit.dock_body.style(state);
+    let ppp = painter.pixels_per_point();
+    let r = look.radius.round().clamp(0.0, 255.0) as u8;
+    // The top corners join the tab bar where egui_stack squares them.
+    let corners = if body.corner_radius.nw == 0 && body.corner_radius.ne == 0 {
+        CornerRadius {
+            nw: 0,
+            ne: 0,
+            sw: r,
+            se: r,
+        }
+    } else {
+        CornerRadius::same(r)
+    };
+    if look.border_width > 0.0 && look.border_color.a() > 0 {
+        let width = crate::scale::snap(look.border_width, ppp);
+        // As egui_stack draws it: the top edge goes up behind the clip
+        // rect, out of sight, by an even number of points, so that an
+        // odd width leaves no anti-aliased line.
+        let lift = (width / 2.0).ceil() * 2.0;
+        let rect = Rect::from_min_max(body.rect.min - vec2(0.0, lift), body.rect.max);
+        painter.rect_stroke(
+            rect.expand(-(width / 2.0).ceil()),
+            corners,
+            Stroke::new(width, look.border_color),
+            StrokeKind::Inside,
+        );
+    }
+    if look.ring_width > 0.0 && look.ring_color.a() > 0 {
+        // The glow keeps the border's centre, as a focus ring does:
+        // larger corners outside the body, smaller inside.
+        let ring = (look.radius + look.ring_offset).round().clamp(0.0, 255.0) as u8;
+        let joined = corners.nw == 0;
+        painter.rect_stroke(
+            body.rect.expand(look.ring_offset),
+            CornerRadius {
+                nw: if joined { 0 } else { ring },
+                ne: if joined { 0 } else { ring },
+                sw: ring,
+                se: ring,
+            },
+            Stroke::new(crate::scale::snap(look.ring_width, ppp), look.ring_color),
+            StrokeKind::Outside,
+        );
+    }
 }
 
 fn cx(painter: &Painter) -> KitCx<'_> {
@@ -104,10 +168,16 @@ impl DockPainter for Kit {
         // The `tab-bar` part already spans the whole bar.
     }
 
+    fn tab_body(&self, painter: &Painter, body: &TabBodyPaint<'_>) {
+        paint_body(self, painter, body);
+    }
+
     fn separator(&self, painter: &Painter, separator: &SeparatorPaint<'_>) {
-        // The kit's line, as thick as the kit says, along the separator.
+        // The kit's line, as thick as the kit says, along the separator;
+        // `active` while pressed or dragged.
         let rect = separator.rect;
-        let width = self.splitter.data.width;
+        let look = &self.dock_separator;
+        let width = look.data.width;
         let line = if width <= 0.0 {
             rect
         } else {
@@ -120,12 +190,13 @@ impl DockPainter for Kit {
                 }
             }
         };
-        self.splitter.paint(
+        let flags = separator.state;
+        look.paint(
             &cx(painter),
             &Part {
                 rect: line,
                 room: line,
-                state: state(separator.state),
+                state: state(flags).with(State::ACTIVE, flags.contains(PartState::DRAGGED)),
                 label: None,
             },
         );

@@ -226,3 +226,138 @@ fn the_time_series_cursor_is_dragged() {
     assert!(now > start + 30, "from frame {start} to {now}");
     assert!(!model.borrow().playing);
 }
+
+/// Three empty panels, framed as an application's are (not frameless):
+/// one in the start side area, two side by side in the centre.
+mod audit {
+    use egui_pop::api::workbench::{PANEL_INSPECTOR, PANEL_MAIN, PANEL_SIDE_BAR};
+    use egui_pop::api::{App, Ctx, DefaultPlugins, Plugin, PluginError};
+    use egui_pop::model::ids::{PanelId, PluginId};
+    use egui_pop::model::layout::{Layout, Node};
+    use egui_pop::model::panels::{Area, PanelSpec};
+
+    pub const SIDE: &str = "Audit side";
+    pub const LEFT: &str = "Audit left";
+    pub const RIGHT: &str = "Audit right";
+
+    const P_SIDE: PanelId = PanelId::from_static("audit.side");
+    const P_LEFT: PanelId = PanelId::from_static("audit.left");
+    const P_RIGHT: PanelId = PanelId::from_static("audit.right");
+
+    struct Panels;
+
+    impl Plugin for Panels {
+        fn id(&self) -> PluginId {
+            PluginId::from_static("audit")
+        }
+
+        fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+            ctx.panel(PanelSpec::new(P_SIDE, SIDE, Area::StartSide), |_, _| {})?
+                .panel(PanelSpec::new(P_LEFT, LEFT, Area::Center), |_, _| {})?
+                .panel(PanelSpec::new(P_RIGHT, RIGHT, Area::Center), |_, _| {})?;
+            Ok(())
+        }
+    }
+
+    pub fn app(theme: &str) -> App {
+        App::builder()
+            .layout(Layout {
+                areas: vec![
+                    (Area::StartSide, Node::tab(P_SIDE)),
+                    (
+                        Area::Center,
+                        Node::Split {
+                            vertical: false,
+                            ratio: 0.5,
+                            a: Box::new(Node::tab(P_LEFT)),
+                            b: Box::new(Node::tab(P_RIGHT)),
+                        },
+                    ),
+                ],
+                hidden: vec![PANEL_SIDE_BAR, PANEL_MAIN, PANEL_INSPECTOR],
+                ..Layout::default()
+            })
+            .plugins(DefaultPlugins)
+            .plugin(Panels)
+            .kit(super::rerun_like::kit())
+            .theme(egui_pop::theme::ThemeSpec::new(theme))
+            .build(&egui::Context::default())
+            .expect("the audit app builds")
+    }
+}
+
+/// The lines a row of pixels crosses between `x` and `x_end` (points):
+/// runs of at most 3 points, each lighter than both its neighbours or
+/// darker than both. A change of fill from one panel to the next is a
+/// step, not a line, and its anti-aliased pixel lies between the two.
+fn lines_across(img: &image::RgbaImage, y: f32, x: f32, x_end: f32, ppp: f32) -> usize {
+    let row = (y * ppp) as u32;
+    let (x0, x1) = (
+        (x * ppp).max(0.0) as u32,
+        ((x_end * ppp) as u32).min(img.width()),
+    );
+    let luma = |px: u32| {
+        let p = img.get_pixel(px, row).0;
+        (2 * i32::from(p[0]) + 5 * i32::from(p[1]) + i32::from(p[2])) / 8
+    };
+    // Runs of near-equal pixels: (luma, width).
+    let mut runs: Vec<(i32, u32)> = Vec::new();
+    for px in x0..x1 {
+        let l = luma(px);
+        match runs.last_mut() {
+            Some((at, w)) if (l - *at).abs() <= 3 => *w += 1,
+            _ => runs.push((l, 1)),
+        }
+    }
+    let thin = (3.0 * ppp).ceil() as u32;
+    runs.windows(3)
+        .filter(|w| {
+            let (before, (l, width), after) = (w[0].0, w[1], w[2].0);
+            width <= thin
+                && ((l > before + 4 && l > after + 4) || (l + 4 < before && l + 4 < after))
+        })
+        .count()
+}
+
+#[test]
+fn at_most_one_line_between_two_panels_at_rest() {
+    // Each theme: (the lines where the side area meets the centre, the
+    // lines between the centre's two panels).
+    let mut seen = Vec::new();
+    for theme in ["pop-dark", DARK, LIGHT] {
+        let mut h = Harness::builder()
+            .with_size(SIZE)
+            .with_max_steps(8)
+            .shared_wgpu()
+            .build_ui_state(|ui, app: &mut App| app.show(ui), audit::app(theme));
+        egui_pop::core::motion::freeze(&h.ctx, 0.0);
+        h.run();
+        let img = h.render().expect("render");
+        let ppp = h.ctx.pixels_per_point();
+        // A panel's tab: the shortest node named after it.
+        let tab = |name: &str| {
+            h.query_all_by_label(name)
+                .map(|n| n.rect())
+                .min_by(|a, b| a.height().total_cmp(&b.height()))
+                .unwrap_or_else(|| panic!("{theme}: no tab {name}"))
+        };
+        let (left, right) = (tab(audit::LEFT), tab(audit::RIGHT));
+        tab(audit::SIDE);
+        // A row through the bodies, below the tab bars, above the side
+        // area's grip (at the middle of its edge).
+        let y = left.bottom() + 60.0;
+        let areas = lines_across(&img, y, left.left() - 40.0, left.left() + 6.0, ppp);
+        let leaves = lines_across(&img, y, right.left() - 14.0, right.left() + 6.0, ppp);
+        seen.push((theme, areas, leaves));
+    }
+    // The probe sees lines: the default kit outlines each body and draws
+    // the side area's separator between them.
+    let pop = seen[0];
+    assert!(pop.1 >= 2, "pop-dark between the areas: {seen:?}");
+    // Rerun-like: the side area's separator alone, and the centre's
+    // panels meet with no line until the pointer is over their separator.
+    for (theme, areas, leaves) in &seen[1..] {
+        assert!(*areas <= 1, "{theme} between the areas: {seen:?}");
+        assert!(*leaves <= 1, "{theme} between two panels: {seen:?}");
+    }
+}

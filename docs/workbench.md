@@ -46,11 +46,20 @@ let builder = App::builder()
 ```
 
 **Frameless areas.** An area has a margin around it, and each of its
-panels' bodies a margin and a rounded border. `AppBuilder::frameless`
-takes both away for the areas it names, so their panels run to the
-window's edges and are set apart by the splitter's line only (a viewer
-whose views draw to their edges); a panel then gives itself the margin
-it wants. `main_edge_to_edge` takes away only the centre's outer margin.
+panels' bodies a margin and a rounded border (the kit's `dock-body`).
+`AppBuilder::frameless` takes both away for the areas it names, so their
+panels run to the window's edges and are set apart by the separator's
+line only (a viewer whose views draw to their edges); a panel then gives
+itself the margin it wants. `main_edge_to_edge` takes away only the
+centre's outer margin.
+
+**Lines between panels.** Two panels of one area meet at the dock's
+separator (the kit's `dock-separator`); two areas meet at the side
+area's separator, which egui draws and which takes the drag that resizes
+the area. Those are the lines that mean something: the bodies' borders
+beside them only repeat them, and a kit that wants one line where two
+panels meet sets `dock-body.rest.border-width` to 0, as the Rerun-like
+kit does (it also hides the dock's separator at rest).
 
 **Bare panels.** A shell panel is declared `bare` (`PanelSpec::bare`): alone in
 its area it is drawn plainly, with no tab bar and no scroll area from anyone. What

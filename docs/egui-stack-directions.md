@@ -157,14 +157,17 @@ code said otherwise:
 - The flags are `PartState`, shared by every part: `SELECTED`, `HOVERED`,
   `PRESSED`, `FOCUSED`, `DRAGGED`, and `LEAF_FOCUSED` (the dock's focused
   leaf, which egui_dock's look distinguishes).
-- The tab bar buttons, the hidden tab bar's handle, the bar's scroll bar
-  and the tab bodies are still painted from `Style`.
+- The tab bar buttons, the hidden tab bar's handle and the bar's scroll
+  bar are still painted from `Style`. Since 0.25 a body's border is the
+  painter's too (`tab_body`, with the body's state: hovered, focused
+  leaf).
 
 egui-pop no longer has `SeenTab`, `paint_tabs`, the transparent style or
 the `tab_style_override` width (a tab is as wide as the kit measures it,
 no 8-point floor); its egui_stack style only sets the bar's height.
-Separators are the kit's `splitter`, the drop overlay inside an area the
-kit's `dock-preview` and `button`.
+Separators are the kit's `dock-separator`, the bodies' borders its
+`dock-body`, the drop overlay inside an area the kit's `dock-preview` and
+`button`.
 
 Since egui_stack 0.23 the drop overlay is drawn on the target
 (`OverlayType::Zones`: the region the tab would take, bordered and
