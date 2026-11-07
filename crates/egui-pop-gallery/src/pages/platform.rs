@@ -103,7 +103,13 @@ pub fn add(builder: AppBuilder, real: bool, first: Option<Instance>) -> AppBuild
             .plugin(NotifyPlugin::new("egui-pop gallery").backend(sim.notify.clone()))
             .plugin(TrayPlugin::new("egui-pop gallery").backend(sim.tray.clone()))
             .plugin(SystemKeysPlugin::new(APP_ID).backend(sim.keys.clone()))
-            .plugin(LogsPlugin::new("egui-pop-gallery").logs(Logs::new(&sim.scratch, "gallery")))
+            // The `log` facade is the process's: galleries side by side
+            // would each show the others' lines.
+            .plugin(
+                LogsPlugin::new("egui-pop-gallery")
+                    .logs(Logs::new(&sim.scratch, "gallery"))
+                    .install(false),
+            )
             .plugin(
                 CrashPlugin::new("egui-pop gallery", env!("CARGO_PKG_VERSION"))
                     .dir(sim.scratch.join("crashes"))
