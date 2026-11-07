@@ -424,7 +424,7 @@ fn a_log_row_moves_the_time_cursor_and_selects_its_entity() {
         .filter(|n| n.accesskit_node().role() == egui::accesskit::Role::Button)
         .map(|n| (n.accesskit_node().label().unwrap_or_default(), n.rect()))
         .collect();
-    let (name, _) = rows
+    let (name, rect) = rows
         .iter()
         .find(|(name, _)| !name.starts_with(&format!("{start} ")))
         .expect("a heartbeat row in view")
@@ -434,7 +434,16 @@ fn a_log_row_moves_the_time_cursor_and_selects_its_entity() {
         .next()
         .and_then(|f| f.parse().ok())
         .expect("the row starts with its frame");
-    h.get_by_role_and_label(egui::accesskit::Role::Button, &name)
+    // A row spans every column, wider than the Logs panel: its middle
+    // lies over the next panel. The click goes on its time, in the
+    // table's first column.
+    let time = frame.to_string();
+    h.query_all_by_label(&time)
+        .find(|n| {
+            let c = n.rect().center();
+            rect.y_range().contains(c.y) && c.x >= rect.left() && c.x < rect.left() + 96.0
+        })
+        .expect("the row's time")
         .click();
     h.run();
     h.run();
