@@ -52,7 +52,7 @@ Conventional Commits; it runs again when the title is edited.
 | Clippy | `cargo clippy --workspace --all-targets -- -D warnings`, then `cargo doc` of the workspace | yes |
 | Guides' documentation | the README and the guides compiled as documentation (`consumer-smoke`), when only they changed | yes |
 | Docs site | the mdBook builds, `docs/SUMMARY.md` lists every page of the index, no link is broken | yes |
-| Tests (lavapipe) | unit and integration tests with cargo-nextest, and doctests (below) | yes |
+| Tests (lavapipe 1/3 to 3/3) | unit and integration tests with cargo-nextest, split in three shards run side by side, and doctests (below) | yes |
 | Viewer's video | the one build with GStreamer: clippy, docs, and the tests of the video widget and the viewer's video page | yes |
 | Viewer's web view | the one build with WebKitGTK: clippy, docs and the YouTube page's tests | yes |
 | Licences and advisories | `cargo deny check`: every dependency's licence accepted by `deny.toml`, security advisories, banned crates, sources | yes |

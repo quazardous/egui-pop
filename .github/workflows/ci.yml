@@ -143,10 +143,18 @@ jobs:
       - run: python3 tools/book/links.py target/book
 
   test:
-    name: Tests (lavapipe)
+    name: Tests (lavapipe ${{ matrix.shard }}/3)
     needs: changes
     if: needs.changes.outputs.test == 'true'
     runs-on: ubuntu-24.04
+    # The tests split in three by nextest (`--partition hash:N/3`), run side
+    # by side: about 16 minutes of tests become about 6 per shard. Each
+    # shard builds the tests (about 3 minutes, from the shared cache) and
+    # runs the doctests.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     env:
       # Render with Mesa's software Vulkan driver: the same pixels on every run.
       WGPU_BACKEND: vulkan
@@ -183,22 +191,22 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           if [ "$FULL" = true ]; then
-            cargo xtask affected --full --run -- --profile ci
+            cargo xtask affected --full --run -- --profile ci --partition hash:${{ matrix.shard }}/3
           else
-            cargo xtask affected --base "$BASE" --run -- --profile ci
+            cargo xtask affected --base "$BASE" --run -- --profile ci --partition hash:${{ matrix.shard }}/3
           fi
       - name: Upload the test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: junit
+          name: junit-${{ matrix.shard }}
           path: target/nextest/ci/junit-*.xml
           if-no-files-found: ignore
       - name: Upload snapshot differences
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: snapshot-diffs
+          name: snapshot-diffs-${{ matrix.shard }}
           path: |
             **/tests/snapshots/*.diff.png
             **/tests/snapshots/*.new.png
