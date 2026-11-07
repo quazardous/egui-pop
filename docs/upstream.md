@@ -455,6 +455,25 @@ limit.
 - **Remove when**: winit reports the cursor size (Windows'
   `SM_CXCURSOR`, the desktop's cursor theme size).
 
+## winit: no release after a compositor move on Wayland
+
+- **Compensated**: on GNOME's mutter (Wayland), a window moved or
+  resized by the compositor (`ViewportCommand::StartDrag`,
+  `BeginResize`, winit's `drag_window` and `drag_resize_window`) may
+  never get the release of the press that started it: egui then holds
+  the primary button down until the pointer leaves the window, and the
+  next clicks (a window button, a section's title) are taken as the
+  rest of that press. labwc delivers the release.
+- **Upstream**: not filed yet; to check against winit's Wayland
+  backend and mutter before filing.
+- **Workaround**: `frame::compositor_grab`, called by the title bar and
+  the resize edges after they hand the window to the compositor: the
+  window's next pass starts with the primary button released, when egui
+  still holds it and no release came. A real release coming later
+  finds the button up.
+- **Remove when**: winit delivers the release (or a pointer leave and
+  enter) after a compositor move or resize on Wayland.
+
 ## winit and egui: no owner window for a viewport
 
 - **Not built**: a palette or toolbox as a native utility window (U3 in
