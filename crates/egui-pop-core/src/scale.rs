@@ -60,10 +60,14 @@ impl Scale {
 }
 
 /// A width of `w` points snapped at `ppp`: a whole number of physical
-/// pixels, at least one, back in points.
+/// pixels, at least one, back in points. A width of zero (or less) stays
+/// zero: a stroke set to nothing is not drawn as a hairline.
 pub fn snap(w: f32, ppp: f32) -> f32 {
     if ppp <= 0.0 {
         return w;
+    }
+    if w <= 0.0 {
+        return 0.0;
     }
     (w * ppp).floor().max(1.0) / ppp
 }
@@ -164,6 +168,14 @@ mod tests {
         }
         assert_eq!(snap(1.0, 1.5) * 1.5, 1.0);
         assert_eq!(snap(2.0, 1.5) * 1.5, 3.0);
+    }
+
+    #[test]
+    fn a_zero_width_stays_zero() {
+        for ppp in [1.0, 1.25, 1.5, 2.0] {
+            assert_eq!(snap(0.0, ppp), 0.0, "at {ppp}");
+            assert_eq!(snap(-1.0, ppp), 0.0, "at {ppp}");
+        }
     }
 
     #[test]
