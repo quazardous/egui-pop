@@ -80,13 +80,18 @@ pub fn add(builder: AppBuilder, real: bool, first: Option<Instance>) -> AppBuild
             .plugin(egui_pop::platform::open::OpenPlugin)
             .plugin(PlatformPage { sim: None })
     } else {
+        // One folder per gallery, not per process: tests run galleries
+        // side by side in one process, and a crash one simulates would
+        // otherwise be offered by the others.
+        static GALLERIES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = GALLERIES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let sim = Sim {
             notify: notify::Simulated::default(),
             tray: tray::Simulated::default(),
             keys: keys::Simulated::default(),
             // Nothing is written on the web: these helpers do not panic there.
             scratch: egui_pop::platform::dirs::temp_dir().join(format!(
-                "egui-pop-gallery-{}",
+                "egui-pop-gallery-{}-{n}",
                 egui_pop::platform::dirs::pid()
             )),
         };
