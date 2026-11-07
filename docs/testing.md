@@ -51,6 +51,24 @@ test group caps the rendering tests yet. If a machine with many cores
 runs out of memory, cap them with `--test-threads`, or add a test group
 to the configuration.
 
+## The next branch
+
+Pull requests target `next`, a buffer branch between them and `main`:
+
+- a pull request into `next` runs the quick checks only (format, clippy,
+  the guides' documentation, licences, changesets and title), in minutes;
+  it merges as soon as they pass;
+- every push to `next` runs everything; a newer push cancels the running
+  run, so a batch of merges is checked once;
+- once that run passes, `main` fast-forwards to the commit it checked
+  (`.github/workflows/promote.yml`), and the site is deployed from `main`.
+  `main` only ever holds commits that passed everything;
+- when `next` fails, the merge that broke it is fixed on `next` or
+  reverted (its pull request reopened); `main` waits until `next` is green.
+
+Releases, publishing and tags happen from `main`. A release pull request
+goes through `next` like any other.
+
 ## Selection
 
 `cargo xtask affected` reads the files a change touches (against the
