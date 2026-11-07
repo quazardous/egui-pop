@@ -318,7 +318,12 @@ compiled at install.
   layout, docking, drag and drop and the tabs' input; the kit is its
   `DockPainter` (`kit::dock`): it measures each tab (`tab_width`, the
   kit's padding, no floor of egui_stack's) and paints the bars, the tabs,
-  the separators (`splitter`) and the drop zones inside an area
+  the borders of the panels' bodies (`dock-body`: its `border-width`,
+  `border-color`, `radius` and glow, the `ring-*` terms, at `rest`,
+  under the pointer, `hover`, and for the dock's focused panel, `focus`;
+  none in a frameless area), the separators between two panels
+  (`dock-separator`: its `fill` at `rest`, `hover` and `active` while
+  dragged) and the drop zones inside an area
   (`dock-preview`: the region a dragged tab would take, bordered and
   tinted; the buttons of egui_stack's former cross overlay, for an
   application asking for it, in `button`) where egui_stack lays them out. Shapes shipped: `box` (joined to its

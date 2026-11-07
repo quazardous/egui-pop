@@ -95,8 +95,9 @@ image = { version = "0.25", default-features = false }
 # continues egui_dock 0.21 on egui 0.37.
 # 0.22.1 has the `DockPainter` the kit paints the docks with; 0.22.2 the
 # section stacks egui-pop wraps (`sections`); 0.24 the n-ary tree, the
-# grid container and the zones drop overlay.
-egui_stack = { version = "0.24.0", default-features = false }
+# grid container and the zones drop overlay; 0.25 the body borders the
+# painter draws (`DockPainter::tab_body`), the kit's `dock-body`.
+egui_stack = { version = "0.25.0", default-features = false }
 egui-pop = { version = "0.7.0", path = "crates/egui-pop" }
 
 [workspace.lints.rust]

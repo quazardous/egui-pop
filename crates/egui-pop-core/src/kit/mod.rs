@@ -825,6 +825,14 @@ components! {
     /// Where a dragged tab or palette would dock (its fill at `opacity`);
     /// `disabled` when refused, its label saying why.
     dock_preview: "dock-preview" => "box",
+    /// The border of a panel's body in a dock (`kit::dock`): `rest`,
+    /// `hover` under the pointer, `focus` for the dock's focused panel;
+    /// its width, colour, corners and glow (the ring) per state. None in
+    /// a frameless area.
+    dock_body: "dock-body" => "plain",
+    /// The line between two panels of a dock (`width` thick): `hover`,
+    /// `active` while dragged, `focus` with the keyboard.
+    dock_separator: "dock-separator" => "plain",
     /// The frame around a text or code editor; `focus` while it has the
     /// keyboard.
     editor_frame: "editor-frame" => "card",

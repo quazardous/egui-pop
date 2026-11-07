@@ -1,4 +1,4 @@
-$description: "Rerun-like, both variants: what the dark and the light variant share (sizes, radii, type, the tab bar and the section bands, the plot's and the table header's shapes, the time cursor, the node graph's hovered and selected wires, and the roles both alias the same way)."
+$description: "Rerun-like, both variants: what the dark and the light variant share (sizes, radii, type, the tab bar, the panel bodies without a border, the separators invisible at rest, the scroll bars shown on hover, the section bands, the plot's and the table header's shapes, the time cursor, the node graph's hovered and selected wires, and the roles both alias the same way)."
 text:
   $type: "color"
   on-accent: {$value: "{blue.contrast}"}
@@ -45,6 +45,16 @@ tab-bar:
   rest:
     fill: {$type: "color", $value: "{surface.panel}", $description: "tab_bar_color"}
     border-width: {$type: "dimension", $value: {value: 0, unit: "px"}}
+dock-body:
+  $description: "Rerun outlines no view: panels are told apart by their fill."
+  rest:
+    border-width: {$type: "dimension", $value: {value: 0, unit: "px"}}
+dock-separator:
+  $description: "Rerun's views meet without a line at rest; the separator shows under the pointer and while dragged."
+  rest:
+    fill: {$type: "color", $value: "{transparent}"}
+scroll-bar:
+  visibility: {$type: "string", $value: "hover", $description: "Rerun's scroll bars float and show only while the pointer is over their area (egui's look): no line at rest."}
 section-band:
   height: {$type: "dimension", $value: {value: 24, unit: "px"}}
   rest:

@@ -110,11 +110,17 @@ What was taken from `re_ui` (`dark_theme.ron`, `light_theme.ron`,
 | `plot-cursor`: `head`, `head-size` | `triangle`, 10 | the same | `paint_time_cursor`'s triangle at the top |
 | `table-header-cell`: `shape` `plain`, a line under it (`indicator-side` bottom), `rest.fill`, `rest.border-color` | Gray.150, Gray.300 | Gray.850, Gray.700 | `table_header_bg_fill`, `table_header_stroke_color` |
 | `viewport.background` (a 2D view) | Gray.100 | Gray.1000 | `viewport_background` |
+| `dock-body`: `rest.border-width` | 0 | 0 | no outline around a view or a panel: they are told apart by their fill |
+| `dock-separator`: `rest.fill` | transparent | transparent | views meet without a line at rest; the separator shows in the default kit's colours under the pointer and while dragged |
+| `scroll-bar`: `visibility` | `hover` | `hover` | egui's floating scroll bars, shown while the pointer is over their area: no line at rest |
 
 The kit's components: buttons without an outline (`button_secondary`),
 tabs and the tab bar on the panel's colour with the tab's three text
 greys and no border, rows selected in the solid accent with the
-accent's text, section bands 24 high on the panel's colour. For the
+accent's text, section bands 24 high on the panel's colour, panel
+bodies without an outline, separators and scroll bars that show only
+under the pointer, so at rest at most one line (a side area's) parts
+two panels. For the
 views: plots without a frame on the view's background, in Rerun's grid
 colour, with a thin time cursor in the text's colour under a triangle, table headers filled with a line under
 them, the log levels in Rerun's colours and the 2D view's background.

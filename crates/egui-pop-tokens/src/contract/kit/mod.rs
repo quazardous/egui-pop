@@ -21,7 +21,9 @@ mod compare_pane;
 mod dialog;
 mod dialog_grip;
 mod dialog_header;
+mod dock_body;
 mod dock_preview;
+mod dock_separator;
 mod drag_cursor;
 mod editor_frame;
 mod empty_state;
@@ -122,7 +124,9 @@ pub(super) const GROUPS: &[&[Required]] = &[
     dialog::CONTRACT,
     dialog_grip::CONTRACT,
     dialog_header::CONTRACT,
+    dock_body::CONTRACT,
     dock_preview::CONTRACT,
+    dock_separator::CONTRACT,
     drag_cursor::CONTRACT,
     editor_frame::CONTRACT,
     empty_state::CONTRACT,

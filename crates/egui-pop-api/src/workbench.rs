@@ -3268,9 +3268,10 @@ fn draw_dock(app: &AppHandle, ui: &mut Ui, area: Area) {
         let mut cache = cache_id.update(&ctx, std::mem::take);
         cache.prepare(app, &ctx, &kit, &tabs);
         let mut style = cache.dock_style(ui.style(), &kit);
-        if app.frameless(area) {
-            // The panels' bodies run to the area's edges; the splitter's
-            // line alone sets them apart.
+        let frameless = app.frameless(area);
+        if frameless {
+            // The panels' bodies run to the area's edges, with no border
+            // (`Frameless`); the separator's line alone sets them apart.
             let body = &mut style.tab.tab_body;
             body.inner_margin = egui::Margin::ZERO;
             body.stroke = egui::Stroke::NONE;
@@ -3280,13 +3281,15 @@ fn draw_dock(app: &AppHandle, ui: &mut Ui, area: Area) {
             app,
             prepared: &cache.tabs,
         };
+        let framed: &(dyn egui_stack::DockPainter + Sync) = &*kit;
+        let bare = Frameless(&kit);
         // egui_stack lays the tabs out and takes their input; the kit
-        // measures and paints them, and the bars, separators and drop
-        // overlay (`egui_pop_core::kit`).
+        // measures and paints them, and the bars, bodies, separators and
+        // drop overlay (`egui_pop_core::kit`).
         DockArea::new(&mut dock)
             .id(dock_id(area))
             .style(style)
-            .painter(&*kit)
+            .painter(if frameless { &bare } else { framed })
             .show_close_buttons(false)
             .show_add_buttons(false)
             .show_leaf_close_all_buttons(false)
@@ -3338,6 +3341,75 @@ fn first_bar(
     })
 }
 
+/// The kit as the dock painter of a frameless area: everything as the
+/// kit paints it, except the panels' bodies, which have no border there
+/// (`AppBuilder::frameless`).
+struct Frameless<'a>(&'a Kit);
+
+impl egui_stack::DockPainter for Frameless<'_> {
+    fn tab_width(&self, tab: &egui_stack::TabMeasure<'_>) -> f32 {
+        self.0.tab_width(tab)
+    }
+
+    fn tab_bar(&self, painter: &egui::Painter, bar: &egui_stack::TabBarPaint<'_>) {
+        self.0.tab_bar(painter, bar);
+    }
+
+    fn tab(&self, painter: &egui::Painter, tab: &egui_stack::TabPaint<'_>) {
+        self.0.tab(painter, tab);
+    }
+
+    fn tab_bar_tail(&self, painter: &egui::Painter, tail: &egui_stack::TabBarTailPaint<'_>) {
+        self.0.tab_bar_tail(painter, tail);
+    }
+
+    fn tab_body(&self, _painter: &egui::Painter, _body: &egui_stack::TabBodyPaint<'_>) {}
+
+    fn separator(&self, painter: &egui::Painter, separator: &egui_stack::SeparatorPaint<'_>) {
+        self.0.separator(painter, separator);
+    }
+
+    fn drop_target(&self, painter: &egui::Painter, target: &egui_stack::DropTargetPaint<'_>) {
+        self.0.drop_target(painter, target);
+    }
+
+    fn drop_button(&self, painter: &egui::Painter, button: &egui_stack::DropButtonPaint<'_>) {
+        self.0.drop_button(painter, button);
+    }
+
+    fn drop_preview(&self, painter: &egui::Painter, drop: &egui_stack::DropPaint<'_>) {
+        self.0.drop_preview(painter, drop);
+    }
+
+    fn section_band(&self, painter: &egui::Painter, band: &egui_stack::SectionBandPaint<'_>) {
+        self.0.section_band(painter, band);
+    }
+
+    fn section_boundary(
+        &self,
+        painter: &egui::Painter,
+        boundary: &egui_stack::SectionBoundaryPaint<'_>,
+    ) {
+        self.0.section_boundary(painter, boundary);
+    }
+
+    fn tool_item(&self, painter: &egui::Painter, item: &egui_stack::ToolItemPaint<'_>) {
+        self.0.tool_item(painter, item);
+    }
+
+    fn tool_more(&self, painter: &egui::Painter, more: &egui_stack::ToolMorePaint<'_>) {
+        self.0.tool_more(painter, more);
+    }
+
+    fn tool_separator(
+        &self,
+        painter: &egui::Painter,
+        separator: &egui_stack::ToolSeparatorPaint<'_>,
+    ) {
+        self.0.tool_separator(painter, separator);
+    }
+}
+
 struct Viewer<'a> {
     app: &'a AppHandle,
     prepared: &'a HashMap<PanelId, PreparedTab>,
@@ -3348,6 +3420,12 @@ struct Viewer<'a> {
 fn dock_style(style: &egui::Style, kit: &Kit) -> egui_stack::Style {
     let mut s = egui_stack::Style::from_egui(style);
     s.tab_bar.height = kit.tab_bar.data.height.max(kit.tab.data.height);
+    // The kit paints the bodies' borders (`dock-body`); their background
+    // takes its corners at rest.
+    let body = kit.dock_body.style(egui_pop_core::kit::State::REST);
+    s.tab.tab_body.stroke = egui::Stroke::NONE;
+    s.tab.tab_body.corner_radius =
+        egui::CornerRadius::same(body.radius.round().clamp(0.0, 255.0) as u8);
     // Drops are shown on the node itself (the region the tab would take,
     // bordered and tinted), not on a cross of buttons. The kit paints
     // them (`dock-preview`); the style says the same for anything
