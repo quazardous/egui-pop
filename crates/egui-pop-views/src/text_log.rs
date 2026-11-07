@@ -35,7 +35,7 @@
 //! ```
 //! use egui_pop_views::text_log::{Level, LogEntry, TextLog, TextLogState};
 //!
-//! fn ui(ui: &mut egui::Ui, state: &mut TextLogState, log: &[LogEntry], now: &mut f64) {
+//! fn ui(ui: &mut egui::Ui, state: &mut TextLogState, log: &Vec<LogEntry>, now: &mut f64) {
 //!     let out = TextLog::new("app.log", log)
 //!         .label("Application log")
 //!         .time_cursor(Some(*now))
