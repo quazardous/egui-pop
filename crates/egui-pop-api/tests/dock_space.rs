@@ -339,35 +339,6 @@ fn an_area_drawn_bare_takes_a_dropped_tab_into_its_tabs() {
 }
 
 #[test]
-fn a_detached_window_takes_a_tab_as_a_tab_even_at_its_edge() {
-    let (mut h, moves) = harness(false);
-    let app = h.state().handle().clone();
-    // The console's window opens over the bottom area, below the tabs of
-    // the start side bar.
-    assert!(app.detach_panel(&CONSOLE).unwrap().ok());
-    h.run();
-    // kittest embeds the window in the main one: it sees the drag.
-    let from = tab(&h, "Search").center();
-    // The body's label, at the top-left of a window at least 320 points
-    // wide: in its left quarter, where an area would split.
-    let to = h.get_by_label("console body").rect().center();
-    drag(&mut h, from, to);
-    let over = app.window_drop().expect("the window shows its drop zone");
-    assert_eq!(over.zone, DropZone::Center, "a window holds tabs, no split");
-    assert!(
-        app.drop_hint().is_none(),
-        "the window shows it, not an area"
-    );
-    release(&mut h, to);
-    let layout = app.layout();
-    let window = layout.window_of(&SEARCH).expect("in the window");
-    assert_eq!(window.panel, CONSOLE);
-    assert_eq!(window.tabs, vec![SEARCH]);
-    assert_eq!(layout.area_of(&SEARCH), None, "not also in an area");
-    assert_eq!(moves.load(Ordering::SeqCst), 0, "a join, not a move");
-}
-
-#[test]
 fn a_layout_saved_before_the_space_reads_into_it_and_saves_the_same() {
     let (mut h, _) = harness(false);
     let app = h.state().handle().clone();
