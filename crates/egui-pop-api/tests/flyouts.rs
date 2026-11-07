@@ -1,7 +1,8 @@
 //! A folded side area's strip: an icon per panel, a click opening the
 //! panel alone as a flyout over the centre, a double click or the pin
 //! unfolding the area, the flyout's width kept per panel, and a panel's
-//! indicator on its icon while the panel is not shown.
+//! indicator on its icon while the panel is not shown; a bare strip,
+//! without icons.
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
@@ -515,4 +516,44 @@ fn escape_closes_the_combo_box_first_then_the_flyout() {
     f.h.run();
     f.h.run();
     assert!(f.app.flyout().is_none(), "then the flyout closed");
+}
+
+#[test]
+fn a_bare_strip_keeps_its_width_draws_no_icon_and_a_click_unfolds() {
+    let mut h = harness(builder().bare_strips(&[Area::StartSide]));
+    let app = h.state().handle().clone();
+    assert!(app.bare_strip(Area::StartSide));
+    // No icon for agents, none for assistive technology.
+    assert!(workbench::strip(&app).is_empty());
+    assert!(
+        h.query_by_role_and_label(egui::accesskit::Role::Button, "Files")
+            .is_none()
+    );
+    assert!(
+        h.query_by_role_and_label(egui::accesskit::Role::Button, "Search")
+            .is_none()
+    );
+    // The kit's width, not widened to an icon's cell.
+    let width = egui_pop_core::kit::Kit::of(&h.ctx).area_strip.data.width;
+    let strip = h.get_by_label("Unfold the start side bar").rect();
+    assert!(
+        (strip.width() - width).abs() < 0.5,
+        "{strip:?}, area-strip.width {width}"
+    );
+    // Nothing painted in the strip under its grip glyph: no icon, no
+    // title's first letter.
+    let under_grip = strip.top() + width * 2.0;
+    let below: Vec<egui::Rect> = h
+        .output()
+        .shapes
+        .iter()
+        .map(|c| c.shape.visual_bounding_rect())
+        .filter(|r| r.is_positive() && strip.contains_rect(*r) && r.top() >= under_grip)
+        .collect();
+    assert!(below.is_empty(), "painted under the grip: {below:?}");
+    // A click, under the grip, unfolds the area.
+    click_at(&mut h, strip.center());
+    assert!(app.layout().folded.is_empty());
+    assert!(app.flyout().is_none());
+    assert!(h.query_by_label("files body").is_some());
 }
