@@ -213,7 +213,7 @@ use egui_pop::egui;
 use egui_pop::views::text_log::{Level, LogEntry, TextLog, TextLogState};
 use egui_pop::views::timeline::{TimeScale, TimelineState};
 
-fn show_log(ui: &mut egui::Ui, log: &[LogEntry], state: &mut TextLogState, timeline: &mut TimelineState) {
+fn show_log(ui: &mut egui::Ui, log: &Vec<LogEntry>, state: &mut TextLogState, timeline: &mut TimelineState) {
     // The timeline's playhead is the time cursor: a row picked moves it.
     let out = TextLog::new("robot.log", log)
         .label("Robot log")
