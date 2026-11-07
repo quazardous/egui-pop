@@ -130,6 +130,17 @@ assert!(h.move_panel(&TREE, Area::EndSide).unwrap().ok());
 assert_eq!(h.layout().area_of(&TREE), Some(Area::EndSide));
 ```
 
+A side area is never narrower than the largest `PanelSpec::min_size` of
+its panels. The shell's own panels (`PANEL_SIDE_BAR`, 120 points at
+least; `PANEL_INSPECTOR`, 160) take the application's sizes:
+`AppBuilder::shell_panel_size` the width they start at,
+`shell_panel_min_size` and `shell_panel_max_size` their least and
+largest, in points or as a share of the window
+(`workbench::ShellSize::Share(0.6)`). `AppBuilder::centre_min_size`
+keeps the centre at least that wide: the side areas give way to it,
+each down to its own least, and a window too narrow for all of them
+squeezes the centre.
+
 Each panel gets `<id>.focus` and `<id>.toggle` commands. `AppHandle::focused_panel`,
 the context key `focusedPanel`, is the panel the keys obey; see
 [The focused panel](#the-focused-panel). The layout

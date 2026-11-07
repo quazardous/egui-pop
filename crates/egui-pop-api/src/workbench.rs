@@ -205,6 +205,44 @@ pub const CMD_ARRANGE_COLUMN: egui_pop_model::ids::CommandId =
 pub const SETTING_PANEL_ALIGNMENT: egui_pop_model::ids::SettingId =
     egui_pop_model::ids::SettingId::from_static("workbench.panel_alignment");
 
+/// A size across an area set by the application
+/// ([`AppBuilder::shell_panel_min_size`](crate::AppBuilder::shell_panel_min_size),
+/// `shell_panel_max_size`, `centre_min_size`): points, or a share of the
+/// window's content (0.6: 60 % of its width). A plain number is points.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ShellSize {
+    Points(f32),
+    Share(f32),
+}
+
+impl ShellSize {
+    /// In points, in a window whose content is `across` points across.
+    pub fn resolve(self, across: f32) -> f32 {
+        let points = match self {
+            ShellSize::Points(p) => p,
+            ShellSize::Share(s) => s * across,
+        };
+        if points.is_finite() {
+            points.max(0.0)
+        } else {
+            0.0
+        }
+    }
+}
+
+impl From<f32> for ShellSize {
+    fn from(points: f32) -> Self {
+        ShellSize::Points(points)
+    }
+}
+
+/// The least and largest sizes the application set for a shell panel.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct ShellBounds {
+    pub(crate) min: Option<ShellSize>,
+    pub(crate) max: Option<ShellSize>,
+}
+
 /// How the bottom panel lines up with the side bars.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PanelAlignment {
@@ -2104,27 +2142,48 @@ fn chain(vertical: bool, mut children: Vec<(Node, f32)>) -> Option<Node> {
 /// takes what is left), then follows a tab dragged to another area.
 pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     let ctx = ui.ctx().clone();
-    let (areas, sizes) = {
+    let across = ui.max_rect().width();
+    let bounds = app.shell_bounds();
+    let (areas, sizes, before) = {
         let mut wb = app.workbench_mut();
         wb.project();
         wb.content = ui.max_rect();
+        // The side areas' widths on the last pass: what the centre's least
+        // width weighs them against.
+        let before: BTreeMap<Area, f32> = wb.rects.iter().map(|(a, r)| (*a, r.width())).collect();
         wb.rects.clear();
         wb.bars.clear();
-        let sizes: BTreeMap<Area, (f32, f32)> = Area::ALL
+        let sizes: BTreeMap<Area, (f32, f32, f32)> = Area::ALL
             .into_iter()
             .map(|a| {
-                let specs: Vec<&PanelSpec> =
-                    wb.panels_in(a).iter().filter_map(|p| wb.spec(p)).collect();
-                let min = specs.iter().map(|s| s.min_size).fold(0.0, f32::max);
+                let panels = wb.panels_in(a);
+                let specs: Vec<&PanelSpec> = panels.iter().filter_map(|p| wb.spec(p)).collect();
+                let set = |p: &PanelId| bounds.iter().find(|(id, _)| id == p).map(|(_, b)| *b);
+                // A least size the application set replaces the panel's own.
+                let min = panels
+                    .iter()
+                    .zip(&specs)
+                    .map(|(p, s)| {
+                        set(p)
+                            .and_then(|b| b.min)
+                            .map_or(s.min_size, |m| m.resolve(across))
+                    })
+                    .fold(0.0, f32::max);
+                let max = panels
+                    .iter()
+                    .filter_map(|p| set(p).and_then(|b| b.max))
+                    .map(|m| m.resolve(across))
+                    .fold(f32::INFINITY, f32::min);
                 let default = specs
                     .iter()
                     .filter_map(|s| s.default_size)
                     .fold(0.0, f32::max);
-                (a, (min, default))
+                (a, (min, default, max))
             })
             .collect();
-        (wb.areas(), sizes)
+        (wb.areas(), sizes, before)
     };
+    let centre_min = app.centre_min_size().map(|m| m.resolve(across));
     let flipped = crate::layout_controls::side_bar_position(app).flipped();
     let zen = {
         let mut wb = app.workbench_mut();
@@ -2182,7 +2241,22 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             }
             continue;
         }
-        let (min, default) = sizes[&area];
+        let (min, default, max) = sizes[&area];
+        // The centre's least width: a side area gives way to it, never
+        // under its own least.
+        let max = match (area, centre_min) {
+            (Area::StartSide | Area::EndSide, Some(centre)) => {
+                let others: f32 = before
+                    .iter()
+                    .filter(|(a, _)| matches!(a, Area::StartSide | Area::EndSide) && **a != area)
+                    .map(|(_, w)| *w)
+                    .sum();
+                max.min(across - centre - others)
+            }
+            _ => max,
+        };
+        let min = min.max(48.0);
+        let max = max.max(min);
         let id = dock_id(area);
         let fallback: f32 = match area {
             Area::Bottom => 200.0,
@@ -2210,8 +2284,9 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             .frame(egui::Frame::side_top_panel(ui.style()).inner_margin(margin))
             .show_separator_line(kit.side_area.style(State::REST).border_width > 0.0)
             .resizable(true)
-            .default_size(default)
-            .min_size(min.max(48.0))
+            .default_size(default.clamp(min, max))
+            .min_size(min)
+            .max_size(max)
             .show(ui, |ui| {
                 // The panel keeps its width; content narrower than it does
                 // not shrink it.
@@ -3019,13 +3094,13 @@ fn lie_over(
     kit: &Kit,
     area: Area,
     strip: Rect,
-    (min, default): (f32, f32),
+    (min, default, most): (f32, f32, f32),
 ) {
     let id = dock_id(area).with("egui_pop.over");
     let width_id = id.with("width");
     let content = app.workbench_mut().content;
     let min = min.max(48.0);
-    let max = (content.width() - 2.0 * strip.width()).max(min);
+    let max = (content.width() - 2.0 * strip.width()).min(most).max(min);
     let width = ctx
         .data_mut(|d| d.get_persisted::<f32>(width_id))
         .or_else(|| {

@@ -485,6 +485,57 @@ fn an_application_sizes_the_shell_panels_and_starts_with_an_area_folded() {
     assert!((inspector.width() - 428.0).abs() < 2.0, "{inspector:?}");
 }
 
+/// The shell's side areas drawn in a window `width` wide.
+fn sides(builder: AppBuilder, width: f32) -> (f32, f32, f32) {
+    let app = builder.build(&egui::Context::default()).unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(width, 800.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    for _ in 0..4 {
+        h.run();
+    }
+    let handle = h.state().handle().clone();
+    let w = |a| handle.area_rect(a).map_or(0.0, |r: egui::Rect| r.width());
+    (w(Area::StartSide), w(Area::Center), w(Area::EndSide))
+}
+
+#[test]
+fn an_application_bounds_the_shell_panels_and_keeps_room_for_the_centre() {
+    // Today's sizes when nothing is set: the demo's tree asks for 220.
+    let (start, _, end) = sides(builder(false), 1280.0);
+    assert!((start - 220.0).abs() < 2.0, "{start}");
+    assert!((end - 240.0).abs() < 2.0, "{end}");
+    // A least size above the starting one: the area starts at its least.
+    let (start, ..) = sides(
+        builder(false).shell_panel_min_size(PANEL_SIDE_BAR, 260.0),
+        1280.0,
+    );
+    assert!((start - 260.0).abs() < 2.0, "{start}");
+    // A largest size as a share of the window.
+    let (_, _, end) = sides(
+        builder(false)
+            .shell_panel_size(PANEL_INSPECTOR, 900.0)
+            .shell_panel_max_size(
+                PANEL_INSPECTOR,
+                egui_pop_api::workbench::ShellSize::Share(0.3),
+            ),
+        1280.0,
+    );
+    assert!(end <= 0.3 * 1280.0 + 2.0, "{end}");
+    // The centre's least width: the side areas give way to it, not under
+    // their own least.
+    let (start, centre, end) = sides(
+        builder(false)
+            .shell_panel_size(PANEL_SIDE_BAR, 600.0)
+            .shell_panel_size(PANEL_INSPECTOR, 600.0)
+            .shell_panel_min_size(PANEL_INSPECTOR, 260.0)
+            .centre_min_size(320.0),
+        1280.0,
+    );
+    assert!(centre >= 318.0, "{start} {centre} {end}");
+    assert!(end >= 258.0, "{start} {centre} {end}");
+}
+
 /// Vetoes the end side bar lying over the centre.
 struct KeepEndBeside;
 
