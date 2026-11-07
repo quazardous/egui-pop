@@ -376,8 +376,89 @@ pub fn resize_edges(ctx: &Context) -> Option<ResizeDirection> {
     });
     if ctx.input(|i| i.pointer.primary_pressed()) {
         ctx.send_viewport_cmd(ViewportCommand::BeginResize(direction));
+        compositor_grab(ctx);
     }
     Some(direction)
+}
+
+/// Says that the compositor takes the pointer from this pass on, for an
+/// interactive move or resize of the window (`ViewportCommand::StartDrag`,
+/// `BeginResize`): the next pass of this window starts with the primary
+/// button released, if egui still holds it down.
+///
+/// upstream: some compositors (mutter, GNOME's, on Wayland) keep the
+/// button's release for their move, and winit never hands it to the
+/// window: egui then believes the button held until the pointer leaves
+/// the window, every click after it a drag or nothing (docs/upstream.md,
+/// "winit: no release after a compositor move on Wayland"). A release that
+/// does come later finds the button up and changes nothing.
+pub fn compositor_grab(ctx: &Context) {
+    let viewport = ctx.viewport_id();
+    let st = crate::state::shared::<Grabs>(ctx, "core.frame.grabs");
+    let mut grabs = lock(&st);
+    if !grabs.installed {
+        grabs.installed = true;
+        ctx.add_plugin(ReleaseAfterGrab);
+    }
+    if !grabs.pending.contains(&viewport) {
+        grabs.pending.push(viewport);
+    }
+}
+
+/// The windows whose compositor took the pointer ([`compositor_grab`]).
+#[derive(Debug, Default)]
+struct Grabs {
+    installed: bool,
+    pending: Vec<ViewportId>,
+}
+
+/// Releases the primary button in a window's next pass after a
+/// compositor grab ([`compositor_grab`]).
+#[derive(Debug)]
+struct ReleaseAfterGrab;
+
+impl egui::plugin::Plugin for ReleaseAfterGrab {
+    fn debug_name(&self) -> &'static str {
+        "egui_pop_core::frame::release_after_grab"
+    }
+
+    fn input_hook(&mut self, ctx: &Context, input: &mut egui::RawInput) {
+        let viewport = input.viewport_id;
+        {
+            let st = crate::state::shared::<Grabs>(ctx, "core.frame.grabs");
+            let mut grabs = lock(&st);
+            let Some(at) = grabs.pending.iter().position(|v| *v == viewport) else {
+                return;
+            };
+            grabs.pending.swap_remove(at);
+        }
+        let (down, pos) = ctx.input_for(viewport, |i| {
+            (i.pointer.primary_down(), i.pointer.latest_pos())
+        });
+        let released = input.events.iter().any(|e| {
+            matches!(
+                e,
+                egui::Event::PointerButton {
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    ..
+                }
+            )
+        });
+        if down && !released {
+            // Before anything else of the pass: a press that follows is a
+            // new one.
+            input.events.insert(
+                0,
+                egui::Event::PointerButton {
+                    pos: pos.unwrap_or_default(),
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: ctx.input_for(viewport, |i| i.modifiers),
+                },
+            );
+        }
+    }
 }
 
 /// What the user asked of the window through its frame.
@@ -504,6 +585,7 @@ impl<'a> TitleBar<'a> {
         } else if drag.drag_started() {
             if !fullscreen {
                 ctx.send_viewport_cmd(ViewportCommand::StartDrag);
+                compositor_grab(&ctx);
             }
         } else if crate::pointer::claim::opens_context_menu(&drag) {
             let at = drag.interact_pointer_pos().unwrap_or(bar.left_bottom());
@@ -961,6 +1043,70 @@ mod tests {
         assert_eq!(l.maximize.unwrap().right(), l.close.unwrap().left());
         assert_eq!(l.minimize.unwrap().right(), l.maximize.unwrap().left());
         assert!(lead.unwrap().right() < l.minimize.unwrap().left());
+    }
+
+    /// A compositor that keeps the release of the press that moved the
+    /// window (mutter on Wayland): the caption drags the window again, and
+    /// a window button still clicks.
+    #[test]
+    fn the_bar_moves_again_and_its_buttons_click_after_a_move_whose_release_never_came() {
+        let ctx = Context::default();
+        crate::theme::install(&ctx, &crate::theme::ThemeSpec::new("pop-dark"));
+        // Each pass: the minimize button, the bar's request, whether the
+        // window was handed to the compositor.
+        let pass = |events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+                events,
+                ..Default::default()
+            };
+            let (mut minimize, mut request) = (None, None);
+            let mut full = ctx.run_ui(input, |ui| {
+                let out = TitleBar::new("Title").show(ui, |_| {}, |_| {});
+                minimize = out.layout.minimize;
+                request = out.request;
+            });
+            full.textures_delta.clear();
+            let started = full
+                .viewport_output
+                .values()
+                .any(|v| v.commands.contains(&ViewportCommand::StartDrag));
+            (minimize, request, started)
+        };
+        let press = |pos, pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let caption = pos2(300.0, 10.0);
+        pass(vec![egui::Event::PointerMoved(caption)]);
+        pass(vec![press(caption, true)]);
+        // The caption dragged: the window is moved by the compositor, which
+        // never hands the release back.
+        let away = caption + vec2(40.0, 0.0);
+        let mut started = pass(vec![egui::Event::PointerMoved(away)]).2;
+        started |= pass(vec![egui::Event::PointerMoved(away + vec2(5.0, 0.0))]).2;
+        assert!(started, "the move went to the compositor");
+        // A second move: a new press on the caption drags it again (egui
+        // held the first press's drag until a release).
+        pass(vec![egui::Event::PointerMoved(caption)]);
+        pass(vec![press(caption, true)]);
+        let mut again = pass(vec![egui::Event::PointerMoved(away)]).2;
+        again |= pass(vec![egui::Event::PointerMoved(away + vec2(5.0, 0.0))]).2;
+        assert!(again, "the window moves a second time");
+        let (minimize, ..) = pass(vec![egui::Event::PointerMoved(away)]);
+        let button = minimize.expect("a minimize button").center();
+        let mut requests = Vec::new();
+        for events in [
+            vec![egui::Event::PointerMoved(button)],
+            vec![press(button, true)],
+            vec![press(button, false)],
+            Vec::new(),
+        ] {
+            requests.extend(pass(events).1);
+        }
+        assert_eq!(requests, [FrameRequest::Minimize]);
     }
 
     #[test]
