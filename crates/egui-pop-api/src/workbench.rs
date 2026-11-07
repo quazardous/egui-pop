@@ -2282,7 +2282,8 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
 /// through the `workbench.fold` step. A side area lying over the centre
 /// keeps its strip while `open` (`selected` then), and a click folds it.
 /// Below the glyph, an icon per panel ([`strip_icon`]), the strip
-/// widened to hold them. Returns where the strip was drawn.
+/// widened to hold them, unless the strip is bare
+/// ([`AppHandle::bare_strip`]). Returns where the strip was drawn.
 fn draw_strip(app: &AppHandle, ui: &mut Ui, kit: &Kit, area: Area, open: bool) -> Rect {
     let component = &kit.area_strip;
     let grip = component.data.width.max(1.0);
@@ -2414,7 +2415,8 @@ pub struct StripIcon {
 
 /// Every icon of the side areas' strips (an area folded, or lying over
 /// the centre), start side first, each in tab order, with its panel's
-/// indicator. Empty in zen mode.
+/// indicator; none for a bare strip ([`AppHandle::bare_strip`]). Empty
+/// in zen mode.
 pub fn strip(app: &AppHandle) -> Vec<StripIcon> {
     let (layout, zen, flyout) = {
         let mut wb = app.workbench_mut();
@@ -2461,8 +2463,12 @@ pub fn strip(app: &AppHandle) -> Vec<StripIcon> {
 }
 
 /// The panels a side area's strip shows icons for: those it holds that
-/// have something to draw, in tab order.
+/// have something to draw, in tab order; none on a bare strip
+/// ([`AppHandle::bare_strip`]).
 fn strip_panels(app: &AppHandle, area: Area) -> Vec<PanelId> {
+    if app.bare_strip(area) {
+        return Vec::new();
+    }
     let panels = app.workbench_mut().panels_in(area);
     panels.into_iter().filter(|p| drawable(app, p)).collect()
 }

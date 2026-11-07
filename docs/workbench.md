@@ -274,6 +274,15 @@ to hold them. An icon's tooltip gives the panel's title and its key
 (the first binding of `<panel>.focus`, else of `<panel>.toggle`), and
 the icon is a button named by the title.
 
+An application keeps a side area's strip bare with
+`AppBuilder::bare_strips(&[Area::StartSide])`: its grip glyph alone,
+`area-strip.width` wide, no icon per panel, and a click unfolding the
+area as before (`AppHandle::bare_strip` says which areas are bare). It
+is the application's choice, as `AppBuilder::frameless` is, not the
+theme's: whether a folded area lists its panels is part of how the
+application is laid out, and the same theme serves applications with
+and without the icons.
+
 On a folded area, a click on an icon opens that panel alone as a
 **flyout** over the centre, next to the strip, without moving the
 layout (`workbench.flyout`, `{ "panel", "open" }`;

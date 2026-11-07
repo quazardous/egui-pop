@@ -729,6 +729,8 @@ pub(crate) struct Shared {
     edge_to_edge: std::cell::Cell<bool>,
     /// The areas drawn without a frame (`AppBuilder::frameless`).
     frameless: RefCell<Vec<Area>>,
+    /// The side areas whose folded strip is bare (`AppBuilder::bare_strips`).
+    bare_strips: RefCell<Vec<Area>>,
     /// The system's text scaling (`AppBuilder::system_text_scale`).
     system_text_scale: std::cell::Cell<crate::text::SystemTextScale>,
     /// Whether the system always shows its scroll bars
@@ -872,6 +874,7 @@ impl AppHandle {
             drawing_areas: std::cell::Cell::new(false),
             edge_to_edge: std::cell::Cell::new(false),
             frameless: RefCell::new(Vec::new()),
+            bare_strips: RefCell::new(Vec::new()),
             system_text_scale: std::cell::Cell::default(),
             system_scroll_bars: std::cell::Cell::default(),
             system_wheel_lines: std::cell::Cell::new(crate::pointer::SYSTEM_WHEEL_LINES),
@@ -2425,6 +2428,12 @@ impl AppHandle {
         self.0.frameless.borrow().contains(&area)
     }
 
+    /// Whether a side area's folded strip is bare
+    /// ([`AppBuilder::bare_strips`]): its grip alone, no icon per panel.
+    pub fn bare_strip(&self, area: Area) -> bool {
+        self.0.bare_strips.borrow().contains(&area)
+    }
+
     /// The system's text scaling the text size was seeded from
     /// (`AppBuilder::system_text_scale`; 1 when none was given).
     pub fn system_text_scale(&self) -> crate::text::SystemTextScale {
@@ -2780,6 +2789,7 @@ pub struct AppBuilder {
     system_wheel_lines: u32,
     edge_to_edge: bool,
     frameless: Vec<Area>,
+    bare_strips: Vec<Area>,
     layout: Option<egui_pop_model::layout::Layout>,
     menu_bar: bool,
     system_file_chooser: bool,
@@ -2875,6 +2885,7 @@ impl AppBuilder {
             system_wheel_lines: crate::pointer::SYSTEM_WHEEL_LINES,
             edge_to_edge: false,
             frameless: Vec::new(),
+            bare_strips: Vec::new(),
             layout: None,
             menu_bar: true,
             system_file_chooser: false,
@@ -2970,6 +2981,33 @@ impl AppBuilder {
     /// ```
     pub fn frameless(mut self, areas: &[Area]) -> Self {
         self.frameless = areas.to_vec();
+        self
+    }
+
+    /// Side areas whose folded strip stays bare: its grip glyph alone,
+    /// `area-strip.width` wide, without an icon (or a title's first
+    /// letter) per panel; a click on it unfolds the area, and no panel
+    /// opens as a flyout from it. For an application whose folded area is
+    /// a plain handle. The centre and the bottom area have no strip and
+    /// are ignored.
+    ///
+    /// ```
+    /// use egui_pop_api::App;
+    /// use egui_pop_model::panels::Area;
+    ///
+    /// let app = App::builder()
+    ///     .bare_strips(&[Area::StartSide])
+    ///     .build(&egui::Context::default())
+    ///     .unwrap();
+    /// assert!(app.handle().bare_strip(Area::StartSide));
+    /// assert!(!app.handle().bare_strip(Area::EndSide));
+    /// ```
+    pub fn bare_strips(mut self, areas: &[Area]) -> Self {
+        self.bare_strips = areas
+            .iter()
+            .copied()
+            .filter(|a| matches!(a, Area::StartSide | Area::EndSide))
+            .collect();
         self
     }
 
@@ -3353,6 +3391,7 @@ impl AppBuilder {
             .map(|p| Writer::new(p, egui_pop_core::persist::DEBOUNCE));
         app.handle.0.edge_to_edge.set(self.edge_to_edge);
         *app.handle.0.frameless.borrow_mut() = self.frameless;
+        *app.handle.0.bare_strips.borrow_mut() = self.bare_strips;
         app.handle.0.system_text_scale.set(self.system_text_scale);
         app.handle.0.system_scroll_bars.set(self.system_scroll_bars);
         app.handle.0.system_wheel_lines.set(self.system_wheel_lines);
