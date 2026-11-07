@@ -1143,3 +1143,79 @@ fn a_tree_in_a_palette_keeps_the_focus_its_clicked_row_gave_it() {
     assert!(h.ctx.memory(|m| m.focused()).is_none());
     assert!(h.query_by_label("Mask 1").is_some(), "still open");
 }
+
+const WIDE: PanelId = PanelId::from_static("wide.strip");
+
+/// A palette whose content cannot shrink below 260 points (a row of
+/// tools that does not wrap), declared with a smaller least width.
+struct Wide;
+
+impl Plugin for Wide {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("wide")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.panel(
+            PanelSpec::new(WIDE, "Strip", Area::StartSide)
+                .palette()
+                .min_size(160.0),
+            |ui, _| {
+                ui.label("Strip body");
+                ui.allocate_exact_size(egui::vec2(260.0, 24.0), egui::Sense::hover());
+            },
+        )?;
+        Ok(())
+    }
+}
+
+#[test]
+fn a_palette_narrowed_below_its_content_keeps_its_buttons_inside() {
+    let app = App::builder()
+        .plugin(Wide)
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 600.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    h.run();
+    let start = frame(&h, &WIDE);
+    assert!(start.width() >= 260.0, "{start:?}");
+    // Its right edge pulled far in, below the content's width, then a
+    // few frames more: the drop, then the size the step kept.
+    let at = right_edge(start);
+    h.drag_at(at);
+    h.run();
+    for i in 1..=4 {
+        h.hover_at(at - egui::vec2(60.0 * i as f32, 0.0));
+        h.run();
+        // While dragged, as once dropped: the band's buttons stay inside
+        // the frame, at its right end.
+        let drawn = frame(&h, &WIDE);
+        let close = h.get_by_role_and_label(Role::Button, "Close Strip").rect();
+        assert!(
+            close.right() <= drawn.right() + 0.5 && drawn.right() - close.right() < 24.0,
+            "dragged {i}: {drawn:?} {close:?}"
+        );
+    }
+    h.drop_at(at - egui::vec2(240.0, 0.0));
+    h.run();
+    h.run();
+    let drawn = frame(&h, &WIDE);
+    let size = floating_wide(&h).size.expect("resized");
+    assert!(near(drawn.width(), size[0]), "{drawn:?} {size:?}");
+    for name in ["Close Strip", "Roll up Strip", "Pin Strip"] {
+        let b = h.get_by_role_and_label(Role::Button, name).rect();
+        assert!(
+            drawn.contains_rect(b),
+            "{name} outside the frame: {drawn:?} {b:?}"
+        );
+    }
+    let close = h.get_by_role_and_label(Role::Button, "Close Strip").rect();
+    assert!(drawn.right() - close.right() < 24.0, "{drawn:?} {close:?}");
+}
+
+fn floating_wide(h: &Harness<'_, App>) -> FloatingGroup {
+    floating(h, &WIDE).expect("the strip floats")
+}
