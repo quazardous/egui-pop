@@ -68,6 +68,15 @@ fn line<'a>(text: &'a str, name: &str) -> &'a str {
 fn a_click_names_the_button_without_pressing_it_and_copy_holds_it() {
     let mut h = harness("debug");
     let app = handle(&h);
+    // The page list veiled, as in the pages' shots: a page added to the
+    // gallery leaves the dialog's shot alone.
+    h.state()
+        .app
+        .handle()
+        .service(&egui_pop_gallery::shell::NAV)
+        .expect("the gallery's navigation")
+        .veil_list(true);
+    h.run();
     chord(&mut h);
     assert!(inspect::active(&app));
     h.get_by_label("Announce \"Saved\"").click();
