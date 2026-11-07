@@ -23,6 +23,11 @@ pub(crate) const CONTRACT: &[Required] = &[
         "dimension",
         "a section count's text size",
     ),
+    comp(
+        "section-count.placement",
+        "string",
+        "where a section's count goes: end or after-title",
+    ),
     comp("section-count.rest.fill", "color", "a section count's fill"),
     comp(
         "section-count.rest.border-color",

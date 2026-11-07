@@ -56,7 +56,9 @@ pub use scoped::{ScopedKit, ScopedVisuals, Stock};
 pub use scroll::{Placement, ScrollBarKit, Visibility};
 pub use source::KitSource;
 pub use tone::Tone;
-pub use window::{ButtonsHover, ButtonsSide, WindowCorners, WindowKit};
+pub use window::{
+    ButtonsHover, ButtonsSide, CountPlacement, SectionsKit, WindowCorners, WindowKit,
+};
 
 /// The states a part can be in, combined (a selected tab under the
 /// pointer is `SELECTED | HOVER`). No flag is the resting state.
@@ -652,6 +654,8 @@ macro_rules! components {
             /// The window's own terms (`title-bar.buttons-side`,
             /// `title-bar.buttons-hover`, `window.corners`).
             pub window: WindowKit,
+            /// The sections' terms (`section-count.placement`).
+            pub sections: SectionsKit,
             /// The drag cursors by kind (`drag-cursor.<kind>.hover`,
             /// `.drag`, `.policy`), under the pointer profile's.
             pub drag_cursors: DragCursorKit,
@@ -688,6 +692,7 @@ macro_rules! components {
                     $($field: component($name, $default),)*
                     glyphs,
                     window: WindowKit::default(),
+                    sections: SectionsKit::default(),
                     drag_cursors: DragCursorKit::default(),
                     scroll: ScrollBarKit::default(),
                     scoped: ScopedKit::default(),
@@ -1131,6 +1136,7 @@ impl Kit {
         let mut kit = Kit::compile_components(component, Glyphs::default(), Vec::new());
         kit.glyphs = Glyphs::compile(t, &mut problems);
         kit.window = WindowKit::compile(t, &mut problems);
+        kit.sections = SectionsKit::compile(t, &mut problems);
         kit.drag_cursors = DragCursorKit::compile(t, &mut problems);
         kit.scroll = ScrollBarKit::compile(t, &kit.scroll_bar.data, &mut problems);
         kit.scoped = ScopedKit::compile(&kit);
