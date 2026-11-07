@@ -542,10 +542,17 @@ impl Plugin for Tv {
 
 /// The menu opened in a theme; the rows' rects by label, the separator's
 /// span, what the rows say.
-fn tv_menu(
-    spec: egui_pop_core::theme::ThemeSpec,
-) -> (Harness<'static, App>, egui::Rect, Vec<menus::RowTrace>) {
+fn tv_menu(theme: Option<&str>) -> (Harness<'static, App>, egui::Rect, Vec<menus::RowTrace>) {
+    let mut themes = egui_pop_core::theme::Themes::default();
+    let spec = match theme {
+        Some(yaml) => {
+            themes.add_text("tv", yaml).expect("the test theme reads");
+            egui_pop_core::theme::ThemeSpec::new("tv")
+        }
+        None => egui_pop_core::theme::ThemeSpec::new("pop-dark"),
+    };
     let app = App::builder()
+        .themes(themes)
         .theme(spec)
         .plugin(Tv)
         .build(&egui::Context::default())
@@ -570,7 +577,7 @@ fn tv_menu(
 
 #[test]
 fn a_theme_sets_a_menu_s_rows_width_separator_and_gutter_and_items_carry_notes() {
-    let (h, menu, rows) = tv_menu(egui_pop_core::theme::ThemeSpec::new("pop-dark"));
+    let (h, menu, rows) = tv_menu(None);
     // Today's menu: at least 200 wide, a gutter (Quit has an icon).
     assert!(menu.width() >= 200.0, "{menu:?}");
     assert!(rows.iter().all(|r| r.gutter > 0.0), "{rows:?}");
@@ -593,16 +600,19 @@ fn a_theme_sets_a_menu_s_rows_width_separator_and_gutter_and_items_carry_notes()
     assert!(note.left() > label.right() + 40.0, "{label:?} {note:?}");
     assert!(about.right() - note.right() < 30.0, "{note:?} in {about:?}");
 
-    let tvty = egui_pop_core::theme::ThemeSpec::new("pop-dark")
-        .override_token("menu-item.height", json!({"value": 31, "unit": "px"}))
-        .override_token("menu-item.padding-x", json!({"value": 12, "unit": "px"}))
-        .override_token("menu-item.width", json!({"value": 336, "unit": "px"}))
-        .override_token(
-            "menu-item.separator-inset",
-            json!({"value": 0, "unit": "px"}),
-        )
-        .override_token("menu-item-gutter.width", json!({"value": 0, "unit": "px"}));
-    let (h, menu, rows) = tv_menu(tvty);
+    // tvty's menu, in a theme of its own (the tokens are optional: a
+    // theme file gives their type).
+    let tvty = r#"
+$extends: "pop-dark"
+menu-item:
+  height: {$type: "dimension", $value: {value: 31, unit: "px"}}
+  padding-x: {$type: "dimension", $value: {value: 12, unit: "px"}}
+  width: {$type: "dimension", $value: {value: 336, unit: "px"}}
+  separator-inset: {$type: "dimension", $value: {value: 0, unit: "px"}}
+menu-item-gutter:
+  width: {$type: "dimension", $value: {value: 0, unit: "px"}}
+"#;
+    let (h, menu, rows) = tv_menu(Some(tvty));
     assert!(menu.width() >= 336.0, "{menu:?}");
     assert!(rows.iter().all(|r| r.gutter == 0.0), "no gutter: {rows:?}");
     assert!(rows.iter().all(|r| r.icon.is_none()), "{rows:?}");
