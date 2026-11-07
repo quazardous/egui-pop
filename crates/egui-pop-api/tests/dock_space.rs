@@ -144,7 +144,11 @@ fn drag(h: &mut Harness<'_, App>, from: Pos2, to: Pos2) {
             from + (to - from) * (i as f32 / 8.0),
         ));
     }
-    h.step();
+    // Held there: egui_stack keeps a target it found for a moment (its
+    // `max_preference_time`) before it takes the next one.
+    for _ in 0..4 {
+        h.step();
+    }
 }
 
 fn release(h: &mut Harness<'_, App>, at: Pos2) {
@@ -338,11 +342,13 @@ fn an_area_drawn_bare_takes_a_dropped_tab_into_its_tabs() {
 fn a_detached_window_takes_a_tab_as_a_tab_even_at_its_edge() {
     let (mut h, moves) = harness(false);
     let app = h.state().handle().clone();
-    assert!(app.detach_panel(&SEARCH).unwrap().ok());
+    // The console's window opens over the bottom area, below the tabs of
+    // the start side bar.
+    assert!(app.detach_panel(&CONSOLE).unwrap().ok());
     h.run();
     // kittest embeds the window in the main one: it sees the drag.
-    let from = tab(&h, "Console").center();
-    let body = h.get_by_label("search body").rect();
+    let from = tab(&h, "Search").center();
+    let body = h.get_by_label("console body").rect();
     let to = egui::pos2(body.left() + 2.0, body.center().y);
     drag(&mut h, from, to);
     let over = app.window_drop().expect("the window shows its drop zone");
@@ -353,10 +359,10 @@ fn a_detached_window_takes_a_tab_as_a_tab_even_at_its_edge() {
     );
     release(&mut h, to);
     let layout = app.layout();
-    let window = layout.window_of(&CONSOLE).expect("in the window");
-    assert_eq!(window.panel, SEARCH);
-    assert_eq!(window.tabs, vec![CONSOLE]);
-    assert_eq!(layout.area_of(&CONSOLE), None, "not also in an area");
+    let window = layout.window_of(&SEARCH).expect("in the window");
+    assert_eq!(window.panel, CONSOLE);
+    assert_eq!(window.tabs, vec![SEARCH]);
+    assert_eq!(layout.area_of(&SEARCH), None, "not also in an area");
     assert_eq!(moves.load(Ordering::SeqCst), 0, "a join, not a move");
 }
 
