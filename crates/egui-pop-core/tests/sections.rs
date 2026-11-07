@@ -1863,3 +1863,67 @@ fn a_count_goes_at_the_band_s_end_or_right_after_the_title() {
     assert!(after >= gap && after < 3.0 * gap, "{title2:?} {count2:?}");
     assert!(count2.right() < count.right());
 }
+
+#[test]
+fn a_stack_sized_by_its_content_keeps_folded_bands_under_a_short_section() {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(300.0, 500.0))
+        .build_ui(|ui| {
+            Sections::new(NAME).fill(false).show(ui, |stack| {
+                stack.rows(Section::new("live", "Live"), 2, |ui, range| {
+                    for i in range {
+                        ui.label(format!("live {i}"));
+                    }
+                });
+                stack.section(Section::new("idle", "Idle").open(false), |ui| {
+                    ui.label("idle row");
+                });
+            });
+        });
+    h.run();
+    let laid = laid_out(&h.ctx, NAME);
+    let live = laid[0].body.expect("open");
+    assert!(live.height() < 100.0, "{live:?}");
+    assert_eq!(laid[1].band.top(), live.bottom());
+    assert!(laid[1].empty > 300.0, "{laid:?}");
+}
+
+#[test]
+fn a_section_s_scroll_bar_takes_the_theme_s_thumb_and_track_inset() {
+    const THUMB: egui::Color32 = egui::Color32::from_rgb(0x4b, 0x4b, 0x4b);
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(300.0, 300.0))
+        .build_ui(|ui| {
+            Sections::new(NAME).show(ui, |stack| {
+                stack.rows(Section::new("long", "Long"), 500, |ui, range| {
+                    for i in range {
+                        ui.label(format!("row {i}"));
+                    }
+                });
+            });
+        });
+    egui_pop_core::theme::install(
+        &h.ctx,
+        &egui_pop_core::theme::ThemeSpec::new("pop-dark")
+            .override_token("scroll-bar.visibility", serde_json::json!("always"))
+            .override_token("scroll-bar.rest.fill", serde_json::json!("#4b4b4b"))
+            .override_token(
+                "scroll-bar.margin-track",
+                serde_json::json!({"value": 4, "unit": "px"}),
+            ),
+    );
+    h.run();
+    h.run();
+    let body = laid_out(&h.ctx, NAME)[0].body.expect("open");
+    let thumbs: Vec<egui::Rect> = h
+        .output()
+        .shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Rect(r) if r.fill == THUMB => Some(r.rect),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(thumbs.len(), 1, "the theme's thumb: {thumbs:?}");
+    assert_eq!(thumbs[0].top(), body.top() + 4.0, "{thumbs:?} {body:?}");
+}

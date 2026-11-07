@@ -61,6 +61,14 @@ windowed rows and the wheel live there, and run against the same tests.
   egui_stack's `pull_when`), the band's height from the kit, and the stack's
   own scroll bar, when it overflows, is the kit's seen at rest
   (`overflow_scroll`);
+- every bar of the stack, the bodies' included, is drawn as
+  `UiPop::scroll_area` draws one: the kit's thumb and track in a
+  `ScrollBar` scope (egui_stack's `bar_style`) and
+  `scroll-bar.margin-track` (`bar_track_inset`);
+- `Sections::fill(false)` sizes the stack by its content (egui_stack's
+  `fill`): an open section sized by the list is never taller than what
+  its body lays out, the folded bands follow right under the last open
+  section, and the room left stays empty under the last band;
 - the debug bridge's `core.sections.laid` slot and the old layouts'
   move (see Remembered) stay egui-pop's.
 
