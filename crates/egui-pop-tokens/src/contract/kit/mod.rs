@@ -100,6 +100,7 @@ mod toast;
 mod toggle_button;
 mod toggle_chip;
 mod toolbar_button;
+mod tooltip;
 mod tree_drop_marker;
 mod viewport_focus;
 mod window;
@@ -204,6 +205,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     toggle_button::CONTRACT,
     toggle_chip::CONTRACT,
     toolbar_button::CONTRACT,
+    tooltip::CONTRACT,
     tree_drop_marker::CONTRACT,
     viewport_focus::CONTRACT,
     window::CONTRACT,

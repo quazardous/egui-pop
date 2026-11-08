@@ -972,6 +972,10 @@ components! {
     /// A toast's frame (its level's tone is its icon's); its `text` is
     /// the message's.
     toast: "toast" => "card",
+    /// A tooltip's frame (`tooltip::TooltipExt`): its `text`, its
+    /// `font-size` (else the `Body` style's), its `placement` (`widget`
+    /// or `pointer`) and its `offset`.
+    tooltip: "tooltip" => "card",
     /// egui's button shown on or off (`Button::selected`), which egui
     /// draws (handler `scoped`): its states become egui's in a scope,
     /// `selected` its fill and text while on.

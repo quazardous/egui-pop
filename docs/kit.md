@@ -468,6 +468,16 @@ compiled at install.
   `card` is the application's own card (`UiPop::card`): the raised
   surface at rest, an edge in the status colour by tone, `muted` a
   sunken well; its padding is `space.group`.
+- **Tooltips** (`tooltip`, handler `card`). `egui_pop_core::tooltip`'s
+  `TooltipExt::tip` (and `disabled_tip`, `tip_ui`) is the kit's
+  `on_hover_text`: egui's delay, grace and tooltip layer, the text the
+  widget's description, in the `tooltip` frame (fill, border, radius,
+  `padding-x` and `padding-y`, shadow) with its `text` colour and its
+  `font-size` (else the `Body` style's). `placement` is `widget`, under
+  the widget from its start edge as egui's, or `pointer`, under the
+  pointer from its position; `offset` is the gap between them. The
+  defaults are egui's popup look, so a theme changes nothing until it
+  sets them; egui's own `on_hover_text` keeps the popup's look.
 - **The application's chrome** (`header-band`, `dialog-header`,
   `band-icon-button`, `find-bar-button`, `activity-bar-item`,
   `dock-preview`, `command-button`, `command-palette-row`,
