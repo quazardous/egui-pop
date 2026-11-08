@@ -73,8 +73,10 @@ centre's outer margin.
 **Lines between panels.** Two panels of one area meet at the dock's
 separator (the kit's `dock-separator`); two areas meet at the layout's
 line between them, which the kit draws (as wide as the widgets' border,
-shown at rest only when `side-area` has a border) and which takes the
-drag that resizes the area. Those are the lines that mean something: the bodies' borders
+shown at rest only when `side-area` has a border). It lies inside the
+side or bottom area, on its edge facing the centre, in the room the
+area's frame keeps for it, where egui drew a side panel's separator
+(`Kit::paint_area_line`); it takes the drag that resizes the area. Those are the lines that mean something: the bodies' borders
 beside them only repeat them, and a kit that wants one line where two
 panels meet sets `dock-body.rest.border-width` to 0, as the Rerun-like
 kit does (it also hides the dock's separator at rest).
