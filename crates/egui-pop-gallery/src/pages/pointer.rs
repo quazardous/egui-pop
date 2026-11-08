@@ -61,10 +61,10 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             "{changed} gestures changed in the shortcuts editor"
         ));
     }
-    if ui.button("Open the shortcuts editor").clicked() {
+    if ui.button("Open the gestures editor").clicked() {
         app.run(
-            egui_pop::api::settings_window::CMD_SETTINGS,
-            serde_json::json!({ "section": egui_pop::api::settings_window::SHORTCUTS }),
+            egui_pop::api::admin::CMD_OPEN,
+            serde_json::json!({ "path": "input/gestures" }),
         );
     }
 

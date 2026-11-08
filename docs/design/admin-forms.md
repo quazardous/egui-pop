@@ -49,10 +49,23 @@ record, so a single record (a backup strategy) is edited as a list of
 one. A deep link `scope/section/<record key>` marks that record and
 scrolls to it. Helios's Storage and Backup pages are built on these.
 
-Slice 1 leaves for later: `Ctrl+,`, File > Settings and the aliases
-`app.settings` and `app.settings.page` (the settings window keeps them
-until the shortcuts editor, gestures and fonts become widget kinds and
-the window goes); the kit components of section 4.4 (the shell draws
+Slice 6 makes the Settings app the settings: `Ctrl+,`, File > Settings
+and `app.settings` open it, and `AdminPlugin` is in `DefaultPlugins`
+(one added on its own takes the group's place). What the settings window
+drew itself are its pages, as registered widget kinds: Input › Keyboard
+shortcuts (`shortcuts`), Input › Pointer gestures (`gestures`, the same
+editor with the gestures alone), Interface › Fonts (`fonts`) and one
+page per custom `SettingsPage` (`settings-page`, in its first setting's
+scope; `app.settings.page` opens it there). A widget names the settings
+it edits in its options' `settings`, so the generated pages leave them
+out. The window stays behind General › Advanced
+(`app.settings.window`) for what the Settings app does not do yet: its
+search does not look inside the shortcuts editor (commands by name, by
+key) nor inside a custom page's settings, only at the pages' titles and
+keywords. Helios's health check is its Health scope (findings as a
+record list with their fix and Ignore as row actions).
+
+Slice 1 leaves for later: the kit components of section 4.4 (the shell draws
 with the existing selectable rows, buttons, combo boxes and indicators);
 icons on the scope tabs and their overflow; the scopes' order and the
 search's filters (`@modified`, `@scope:`); statuses read from commands

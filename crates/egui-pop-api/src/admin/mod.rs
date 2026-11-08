@@ -31,9 +31,11 @@
 //!   `admin.close`, `admin.popOut`, `admin.set` and `admin.reset` (a value
 //!   in a scope, for agents). The `admin` collector shows the tree.
 //!
-//! The settings window ([`crate::settings_window`]) stays until the
-//! migration replaces it; the shortcuts editor, gestures and fonts pages
-//! become widget kinds then.
+//! `Ctrl+,` and `app.settings` open it ([`crate::settings_window`]).
+//! The shortcuts editor, the gestures, the Fonts page and the custom
+//! settings pages are its pages, as registered widget kinds (`shortcuts`,
+//! `gestures`, `fonts`, `settings-page`); the settings window of before
+//! opens from General › Advanced.
 
 mod shell;
 
@@ -193,8 +195,10 @@ impl Admin {
         lock(&self.hooks).register(name, hook)
     }
 
-    /// Registers a widget kind (a stub registry for now: the shortcuts
-    /// editor, gestures and font picker move here with the migration).
+    /// Registers a widget kind: draws a node of its kind with its options
+    /// (`shortcuts`, `gestures`, `fonts` and `settings-page` are
+    /// egui-pop's own). One that edits settings names them in its
+    /// options' `settings`, so the generated pages leave them out.
     pub fn widget_kind(
         &self,
         id: &str,
@@ -220,7 +224,15 @@ impl Admin {
     /// a manifest places), then every manifest, checked.
     pub fn tree(&self, app: &AppHandle) -> Tree {
         let entries = app.settings();
-        let manifests = lock(&self.manifests).clone();
+        let mut manifests = lock(&self.manifests).clone();
+        // The pages the settings window drew itself: shortcuts, gestures,
+        // fonts, custom pages, and the window behind Advanced.
+        if app
+            .service(&crate::settings_window::SETTINGS_WINDOW)
+            .is_some()
+        {
+            manifests.insert(0, crate::settings_window::admin_manifest(app));
+        }
         let placed: std::collections::BTreeSet<&str> =
             manifests.iter().flat_map(|m| m.bound_settings()).collect();
         let mut tree = Tree::default();
@@ -577,7 +589,9 @@ impl Plugin for AdminPlugin {
     }
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
-        ctx.service(&ADMIN, Admin::new())?;
+        let service = Admin::new();
+        crate::settings_window::register_kinds(&service);
+        ctx.service(&ADMIN, service)?;
         ctx.local_scope(
             SURFACE,
             StoreScope::new(egui_pop_model::history::SETTINGS, "Settings"),

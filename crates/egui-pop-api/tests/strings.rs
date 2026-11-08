@@ -160,7 +160,12 @@ fn the_palette_shows_and_matches_the_translated_label_on_english_data() {
 #[test]
 fn the_settings_window_shows_translated_settings_and_stores_raw_values() {
     let mut h = harness();
-    h.key_press_modifiers(Modifiers::COMMAND, Key::Comma);
+    // The settings window itself (`Ctrl+,` opens the Settings app).
+    let _ = h.state_mut().run(
+        &egui_pop_api::settings_window::CMD_SETTINGS_WINDOW,
+        serde_json::Value::Null,
+        egui_pop_model::commands::Origin::User,
+    );
     h.run();
     assert!(settings_window::is_open(h.state().handle()));
     assert!(h.query_all_by_label("Apparence").count() >= 1);

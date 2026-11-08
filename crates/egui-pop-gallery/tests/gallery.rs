@@ -1155,7 +1155,7 @@ fn the_settings_window_searches_and_edits_shortcuts() {
     let mut results = egui_kittest::SnapshotResults::new();
     let mut h = harness(options("pop-dark", Density::Comfortable, "settings"));
     h.run();
-    h.get_by_label("Open the settings window (Ctrl+,)").click();
+    h.get_by_label("Open the settings window").click();
     h.run();
     h.run();
     egui_pop_test::assert_all_named(&h);
@@ -1167,11 +1167,33 @@ fn the_settings_window_searches_and_edits_shortcuts() {
     results.add(h.try_snapshot("shortcuts-pop-dark"));
 }
 
+/// `Ctrl+,` opens the Settings app; the shortcuts editor is its Input ›
+/// Keyboard shortcuts page.
+#[test]
+fn the_settings_app_holds_the_shortcuts_editor() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    let mut h = harness(options("pop-dark", Density::Comfortable, "settings"));
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Comma);
+    h.run();
+    assert!(egui_pop::api::admin::is_open(h.state().app.handle()));
+    h.state().app.handle().run(
+        egui_pop::api::admin::CMD_OPEN,
+        serde_json::json!({ "path": "input/shortcuts" }),
+    );
+    h.run();
+    h.run();
+    h.run();
+    assert!(h.query_by_label("Change the keys of Edit: Undo").is_some());
+    egui_pop_test::assert_all_named(&h);
+    results.add(h.try_snapshot("admin-shortcuts-pop-dark"));
+}
+
 #[test]
 fn the_settings_window_shows_the_gallerys_custom_page() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "settings"));
     h.run();
-    h.get_by_label("Open the settings window (Ctrl+,)").click();
+    h.get_by_label("Open the settings window").click();
     h.run();
     h.run();
     // Under the gallery's section, found by a keyword (the search field
@@ -3220,7 +3242,7 @@ fn the_viewer_shows_docs_pages_finds_zooms_and_asks_before_remote_images() {
 fn the_shortcuts_editor_searches_by_key_and_removes_every_key() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "settings"));
     h.run();
-    h.get_by_label("Open the settings window (Ctrl+,)").click();
+    h.get_by_label("Open the settings window").click();
     h.run();
     h.get_by_label("Keyboard shortcuts").click();
     h.run();
@@ -6439,7 +6461,7 @@ fn the_pointer_page_switches_profile_and_lists_its_gestures() {
 fn the_shortcuts_editor_adds_a_gesture_done_on_its_pad() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "settings"));
     h.run();
-    h.get_by_label("Open the settings window (Ctrl+,)").click();
+    h.get_by_label("Open the settings window").click();
     h.run();
     h.get_by_label("Keyboard shortcuts").click();
     h.run();
