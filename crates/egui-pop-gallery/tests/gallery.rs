@@ -7910,6 +7910,8 @@ fn the_file_browser_page_shows_the_filmstrip_and_the_columns() {
     h.run();
     h.get_by_role_and_label(egui::accesskit::Role::Button, "Filmstrip")
         .click();
+    h.run();
+    h.get_by_label("harbour.png").click();
     for _ in 0..3 {
         settle_thumbnails(&mut h);
     }
@@ -7917,6 +7919,8 @@ fn the_file_browser_page_shows_the_filmstrip_and_the_columns() {
     h.snapshot("file-browser-filmstrip-pop-dark");
     h.get_by_role_and_label(egui::accesskit::Role::Button, "Columns")
         .click();
+    h.run();
+    // The focus kept: the next column shows its thumbnail.
     for _ in 0..3 {
         settle_thumbnails(&mut h);
     }
