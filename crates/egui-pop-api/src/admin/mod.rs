@@ -447,7 +447,7 @@ impl Plugin for AdminPlugin {
     }
 
     fn title(&self) -> String {
-        "Settings".into()
+        "Settings app".into()
     }
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {

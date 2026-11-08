@@ -2081,7 +2081,7 @@ panel-egui-pop-jobs =
     .title = Tâches
 
 plugin-egui-pop-admin =
-    .title = Réglages
+    .title = Application des réglages
 
 plugin-egui-pop-about =
     .title = À propos

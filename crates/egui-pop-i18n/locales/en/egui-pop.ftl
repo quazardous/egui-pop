@@ -2695,7 +2695,7 @@ plugin-egui-pop-about =
     .title = About
 
 plugin-egui-pop-admin =
-    .title = Settings
+    .title = Settings app
 
 plugin-egui-pop-agent-socket =
     .title = Agent socket
