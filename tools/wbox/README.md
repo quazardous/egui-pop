@@ -73,18 +73,18 @@ does.
 
 ## GNOME: a headless mutter
 
-Some bugs show only on GNOME. `mutter.py` runs a scenario in a headless
-mutter instead of labwc, with the same calls (`launch`, `mouse_move`,
-`click`, `drag`, `key`, `screenshot`, `stop`): input goes through mutter's
-RemoteDesktop D-Bus API, frames through its ScreenCast stream and
-PipeWire, captured by GStreamer. `backend.py` picks it when
-`WBOX_COMPOSITOR=mutter` (or `compositor: mutter` in the config):
+Some bugs show only on GNOME. wbox (0.14 and later) runs them in a
+headless mutter instead of labwc, with the same calls: `backend.py` builds
+wbox's own compositor, the config's (`compositor: mutter`) or the one
+`WBOX_COMPOSITOR` names, so a scenario runs unchanged in either:
 
 ```sh
 WBOX_COMPOSITOR=mutter $WBOX_PYTHON tools/wbox/titlebar.py
 ```
 
-It needs mutter, pipewire, wireplumber, dbus-daemon, GStreamer's
-`pipewiresrc`, `pngenc` and `videocrop`, and the `jeepney` package in the
-wbox Python. Each run gets a private D-Bus session and runtime directory;
-nothing touches the desktop's session.
+mutter runs headless only (`headless: true`, as in `config.yaml`). It
+needs wbox's `mutter` extra (`pip install 'wbox-mcp[mutter]'`, which
+brings jeepney), mutter, dbus-daemon, PipeWire and WirePlumber, and
+GStreamer with `pipewiresrc`: see wbox's usage guide. Each run gets a
+private D-Bus session and runtime directory; nothing touches the desktop's
+session.
