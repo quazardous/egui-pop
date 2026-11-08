@@ -196,6 +196,16 @@ pub const GRAPH_WIRE_HINT: StrKey = StrKey::new(
     "egui-pop-viewport-graph-wire-hint",
     "Click: select the wire · Ctrl+click: add it · Drag: move its nearer end · Right-click: its menu",
 );
+/// The one-time hint on a canvas's first use.
+pub const NAV_HINT: StrKey = StrKey::new(
+    "egui-pop-viewport-nav-hint",
+    "Middle-drag, Space+drag or H to pan · Ctrl+wheel to zoom · F to frame",
+);
+/// The indicator shown while hand mode is on.
+pub const NAV_HAND: StrKey = StrKey::new(
+    "egui-pop-viewport-nav-hand",
+    "Hand: drag to pan (H to leave)",
+);
 /// Announced when wires are removed.
 pub const GRAPH_DISCONNECTED: StrKey = StrKey::new(
     "egui-pop-viewport-graph-disconnected",
@@ -318,6 +328,8 @@ pub const ALL: &[StrKey] = &[
     GRAPH_SELECT_DESTINATION,
     GRAPH_MINIMAP,
     GRAPH_MINIMAP_VALUE,
+    NAV_HINT,
+    NAV_HAND,
 ];
 
 #[cfg(test)]

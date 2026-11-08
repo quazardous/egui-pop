@@ -552,6 +552,10 @@ fn show(ui: &mut Ui, app: &AppHandle, s: &mut State, asked: &Cell<Option<(bool, 
     let editor = GraphEditor::new(&s.graph, &mut s.view)
         .label("Processing graph")
         .size(vec2(width, height))
+        // The page shows the minimap below; the view is kept across
+        // sessions.
+        .overview(egui_pop::viewport::navigation::Overview::Never)
+        .keep_view("gallery.node-graph")
         .snap(s.snap.then_some(10.0))
         .wires(s.wires)
         .header(move |ui, _node| {

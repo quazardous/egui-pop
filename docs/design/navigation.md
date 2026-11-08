@@ -1,8 +1,14 @@
 # Navigation on canvases larger than their view: a study
 
-Status: **design note, proposed** (2026-11-08). Nothing in section 6 is
-decided; section 7 lists the questions for the maintainer, each with a
-recommendation.
+Status: **accepted, under way** (2026-11-08). The maintainer chose B
+for Q1 (hand mode: H, and Space held), Q2 (the profile's key plus F
+everywhere), Q3 (the overview when needed), Q4 (the view kept by id)
+and Q6 (a one-time hint, dismissed by the first pan or a click); Q5
+stays A. Built so far, in `egui_pop::viewport::navigation` and on the
+node graph: hand mode, the `view.*` commands and their keys, fit
+selection, the overview's rule, the kept view and the hint. Still to
+do: the image viewport and plots on the same model (hand mode, fit,
+100 % and the commands at least), the zoom control on the graph.
 
 A report started it: in Helios and in the gallery "you cannot move
 around in the diagrams". The quick check (section 1) found a real fault

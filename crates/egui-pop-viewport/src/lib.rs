@@ -85,6 +85,7 @@ pub mod hooks;
 pub mod image_surface;
 pub mod loupe;
 pub mod mounts;
+pub mod navigation;
 pub mod navigator;
 pub mod overlay;
 pub mod source;
