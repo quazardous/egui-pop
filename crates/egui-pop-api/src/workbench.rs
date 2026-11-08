@@ -2580,8 +2580,10 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     // (a plugin may veto; the layout is built again from the workbench's
     // state each pass, so a veto puts it back).
     let mut resized = false;
-    // An area its least size widened keeps that size once the least goes,
-    // as egui's side panels kept theirs.
+    // As egui kept a side panel's size from its first pass on, an open
+    // area keeps the size it was first shown at: a panel made active
+    // later with another default size does not resize it. An area its
+    // least size widened keeps that size once the least goes.
     for zone in laid.zones.iter().filter(|z| z.shown == Shown::Open) {
         let Some(area) = area_from(&zone.name.0).filter(|a| *a != Area::Center) else {
             continue;
@@ -2591,17 +2593,24 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         } else {
             zone.rect.width()
         };
-        // What it would have without its least size: the size the user
-        // gave, else its default (not raised to the least).
+        let kept = saved.get(&zone.name.0).copied();
+        // What it would have without its least size: the size kept, else
+        // its default (not raised to the least).
         let (_, default, _) = sizes[&area];
-        let wanted = saved
-            .get(&zone.name.0)
-            .copied()
-            .unwrap_or_else(|| area_default(area, default));
-        if along > wanted + 0.5 && along <= zone.least + 0.5 {
-            saved.insert(zone.name.0.clone(), along);
-            resized = true;
-        }
+        let wanted = kept.unwrap_or_else(|| area_default(area, default));
+        let size = if along > wanted + 0.5 && along <= zone.least + 0.5 {
+            along
+        } else if kept.is_none() {
+            // Its default as the layout took it (within its bounds).
+            layout
+                .zone(&zone.name.0)
+                .and_then(|z| z.constraints.default)
+                .map_or(along, |d| d.points(0.0))
+        } else {
+            continue;
+        };
+        saved.insert(zone.name.0.clone(), size);
+        resized = true;
     }
     for event in &laid.events {
         match event {
