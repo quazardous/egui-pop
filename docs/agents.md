@@ -8,9 +8,10 @@ that bridge is, how an agent reaches it, what it can and cannot do, and
 what is not protected today.
 
 In short: the bridge is a Rust API inside the application's process.
-egui-pop opens no socket and no port for it. An agent is code that holds
-the `App` (a test, a harness, a transport the application writes
-itself); it discovers the collectors and commands as JSON, runs the
+egui-pop opens no socket and no port for it unless the application turns
+on the opt-in [agent socket](agent-socket.md) (`egui-pop-agent`). An
+agent is code that holds the `App` (a test, a harness, a transport such
+as the agent socket); it discovers the collectors and commands as JSON, runs the
 commands offered to agents, reads every collector's state, and calls
 the collector actions offered to agents. What keeps an action away from
 it is the command's or the collector action's `agent` flag, the
@@ -20,10 +21,13 @@ checks.
 
 ## What an agent connects to
 
-**No transport.** The bridge (`egui_pop::core::debug::DebugBridge`) is a
-list of *collectors* held by each `App`. Nothing in egui-pop listens on
-a TCP port, a local socket or a pipe for it, and there is no address to
-connect to, loopback or not. It is reached by Rust calls:
+**In the process, or over the agent socket.** The bridge
+(`egui_pop::core::debug::DebugBridge`) is a list of *collectors* held by
+each `App`. By default nothing listens for it: no TCP port, no socket,
+no pipe. An application that wants agents outside its process adds the
+opt-in crate `egui-pop-agent`, which serves the calls below as JSON-RPC
+over a private local socket ([The agent socket](agent-socket.md)); never
+TCP. In the process, it is reached by Rust calls:
 
 | Call | What it does |
 |---|---|
@@ -588,12 +592,14 @@ assert_eq!(app.run(&count, Json::Null, Origin::User).now(), Some(Ok(json!(3))));
 
 What is not protected today. None of these is fixed by documenting it.
 
-- **No transport, no authentication.** egui-pop has no notion of who
-  the agent is: every bridge call is `debug-bridge`. An application that
-  exposes the bridge over a socket or a pipe gives whoever reaches it
-  everything below; any local process able to connect to that transport
-  is an agent. Access control is the transport's, and egui-pop offers no
-  helper for it.
+- **No authentication beyond the socket's owner.** egui-pop has no
+  notion of who the agent is: every call through the bridge is
+  `debug-bridge`, every call through the [agent socket](agent-socket.md)
+  `agent-socket`. The socket is a Unix socket of mode 0600 in a directory
+  only the user may write to (a named pipe on Windows, with the system's
+  default access), so any process of the same user that reaches it is an
+  agent, with what the bridge's mode allows (read-only unless the
+  application offers more).
 - **Code in the process is the user if it says so.** The bridge's mode
   holds anyone but the user; code in the process (a plugin included)
   that calls `debug_call_as` with `Origin::User` is not held. Turning

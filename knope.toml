@@ -109,6 +109,13 @@ versioned_files = [
     { path = "Cargo.lock", dependency = "egui-pop-imaging" },
 ]
 
+[packages.egui-pop-agent]
+versioned_files = [
+    "crates/egui-pop-agent/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-agent" },
+    { path = "Cargo.lock", dependency = "egui-pop-agent" },
+]
+
 [packages.egui-pop-test-macros]
 versioned_files = [
     "crates/egui-pop-test-macros/Cargo.toml",
