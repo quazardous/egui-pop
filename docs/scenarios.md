@@ -121,7 +121,44 @@ The gallery's scenarios are in `crates/egui-pop-gallery/tests/scenarios`;
 the broken ones, under `broken/`, fail on purpose and
 `tests/scenarios.rs` checks their reports.
 
+## Live runs
+
+The same files run against a running application over its [agent
+socket](agent-socket.md), as an agent drives it, with
+`egui_pop_test::scenario::live::LiveRunner` (Unix) or its command line:
+
+```console
+$ egui-pop-scenario --socket "$XDG_RUNTIME_DIR/egui-pop-agent-my-app.sock" \
+    --var folder=/tmp/photos --out /tmp/out \
+    --shot my.screenshot '{"path": "$path"}' tests/scenarios
+```
+
+- **Steps.** `Call`, `Wait`, `Expect(NoError)`, `Expect(Value)`,
+  `Expect(Journal)` and `Shot` work as in-process. `Ui` and
+  `Expect(Tree)` need the accessibility tree: they fail live, until the
+  `ui.*` side over eframe's `inspection` exists.
+- **Variables.** `--var name=value` (`LiveRunner::var`) replaces `$name`
+  in every string argument of the steps and fixtures: a folder the run
+  made, a file.
+- **Invariants.** `NoErrorToast`, `NoFailedCommand`, `NoUnknownCommand`
+  and `NoMissingText` as in-process; `NoPanic` breaks when the
+  application is gone (it crashed or exited). `StableWindows` and
+  `FrameBudget` need the frames: in-process only.
+- **Shots.** A shot keeps every collector's snapshot as
+  `<scenario>-<name>.json` in `--out`. With `--shot CAPABILITY ARGS`
+  (`LiveRunner::shot`), it also calls the application's own screenshot
+  capability, `$path` in its arguments replaced by
+  `<scenario>-<name>.png`, and waits for the file.
+- **Output.** One JSON line per scenario on stdout; with `--out`, each
+  passed scenario's journal as `<scenario>-journal.json` and a
+  failure's report as `<scenario>-failure.txt`. The exit status is 1
+  when one fails.
+
+The application must let the agent write (`BridgeMode::On`): a socket
+turned on without a mode is read-only, and a scenario that changes
+anything is refused.
+
 ## Not yet
 
-- Live runs, against a running application over a socket, and the
-  recording of an agent's session as a scenario.
+- `Ui` steps live, and the recording of an agent's session as a
+  scenario.
