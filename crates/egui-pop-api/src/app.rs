@@ -6427,10 +6427,12 @@ impl App {
             crate::workbench::show(&h, ui);
             return;
         }
+        // The bars hold no dock: no dragged tab is dropped there.
+        let mut no_drop = Vec::new();
         if h.zone_has_blocks(&zones::TITLE) {
             // No least height: a title zone whose blocks draw nothing (the
             // system draws the frame) takes no room.
-            egui::Panel::top(Id::unique("egui_pop.title"))
+            let shown = egui::Panel::top(Id::unique("egui_pop.title"))
                 .frame(egui::Frame::NONE)
                 // The kit's `title-bar` draws the line under the bar.
                 .show_separator_line(false)
@@ -6438,9 +6440,10 @@ impl App {
                 .show(ui, |ui| {
                     focus::scope(ui, "titleBar", &[], |ui| h.show_zone(ui, &zones::TITLE));
                 });
+            no_drop.push(shown.response.rect);
         }
         if h.menu_bar() {
-            egui::Panel::top(Id::unique("egui_pop.top")).show(ui, |ui| {
+            let shown = egui::Panel::top(Id::unique("egui_pop.top")).show(ui, |ui| {
                 focus::scope(ui, "topBar", &[], |ui| {
                     egui::MenuBar::new().ui(ui, |ui| {
                         // The top bar's blocks keep the width they took
@@ -6490,8 +6493,9 @@ impl App {
                     });
                 });
             });
+            no_drop.push(shown.response.rect);
         } else if h.zone_has_blocks(&zones::TOP_BAR) || h.zone_has_blocks(&zones::TOP_BAR_END) {
-            egui::Panel::top(Id::unique("egui_pop.top")).show(ui, |ui| {
+            let shown = egui::Panel::top(Id::unique("egui_pop.top")).show(ui, |ui| {
                 focus::scope(ui, "topBar", &[], |ui| {
                     ui.horizontal(|ui| {
                         h.show_zone(ui, &zones::TOP_BAR);
@@ -6504,9 +6508,10 @@ impl App {
                     });
                 });
             });
+            no_drop.push(shown.response.rect);
         }
         if h.zone_has_blocks(&zones::STATUS_BAR) {
-            egui::Panel::bottom(Id::unique("egui_pop.status")).show(ui, |ui| {
+            let shown = egui::Panel::bottom(Id::unique("egui_pop.status")).show(ui, |ui| {
                 let region = focus::Region::new("statusBar", crate::workbench::RANK_STATUS_BAR);
                 focus::region(ui, &region, |ui| {
                     // One Tab stop, Left and Right between its items.
@@ -6516,7 +6521,9 @@ impl App {
                     });
                 });
             });
+            no_drop.push(shown.response.rect);
         }
+        h.workbench_mut().no_drop = no_drop;
         crate::workbench::show(&h, ui);
     }
 }
