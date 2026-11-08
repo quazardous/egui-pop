@@ -134,8 +134,12 @@ fn describe_call_and_wait_from_outside() {
         assert!(caps.iter().any(|c| c["name"] == "about.read"));
         assert!(caps.iter().any(|c| c["name"] == "bridge.wait"));
 
-        let snapshot = c.result("snapshot", json!({ "collector": "bridge" }));
-        assert!(snapshot.is_object(), "{snapshot}");
+        let all = c.result("snapshot", json!({}));
+        assert!(all.get("commands").is_some(), "{all}");
+        let one = c.result("snapshot", json!({ "collector": "commands" }));
+        assert!(!one.is_null(), "{one}");
+        let r = c.request("snapshot", json!({ "collector": "no.such" }));
+        assert_eq!(r["error"]["code"], -32602, "{r}");
 
         let settled = c.result("wait", json!({ "settled": true, "deadline_ms": 10_000 }));
         assert_eq!(settled["met"], true, "{settled}");
