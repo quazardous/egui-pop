@@ -1,0 +1,7 @@
+// Fails on purpose: a capability nobody registered (NoUnknownCommand).
+Scenario(
+    name: "unknown-command",
+    steps: [
+        Call("gallery.does.not.exist", ()),
+    ],
+)

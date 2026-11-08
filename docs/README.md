@@ -203,6 +203,8 @@ of every crate with every feature on.
 - [Packaging](packaging.md): desktop files, AppStream, Flatpak, icons,
   the Windows manifest and installers, the macOS bundle, and what each
   platform service needs from the package.
+- [Scenarios](scenarios.md): tests written as RON data, replayed
+  headless with invariants checked after every step.
 - [Testing](testing.md): how egui-pop is tested.
 - [Threading](threading.md): what egui allows on which thread, egui-pop's
   threads, the kernel on its own thread, delegated displays.

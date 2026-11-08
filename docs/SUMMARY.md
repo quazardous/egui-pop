@@ -66,6 +66,7 @@
 
 - [Packaging](packaging.md)
 - [Testing](testing.md)
+- [Scenarios](scenarios.md)
 - [Threading](threading.md)
 - [Threading survey](threading-survey.md)
 - [File dialogs survey](file-dialogs-survey.md)

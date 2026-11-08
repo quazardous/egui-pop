@@ -31,6 +31,8 @@ egui-pop-api.workspace = true
 egui-pop-model.workspace = true
 egui-pop-test-macros.workspace = true
 serde_json.workspace = true
+serde.workspace = true
+ron.workspace = true
 
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }
