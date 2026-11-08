@@ -266,6 +266,12 @@ of every crate with every feature on.
   proposed file browser shared by every file dialog and an import window,
   its view-mode, file-source and thumbnail-provider contracts, and a
   survey of file managers' and photo tools' views.
+- [Administration as forms, a design](design/admin-forms.md): the
+  proposed framework for an application's whole non-image side (settings,
+  tools, import, export, backups, health, plugins, jobs) as one full-page
+  app with two navigation axes: a declarative form tree contributed by
+  manifests, a closed set of bricks, standalone task surfaces and a
+  wizard kit, with a survey and Helios's information architecture.
 - [Fonts](fonts.md): font families from the theme at four weights, the
   size scale and the text size seeded from the system's (built), and
   the design for the rest.
