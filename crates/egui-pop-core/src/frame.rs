@@ -393,6 +393,11 @@ pub fn resize_edges(ctx: &Context) -> Option<ResizeDirection> {
 /// "winit: no release after a compositor move on Wayland"). A release that
 /// does come later finds the button up and changes nothing.
 pub fn compositor_grab(ctx: &Context) {
+    // A probe only: #257's release disabled, to show #256 still fails
+    // without it. Never merged.
+    if std::env::var_os("EGUI_POP_KEEP_GRAB_FIX").is_none() {
+        return;
+    }
     let viewport = ctx.viewport_id();
     let st = crate::state::shared::<Grabs>(ctx, "core.frame.grabs");
     let mut grabs = lock(&st);
