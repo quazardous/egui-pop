@@ -84,6 +84,54 @@ pub const PALETTE_NOT_NUMBER: StrKey = StrKey::new(
 pub const PALETTE_NOT_JSON: StrKey =
     StrKey::new("egui-pop-palette-not-json", "not JSON: { $error }");
 
+// The administration app (`admin`): settings as full pages.
+
+pub const ADMIN_SEARCH_HINT: StrKey =
+    StrKey::new("egui-pop-admin-search-hint", "Search every setting");
+pub const ADMIN_POP_OUT: StrKey = StrKey::new("egui-pop-admin-pop-out", "Pop out");
+pub const ADMIN_POP_OUT_TIP: StrKey = StrKey::new(
+    "egui-pop-admin-pop-out-tip",
+    "Move the settings to a window of their own",
+);
+pub const ADMIN_POP_IN: StrKey = StrKey::new("egui-pop-admin-pop-in", "Back into the window");
+pub const ADMIN_CLOSE: StrKey = StrKey::new("egui-pop-admin-close", "Close");
+pub const ADMIN_SCOPES: StrKey = StrKey::new("egui-pop-admin-scopes", "Setting families");
+pub const ADMIN_SECTIONS: StrKey = StrKey::new("egui-pop-admin-sections", "Sections");
+pub const ADMIN_RESET_SECTION: StrKey =
+    StrKey::new("egui-pop-admin-reset-section", "Reset section");
+pub const ADMIN_MODIFIED_COUNT: StrKey =
+    StrKey::new("egui-pop-admin-modified-count", "Changed: { $count }");
+pub const ADMIN_SET_FOR: StrKey = StrKey::new("egui-pop-admin-set-for", "Set for");
+pub const ADMIN_SET_FOR_NAME: StrKey =
+    StrKey::new("egui-pop-admin-set-for-name", "Where { $setting } is set");
+pub const ADMIN_FOR_APP: StrKey = StrKey::new("egui-pop-admin-for-app", "This app");
+pub const ADMIN_FOR_LIBRARY: StrKey = StrKey::new("egui-pop-admin-for-library", "This library");
+pub const ADMIN_FOR_WORKSPACE: StrKey =
+    StrKey::new("egui-pop-admin-for-workspace", "This workspace");
+pub const ADMIN_ORIGIN_LIBRARY: StrKey = StrKey::new("egui-pop-admin-origin-library", "library");
+pub const ADMIN_ORIGIN_WORKSPACE: StrKey =
+    StrKey::new("egui-pop-admin-origin-workspace", "workspace");
+pub const ADMIN_ORIGIN_RUN: StrKey = StrKey::new("egui-pop-admin-origin-run", "command line");
+pub const ADMIN_ORIGIN_TIP: StrKey = StrKey::new(
+    "egui-pop-admin-origin-tip",
+    "This value comes from the { $origin } layer",
+);
+pub const ADMIN_RUN_READ_ONLY: StrKey = StrKey::new(
+    "egui-pop-admin-run-read-only",
+    "Set on the command line for this run: not editable here",
+);
+pub const ADMIN_MODIFIED: StrKey = StrKey::new("egui-pop-admin-modified", "modified");
+pub const ADMIN_NO_WIDGET: StrKey = StrKey::new(
+    "egui-pop-admin-no-widget",
+    "No widget kind `{ $kind }` is registered",
+);
+pub const ADMIN_SCOPE_GENERAL: StrKey = StrKey::new("egui-pop-admin-scope-general", "General");
+pub const ADMIN_SCOPE_INTERFACE: StrKey =
+    StrKey::new("egui-pop-admin-scope-interface", "Interface");
+pub const ADMIN_SCOPE_INPUT: StrKey = StrKey::new("egui-pop-admin-scope-input", "Input");
+pub const ADMIN_SCOPE_DEVELOPER: StrKey =
+    StrKey::new("egui-pop-admin-scope-developer", "Developer");
+
 // The settings window and form.
 
 pub const SETTINGS_TITLE: StrKey = StrKey::new("egui-pop-settings-title", "Settings");
@@ -1312,6 +1360,31 @@ pub const ALL: &[StrKey] = &[
     PALETTE_NOT_BOOL,
     PALETTE_NOT_NUMBER,
     PALETTE_NOT_JSON,
+    ADMIN_SEARCH_HINT,
+    ADMIN_POP_OUT,
+    ADMIN_POP_OUT_TIP,
+    ADMIN_POP_IN,
+    ADMIN_CLOSE,
+    ADMIN_SCOPES,
+    ADMIN_SECTIONS,
+    ADMIN_RESET_SECTION,
+    ADMIN_MODIFIED_COUNT,
+    ADMIN_SET_FOR,
+    ADMIN_SET_FOR_NAME,
+    ADMIN_FOR_APP,
+    ADMIN_FOR_LIBRARY,
+    ADMIN_FOR_WORKSPACE,
+    ADMIN_ORIGIN_LIBRARY,
+    ADMIN_ORIGIN_WORKSPACE,
+    ADMIN_ORIGIN_RUN,
+    ADMIN_ORIGIN_TIP,
+    ADMIN_RUN_READ_ONLY,
+    ADMIN_MODIFIED,
+    ADMIN_NO_WIDGET,
+    ADMIN_SCOPE_GENERAL,
+    ADMIN_SCOPE_INTERFACE,
+    ADMIN_SCOPE_INPUT,
+    ADMIN_SCOPE_DEVELOPER,
     SETTINGS_TITLE,
     SETTINGS_SEARCH_HINT,
     SETTINGS_SHORTCUTS,

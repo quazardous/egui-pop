@@ -76,6 +76,7 @@ fn messages() -> Messages {
         .plugin(egui_pop_api::jobs::JobsPlugin::default())
         .plugin(egui_pop_api::theme_editor::ThemeEditorPlugin)
         .plugin(egui_pop_api::tips::TipsPlugin)
+        .plugin(egui_pop_api::admin::AdminPlugin)
         // With somewhere to report issues: `help.report` is declared.
         .plugin(egui_pop_api::about::AboutPlugin::new(
             egui_pop_api::about::AppInfo::default().issues("https://example.org/issues"),

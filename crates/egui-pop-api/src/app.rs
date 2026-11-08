@@ -5540,7 +5540,12 @@ impl App {
             error,
             backup: None,
         };
-        let doc = lock(&self.handle.0.store).export("settings/");
+        let mut doc = lock(&self.handle.0.store).export("settings/");
+        // A value a library or workspace layer holds is saved as the
+        // user's own (the `app` layer's), not as shown.
+        if let Some(admin) = self.handle.service(&crate::admin::ADMIN) {
+            admin.app_doc(&self.handle, &mut doc.values);
+        }
         let settings = settings_schema()
             .save(&doc)
             .map_err(|e| doc_error("settings", e))?;

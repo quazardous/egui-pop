@@ -1,0 +1,590 @@
+//! The administration app (`docs/design/admin-forms.md`), titled
+//! "Settings": every setting, and later every tool and task that is not
+//! the work surface, as full pages generated from declarations. Nothing
+//! here draws a component's own widgets: a component declares a
+//! [`Manifest`] and the shell renders it with egui-pop's bricks.
+//!
+//! - **Full page**: an overlay of the whole main window, or "Pop out" to
+//!   a window of its own; the mode used last is remembered (the
+//!   `admin.window` setting).
+//! - **Two axes**: the scopes as tabs on top, the scope's sections in a
+//!   left panel; a search at the end of the tab row searches every scope.
+//! - **Rows**: each setting's editor, a modified bar, an origin tag
+//!   (`library`, `workspace`, `command line`), its reset (of the layer
+//!   shown), and a "Set for" menu when it may be set in several value
+//!   scopes. Applied live, undone with the settings' history.
+//! - **Generated**: the declared settings become pages with no
+//!   hand-written page ([`egui_pop_model::admin::generate`]); manifests
+//!   add scopes and sections ([`Admin::manifest`]).
+//! - **Value scopes**: [`Admin::offer`] opens the library or workspace
+//!   layer, [`Admin::load_layer`] fills it, [`Admin::set_run`] records a
+//!   command line override ([`egui_pop_model::admin::layers`]).
+//! - **Commands**: `admin.open` (`{"path": "scope/section/key"}`, or
+//!   `{"key": "<setting id>"}`, and `{"mode": "overlay" | "window"}`),
+//!   `admin.close`, `admin.popOut`, `admin.set` and `admin.reset` (a value
+//!   in a scope, for agents). The `admin` collector shows the tree.
+//!
+//! The settings window ([`crate::settings_window`]) stays until the
+//! migration replaces it; the shortcuts editor, gestures and fonts pages
+//! become widget kinds then.
+
+mod shell;
+
+use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
+
+use egui::Ui;
+use egui_pop_core::lock;
+use egui_pop_model::admin::generate::{self, Entry};
+use egui_pop_model::admin::hooks::{Hook, Hooks};
+use egui_pop_model::admin::layers::Layers;
+use egui_pop_model::admin::{Manifest, Tree, ValueScope};
+use egui_pop_model::commands::{CommandSpec, Origin};
+use egui_pop_model::diagnostics::Diagnostics;
+use egui_pop_model::ids::{BlockId, CommandId, OwnerId, PluginId, SettingId};
+use egui_pop_model::values::{Change, Descriptor, Set, Value};
+use serde_json::{Value as Json, json};
+
+use crate::app::AppHandle;
+use crate::history::StoreScope;
+use crate::services::ServiceToken;
+use crate::zones::{self, Block};
+use crate::{Ctx, Plugin, PluginError};
+
+pub use egui_pop_model::admin as model;
+
+/// Opens the administration app (`{"path"}`, `{"key"}`, `{"mode"}`).
+pub const CMD_OPEN: CommandId = CommandId::from_static("admin.open");
+/// Closes it.
+pub const CMD_CLOSE: CommandId = CommandId::from_static("admin.close");
+/// Moves it between the overlay and a window of its own.
+pub const CMD_POP_OUT: CommandId = CommandId::from_static("admin.popOut");
+/// Sets a setting's value in a value scope (`{"key", "scope", "value"}`).
+pub const CMD_SET: CommandId = CommandId::from_static("admin.set");
+/// Takes a value scope's value of a setting back (`{"key", "scope"}`).
+pub const CMD_RESET: CommandId = CommandId::from_static("admin.reset");
+
+/// Whether it opens in a window of its own: the mode used last.
+pub const WINDOW: SettingId = SettingId::from_static("admin.window");
+
+/// The service.
+pub const ADMIN: ServiceToken<Admin> = ServiceToken::new("admin");
+
+/// The focus surface the pages are drawn in: its local scope is the
+/// settings' history.
+pub const SURFACE: &str = "adminWindow";
+
+/// A registered widget kind: draws a node of its kind with its options
+/// (the declared exception to "components never draw").
+pub type WidgetKindFn = Arc<dyn Fn(&mut Ui, &AppHandle, &Json) + Send + Sync>;
+
+#[derive(Debug, Default)]
+struct State {
+    open: bool,
+    scope: Option<String>,
+    section: Option<String>,
+    /// An item to scroll to once (a deep link's key).
+    key: Option<String>,
+    filter: String,
+    /// The value scope a row writes to, when its "Set for" menu chose.
+    target: BTreeMap<String, ValueScope>,
+}
+
+/// The administration app's state, manifests, hooks, widget kinds and
+/// value layers.
+#[derive(Default)]
+pub struct Admin {
+    state: Mutex<State>,
+    layers: Mutex<Layers>,
+    manifests: Mutex<Vec<Manifest>>,
+    hooks: Mutex<Hooks>,
+    widgets: Mutex<BTreeMap<String, WidgetKindFn>>,
+    diagnostics: Mutex<Diagnostics>,
+}
+
+impl std::fmt::Debug for Admin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Admin")
+            .field("state", &self.state)
+            .field("layers", &self.layers)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Admin {
+    fn new() -> Admin {
+        Admin {
+            layers: Mutex::new(Layers::new()),
+            ..Admin::default()
+        }
+    }
+
+    pub fn is_open(&self) -> bool {
+        lock(&self.state).open
+    }
+
+    /// Opens it on a place: `scope`, `scope/section`, `scope/section/key`
+    /// or a setting id (`None`: where it was).
+    pub fn open(&self, app: &AppHandle, place: Option<&str>) -> Result<(), String> {
+        if let Some(link) = place.filter(|p| !p.is_empty()) {
+            let tree = self.tree(app);
+            let p = tree
+                .resolve(link)
+                .ok_or_else(|| format!("no place `{link}` in the settings"))?;
+            let mut s = lock(&self.state);
+            s.scope = Some(p.scope);
+            s.section = p.section;
+            s.key = p.key;
+            s.filter.clear();
+        }
+        lock(&self.state).open = true;
+        Ok(())
+    }
+
+    pub fn close(&self) {
+        let mut s = lock(&self.state);
+        s.open = false;
+        s.filter.clear();
+    }
+
+    /// The scope, section and search shown.
+    pub fn shown(&self) -> (Option<String>, Option<String>, String) {
+        let s = lock(&self.state);
+        (s.scope.clone(), s.section.clone(), s.filter.clone())
+    }
+
+    /// Adds a manifest (checked when the tree is built: what does not
+    /// resolve is left out and reported).
+    pub fn manifest(&self, manifest: Manifest) {
+        lock(&self.manifests).push(manifest);
+    }
+
+    /// Registers a hook a manifest names; `false` when the name is taken.
+    pub fn hook(&self, name: &str, hook: Hook) -> bool {
+        lock(&self.hooks).register(name, hook)
+    }
+
+    /// Registers a widget kind (a stub registry for now: the shortcuts
+    /// editor, gestures and font picker move here with the migration).
+    pub fn widget_kind(
+        &self,
+        id: &str,
+        draw: impl Fn(&mut Ui, &AppHandle, &Json) + Send + Sync + 'static,
+    ) {
+        lock(&self.widgets).insert(id.into(), Arc::new(draw));
+    }
+
+    pub(crate) fn widget(&self, id: &str) -> Option<WidgetKindFn> {
+        lock(&self.widgets).get(id).cloned()
+    }
+
+    pub(crate) fn hooks(&self) -> std::sync::MutexGuard<'_, Hooks> {
+        lock(&self.hooks)
+    }
+
+    /// The diagnostics of the last tree built.
+    pub fn diagnostics(&self) -> Diagnostics {
+        lock(&self.diagnostics).clone()
+    }
+
+    /// The resolved tree: the declared settings' pages, then every
+    /// manifest, checked.
+    pub fn tree(&self, app: &AppHandle) -> Tree {
+        let entries = app.settings();
+        let mut tree = Tree::default();
+        tree.merge(generate::settings(entries.iter().map(|e| Entry {
+            id: e.id.as_str(),
+            section: &e.section,
+        })));
+        let mut d = Diagnostics::new();
+        let manifests = lock(&self.manifests).clone();
+        let mut scopes: Vec<String> = tree.scopes.iter().map(|s| s.meta.id.clone()).collect();
+        for m in &manifests {
+            scopes.extend(m.scopes.iter().map(|s| s.meta.id.clone()));
+        }
+        let exists = |id: &str| entries.iter().any(|e| e.id.as_str() == id);
+        for mut m in manifests {
+            if m.version > model::FORMAT {
+                d.warn(
+                    "admin-newer",
+                    None,
+                    "manifest",
+                    format!(
+                        "manifest format {} is newer than {}: left out",
+                        m.version,
+                        model::FORMAT
+                    ),
+                );
+                continue;
+            }
+            for x in m.check(&scopes, &exists).all() {
+                d.push_quiet(x.clone());
+            }
+            tree.merge(m);
+        }
+        *lock(&self.diagnostics) = d;
+        tree
+    }
+
+    /// The value layers.
+    pub fn layers(&self) -> Layers {
+        lock(&self.layers).clone()
+    }
+
+    /// Offers the library or workspace layer for editing (the application
+    /// opened one), or takes it back.
+    pub fn offer(&self, scope: ValueScope, on: bool) {
+        lock(&self.layers).offer(scope, on);
+    }
+
+    /// The editable value scopes offered (`app` always).
+    pub fn offered(&self) -> Vec<ValueScope> {
+        lock(&self.layers).offered().to_vec()
+    }
+
+    /// Replaces a layer's values (setting id to JSON), as the application
+    /// keeps them with its library or workspace; the effective values
+    /// change at once.
+    pub fn load_layer(&self, app: &AppHandle, scope: ValueScope, values: BTreeMap<String, Json>) {
+        let store = app.store();
+        let values = values
+            .into_iter()
+            .map(|(k, v)| (SettingId::new(&k).map_or(k, |id| id.path()), v))
+            .collect();
+        let writes = {
+            let s = lock(&store);
+            lock(&self.layers).load(scope, values, &|p| s.get(p).map(|e| e.value.to_json()))
+        };
+        for (path, v) in writes {
+            write(app, &path, &v);
+        }
+    }
+
+    /// A layer's values, by setting id: what the application saves.
+    pub fn export_layer(&self, scope: ValueScope) -> BTreeMap<String, Json> {
+        lock(&self.layers)
+            .export(scope)
+            .into_iter()
+            .map(|(p, v)| (p.strip_prefix("settings/").unwrap_or(&p).to_string(), v))
+            .collect()
+    }
+
+    /// A command line override (`--set key=value`): shown as the `command
+    /// line` origin, never edited.
+    pub fn set_run(&self, app: &AppHandle, id: &SettingId, value: Json) -> Result<(), String> {
+        let path = id.path();
+        let now = current(app, &path)?;
+        let w = lock(&self.layers).set_run(&path, value, &now);
+        if let Some(v) = w {
+            write(app, &path, &v);
+        }
+        Ok(())
+    }
+
+    /// Sets a setting's value in a value scope; `app` writes the store as
+    /// the settings form does (an undo step) unless a layer above holds
+    /// it.
+    pub fn set_in(
+        &self,
+        app: &AppHandle,
+        scope: ValueScope,
+        id: &SettingId,
+        value: Json,
+    ) -> Result<(), String> {
+        let path = id.path();
+        let now = current(app, &path)?;
+        if !scope.editable() {
+            return Err("the command line's values are not edited here".into());
+        }
+        if scope != ValueScope::App && !self.offered().contains(&scope) {
+            return Err(format!("no {} is open", scope.name()));
+        }
+        let (w, plain) = {
+            let mut l = lock(&self.layers);
+            let plain = scope == ValueScope::App && l.origin(&path) == ValueScope::App;
+            (l.set(scope, &path, value, &now), plain)
+        };
+        match (w, plain) {
+            (Some(v), true) => {
+                let ty = descriptor(app, &path)?.ty;
+                let v = Value::from_json(ty, &v)?;
+                lock(&app.store())
+                    .set(Set::new(&path, Change::To(v), Origin::User).by(&OwnerId::FRAMEWORK))
+                    .map(|_| ())
+                    .map_err(|e| format!("{e:?}"))
+            }
+            (Some(v), false) => {
+                write(app, &path, &v);
+                Ok(())
+            }
+            (None, _) => Ok(()),
+        }
+    }
+
+    /// Takes a value scope's value of a setting back: `app` goes back to
+    /// the default, a layer above to what is under it.
+    pub fn clear_in(
+        &self,
+        app: &AppHandle,
+        scope: ValueScope,
+        id: &SettingId,
+    ) -> Result<(), String> {
+        let path = id.path();
+        let now = current(app, &path)?;
+        let default = descriptor(app, &path)?.default.to_json();
+        let plain = scope == ValueScope::App && lock(&self.layers).origin(&path) == ValueScope::App;
+        if plain {
+            return lock(&app.store())
+                .set(Set::new(&path, Change::Reset, Origin::User).by(&OwnerId::FRAMEWORK))
+                .map(|_| ())
+                .map_err(|e| format!("{e:?}"));
+        }
+        let w = lock(&self.layers).clear(scope, &path, &now, &default);
+        if let Some(v) = w {
+            write(app, &path, &v);
+        }
+        Ok(())
+    }
+
+    /// The row's target scope ("Set for").
+    pub(crate) fn target(&self, path: &str) -> Option<ValueScope> {
+        lock(&self.state).target.get(path).copied()
+    }
+
+    pub(crate) fn set_target(&self, path: &str, scope: ValueScope) {
+        lock(&self.state).target.insert(path.into(), scope);
+    }
+
+    /// The user's settings document as saved: the `app` values in place of
+    /// those a layer above holds.
+    pub(crate) fn app_doc(&self, app: &AppHandle, values: &mut BTreeMap<String, Json>) {
+        let store = app.store();
+        let s = lock(&store);
+        lock(&self.layers).app_doc(values, &|p| {
+            s.get(p).map(|e| e.descriptor.default.to_json())
+        });
+    }
+}
+
+fn current(app: &AppHandle, path: &str) -> Result<Json, String> {
+    lock(&app.store())
+        .get(path)
+        .map(|e| e.value.to_json())
+        .ok_or_else(|| format!("no setting at `{path}`"))
+}
+
+fn descriptor(app: &AppHandle, path: &str) -> Result<Descriptor, String> {
+    lock(&app.store())
+        .get(path)
+        .map(|e| e.descriptor.clone())
+        .ok_or_else(|| format!("no setting at `{path}`"))
+}
+
+/// Writes an effective value a layer change gives: no undo step (the
+/// layers would not follow it back).
+fn write(app: &AppHandle, path: &str, v: &Json) {
+    let store = app.store();
+    let mut s = lock(&store);
+    let Some(ty) = s.get(path).map(|e| e.descriptor.ty) else {
+        return;
+    };
+    if let Ok(v) = Value::from_json(ty, v) {
+        let _ = s.set(
+            Set::new(path, Change::To(v), Origin::User)
+                .force()
+                .untracked()
+                .by(&OwnerId::FRAMEWORK),
+        );
+    }
+}
+
+/// A value scope from its name.
+pub fn scope_named(name: &str) -> Option<ValueScope> {
+    ValueScope::ALL.into_iter().find(|s| s.name() == name)
+}
+
+/// Whether the application's administration app is open.
+pub fn is_open(app: &AppHandle) -> bool {
+    app.service(&ADMIN).is_some_and(|a| a.is_open())
+}
+
+/// Whether it opens in a window of its own.
+pub fn in_window(app: &AppHandle) -> bool {
+    app.setting::<bool>(&WINDOW).unwrap_or(false)
+}
+
+/// The plugin: the `admin` service, its commands, its setting and its
+/// overlay. Not in `DefaultPlugins` yet: the settings window keeps
+/// `Ctrl+,` until the migration.
+#[derive(Debug, Default)]
+pub struct AdminPlugin;
+
+fn admin(call: &crate::app::Call<'_>) -> Result<Arc<Admin>, String> {
+    call.app.service(&ADMIN).ok_or_else(|| "no admin".into())
+}
+
+fn key_arg(call: &crate::app::Call<'_>) -> Result<SettingId, String> {
+    let key = call
+        .args
+        .get("key")
+        .and_then(Json::as_str)
+        .ok_or("`key` is missing")?;
+    SettingId::new(key).map_err(|e| format!("{e:?}"))
+}
+
+fn scope_arg(call: &crate::app::Call<'_>) -> Result<ValueScope, String> {
+    let name = call
+        .args
+        .get("scope")
+        .and_then(Json::as_str)
+        .unwrap_or("app");
+    scope_named(name).ok_or_else(|| format!("no value scope `{name}`"))
+}
+
+impl Plugin for AdminPlugin {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("egui_pop.admin")
+    }
+
+    fn title(&self) -> String {
+        "Settings".into()
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.service(&ADMIN, Admin::new())?;
+        ctx.local_scope(
+            SURFACE,
+            StoreScope::new(egui_pop_model::history::SETTINGS, "Settings"),
+        );
+        ctx.setting(
+            WINDOW,
+            Descriptor::bool("Settings in their own window", false).description(
+                "Opens the settings in a window of their own rather than over the main window.",
+            ),
+        )?;
+        ctx.command(
+            CommandSpec::new(CMD_OPEN, "Settings", "File")
+                .icon("settings")
+                .description(
+                    "Every setting as full pages: families on top, sections on the side, one search.",
+                )
+                .args(json!({ "path": "", "key": "", "mode": "" })),
+            |call| {
+                let a = admin(call)?;
+                if let Some(mode) = call.args.get("mode").and_then(Json::as_str)
+                    && !mode.is_empty()
+                {
+                    let window = match mode {
+                        "window" => true,
+                        "overlay" => false,
+                        other => return Err(format!("no mode `{other}`")),
+                    };
+                    a.set_in(call.app, ValueScope::App, &WINDOW, json!(window))?;
+                }
+                // A path first, else a setting id alone.
+                let place = ["path", "key"].iter().find_map(|k| {
+                    call.args
+                        .get(*k)
+                        .and_then(Json::as_str)
+                        .filter(|p| !p.is_empty())
+                });
+                a.open(call.app, place)?;
+                let (scope, section, _) = a.shown();
+                Ok(json!({ "open": true, "scope": scope, "section": section, "window": in_window(call.app) }))
+            },
+        )?;
+        ctx.command(
+            CommandSpec::new(CMD_CLOSE, "Close settings", "File").hidden(),
+            |call| {
+                admin(call)?.close();
+                Ok(json!({ "open": false }))
+            },
+        )?;
+        ctx.command(
+            CommandSpec::new(CMD_POP_OUT, "Settings: pop out", "File")
+                .description(
+                    "Moves the settings between the main window and a window of their own.",
+                )
+                .hidden(),
+            |call| {
+                let window = !in_window(call.app);
+                admin(call)?.set_in(call.app, ValueScope::App, &WINDOW, json!(window))?;
+                Ok(json!({ "window": window }))
+            },
+        )?;
+        ctx.command(
+            CommandSpec::new(CMD_SET, "Set a setting in a value scope", "File")
+                .hidden()
+                .args(json!({ "key": "", "scope": "app", "value": null })),
+            |call| {
+                let id = key_arg(call)?;
+                let scope = scope_arg(call)?;
+                let value = call
+                    .args
+                    .get("value")
+                    .cloned()
+                    .ok_or("`value` is missing")?;
+                admin(call)?.set_in(call.app, scope, &id, value)?;
+                Ok(json!({ "key": id.as_str(), "scope": scope.name() }))
+            },
+        )?;
+        ctx.command(
+            CommandSpec::new(CMD_RESET, "Reset a setting in a value scope", "File")
+                .hidden()
+                .args(json!({ "key": "", "scope": "app" })),
+            |call| {
+                let id = key_arg(call)?;
+                let scope = scope_arg(call)?;
+                admin(call)?.clear_in(call.app, scope, &id)?;
+                Ok(json!({ "key": id.as_str(), "scope": scope.name() }))
+            },
+        )?;
+        ctx.block(
+            zones::OVERLAYS,
+            Block::add(BlockId::from_static("egui_pop.admin"), 6, shell::show),
+        );
+        let w = ctx.app().downgrade();
+        ctx.collector(
+            egui_pop_core::debug::FnCollector::new(
+                "admin",
+                "The administration app (Settings as full pages): open or not, the mode, the scope, section and search shown, the value scopes offered, the values set above the app layer and their origin, the resolved tree (scopes, sections, items) and the diagnostics of its manifests.",
+            )
+            .snapshot(move |_| match w.get() {
+                Ok(app) => describe(&app),
+                Err(_) => Json::Null,
+            }),
+        )?;
+        Ok(())
+    }
+}
+
+/// What the `admin` collector shows.
+fn describe(app: &AppHandle) -> Json {
+    let Some(a) = app.service(&ADMIN) else {
+        return Json::Null;
+    };
+    let tree = a.tree(app);
+    let (scope, section, filter) = a.shown();
+    let layers = a.layers();
+    let mut origins = BTreeMap::new();
+    for (_, f) in tree.fields() {
+        if let Some(id) = f.setting_id() {
+            let o = layers.origin(&format!("settings/{id}"));
+            if o != ValueScope::App {
+                origins.insert(id.to_string(), o.name());
+            }
+        }
+    }
+    json!({
+        "open": a.is_open(),
+        "window": in_window(app),
+        "scope": scope,
+        "section": section,
+        "filter": filter,
+        "offered": a.offered().iter().map(|s| s.name()).collect::<Vec<_>>(),
+        "origins": origins,
+        "tree": tree,
+        "hooks": a.hooks().list().into_iter().map(|(n, k)| json!({"name": n, "kind": k})).collect::<Vec<_>>(),
+        "diagnostics": a.diagnostics().all().iter().map(|d| json!({"code": d.code, "subject": d.subject, "message": d.message})).collect::<Vec<_>>(),
+    })
+}

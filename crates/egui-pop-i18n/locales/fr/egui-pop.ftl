@@ -38,6 +38,23 @@ category-window = Fenêtre
 clip-application-x-egui-pop-inspect-json =
     .title = un élément inspecté
 
+command-admin-close =
+    .title = Fermer les réglages
+
+command-admin-open =
+    .description = Tous les réglages en pages entières : les familles en haut, les sections sur le côté, une seule recherche.
+    .title = Réglages
+
+command-admin-popOut =
+    .description = Déplace les réglages entre la fenêtre principale et une fenêtre à eux.
+    .title = Réglages : détacher
+
+command-admin-reset =
+    .title = Rétablir un réglage dans une portée de valeurs
+
+command-admin-set =
+    .title = Changer un réglage dans une portée de valeurs
+
 command-about =
     .description = Le nom de l’application, sa version, sa licence, ses auteurs et ses liens, avec ses informations de version à copier.
     .title = À propos de { $application }
@@ -661,6 +678,56 @@ command-workbench-move-to-window =
 command-workbench-zen =
     .description = N’affiche que le centre : ni barre de titre, de menus ou d’état, ni zone latérale ou du bas, ni palette. Échap en sort.
     .title = Mode zen
+
+egui-pop-admin-close = Fermer
+
+egui-pop-admin-for-app = Cette application
+
+egui-pop-admin-for-library = Cette bibliothèque
+
+egui-pop-admin-for-workspace = Cet espace de travail
+
+egui-pop-admin-modified = modifié
+
+egui-pop-admin-modified-count = Modifiés : { $count }
+
+egui-pop-admin-no-widget = Aucun type de widget « { $kind } » n’est enregistré
+
+egui-pop-admin-origin-library = bibliothèque
+
+egui-pop-admin-origin-run = ligne de commande
+
+egui-pop-admin-origin-tip = Cette valeur vient de la couche { $origin }
+
+egui-pop-admin-origin-workspace = espace de travail
+
+egui-pop-admin-pop-in = Revenir dans la fenêtre
+
+egui-pop-admin-pop-out = Détacher
+
+egui-pop-admin-pop-out-tip = Déplacer les réglages dans une fenêtre à eux
+
+egui-pop-admin-reset-section = Rétablir la section
+
+egui-pop-admin-run-read-only = Fixé par la ligne de commande pour cette exécution : non modifiable ici
+
+egui-pop-admin-scope-developer = Développement
+
+egui-pop-admin-scope-general = Général
+
+egui-pop-admin-scope-input = Saisie
+
+egui-pop-admin-scope-interface = Interface
+
+egui-pop-admin-scopes = Familles de réglages
+
+egui-pop-admin-search-hint = Chercher dans tous les réglages
+
+egui-pop-admin-sections = Sections
+
+egui-pop-admin-set-for = Pour
+
+egui-pop-admin-set-for-name = Où { $setting } est fixé
 
 egui-pop-about-authors = Auteurs
 
@@ -2013,6 +2080,9 @@ panel-egui-pop-history =
 panel-egui-pop-jobs =
     .title = Tâches
 
+plugin-egui-pop-admin =
+    .title = Réglages
+
 plugin-egui-pop-about =
     .title = À propos
 
@@ -2111,6 +2181,10 @@ plugin-egui-pop-views =
 
 plugin-egui-pop-window =
     .title = Fenêtre
+
+setting-admin-window =
+    .description = Ouvre les réglages dans une fenêtre à eux plutôt que par-dessus la fenêtre principale.
+    .label = Réglages dans leur propre fenêtre
 
 setting-appearance-accent-color =
     .description = Une couleur (#rrggbb) d’où l’accent est généré, en clair et en sombre : douze nuances dont le texte et le contraste se lisent dans le thème. Vide garde l’accent du thème.
