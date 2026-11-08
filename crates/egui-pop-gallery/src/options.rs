@@ -31,6 +31,8 @@ Options:
   --detach <panel>       open a panel and detach it into a window of its
                          own at start (gallery.notes, on the workbench
                          page)
+  --own-frame            the gallery draws its own title bar and edges
+                         (the window frame setting's default: own)
   --system-file-chooser  allow the system's file chooser, a fallback (only
                          built with the native-dialogs feature; never
                          under tests)
@@ -78,6 +80,8 @@ pub struct Options {
     /// `--system-file-chooser`: the application allows the system's file
     /// chooser (`AppBuilder::system_file_chooser`), a fallback.
     pub system_file_chooser: bool,
+    /// `--own-frame`: the window frame setting's default is `own`.
+    pub own_frame: bool,
     pub help: bool,
 }
 
@@ -99,6 +103,7 @@ impl Default for Options {
             platform: false,
             wide_gamut: false,
             system_file_chooser: false,
+            own_frame: false,
             help: false,
         }
     }
@@ -140,6 +145,7 @@ impl Options {
                 "--platform" => o.platform = true,
                 "--wide-gamut" => o.wide_gamut = true,
                 "--system-file-chooser" => o.system_file_chooser = true,
+                "--own-frame" => o.own_frame = true,
                 "--quit-after" => {
                     let v = value("--quit-after")?;
                     o.quit_after = Some(
@@ -192,6 +198,7 @@ mod tests {
             "1280x800",
             "--wide-gamut",
             "--system-file-chooser",
+            "--own-frame",
             "--detach",
             "gallery.notes",
             "--no-persistence",
@@ -208,6 +215,7 @@ mod tests {
         assert_eq!(o.size, [1280.0, 800.0]);
         assert!(o.wide_gamut);
         assert!(o.system_file_chooser);
+        assert!(o.own_frame);
         assert_eq!(o.detach.as_deref(), Some("gallery.notes"));
         assert_eq!(
             Options::parse(Vec::<String>::new()).unwrap(),
