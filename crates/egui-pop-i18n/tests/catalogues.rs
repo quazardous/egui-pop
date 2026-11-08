@@ -93,6 +93,10 @@ fn messages() -> Messages {
         .plugin(egui_pop_editors::EditorsPlugin)
         .plugin(egui_pop_editors::TerminalPlugin)
         .plugin(egui_pop_editors::JobConsolesPlugin)
+        // Its setting (`developer.agentSocket`), off: nothing listens.
+        .plugin(egui_pop_agent::AgentPlugin::on_setting(
+            egui_pop_agent::AgentSocket::new(),
+        ))
         .build(&ctx)
         .expect("egui-pop's plugins build");
     let mut found = extract::declarations(app.handle(), &[]);

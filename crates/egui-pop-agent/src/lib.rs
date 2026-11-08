@@ -4,9 +4,12 @@
 //! Off unless the application turns it on, with
 //! [`AgentSocketExt::agent_socket`] or, when the user asks for it,
 //! [`AgentSocketExt::agent_socket_from_env`] (`EGUI_POP_AGENT_SOCKET=1`
-//! or a path). When the application chose no bridge mode, turning the
-//! socket on makes it [`BridgeMode::ReadOnly`]: an agent reads and runs
-//! read-only commands, and anything that writes is refused.
+//! or a path), or [`AgentSocketExt::agent_socket_from_env_or_setting`]:
+//! the variable, or the `developer.agentSocket` setting (off by
+//! default), the socket starting and stopping as the setting changes.
+//! When the application chose no bridge mode, turning the socket on
+//! makes it [`BridgeMode::ReadOnly`]: an agent reads and runs read-only
+//! commands, and anything that writes is refused.
 //!
 //! **Transport.** A Unix socket (Linux, macOS) in the user's runtime
 //! directory (`$XDG_RUNTIME_DIR`, `$TMPDIR` on macOS), mode 0600, in a
@@ -41,7 +44,8 @@ use egui_pop_api::wait::WaitFor;
 use egui_pop_api::{AppBuilder, AppHandle, Ctx, Plugin, PluginError};
 use egui_pop_core::debug::BridgeMode;
 use egui_pop_model::commands::Origin;
-use egui_pop_model::ids::PluginId;
+use egui_pop_model::ids::{PluginId, SettingId};
+use egui_pop_model::values::Descriptor;
 use serde_json::{Value as Json, json};
 
 #[cfg(feature = "mcp")]
@@ -61,6 +65,9 @@ pub const ENV: &str = "EGUI_POP_AGENT_SOCKET";
 pub const AGENT: &str = "agent-socket";
 /// The plugin's id.
 pub const AGENT_PLUGIN: PluginId = PluginId::from_static("egui_pop.agent_socket");
+/// The setting that turns the socket on, live
+/// ([`AgentSocketExt::agent_socket_from_env_or_setting`]); off by default.
+pub const SETTING_AGENT_SOCKET: SettingId = SettingId::from_static("developer.agentSocket");
 /// How long a `wait` is held when it gives no `deadline_ms`.
 pub const DEFAULT_DEADLINE: Duration = Duration::from_secs(5);
 /// The longest a `wait` is held, whatever it asks.
@@ -163,17 +170,50 @@ pub trait AgentSocketExt: Sized {
             None => self,
         }
     }
+
+    /// Declares the `developer.agentSocket` setting (off by default) and
+    /// serves the bridge on `socket` while it is on: the socket starts
+    /// when the setting turns on and stops, its file removed, when it
+    /// turns off. The bridge's mode as with
+    /// [`AgentSocketExt::agent_socket`].
+    fn agent_socket_on_setting(self, socket: AgentSocket) -> Self;
+
+    /// The setting ([`AgentSocketExt::agent_socket_on_setting`], at the
+    /// default place), or [`ENV`]: when the variable asks for the socket,
+    /// it listens (at the variable's path) whatever the setting says.
+    fn agent_socket_from_env_or_setting(self) -> Self;
 }
 
 impl AgentSocketExt for AppBuilder {
     fn agent_socket(self, socket: AgentSocket) -> Self {
-        let b = if self.chosen_debug_bridge().is_none() {
-            self.debug_bridge(BridgeMode::ReadOnly)
-        } else {
-            self
-        };
-        b.plugin(AgentPlugin::new(socket))
+        read_only_unless_chosen(self).plugin(AgentPlugin::new(socket))
     }
+
+    fn agent_socket_on_setting(self, socket: AgentSocket) -> Self {
+        read_only_unless_chosen(self).plugin(AgentPlugin::on_setting(socket))
+    }
+
+    fn agent_socket_from_env_or_setting(self) -> Self {
+        let plugin = match AgentSocket::from_env() {
+            Some(s) => AgentPlugin::on_setting(s).forced(),
+            None => AgentPlugin::on_setting(AgentSocket::new()),
+        };
+        read_only_unless_chosen(self).plugin(plugin)
+    }
+}
+
+/// The bridge `ReadOnly` when the application chose no mode.
+fn read_only_unless_chosen(b: AppBuilder) -> AppBuilder {
+    if b.chosen_debug_bridge().is_none() {
+        b.debug_bridge(BridgeMode::ReadOnly)
+    } else {
+        b
+    }
+}
+
+/// Whether the `developer.agentSocket` setting is on.
+pub fn setting_on(app: &AppHandle) -> bool {
+    app.setting::<bool>(&SETTING_AGENT_SOCKET).unwrap_or(false)
 }
 
 /// The plugin serving the socket ([`AgentSocketExt::agent_socket`] adds
@@ -184,15 +224,40 @@ impl AgentSocketExt for AppBuilder {
 #[derive(Debug)]
 pub struct AgentPlugin {
     socket: AgentSocket,
-    server: Option<Server>,
+    /// Declares `developer.agentSocket` and follows it.
+    setting: bool,
+    /// Listens whatever the setting says.
+    forced: bool,
+    server: Arc<Mutex<Option<Server>>>,
 }
 
 impl AgentPlugin {
+    /// Always listening.
     pub fn new(socket: AgentSocket) -> Self {
         Self {
             socket,
-            server: None,
+            setting: false,
+            forced: true,
+            server: Arc::default(),
         }
+    }
+
+    /// Listening while the `developer.agentSocket` setting is on, which
+    /// it declares.
+    pub fn on_setting(socket: AgentSocket) -> Self {
+        Self {
+            socket,
+            setting: true,
+            forced: false,
+            server: Arc::default(),
+        }
+    }
+
+    /// Listening whatever the setting says (it is still declared).
+    #[must_use]
+    pub fn forced(mut self) -> Self {
+        self.forced = true;
+        self
     }
 }
 
@@ -206,6 +271,14 @@ impl Plugin for AgentPlugin {
     }
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        if self.setting {
+            ctx.setting(
+                SETTING_AGENT_SOCKET,
+                Descriptor::bool("Agent socket", false).description(
+                    "Lets local programs drive this app (read-only unless the app allows more).",
+                ),
+            )?;
+        }
         let app = ctx.app();
         let path = match self.socket.resolve(&app.app_id()) {
             Ok(p) => p,
@@ -216,27 +289,78 @@ impl Plugin for AgentPlugin {
         };
         let (tx, rx) = mpsc::channel();
         let wake = Waker::default();
-        match Server::start(&path, tx, wake.clone()) {
-            Ok(server) => {
-                log::info!(target: "egui_pop_agent", "agent socket listening at {}", path.display());
-                self.server = Some(server);
-            }
-            Err(e) => {
-                log::error!(target: "egui_pop_agent", "agent socket not started at {}: {e}", path.display());
-                return Ok(());
-            }
-        }
+        let mut listen = Listen {
+            path,
+            tx,
+            wake: wake.clone(),
+            server: self.server.clone(),
+            follows: self.setting && !self.forced,
+            tried: false,
+        };
+        let _ = listen.follow(&app);
         let mut side = UiSide {
             rx,
             waits: Vec::new(),
             wake,
         };
-        ctx.on(On::Pass, move |app, _| side.pass(app));
+        ctx.on(On::Pass, move |app, _| {
+            if listen.follow(app) {
+                side.pass(app);
+            } else {
+                side.refuse_all();
+            }
+        });
         Ok(())
     }
 
     fn disconnect(&mut self, _ctx: &mut Ctx<'_>) {
-        self.server = None;
+        if let Ok(mut s) = self.server.lock() {
+            *s = None;
+        }
+    }
+}
+
+/// Starts and stops the server as it should listen.
+struct Listen {
+    path: PathBuf,
+    tx: mpsc::Sender<Job>,
+    wake: Waker,
+    server: Arc<Mutex<Option<Server>>>,
+    /// Follows the setting; listens always otherwise.
+    follows: bool,
+    /// Tried to start since it should listen: a failure is logged once,
+    /// not at every pass.
+    tried: bool,
+}
+
+impl Listen {
+    /// Whether it listens now.
+    fn follow(&mut self, app: &AppHandle) -> bool {
+        let want = !self.follows || setting_on(app);
+        let Ok(mut server) = self.server.lock() else {
+            return false;
+        };
+        if !want {
+            self.tried = false;
+            if server.take().is_some() {
+                log::info!(target: "egui_pop_agent", "agent socket stopped at {}", self.path.display());
+            }
+            return false;
+        }
+        if server.is_some() || self.tried {
+            return server.is_some();
+        }
+        self.tried = true;
+        match Server::start(&self.path, self.tx.clone(), self.wake.clone()) {
+            Ok(s) => {
+                log::info!(target: "egui_pop_agent", "agent socket listening at {}", self.path.display());
+                *server = Some(s);
+            }
+            Err(e) => {
+                log::error!(target: "egui_pop_agent", "agent socket not started at {}: {e}", self.path.display());
+            }
+        }
+        server.is_some()
     }
 }
 
@@ -350,6 +474,23 @@ fn origin() -> Origin {
 }
 
 impl UiSide {
+    /// The socket is off: what clients still connected ask is refused,
+    /// and the waits held end.
+    fn refuse_all(&mut self) {
+        while let Ok(job) = self.rx.try_recv() {
+            let reply = match job {
+                Job::Describe { reply }
+                | Job::Snapshot { reply, .. }
+                | Job::Call { reply, .. }
+                | Job::Wait { reply, .. } => reply,
+            };
+            let _ = reply.send(Err(RpcError::stopped()));
+        }
+        for w in self.waits.drain(..) {
+            let _ = w.reply.send(Err(RpcError::stopped()));
+        }
+    }
+
     fn pass(&mut self, app: &AppHandle) {
         let ctx = app.egui();
         self.wake.set(ctx.clone());

@@ -2002,6 +2002,9 @@ panel-egui-pop-jobs =
 plugin-egui-pop-about =
     .title = À propos
 
+plugin-egui-pop-agent-socket =
+    .title = Socket des agents
+
 plugin-egui-pop-arrangements =
     .title = Dispositions
 
@@ -2199,6 +2202,10 @@ setting-appearance-toast-corner-choice-top-center = en haut au centre
 setting-appearance-toast-corner-choice-top-left = en haut à gauche
 
 setting-appearance-toast-corner-choice-top-right = en haut à droite
+
+setting-developer-agentSocket =
+    .description = Permet à des programmes locaux de piloter cette application (en lecture seule, sauf si l’application autorise davantage).
+    .label = Socket des agents
 
 setting-developer-devtools =
     .description = Permet d’ouvrir le panneau des outils de développement (Affichage > Outils de développement) : résolutions des touches, journal, étapes, focus, échelle et chaque collecteur de débogage.
