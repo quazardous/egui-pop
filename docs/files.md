@@ -253,7 +253,17 @@ which swaps the first two (`SetFolder`).
   `files::view_for`); a dialog never shown opens in the mode last used
   (`settings/files.view`, `files::view`; `list` and `grid`, kept before the
   modes, read as `details` and `thumbnails`). A picker without previews keeps
-  its list. The thumbnails' size goes from `THUMBNAIL_MIN_SIZE` to
+  its list.
+- Choosing a folder, the switcher also offers the `columns` mode, Finder's
+  column view (`FilePicker::views` lists what a picker offers): the path's
+  folders side by side from the root, the folder shown's subfolders, then
+  the highlighted folder's. Up and Down move in the folder shown's column and
+  select, Right goes into the highlighted folder (the selection left behind,
+  so the folder entered is the choice), Left goes back to the parent with the
+  folder left selected, and a click in another column goes to that folder
+  with the folder clicked selected. The button chooses the folder selected,
+  else the folder shown, as in the list. Columns last used by a folder
+  chooser are not a file dialog's: it opens in `details`. The thumbnails' size goes from `THUMBNAIL_MIN_SIZE` to
   `THUMBNAIL_MAX_SIZE` (64 to 256 points, 128 at first): the slider beside the
   switch, `Ctrl` and the wheel over the grid, or `Ctrl` and `+` or `-`; it is
   kept in `settings/files.thumbnail_size` (`files::thumbnail_size`). Only the

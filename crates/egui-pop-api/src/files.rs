@@ -1468,7 +1468,11 @@ impl Plugin for FilesPlugin {
                     VIEW,
                     Descriptor::choice(
                         "File picker view",
-                        &[PickerView::List.as_str(), PickerView::Grid.as_str()],
+                        &[
+                            PickerView::List.as_str(),
+                            PickerView::Grid.as_str(),
+                            PickerView::Columns.as_str(),
+                        ],
                         browser::MODE_DETAILS,
                     ),
                 ),
@@ -1629,14 +1633,11 @@ impl Plugin for FilesPlugin {
                     // the change goes there.
                     let dialog = lock(&f.0)
                         .active_picker()
-                        .filter(|p| p.previews.is_some())
-                        .map(|p| p.dialog.clone());
+                        .map(|p| (p.dialog.clone(), p.views()))
+                        .filter(|(_, views)| views.len() > 1);
                     match dialog {
-                        Some(dialog) => {
-                            if let Some(view) = n
-                                .checked_sub(1)
-                                .and_then(|i| PickerView::ALL.get(i))
-                            {
+                        Some((dialog, views)) => {
+                            if let Some(view) = n.checked_sub(1).and_then(|i| views.get(i)) {
                                 want_view_for(call.app, &dialog, view.as_str());
                             }
                         }
@@ -2063,9 +2064,15 @@ fn load_view(app: &AppHandle, picker: &mut FilePicker) {
     if !picker.pane_dragging {
         picker.pane_width = pane_width(app);
     }
-    picker.view = view_for(app, &picker.dialog)
+    let view = view_for(app, &picker.dialog)
         .and_then(|m| PickerView::parse(&m))
         .unwrap_or_else(|| view(app));
+    // The columns, last used choosing a folder, are not a file dialog's.
+    picker.view = if picker.views().contains(&view) || view == PickerView::Grid {
+        view
+    } else {
+        PickerView::List
+    };
     if !picker.thumbnail_dragging {
         picker.thumbnail_size = thumbnail_size(app);
     }
@@ -2335,8 +2342,10 @@ fn folder_name(dir: &Path) -> String {
 }
 
 /// How the in-app picker shows a folder's entries: the file browser's
-/// modes it draws ([`browser::MODE_DETAILS`], [`browser::MODE_THUMBNAILS`]).
+/// modes it draws ([`browser::MODE_DETAILS`], [`browser::MODE_THUMBNAILS`],
+/// [`browser::MODE_COLUMNS`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PickerView {
     /// The details mode: one entry per row, with its facts in columns.
     #[default]
@@ -2344,17 +2353,23 @@ pub enum PickerView {
     /// The thumbnails mode: thumbnails from the preview providers (only
     /// with previews, [`FilePicker::with_previews`]: details without them).
     Grid,
+    /// The columns mode, Finder's: the path's folders side by side, the
+    /// highlighted folder's subfolders after them. Only when choosing a
+    /// folder: details elsewhere.
+    Columns,
 }
 
 impl PickerView {
-    /// Both, in the switcher's order.
-    pub const ALL: [PickerView; 2] = [PickerView::List, PickerView::Grid];
+    /// Every view, in the switcher's order; a picker offers those that fit
+    /// it ([`FilePicker::views`]).
+    pub const ALL: [PickerView; 3] = [PickerView::List, PickerView::Grid, PickerView::Columns];
 
     /// Its mode's id, its name in the store.
     pub fn as_str(self) -> &'static str {
         match self {
             PickerView::List => browser::MODE_DETAILS,
             PickerView::Grid => browser::MODE_THUMBNAILS,
+            PickerView::Columns => browser::MODE_COLUMNS,
         }
     }
 
@@ -2364,6 +2379,7 @@ impl PickerView {
         match name {
             browser::MODE_DETAILS | "list" => Some(PickerView::List),
             browser::MODE_THUMBNAILS | "grid" => Some(PickerView::Grid),
+            browser::MODE_COLUMNS => Some(PickerView::Columns),
             _ => None,
         }
     }
@@ -2664,6 +2680,10 @@ struct Listing {
     members: Arc<HashMap<PathBuf, PathBuf>>,
 }
 
+/// The subfolders the picker's columns list, by folder and whether hidden
+/// ones are shown.
+type ColumnCache = Arc<Mutex<HashMap<(PathBuf, bool), Arc<Vec<browser::SourceEntry>>>>>;
+
 /// The in-app picker: a folder's entries, a field that filters them
 /// (fuzzy) or takes a typed path (with completion), places, filters.
 /// Usable on its own: [`FilePicker::show`] in any `Ui`.
@@ -2769,6 +2789,10 @@ pub struct FilePicker {
     /// The modes drawing the list and the grid.
     details: browser::DetailsMode,
     thumbs: browser::ThumbnailsMode,
+    cols: browser::ColumnsMode,
+    /// The subfolders the columns list, by folder and whether hidden ones
+    /// are shown, read once. Shared: the picker is copied every frame.
+    column_cache: ColumnCache,
     /// The grid brings the highlighted cell into view at the next frame.
     reveal_cell: bool,
     /// The highlighted cell takes the focus when it is next drawn: the
@@ -2862,6 +2886,8 @@ impl FilePicker {
             columns: 1,
             details: browser::DetailsMode::default(),
             thumbs: browser::ThumbnailsMode::default(),
+            cols: browser::ColumnsMode::default(),
+            column_cache: Arc::default(),
             reveal_cell: false,
             focus_cell: false,
             thumbnail_dragging: false,
@@ -3006,6 +3032,7 @@ impl FilePicker {
         self.listing = None;
         // A file changed is previewed again: its time is in the cache's key.
         lock(&self.metas).clear();
+        lock(&self.column_cache).clear();
     }
 
     /// What a key of the picker's commands does to it.
@@ -3956,6 +3983,23 @@ impl FilePicker {
         } else {
             (None, false)
         };
+        // Left and Right leave the folder in the columns, as the mode says.
+        if self.columns_on() && !waiting && !elsewhere && !editing {
+            let cols = &self.cols;
+            let travel = ui.input_mut(|i| {
+                [
+                    (Key::ArrowLeft, browser::ModeKey::Left),
+                    (Key::ArrowRight, browser::ModeKey::Right),
+                ]
+                .into_iter()
+                .filter_map(|(key, mk)| cols.travel(mk).map(|t| (key, t)))
+                .find(|(key, _)| i.consume_key(Modifiers::NONE, *key))
+                .map(|(_, t)| t)
+            });
+            if let Some(t) = travel {
+                self.travel(t);
+            }
+        }
         if grid && !waiting {
             let (bigger, smaller) = ui.input_mut(|i| {
                 (
@@ -4033,7 +4077,7 @@ impl FilePicker {
             if self.makes_folders() {
                 self.new_folder_button(ui);
             }
-            if self.previews.is_some() {
+            if self.views().len() > 1 {
                 self.view_controls(ui);
             }
             if self.can_group() {
@@ -4379,6 +4423,11 @@ impl FilePicker {
         self.view == PickerView::Grid && self.previews.is_some()
     }
 
+    /// The columns are shown: choosing a folder, in that view.
+    fn columns_on(&self) -> bool {
+        self.view == PickerView::Columns && self.kind == ChooseKind::Folder
+    }
+
     /// A new size for the thumbnails; the highlighted cell stays in view.
     fn resize_thumbnails(&mut self, size: f32) {
         self.thumbnail_size = size.clamp(THUMBNAIL_MIN_SIZE, THUMBNAIL_MAX_SIZE);
@@ -4546,26 +4595,37 @@ impl FilePicker {
         None
     }
 
-    /// The modes it offers, in the switcher's order: the file browser's
-    /// details and thumbnails.
-    fn mode_infos() -> Vec<browser::ModeInfo> {
+    /// The views it offers, in the switcher's order: details; thumbnails
+    /// with previews; columns when choosing a folder.
+    pub fn views(&self) -> Vec<PickerView> {
         PickerView::ALL
+            .into_iter()
+            .filter(|v| match v {
+                PickerView::List => true,
+                PickerView::Grid => self.previews.is_some(),
+                PickerView::Columns => self.kind == ChooseKind::Folder,
+            })
+            .collect()
+    }
+
+    /// The modes it offers, in the switcher's order ([`Self::views`]).
+    fn mode_infos(&self) -> Vec<browser::ModeInfo> {
+        let modes = browser::ViewModes::built_in();
+        self.views()
             .iter()
-            .filter_map(|v| browser::ViewModes::default().make(v.as_str()))
+            .filter_map(|v| modes.make(v.as_str()))
             .map(|m| m.describe())
             .collect()
     }
 
-    /// Shows the `n`-th mode (from 1), as `Ctrl+n` does; `false` without
-    /// previews (no thumbnails) or without such a mode.
+    /// Shows the `n`-th mode (from 1, among [`Self::views`]), as `Ctrl+n`
+    /// does; `false` without such a mode, or with one view alone.
     pub fn set_mode_index(&mut self, n: usize) -> bool {
-        let Some(view) = n
-            .checked_sub(1)
-            .and_then(|i| PickerView::ALL.get(i).copied())
-        else {
+        let views = self.views();
+        let Some(view) = n.checked_sub(1).and_then(|i| views.get(i).copied()) else {
             return false;
         };
-        if self.previews.is_none() || self.view == view {
+        if views.len() < 2 || self.view == view {
             return false;
         }
         self.view = view;
@@ -4576,7 +4636,7 @@ impl FilePicker {
     /// The mode switcher, and the thumbnails' size with the thumbnails.
     fn view_controls(&mut self, ui: &mut Ui) {
         let id = ui.scope_id().with("egui_pop.files.modes");
-        let modes = Self::mode_infos();
+        let modes = self.mode_infos();
         if let Some((mode, r)) = browser::mode_switcher(ui, id, &modes, self.view.as_str()) {
             if let Some(view) = PickerView::parse(&mode)
                 && view != self.view
@@ -4806,6 +4866,84 @@ impl FilePicker {
                 })
                 .collect(),
         )
+    }
+
+    /// A column of the columns view: `dir`'s subfolders, read once.
+    fn column(&self, dir: &Path, open: Option<&Path>) -> browser::Column {
+        let key = (dir.to_path_buf(), self.show_hidden);
+        let cached = lock(&self.column_cache).get(&key).cloned();
+        let entries = cached.unwrap_or_else(|| {
+            let read: Arc<Vec<browser::SourceEntry>> = Arc::new(
+                self.subfolders(dir)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|c| browser::SourceEntry {
+                        path: c.path,
+                        name: c.name,
+                        kind: browser::EntryKind::Folder,
+                        size: None,
+                        modified: None,
+                        taken: None,
+                        app_id: None,
+                    })
+                    .collect(),
+            );
+            lock(&self.column_cache).insert(key, read.clone());
+            read
+        });
+        browser::Column {
+            place: dir.to_path_buf(),
+            open: open.and_then(|o| entries.iter().position(|e| e.path == o)),
+            entries: entries.to_vec(),
+            loading: false,
+        }
+    }
+
+    /// The columns before the folder shown, the topmost first: each
+    /// ancestor's subfolders, the path's next one open.
+    fn ancestor_columns(&self) -> Vec<browser::Column> {
+        let mut out: Vec<browser::Column> = self
+            .dir
+            .ancestors()
+            .skip(1)
+            .zip(self.dir.ancestors())
+            .map(|(dir, next)| self.column(dir, Some(next)))
+            .collect();
+        out.reverse();
+        out
+    }
+
+    /// A key the columns' mode reads as leaving the folder shown: into the
+    /// highlighted folder (the selection left behind, so the folder entered
+    /// is the choice), or back to the parent, the folder left selected.
+    fn travel(&mut self, travel: browser::Travel) {
+        match travel {
+            browser::Travel::Into => {
+                if let Some(e) = self.highlighted().filter(|e| e.is_dir) {
+                    self.go(e.path);
+                }
+            }
+            browser::Travel::Out => {
+                if let Some(parent) = self.dir.parent().map(Path::to_path_buf) {
+                    let left = self.dir.clone();
+                    self.reach(parent, Some(left));
+                }
+            }
+        }
+    }
+
+    /// Shows `place`, `focus` highlighted and selected there: a click in
+    /// another column than the folder shown's.
+    fn reach(&mut self, place: PathBuf, focus: Option<PathBuf>) {
+        self.go(place);
+        let Some(focus) = focus else {
+            return;
+        };
+        if let Some(at) = self.visible().iter().position(|e| e.path == focus) {
+            self.highlight = at;
+            self.selected.clear();
+            self.selected.insert(focus);
+        }
     }
 
     /// The menu under a breadcrumb's `button`, listing what `read` gives as it
@@ -5067,7 +5205,32 @@ impl FilePicker {
         self.row_ids.clear();
         let mut details = std::mem::take(&mut self.details);
         let mut thumbs = std::mem::take(&mut self.thumbs);
+        let mut cols = std::mem::take(&mut self.cols);
         let place = self.dir.clone();
+        let columns_on = self.columns_on();
+        let (ancestors, peek) = if columns_on {
+            let peek = entries
+                .get(highlight)
+                .filter(|e| e.is_dir())
+                .map(|e| self.column(&e.path, None));
+            (self.ancestor_columns(), peek)
+        } else {
+            (Vec::new(), None)
+        };
+        // A column holds the names alone.
+        let name_only;
+        let (columns, row_width) = if columns_on {
+            let width = browser::ColumnsMode::COLUMN_WIDTH - ui.spacing().scroll.allocated_width();
+            name_only = fit_columns(
+                width,
+                Tokens::of(ui.ctx()).space.m,
+                ui.spacing().button_padding.x,
+                &[],
+            );
+            (name_only.as_slice(), width)
+        } else {
+            (columns, row_width)
+        };
         let mut drawer = PickerDrawer {
             modifiers: ui.input(|i| i.modifiers),
             pointer: ui.input(|i| i.pointer.any_down() || i.pointer.any_released()),
@@ -5092,10 +5255,12 @@ impl FilePicker {
             name: Some(name),
             many,
             place: &place,
-            ancestors: &[],
-            peek: None,
+            ancestors: &ancestors,
+            peek: peek.as_ref(),
         };
-        let out = if grid {
+        let out = if columns_on {
+            cols.show(ui, cx)
+        } else if grid {
             thumbs.show(ui, cx)
         } else {
             details.show(ui, cx)
@@ -5103,7 +5268,13 @@ impl FilePicker {
         let in_view = std::mem::take(&mut drawer.in_view);
         self.details = details;
         self.thumbs = thumbs;
+        self.cols = cols;
         self.columns = out.columns;
+        if let Some(r) = out.reach {
+            self.reach(r.place, r.focus);
+            self.refocus = true;
+            ui.ctx().request_repaint();
+        }
         if grid && (!in_view.is_empty() || self.asked_thumbnails) {
             self.want_thumbnails(ui.ctx(), &in_view);
         }
