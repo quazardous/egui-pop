@@ -78,8 +78,10 @@ impl Plugin for SettingsPage {
                 "gallery.greeting.length",
                 Hook::Status(Box::new(|| ("5 letters".into(), Tone::Success))),
             );
-            admin.manifest(
-                Manifest::new(FORMAT).section("general/greeting", "Greeting text", |s| {
+            admin.manifest(Manifest::new(FORMAT).section(
+                "general/greeting",
+                "Greeting text",
+                |s| {
                     s.description("The preview's text and weight, declared as a manifest.")
                         .callout(Callout::new(
                             "tip",
@@ -95,8 +97,8 @@ impl Plugin for SettingsPage {
                                 .title("Open the interface settings")
                                 .args(serde_json::json!({ "path": "interface" })),
                         );
-                }),
-            );
+                },
+            ));
         }
         // A page of its own in the settings window, under this plugin's
         // section: the size and weight with the preview they change.
