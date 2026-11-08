@@ -5,8 +5,8 @@
 //! The same files run both ways. Live, the steps that go through the
 //! bridge (`Call`, `Wait`, `Expect(NoError)`, `Expect(Value)`,
 //! `Expect(Journal)`, `Shot`) work as in-process; the ones that need the
-//! accessibility tree (`Ui`, `Expect(Tree)`) are refused, until the
-//! `ui.*` side over eframe's `inspection` exists. After every step the
+//! accessibility tree (`Ui`, `Expect(Tree)`) go through the socket's `ui`
+//! method, its input queued into egui's next frames. After every step the
 //! runner checks `NoErrorToast`, `NoFailedCommand`, `NoUnknownCommand`,
 //! `NoMissingText`, and `NoPanic` (the application is gone: it crashed or
 //! exited); `StableWindows` and `FrameBudget` need the frames, so they
@@ -43,8 +43,8 @@ use super::invariants::{
     NO_ERROR_TOAST, NO_FAILED_COMMAND, NO_MISSING_TEXT, NO_PANIC, NO_UNKNOWN_COMMAND,
 };
 use super::{
-    Expect, Failure, Fixture, Runner, Scenario, Step, Wait, error_toasts, holds, missing_text,
-    step_text, value_at,
+    Expect, Failure, Fixture, Node, Runner, Scenario, Step, Ui, Wait, error_toasts, holds,
+    missing_text, step_text, value_at,
 };
 
 /// Why a request got no answer.
@@ -489,10 +489,17 @@ impl LiveRun<'_> {
                     ))
                 }
             }
-            Step::Ui(_) => Err((
-                "ui".into(),
-                "`Ui` steps are not live yet (they need the `ui.*` side): run the scenario in-process, or use commands".into(),
-            )),
+            Step::Ui(ui) => {
+                self.mark = self.client.last_event().map_err(|e| gone(&e))?;
+                let params = self.ui_params(ui);
+                self.client
+                    .request("ui", params)
+                    .map(|_| ())
+                    .map_err(|e| match e {
+                        ClientError::Rpc(m) => ("ui".into(), m),
+                        e => gone(&e),
+                    })
+            }
             Step::Expect(e) => self.expect(e),
             Step::Shot(name) => self.shoot(name),
         }
@@ -521,9 +528,19 @@ impl LiveRun<'_> {
                     Err(no(format!("command.failed: {failed:?}")))
                 }
             }
-            Expect::Tree { .. } => Err(no(
-                "`Expect(Tree)` is not live yet (it needs the `ui.*` side)".into(),
-            )),
+            Expect::Tree { has, lacks } => {
+                if let Some(n) = has
+                    && self.count(n)? == 0
+                {
+                    return Err(no(format!("the tree has no {n}")));
+                }
+                if let Some(n) = lacks
+                    && self.count(n)? > 0
+                {
+                    return Err(no(format!("the tree has {n}")));
+                }
+                Ok(())
+            }
             Expect::Value(path, want) => {
                 let snapshot = self.client.snapshot().map_err(|e| gone(&e))?;
                 let got = value_at(&snapshot, path).map_err(no)?;
@@ -552,6 +569,53 @@ impl LiveRun<'_> {
                 }
             }
         }
+    }
+
+    /// A `Ui` step as the socket's `ui` params.
+    fn ui_params(&self, ui: &Ui) -> Json {
+        let node = |label: &Option<String>, role: &Option<String>| {
+            let mut p = json!({});
+            if let Some(l) = label {
+                p["label"] = self.runner.substitute(&json!(l));
+            }
+            if let Some(r) = role {
+                p["role"] = json!(r);
+            }
+            p
+        };
+        match ui {
+            Ui::Click { label, role } => {
+                let mut p = node(label, role);
+                p["action"] = json!("click");
+                p
+            }
+            Ui::Type { label, role, text } => {
+                let mut p = node(label, role);
+                p["action"] = json!("type");
+                p["text"] = self.runner.substitute(&json!(text));
+                p
+            }
+            Ui::Key(chord) => json!({ "action": "key", "key": chord }),
+            Ui::Scroll { label, role, up } => {
+                let mut p = node(label, role);
+                p["action"] = json!("scroll");
+                p["up"] = json!(up);
+                p
+            }
+        }
+    }
+
+    /// How many nodes of the tree match `n`.
+    fn count(&mut self, n: &Node) -> Result<u64, StepError> {
+        let mut p = json!({ "action": "tree" });
+        if let Some(l) = &n.label {
+            p["label"] = self.runner.substitute(&json!(l));
+        }
+        if let Some(r) = &n.role {
+            p["role"] = json!(r);
+        }
+        let r = self.client.request("ui", p).map_err(|e| gone(&e))?;
+        Ok(r["count"].as_u64().unwrap_or(0))
     }
 
     fn shoot(&mut self, name: &str) -> Result<(), StepError> {

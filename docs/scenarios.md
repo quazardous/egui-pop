@@ -133,10 +133,12 @@ $ egui-pop-scenario --socket "$XDG_RUNTIME_DIR/egui-pop-agent-my-app.sock" \
     --shot my.screenshot '{"path": "$path"}' tests/scenarios
 ```
 
-- **Steps.** `Call`, `Wait`, `Expect(NoError)`, `Expect(Value)`,
-  `Expect(Journal)` and `Shot` work as in-process. `Ui` and
-  `Expect(Tree)` need the accessibility tree: they fail live, until the
-  `ui.*` side over eframe's `inspection` exists.
+- **Steps.** Every step works as in-process. `Ui` and `Expect(Tree)`
+  go through the socket's `ui` method: the accessibility tree of the
+  frame just drawn, and input queued into egui's next frames (a click
+  is a hover, a press and a release); a `Ui` step ends once its input
+  went in, so follow it with a `Wait`. `$name` variables fill labels
+  and typed text too.
 - **Variables.** `--var name=value` (`LiveRunner::var`) replaces `$name`
   in every string argument of the steps and fixtures: a folder the run
   made, a file.
@@ -156,9 +158,9 @@ $ egui-pop-scenario --socket "$XDG_RUNTIME_DIR/egui-pop-agent-my-app.sock" \
 
 The application must let the agent write (`BridgeMode::On`): a socket
 turned on without a mode is read-only, and a scenario that changes
-anything is refused.
+anything, a `Ui` action included, is refused.
 
 ## Not yet
 
-- `Ui` steps live, and the recording of an agent's session as a
-  scenario.
+- The recording of an agent's session as a scenario, and a frame-time
+  collector so `FrameBudget` holds live too.

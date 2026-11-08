@@ -5,12 +5,16 @@
 
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use egui_kittest::Harness;
 use egui_pop_agent::{AgentSocket, AgentSocketExt as _};
 use egui_pop_api::about::{AboutPlugin, AppInfo};
-use egui_pop_api::{App, DefaultPlugins};
+use egui_pop_api::core::debug::BridgeMode;
+use egui_pop_api::zones::{self, Block};
+use egui_pop_api::{App, AppBuilder, Ctx, DefaultPlugins, Plugin, PluginError};
+use egui_pop_model::ids::{BlockId, PluginId};
 use egui_pop_test::scenario::live::LiveRunner;
 use egui_pop_test::scenario::parse;
 
@@ -23,7 +27,11 @@ fn private_dir(name: &str) -> PathBuf {
 }
 
 fn app(socket: &Path) -> Harness<'static, App> {
-    let builder = App::builder()
+    app_with(App::builder(), socket)
+}
+
+fn app_with(builder: AppBuilder, socket: &Path) -> Harness<'static, App> {
+    let builder = builder
         .plugins(DefaultPlugins)
         .plugin(AboutPlugin::new(AppInfo::new("Live test", "1.0.0")))
         .app_id("org.example.LiveTest")
@@ -112,8 +120,96 @@ fn parse_step(step: &str) -> egui_pop_test::scenario::Step {
     s.steps.into_iter().next().unwrap()
 }
 
+/// A button, a text field and a key, each saying on screen what it got.
+#[derive(Default)]
+struct Widgets {
+    state: Arc<Mutex<(u32, String, bool)>>,
+}
+
+impl Plugin for Widgets {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("test.widgets")
+    }
+
+    fn title(&self) -> String {
+        "Widgets".into()
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        let state = self.state.clone();
+        ctx.block(
+            zones::MAIN,
+            Block::add(BlockId::from_static("test.widgets"), 0, move |ui, _| {
+                let mut s = state.lock().unwrap();
+                if ui.button("Press me").clicked() {
+                    s.0 += 1;
+                }
+                ui.label(format!("pressed {}", s.0));
+                ui.add(egui::TextEdit::singleline(&mut s.1).hint_text("Name"));
+                ui.label(format!("typed {}", s.1));
+                if ui.input(|i| i.key_pressed(egui::Key::F2)) {
+                    s.2 = true;
+                }
+                ui.label(if s.2 { "F2 pressed" } else { "F2 waiting" });
+            }),
+        );
+        Ok(())
+    }
+}
+
 #[test]
-fn live_runs_break_unknown_commands_and_refuse_ui_steps() {
+fn ui_steps_click_type_and_press_keys_live() {
+    let dir = private_dir("ui");
+    let path = dir.join("app.sock");
+    let builder = App::builder()
+        .debug_bridge(BridgeMode::On)
+        .plugin(Widgets::default());
+    let mut h = app_with(builder, &path);
+    let scenario = parse(
+        r#"Scenario(
+            name: "ui-live",
+            steps: [
+                Wait(Settled),
+                Expect(Tree(has: (role: "Button", label: "Press me"), lacks: (label: "pressed 1"))),
+                Ui(Click(role: "Button", label: "Press me")),
+                Wait(Settled),
+                Expect(Tree(has: (label: "pressed 1"))),
+                Ui(Type(role: "TextInput", text: "$who")),
+                Wait(Settled),
+                Expect(Tree(has: (label: "typed Ada"))),
+                Ui(Key("F2")),
+                Wait(Settled),
+                Expect(Tree(has: (label: "F2 pressed"))),
+                Expect(NoError),
+            ],
+        )"#,
+    )
+    .unwrap();
+    let p = path.clone();
+    let passed = with_client(&mut h, move || {
+        LiveRunner::new(p)
+            .var("who", "Ada")
+            .connect_within(Duration::from_secs(10))
+            .run(&scenario)
+    })
+    .unwrap_or_else(|f| panic!("{f}"));
+    assert_eq!(passed.steps, 12);
+
+    // A node named twice, or not at all, is refused with the reason.
+    let p = path.clone();
+    let missing = parse(r#"Scenario(name: "m", steps: [Ui(Click(label: "No such"))])"#).unwrap();
+    let f = with_client(&mut h, move || {
+        LiveRunner::new(p)
+            .connect_within(Duration::from_secs(10))
+            .run(&missing)
+    })
+    .expect_err("no such node");
+    assert_eq!(f.broken, "ui", "{f}");
+    assert!(f.message.contains("no \"No such\""), "{f}");
+}
+
+#[test]
+fn live_runs_break_unknown_commands_and_refuse_ui_actions_when_read_only() {
     let dir = private_dir("broken");
     let path = dir.join("app.sock");
     let mut h = app(&path);
@@ -130,8 +226,9 @@ fn live_runs_break_unknown_commands_and_refuse_ui_steps() {
     let a = a.expect_err("no such command");
     assert_eq!(a.broken, "invariant NoUnknownCommand", "{a}");
     assert!(a.message.contains("no.such.command"), "{a}");
-    let b = b.expect_err("Ui is not live");
+    let b = b.expect_err("the bridge is read-only");
     assert_eq!(b.broken, "ui", "{b}");
+    assert!(b.message.contains("read-only"), "{b}");
 }
 
 #[test]
