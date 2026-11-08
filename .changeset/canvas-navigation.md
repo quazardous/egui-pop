@@ -14,7 +14,7 @@ One navigation model for canvases larger than their view
   touch screen or a mouse without a middle button. The grab cursor and
   an indicator in the corner show it.
 - **Navigation commands** in the palette, with keys, agent-callable:
-  `view.fit` (Home; Document also Shift+1), `view.frame_selection` (F
+  `view.fit` (Shift+1; Home on the canvas), `view.frame_selection` (F
   everywhere; Blender `.`, Document Shift+2), `view.zoom_in`,
   `view.zoom_out`, `view.zoom_100` (Ctrl and `+`, `-`, `0`),
   `view.pan_left`, `_right`, `_up`, `_down` (Ctrl and the arrows) and

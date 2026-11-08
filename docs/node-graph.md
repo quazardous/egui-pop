@@ -198,7 +198,7 @@ The graph follows the shared navigation model
 | Key or command | What it does |
 |---|---|
 | H, `view.hand` | Hand mode on or off: a primary drag pans from anywhere; the grab cursor and an indicator in the top-left corner show it |
-| Home, `view.fit` (Document: also Shift+1) | Fits the graph |
+| Home on the graph, `view.fit` (Shift+1) | Fits the graph |
 | F, `view.frame_selection` (Blender: also `.`; Document: also Shift+2) | Frames the selected nodes (the whole graph when none is) |
 | Ctrl and `+` / `-`, `view.zoom_in` / `view.zoom_out` | Zooms around the view's centre |
 | Ctrl+0, `view.zoom_100` | 100 % (within the zoom range) |

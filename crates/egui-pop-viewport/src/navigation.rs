@@ -22,8 +22,7 @@
 //!   dismissed by the first pan or a click, remembered.
 
 use egui::{
-    Align2, Context, CursorIcon, Id, Key, Modifiers, Rect, Response, Sense, Ui, UiBuilder, Vec2,
-    vec2,
+    Align2, Context, CursorIcon, Id, Key, Modifiers, Rect, Response, Sense, Ui, Vec2, vec2,
 };
 use egui_pop_core::canvas;
 use egui_pop_core::state::Slot;
@@ -440,21 +439,27 @@ fn overlay_label(
         _ => at,
     };
     let r = Rect::from_min_size(min, size).intersect(clip);
-    ui.scope_builder(UiBuilder::new().max_rect(r), |ui| {
-        ui.set_clip_rect(clip);
-        let fill = ui.visuals().window_fill.gamma_multiply(0.92);
-        let stroke = ui.visuals().window_stroke;
-        ui.painter()
-            .rect(r, 4.0, fill, stroke, egui::StrokeKind::Inside);
-        let resp = ui.allocate_rect(r, sense);
-        let label = text.to_string();
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &label));
-        ui.painter().galley(
-            r.center() - galley.size() / 2.0,
-            galley,
-            ui.visuals().strong_text_color(),
-        );
-        resp
-    })
-    .inner
+    // In an area above the canvas (and above the scene's own layer, where
+    // a graph's nodes are), so it takes no room in the canvas's `Ui`.
+    egui::Area::new(ui.scope_id().with(("egui_pop.navigation.overlay", text)))
+        .order(egui::Order::Foreground)
+        .fixed_pos(r.min)
+        .constrain(false)
+        .show(ui.ctx(), |ui| {
+            ui.set_clip_rect(clip);
+            let (r, resp) = ui.allocate_exact_size(r.size(), sense);
+            let fill = ui.visuals().window_fill.gamma_multiply(0.92);
+            let stroke = ui.visuals().window_stroke;
+            ui.painter()
+                .rect(r, 4.0, fill, stroke, egui::StrokeKind::Inside);
+            let label = text.to_string();
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &label));
+            ui.painter().galley(
+                r.center() - galley.size() / 2.0,
+                galley,
+                ui.visuals().strong_text_color(),
+            );
+            resp
+        })
+        .inner
 }
