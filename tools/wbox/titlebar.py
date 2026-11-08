@@ -27,8 +27,8 @@ its own compositor:
    captures 200 px to the left: the second move must start (the bar
    answers a new drag after a move) and the button hover.
 
-`WBOX_COMPOSITOR=mutter` runs the same in a headless mutter (GNOME's
-compositor, `mutter.py`), where the window lands at the top left.
+`WBOX_COMPOSITOR=mutter` runs the same in wbox's headless mutter
+(GNOME's compositor), where the window lands at the top left.
 
 Full screenshots of each run go to the output directory, the compositor's
 logs to its `log/`. One JSON line per
@@ -52,14 +52,14 @@ from wbox.server import _build_app_cmd
 HERE = Path(__file__).resolve().parent
 # `python -I` leaves this directory out of the path: backend.py is here
 sys.path.insert(0, str(HERE))
-from backend import build_compositor  # noqa: E402
+from backend import build_compositor, compositor_name  # noqa: E402
 CONFIG = HERE / "config.yaml"
 WIDTH, HEIGHT = 1280, 800
 # The title bar's middle row below the window's top, and how far the move
-# goes. Where the window lands is the compositor's: labwc puts it 28 px
-# down; a backend may say otherwise (`window_origin`).
+# goes. Where a window as large as the output lands is the compositor's:
+# labwc puts it 28 px down, mutter at the top left.
 BAR_ROW = 15
-LABWC_ORIGIN = (0, 28)
+ORIGINS = {"labwc": (0, 28), "mutter": (0, 0)}
 SHIFT = 100
 
 
@@ -111,7 +111,7 @@ def run(cfg: dict, name: str, moves: int, out: Path) -> dict:
         if not wait_ready(jsonl, 30):
             return {"error": "the gallery never printed its ready line"}
         time.sleep(2.0)
-        origin_x, origin_y = getattr(comp, "window_origin", LABWC_ORIGIN)
+        origin_x, origin_y = ORIGINS.get(compositor_name(cfg), ORIGINS["labwc"])
         bar_y = origin_y + BAR_ROW
         left = SHIFT * moves
         caption = (origin_x + WIDTH // 2, bar_y)
