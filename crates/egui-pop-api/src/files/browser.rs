@@ -804,6 +804,10 @@ pub struct PlainDrawer<'a> {
 }
 
 impl PlainDrawer<'_> {
+    /// Below this width, a row shows its name alone, without the size and
+    /// the date.
+    pub const FACTS_WIDTH: f32 = 320.0;
+
     fn back(&self, ui: &Ui, resp: &egui::Response, n: usize, radius: f32) {
         let e = &self.entries[n];
         let selected = self.selection.contains(&e.path);
@@ -851,6 +855,11 @@ impl EntryDrawer for PlainDrawer<'_> {
             e.name.clone()
         };
         let y = rect.center().y;
+        // A narrow row (a column of Finder's view) shows the name alone.
+        if w < Self::FACTS_WIDTH {
+            paint_row_name(ui, rect, e, text);
+            return resp;
+        }
         ui.painter()
             .with_clip_rect(rect.with_max_x(rect.left() + w * 0.6))
             .text(
@@ -1344,8 +1353,9 @@ impl ViewMode for ColumnsMode {
             gestures: vec!["Wheel: scroll".into()],
             persist: MODE_COLUMNS.into(),
             role: egui::Role::ListBox,
+            // The focused file's thumbnail is at the column's width: no
+            // size slider.
             needs: ModeNeeds {
-                thumbnails: true,
                 hierarchy: true,
                 ..ModeNeeds::default()
             },
