@@ -2613,6 +2613,9 @@ panel-egui-pop-viewer =
 plugin-egui-pop-about =
     .title = About
 
+plugin-egui-pop-agent-socket =
+    .title = Agent socket
+
 plugin-egui-pop-arrangements =
     .title = Arrangements
 
@@ -2819,6 +2822,10 @@ setting-appearance-toast-corner-choice-top-center = top-center
 setting-appearance-toast-corner-choice-top-left = top-left
 
 setting-appearance-toast-corner-choice-top-right = top-right
+
+setting-developer-agentSocket =
+    .description = Lets local programs drive this app (read-only unless the app allows more).
+    .label = Agent socket
 
 setting-developer-devtools =
     .description = Lets the devtools panel open (View > Devtools): key resolutions, the journal, steps, focus, scale and every debug collector.

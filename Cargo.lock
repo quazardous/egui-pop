@@ -1482,6 +1482,7 @@ name = "egui-pop-i18n"
 version = "0.7.0"
 dependencies = [
  "egui",
+ "egui-pop-agent",
  "egui-pop-api",
  "egui-pop-core",
  "egui-pop-editors",

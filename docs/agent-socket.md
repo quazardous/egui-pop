@@ -22,6 +22,28 @@ let builder = App::builder()
     .agent_socket_from_env();
 ```
 
+### From a setting
+
+An application that lets its users turn the socket on from its settings
+window uses `agent_socket_from_env_or_setting()`:
+
+```rust,ignore
+let builder = App::builder()
+    .app_id("org.example.App")
+    .agent_socket_from_env_or_setting();
+```
+
+It declares the `developer.agentSocket` setting (Developer section, off
+by default; "Lets local programs drive this app (read-only unless the
+app allows more)"). The socket follows it live: it starts, at the
+default place, when the setting turns on, and stops, its file removed,
+when it turns off; a client still connected then has its requests
+refused (`-32001`, "the agent socket is off"). `EGUI_POP_AGENT_SOCKET`
+still turns it on (at its path, when it gives one) whatever the setting
+says. `agent_socket_on_setting(AgentSocket::at(path))` follows the
+setting at another place. The bridge is made read-only at build when the
+application chose no mode, the setting on or off.
+
 - **Where.** By default `egui-pop-agent-<app id>.sock` in
   `$XDG_RUNTIME_DIR` (`$TMPDIR` on macOS); on Windows the named pipe
   `\\.\pipe\egui-pop-agent-<app id>`. The path is logged once, at start

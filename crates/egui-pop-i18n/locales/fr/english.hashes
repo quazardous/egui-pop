@@ -1300,6 +1300,7 @@ panel-egui-pop-history.title 32a082307a8ba077
 panel-egui-pop-jobs.title 61eef857facc40ad
 panel-egui-pop-viewer.title 0111455edf9c95c7
 plugin-egui-pop-about.title 4ac2509647dead34
+plugin-egui-pop-agent-socket.title 66eabe41d66637cb
 plugin-egui-pop-arrangements.title 82eceb9b2f1a7dae
 plugin-egui-pop-clipboard.title d9ee853515a6a499
 plugin-egui-pop-contexts.title 15cdd71e19e43d2a
@@ -1386,6 +1387,8 @@ setting-appearance-toast-corner-choice-top-left 6a1bc5effde016f8
 setting-appearance-toast-corner-choice-top-right a4397e39aeea845f
 setting-appearance-toast-corner.description eec260795bc3e412
 setting-appearance-toast-corner.label 4cbacf8a620e21dd
+setting-developer-agentSocket.description 2cfb564f0aa45fad
+setting-developer-agentSocket.label 66eabe41d66637cb
 setting-developer-devtools.description bd38cc91c0ab1f13
 setting-developer-devtools.label 9642ebb52ece11a7
 setting-developer-log-level-choice-debug ce9864611d84e87e

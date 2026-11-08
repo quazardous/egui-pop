@@ -57,6 +57,12 @@ impl RpcError {
         )
     }
 
+    /// The socket was turned off (its setting) while a client was
+    /// connected.
+    pub(crate) fn stopped() -> Self {
+        Self::new(Self::REFUSED, "the agent socket is off")
+    }
+
     pub(crate) fn refused(f: &Feedback) -> Self {
         Self {
             code: Self::REFUSED,

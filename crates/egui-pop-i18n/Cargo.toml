@@ -49,3 +49,5 @@ egui-pop-platform = { path = "../egui-pop-platform" }
 egui-pop-views = { path = "../egui-pop-views", features = ["markdown"] }
 # Path only: the catalogue test covers the editors' text and commands.
 egui-pop-editors = { path = "../egui-pop-editors" }
+# Path only: the catalogue test covers the agent socket's setting.
+egui-pop-agent = { path = "../egui-pop-agent" }
