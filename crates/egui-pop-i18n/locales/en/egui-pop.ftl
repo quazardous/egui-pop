@@ -307,6 +307,42 @@ command-file-toggle-selection =
     .description = Selects or unselects the highlighted entry of the open in-app file picker, choosing several files or a folder. A folder among files is not selected: the picker says so.
     .title = Select or unselect the entry
 
+command-file-view-mode1 =
+    .description = Shows the entries of the file browser holding the keyboard (the open in-app file picker first) in its mode number 1, in the order of its switcher; nothing when it has fewer modes.
+    .title = View mode 1
+
+command-file-view-mode2 =
+    .description = Shows the entries of the file browser holding the keyboard (the open in-app file picker first) in its mode number 2, in the order of its switcher; nothing when it has fewer modes.
+    .title = View mode 2
+
+command-file-view-mode3 =
+    .description = Shows the entries of the file browser holding the keyboard (the open in-app file picker first) in its mode number 3, in the order of its switcher; nothing when it has fewer modes.
+    .title = View mode 3
+
+command-file-view-mode4 =
+    .description = Shows the entries of the file browser holding the keyboard (the open in-app file picker first) in its mode number 4, in the order of its switcher; nothing when it has fewer modes.
+    .title = View mode 4
+
+command-file-view-mode5 =
+    .description = Shows the entries of the file browser holding the keyboard (the open in-app file picker first) in its mode number 5, in the order of its switcher; nothing when it has fewer modes.
+    .title = View mode 5
+
+command-file-view-mode6 =
+    .description = Shows the entries of the file browser holding the keyboard (the open in-app file picker first) in its mode number 6, in the order of its switcher; nothing when it has fewer modes.
+    .title = View mode 6
+
+command-file-view-mode7 =
+    .description = Shows the entries of the file browser holding the keyboard (the open in-app file picker first) in its mode number 7, in the order of its switcher; nothing when it has fewer modes.
+    .title = View mode 7
+
+command-file-view-mode8 =
+    .description = Shows the entries of the file browser holding the keyboard (the open in-app file picker first) in its mode number 8, in the order of its switcher; nothing when it has fewer modes.
+    .title = View mode 8
+
+command-file-view-mode9 =
+    .description = Shows the entries of the file browser holding the keyboard (the open in-app file picker first) in its mode number 9, in the order of its switcher; nothing when it has fewer modes.
+    .title = View mode 9
+
 command-files-reveal =
     .description = Shows a file (`path`) selected in the file manager; an agent's request is confirmed by the user.
     .title = Show in folder
@@ -1286,6 +1322,12 @@ egui-pop-files-kind-file = File
 egui-pop-files-kind-folder = Folder
 
 egui-pop-files-lens = Lens
+
+egui-pop-files-mode-details = Details
+
+egui-pop-files-mode-thumbnails = Thumbnails
+
+egui-pop-files-modes = View mode
 
 egui-pop-files-modified = Modified
 

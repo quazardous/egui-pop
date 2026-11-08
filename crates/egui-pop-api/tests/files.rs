@@ -1905,7 +1905,7 @@ fn the_list_stays_the_view_at_first_and_has_no_grid_without_previews() {
     let app = h.state().handle().clone();
     assert_eq!(files::view(&app), PickerView::List);
     let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
-    assert_eq!(state(&h, "view"), "list");
+    assert_eq!(state(&h, "view"), "details");
     assert!(h.query_by_label("Thumbnail size").is_none());
     assert!(h.query_by_label("IMG_00000.cr3").is_some());
     // Left and Right are the field's alone in the list.
@@ -1930,7 +1930,7 @@ fn the_list_stays_the_view_at_first_and_has_no_grid_without_previews() {
             picker,
         );
     h.run();
-    assert!(h.query_by_label("Grid").is_none());
+    assert!(h.query_by_label("Thumbnails").is_none());
     assert!(h.query_by_label("IMG_00000.cr3").is_some());
 }
 
@@ -2138,9 +2138,9 @@ fn the_view_and_the_size_are_kept_for_the_next_picker() {
     let (mut h, _) = grid_harness(40, PickerView::List);
     let app = h.state().handle().clone();
     let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
-    h.get_by_label("Grid").click();
+    h.get_by_label("Thumbnails").click();
     settle_thumbnails(&mut h);
-    assert_eq!(state(&h, "view"), "grid");
+    assert_eq!(state(&h, "view"), "thumbnails");
     assert_eq!(files::view(&app), PickerView::Grid);
     assert_eq!(files::thumbnail_size(&app), files::THUMBNAIL_DEFAULT_SIZE);
     let before = state(&h, "columns").as_u64().unwrap();
@@ -2177,13 +2177,13 @@ fn the_view_and_the_size_are_kept_for_the_next_picker() {
     settle(&mut h);
     assert!(app.service(&FILES).unwrap().open_ids().is_empty());
     let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
-    assert_eq!(state(&h, "view"), "grid");
+    assert_eq!(state(&h, "view"), "thumbnails");
     assert_eq!(
         state(&h, "thumbnail_size").as_f64(),
         Some(f64::from(files::THUMBNAIL_MAX_SIZE))
     );
     // Back to the list: the grid's queue is dropped.
-    h.get_by_label("List").click();
+    h.get_by_label("Details").click();
     settle_thumbnails(&mut h);
     assert_eq!(files::view(&app), PickerView::List);
     assert!(h.query_by_label("Thumbnail size").is_none());
@@ -2420,7 +2420,7 @@ fn the_grid_follows_the_same_order_and_its_headers_sort() {
         .with_size(egui::vec2(900.0, 640.0))
         .build_ui_state(|ui, app: &mut App| app.show(ui), app);
     let _p = choose(&mut h, FileRequest::open("Open").directory("/d"));
-    assert_eq!(picker_state(&h, "view"), "grid");
+    assert_eq!(picker_state(&h, "view"), "thumbnails");
     header_click(&mut h, "Size");
     assert_eq!(
         shown_names(&h)[2..],
@@ -2432,9 +2432,9 @@ fn the_grid_follows_the_same_order_and_its_headers_sort() {
     assert!(x(&h, "notes.txt") < x(&h, "IMG_9.jpg"));
     assert_eq!(files::sort_order(&handle).as_text(), "-size");
     // The list's keeps it.
-    h.get_by_label("List").click();
+    h.get_by_label("Details").click();
     settle(&mut h);
-    assert_eq!(picker_state(&h, "view"), "list");
+    assert_eq!(picker_state(&h, "view"), "details");
     assert!(row(&h, "IMG_10.jpg").rect().top() < row(&h, "notes.txt").rect().top());
 }
 
@@ -2591,22 +2591,22 @@ fn focused_name(h: &Harness<'static, App>) -> String {
 fn a_press_on_the_view_gives_the_keyboard_back_to_the_field() {
     let (mut h, _) = grid_harness(3, PickerView::List);
     let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
-    click(&mut h, "Grid", Modifiers::NONE);
-    assert_eq!(state(&h, "view"), "grid");
+    click(&mut h, "Thumbnails", Modifiers::NONE);
+    assert_eq!(state(&h, "view"), "thumbnails");
     assert!(h.get_by_label(FIELD).is_focused());
     h.event(egui::Event::Text("img".into()));
     settle(&mut h);
     assert_eq!(field(&h), "img");
     // A press on what is already on does the same.
-    click(&mut h, "Grid", Modifiers::NONE);
+    click(&mut h, "Thumbnails", Modifiers::NONE);
     assert!(h.get_by_label(FIELD).is_focused());
-    click(&mut h, "List", Modifiers::NONE);
+    click(&mut h, "Details", Modifiers::NONE);
     assert!(h.get_by_label(FIELD).is_focused());
     // By the keyboard, the focus stays where it is, to go on from there.
-    walk::reach(&mut h, walk::SHIFT_TAB, "Grid", 60).expect("Shift+Tab reaches the switch");
+    walk::reach(&mut h, walk::SHIFT_TAB, "Thumbnails", 60).expect("Shift+Tab reaches the switch");
     press(&mut h, Key::Space, Modifiers::NONE);
-    assert_eq!(state(&h, "view"), "grid");
-    assert_eq!(focused_name(&h), "Grid");
+    assert_eq!(state(&h, "view"), "thumbnails");
+    assert_eq!(focused_name(&h), "Thumbnails");
 }
 
 #[test]
@@ -4154,4 +4154,104 @@ fn the_footer_stays_whole_at_every_size_and_scale() {
         }
     }
     let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn each_dialog_opens_in_the_mode_it_was_last_shown_in() {
+    let (mut h, _) = grid_harness(3, PickerView::List);
+    let app = h.state().handle().clone();
+    let import = || {
+        FileRequest::open("Import")
+            .purpose("import")
+            .directory("/raws")
+    };
+    let export = || {
+        FileRequest::save("Export", "a.cr3")
+            .purpose("export")
+            .directory("/raws")
+    };
+    let close = |h: &mut Harness<'static, App>| {
+        key(h, Key::Escape, Modifiers::NONE);
+        key(h, Key::Escape, Modifiers::NONE);
+        settle(h);
+        assert!(app.service(&FILES).unwrap().open_ids().is_empty());
+    };
+    let _p = choose(&mut h, import());
+    assert_eq!(state(&h, "view"), "details");
+    h.get_by_label("Thumbnails").click();
+    settle(&mut h);
+    assert_eq!(state(&h, "view"), "thumbnails");
+    assert_eq!(
+        files::view_for(&app, "import").as_deref(),
+        Some("thumbnails")
+    );
+    close(&mut h);
+    // A dialog never shown opens in the mode last used; then keeps its own.
+    let _p = choose(&mut h, export());
+    assert_eq!(state(&h, "view"), "thumbnails");
+    h.get_by_label("Details").click();
+    settle(&mut h);
+    assert_eq!(files::view_for(&app, "export").as_deref(), Some("details"));
+    close(&mut h);
+    let _p = choose(&mut h, import());
+    assert_eq!(state(&h, "view"), "thumbnails");
+    close(&mut h);
+    let _p = choose(&mut h, export());
+    assert_eq!(state(&h, "view"), "details");
+    // Kept in the host's store, not in egui's memory.
+    let kept = egui_pop_core::lock(&app.store())
+        .get(files::VIEWS)
+        .and_then(|e| e.value.as_text().map(str::to_string))
+        .unwrap();
+    assert!(
+        kept.contains("\"import\"") && kept.contains("\"export\""),
+        "{kept}"
+    );
+}
+
+#[test]
+fn ctrl_and_a_digit_switch_the_pickers_mode() {
+    let (mut h, _) = grid_harness(3, PickerView::List);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    assert_eq!(state(&h, "view"), "details");
+    press(&mut h, Key::Num2, Modifiers::COMMAND);
+    settle(&mut h);
+    assert_eq!(state(&h, "view"), "thumbnails");
+    press(&mut h, Key::Num1, Modifiers::COMMAND);
+    settle(&mut h);
+    assert_eq!(state(&h, "view"), "details");
+    // No third mode: nothing changes.
+    press(&mut h, Key::Num3, Modifiers::COMMAND);
+    settle(&mut h);
+    assert_eq!(state(&h, "view"), "details");
+    // The keys are commands of the keymap, rebindable.
+    let app = h.state().handle().clone();
+    assert_eq!(
+        app.keys_for(&egui_pop_model::ids::CommandId::from_static(
+            "file.view.mode2"
+        )),
+        ["Ctrl+2"]
+    );
+}
+
+#[test]
+fn the_picker_drawn_on_its_own_reads_ctrl_and_a_digit() {
+    let request = FileRequest::open("Open").directory("/raws");
+    let picker = files::FilePicker::new_in(&request, raws(3))
+        .with_previews(egui_pop_api::files::preview::Previews::default());
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 640.0))
+        .build_ui_state(
+            |ui, picker: &mut files::FilePicker| {
+                picker.show(ui, &files::Places::default());
+            },
+            picker,
+        );
+    h.run();
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Num2);
+    h.run();
+    assert_eq!(h.state().view, PickerView::Grid);
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Num1);
+    h.run();
+    assert_eq!(h.state().view, PickerView::List);
 }

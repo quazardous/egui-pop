@@ -290,6 +290,42 @@ command-file-toggle-preview =
     .description = Affiche ou masque le volet d’aperçu du sélecteur de fichiers intégré, gardé pour le suivant (le réglage `files.preview`).
     .title = Afficher ou masquer l’aperçu
 
+command-file-view-mode1 =
+    .description = Affiche les entrées du navigateur de fichiers qui a le clavier (d’abord le sélecteur de fichiers intégré ouvert) dans son mode numéro 1, dans l’ordre de son sélecteur de mode ; rien quand il a moins de modes.
+    .title = Mode d’affichage 1
+
+command-file-view-mode2 =
+    .description = Affiche les entrées du navigateur de fichiers qui a le clavier (d’abord le sélecteur de fichiers intégré ouvert) dans son mode numéro 2, dans l’ordre de son sélecteur de mode ; rien quand il a moins de modes.
+    .title = Mode d’affichage 2
+
+command-file-view-mode3 =
+    .description = Affiche les entrées du navigateur de fichiers qui a le clavier (d’abord le sélecteur de fichiers intégré ouvert) dans son mode numéro 3, dans l’ordre de son sélecteur de mode ; rien quand il a moins de modes.
+    .title = Mode d’affichage 3
+
+command-file-view-mode4 =
+    .description = Affiche les entrées du navigateur de fichiers qui a le clavier (d’abord le sélecteur de fichiers intégré ouvert) dans son mode numéro 4, dans l’ordre de son sélecteur de mode ; rien quand il a moins de modes.
+    .title = Mode d’affichage 4
+
+command-file-view-mode5 =
+    .description = Affiche les entrées du navigateur de fichiers qui a le clavier (d’abord le sélecteur de fichiers intégré ouvert) dans son mode numéro 5, dans l’ordre de son sélecteur de mode ; rien quand il a moins de modes.
+    .title = Mode d’affichage 5
+
+command-file-view-mode6 =
+    .description = Affiche les entrées du navigateur de fichiers qui a le clavier (d’abord le sélecteur de fichiers intégré ouvert) dans son mode numéro 6, dans l’ordre de son sélecteur de mode ; rien quand il a moins de modes.
+    .title = Mode d’affichage 6
+
+command-file-view-mode7 =
+    .description = Affiche les entrées du navigateur de fichiers qui a le clavier (d’abord le sélecteur de fichiers intégré ouvert) dans son mode numéro 7, dans l’ordre de son sélecteur de mode ; rien quand il a moins de modes.
+    .title = Mode d’affichage 7
+
+command-file-view-mode8 =
+    .description = Affiche les entrées du navigateur de fichiers qui a le clavier (d’abord le sélecteur de fichiers intégré ouvert) dans son mode numéro 8, dans l’ordre de son sélecteur de mode ; rien quand il a moins de modes.
+    .title = Mode d’affichage 8
+
+command-file-view-mode9 =
+    .description = Affiche les entrées du navigateur de fichiers qui a le clavier (d’abord le sélecteur de fichiers intégré ouvert) dans son mode numéro 9, dans l’ordre de son sélecteur de mode ; rien quand il a moins de modes.
+    .title = Mode d’affichage 9
+
 command-file-edit-path =
     .description = Met le dossier du sélecteur de fichiers intégré ouvert dans son champ, comme un chemin à modifier ; à l’enregistrement, le nom reste à sa fin. Un chemin déjà saisi reste tel quel.
     .title = Modifier le chemin du dossier
@@ -889,6 +925,12 @@ egui-pop-files-view-list = Liste
 egui-pop-files-view-grid = Grille
 
 egui-pop-files-thumbnail-size = Taille des vignettes
+
+egui-pop-files-modes = Mode d’affichage
+
+egui-pop-files-mode-details = Détails
+
+egui-pop-files-mode-thumbnails = Vignettes
 
 egui-pop-files-crumb-open = Ouvrir le dossier { $name }
 

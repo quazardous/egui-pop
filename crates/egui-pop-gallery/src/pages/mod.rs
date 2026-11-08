@@ -18,6 +18,7 @@ pub mod display;
 pub mod dj;
 pub mod editor;
 pub mod editors;
+pub mod file_browser;
 pub mod files;
 pub mod fonts;
 pub mod frame;

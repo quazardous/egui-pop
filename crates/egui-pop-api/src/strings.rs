@@ -416,6 +416,11 @@ pub const FILES_VIEW_LIST: StrKey = StrKey::new("egui-pop-files-view-list", "Lis
 pub const FILES_VIEW_GRID: StrKey = StrKey::new("egui-pop-files-view-grid", "Grid");
 pub const FILES_THUMBNAIL_SIZE: StrKey =
     StrKey::new("egui-pop-files-thumbnail-size", "Thumbnail size");
+/// The file browser's modes, and its switcher's name when it is a menu.
+pub const FILES_MODES: StrKey = StrKey::new("egui-pop-files-modes", "View mode");
+pub const FILES_MODE_DETAILS: StrKey = StrKey::new("egui-pop-files-mode-details", "Details");
+pub const FILES_MODE_THUMBNAILS: StrKey =
+    StrKey::new("egui-pop-files-mode-thumbnails", "Thumbnails");
 /// The in-app picker's breadcrumbs: what each part is called, and what a
 /// segment's menu says when it has nothing to list.
 pub const FILES_CRUMB_OPEN: StrKey =
@@ -1407,6 +1412,9 @@ pub const ALL: &[StrKey] = &[
     FILES_VIEW_LIST,
     FILES_VIEW_GRID,
     FILES_THUMBNAIL_SIZE,
+    FILES_MODES,
+    FILES_MODE_DETAILS,
+    FILES_MODE_THUMBNAILS,
     FILES_CRUMB_OPEN,
     FILES_CRUMB_CURRENT,
     FILES_CRUMB_SUBFOLDERS,
