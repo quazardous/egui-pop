@@ -397,7 +397,8 @@ jobs:
           git config user.email ci@invalid
           knope pending-versions
           git status --short
-      - run: cargo semver-checks check-release --workspace
+      # A crate not yet on crates.io has no baseline to compare with.
+      - run: cargo semver-checks check-release --workspace --exclude egui-pop-agent
 
   # The one required check: every job above passed or was skipped. A
   # skipped job reports nothing, so branch protection names this one.
