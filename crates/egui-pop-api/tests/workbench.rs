@@ -786,3 +786,30 @@ fn a_group_alone_in_its_area_has_nothing_to_arrange() {
         "{out:?}"
     );
 }
+
+#[test]
+fn the_shell_takes_no_room_below_the_window() {
+    // What the pass allocates after the shell (the live regions, the
+    // overlay zones) stays within the `Ui` the application was given: a
+    // frame drawn around it does not run past the window's bottom.
+    let app = builder(false).build(&egui::Context::default()).unwrap();
+    let seen = std::rc::Rc::new(std::cell::Cell::new((
+        egui::Rect::NOTHING,
+        egui::Rect::NOTHING,
+    )));
+    let out = seen.clone();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 600.0))
+        .build_ui_state(
+            move |ui, app: &mut App| {
+                let max = ui.max_rect();
+                app.show(ui);
+                out.set((max, ui.min_rect()));
+            },
+            app,
+        );
+    h.run();
+    let (max, used) = seen.get();
+    assert!(max.is_positive(), "{max:?}");
+    assert!(used.bottom() <= max.bottom(), "{used:?} past {max:?}");
+}
