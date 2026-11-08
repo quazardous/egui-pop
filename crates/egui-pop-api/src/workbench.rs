@@ -2483,14 +2483,10 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         let (min, default, max) = sizes[&area];
         let min = min.max(48.0);
         let max = max.max(min);
-        let fallback: f32 = match area {
-            Area::Bottom => 200.0,
-            _ => 240.0,
-        };
         let default = if default > 0.0 {
             default
         } else {
-            fallback.max(min)
+            area_default(area, default).max(min)
         };
         let side = matches!(area, Area::StartSide | Area::EndSide);
         let strip = folded.contains(&area) || (side && over.contains(&area));
@@ -2594,11 +2590,14 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         } else {
             zone.rect.width()
         };
-        let wanted = saved.get(&zone.name.0).copied().or_else(|| {
-            let c = layout.zone(&zone.name.0)?.constraints;
-            c.default.map(|d| d.points(0.0))
-        });
-        if wanted.is_some_and(|w| along > w + 0.5) && along <= zone.least + 0.5 {
+        // What it would have without its least size: the size the user
+        // gave, else its default (not raised to the least).
+        let (_, default, _) = sizes[&area];
+        let wanted = saved
+            .get(&zone.name.0)
+            .copied()
+            .unwrap_or_else(|| area_default(area, default));
+        if along > wanted + 0.5 && along <= zone.least + 0.5 {
             saved.insert(zone.name.0.clone(), along);
             resized = true;
         }
@@ -2831,6 +2830,18 @@ fn shell_tree(
         Zone::split(name, Dir::Horizontal, children)
     } else {
         Zone::split(name, Dir::Vertical, vec![inner, leaf(first)])
+    }
+}
+
+/// An area's default size: its panels' (`default`, 0 when none says),
+/// else 240 for a side area and 200 for the bottom one.
+fn area_default(area: Area, default: f32) -> f32 {
+    if default > 0.0 {
+        default
+    } else if area == Area::Bottom {
+        200.0
+    } else {
+        240.0
     }
 }
 
