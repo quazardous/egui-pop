@@ -573,8 +573,11 @@ impl LiveRun<'_> {
 
     /// A `Ui` step as the socket's `ui` params.
     fn ui_params(&self, ui: &Ui) -> Json {
-        let node = |label: &Option<String>, role: &Option<String>| {
+        let node = |label: &Option<String>, role: &Option<String>, nth: &Option<usize>| {
             let mut p = json!({});
+            if let Some(n) = nth {
+                p["nth"] = json!(n);
+            }
             if let Some(l) = label {
                 p["label"] = self.runner.substitute(&json!(l));
             }
@@ -584,20 +587,30 @@ impl LiveRun<'_> {
             p
         };
         match ui {
-            Ui::Click { label, role } => {
-                let mut p = node(label, role);
+            Ui::Click { label, role, nth } => {
+                let mut p = node(label, role, nth);
                 p["action"] = json!("click");
                 p
             }
-            Ui::Type { label, role, text } => {
-                let mut p = node(label, role);
+            Ui::Type {
+                label,
+                role,
+                nth,
+                text,
+            } => {
+                let mut p = node(label, role, nth);
                 p["action"] = json!("type");
                 p["text"] = self.runner.substitute(&json!(text));
                 p
             }
             Ui::Key(chord) => json!({ "action": "key", "key": chord }),
-            Ui::Scroll { label, role, up } => {
-                let mut p = node(label, role);
+            Ui::Scroll {
+                label,
+                role,
+                nth,
+                up,
+            } => {
+                let mut p = node(label, role, nth);
                 p["action"] = json!("scroll");
                 p["up"] = json!(up);
                 p

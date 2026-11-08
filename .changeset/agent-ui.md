@@ -12,3 +12,5 @@ its agent socket:
   frames (headless or on a desktop); acting needs the bridge on;
 - the MCP server offers it as the `ui` tool;
 - live scenarios run `Ui` steps and `Expect(Tree)` over it.
+- a scenario's node may be picked among several with `nth`, in
+  reading order (`Ui(Click(label: "Import", nth: 0))`).

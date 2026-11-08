@@ -111,15 +111,23 @@ pub struct Node {
     pub label: Option<String>,
     #[serde(default)]
     pub role: Option<String>,
+    /// Which of several matching nodes, in reading order (top to bottom,
+    /// then left to right), from 0; without it, exactly one must match.
+    #[serde(default)]
+    pub nth: Option<usize>,
 }
 
 impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match (&self.label, &self.role) {
-            (Some(l), Some(r)) => write!(f, "{r} \"{l}\""),
-            (Some(l), None) => write!(f, "\"{l}\""),
-            (None, Some(r)) => write!(f, "{r}"),
-            (None, None) => write!(f, "any node"),
+            (Some(l), Some(r)) => write!(f, "{r} \"{l}\"")?,
+            (Some(l), None) => write!(f, "\"{l}\"")?,
+            (None, Some(r)) => write!(f, "{r}")?,
+            (None, None) => write!(f, "any node")?,
+        }
+        match self.nth {
+            Some(n) => write!(f, " #{n}"),
+            None => Ok(()),
         }
     }
 }
@@ -133,6 +141,9 @@ pub enum Ui {
         label: Option<String>,
         #[serde(default)]
         role: Option<String>,
+        /// Which of several matching nodes ([`Node::nth`]).
+        #[serde(default)]
+        nth: Option<usize>,
     },
     /// Focuses a node and types text into it.
     Type {
@@ -140,6 +151,8 @@ pub enum Ui {
         label: Option<String>,
         #[serde(default)]
         role: Option<String>,
+        #[serde(default)]
+        nth: Option<usize>,
         text: String,
     },
     /// Presses a key, with modifiers: `Escape`, `Ctrl+K`, `Shift+Tab`.
@@ -150,6 +163,8 @@ pub enum Ui {
         label: Option<String>,
         #[serde(default)]
         role: Option<String>,
+        #[serde(default)]
+        nth: Option<usize>,
         #[serde(default)]
         up: bool,
     },
@@ -688,17 +703,24 @@ impl Run<'_> {
 
     fn ui(&mut self, h: &mut Harness<'static, App>, ui: &Ui) -> Result<(), String> {
         match ui {
-            Ui::Click { label, role } => {
+            Ui::Click { label, role, nth } => {
                 let node = Node {
                     label: label.clone(),
                     role: role.clone(),
+                    nth: *nth,
                 };
                 find(h, &node)?.click();
             }
-            Ui::Type { label, role, text } => {
+            Ui::Type {
+                label,
+                role,
+                nth,
+                text,
+            } => {
                 let node = Node {
                     label: label.clone(),
                     role: role.clone(),
+                    nth: *nth,
                 };
                 find(h, &node)?.focus();
                 h.run_ok();
@@ -708,10 +730,16 @@ impl Run<'_> {
                 let (mods, key) = parse_chord(chord)?;
                 h.key_press_modifiers(mods, key);
             }
-            Ui::Scroll { label, role, up } => {
+            Ui::Scroll {
+                label,
+                role,
+                nth,
+                up,
+            } => {
                 let node = Node {
                     label: label.clone(),
                     role: role.clone(),
+                    nth: *nth,
                 };
                 let n = find(h, &node)?;
                 if *up {
@@ -924,6 +952,18 @@ fn count(h: &Harness<'static, App>, n: &Node) -> usize {
 }
 
 fn find<'h>(h: &'h Harness<'static, App>, n: &'h Node) -> Result<egui_kittest::Node<'h>, String> {
+    if let Some(i) = n.nth {
+        let mut all: Vec<_> = h.query_all(by_node(n)).collect();
+        all.sort_by(|a, b| {
+            let (a, b) = (a.rect().min, b.rect().min);
+            a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x))
+        });
+        let count = all.len();
+        return all
+            .into_iter()
+            .nth(i)
+            .ok_or_else(|| format!("no {n}: {count} match"));
+    }
     let mut all = h.query_all(by_node(n));
     let first = all.next().ok_or_else(|| format!("no {n} in the tree"))?;
     if all.next().is_some() {
@@ -1080,14 +1120,15 @@ mod tests {
         assert_eq!(s.fixtures[0].1, json!({ "jpeg": 3 }));
         assert!(matches!(&s.steps[0], Step::Call(n, Json::Null) if n == "about.read"));
         assert!(
-            matches!(&s.steps[3], Step::Ui(Ui::Click { label: Some(l), role: None }) if l == "About")
+            matches!(&s.steps[3], Step::Ui(Ui::Click { label: Some(l), role: None, nth: None }) if l == "About")
         );
         assert!(matches!(
             &s.steps[8],
             Step::Expect(Expect::Tree {
                 has: Some(Node {
                     role: Some(_),
-                    label: Some(_)
+                    label: Some(_),
+                    ..
                 }),
                 lacks: None
             })

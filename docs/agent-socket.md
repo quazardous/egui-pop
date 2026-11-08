@@ -74,14 +74,15 @@ journal apply as to any agent.
 | `call` | `{ "collector", "action", "args"? }` | the bridge's feedback block: `{ "ok", "collector", "action", "mutates", "message", "data" }`, a refusal included (`ok: false`) |
 | `wait` | `bridge.wait`'s arguments (`event` and `cause`, `settled: true`, or `any`; `since`) and `deadline_ms` (5 s by default, 120 s at most) | `{ "met", "by", "event", "last" }`; `met: false` at the deadline |
 | `ui` | `{ "action": "tree", "label"?, "role"? }` | `{ "count", "nodes" }`: the accessibility tree's nodes (`id`, `parent`, `role`, `label`, `value`, `rect` in points, `disabled`), every one or those matching |
-| `ui` | `{ "action": "click" \| "type" \| "scroll", "label"?, "role"?, "text"?, "up"? }` | `{ "node" }`, once the input went in |
+| `ui` | `{ "action": "click" \| "type" \| "scroll", "label"?, "role"?, "nth"?, "text"?, "up"? }` | `{ "node" }`, once the input went in |
 | `ui` | `{ "action": "key", "key": "Ctrl+K" }` | `{ "key" }` |
 
 **The interface.** `ui` reads the AccessKit tree of the frame just
 drawn (AccessKit is turned on at the first `ui` request) and acts on it
 as a person does: a node is found by its `label` (exactly; a text
 label's text) and its `role` (`Button`, `TextInput`, `Window`, any
-case), and an action needs exactly one. `click` hovers the node's
+case), and an action needs exactly one, or `nth` picks one of several
+in reading order (top to bottom, then left to right, from 0). `click` hovers the node's
 centre, presses and releases, a frame each; `type` clicks it, then
 types `text`; `scroll` turns the wheel over it, down unless `up`; `key`
 presses and releases a key with its modifiers (`Ctrl`, `Shift`, `Alt`,
