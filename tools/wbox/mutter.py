@@ -192,6 +192,12 @@ class MutterCompositor:
         # client.
         self._move(self.width - 1, self.height - 1)
         self.pointer = (self.width - 1, self.height - 1)
+        # The keyboard likewise: without one the seat has no keyboard, no
+        # window ever gets the keyboard focus, and winit's windows never
+        # report focus (egui then drops `ViewportCommand::StartDrag`, which
+        # it sends only to a focused window). A Shift tap makes it.
+        self._rd("NotifyKeyboardKeycode", "ub", KEYS["shift"], True)
+        self._rd("NotifyKeyboardKeycode", "ub", KEYS["shift"], False)
 
         # Every frame of the stream as a PNG file; the last few kept.
         self.frames = rt / "frames"
