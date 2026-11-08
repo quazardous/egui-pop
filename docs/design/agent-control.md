@@ -1,7 +1,9 @@
 # Agent control: transports, scenarios and invariants
 
-Status: **design note, proposed** (2026-11-08). Nothing here is built
-yet. It answers an application's need (Helios): agents drive a running
+Status: **design note, proposed** (2026-11-08). Built since: schemas
+and `bridge.wait`, the in-process scenario runner, the socket and MCP
+transports, and live scenario runs over the socket (`Ui` steps aside;
+see [Scenarios](../scenarios.md)). It answers an application's need (Helios): agents drive a running
 application, turn what they find into tests, and run those tests
 without a person.
 

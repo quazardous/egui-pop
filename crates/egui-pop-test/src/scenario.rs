@@ -34,6 +34,9 @@ use serde_json::{Value as Json, json};
 
 use crate::wait::{Deadline, wait_until};
 
+#[cfg(unix)]
+pub mod live;
+
 /// A scenario, as read from its RON file.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
