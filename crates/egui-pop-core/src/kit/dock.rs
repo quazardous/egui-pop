@@ -8,12 +8,16 @@
 //! `section-disclosure`, the count `section-count`) and the focus ring of
 //! their boundaries; and its toolbar rows ([`egui_stack::toolbar`]): their
 //! tools (`toolbar-button`, a row of their More menu `menu-item`), More
-//! button (`toolbar-button`, the More glyph) and separators. egui_stack
-//! lays them out and takes their input.
+//! button (`toolbar-button`, the More glyph) and separators; and the
+//! shell's layout ([`egui_stack::layout`]): the lines between its areas,
+//! the folded areas' strips (`area-strip`). egui_stack lays them out and
+//! takes their input.
 
 use egui::{
-    Color32, CornerRadius, FontFamily, FontId, Painter, Rect, Stroke, StrokeKind, pos2, vec2,
+    Color32, CornerRadius, FontFamily, FontId, Painter, Rect, Shadow, Stroke, StrokeKind, pos2,
+    vec2,
 };
+use egui_stack::layout::{FlyoutPaint, LayoutPainter, SashPaint, Shown, StripPaint};
 use egui_stack::toolbar::ToolKind;
 use egui_stack::{
     DockPainter, DropButtonPaint, DropPaint, DropTargetPaint, PartState, SectionBandPaint,
@@ -21,7 +25,10 @@ use egui_stack::{
     TabBodyPaint, TabMeasure, TabPaint, ToolItemPaint, ToolMorePaint, ToolSeparatorPaint,
 };
 
-use super::{Corners, Glyph, Kit, KitCx, Part, State, Tone, paint_ring};
+use super::{
+    BoxStyle, Corners, Glyph, Kit, KitCx, Part, Side, State, Tone, paint_box, paint_indicator,
+    paint_ring,
+};
 use crate::icon::Size;
 use crate::indicator;
 use crate::progress::paint_spinner_on;
@@ -125,6 +132,88 @@ fn cx(painter: &Painter) -> KitCx<'_> {
     KitCx {
         painter,
         ppp: painter.pixels_per_point(),
+    }
+}
+
+impl Kit {
+    /// A folded area's strip (`area-strip`): its box, the line on the side
+    /// facing the centre (`inner`), and the drag-handle glyph near its top.
+    pub fn paint_area_strip(&self, painter: &Painter, rect: Rect, state: State, inner: Side) {
+        let component = &self.area_strip;
+        let grip = component.data.width.max(1.0);
+        let b = component.style(state);
+        let cx = cx(painter);
+        paint_box(
+            &cx,
+            rect,
+            &BoxStyle {
+                border_width: 0.0,
+                ..*b
+            },
+            Corners::None,
+            inner,
+        );
+        let line = BoxStyle {
+            indicator_color: b.border_color,
+            indicator_size: b.border_width,
+            ..BoxStyle::default()
+        };
+        paint_indicator(&cx, rect, &line, inner);
+        let at = Rect::from_center_size(
+            pos2(rect.center().x, rect.top() + grip * 1.25),
+            vec2(grip, grip),
+        );
+        self.glyph(Glyph::DragHandle).paint(painter, at, b.text);
+    }
+}
+
+/// The kit paints egui_stack's layout: the line between two areas (as an
+/// egui side panel's separator, shown at rest only when the kit's
+/// `side-area` has a border), the folded areas' strips (`area-strip`) and
+/// the frame of what lies over the centre (`side-area`, its shadow).
+impl LayoutPainter for Kit {
+    fn sash(&self, painter: &Painter, sash: &SashPaint<'_>) {
+        let style = painter.ctx().global_style();
+        let widgets = &style.visuals.widgets;
+        let flags = sash.state;
+        let stroke = if flags.contains(PartState::DRAGGED) {
+            widgets.active.fg_stroke
+        } else if flags.contains(PartState::HOVERED) || flags.contains(PartState::FOCUSED) {
+            widgets.hovered.fg_stroke
+        } else if self.side_area.style(State::REST).border_width > 0.0 {
+            widgets.noninteractive.bg_stroke
+        } else {
+            return;
+        };
+        let c = sash.rect.center();
+        match sash.axis {
+            SeparatorAxis::Vertical => {
+                painter.vline(c.x, sash.rect.y_range(), stroke);
+            }
+            SeparatorAxis::Horizontal => {
+                painter.hline(sash.rect.x_range(), c.y, stroke);
+            }
+        }
+    }
+
+    fn strip(&self, painter: &Painter, strip: &StripPaint<'_>) {
+        // The side facing the rest of the window, from where the strip is.
+        let inner = if strip.rect.center().x < painter.clip_rect().center().x {
+            Side::Right
+        } else {
+            Side::Left
+        };
+        let state = state(strip.grip_state).with(State::SELECTED, strip.shown == Shown::Over);
+        self.paint_area_strip(painter, strip.rect, state, inner);
+    }
+
+    fn flyout_frame(&self, painter: &Painter, frame: &FlyoutPaint<'_>) {
+        let shadow = self.side_area.data.shadow;
+        if shadow != Shadow::NONE {
+            painter.add(shadow.as_shape(frame.rect, CornerRadius::ZERO));
+        }
+        let fill = painter.ctx().global_style().visuals.panel_fill;
+        painter.rect_filled(frame.rect, CornerRadius::ZERO, fill);
     }
 }
 
