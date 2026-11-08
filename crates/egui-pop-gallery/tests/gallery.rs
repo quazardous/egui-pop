@@ -7904,26 +7904,56 @@ fn the_tracks_page_shows_clips_that_the_keys_select_move_and_trim() {
     results.add(h.try_snapshot("tracks-keys-pop-dark"));
 }
 
+/// Picks a mode in the file browser's switcher, a menu beyond four modes.
+fn pick_browser_mode(h: &mut Harness<'_, Gallery>, label: &str) {
+    h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "View mode")
+        .click();
+    h.run();
+    h.get_all_by_label(label).last().unwrap().click();
+    h.run();
+}
+
 #[test]
 fn the_file_browser_page_shows_the_filmstrip_and_the_columns() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "file-browser"));
     h.run();
-    h.get_by_role_and_label(egui::accesskit::Role::Button, "Filmstrip")
-        .click();
-    h.run();
+    pick_browser_mode(&mut h, "Filmstrip");
     h.get_by_label("harbour.png").click();
     for _ in 0..3 {
         settle_thumbnails(&mut h);
     }
     egui_pop_test::assert_all_named(&h);
     h.snapshot("file-browser-filmstrip-pop-dark");
-    h.get_by_role_and_label(egui::accesskit::Role::Button, "Columns")
-        .click();
-    h.run();
+    pick_browser_mode(&mut h, "Columns");
     // The focus kept: the next column shows its thumbnail.
     for _ in 0..3 {
         settle_thumbnails(&mut h);
     }
     egui_pop_test::assert_all_named(&h);
     h.snapshot("file-browser-columns-pop-dark");
+}
+
+#[test]
+fn the_file_browser_page_shows_the_carousel_and_the_agenda() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "file-browser"));
+    h.run();
+    pick_browser_mode(&mut h, "Carousel");
+    h.get_by_label("harbour.png").click();
+    for _ in 0..3 {
+        settle_thumbnails(&mut h);
+    }
+    egui_pop_test::assert_all_named(&h);
+    assert!(h.query_by_label("lighthouse.jpg").is_some(), "a neighbour");
+    h.snapshot("file-browser-carousel-pop-dark");
+    pick_browser_mode(&mut h, "Agenda");
+    for _ in 0..3 {
+        settle_thumbnails(&mut h);
+    }
+    egui_pop_test::assert_all_named(&h);
+    assert!(
+        h.query_by_role_and_label(egui::accesskit::Role::Heading, "No date")
+            .is_some(),
+        "the folders, without a time"
+    );
+    h.snapshot("file-browser-agenda-pop-dark");
 }
