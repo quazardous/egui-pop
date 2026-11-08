@@ -73,6 +73,24 @@ journal apply as to any agent.
 | `snapshot` | `{ "collector"? }` | every collector's snapshot by name, or one collector's |
 | `call` | `{ "collector", "action", "args"? }` | the bridge's feedback block: `{ "ok", "collector", "action", "mutates", "message", "data" }`, a refusal included (`ok: false`) |
 | `wait` | `bridge.wait`'s arguments (`event` and `cause`, `settled: true`, or `any`; `since`) and `deadline_ms` (5 s by default, 120 s at most) | `{ "met", "by", "event", "last" }`; `met: false` at the deadline |
+| `ui` | `{ "action": "tree", "label"?, "role"? }` | `{ "count", "nodes" }`: the accessibility tree's nodes (`id`, `parent`, `role`, `label`, `value`, `rect` in points, `disabled`), every one or those matching |
+| `ui` | `{ "action": "click" \| "type" \| "scroll", "label"?, "role"?, "text"?, "up"? }` | `{ "node" }`, once the input went in |
+| `ui` | `{ "action": "key", "key": "Ctrl+K" }` | `{ "key" }` |
+
+**The interface.** `ui` reads the AccessKit tree of the frame just
+drawn (AccessKit is turned on at the first `ui` request) and acts on it
+as a person does: a node is found by its `label` (exactly; a text
+label's text) and its `role` (`Button`, `TextInput`, `Window`, any
+case), and an action needs exactly one. `click` hovers the node's
+centre, presses and releases, a frame each; `type` clicks it, then
+types `text`; `scroll` turns the wheel over it, down unless `up`; `key`
+presses and releases a key with its modifiers (`Ctrl`, `Shift`, `Alt`,
+`Cmd`). The events go into egui's raw input through an egui plugin
+(`input_hook`), so they work the same in a kittest harness, headless in
+a nested compositor and in a window on a desktop. `tree` needs the
+bridge on or read-only; the actions change the application, so they
+need it on, and are refused when it is read-only. A node not found, or
+found twice, is error `-32003`, with the reason.
 
 `commands.run` through `call` is queued for the next frame, as
 `AppHandle::debug_call` does: its result comes on the journal. Wait for
@@ -82,7 +100,8 @@ an earlier `wait`.
 Errors: `-32700` (not JSON), `-32600` (not a request), `-32601` (no such
 method), `-32602` (bad params), `-32001` (the bridge refused `describe`,
 `snapshot` or `wait`; `data` is the feedback block, when there is one), `-32002` (the application did
-not answer: it ran no frame, or it closed).
+not answer: it ran no frame, or it closed), `-32003` (`ui` found no
+node, or more than one, to act on).
 
 ```console
 $ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"wait","params":{"settled":true}}' \
@@ -120,8 +139,9 @@ $ claude mcp add my-app -- egui-pop-agent-mcp $XDG_RUNTIME_DIR/egui-pop-agent-or
   with `commands.run`, then waits for its `command.done` (or
   `command.failed`) on the journal, 10 s at most, and answers the
   command's result.
-- **Built-ins.** `snapshot` (`collector`, optional) and `wait` (the
-  socket's `wait`, its params and its answer as structured content).
+- **Built-ins.** `snapshot` (`collector`, optional), `wait` (the
+  socket's `wait`, its params and its answer as structured content) and
+  `ui` (the socket's `ui`: the tree, click, type, key, scroll).
   `bridge.wait`, which does not block, is not offered as a tool.
 - **Off.** When `describe` is refused (the bridge is off) or the
   application does not answer, `tools/list` offers `snapshot` and

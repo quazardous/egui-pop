@@ -102,6 +102,8 @@ pub enum Target {
     Snapshot,
     /// `wait`, held by the socket.
     Wait,
+    /// `ui`: the accessibility tree, and input on its nodes.
+    Ui,
 }
 
 /// A tool made from a capability.
@@ -203,7 +205,7 @@ fn input_schema(args: &Json, example: &Json) -> (Json, bool) {
     }
 }
 
-/// The tools always offered: `snapshot` and `wait`.
+/// The tools always offered: `snapshot`, `wait` and `ui`.
 fn builtins() -> Vec<GeneratedTool> {
     let snapshot = Tool::new(
         "snapshot",
@@ -246,6 +248,26 @@ fn builtins() -> Vec<GeneratedTool> {
         "required": ["met"],
     })))
     .with_annotations(ToolAnnotations::new().read_only(true));
+    let ui = Tool::new(
+        "ui",
+        "The interface, as a person sees and drives it. `action: \"tree\"` lists the \
+         accessibility tree's nodes (role, label, value, rect), or those matching `label` \
+         (exactly) and `role` (`Button`, `TextInput`, any case). `click`, `type` (with `text`) \
+         and `scroll` (`up`, optional) act on the one node `label` and `role` name, `key` presses \
+         `key` (`Escape`, `Ctrl+K`); they answer once the input went in, and need the bridge on.",
+        object(json!({
+            "type": "object",
+            "properties": {
+                "action": { "type": "string", "enum": ["tree", "click", "type", "key", "scroll"] },
+                "label": { "type": "string" },
+                "role": { "type": "string" },
+                "text": { "type": "string" },
+                "key": { "type": "string" },
+                "up": { "type": "boolean" },
+            },
+            "required": ["action"],
+        })),
+    );
     vec![
         GeneratedTool {
             tool: snapshot,
@@ -257,11 +279,16 @@ fn builtins() -> Vec<GeneratedTool> {
             target: Target::Wait,
             wrapped: false,
         },
+        GeneratedTool {
+            tool: ui,
+            target: Target::Ui,
+            wrapped: false,
+        },
     ]
 }
 
 /// The tools for a `describe` reply (`{ "protocol", "capabilities" }`):
-/// `snapshot` and `wait`, then one per capability offered to agents
+/// `snapshot`, `wait` and `ui`, then one per capability offered to agents
 /// (`bridge.wait` is the `wait` tool). A name taken already gets a
 /// number.
 pub fn tools(describe: &Json) -> Vec<GeneratedTool> {
@@ -362,7 +389,7 @@ impl<B: Backend> McpBridge<B> {
 
     /// The tools now: `describe` asked again, so a capability added since
     /// is there. When `describe` is refused (the bridge is off) or the
-    /// application does not answer, only `snapshot` and `wait`.
+    /// application does not answer, only `snapshot`, `wait` and `ui`.
     async fn refresh(&self) -> Vec<GeneratedTool> {
         let tools = match self.request("describe", json!({})).await {
             Ok(d) => tools(&d),
@@ -411,6 +438,10 @@ impl<B: Backend> McpBridge<B> {
             },
             Target::Wait => match self.request("wait", args).await {
                 Ok(v) => CallToolResult::structured(v),
+                Err(e) => rpc_error(e),
+            },
+            Target::Ui => match self.request("ui", args).await {
+                Ok(v) => CallToolResult::success(vec![ContentBlock::text(v.to_string())]),
                 Err(e) => rpc_error(e),
             },
             Target::Action { collector, action } => {
@@ -516,7 +547,7 @@ impl<B: Backend> ServerHandler for McpBridge<B> {
             .with_instructions(
                 "Drives a running egui-pop application through its agent socket. The tools are \
                  its capabilities; `snapshot` reads its state, `wait` waits for an event or for \
-                 it to settle. Calls that change the application are refused unless it offers \
+                 it to settle, `ui` reads the interface's tree and clicks, types and scrolls. Calls that change the application are refused unless it offers \
                  them.",
             )
     }
