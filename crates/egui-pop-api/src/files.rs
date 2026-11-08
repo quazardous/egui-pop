@@ -2491,38 +2491,6 @@ fn header_inset(ui: &Ui, kit: &Kit, font: &egui::FontId) -> f32 {
         .left()
 }
 
-/// A move of the highlight in the grid.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum GridMove {
-    Left,
-    Right,
-    Up,
-    Down,
-    Home,
-    End,
-}
-
-impl GridMove {
-    /// Where it lands from entry `at`, in `count` entries with `columns` in a
-    /// row. Down from the row above a shorter last one takes the last entry,
-    /// and from the last row stays, as file managers do.
-    fn target(self, at: usize, columns: usize, count: usize) -> usize {
-        let last = count.saturating_sub(1);
-        let columns = columns.max(1);
-        match self {
-            GridMove::Left => at.saturating_sub(1),
-            GridMove::Right => (at + 1).min(last),
-            GridMove::Up if at >= columns => at - columns,
-            GridMove::Up => at,
-            GridMove::Down if at + columns <= last => at + columns,
-            GridMove::Down if at / columns < last / columns => last,
-            GridMove::Down => at,
-            GridMove::Home => 0,
-            GridMove::End => last,
-        }
-    }
-}
-
 /// One entry of a folder.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
@@ -3965,10 +3933,10 @@ impl FilePicker {
             ui.input_mut(|i| {
                 let mut moved = (None, false);
                 for (key, to) in [
-                    (Key::ArrowLeft, GridMove::Left),
-                    (Key::ArrowRight, GridMove::Right),
-                    (Key::Home, GridMove::Home),
-                    (Key::End, GridMove::End),
+                    (Key::ArrowLeft, browser::ModeKey::Left),
+                    (Key::ArrowRight, browser::ModeKey::Right),
+                    (Key::Home, browser::ModeKey::Home),
+                    (Key::End, browser::ModeKey::End),
                 ] {
                     // Shift first: egui matches a key asked without it with
                     // it held too.
@@ -4182,26 +4150,22 @@ impl FilePicker {
             });
         }
         let shown = self.visible();
-        let grid_move = grid_move.or(if !grid {
-            None
-        } else if down {
-            Some(GridMove::Down)
+        let key = grid_move.or(if down {
+            Some(browser::ModeKey::Down)
         } else if up {
-            Some(GridMove::Up)
+            Some(browser::ModeKey::Up)
         } else {
             None
         });
-        if down || up || grid_move.is_some() {
+        if let Some(key) = key {
             // Choosing a folder the list opens with nothing selected: the first
             // press selects the entry highlighted, rather than the one after it.
+            // Otherwise the mode shown says where the key goes, by its layout.
             let to = if self.kind == ChooseKind::Folder && self.selected.is_empty() {
                 self.highlight
-            } else if let Some(grid_move) = grid_move {
-                grid_move.target(self.highlight, self.columns, shown.len())
-            } else if down {
-                (self.highlight + 1).min(shown.len().saturating_sub(1))
             } else {
-                self.highlight.saturating_sub(1)
+                let mode: &dyn browser::ViewMode = if grid { &self.thumbs } else { &self.details };
+                mode.step(self.highlight, shown.len(), key)
             };
             self.move_highlight(to, &shown, extend || grid_extend);
             self.reveal_cell = true;
@@ -6043,28 +6007,6 @@ mod tests {
         assert_eq!(columns[0].width, NAME_MIN_WIDTH + 40.0);
         assert_eq!(columns[1].left, 4.0 + NAME_MIN_WIDTH + 40.0 + 10.0);
         assert_eq!(columns[2].left, columns[1].left + 160.0);
-    }
-
-    #[test]
-    fn a_move_in_the_grid_lands_as_in_a_file_manager() {
-        use GridMove::*;
-        // Ten entries, four in a row: 0 1 2 3 / 4 5 6 7 / 8 9.
-        let to = |m: GridMove, at| m.target(at, 4, 10);
-        assert_eq!(to(Right, 3), 4, "to the next row's start");
-        assert_eq!(to(Left, 4), 3, "to the row before's end");
-        assert_eq!(to(Left, 0), 0);
-        assert_eq!(to(Right, 9), 9);
-        assert_eq!(to(Down, 1), 5);
-        assert_eq!(to(Up, 5), 1);
-        assert_eq!(to(Up, 2), 2, "the first row stays");
-        assert_eq!(to(Down, 6), 9, "above the short last row: its last entry");
-        assert_eq!(to(Down, 9), 9, "the last row stays");
-        assert_eq!(to(Down, 8), 8);
-        assert_eq!(to(Home, 6), 0);
-        assert_eq!(to(End, 6), 9);
-        // Nothing shown, and a width of one.
-        assert_eq!(End.target(0, 4, 0), 0);
-        assert_eq!(Down.target(0, 1, 3), 1);
     }
 
     #[test]
