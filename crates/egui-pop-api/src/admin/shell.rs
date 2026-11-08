@@ -231,11 +231,8 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
                             }
                         }
                     } else {
-                        for s in &tree.sections {
-                            let hits = hits(&ctx, app, &entries, s, &query).len();
-                            if hits == 0 {
-                                continue;
-                            }
+                        for (s, list) in search(&ctx, app, &entries, &tree, &query) {
+                            let hits = list.len();
                             let title = format!(
                                 "{} › {}  ({hits})",
                                 scope_title_of(&ctx, &tree, &s.scope),
@@ -266,11 +263,7 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
                             }
                         } else {
                             let mut any = false;
-                            for s in &tree.sections {
-                                let list = hits(&ctx, app, &entries, s, &query);
-                                if list.is_empty() {
-                                    continue;
-                                }
+                            for (s, list) in search(&ctx, app, &entries, &tree, &query) {
                                 any = true;
                                 ui.strong(format!(
                                     "{} › {}",
@@ -373,6 +366,34 @@ fn hits<'a>(
             })
         })
         .collect()
+}
+
+/// The search's hits by section, a setting placed in several sections
+/// shown once, at its first place.
+fn search<'a>(
+    ctx: &egui::Context,
+    app: &AppHandle,
+    entries: &[SettingEntry],
+    tree: &'a Tree,
+    query: &str,
+) -> Vec<(&'a Section, Vec<&'a Field>)> {
+    let mut seen: Vec<&str> = Vec::new();
+    let mut out = Vec::new();
+    for s in &tree.sections {
+        let list: Vec<&Field> = hits(ctx, app, entries, s, query)
+            .into_iter()
+            .filter(|f| {
+                let id = f.setting_id().unwrap_or_default();
+                let fresh = !seen.contains(&id);
+                seen.push(id);
+                fresh
+            })
+            .collect();
+        if !list.is_empty() {
+            out.push((s, list));
+        }
+    }
+    out
 }
 
 /// How many of a section's settings hold a value other than their
