@@ -137,6 +137,9 @@ class MutterCompositor:
         env.update(XDG_RUNTIME_DIR=str(rt), XDG_CONFIG_HOME=str(config),
                    GSETTINGS_BACKEND="keyfile", NO_AT_BRIDGE="1",
                    GDK_BACKEND="wayland")
+        # mutter's own traces in its log: WBOX_MUTTER_DEBUG=window-ops,...
+        if os.environ.get("WBOX_MUTTER_DEBUG"):
+            env["MUTTER_DEBUG"] = os.environ["WBOX_MUTTER_DEBUG"]
         self.env = env
 
         bus_path = rt / "bus"
