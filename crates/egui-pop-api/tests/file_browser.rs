@@ -368,8 +368,7 @@ fn the_filmstrip_asks_for_the_large_view_first_then_the_strip_in_order() {
     let rec = Arc::new(RecordingThumbnails::default());
     let provider: Arc<dyn ThumbnailProvider> = rec.clone();
     let mut h = harness(filmstrip("film-thumbs", 200).with_thumbnails(provider));
-    h.run();
-    h.get_by_label("IMG_005.png").click();
+    h.state_mut().focus_on(Path::new("/p/IMG_005.png"), false);
     h.run();
     h.run();
     let r = rec.record.lock().unwrap();
