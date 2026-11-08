@@ -9,7 +9,7 @@
 use egui::{RichText, Ui};
 use egui_pop::api::admin::model::hooks::Hook;
 use egui_pop::api::admin::model::{
-    Action, Callout, FORMAT, Field, Manifest, Records, Status, Tone,
+    Action, Callout, Confirmation, FORMAT, Field, Manifest, Records, RowField, Status, Tone,
 };
 use egui_pop::api::admin::{ADMIN, CMD_OPEN};
 use egui_pop::api::settings;
@@ -105,9 +105,9 @@ impl Plugin for SettingsPage {
                 "gallery.greeting.languages",
                 Hook::Records(Box::new(|| {
                     vec![
-                        serde_json::json!({ "id": "en", "name": "English", "greeting": "Hello", "state": "success" }),
-                        serde_json::json!({ "id": "fr", "name": "French", "greeting": "Bonjour", "state": "success" }),
-                        serde_json::json!({ "id": "eo", "name": "Esperanto", "greeting": "Saluton", "state": "warning" }),
+                        serde_json::json!({ "id": "en", "name": "English", "greeting": "Hello", "state": "success", "known": 0.9, "knownText": "Most people", "strong": true }),
+                        serde_json::json!({ "id": "fr", "name": "French", "greeting": "Bonjour", "state": "success", "known": 0.4, "knownText": "Many people", "strong": false }),
+                        serde_json::json!({ "id": "eo", "name": "Esperanto", "greeting": "Saluton", "state": "warning", "known": 0.05, "knownText": "A few people", "strong": false }),
                     ]
                 })),
             );
@@ -115,17 +115,29 @@ impl Plugin for SettingsPage {
                 "general/greetings",
                 "Greetings",
                 |s| {
-                    s.description("Records from a hook: a table and a list, each row with its actions.")
+                    s.description("Records from a hook: a table and a list, each row with its fields and actions.")
                         .group("table", "Table")
                         .table(
                             Records::hook("languages", "", "gallery.greeting.languages", "id")
                                 .column("name", "Language")
                                 .column("greeting", "Greeting")
+                                .meter("known", "Known by", "knownText")
                                 .tone("state")
+                                .row_field(RowField::toggle(
+                                    "strong",
+                                    "In bold",
+                                    "admin.set",
+                                    serde_json::json!({ "key": "gallery.strong", "value": "${value}" }),
+                                ))
                                 .row_action(
                                     Action::command("admin.set")
                                         .title("Use")
-                                        .args(serde_json::json!({ "key": "gallery.greeting", "value": "${row.greeting}" })),
+                                        .args(serde_json::json!({ "key": "gallery.greeting", "value": "${row.greeting}" }))
+                                        .confirmation(Confirmation::new(
+                                            "Greet in ${row.name}?",
+                                            "The greeting becomes \"${row.greeting}\".",
+                                            "Use it",
+                                        )),
                                 ),
                         )
                         .group("list", "List")

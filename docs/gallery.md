@@ -552,6 +552,9 @@ Settings, the Settings app (generated pages, a manifest's section, value scopes,
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/admin-search-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/admin-search-pop-dark.png" width="200" alt="admin-search-pop-dark"></a><br>admin-search-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/admin-records-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/admin-records-pop-dark.png" width="200" alt="admin-records-pop-dark"></a><br>admin-records-pop-dark</td>
   </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/admin-confirm-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/admin-confirm-pop-dark.png" width="200" alt="admin-confirm-pop-dark"></a><br>admin-confirm-pop-dark</td>
+  </tr>
 </table>
 
 ### Examples

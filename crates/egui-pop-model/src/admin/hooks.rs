@@ -136,6 +136,14 @@ impl Hooks {
         }
     }
 
+    /// Runs a `confirm` hook: the confirmation it asks for, if any.
+    pub fn confirm(&self, name: &str, values: &Values) -> Option<Confirm> {
+        match self.get(name) {
+            Some(Hook::Confirm(f)) => f(values),
+            _ => None,
+        }
+    }
+
     pub fn status(&self, name: &str) -> Option<(String, Tone)> {
         match self.get(name) {
             Some(Hook::Status(f)) => Some(f()),

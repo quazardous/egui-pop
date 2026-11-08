@@ -92,6 +92,9 @@ struct State {
     section: Option<String>,
     /// An item to scroll to once (a deep link's key).
     key: Option<String>,
+    /// A record a deep link named (its key's value): marked while its
+    /// section shows.
+    row: Option<String>,
     filter: String,
     /// The value scope a row writes to, when its "Set for" menu chose.
     target: BTreeMap<String, ValueScope>,
@@ -158,6 +161,7 @@ impl Admin {
             let mut s = lock(&self.state);
             s.scope = Some(p.scope);
             s.section = p.section;
+            s.row = None;
             s.key = p.key;
             s.filter.clear();
         }

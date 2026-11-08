@@ -166,7 +166,7 @@ macro_rules! clauses {
     )*};
 }
 
-clauses!(Field, Action, Status, Callout, Records);
+clauses!(Field, Action, Status, Callout, Records, RowField);
 
 /// The ten field kinds. The list is closed: a new one is a decision in
 /// the design note, not in a plugin.
@@ -372,6 +372,53 @@ pub struct Action {
     /// A `confirm` hook by name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confirm: Option<String>,
+    /// A confirmation asked before the command runs (its texts may name
+    /// the form's and the row's values, `${row.name}`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirmation: Option<Confirmation>,
+}
+
+/// A question asked before an action's command runs: a title, what
+/// happens, the verb of the button that goes on, and the danger style
+/// (the focus starts on Cancel).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Confirmation {
+    pub title: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub text: String,
+    pub verb: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub danger: bool,
+}
+
+impl Confirmation {
+    pub fn new(title: &str, text: &str, verb: &str) -> Confirmation {
+        Confirmation {
+            title: title.into(),
+            text: text.into(),
+            verb: verb.into(),
+            danger: false,
+        }
+    }
+
+    pub fn danger(mut self) -> Confirmation {
+        self.danger = true;
+        self
+    }
+
+    /// Its texts with the values they name filled in.
+    pub fn filled(&self, values: &hooks::Values) -> Confirmation {
+        let fill = |s: &str| match template::expand(&Json::String(s.into()), values).0 {
+            Json::String(s) => s,
+            other => cell_text(&other),
+        };
+        Confirmation {
+            title: fill(&self.title),
+            text: fill(&self.text),
+            verb: fill(&self.verb),
+            danger: self.danger,
+        }
+    }
 }
 
 impl Action {
@@ -382,6 +429,7 @@ impl Action {
             args: Json::Null,
             style: ActionStyle::Secondary,
             confirm: None,
+            confirmation: None,
         }
     }
 
@@ -407,6 +455,12 @@ impl Action {
 
     pub fn confirm(mut self, hook: &str) -> Action {
         self.confirm = Some(hook.into());
+        self
+    }
+
+    /// Asks this before running.
+    pub fn confirmation(mut self, confirmation: Confirmation) -> Action {
+        self.confirmation = Some(confirmation);
         self
     }
 }
@@ -520,6 +574,152 @@ pub enum RecordSource {
 pub struct Column {
     pub key: String,
     pub title: String,
+    #[serde(default, skip_serializing_if = "CellKind::is_text")]
+    pub kind: CellKind,
+    /// A meter's words, from this key of the record (`120 GB free of
+    /// 1 TB`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+}
+
+/// How a cell shows its value.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CellKind {
+    /// Written out ([`cell_text`]).
+    #[default]
+    Text,
+    /// A bar filled by a share from 0 to 1 (used of total, done of all),
+    /// with its words over it; text when the value is not a number.
+    Meter,
+}
+
+impl CellKind {
+    pub fn is_text(&self) -> bool {
+        *self == CellKind::Text
+    }
+}
+
+/// A meter's share: a number clamped to 0 to 1, none for anything else.
+pub fn meter_share(v: &Json) -> Option<f32> {
+    v.as_f64().map(|x| x.clamp(0.0, 1.0) as f32)
+}
+
+/// A choice of a row field: the value written and its label.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RowChoice {
+    pub value: Json,
+    pub label: String,
+}
+
+/// An editable cell: a record's value shown as a field (a toggle, a
+/// text, a choice) and written through a command whose arguments name
+/// the record (`${row.<key>}`) and the new value (`${value}`). In a
+/// table it takes the place of the column of its key, or adds one; in a
+/// list it shows under the record's title. Its `when` and `enabled`
+/// read the record as `row.<key>`; its description is its tooltip.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RowField {
+    #[serde(flatten)]
+    pub meta: Meta,
+    /// The record's key it shows.
+    pub key: String,
+    /// `toggle`, `text` or `choice`; another kind shows as text.
+    pub kind: FieldKind,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub choices: Vec<RowChoice>,
+    /// The choices from the record: an array of `{value, label}` at this
+    /// key (destinations that depend on the record).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub choices_key: Option<String>,
+    pub command: String,
+    #[serde(default, skip_serializing_if = "Json::is_null")]
+    pub args: Json,
+}
+
+impl RowField {
+    fn new(kind: FieldKind, key: &str, title: &str, command: &str, args: Json) -> RowField {
+        RowField {
+            meta: Meta::new(key, title),
+            key: key.into(),
+            kind,
+            choices: Vec::new(),
+            choices_key: None,
+            command: command.into(),
+            args,
+        }
+    }
+
+    /// A switch over a boolean.
+    pub fn toggle(key: &str, title: &str, command: &str, args: Json) -> RowField {
+        RowField::new(FieldKind::Toggle, key, title, command, args)
+    }
+
+    /// A text, written when the field is left or Enter is pressed.
+    pub fn text(key: &str, title: &str, command: &str, args: Json) -> RowField {
+        RowField::new(FieldKind::Text, key, title, command, args)
+    }
+
+    /// One of the choices (value, label).
+    pub fn choice(
+        key: &str,
+        title: &str,
+        choices: &[(Json, &str)],
+        command: &str,
+        args: Json,
+    ) -> RowField {
+        let mut f = RowField::new(FieldKind::Choice, key, title, command, args);
+        f.choices = choices
+            .iter()
+            .map(|(value, label)| RowChoice {
+                value: value.clone(),
+                label: (*label).into(),
+            })
+            .collect();
+        f
+    }
+
+    /// The choices read from the record at `key`.
+    pub fn choices_from(mut self, key: &str) -> RowField {
+        self.choices_key = Some(key.into());
+        self
+    }
+
+    /// Its id, when two fields show the same key.
+    pub fn id(mut self, id: &str) -> RowField {
+        self.meta.id = id.into();
+        self
+    }
+
+    /// Its tooltip.
+    pub fn help(mut self, text: &str) -> RowField {
+        self.meta.description = text.into();
+        self
+    }
+
+    /// The choices offered for a record: the declared ones, then those
+    /// the record holds.
+    pub fn choices_of(&self, row: &Json) -> Vec<RowChoice> {
+        let mut out = self.choices.clone();
+        if let Some(k) = &self.choices_key {
+            out.extend(
+                row[k.as_str()]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|c| serde_json::from_value::<RowChoice>(c.clone()).ok()),
+            );
+        }
+        out
+    }
+
+    /// The command's arguments for a new value: the template filled with
+    /// the values (the record's as `row.<key>`) and `value`.
+    pub fn write_args(&self, values: &hooks::Values, value: Json) -> Json {
+        let mut v = values.clone();
+        v.insert("value".into(), value);
+        template::expand(&self.args, &v).0
+    }
 }
 
 /// What an empty source shows: a message and an optional action.
@@ -552,6 +752,8 @@ pub struct Records {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tone_key: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub row_fields: Vec<RowField>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub row_actions: Vec<Action>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub empty: Option<Empty>,
@@ -570,6 +772,7 @@ impl Records {
             subtitle_key: None,
             columns: Vec::new(),
             tone_key: None,
+            row_fields: Vec::new(),
             row_actions: Vec::new(),
             empty: None,
             refresh: Vec::new(),
@@ -614,8 +817,40 @@ impl Records {
         self.columns.push(Column {
             key: key.into(),
             title: title.into(),
+            kind: CellKind::Text,
+            text: None,
         });
         self
+    }
+
+    /// A meter column: the share at `key` (0 to 1), the words at `text`.
+    pub fn meter(mut self, key: &str, title: &str, text: &str) -> Records {
+        self.columns.push(Column {
+            key: key.into(),
+            title: title.into(),
+            kind: CellKind::Meter,
+            text: Some(text.into()),
+        });
+        self
+    }
+
+    /// An editable cell ([`RowField`]).
+    pub fn row_field(mut self, field: RowField) -> Records {
+        self.row_fields.push(field);
+        self
+    }
+
+    /// The row field shown in place of a column, by its key.
+    pub fn field_for(&self, key: &str) -> Option<&RowField> {
+        self.row_fields.iter().find(|f| f.key == key)
+    }
+
+    /// The row fields with no column of their key: a table adds a column
+    /// for each.
+    pub fn extra_fields(&self) -> impl Iterator<Item = &RowField> {
+        self.row_fields
+            .iter()
+            .filter(|f| !self.columns.iter().any(|c| c.key == f.key))
     }
 
     pub fn tone(mut self, key: &str) -> Records {
@@ -642,14 +877,38 @@ impl Records {
     }
 
     /// The rows in a source's answer: the array at the pointer, its
-    /// objects only.
+    /// objects only; an object there is one record (a form over one
+    /// record, as a strategy).
     pub fn rows_of(answer: &Json, pointer: &str) -> Vec<Json> {
-        answer
-            .pointer(pointer)
-            .and_then(Json::as_array)
-            .map(|a| a.iter().filter(|r| r.is_object()).cloned().collect())
-            .unwrap_or_default()
+        match answer.pointer(pointer) {
+            Some(Json::Array(a)) => a.iter().filter(|r| r.is_object()).cloned().collect(),
+            Some(o @ Json::Object(_)) => vec![o.clone()],
+            _ => Vec::new(),
+        }
     }
+
+    /// The values a row's actions and fields read: the form's, and the
+    /// record's as `row.<key>`.
+    pub fn row_values(values: &hooks::Values, row: &Json) -> hooks::Values {
+        let mut v = values.clone();
+        if let Some(o) = row.as_object() {
+            for (k, x) in o {
+                v.insert(format!("row.{k}"), x.clone());
+            }
+        }
+        v
+    }
+}
+
+/// The context a row's clauses read: the section's, and the record's
+/// values as `row.<key>` (booleans `true` or `false`, texts as they are).
+pub fn row_context(mut cx: WhenContext, row: &Json) -> WhenContext {
+    if let Some(o) = row.as_object() {
+        for (k, v) in o {
+            cx.set(&format!("row.{k}"), &cell_text(v));
+        }
+    }
+    cx
 }
 
 /// A record value as shown in a cell: text as it is, numbers and
@@ -1271,6 +1530,69 @@ mod tests {
         let codes: Vec<&str> = d.all().iter().map(|x| x.code).collect();
         assert_eq!(codes, ["admin-bad-clause", "admin-bad-clause"]);
         assert!(m.sections[0].meta.when.is_none());
+    }
+
+    #[test]
+    fn row_fields_fill_their_command_with_the_row_and_the_value() {
+        let f = RowField::text(
+            "name",
+            "Name",
+            "storage.volumeSet",
+            json!({"volume": "${row.id}", "name": "${value}"}),
+        );
+        let row = json!({"id": "d1", "name": "Disk", "dests": [{"value": "a", "label": "A"}, 3]});
+        let v = Records::row_values(&hooks::Values::new(), &row);
+        assert_eq!(
+            f.write_args(&v, json!("Studio")),
+            json!({"volume": "d1", "name": "Studio"})
+        );
+        let c = RowField::choice("dest", "To", &[(json!("any"), "Any")], "x", Json::Null)
+            .choices_from("dests");
+        let labels: Vec<String> = c.choices_of(&row).into_iter().map(|c| c.label).collect();
+        assert_eq!(labels, ["Any", "A"]);
+        let r = Records::command("v", "", "c", "", "id")
+            .column("name", "Name")
+            .meter("share", "Space", "spaceText")
+            .row_field(f)
+            .row_field(RowField::toggle("raid", "RAID", "x", Json::Null).when("row.online"));
+        assert!(r.field_for("name").is_some());
+        assert_eq!(r.extra_fields().count(), 1);
+        assert_eq!(
+            Manifest::from_json(&Manifest::new(FORMAT).to_json())
+                .unwrap()
+                .version,
+            FORMAT
+        );
+        let cx = row_context(WhenContext::new(), &json!({"online": true, "weak": false}));
+        assert!(holds(Some("row.online"), &cx));
+        assert!(!holds(Some("row.weak"), &cx));
+        assert_eq!(meter_share(&json!(1.5)), Some(1.0));
+        assert_eq!(meter_share(&json!("x")), None);
+        // One object at the pointer is one record.
+        assert_eq!(
+            Records::rows_of(&json!({"s": {"set": true}}), "/s").len(),
+            1
+        );
+        let m = Manifest::new(FORMAT)
+            .scope("s", "S", "x")
+            .section("s/v", "V", |s| {
+                s.table(r.clone());
+            });
+        assert_eq!(Manifest::from_json(&m.to_json()).unwrap(), m);
+    }
+
+    #[test]
+    fn a_confirmation_names_the_row() {
+        let a = Action::command("storage.forget")
+            .confirmation(Confirmation::new("Forget ${row.name}?", "It goes.", "Forget").danger());
+        let json = serde_json::to_value(&a).unwrap();
+        assert_eq!(json["confirmation"]["danger"], true);
+        let back: Action = serde_json::from_value(json).unwrap();
+        assert_eq!(back, a);
+        let v = Records::row_values(&hooks::Values::new(), &json!({"name": "Disk"}));
+        let c = a.confirmation.unwrap().filled(&v);
+        assert_eq!(c.title, "Forget Disk?");
+        assert!(c.danger);
     }
 
     #[test]
