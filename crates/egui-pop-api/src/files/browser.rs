@@ -2792,6 +2792,9 @@ impl FileBrowser {
         if let Some((i, mods)) = mode_out.clicked {
             let path = self.entries[i].path.clone();
             self.click(&path, mods);
+            // An entry clicked at the edge, partly scrolled away, comes
+            // whole into view (the filmstrip's next cell, a grid's last row).
+            self.reveal = true;
             out.selection_changed = true;
             ui.memory_mut(|m| m.request_focus(keys_id));
         }
