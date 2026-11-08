@@ -8,7 +8,9 @@
 
 use egui::{RichText, Ui};
 use egui_pop::api::admin::model::hooks::Hook;
-use egui_pop::api::admin::model::{Action, Callout, FORMAT, Field, Manifest, Status, Tone};
+use egui_pop::api::admin::model::{
+    Action, Callout, FORMAT, Field, Manifest, Records, Status, Tone,
+};
 use egui_pop::api::admin::{ADMIN, CMD_OPEN};
 use egui_pop::api::settings;
 use egui_pop::api::settings_pages::SettingsPage as CustomPage;
@@ -99,6 +101,45 @@ impl Plugin for SettingsPage {
                         );
                 },
             ));
+            admin.hook(
+                "gallery.greeting.languages",
+                Hook::Records(Box::new(|| {
+                    vec![
+                        serde_json::json!({ "id": "en", "name": "English", "greeting": "Hello", "state": "success" }),
+                        serde_json::json!({ "id": "fr", "name": "French", "greeting": "Bonjour", "state": "success" }),
+                        serde_json::json!({ "id": "eo", "name": "Esperanto", "greeting": "Saluton", "state": "warning" }),
+                    ]
+                })),
+            );
+            admin.manifest(Manifest::new(FORMAT).section(
+                "general/greetings",
+                "Greetings",
+                |s| {
+                    s.description("Records from a hook: a table and a list, each row with its actions.")
+                        .group("table", "Table")
+                        .table(
+                            Records::hook("languages", "", "gallery.greeting.languages", "id")
+                                .column("name", "Language")
+                                .column("greeting", "Greeting")
+                                .tone("state")
+                                .row_action(
+                                    Action::command("admin.set")
+                                        .title("Use")
+                                        .args(serde_json::json!({ "key": "gallery.greeting", "value": "${row.greeting}" })),
+                                ),
+                        )
+                        .group("list", "List")
+                        .list(
+                            Records::hook("list", "", "gallery.greeting.languages", "id")
+                                .titles("name", Some("greeting")),
+                        )
+                        .list(
+                            Records::hook("none", "", "gallery.greeting.none", "id")
+                                .empty("No hook gives these records yet.", None),
+                        );
+                },
+            ));
+            admin.hook("gallery.greeting.none", Hook::Records(Box::new(Vec::new)));
         }
         // A page of its own in the settings window, under this plugin's
         // section: the size and weight with the preview they change.
