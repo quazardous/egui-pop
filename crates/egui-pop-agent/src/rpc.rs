@@ -36,6 +36,8 @@ impl RpcError {
     pub const REFUSED: i64 = -32001;
     /// The application did not answer in time (it ran no frame).
     pub const NO_ANSWER: i64 = -32002;
+    /// A `ui` action found no node, or more than one, to act on.
+    pub const UI: i64 = -32003;
 
     pub(crate) fn new(code: i64, message: impl Into<String>) -> Self {
         Self {
@@ -178,10 +180,16 @@ fn dispatch(method: &str, params: Json, tx: &Sender<Job>, wake: &Waker) -> Resul
                 reply,
             }
         }
+        "ui" => Job::Ui {
+            params,
+            // The UI thread answers first, so the reason reaches the client.
+            deadline: Instant::now() + ANSWER_WITHIN - Duration::from_secs(5),
+            reply,
+        },
         other => {
             return Err(RpcError::new(
                 RpcError::NO_METHOD,
-                format!("no method `{other}`: describe, snapshot, call, wait"),
+                format!("no method `{other}`: describe, snapshot, call, wait, ui"),
             ));
         }
     };

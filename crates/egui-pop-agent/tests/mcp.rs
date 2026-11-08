@@ -82,6 +82,7 @@ fn tools_from_a_describe_fixture() {
         [
             "snapshot",
             "wait",
+            "ui",
             "viewer_zoom",
             "log_tail",
             "about_read",
@@ -288,7 +289,7 @@ fn mcp_lists_and_calls_through_the_socket() {
                 .iter()
                 .filter_map(|t| t["name"].as_str())
                 .collect();
-            for n in ["snapshot", "wait", "about_read", "test_write"] {
+            for n in ["snapshot", "wait", "ui", "about_read", "test_write"] {
                 assert!(names.contains(&n), "{n} in {names:?}");
             }
 

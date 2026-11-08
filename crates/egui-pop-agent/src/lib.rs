@@ -22,6 +22,14 @@
 //! | `snapshot` | `{ "collector"? }` | every collector's snapshot, or one |
 //! | `call` | `{ "collector", "action", "args"? }` | the bridge's feedback block (`ok`, `message`, `data`...) |
 //! | `wait` | `bridge.wait`'s arguments and `deadline_ms` | `{ "met", "by", "event", "last" }` |
+//! | `ui` | `{ "action", "label"?, "role"?, "text"?, "key"?, "up"? }` | the accessibility tree, or the node acted on |
+//!
+//! `ui` reads the interface as a person sees it and drives it: `tree`
+//! lists the AccessKit nodes of the frame just drawn; `click`, `type`,
+//! `key` and `scroll` queue raw egui events (hover, press, release, text,
+//! wheel) into the next frames' input, through an egui plugin, so they
+//! work headless as in a window. Reading needs the bridge on or
+//! read-only, acting needs it on.
 //!
 //! Every call is made as `Origin::Agent("agent-socket")`, so the bridge's
 //! mode, the `agent` flags and the `debug.call` step apply as to any
@@ -51,6 +59,7 @@ use serde_json::{Value as Json, json};
 #[cfg(feature = "mcp")]
 pub mod mcp;
 mod rpc;
+mod ui;
 #[cfg(unix)]
 mod unix;
 #[cfg(windows)]
@@ -301,6 +310,7 @@ impl Plugin for AgentPlugin {
         let mut side = UiSide {
             rx,
             waits: Vec::new(),
+            ui_jobs: Vec::new(),
             wake,
         };
         ctx.on(On::Pass, move |app, _| {
@@ -452,6 +462,22 @@ pub(crate) enum Job {
         deadline: Instant,
         reply: Reply,
     },
+    Ui {
+        params: Json,
+        deadline: Instant,
+        reply: Reply,
+    },
+}
+
+/// A `ui` request in progress.
+struct UiJob {
+    request: ui::Request,
+    /// Answered from a tree kept at this pass or later.
+    from_pass: u64,
+    /// Once its events went in, this answer.
+    answer: Option<Json>,
+    deadline: Instant,
+    reply: Reply,
 }
 
 /// A wait held until it is met or its deadline passes.
@@ -466,6 +492,7 @@ struct Held {
 struct UiSide {
     rx: Receiver<Job>,
     waits: Vec<Held>,
+    ui_jobs: Vec<UiJob>,
     wake: Waker,
 }
 
@@ -482,12 +509,16 @@ impl UiSide {
                 Job::Describe { reply }
                 | Job::Snapshot { reply, .. }
                 | Job::Call { reply, .. }
-                | Job::Wait { reply, .. } => reply,
+                | Job::Wait { reply, .. }
+                | Job::Ui { reply, .. } => reply,
             };
             let _ = reply.send(Err(RpcError::stopped()));
         }
         for w in self.waits.drain(..) {
             let _ = w.reply.send(Err(RpcError::stopped()));
+        }
+        for j in self.ui_jobs.drain(..) {
+            let _ = j.reply.send(Err(RpcError::stopped()));
         }
     }
 
@@ -512,9 +543,10 @@ impl UiSide {
             }
             true
         });
+        self.ui_pass(&ctx, now);
         // After the checks: a repaint asked for now is not one the
         // application asked for.
-        if !self.waits.is_empty() {
+        if !self.waits.is_empty() || !self.ui_jobs.is_empty() {
             ctx.request_repaint_after(Duration::from_millis(10));
         }
     }
@@ -588,6 +620,103 @@ impl UiSide {
                     reply,
                 });
             }
+            Job::Ui {
+                params,
+                deadline,
+                reply,
+            } => {
+                let request = match ui::Request::from_params(&params) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        let _ = reply.send(Err(RpcError::params(e)));
+                        return;
+                    }
+                };
+                // The bridge's mode, as for its calls: reading the tree
+                // needs it on or read-only, acting needs it on.
+                let mode = app.debug_bridge_mode();
+                if mode == BridgeMode::Off {
+                    let _ = reply.send(Err(RpcError::off()));
+                    return;
+                }
+                if request.writes() && mode != BridgeMode::On {
+                    let _ = reply.send(Err(RpcError::new(
+                        RpcError::REFUSED,
+                        "the debug bridge is read-only: `ui` may read the tree, not act",
+                    )));
+                    return;
+                }
+                let ctx = app.egui();
+                let shared = ui::install(&ctx);
+                if let Ok(mut s) = shared.lock() {
+                    s.want_tree = true;
+                }
+                ctx.request_repaint();
+                self.ui_jobs.push(UiJob {
+                    request,
+                    from_pass: ctx.cumulative_pass_nr(),
+                    answer: None,
+                    deadline,
+                    reply,
+                });
+            }
+        }
+    }
+
+    /// The `ui` requests: answered from the tree kept at the end of a
+    /// pass, then once their events went in.
+    fn ui_pass(&mut self, ctx: &egui::Context, now: Instant) {
+        if self.ui_jobs.is_empty() {
+            return;
+        }
+        let shared = ui::shared(ctx);
+        let Ok(mut s) = shared.lock() else {
+            return;
+        };
+        let mut left = Vec::new();
+        // One action at a time: a second one's node is found once the
+        // first one's events went in.
+        let mut busy = !s.queue.is_empty();
+        for mut j in self.ui_jobs.drain(..) {
+            if let Some(answer) = j.answer.take() {
+                if s.queue.is_empty() {
+                    let _ = j.reply.send(Ok(answer));
+                    busy = false;
+                    continue;
+                }
+                j.answer = Some(answer);
+                left.push(j);
+                continue;
+            }
+            let fresh = s.tree.as_ref().filter(|(pass, _)| *pass >= j.from_pass);
+            match fresh {
+                Some((_, tree)) if !busy => match j.request.on_tree(tree) {
+                    Ok((batches, answer)) if batches.is_empty() => {
+                        let _ = j.reply.send(Ok(answer));
+                    }
+                    Ok((batches, answer)) => {
+                        s.queue.extend(batches);
+                        busy = true;
+                        j.answer = Some(answer);
+                        left.push(j);
+                    }
+                    Err(e) => {
+                        let _ = j.reply.send(Err(RpcError::new(RpcError::UI, e)));
+                    }
+                },
+                _ if now >= j.deadline => {
+                    let _ = j.reply.send(Err(RpcError::new(
+                        RpcError::NO_ANSWER,
+                        "no frame drew the accessibility tree in time",
+                    )));
+                }
+                _ => left.push(j),
+            }
+        }
+        self.ui_jobs = left;
+        s.want_tree = self.ui_jobs.iter().any(|j| j.answer.is_none());
+        if !s.queue.is_empty() || s.want_tree {
+            ctx.request_repaint();
         }
     }
 }
