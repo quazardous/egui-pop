@@ -116,5 +116,6 @@
 - [Icons: an inventory](icons.md)
 - [Pointer gestures, a study](design/pointer-gestures.md)
 - [Navigation on large canvases, a study](design/navigation.md)
+- [One file browser, many views](design/file-browser.md)
 - [Wide gamut on Wayland](wayland-colour.md)
 - [The logo](logo/README.md)

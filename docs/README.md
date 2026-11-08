@@ -256,6 +256,10 @@ of every crate with every feature on.
 - [Pointer gestures, a study](design/pointer-gestures.md): how
   applications use the wheel, the buttons and the modifiers on canvases
   (darktable in detail), the gesture profiles, and the decisions taken.
+- [One file browser, many views](design/file-browser.md): the
+  proposed file browser shared by every file dialog and an import window,
+  its view-mode, file-source and thumbnail-provider contracts, and a
+  survey of file managers' and photo tools' views.
 - [Fonts](fonts.md): font families from the theme at four weights, the
   size scale and the text size seeded from the system's (built), and
   the design for the rest.
