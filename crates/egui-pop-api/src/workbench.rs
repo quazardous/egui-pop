@@ -2548,7 +2548,11 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         .style(style)
         .painter(&painter)
         .show_inside(&mut inner, &mut viewer);
-    ui.advance_cursor_after_rect(rect);
+    // The shell covers `ui` without moving its cursor past the window's
+    // bottom: past it (plus the item spacing), what the pass still
+    // allocates in `ui` (the live regions, the overlay zones) would grow
+    // `ui` below the window, and a frame drawn around `ui` with it.
+    ui.expand_to_include_rect(rect);
     // Strips of folded side areas, where a flyout may open.
     let mut lying = Vec::new();
     let mut strips = Vec::new();
