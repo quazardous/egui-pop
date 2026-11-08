@@ -137,7 +137,14 @@ pub fn builder(options: &Options) -> AppBuilder {
         // does not preview itself.
         .plugin(egui_pop::platform::thumbnails::ThumbnailsPlugin::default())
         .plugin(egui_pop::mounts::MountsPlugin)
-        .plugin(egui_pop::api::frame::FramePlugin::system().layout_controls(true))
+        .plugin(
+            if options.own_frame {
+                egui_pop::api::frame::FramePlugin::own()
+            } else {
+                egui_pop::api::frame::FramePlugin::system()
+            }
+            .layout_controls(true),
+        )
         .plugin(shell::Shell {
             first: StoryId::new(options.page.as_str()).unwrap_or(StoryId::from_static("overview")),
         })
