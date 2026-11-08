@@ -72,7 +72,7 @@ they forbid.
 | `Wait(Settled)` | steps frames until no command is queued or running, every job is idle and no repaint is asked for; then checks `StableWindows` |
 | `Wait(Event(name))` | steps frames until a journal event of that name follows the last `Call` or `Ui` step |
 | `Wait(Any([..]))` | the first of several |
-| `Ui(Click(label: .., role: ..))` | clicks a node of the accessibility tree, by label, role (`Button`, `Window`, `CheckBox`..., any case) or both; it must be the only one |
+| `Ui(Click(label: .., role: ..))` | clicks a node of the accessibility tree, by label, role (`Button`, `Window`, `CheckBox`..., any case) or both; it must be the only one, unless `nth: 0` picks one of several in reading order (top to bottom, then left to right) |
 | `Ui(Type(label: .., role: .., text: ".."))` | focuses a node and types into it |
 | `Ui(Key("Ctrl+K"))` | presses a key, with `Ctrl`, `Shift`, `Alt`, `Cmd` |
 | `Ui(Scroll(label: .., role: .., up: true))` | scrolls a node, down unless `up` |

@@ -261,6 +261,7 @@ fn builtins() -> Vec<GeneratedTool> {
                 "action": { "type": "string", "enum": ["tree", "click", "type", "key", "scroll"] },
                 "label": { "type": "string" },
                 "role": { "type": "string" },
+                "nth": { "type": "integer", "description": "Which of several matching nodes, in reading order, from 0." },
                 "text": { "type": "string" },
                 "key": { "type": "string" },
                 "up": { "type": "boolean" },

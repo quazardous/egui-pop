@@ -20,7 +20,9 @@
 //! | `scroll` | `label`?, `role`?, `up`? | `{ "node" }`, down unless `up` |
 //!
 //! A node is found by its label (exactly) and its role (`Button`,
-//! `Window`, `TextInput`, any case); an action needs exactly one.
+//! `Window`, `TextInput`, any case); an action needs exactly one, or
+//! `nth`, which of several in reading order (top to bottom, then left to
+//! right), from 0.
 //! `tree` needs the bridge on or read-only; the others change the
 //! application, so they need it on (`BridgeMode::On`).
 
@@ -215,6 +217,8 @@ pub(crate) struct Request {
     pub action: Action,
     pub label: Option<String>,
     pub role: Option<String>,
+    /// Which of several matching nodes, in reading order, from 0.
+    pub nth: Option<usize>,
 }
 
 impl Request {
@@ -243,6 +247,10 @@ impl Request {
             action,
             label: s("label"),
             role: s("role"),
+            nth: p
+                .get("nth")
+                .and_then(Json::as_u64)
+                .and_then(|n| usize::try_from(n).ok()),
         };
         if r.needs_node() && r.label.is_none() && r.role.is_none() {
             return Err("name the node: `label`, `role` or both".into());
@@ -285,10 +293,21 @@ impl Request {
         if let Action::Key(m, k) = &self.action {
             return Ok((key_batches(*m, *k), json!({ "key": format!("{k:?}") })));
         }
-        let node = match hits.as_slice() {
-            [] => return Err(format!("no {} in the tree", self.named())),
-            [one] => *one,
-            many => {
+        let node = match (hits.as_slice(), self.nth) {
+            (_, Some(i)) => {
+                let mut sorted = hits.clone();
+                sorted.sort_by(|a, b| {
+                    let at = |n: &UiNode| n.rect.map_or(Pos2::ZERO, |r| r.min);
+                    let (a, b) = (at(a), at(b));
+                    a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x))
+                });
+                *sorted
+                    .get(i)
+                    .ok_or_else(|| format!("no {} #{i}: {} match", self.named(), sorted.len()))?
+            }
+            ([], None) => return Err(format!("no {} in the tree", self.named())),
+            ([one], None) => *one,
+            (many, None) => {
                 return Err(format!(
                     "{} nodes are {}: name it more closely",
                     many.len(),
@@ -430,6 +449,7 @@ mod tests {
             action: Action::Click,
             label: label.map(String::from),
             role: role.map(String::from),
+            nth: None,
         };
         let (b, r) = click(Some("OK"), None).on_tree(&tree).unwrap();
         assert_eq!(b.len(), 3);
@@ -445,7 +465,13 @@ mod tests {
             action: Action::Tree,
             label: None,
             role: Some("BUTTON".into()),
+            nth: None,
         };
+        let mut second = click(None, Some("Button"));
+        second.nth = Some(1);
+        assert!(second.on_tree(&tree).is_ok());
+        second.nth = Some(2);
+        assert!(second.on_tree(&tree).unwrap_err().contains("2 match"));
         assert_eq!(tree_req.on_tree(&tree).unwrap().1["count"], 2);
     }
 }
