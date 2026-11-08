@@ -234,6 +234,7 @@ class MutterCompositor:
             env = dict(self.env)
             env["WAYLAND_DISPLAY"] = self.wayland_display
             env.update(app_env or {})
+            env["WAYLAND_DEBUG"] = "client"
             log = self._log("app")
             self.app = subprocess.Popen(app_cmd, env=env, stdin=subprocess.DEVNULL,
                                         stdout=log, stderr=subprocess.STDOUT,
