@@ -4255,3 +4255,88 @@ fn the_picker_drawn_on_its_own_reads_ctrl_and_a_digit() {
     h.run();
     assert_eq!(h.state().view, PickerView::List);
 }
+
+/// `/r` holding `a` and `b`; `a` holding `sub` (holding `deep`) and a file.
+fn folder_tree_harness() -> Harness<'static, App> {
+    let fs: SharedFs = Arc::new(
+        MemoryFs::new()
+            .dir("/r")
+            .dir("/r/a")
+            .dir("/r/a/sub")
+            .dir("/r/a/sub/deep")
+            .dir("/r/b")
+            .file("/r/a/x.png", vec![0; 3]),
+    );
+    let app = App::builder()
+        .plugin(FilesPlugin::in_app().file_system(fs))
+        .build(&egui::Context::default())
+        .map(no_system_places)
+        .unwrap();
+    files::want_preview(app.handle(), false);
+    Harness::builder()
+        .with_size(egui::vec2(900.0, 640.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app)
+}
+
+#[test]
+fn the_columns_are_offered_when_choosing_a_folder_only() {
+    let fs: SharedFs = Arc::new(MemoryFs::new().dir("/r").dir("/r/a"));
+    let picker = |r: FileRequest| files::FilePicker::new_in(&r, fs.clone()).views();
+    assert_eq!(
+        picker(FileRequest::folder("Folder").directory("/r")),
+        [PickerView::List, PickerView::Columns]
+    );
+    assert_eq!(
+        picker(FileRequest::open("Open").directory("/r")),
+        [PickerView::List]
+    );
+    // Columns last used by a folder chooser: a file dialog shows details.
+    let mut h = folder_tree_harness();
+    let app = h.state().handle().clone();
+    files::want_view(&app, PickerView::Columns);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/r/a"));
+    assert_eq!(picker_state(&h, "view"), "details");
+    assert!(h.query_by_role_and_label(Role::Button, "Columns").is_none());
+}
+
+#[test]
+fn choosing_a_folder_in_the_columns_the_selected_folder_is_the_answer() {
+    let mut h = folder_tree_harness();
+    let p = choose(&mut h, FileRequest::folder("Folder").directory("/r/a"));
+    h.get_by_role_and_label(Role::Button, "Columns").click();
+    settle(&mut h);
+    assert_eq!(picker_state(&h, "view"), "columns");
+    // The path's folders side by side: `/r`'s column lists `b` too.
+    assert!(
+        h.query_by_role_and_label(Role::ListBoxOption, "b")
+            .is_some()
+    );
+    // Folders only: the file is not listed.
+    assert!(h.query_by_label_contains("x.png").is_none());
+    // The first Down selects `sub`, and its subfolders show after it.
+    press(&mut h, Key::ArrowDown, Modifiers::NONE);
+    assert_eq!(selected(&h), ["sub"]);
+    assert!(
+        h.query_by_role_and_label(Role::ListBoxOption, "deep")
+            .is_some()
+    );
+    // Right goes in: the folder entered is the choice.
+    press(&mut h, Key::ArrowRight, Modifiers::NONE);
+    assert_eq!(picker_state(&h, "dir"), "/r/a/sub");
+    assert_eq!(selected(&h), Vec::<String>::new());
+    // Left comes back, the folder left selected.
+    press(&mut h, Key::ArrowLeft, Modifiers::NONE);
+    assert_eq!(picker_state(&h, "dir"), "/r/a");
+    assert_eq!(selected(&h), ["sub"]);
+    // A click in `/r`'s column goes there, the folder clicked selected.
+    h.get_by_role_and_label(Role::ListBoxOption, "b")
+        .click_accesskit();
+    settle(&mut h);
+    assert_eq!(picker_state(&h, "dir"), "/r");
+    assert_eq!(selected(&h), ["b"]);
+    press(&mut h, Key::Enter, Modifiers::COMMAND);
+    assert_eq!(
+        result(&mut h, &p),
+        Ok(Chosen::Paths(vec![PathBuf::from("/r/b")]))
+    );
+}
