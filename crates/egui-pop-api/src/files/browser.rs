@@ -496,7 +496,7 @@ pub struct ModeInfo {
     /// `details`, `thumbnails`, `filmstrip`…
     pub id: String,
     pub label: String,
-    /// A short glyph for the switcher's button.
+    /// The name of its icon in the icon registry (`list`, `grid`).
     pub icon: String,
     /// The keys it moves with, as its tip says them.
     pub keys: Vec<(String, String)>,
@@ -678,7 +678,7 @@ impl ViewMode for DetailsMode {
         ModeInfo {
             id: "details".into(),
             label: "Details".into(),
-            icon: "☰".into(),
+            icon: "list".into(),
             keys: vec![
                 ("Up, Down".into(), "Previous, next entry".into()),
                 ("Page Up, Page Down".into(), "A page up or down".into()),
@@ -752,7 +752,7 @@ impl ViewMode for DetailsMode {
                 let font = egui::TextStyle::Body.resolve(ui.style());
                 let w = rect.width();
                 let name = if e.is_dir() {
-                    format!("🗀 {}", e.name)
+                    format!("{}/", e.name)
                 } else {
                     e.name.clone()
                 };
@@ -841,7 +841,7 @@ impl ViewMode for ThumbnailsMode {
         ModeInfo {
             id: "thumbnails".into(),
             label: "Thumbnails".into(),
-            icon: "⊞".into(),
+            icon: "grid".into(),
             keys: vec![
                 ("Arrows".into(), "Move in the grid".into()),
                 ("Page Up, Page Down".into(), "A page up or down".into()),
@@ -972,10 +972,10 @@ impl ViewMode for ThumbnailsMode {
                             }
                             other => {
                                 let glyph = match other {
-                                    _ if e.is_dir() => "🗀",
-                                    ThumbState::Failed(_) => "⚠",
-                                    ThumbState::Loading => "…",
-                                    _ => "🗋",
+                                    _ if e.is_dir() => "Folder",
+                                    ThumbState::Failed(_) => "!",
+                                    ThumbState::Loading => "...",
+                                    _ => "File",
                                 };
                                 ui.painter()
                                     .rect_filled(image, 4.0, visuals.extreme_bg_color);
@@ -983,7 +983,7 @@ impl ViewMode for ThumbnailsMode {
                                     image.center(),
                                     egui::Align2::CENTER_CENTER,
                                     glyph,
-                                    egui::FontId::proportional(side * 0.3),
+                                    egui::FontId::proportional(side * 0.15),
                                     visuals.weak_text_color(),
                                 );
                             }
@@ -1429,7 +1429,7 @@ impl FileBrowser {
                     .collect::<Vec<_>>()
                     .join("\n");
                 let resp = ui
-                    .selectable_label(on, format!("{} {}", info.icon, info.label))
+                    .selectable_label(on, info.label.as_str())
                     .on_hover_text(tip);
                 if resp.clicked() && !on {
                     self.set_mode(&id);
