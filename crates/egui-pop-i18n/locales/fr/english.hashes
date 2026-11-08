@@ -662,6 +662,7 @@ egui-pop-files-kind-folder 385fe1e894da806d
 egui-pop-files-lens 666f135f6076a31d
 egui-pop-files-mode-columns 3c00a07c96cb7b8a
 egui-pop-files-mode-details 6b7485aa06c674c5
+egui-pop-files-mode-filmstrip aa303106450875c3
 egui-pop-files-mode-thumbnails b22324cdceb4df2a
 egui-pop-files-modes bc767315c6fd637b
 egui-pop-files-modified 4a4dc6e0a5c27f60
@@ -677,7 +678,9 @@ egui-pop-files-preview 48c847eda5526dbf
 egui-pop-files-preview-failed f604c6983efc1035
 egui-pop-files-preview-loading 9744c34a0d5ec1da
 egui-pop-files-preview-none 0c446dff9a1be9c0
+egui-pop-files-preview-of 7769d592d12ff695
 egui-pop-files-preview-resize 82d514fc12419954
+egui-pop-files-quick-look 739f375cdc87e50c
 egui-pop-files-rating 36690a4e79cfa166
 egui-pop-files-rating-value df2cadf36e533a28
 egui-pop-files-recent ab73b8f8d0246524

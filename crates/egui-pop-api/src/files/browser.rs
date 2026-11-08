@@ -680,9 +680,15 @@ impl ViewModes {
         modes
     }
 
-    /// Every built-in mode: details, thumbnails, columns.
+    /// Every built-in mode: details, thumbnails, filmstrip, columns.
     pub fn built_in() -> Self {
         let modes = ViewModes::default();
+        modes
+            .register(
+                MODE_FILMSTRIP,
+                Arc::new(|| Box::new(FilmstripMode::default())),
+            )
+            .expect("built-in");
         modes
             .register(MODE_COLUMNS, Arc::new(|| Box::new(ColumnsMode::default())))
             .expect("built-in");
@@ -970,11 +976,11 @@ fn lay_out(
     let mut first = usize::MAX;
     let mut end = 0;
     let mut columns = 1;
-    let add = |ui: &mut Ui, out: &mut ModeOutput| {
+    let mut add = |ui: &mut Ui, out: &mut ModeOutput| {
         if count == 0 {
             drawer.empty(ui);
         }
-        columns = grid.show(ui, |ui, n| {
+        columns = grid.clone().show(ui, |ui, n| {
             let r = draw(&mut *drawer, ui, n);
             if focus == Some(n) {
                 out.focused = Some(r.id);
@@ -984,6 +990,23 @@ fn lay_out(
             end = end.max(n + 1);
         });
     };
+    in_container(ui, container, out, &mut add);
+    out.visible = if first == usize::MAX {
+        0..0
+    } else {
+        first..end
+    };
+    columns.max(1)
+}
+
+/// Draws the entries through `add`, inside a list box named `container`'s
+/// name when the mode makes it, its active descendant the focused entry.
+fn in_container(
+    ui: &mut Ui,
+    container: Option<(&str, bool)>,
+    out: &mut ModeOutput,
+    add: &mut dyn FnMut(&mut Ui, &mut ModeOutput),
+) {
     match container {
         Some((name, many)) => {
             ui.scope_builder(
@@ -1006,12 +1029,6 @@ fn lay_out(
         }
         None => add(ui, out),
     }
-    out.visible = if first == usize::MAX {
-        0..0
-    } else {
-        first..end
-    };
-    columns.max(1)
 }
 
 /// Rows with columns: the name, the size and when it last changed.
@@ -1467,6 +1484,243 @@ impl ViewMode for ColumnsMode {
     }
 }
 
+/// Lays `count` cells out in one virtualised row, scrolled sideways, `item`
+/// drawing cell `i`: the filmstrip's strip.
+fn strip_row(
+    ui: &mut Ui,
+    count: usize,
+    cell: egui::Vec2,
+    salt: egui::Id,
+    reveal: Option<usize>,
+    mut item: impl FnMut(&mut Ui, usize),
+) {
+    let gap = ui.spacing().item_spacing.x;
+    let pitch = cell.x + gap;
+    egui::ScrollArea::horizontal()
+        .id_salt(salt)
+        .auto_shrink([false, true])
+        .animated(false)
+        .show_viewport(ui, |ui, viewport| {
+            let total = (pitch * count as f32 - gap).max(0.0);
+            ui.set_width(total);
+            ui.set_height(cell.y);
+            let origin = ui.max_rect().min;
+            if let Some(i) = reveal {
+                let r = egui::Rect::from_min_size(origin + egui::vec2(i as f32 * pitch, 0.0), cell);
+                ui.scroll_to_rect(r, None);
+                ui.ctx().request_repaint();
+            }
+            let first = ((viewport.min.x / pitch).floor().max(0.0) as usize).min(count);
+            let end = ((viewport.max.x / pitch).ceil().max(0.0) as usize + 1).min(count);
+            for i in first..end {
+                let rect =
+                    egui::Rect::from_min_size(origin + egui::vec2(i as f32 * pitch, 0.0), cell);
+                ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| item(ui, i));
+            }
+        });
+}
+
+/// One entry large: its thumbnail fitted in `rect`, or what stands in for
+/// it, named for screen readers by `name`.
+fn paint_large(
+    ui: &mut Ui,
+    rect: egui::Rect,
+    e: &SourceEntry,
+    state: ThumbState,
+    name: &str,
+) -> egui::Response {
+    let resp = ui.allocate_rect(rect, egui::Sense::hover());
+    let label = name.to_owned();
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, &label));
+    let visuals = ui.visuals();
+    ui.painter()
+        .rect_filled(rect, 4.0, visuals.extreme_bg_color);
+    match state {
+        ThumbState::Ready(t) => {
+            let s = t.size_vec2();
+            let scale = (rect.width() / s.x).min(rect.height() / s.y);
+            ui.painter().image(
+                t.id(),
+                egui::Rect::from_center_size(rect.center(), s * scale),
+                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                egui::Color32::WHITE,
+            );
+        }
+        other => {
+            let glyph = match other {
+                _ if e.is_dir() => "Folder",
+                ThumbState::Failed(_) => "!",
+                ThumbState::Loading => "...",
+                _ => "File",
+            };
+            ui.painter().text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                glyph,
+                egui::FontId::proportional((rect.height() * 0.1).clamp(12.0, 48.0)),
+                visuals.weak_text_color(),
+            );
+        }
+    }
+    resp
+}
+
+/// The pixels a large view asks for: its long side, on the screen.
+fn pixels_of(ui: &Ui, rect: egui::Rect) -> u32 {
+    (rect.width().max(rect.height()) * ui.ctx().pixels_per_point()).round() as u32
+}
+
+/// One row of thumbnails, the focused entry large above it (Lightroom's
+/// Loupe and Filmstrip). The large view asks first (`Visible`), then the
+/// strip's cells in view, then the next screen of them (`Near`).
+#[derive(Clone, Debug, Default)]
+pub struct FilmstripMode {
+    in_view: usize,
+}
+
+impl FilmstripMode {
+    /// The strip's thumbnails' most side, in points.
+    pub const MAX_STRIP: f32 = 128.0;
+}
+
+impl ViewMode for FilmstripMode {
+    fn describe(&self) -> ModeInfo {
+        ModeInfo {
+            id: MODE_FILMSTRIP.into(),
+            label: "Filmstrip".into(),
+            icon: "phosphor:film-strip".into(),
+            keys: vec![
+                ("Left, Right".into(), "Previous, next entry".into()),
+                ("Page Up, Page Down".into(), "A strip's width".into()),
+                ("Home, End".into(), "First, last entry".into()),
+            ],
+            gestures: vec!["Wheel: scroll the strip".into()],
+            persist: MODE_FILMSTRIP.into(),
+            role: egui::Role::ListBox,
+            needs: ModeNeeds {
+                thumbnails: true,
+                ..ModeNeeds::default()
+            },
+        }
+    }
+
+    fn show(&mut self, ui: &mut Ui, cx: ModeContext<'_>) -> ModeOutput {
+        let mut out = ModeOutput::default();
+        let side = cx
+            .settings
+            .thumbnail_size
+            .clamp(ThumbnailsMode::MIN_SIZE, Self::MAX_STRIP);
+        let mut plain = PlainDrawer {
+            entries: cx.entries,
+            selection: cx.selection,
+            focus: cx.focus,
+        };
+        let drawer: &mut dyn EntryDrawer = match cx.drawer {
+            Some(d) => d,
+            None => &mut plain,
+        };
+        let n = cx.entries.len();
+        let cell = drawer.cell_size(ui, side);
+        let height = cx
+            .max_height
+            .unwrap_or_else(|| ui.available_height())
+            .max(cell.y * 2.0);
+        let ctx = ui.ctx().clone();
+        let thumbnails = cx.thumbnails;
+        let entries = cx.entries;
+        // The large view: the focused entry, else the first.
+        let shown = cx.focus.or((n > 0).then_some(0));
+        let big_h = (height
+            - cell.y
+            - ui.spacing().item_spacing.y * 2.0
+            - ui.spacing().scroll.allocated_width())
+        .max(cell.y);
+        let (big, _) = ui.allocate_exact_size(
+            egui::vec2(ui.available_width(), big_h),
+            egui::Sense::hover(),
+        );
+        if let Some(i) = shown {
+            let e = &entries[i];
+            let state = thumbnails.request(
+                &ctx,
+                &ThumbRequest {
+                    entry: e,
+                    size: pixels_of(ui, big),
+                    priority: Priority::Visible,
+                },
+            );
+            let name = strings::tr_args(
+                &ctx,
+                &crate::strings::FILES_PREVIEW_OF,
+                &[("name", &e.name)],
+            );
+            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(big));
+            paint_large(&mut child, big, e, state, &name);
+        } else {
+            drawer.empty(ui);
+        }
+        let pixels = (side * ctx.pixels_per_point()).round() as u32;
+        let ask = |i: usize, priority| {
+            thumbnails.request(
+                &ctx,
+                &ThumbRequest {
+                    entry: &entries[i],
+                    size: pixels,
+                    priority,
+                },
+            )
+        };
+        let reveal = cx.focus.filter(|_| cx.reveal_focus && n > 0);
+        let mut first = usize::MAX;
+        let mut end = 0;
+        let focus = cx.focus;
+        let mut add = |ui: &mut Ui, out: &mut ModeOutput| {
+            strip_row(ui, n, cell, cx.id.with("filmstrip"), reveal, |ui, i| {
+                let r = drawer.cell(ui, i, cell, ask(i, Priority::Visible));
+                if focus == Some(i) {
+                    out.focused = Some(r.id);
+                }
+                report(&r, i, out);
+                first = first.min(i);
+                end = end.max(i + 1);
+            });
+        };
+        in_container(
+            ui,
+            cx.name.as_deref().map(|n| (n, cx.many)),
+            &mut out,
+            &mut add,
+        );
+        out.visible = if first == usize::MAX {
+            0..0
+        } else {
+            first..end
+        };
+        // Then the next screen of the strip.
+        let screen = out.visible.len();
+        for i in end..(end + screen).min(n) {
+            ask(i, Priority::Near);
+        }
+        self.in_view = screen.max(1);
+        out.columns = n.max(1);
+        out
+    }
+
+    fn step(&self, from: usize, count: usize, key: ModeKey) -> usize {
+        let last = count.saturating_sub(1);
+        let page = self.in_view.max(1);
+        match key {
+            ModeKey::Left => from.saturating_sub(1),
+            ModeKey::Right => (from + 1).min(last),
+            ModeKey::Up | ModeKey::Down => from,
+            ModeKey::PageUp => from.saturating_sub(page),
+            ModeKey::PageDown => (from + page).min(last),
+            ModeKey::Home => 0,
+            ModeKey::End => last,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // The mode switcher and the mode keys
 // ---------------------------------------------------------------------------
@@ -1477,6 +1731,8 @@ pub const MODE_DETAILS: &str = "details";
 pub const MODE_THUMBNAILS: &str = "thumbnails";
 /// The id of the columns mode (Finder's).
 pub const MODE_COLUMNS: &str = "columns";
+/// The id of the filmstrip mode.
+pub const MODE_FILMSTRIP: &str = "filmstrip";
 /// Up to this many modes, the switcher is a segmented control; beyond, a
 /// menu.
 pub const SEGMENTED_MAX: usize = 4;
@@ -1671,6 +1927,8 @@ pub struct FileBrowser {
     /// Focus the first entry once the listing gives one (Right into a
     /// folder).
     focus_first: bool,
+    /// Quick look is open over the entries.
+    quick_look: bool,
 }
 
 /// The browser's order: folders first, then names as people read them.
@@ -1780,6 +2038,7 @@ impl FileBrowser {
             ancestor_listings: Vec::new(),
             peek: None,
             focus_first: false,
+            quick_look: false,
         };
         b.reload();
         b
@@ -1962,6 +2221,100 @@ impl FileBrowser {
             self.focus = Some(f.clone());
             self.reveal = true;
         }
+    }
+
+    /// Whether quick look is open.
+    pub fn quick_look(&self) -> bool {
+        self.quick_look
+    }
+
+    /// Opens or closes quick look, a large view of the focused entry over
+    /// the entries (`Ctrl+Y`, or Space while an entry has the focus);
+    /// nothing opens without a focused entry.
+    pub fn set_quick_look(&mut self, open: bool) {
+        self.quick_look = open && self.focus_index().is_some();
+    }
+
+    /// Quick look's keys: Escape, `Ctrl+Y` or Space closes it, the arrows
+    /// go to the previous or next entry. `true` when a key was taken.
+    fn quick_look_keys(&mut self, ui: &mut Ui) -> bool {
+        let (close, back, next) = ui.input_mut(|i| {
+            let close = i.consume_key(Modifiers::NONE, egui::Key::Escape)
+                || i.consume_key(Modifiers::COMMAND, egui::Key::Y)
+                || i.consume_key(Modifiers::NONE, egui::Key::Space);
+            let back = i.consume_key(Modifiers::NONE, egui::Key::ArrowLeft)
+                || i.consume_key(Modifiers::NONE, egui::Key::ArrowUp);
+            let next = i.consume_key(Modifiers::NONE, egui::Key::ArrowRight)
+                || i.consume_key(Modifiers::NONE, egui::Key::ArrowDown);
+            (close, back, next)
+        });
+        if close {
+            self.quick_look = false;
+        } else if (back || next)
+            && let Some(at) = self.focus_index()
+        {
+            {
+                let to = if next {
+                    (at + 1).min(self.entries.len() - 1)
+                } else {
+                    at.saturating_sub(1)
+                };
+                let path = self.entries[to].path.clone();
+                self.focus = Some(path.clone());
+                if self.select == SelectMode::One {
+                    self.selection.only(&path);
+                }
+                self.reveal = true;
+            }
+        }
+        close || back || next
+    }
+
+    /// Draws quick look over `rect`: the focused entry as large as it fits,
+    /// its name under it.
+    fn show_quick_look(&self, ui: &mut Ui, rect: egui::Rect) {
+        let Some(e) = self.focus_index().map(|i| &self.entries[i]) else {
+            return;
+        };
+        let ctx = ui.ctx().clone();
+        let name = strings::tr_args(
+            &ctx,
+            &crate::strings::FILES_QUICK_LOOK,
+            &[("name", &e.name)],
+        );
+        egui::Area::new(self.id.with("quick_look"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(rect.min)
+            .show(&ctx, |ui| {
+                ui.set_min_size(rect.size());
+                let visuals = ui.visuals().clone();
+                ui.painter()
+                    .rect_filled(rect, 6.0, visuals.window_fill.gamma_multiply(0.97));
+                let caption = ui.text_style_height(&egui::TextStyle::Body) + 8.0;
+                let image = egui::Rect::from_min_max(
+                    rect.min + egui::vec2(12.0, 12.0),
+                    egui::pos2(rect.right() - 12.0, rect.bottom() - caption - 12.0),
+                );
+                if image.width() < 1.0 || image.height() < 1.0 {
+                    return;
+                }
+                let state = self.thumbnails.request(
+                    &ctx,
+                    &ThumbRequest {
+                        entry: e,
+                        size: pixels_of(ui, image),
+                        priority: Priority::Visible,
+                    },
+                );
+                paint_large(ui, image, e, state, &name);
+                ui.painter().text(
+                    egui::pos2(rect.center().x, rect.bottom() - caption / 2.0 - 6.0),
+                    egui::Align2::CENTER_CENTER,
+                    &e.name,
+                    egui::TextStyle::Body.resolve(ui.style()),
+                    visuals.text_color(),
+                );
+            });
     }
 
     /// Focuses the first entry when asked to and one is there.
@@ -2296,7 +2649,12 @@ impl FileBrowser {
         // The keyboard, while the entries hold the focus.
         let keys_id = self.id.with("entries");
         let focused = ui.memory(|m| m.has_focus(keys_id));
-        if focused {
+        // Quick look holds the keys while it is open.
+        let looking = self.quick_look && self.quick_look_keys(ui);
+        if self.quick_look && focused {
+            ui.ctx().data_mut(|d| d.insert_temp(focused_id(), true));
+        }
+        if focused && !self.quick_look && !looking {
             ui.ctx().data_mut(|d| d.insert_temp(focused_id(), true));
             // A mode key: pressed here, or run as a command of the keymap.
             let asked = mode_key(ui)
@@ -2308,6 +2666,11 @@ impl FileBrowser {
             }
             let (events, modifiers) = ui.input(|i| (i.events.clone(), i.modifiers));
             let before = self.place.clone();
+            // Space is type-ahead's while a prefix is being typed, quick
+            // look's otherwise.
+            let typing = !self.type_ahead.prefix.is_empty()
+                && ui.input(|i| i.time) - self.type_ahead.at <= Self::TYPE_AHEAD_RESET;
+            let mut spaced = false;
             for ev in events {
                 match ev {
                     egui::Event::Key {
@@ -2337,9 +2700,14 @@ impl FileBrowser {
                         {
                             self.click(&f, Modifiers::COMMAND);
                             out.selection_changed = true;
+                        } else if (key == egui::Key::Y && modifiers.command)
+                            || (key == egui::Key::Space && modifiers.is_none() && !typing)
+                        {
+                            self.set_quick_look(true);
+                            spaced |= key == egui::Key::Space;
                         }
                     }
-                    egui::Event::Text(t) if !modifiers.command => {
+                    egui::Event::Text(t) if !(modifiers.command || spaced && t == " ") => {
                         let now = ui.input(|i| i.time);
                         self.type_ahead(&t, now);
                     }
@@ -2394,6 +2762,13 @@ impl FileBrowser {
                 },
             )
         });
+        // Quick look asks within the frame, so its thumbnail is renewed.
+        if self.quick_look && self.focus_index().is_none() {
+            self.quick_look = false;
+        }
+        if self.quick_look {
+            self.show_quick_look(ui, inner.response.rect);
+        }
         self.thumbnails.end_frame(ui.ctx());
         let mode_out = inner.inner;
         // The entries' container: a stop for Tab that takes the keys.

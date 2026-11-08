@@ -273,7 +273,7 @@ fn columns_move_up_and_down_in_a_column_and_left_and_right_between_them() {
 }
 
 #[test]
-fn a_click_in_an_ancestors_column_goes_there() {
+fn columns_a_click_in_an_ancestors_column_goes_there() {
     let mut h = harness(columns("click"));
     h.run();
     h.get_by_label("b").click();
@@ -317,5 +317,165 @@ fn columns_ask_for_the_focused_files_thumbnail_alone() {
     assert_eq!(
         r.frames.last().unwrap(),
         &[(PathBuf::from("/r/a/IMG_004.png"), Priority::Visible)]
+    );
+}
+
+fn filmstrip(id: &str, n: usize) -> FileBrowser {
+    let mut b = FileBrowser::new(id.to_owned(), source(n), "/p").with_modes(ViewModes::built_in());
+    assert!(b.set_mode("filmstrip"));
+    b
+}
+
+#[test]
+fn every_built_in_mode_is_offered_in_order() {
+    assert_eq!(
+        ViewModes::built_in().ids(),
+        ["details", "thumbnails", "filmstrip", "columns"]
+    );
+}
+
+#[test]
+fn the_filmstrip_moves_left_and_right_and_shows_the_focused_entry_large() {
+    let mut h = harness(filmstrip("film-keys", 30));
+    h.run();
+    h.get_by_label("IMG_003.png").click();
+    h.run();
+    assert!(h.query_by_label("Preview of IMG_003.png").is_some());
+    h.key_press(Key::ArrowRight);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_004.png")));
+    assert!(h.query_by_label("Preview of IMG_004.png").is_some());
+    // Up and Down stay: one row.
+    h.key_press(Key::ArrowDown);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_004.png")));
+    h.key_press(Key::ArrowLeft);
+    h.key_press(Key::ArrowLeft);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_002.png")));
+    h.key_press(Key::End);
+    h.run();
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_030.png")));
+    assert!(
+        h.query_by_label("IMG_030.png").is_some(),
+        "the strip scrolled to it"
+    );
+}
+
+#[test]
+fn the_filmstrip_asks_for_the_large_view_first_then_the_strip_in_order() {
+    let rec = Arc::new(RecordingThumbnails::default());
+    let provider: Arc<dyn ThumbnailProvider> = rec.clone();
+    let mut h = harness(filmstrip("film-thumbs", 200).with_thumbnails(provider));
+    h.run();
+    h.get_by_label("IMG_005.png").click();
+    h.run();
+    h.run();
+    let r = rec.record.lock().unwrap();
+    let last = r.frames.last().unwrap();
+    // The large view's entry first, then the strip from its start.
+    assert_eq!(
+        last[0],
+        (PathBuf::from("/p/IMG_005.png"), Priority::Visible)
+    );
+    assert_eq!(
+        last[1],
+        (PathBuf::from("/p/IMG_001.png"), Priority::Visible)
+    );
+    let near = last
+        .iter()
+        .position(|(_, p)| *p == Priority::Near)
+        .expect("the next screen asked");
+    assert!(last[..near].iter().all(|(_, p)| *p == Priority::Visible));
+    assert!(last.len() < 200);
+}
+
+#[test]
+fn the_selection_is_kept_across_every_built_in_mode() {
+    let mut h = harness(filmstrip("film-keep", 20));
+    h.state_mut().set_mode("details");
+    h.run();
+    h.get_by_label("IMG_002.png").click();
+    h.run();
+    h.key_press_modifiers(Modifiers::SHIFT, Key::ArrowDown);
+    h.run();
+    let sel = h.state().selection().clone();
+    assert_eq!(sel.len(), 2);
+    for mode in ["thumbnails", "filmstrip", "details"] {
+        h.get_by_label_contains(match mode {
+            "thumbnails" => "Thumbnails",
+            "filmstrip" => "Filmstrip",
+            _ => "Details",
+        })
+        .click();
+        h.run();
+        assert_eq!(h.state().mode(), mode);
+        assert_eq!(h.state().selection(), &sel, "{mode}");
+        assert_eq!(
+            h.state().focus(),
+            Some(Path::new("/p/IMG_003.png")),
+            "{mode}"
+        );
+    }
+}
+
+#[test]
+fn quick_look_opens_with_ctrl_y_or_space_moves_with_the_arrows_and_closes() {
+    let mut h = harness(FileBrowser::new("look", source(20), "/p"));
+    h.run();
+    h.get_by_label("IMG_003.png").click();
+    h.run();
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Y);
+    h.run();
+    assert!(h.state().quick_look());
+    assert!(h.query_by_label("Quick look: IMG_003.png").is_some());
+    h.key_press(Key::ArrowRight);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_004.png")));
+    assert!(h.query_by_label("Quick look: IMG_004.png").is_some());
+    h.key_press(Key::ArrowUp);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_003.png")));
+    h.key_press(Key::Escape);
+    h.run();
+    assert!(!h.state().quick_look());
+    assert!(h.query_by_label("Quick look: IMG_003.png").is_none());
+    // Space, the entries holding the keyboard, opens and closes it.
+    h.get_by_label("IMG_005.png").click();
+    h.run();
+    h.key_press(Key::Space);
+    h.run();
+    assert!(h.state().quick_look());
+    h.key_press(Key::Space);
+    h.run();
+    assert!(!h.state().quick_look());
+    // Ctrl+Y closes it too.
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Y);
+    h.run();
+    assert!(h.state().quick_look());
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Y);
+    h.run();
+    assert!(!h.state().quick_look());
+}
+
+#[test]
+fn quick_look_asks_for_its_thumbnail_as_visible() {
+    let rec = Arc::new(RecordingThumbnails::default());
+    let provider: Arc<dyn ThumbnailProvider> = rec.clone();
+    let mut h = harness(FileBrowser::new("look-thumbs", source(5), "/p").with_thumbnails(provider));
+    h.run();
+    h.get_by_label("IMG_002.png").click();
+    h.run();
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Y);
+    h.run();
+    h.run();
+    let r = rec.record.lock().unwrap();
+    assert!(
+        r.frames
+            .last()
+            .unwrap()
+            .iter()
+            .any(|(p, pr)| p == Path::new("/p/IMG_002.png") && *pr == Priority::Visible)
     );
 }

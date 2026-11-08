@@ -1327,6 +1327,8 @@ egui-pop-files-mode-columns = Columns
 
 egui-pop-files-mode-details = Details
 
+egui-pop-files-mode-filmstrip = Filmstrip
+
 egui-pop-files-mode-thumbnails = Thumbnails
 
 egui-pop-files-modes = View mode
@@ -1357,7 +1359,11 @@ egui-pop-files-preview-loading = Loading the preview…
 
 egui-pop-files-preview-none = No preview
 
+egui-pop-files-preview-of = Preview of { $name }
+
 egui-pop-files-preview-resize = Resize the preview
+
+egui-pop-files-quick-look = Quick look: { $name }
 
 egui-pop-files-rating = Rating
 
