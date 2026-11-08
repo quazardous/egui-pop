@@ -934,6 +934,12 @@ egui-pop-files-mode-columns = Colonnes
 
 egui-pop-files-mode-filmstrip = Pellicule
 
+egui-pop-files-mode-carousel = Carrousel
+
+egui-pop-files-mode-agenda = Agenda
+
+egui-pop-files-agenda-undated = Sans date
+
 egui-pop-files-preview-of = Aperçu de { $name }
 
 egui-pop-files-quick-look = Coup d’œil : { $name }

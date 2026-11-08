@@ -1231,6 +1231,8 @@ egui-pop-field-required = Required
 
 egui-pop-field-reset = Reset { $label } to default
 
+egui-pop-files-agenda-undated = No date
+
 egui-pop-files-all = All files
 
 egui-pop-files-bookmark = Bookmark this folder
@@ -1322,6 +1324,10 @@ egui-pop-files-kind-file = File
 egui-pop-files-kind-folder = Folder
 
 egui-pop-files-lens = Lens
+
+egui-pop-files-mode-agenda = Agenda
+
+egui-pop-files-mode-carousel = Carousel
 
 egui-pop-files-mode-columns = Columns
 

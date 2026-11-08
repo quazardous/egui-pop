@@ -614,6 +614,7 @@ egui-pop-field-modified-saved 5459baf0eac3bc94
 egui-pop-field-pending c3b0aa438f1b4399
 egui-pop-field-required a13c939a31e0bbe6
 egui-pop-field-reset 5a2e444b21057c4c
+egui-pop-files-agenda-undated c683cb396d051c18
 egui-pop-files-all 45bed3078932475b
 egui-pop-files-bookmark 6b0e2a63b0284481
 egui-pop-files-bookmark-name d6f8334d610b5af6
@@ -660,6 +661,8 @@ egui-pop-files-items e0d1e5c84cf292a7
 egui-pop-files-kind-file 181d912a9545ccc3
 egui-pop-files-kind-folder 385fe1e894da806d
 egui-pop-files-lens 666f135f6076a31d
+egui-pop-files-mode-agenda bdc8dd1d1687f9d5
+egui-pop-files-mode-carousel c68384b41898b633
 egui-pop-files-mode-columns 3c00a07c96cb7b8a
 egui-pop-files-mode-details 6b7485aa06c674c5
 egui-pop-files-mode-filmstrip aa303106450875c3

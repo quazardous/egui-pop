@@ -569,6 +569,22 @@ its own list and grid (columns to sort by, groups) for its two modes.
   Down by a strip's width. The large view asks the provider first
   (`Visible`), then the strip's cells in view, then the next screen of
   them (`Near`).
+- **Carousel.** `carousel` shows the focused entry large in the middle,
+  its neighbours smaller and smaller on each side as far as the width
+  goes (Finder's Gallery). Left and Right bring the previous or next entry
+  to the middle, Page Up and Page Down the neighbours of one side; a click
+  on a neighbour does too. The middle one asks for its thumbnail first,
+  then the neighbours outwards, then the next one beyond each side
+  (`Near`). Each entry is an option named by its name for screen readers.
+- **Agenda.** `agenda` files the entries by day, the newest first: one
+  heading per day (a screen reader's heading, `2026-11-08`), its entries
+  under it in a grid, the newest of the day first, and the entries without
+  a time last, under "No date". The day is the one an entry was taken
+  (`SourceEntry::taken`, which an application's source gives, a photo's
+  capture time), else the one it last changed, in UTC. Left and Right go
+  in that order, across days; Up and Down go a row up or down, into the
+  previous or next day, in the same column as near as it goes; Home and
+  End go to the newest and the oldest entry.
 - **Quick look.** `Ctrl+Y`, or Space while the entries hold the keyboard
   (and no type-ahead prefix is being typed), opens a large view of the
   focused entry over the entries, in every mode; the arrows move to the
@@ -582,7 +598,7 @@ its own list and grid (columns to sort by, groups) for its two modes.
   goes back to the parent (the folder left focused); a click in another
   column goes to that folder. `ViewModes::folders()` is the folder
   chooser's set, `details` and `columns`; `ViewModes::built_in()` has every
-  built-in mode (details, thumbnails, filmstrip, columns). A mode that needs the path says so
+  built-in mode (details, thumbnails, filmstrip, columns, carousel, agenda). A mode that needs the path says so
   (`ModeNeeds::hierarchy`): the browser then lists the ancestors and the
   focused folder too and hands them over in `ModeContext::ancestors` and
   `ModeContext::peek`; the mode answers a `Reach` (a place and the entry to
