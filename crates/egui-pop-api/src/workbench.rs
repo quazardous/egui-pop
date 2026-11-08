@@ -2583,6 +2583,26 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     // (a plugin may veto; the layout is built again from the workbench's
     // state each pass, so a veto puts it back).
     let mut resized = false;
+    // An area its least size widened keeps that size once the least goes,
+    // as egui's side panels kept theirs.
+    for zone in laid.zones.iter().filter(|z| z.shown == Shown::Open) {
+        let Some(area) = area_from(&zone.name.0).filter(|a| *a != Area::Center) else {
+            continue;
+        };
+        let along = if area == Area::Bottom {
+            zone.rect.height()
+        } else {
+            zone.rect.width()
+        };
+        let wanted = saved.get(&zone.name.0).copied().or_else(|| {
+            let c = layout.zone(&zone.name.0)?.constraints;
+            c.default.map(|d| d.points(0.0))
+        });
+        if wanted.is_some_and(|w| along > w + 0.5) && along <= zone.least + 0.5 {
+            saved.insert(zone.name.0.clone(), along);
+            resized = true;
+        }
+    }
     for event in &laid.events {
         match event {
             LayoutEvent::Resized { zone, size } => {
