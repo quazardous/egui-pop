@@ -221,7 +221,7 @@ fn the_search_finds_settings_in_every_scope_and_a_row_edits_its_scope() {
     h.run();
     h.run();
     // The hit, under its breadcrumb, editable in place.
-    h.get_by_label("General › Compute");
+    h.get_by_label("Hardware › Compute");
     h.get_by_role_and_label(egui::accesskit::Role::Group, "Worker threads");
     // A library value: the row says it is modified and where it comes
     // from.
