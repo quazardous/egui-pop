@@ -229,6 +229,27 @@ fn a_library_value_wins_says_its_origin_and_leaves_the_users_file_alone() {
 }
 
 #[test]
+fn a_setting_a_manifest_places_is_not_also_generated() {
+    let app = app();
+    let a = app.handle().service(&ADMIN).unwrap();
+    let tree = a.tree(app.handle());
+    let places = |id: &str| -> Vec<String> {
+        tree.fields()
+            .into_iter()
+            .filter(|(_, f)| f.setting_id() == Some(id))
+            .map(|(path, _)| path)
+            .collect()
+    };
+    // Placed twice by the manifest, never by its prefix.
+    assert_eq!(
+        places("compute.threads"),
+        ["hardware/compute", "hardware/devices"]
+    );
+    // A setting no manifest places keeps its generated page.
+    assert_eq!(places("compute.long"), ["general/compute"]);
+}
+
+#[test]
 fn the_settings_open_as_generated_pages_and_deep_links_land() {
     let mut h = harness();
     let out = run(&mut h, &CMD_OPEN, json!({ "key": "compute.threads" }));
