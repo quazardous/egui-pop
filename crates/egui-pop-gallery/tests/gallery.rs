@@ -1120,7 +1120,11 @@ fn the_settings_app_shows_generated_pages_value_scopes_and_search() {
     h.get_by_label("Greetings").click();
     h.run();
     h.run();
-    h.get_by_label("Esperanto");
+    assert_eq!(
+        h.get_all_by_label("Esperanto").count(),
+        2,
+        "in the table and the list"
+    );
     h.get_by_label("No hook gives these records yet.");
     egui_pop_test::assert_all_named(&h);
     results.add(h.try_snapshot("admin-records-pop-dark"));
