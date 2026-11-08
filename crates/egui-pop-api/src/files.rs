@@ -149,6 +149,7 @@ use crate::{Ctx, Plugin, PluginError};
 
 use self::sort::{PickerSort, SortColumn};
 
+pub mod browser;
 pub mod fs;
 pub mod groups;
 pub mod places;
