@@ -267,7 +267,7 @@ of every crate with every feature on.
   its view-mode, file-source and thumbnail-provider contracts, and a
   survey of file managers' and photo tools' views.
 - [Administration as forms, a design](design/admin-forms.md): the
-  proposed framework for an application's whole non-image side (settings,
+  accepted framework, its first slice built (the Settings app), for an application's whole non-image side (settings,
   tools, import, export, backups, health, plugins, jobs) as one full-page
   app with two navigation axes: a declarative form tree contributed by
   manifests, a closed set of bricks, standalone task surfaces and a

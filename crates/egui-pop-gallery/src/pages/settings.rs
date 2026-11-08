@@ -1,9 +1,15 @@
 //! The settings page: settings declared by a plugin, applied live, each
-//! with its reset; and a custom page of the settings window, "Greeting
+//! with its reset; a custom page of the settings window, "Greeting
 //! preview", under the gallery's section, drawing two of them with the
-//! preview.
+//! preview; and the Settings app (`admin`), every setting as full pages
+//! generated from the declarations, with a manifest's section (a
+//! callout, a status from a hook, an action) and a library and a
+//! workspace layer over the user's values.
 
 use egui::{RichText, Ui};
+use egui_pop::api::admin::model::hooks::Hook;
+use egui_pop::api::admin::model::{Action, Callout, FORMAT, Field, Manifest, Status, Tone};
+use egui_pop::api::admin::{ADMIN, CMD_OPEN};
 use egui_pop::api::settings;
 use egui_pop::api::settings_pages::SettingsPage as CustomPage;
 use egui_pop::api::settings_window;
@@ -37,7 +43,7 @@ impl Plugin for SettingsPage {
     }
 
     fn requires(&self) -> Vec<PluginId> {
-        vec![SHELL]
+        vec![SHELL, PluginId::from_static("egui_pop.admin")]
     }
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
@@ -65,6 +71,33 @@ impl Plugin for SettingsPage {
                 .description("Settings declared by plugins, applied as you change them, each with its reset.")
                 .group("Framework", 110),
         )?;
+        // A section of the Settings app declared as data: no widget drawn
+        // by this plugin.
+        if let Some(admin) = ctx.app().service(&ADMIN) {
+            admin.hook(
+                "gallery.greeting.length",
+                Hook::Status(Box::new(|| ("5 letters".into(), Tone::Success))),
+            );
+            admin.manifest(
+                Manifest::new(FORMAT).section("general/greeting", "Greeting", |s| {
+                    s.description("The preview's text and weight, declared as a manifest.")
+                        .callout(Callout::new(
+                            "tip",
+                            Tone::Info,
+                            "Values set for the library or the workspace win over yours.",
+                        ))
+                        .group("text", "Text")
+                        .field(Field::setting("gallery.greeting"))
+                        .field(Field::setting("gallery.strong"))
+                        .status(Status::hook("length", "Length", "gallery.greeting.length"))
+                        .action(
+                            Action::command("admin.open")
+                                .title("Open the interface settings")
+                                .args(serde_json::json!({ "path": "interface" })),
+                        );
+                }),
+            );
+        }
         // A page of its own in the settings window, under this plugin's
         // section: the size and weight with the preview they change.
         ctx.settings_page(
@@ -90,6 +123,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             egui_pop::api::settings_window::CMD_SETTINGS,
             serde_json::json!({ "section": "" }),
         );
+    }
+    if ui.button("Open the Settings app").clicked() {
+        open_admin(app);
     }
     ui.add_space(t.space.s);
     settings::form(ui, app);
@@ -119,4 +155,30 @@ fn preview(ui: &mut Ui, app: &AppHandle) {
         rich = rich.strong();
     }
     ui.label(rich);
+}
+
+/// Opens the Settings app on the gallery's section, a library and a
+/// workspace open with a value each over the user's.
+pub fn open_admin(app: &AppHandle) {
+    use egui_pop::model::admin::ValueScope;
+    if let Some(admin) = app.service(&ADMIN) {
+        admin.offer(ValueScope::Library, true);
+        admin.offer(ValueScope::Workspace, true);
+        if admin.export_layer(ValueScope::Library).is_empty() {
+            admin.load_layer(
+                app,
+                ValueScope::Library,
+                [("gallery.size".to_string(), serde_json::json!(24.0))].into(),
+            );
+            admin.load_layer(
+                app,
+                ValueScope::Workspace,
+                [("gallery.tone".to_string(), serde_json::json!("accent"))].into(),
+            );
+        }
+    }
+    app.run(
+        CMD_OPEN,
+        serde_json::json!({ "path": "general/gallery-settings" }),
+    );
 }

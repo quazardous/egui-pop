@@ -525,7 +525,7 @@ the list, so a page added to the gallery changes only these.
 
 ### Application services
 
-Settings, shortcuts, pointer gesture profiles, tips, About (the page and its dialog), platform services, translations, the developer tools (with the inspect mode's dialog), and the jobs centre (a job's log console open, in the page and in the status bar's popover).
+Settings, the Settings app (generated pages, a manifest's section, value scopes, the search), shortcuts, pointer gesture profiles, tips, About (the page and its dialog), platform services, translations, the developer tools (with the inspect mode's dialog), and the jobs centre (a job's log console open, in the page and in the status bar's popover).
 
 <table>
   <tr>
@@ -545,6 +545,11 @@ Settings, shortcuts, pointer gesture profiles, tips, About (the page and its dia
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/about-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/about-pop-dark.png" width="200" alt="about-pop-dark"></a><br>about-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/about-dialog-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/about-dialog-pop-dark.png" width="200" alt="about-dialog-pop-dark"></a><br>about-dialog-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/inspect-dialog-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/inspect-dialog-pop-dark.png" width="200" alt="inspect-dialog-pop-dark"></a><br>inspect-dialog-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/admin-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/admin-pop-dark.png" width="200" alt="admin-pop-dark"></a><br>admin-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/admin-manifest-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/admin-manifest-pop-dark.png" width="200" alt="admin-manifest-pop-dark"></a><br>admin-manifest-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/admin-search-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/admin-search-pop-dark.png" width="200" alt="admin-search-pop-dark"></a><br>admin-search-pop-dark</td>
   </tr>
 </table>
 
