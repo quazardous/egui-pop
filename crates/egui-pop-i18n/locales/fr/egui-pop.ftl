@@ -930,6 +930,8 @@ egui-pop-files-modes = Mode d’affichage
 
 egui-pop-files-mode-details = Détails
 
+egui-pop-files-mode-columns = Colonnes
+
 egui-pop-files-mode-thumbnails = Vignettes
 
 egui-pop-files-crumb-open = Ouvrir le dossier { $name }

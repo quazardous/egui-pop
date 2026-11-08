@@ -1323,6 +1323,8 @@ egui-pop-files-kind-folder = Folder
 
 egui-pop-files-lens = Lens
 
+egui-pop-files-mode-columns = Columns
+
 egui-pop-files-mode-details = Details
 
 egui-pop-files-mode-thumbnails = Thumbnails

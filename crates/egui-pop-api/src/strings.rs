@@ -421,6 +421,7 @@ pub const FILES_MODES: StrKey = StrKey::new("egui-pop-files-modes", "View mode")
 pub const FILES_MODE_DETAILS: StrKey = StrKey::new("egui-pop-files-mode-details", "Details");
 pub const FILES_MODE_THUMBNAILS: StrKey =
     StrKey::new("egui-pop-files-mode-thumbnails", "Thumbnails");
+pub const FILES_MODE_COLUMNS: StrKey = StrKey::new("egui-pop-files-mode-columns", "Columns");
 /// The in-app picker's breadcrumbs: what each part is called, and what a
 /// segment's menu says when it has nothing to list.
 pub const FILES_CRUMB_OPEN: StrKey =
@@ -1415,6 +1416,7 @@ pub const ALL: &[StrKey] = &[
     FILES_MODES,
     FILES_MODE_DETAILS,
     FILES_MODE_THUMBNAILS,
+    FILES_MODE_COLUMNS,
     FILES_CRUMB_OPEN,
     FILES_CRUMB_CURRENT,
     FILES_CRUMB_SUBFOLDERS,

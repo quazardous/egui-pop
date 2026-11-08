@@ -5067,6 +5067,7 @@ impl FilePicker {
         self.row_ids.clear();
         let mut details = std::mem::take(&mut self.details);
         let mut thumbs = std::mem::take(&mut self.thumbs);
+        let place = self.dir.clone();
         let mut drawer = PickerDrawer {
             modifiers: ui.input(|i| i.modifiers),
             pointer: ui.input(|i| i.pointer.any_down() || i.pointer.any_released()),
@@ -5090,6 +5091,9 @@ impl FilePicker {
             drawer: Some(&mut drawer),
             name: Some(name),
             many,
+            place: &place,
+            ancestors: &[],
+            peek: None,
         };
         let out = if grid {
             thumbs.show(ui, cx)
