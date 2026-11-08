@@ -22,6 +22,16 @@ remove, selection, bulk actions and group-by are still to come. Rows lay
 their right-hand controls from the page's right edge and wrap their help,
 so nothing passes the page.
 
+Slices 3 and 4 are on the application's side (Helios): its scopes and
+its settings placed through a bridge (layers: machine, library, person,
+command line), then its Storage and Backup pages declared as manifests.
+The volume table and the strategy statuses read the application's own
+`read_only` commands, with row actions over its commands; the scope and
+section titles go through the application's catalogues before they are
+declared, since declared titles are shown as given. Its hand-drawn
+Storage window stays until row fields (a role per column, a name edited
+in place), confirmations and the strategy as a form exist.
+
 Slice 1 leaves for later: `Ctrl+,`, File > Settings and the aliases
 `app.settings` and `app.settings.page` (the settings window keeps them
 until the shortcuts editor, gestures and fonts become widget kinds and
