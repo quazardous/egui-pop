@@ -1110,7 +1110,7 @@ fn the_settings_app_shows_generated_pages_value_scopes_and_search() {
     h.get_by_role_and_label(egui::accesskit::Role::Group, "Tone, modified, workspace");
     results.add(h.try_snapshot("admin-pop-dark"));
     // The section a manifest declares.
-    h.get_by_label("Greeting").click();
+    h.get_by_label("Greeting text").click();
     h.run();
     h.run();
     h.get_by_label("5 letters");

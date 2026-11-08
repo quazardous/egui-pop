@@ -79,7 +79,7 @@ impl Plugin for SettingsPage {
                 Hook::Status(Box::new(|| ("5 letters".into(), Tone::Success))),
             );
             admin.manifest(
-                Manifest::new(FORMAT).section("general/greeting", "Greeting", |s| {
+                Manifest::new(FORMAT).section("general/greeting", "Greeting text", |s| {
                     s.description("The preview's text and weight, declared as a manifest.")
                         .callout(Callout::new(
                             "tip",
