@@ -363,6 +363,44 @@ fn the_filmstrip_moves_left_and_right_and_shows_the_focused_entry_large() {
     );
 }
 
+/// A click on a thumbnail at the strip's edge: its centre (where kittest's
+/// `click` presses) lies past the window, so that press reaches nothing,
+/// as a press off the window would. A press on its visible part, or a
+/// screen reader's click, takes it, and it scrolls whole into view.
+#[test]
+fn the_filmstrip_takes_a_click_on_a_thumbnail_partly_in_view() {
+    let width = 640.0;
+    let mut h = harness(filmstrip("film-click", 200));
+    h.run();
+    let rect = h.get_by_label("IMG_005.png").rect();
+    assert!(
+        rect.left() < width && rect.center().x > width,
+        "the fifth cell is cut by the window's edge: {rect:?}"
+    );
+    // On its visible part.
+    let at = egui::pos2((rect.left() + width) / 2.0, rect.center().y);
+    h.event(egui::Event::PointerMoved(at));
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        });
+    }
+    h.run();
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_005.png")));
+    assert!(h.state().selection().contains(Path::new("/p/IMG_005.png")));
+    let rect = h.get_by_label("IMG_005.png").rect();
+    assert!(rect.right() <= width, "scrolled whole into view: {rect:?}");
+    // Through accessibility, the next one.
+    h.get_by_label("IMG_006.png").click_accesskit();
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_006.png")));
+    assert!(h.state().selection().contains(Path::new("/p/IMG_006.png")));
+}
+
 #[test]
 fn the_filmstrip_asks_for_the_large_view_first_then_the_strip_in_order() {
     let rec = Arc::new(RecordingThumbnails::default());
