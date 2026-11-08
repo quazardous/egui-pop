@@ -1564,7 +1564,11 @@ pub fn mode_switcher(
             for (n, info) in modes.iter().enumerate() {
                 let label = mode_label(&ctx, info);
                 let on = info.id == current;
-                let glyph = Icon::by_name(&info.icon).and_then(Icon::glyph);
+                // Without the icon font in use (a bare test context, the
+                // first pass), the label stands alone: a glyph would panic.
+                let glyph = Icon::by_name(&info.icon)
+                    .and_then(Icon::glyph)
+                    .filter(|_| egui_pop_core::icon::font_ready(&ctx));
                 let r = match glyph {
                     Some(g) => {
                         let family = egui::FontFamily::Name(egui_pop_core::icon::FAMILY.into());
