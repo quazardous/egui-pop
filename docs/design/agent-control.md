@@ -2,8 +2,8 @@
 
 Status: **design note, proposed** (2026-11-08). Built since: schemas
 and `bridge.wait`, the in-process scenario runner, the socket and MCP
-transports, and live scenario runs over the socket (`Ui` steps aside;
-see [Scenarios](../scenarios.md)). It answers an application's need (Helios): agents drive a running
+transports, live scenario runs over the socket, and the `ui` side on the
+socket (see [Scenarios](../scenarios.md)). It answers an application's need (Helios): agents drive a running
 application, turn what they find into tests, and run those tests
 without a person.
 
@@ -96,7 +96,8 @@ A transport only carries requests to the UI thread and replies back.
 | In-process | Rust calls | the bridge itself | exists |
 | Local socket | JSON-RPC 2.0: `describe`, `snapshot`, `call`, `wait` | `egui-pop-agent` (new, opt-in) | built |
 | MCP | the same, as MCP tools generated from `describe`: a new capability becomes a tool with no code | `egui-pop-agent`, feature `mcp`, on an MCP SDK (below) | built: `egui-pop-agent-mcp` |
-| UI: tree, screenshot, input | egui's `egui_inspection` protocol | eframe's `inspection` feature, as the gallery does | exists; to document as the `ui.*` side |
+| UI: tree, input | the socket's `ui` method: the AccessKit tree, and raw egui events queued by an egui plugin's `input_hook` | `egui-pop-agent` | built (2026-11-08) |
+| UI: screenshot | egui's `egui_inspection` protocol, or the application's own screenshot command | eframe's `inspection` feature, as the gallery does | exists |
 
 The UI side stays egui's protocol, with `egui_mcp` or our own client. An
 agent holds two connections: the bridge for meaning, `inspection` for
@@ -210,8 +211,10 @@ autonomous tests before any live transport exists.
 1. RON or JSON for scenarios: RON reads better and matches the
    snapshots' tooling; JSON is what an MCP client emits when recording.
    The proposal is RON, with the recorder writing RON.
-2. Whether `ui.*` steps should exist on the bridge too, as synthetic
-   egui events from a collector action. That would give one connection,
-   at the cost of duplicating `inspection`.
+2. Settled (2026-11-08): the `ui` side lives on the socket, as raw egui
+   events queued into the next frames by an egui plugin, and the
+   AccessKit tree of the frame just drawn. One connection, no windowing
+   system's help, the same headless and on a desktop; `inspection`
+   stays for pixels.
 3. Where fixtures live: `test.*` collectors compiled only with a
    `test-fixtures` feature, or a separate registry the runner owns.
