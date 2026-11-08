@@ -70,3 +70,21 @@ exits with 1 when a run failed; screenshots of each run go to
 `screenshots/`. The gate does not run it: it needs wbox (labwc, a
 headless compositor) and a release build, as `cargo xtask screenshots`
 does.
+
+## GNOME: a headless mutter
+
+Some bugs show only on GNOME. `mutter.py` runs a scenario in a headless
+mutter instead of labwc, with the same calls (`launch`, `mouse_move`,
+`click`, `drag`, `key`, `screenshot`, `stop`): input goes through mutter's
+RemoteDesktop D-Bus API, frames through its ScreenCast stream and
+PipeWire, captured by GStreamer. `backend.py` picks it when
+`WBOX_COMPOSITOR=mutter` (or `compositor: mutter` in the config):
+
+```sh
+WBOX_COMPOSITOR=mutter $WBOX_PYTHON tools/wbox/titlebar.py
+```
+
+It needs mutter, pipewire, wireplumber, dbus-daemon, GStreamer's
+`pipewiresrc`, `pngenc` and `videocrop`, and the `jeepney` package in the
+wbox Python. Each run gets a private D-Bus session and runtime directory;
+nothing touches the desktop's session.
