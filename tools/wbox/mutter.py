@@ -97,6 +97,7 @@ class MutterCompositor:
         self.frames: Path | None = None
         self.env: dict[str, str] = {}
         self.wayland_display = ""
+        self.pointer: tuple[float, float] | None = None
 
     # ── set-up ──────────────────────────────────────────────────────
 
@@ -184,6 +185,13 @@ class MutterCompositor:
             self._rd("Start")
             signal_msg = self.conn.recv_until_filtered(queue, timeout=self.timeout)
         self.node = int(signal_msg.body[0])
+        # mutter makes the session's virtual pointer at its first event, and
+        # the seat has no pointer until then: made later, a client binds its
+        # wl_pointer after the motion that should have given it the focus,
+        # and the next press goes to no surface. One motion now, before any
+        # client.
+        self._move(self.width - 1, self.height - 1)
+        self.pointer = (self.width - 1, self.height - 1)
 
         # Every frame of the stream as a PNG file; the last few kept.
         self.frames = rt / "frames"
@@ -241,6 +249,19 @@ class MutterCompositor:
 
     def _move(self, x: float, y: float) -> None:
         self._rd("NotifyPointerMotionAbsolute", "sdd", self.stream, float(x), float(y))
+        self.pointer = (x, y)
+
+    def _focus(self, x: float, y: float) -> None:
+        """The pointer at (x, y), and the surface there given its focus.
+
+        mutter picks the surface under the pointer on a motion that moves
+        it: the pointer goes a pixel aside first when it is there already
+        (a window mapped under a still pointer has no focus yet), then
+        waits for the pick before a press."""
+        if self.pointer == (x, y):
+            self._move(x + 1 if x + 1 < self.width else x - 1, y)
+        self._move(x, y)
+        time.sleep(FOCUS_DELAY)
 
     def _button(self, button: int, pressed: bool) -> None:
         self._rd("NotifyPointerButton", "ib", BUTTONS.get(button, button), pressed)
@@ -254,8 +275,7 @@ class MutterCompositor:
     def click(self, x: int, y: int, button: int = 1) -> dict:
         if not self.is_running():
             return {"error": "compositor is not running"}
-        self._move(x, y)
-        time.sleep(FOCUS_DELAY)
+        self._focus(x, y)
         self._button(button, True)
         time.sleep(0.05)
         self._button(button, False)
@@ -267,8 +287,7 @@ class MutterCompositor:
         if not self.is_running():
             return {"error": "compositor is not running"}
         steps = max(1, int(steps))
-        self._move(x1, y1)
-        time.sleep(FOCUS_DELAY)
+        self._focus(x1, y1)
         self._button(button, True)
         try:
             for i in range(1, steps + 1):
