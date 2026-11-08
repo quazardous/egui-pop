@@ -21,14 +21,33 @@ fn source(n: usize) -> Arc<dyn FileSource> {
 }
 
 fn harness(browser: FileBrowser) -> Harness<'static, FileBrowser> {
-    Harness::builder()
+    let mut h = Harness::builder()
         .with_size(egui::vec2(640.0, 400.0))
         .build_ui_state(
             |ui, b: &mut FileBrowser| {
                 b.show(ui);
             },
             browser,
-        )
+        );
+    // egui-pop's icon font, as an application has it: the switcher's icons.
+    egui_pop_core::icon::install(&h.ctx);
+    h.run();
+    h
+}
+
+#[test]
+fn the_switcher_without_the_icon_font_shows_its_labels() {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(640.0, 400.0))
+        .build_ui_state(
+            |ui, b: &mut FileBrowser| {
+                b.show(ui);
+            },
+            FileBrowser::new("bare", source(3), "/p"),
+        );
+    h.run();
+    assert!(h.query_by_label("Details").is_some());
+    assert!(h.query_by_label("Thumbnails").is_some());
 }
 
 #[test]
