@@ -880,6 +880,19 @@ impl Manifest {
         serde_json::to_value(self).unwrap_or(Json::Null)
     }
 
+    /// The settings its fields bind: the generated pages leave them out,
+    /// so a setting a manifest places shows once, where it is placed.
+    pub fn bound_settings(&self) -> impl Iterator<Item = &str> {
+        self.sections
+            .iter()
+            .flat_map(|s| &s.groups)
+            .flat_map(|g| &g.items)
+            .filter_map(|i| match i {
+                Item::Field(f) => f.setting_id(),
+                _ => None,
+            })
+    }
+
     /// Reads a manifest, refusing one newer than [`FORMAT`]. An older one
     /// would be migrated here (there is none yet).
     pub fn from_json(json: &Json) -> Result<Manifest, ManifestError> {

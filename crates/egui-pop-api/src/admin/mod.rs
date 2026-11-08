@@ -212,17 +212,24 @@ impl Admin {
         lock(&self.diagnostics).clone()
     }
 
-    /// The resolved tree: the declared settings' pages, then every
-    /// manifest, checked.
+    /// The resolved tree: the declared settings' pages (less the settings
+    /// a manifest places), then every manifest, checked.
     pub fn tree(&self, app: &AppHandle) -> Tree {
         let entries = app.settings();
-        let mut tree = Tree::default();
-        tree.merge(generate::settings(entries.iter().map(|e| Entry {
-            id: e.id.as_str(),
-            section: &e.section,
-        })));
-        let mut d = Diagnostics::new();
         let manifests = lock(&self.manifests).clone();
+        let placed: std::collections::BTreeSet<&str> =
+            manifests.iter().flat_map(|m| m.bound_settings()).collect();
+        let mut tree = Tree::default();
+        tree.merge(generate::settings(
+            entries
+                .iter()
+                .filter(|e| !placed.contains(e.id.as_str()))
+                .map(|e| Entry {
+                    id: e.id.as_str(),
+                    section: &e.section,
+                }),
+        ));
+        let mut d = Diagnostics::new();
         let mut scopes: Vec<String> = tree.scopes.iter().map(|s| s.meta.id.clone()).collect();
         for m in &manifests {
             scopes.extend(m.scopes.iter().map(|s| s.meta.id.clone()));
