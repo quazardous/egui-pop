@@ -553,6 +553,19 @@ its own list and grid (columns to sort by, groups) for its two modes.
   `ViewModes::register` adds others. A mode draws and reports clicks; the
   browser keeps the selection (one or several, Ctrl and Shift as in the
   picker) and the focus, which a change of mode keeps.
+- **Columns.** `columns` is Finder's column view: one column per folder of
+  the path, from the browser's root (`with_root`, else the file system's)
+  down to the place, then the focused entry looked into (a folder's
+  entries, a file's thumbnail and size). Up and Down move in the place's
+  column, Right enters the focused folder (its first entry focused), Left
+  goes back to the parent (the folder left focused); a click in another
+  column goes to that folder. `ViewModes::folders()` is the folder
+  chooser's set, `details` and `columns`; `ViewModes::built_in()` has every
+  built-in mode. A mode that needs the path says so
+  (`ModeNeeds::hierarchy`): the browser then lists the ancestors and the
+  focused folder too and hands them over in `ModeContext::ancestors` and
+  `ModeContext::peek`; the mode answers a `Reach` (a place and the entry to
+  focus) and names the keys that leave the place with `ViewMode::travel`.
 - **Keys**, while the entries hold the focus: the arrows, Page Up and Page
   Down, Home and End as the mode's layout says; Enter opens; Ctrl+A and
   Ctrl+Space select; typed letters jump to the first name that starts with

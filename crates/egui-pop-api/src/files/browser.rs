@@ -493,6 +493,41 @@ pub struct ModeNeeds {
     pub thumbnails: bool,
     /// A time per entry (an agenda).
     pub time: bool,
+    /// The listings of the place's ancestors and of the focused folder
+    /// ([`ModeContext::ancestors`], [`ModeContext::peek`]): Finder's columns.
+    pub hierarchy: bool,
+}
+
+/// One folder's listing beside the place's: an ancestor, or the focused
+/// folder looked into, for a mode that shows the path as columns.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Column {
+    /// The folder listed.
+    pub place: PathBuf,
+    /// Its entries, sorted as the browser sorts (folders first, then names
+    /// as people read them).
+    pub entries: Vec<SourceEntry>,
+    /// The entry that leads to the next column: the path's next folder.
+    pub open: Option<usize>,
+    /// Its listing is still under way.
+    pub loading: bool,
+}
+
+/// Somewhere a mode asks the browser to go: a place, and the entry to focus
+/// there (a click in another column than the place's).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Reach {
+    pub place: PathBuf,
+    pub focus: Option<PathBuf>,
+}
+
+/// A key that leaves the place, in a mode that shows the path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Travel {
+    /// Into the focused folder, its first entry focused.
+    Into,
+    /// Back to the parent, the folder left focused.
+    Out,
 }
 
 /// What a mode is, for the switcher, persistence, agents and screen readers.
@@ -556,6 +591,14 @@ pub struct ModeContext<'a> {
     pub name: Option<String>,
     /// Several entries can be selected: said by the container.
     pub many: bool,
+    /// The folder the entries are in.
+    pub place: &'a Path,
+    /// The place's ancestors' listings, the topmost first, when the mode
+    /// needs a hierarchy ([`ModeNeeds::hierarchy`]); empty otherwise.
+    pub ancestors: &'a [Column],
+    /// The focused folder's listing, when the mode needs a hierarchy and a
+    /// folder has the focus.
+    pub peek: Option<&'a Column>,
 }
 
 /// What the person did in a mode; the browser decides what it means.
@@ -571,6 +614,9 @@ pub struct ModeOutput {
     pub focused: Option<egui::Id>,
     /// The entries in one of its rows, as last laid out.
     pub columns: usize,
+    /// Another place to show: a click in an ancestor's column or in the
+    /// focused folder's.
+    pub reach: Option<Reach>,
 }
 
 /// A way to show a browser's entries. It draws and reports; selection rules,
@@ -583,6 +629,13 @@ pub trait ViewMode: Send {
     /// Where a key moves the focus from `from`, among `count` entries, in
     /// the layout last drawn.
     fn step(&self, from: usize, count: usize, key: ModeKey) -> usize;
+
+    /// Whether a key leaves the place rather than moving within it (Left and
+    /// Right in Finder's columns). `None`, the default, leaves the key to
+    /// [`ViewMode::step`].
+    fn travel(&self, _key: ModeKey) -> Option<Travel> {
+        None
+    }
 }
 
 type ModeFactory = Arc<dyn Fn() -> Box<dyn ViewMode> + Send + Sync>;
@@ -615,6 +668,27 @@ impl Default for ViewModes {
 }
 
 impl ViewModes {
+    /// The folder chooser's modes: details and columns.
+    pub fn folders() -> Self {
+        let modes = ViewModes(Arc::default());
+        modes
+            .register(MODE_DETAILS, Arc::new(|| Box::new(DetailsMode::default())))
+            .expect("first");
+        modes
+            .register(MODE_COLUMNS, Arc::new(|| Box::new(ColumnsMode::default())))
+            .expect("second");
+        modes
+    }
+
+    /// Every built-in mode: details, thumbnails, columns.
+    pub fn built_in() -> Self {
+        let modes = ViewModes::default();
+        modes
+            .register(MODE_COLUMNS, Arc::new(|| Box::new(ColumnsMode::default())))
+            .expect("built-in");
+        modes
+    }
+
     /// No mode at all.
     pub fn empty() -> Self {
         ViewModes(Arc::default())
@@ -1144,6 +1218,255 @@ impl ViewMode for ThumbnailsMode {
     }
 }
 
+/// Finder's columns: one column per folder of the path, the place's last,
+/// then the focused entry looked into (a folder's entries, a file's
+/// thumbnail and facts). Up and Down move in the place's column; Right
+/// enters the focused folder, Left goes back to the parent.
+#[derive(Clone, Debug, Default)]
+pub struct ColumnsMode {
+    rows_in_view: usize,
+}
+
+impl ColumnsMode {
+    /// A column's width, in points.
+    pub const COLUMN_WIDTH: f32 = 200.0;
+
+    /// One column of plain rows: an ancestor's, or the focused folder's.
+    /// Answers the entry clicked.
+    fn side(ui: &mut Ui, column: &Column, height: f32, salt: egui::Id) -> Option<PathBuf> {
+        let mut clicked = None;
+        let name = column.place.file_name().map_or_else(
+            || column.place.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        ui.scope_builder(
+            egui::UiBuilder::new()
+                .accessibility_role(egui::accesskit::Role::ListBox)
+                .accessibility_label(name),
+            |ui| {
+                egui::ScrollArea::vertical()
+                    .id_salt(salt)
+                    .max_height(height)
+                    .auto_shrink([false, false])
+                    .show_rows(
+                        ui,
+                        DetailsMode::ROW_HEIGHT,
+                        column.entries.len(),
+                        |ui, range| {
+                            for i in range {
+                                let e = &column.entries[i];
+                                let on = column.open == Some(i);
+                                let (rect, resp) = ui.allocate_exact_size(
+                                    egui::vec2(ui.available_width(), DetailsMode::ROW_HEIGHT),
+                                    egui::Sense::click(),
+                                );
+                                entry_response(&resp, e, on);
+                                let visuals = ui.visuals();
+                                if on {
+                                    ui.painter().rect_filled(
+                                        rect,
+                                        2.0,
+                                        visuals.widgets.active.weak_bg_fill,
+                                    );
+                                } else if resp.hovered() {
+                                    ui.painter().rect_filled(
+                                        rect,
+                                        2.0,
+                                        visuals.widgets.hovered.weak_bg_fill,
+                                    );
+                                }
+                                paint_row_name(ui, rect, e, visuals.text_color());
+                                if resp.clicked() {
+                                    clicked = Some(e.path.clone());
+                                }
+                            }
+                        },
+                    );
+            },
+        );
+        clicked
+    }
+}
+
+/// A row's name, and a chevron after a folder's.
+fn paint_row_name(ui: &Ui, rect: egui::Rect, e: &SourceEntry, color: egui::Color32) {
+    let font = egui::TextStyle::Body.resolve(ui.style());
+    let y = rect.center().y;
+    let chevron = 14.0;
+    ui.painter()
+        .with_clip_rect(rect.with_max_x(rect.right() - chevron))
+        .text(
+            egui::pos2(rect.left() + 4.0, y),
+            egui::Align2::LEFT_CENTER,
+            &e.name,
+            font.clone(),
+            color,
+        );
+    if e.is_dir() {
+        ui.painter().text(
+            egui::pos2(rect.right() - 4.0, y),
+            egui::Align2::RIGHT_CENTER,
+            ">",
+            font,
+            color,
+        );
+    }
+}
+
+impl ViewMode for ColumnsMode {
+    fn describe(&self) -> ModeInfo {
+        ModeInfo {
+            id: MODE_COLUMNS.into(),
+            label: "Columns".into(),
+            icon: "phosphor:columns".into(),
+            keys: vec![
+                ("Up, Down".into(), "Previous, next entry".into()),
+                ("Right".into(), "Into the folder".into()),
+                ("Left".into(), "Back to the parent".into()),
+            ],
+            gestures: vec!["Wheel: scroll".into()],
+            persist: MODE_COLUMNS.into(),
+            role: egui::Role::ListBox,
+            needs: ModeNeeds {
+                thumbnails: true,
+                hierarchy: true,
+                ..ModeNeeds::default()
+            },
+        }
+    }
+
+    fn show(&mut self, ui: &mut Ui, cx: ModeContext<'_>) -> ModeOutput {
+        let mut out = ModeOutput::default();
+        let w = Self::COLUMN_WIDTH;
+        let height = cx
+            .max_height
+            .unwrap_or_else(|| ui.available_height())
+            .max(DetailsMode::ROW_HEIGHT * 3.0);
+        let mut plain = PlainDrawer {
+            entries: cx.entries,
+            selection: cx.selection,
+            focus: cx.focus,
+        };
+        let drawer: &mut dyn EntryDrawer = match cx.drawer {
+            Some(d) => d,
+            None => &mut plain,
+        };
+        let n = cx.entries.len();
+        let reveal = cx.focus.filter(|_| cx.reveal_focus && n > 0);
+        let reveal_column = cx.reveal_focus;
+        let ctx = ui.ctx().clone();
+        let thumbnails = cx.thumbnails;
+        let focused = cx.focus.and_then(|i| cx.entries.get(i));
+        egui::ScrollArea::horizontal()
+            .id_salt(cx.id.with("columns"))
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                ui.horizontal_top(|ui| {
+                    let column = |ui: &mut Ui, add: &mut dyn FnMut(&mut Ui)| {
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(w, height),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| {
+                                ui.set_width(w);
+                                ui.set_min_height(height);
+                                add(ui);
+                            },
+                        )
+                        .response
+                    };
+                    for (k, a) in cx.ancestors.iter().enumerate() {
+                        column(ui, &mut |ui| {
+                            if let Some(p) = Self::side(ui, a, height, cx.id.with(("ancestor", k)))
+                            {
+                                out.reach = Some(Reach {
+                                    place: a.place.clone(),
+                                    focus: Some(p),
+                                });
+                            }
+                        });
+                        ui.separator();
+                    }
+                    let here = column(ui, &mut |ui| {
+                        let size = drawer.row_size(ui, w - ui.spacing().scroll.allocated_width());
+                        lay_out(
+                            ui,
+                            cx.name.as_deref().map(|n| (n, cx.many)),
+                            &mut *drawer,
+                            cx.id.with("columns.here"),
+                            n,
+                            size,
+                            Some(height),
+                            reveal,
+                            cx.focus,
+                            &mut out,
+                            |d, ui, i| d.row(ui, i, size),
+                        );
+                    });
+                    if let Some(f) = focused {
+                        ui.separator();
+                        column(ui, &mut |ui| match cx.peek {
+                            Some(p) if f.is_dir() => {
+                                if let Some(e) = Self::side(ui, p, height, cx.id.with("peek")) {
+                                    out.reach = Some(Reach {
+                                        place: p.place.clone(),
+                                        focus: Some(e),
+                                    });
+                                }
+                            }
+                            _ if f.is_dir() => {}
+                            _ => {
+                                let side = w - 8.0;
+                                let pixels = (side * ctx.pixels_per_point()).round() as u32;
+                                let state = thumbnails.request(
+                                    &ctx,
+                                    &ThumbRequest {
+                                        entry: f,
+                                        size: pixels,
+                                        priority: Priority::Visible,
+                                    },
+                                );
+                                let cell = egui::vec2(w, side + DetailsMode::ROW_HEIGHT + 8.0);
+                                let (rect, _) = ui.allocate_exact_size(cell, egui::Sense::hover());
+                                paint_cell(ui, rect, f, state);
+                                if let Some(s) = f.size {
+                                    ui.weak(human_size(s));
+                                }
+                            }
+                        });
+                    }
+                    if reveal_column {
+                        ui.scroll_to_rect(here.rect, None);
+                    }
+                });
+            });
+        self.rows_in_view = out.visible.len().max(1);
+        out.columns = 1;
+        out
+    }
+
+    fn step(&self, from: usize, count: usize, key: ModeKey) -> usize {
+        let last = count.saturating_sub(1);
+        let page = self.rows_in_view.max(1);
+        match key {
+            ModeKey::Up => from.saturating_sub(1),
+            ModeKey::Down => (from + 1).min(last),
+            ModeKey::Left | ModeKey::Right => from,
+            ModeKey::PageUp => from.saturating_sub(page),
+            ModeKey::PageDown => (from + page).min(last),
+            ModeKey::Home => 0,
+            ModeKey::End => last,
+        }
+    }
+
+    fn travel(&self, key: ModeKey) -> Option<Travel> {
+        match key {
+            ModeKey::Right => Some(Travel::Into),
+            ModeKey::Left => Some(Travel::Out),
+            _ => None,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // The mode switcher and the mode keys
 // ---------------------------------------------------------------------------
@@ -1152,6 +1475,8 @@ impl ViewMode for ThumbnailsMode {
 pub const MODE_DETAILS: &str = "details";
 /// The id of the thumbnails mode.
 pub const MODE_THUMBNAILS: &str = "thumbnails";
+/// The id of the columns mode (Finder's).
+pub const MODE_COLUMNS: &str = "columns";
 /// Up to this many modes, the switcher is a segmented control; beyond, a
 /// menu.
 pub const SEGMENTED_MAX: usize = 4;
@@ -1299,6 +1624,9 @@ pub struct BrowserOutput {
     pub activated: Option<PathBuf>,
     pub selection_changed: bool,
     pub mode_changed: bool,
+    /// The place shown changed: a click in another column, or Left and
+    /// Right in a mode that shows the path.
+    pub place_changed: bool,
 }
 
 /// Type-ahead's prefix and when it was last typed.
@@ -1330,6 +1658,60 @@ pub struct FileBrowser {
     type_ahead: TypeAhead,
     reveal: bool,
     restored: bool,
+    root: Option<PathBuf>,
+    /// The ancestors' and the focused folder's listings, for a mode that
+    /// shows the path.
+    ancestors: Vec<Column>,
+    ancestor_listings: Vec<Option<Listing>>,
+    peek: Option<(Column, Option<Listing>)>,
+    /// Focus the first entry once the listing gives one (Right into a
+    /// folder).
+    focus_first: bool,
+}
+
+/// The browser's order: folders first, then names as people read them.
+fn sort_entries(entries: &mut [SourceEntry]) {
+    entries.sort_by(|a, b| {
+        b.is_dir()
+            .cmp(&a.is_dir())
+            .then_with(|| natural_cmp(&a.name, &b.name))
+    });
+}
+
+/// Takes what a side listing delivered into its column; `true` while it is
+/// under way.
+fn pump_column(column: &mut Column, listing: &mut Option<Listing>) -> bool {
+    let Some(l) = listing else {
+        return false;
+    };
+    let mut changed = false;
+    let mut done = false;
+    for page in l.poll() {
+        match page {
+            Page::Entries(mut e) => {
+                column.entries.append(&mut e);
+                changed = true;
+            }
+            Page::Updated(e) => {
+                for u in e {
+                    if let Some(old) = column.entries.iter_mut().find(|o| o.path == u.path) {
+                        *old = u;
+                    }
+                }
+            }
+            Page::Removed(paths) => column.entries.retain(|e| !paths.contains(&e.path)),
+            Page::Changed => column.entries.clear(),
+            Page::Done | Page::Failed(_) => done = true,
+        }
+    }
+    if changed {
+        sort_entries(&mut column.entries);
+    }
+    if done {
+        *listing = None;
+    }
+    column.loading = listing.is_some();
+    column.loading
 }
 
 impl fmt::Debug for FileBrowser {
@@ -1389,6 +1771,11 @@ impl FileBrowser {
             type_ahead: TypeAhead::default(),
             reveal: false,
             restored: false,
+            root: None,
+            ancestors: Vec::new(),
+            ancestor_listings: Vec::new(),
+            peek: None,
+            focus_first: false,
         };
         b.reload();
         b
@@ -1414,6 +1801,178 @@ impl FileBrowser {
 
     pub fn id(&self) -> egui::Id {
         self.id
+    }
+
+    /// The topmost folder a mode that shows the path goes up to (and Left
+    /// goes back to); the file system's root when not set.
+    pub fn with_root(mut self, root: impl Into<PathBuf>) -> Self {
+        self.root = Some(root.into());
+        self
+    }
+
+    /// The ancestors' listings, the topmost first, as a mode that shows the
+    /// path is given them (kept only while such a mode is shown).
+    pub fn ancestors(&self) -> &[Column] {
+        &self.ancestors
+    }
+
+    /// The place's ancestors a mode that shows the path lists, the topmost
+    /// first: up to the root.
+    fn wanted_ancestors(&self) -> Vec<PathBuf> {
+        if let Some(root) = &self.root
+            && !self.place.starts_with(root)
+        {
+            return Vec::new();
+        }
+        let mut up: Vec<PathBuf> = Vec::new();
+        for a in self.place.ancestors().skip(1) {
+            if self.root.as_deref().is_some_and(|r| !a.starts_with(r)) {
+                break;
+            }
+            up.push(a.to_path_buf());
+        }
+        up.reverse();
+        up
+    }
+
+    /// Keeps the side listings a mode that shows the path needs: started
+    /// when missing, polled, dropped when not wanted. `true` while one is
+    /// under way.
+    fn sync_columns(&mut self) -> bool {
+        let wanted = self.wanted_ancestors();
+        if self.ancestors.iter().map(|c| &c.place).ne(wanted.iter()) {
+            let mut old: Vec<(Column, Option<Listing>)> = self
+                .ancestors
+                .drain(..)
+                .zip(self.ancestor_listings.drain(..))
+                .collect();
+            for place in wanted {
+                match old.iter().position(|(c, _)| c.place == place) {
+                    Some(i) => {
+                        let (c, l) = old.swap_remove(i);
+                        self.ancestors.push(c);
+                        self.ancestor_listings.push(l);
+                    }
+                    None => {
+                        let l = self.source.list(&place, &self.options);
+                        self.ancestors.push(Column {
+                            place,
+                            loading: true,
+                            ..Column::default()
+                        });
+                        self.ancestor_listings.push(Some(l));
+                    }
+                }
+            }
+        }
+        let mut busy = false;
+        for (c, l) in self
+            .ancestors
+            .iter_mut()
+            .zip(self.ancestor_listings.iter_mut())
+        {
+            busy |= pump_column(c, l);
+        }
+        // Each column's open entry: the path's next folder.
+        let n = self.ancestors.len();
+        for k in 0..n {
+            let next = if k + 1 < n {
+                self.ancestors[k + 1].place.clone()
+            } else {
+                self.place.clone()
+            };
+            let c = &mut self.ancestors[k];
+            c.open = c.entries.iter().position(|e| e.path == next);
+        }
+        // The focused folder, looked into.
+        let folder = self
+            .focus_index()
+            .map(|i| &self.entries[i])
+            .filter(|e| e.is_dir())
+            .map(|e| e.path.clone());
+        match folder {
+            Some(f) => {
+                if self.peek.as_ref().is_none_or(|(c, _)| c.place != f) {
+                    let l = self.source.list(&f, &self.options);
+                    self.peek = Some((
+                        Column {
+                            place: f,
+                            loading: true,
+                            ..Column::default()
+                        },
+                        Some(l),
+                    ));
+                }
+                if let Some((c, l)) = &mut self.peek {
+                    busy |= pump_column(c, l);
+                }
+            }
+            None => self.peek = None,
+        }
+        busy
+    }
+
+    /// Leaves the place as a mode's key asks: into the focused folder, or
+    /// back to the parent. `true` when the place changed.
+    pub fn travel(&mut self, travel: Travel) -> bool {
+        match travel {
+            Travel::Into => {
+                let Some(folder) = self
+                    .focus_index()
+                    .map(|i| &self.entries[i])
+                    .filter(|e| e.is_dir())
+                    .map(|e| e.path.clone())
+                else {
+                    return false;
+                };
+                self.open(folder);
+                self.focus_first = true;
+                self.settle_focus();
+                true
+            }
+            Travel::Out => {
+                if self.root.as_deref() == Some(self.place.as_path()) {
+                    return false;
+                }
+                let Some(parent) = self.place.parent().map(Path::to_path_buf) else {
+                    return false;
+                };
+                let left = self.place.clone();
+                self.reach(&Reach {
+                    place: parent,
+                    focus: Some(left),
+                });
+                true
+            }
+        }
+    }
+
+    /// Shows another place, an entry of it focused (and selected, as a
+    /// click selects it).
+    pub fn reach(&mut self, reach: &Reach) {
+        if reach.place != self.place {
+            self.open(reach.place.clone());
+        }
+        if let Some(f) = &reach.focus {
+            self.selection.only(f);
+            self.focus = Some(f.clone());
+            self.reveal = true;
+        }
+    }
+
+    /// Focuses the first entry when asked to and one is there.
+    fn settle_focus(&mut self) {
+        if !self.focus_first {
+            return;
+        }
+        if let Some(first) = self.entries.first().map(|e| e.path.clone()) {
+            self.focus_first = false;
+            self.focus = Some(first.clone());
+            self.selection.only(&first);
+            self.reveal = true;
+        } else if !self.loading() {
+            self.focus_first = false;
+        }
     }
 
     pub fn place(&self) -> &Path {
@@ -1474,16 +2033,12 @@ impl FileBrowser {
             }
         }
         if changed {
-            // Folders first, then names as people read them.
-            self.entries.sort_by(|a, b| {
-                b.is_dir()
-                    .cmp(&a.is_dir())
-                    .then_with(|| natural_cmp(&a.name, &b.name))
-            });
+            sort_entries(&mut self.entries);
         }
         if done {
             self.listing = None;
         }
+        self.settle_focus();
     }
 
     /// Whether the listing is still under way.
@@ -1586,6 +2141,9 @@ impl FileBrowser {
 
     /// Moves the focus by a key, as the mode's layout says.
     pub fn key(&mut self, key: ModeKey, shift: bool) -> bool {
+        if let Some(t) = self.mode.travel(key) {
+            return self.travel(t);
+        }
         let n = self.entries.len();
         if n == 0 {
             return false;
@@ -1745,6 +2303,7 @@ impl FileBrowser {
                 out.mode_changed = true;
             }
             let (events, modifiers) = ui.input(|i| (i.events.clone(), i.modifiers));
+            let before = self.place.clone();
             for ev in events {
                 match ev {
                     egui::Event::Key {
@@ -1783,6 +2342,7 @@ impl FileBrowser {
                     _ => {}
                 }
             }
+            out.place_changed |= self.place != before;
             // Keep the arrows, Tab excepted, for the entries.
             ui.memory_mut(|m| {
                 m.set_focus_lock_filter(
@@ -1795,6 +2355,16 @@ impl FileBrowser {
                     },
                 )
             });
+        }
+        let hierarchy = self.mode.describe().needs.hierarchy;
+        if hierarchy {
+            if self.sync_columns() {
+                ui.ctx().request_repaint();
+            }
+        } else if !self.ancestors.is_empty() || self.peek.is_some() {
+            self.ancestors.clear();
+            self.ancestor_listings.clear();
+            self.peek = None;
         }
         let focus = self.focus_index();
         let reveal = std::mem::take(&mut self.reveal);
@@ -1814,6 +2384,9 @@ impl FileBrowser {
                     drawer: None,
                     name: None,
                     many: false,
+                    place: &self.place,
+                    ancestors: &self.ancestors,
+                    peek: self.peek.as_ref().map(|(c, _)| c),
                 },
             )
         });
@@ -1835,6 +2408,12 @@ impl FileBrowser {
         }
         if let Some(i) = mode_out.activated {
             out.activated = Some(self.entries[i].path.clone());
+            ui.memory_mut(|m| m.request_focus(keys_id));
+        }
+        if let Some(r) = mode_out.reach {
+            self.reach(&r);
+            out.selection_changed = true;
+            out.place_changed = true;
             ui.memory_mut(|m| m.request_focus(keys_id));
         }
         out
