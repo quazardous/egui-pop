@@ -2891,3 +2891,47 @@ egui-pop-views-timeline-trim-clip = Découper le clip
 
 plugin-egui-pop-timeline =
     .title = Ligne de temps
+
+egui-pop-viewport-nav-hand = Main : glisser pour déplacer (H pour quitter)
+
+egui-pop-viewport-nav-hint = Glisser du bouton du milieu, Espace+glisser ou H pour déplacer · Ctrl+molette pour zoomer · F pour cadrer
+
+command-view-fit =
+    .description = Cadre tout le contenu du canevas en cours.
+    .title = Ajuster la vue
+
+command-view-frame-selection =
+    .description = Cadre la sélection du canevas en cours (tout son contenu quand rien n’est sélectionné).
+    .title = Cadrer la sélection
+
+command-view-hand =
+    .description = Active ou désactive le mode main : un glisser du bouton principal déplace les canevas (pour un stylet, un écran tactile ou une souris sans bouton du milieu). Espace maintenu fait de même un instant.
+    .title = Mode main
+
+command-view-pan-down =
+    .description = Déplace la vue du canevas en cours vers le bas.
+    .title = Déplacer vers le bas
+
+command-view-pan-left =
+    .description = Déplace la vue du canevas en cours vers la gauche.
+    .title = Déplacer vers la gauche
+
+command-view-pan-right =
+    .description = Déplace la vue du canevas en cours vers la droite.
+    .title = Déplacer vers la droite
+
+command-view-pan-up =
+    .description = Déplace la vue du canevas en cours vers le haut.
+    .title = Déplacer vers le haut
+
+command-view-zoom-100 =
+    .description = Affiche le canevas en cours à 100 % (une unité, ou un pixel, par point).
+    .title = Zoom à 100 %
+
+command-view-zoom-in =
+    .description = Agrandit le canevas en cours, autour de son centre.
+    .title = Zoom avant
+
+command-view-zoom-out =
+    .description = Réduit le canevas en cours, autour de son centre.
+    .title = Zoom arrière
