@@ -839,6 +839,16 @@ impl Manifest {
         }
     }
 
+    /// A scope placed among the others by `order` (the default scopes
+    /// are 0, 10, 20 and 110: [`generate::SCOPES`]).
+    pub fn scope_at(mut self, id: &str, title: &str, icon: &str, order: i32) -> Manifest {
+        self = self.scope(id, title, icon);
+        if let Some(s) = self.scopes.last_mut() {
+            s.meta.order = order;
+        }
+        self
+    }
+
     /// A scope: a tab with an icon.
     pub fn scope(mut self, id: &str, title: &str, icon: &str) -> Manifest {
         let order = self.scopes.len() as i32;

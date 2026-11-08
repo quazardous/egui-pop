@@ -6,12 +6,16 @@
 
 use super::{FORMAT, Field, Group, Item, Manifest, Meta, Scope, Section};
 
-/// The default scopes: id, title, icon.
-pub const SCOPES: [(&str, &str, &str); 4] = [
-    ("general", "General", "settings"),
-    ("interface", "Interface", "palette"),
-    ("input", "Input", "keyboard"),
-    ("developer", "Developer", "code"),
+/// The default scopes: id, title, icon, order. The orders leave room
+/// between them, so an application's scopes take their place in the
+/// note's order (section 6: Library 30, Storage 40, Backup 50, Import and
+/// export 60, Hardware 70, Plugins 80, Health 90, Jobs 100), Developer
+/// last.
+pub const SCOPES: [(&str, &str, &str, i32); 4] = [
+    ("general", "General", "settings", 0),
+    ("interface", "Interface", "palette", 10),
+    ("input", "Input", "keyboard", 20),
+    ("developer", "Developer", "code", 110),
 ];
 
 /// A setting as the generator takes it: its id and its section's title.
@@ -57,11 +61,11 @@ pub fn slug(title: &str) -> String {
 /// (scope, section title) in the settings' order.
 pub fn settings<'a>(entries: impl IntoIterator<Item = Entry<'a>>) -> Manifest {
     let mut m = Manifest::new(FORMAT);
-    for (order, (id, title, icon)) in SCOPES.iter().enumerate() {
+    for (id, title, icon, order) in SCOPES {
         m.scopes.push(Scope {
             meta: Meta {
-                icon: Some((*icon).into()),
-                order: order as i32,
+                icon: Some(icon.into()),
+                order,
                 ..Meta::new(id, title)
             },
         });
@@ -144,6 +148,18 @@ mod tests {
         assert_eq!(t.shown_scopes().len(), 4);
         // Generated manifests round-trip like any other.
         assert_eq!(Manifest::from_json(&m.to_json()).unwrap(), m);
+    }
+
+    #[test]
+    fn an_application_scope_takes_its_place_by_order() {
+        let mut t = Tree::default();
+        t.merge(settings([]));
+        t.merge(Manifest::new(FORMAT).scope_at("library", "Library", "book", 30));
+        let ids: Vec<&str> = t.scopes.iter().map(|s| s.meta.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            ["general", "interface", "input", "library", "developer"]
+        );
     }
 
     #[test]
