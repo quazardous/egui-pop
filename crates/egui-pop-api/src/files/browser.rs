@@ -8,8 +8,10 @@
 //! [`ThumbnailProvider`], egui-pop's default being [`PreviewThumbnails`] over
 //! the files service's preview providers.
 //!
-//! Built-in modes: [`DetailsMode`] (rows with columns) and [`ThumbnailsMode`]
-//! (a virtualised grid). Others register on a [`ViewModes`] registry.
+//! Built-in modes: [`DetailsMode`] (rows with columns), [`ThumbnailsMode`]
+//! (a virtualised grid), [`FilmstripMode`], [`ColumnsMode`] (Finder's),
+//! [`CarouselMode`] and [`AgendaMode`] (by day). Others register on a
+//! [`ViewModes`] registry.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
@@ -680,7 +682,8 @@ impl ViewModes {
         modes
     }
 
-    /// Every built-in mode: details, thumbnails, filmstrip, columns.
+    /// Every built-in mode: details, thumbnails, filmstrip, columns,
+    /// carousel, agenda.
     pub fn built_in() -> Self {
         let modes = ViewModes::default();
         modes
@@ -691,6 +694,15 @@ impl ViewModes {
             .expect("built-in");
         modes
             .register(MODE_COLUMNS, Arc::new(|| Box::new(ColumnsMode::default())))
+            .expect("built-in");
+        modes
+            .register(
+                MODE_CAROUSEL,
+                Arc::new(|| Box::new(CarouselMode::default())),
+            )
+            .expect("built-in");
+        modes
+            .register(MODE_AGENDA, Arc::new(|| Box::new(AgendaMode::default())))
             .expect("built-in");
         modes
     }
@@ -1731,6 +1743,514 @@ impl ViewMode for FilmstripMode {
     }
 }
 
+/// The focused entry large in the middle, its neighbours smaller and
+/// smaller on each side (Finder's Gallery). Left and Right bring the
+/// previous or next entry to the middle; a click on a neighbour does too.
+/// The middle one asks for its thumbnail first, then the neighbours
+/// outwards, then the next one on each side (`Near`).
+#[derive(Clone, Debug, Default)]
+pub struct CarouselMode {
+    per_side: usize,
+}
+
+impl CarouselMode {
+    /// Each neighbour's side, against the one nearer the middle.
+    pub const SHRINK: f32 = 0.55;
+    /// The smallest neighbour drawn, in points.
+    pub const MIN_SIDE: f32 = 24.0;
+    /// The middle one's most width, against the room: what leaves room
+    /// for neighbours.
+    pub const MIDDLE: f32 = 0.3;
+}
+
+impl ViewMode for CarouselMode {
+    fn describe(&self) -> ModeInfo {
+        ModeInfo {
+            id: MODE_CAROUSEL.into(),
+            label: "Carousel".into(),
+            icon: "phosphor:slideshow".into(),
+            keys: vec![
+                ("Left, Right".into(), "Previous, next entry".into()),
+                (
+                    "Page Up, Page Down".into(),
+                    "The neighbours on one side".into(),
+                ),
+                ("Home, End".into(), "First, last entry".into()),
+            ],
+            gestures: vec!["Click a neighbour: bring it to the middle".into()],
+            persist: MODE_CAROUSEL.into(),
+            role: egui::Role::ListBox,
+            needs: ModeNeeds {
+                thumbnails: true,
+                ..ModeNeeds::default()
+            },
+        }
+    }
+
+    fn show(&mut self, ui: &mut Ui, cx: ModeContext<'_>) -> ModeOutput {
+        let mut out = ModeOutput::default();
+        let mut plain = PlainDrawer {
+            entries: cx.entries,
+            selection: cx.selection,
+            focus: cx.focus,
+        };
+        let drawer: &mut dyn EntryDrawer = match cx.drawer {
+            Some(d) => d,
+            None => &mut plain,
+        };
+        let n = cx.entries.len();
+        let width = ui.available_width();
+        let height = cx
+            .max_height
+            .unwrap_or_else(|| ui.available_height())
+            .max(4.0 * Self::MIN_SIDE);
+        // What a cell adds around its thumbnail: the margins and the name.
+        let extra = drawer.cell_size(ui, 0.0);
+        let middle = (height - extra.y)
+            .min(width * Self::MIDDLE)
+            .max(Self::MIN_SIDE);
+        let gap = ui.spacing().item_spacing.x;
+        let ctx = ui.ctx().clone();
+        let thumbnails = cx.thumbnails;
+        let entries = cx.entries;
+        let ask = |i: usize, side: f32, priority| {
+            thumbnails.request(
+                &ctx,
+                &ThumbRequest {
+                    entry: &entries[i],
+                    size: (side * ctx.pixels_per_point()).round() as u32,
+                    priority,
+                },
+            )
+        };
+        let shown = cx.focus.or((n > 0).then_some(0));
+        let focus = cx.focus;
+        let mut per_side = 0;
+        let mut first = usize::MAX;
+        let mut end = 0;
+        let mut add = |ui: &mut Ui, out: &mut ModeOutput| {
+            let (area, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+            let Some(at) = shown else {
+                drawer.empty(ui);
+                return;
+            };
+            let mut place = |ui: &mut Ui, i: usize, side: f32, x: f32, priority| {
+                let size = drawer.cell_size(ui, side);
+                let rect = egui::Rect::from_center_size(egui::pos2(x, area.center().y), size);
+                let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+                let r = drawer.cell(&mut child, i, size, ask(i, side, priority));
+                if focus == Some(i) {
+                    out.focused = Some(r.id);
+                }
+                report(&r, i, out);
+                first = first.min(i);
+                end = end.max(i + 1);
+            };
+            place(ui, at, middle, area.center().x, Priority::Visible);
+            // Outwards, a step smaller each time, while there is room.
+            let mut side = middle;
+            let mut reach = (middle + extra.x) / 2.0;
+            let mut k = 1;
+            loop {
+                let next = side * Self::SHRINK;
+                let w = next + extra.x;
+                if next < Self::MIN_SIDE || reach + gap + w > width / 2.0 {
+                    break;
+                }
+                let offset = reach + gap + w / 2.0;
+                if at + k < n {
+                    place(
+                        ui,
+                        at + k,
+                        next,
+                        area.center().x + offset,
+                        Priority::Visible,
+                    );
+                }
+                if let Some(i) = at.checked_sub(k) {
+                    place(ui, i, next, area.center().x - offset, Priority::Visible);
+                }
+                side = next;
+                reach += gap + w;
+                per_side = k;
+                k += 1;
+            }
+            // The next one beyond each side.
+            if at + k < n {
+                ask(at + k, side, Priority::Near);
+            }
+            if let Some(i) = at.checked_sub(k) {
+                ask(i, side, Priority::Near);
+            }
+        };
+        in_container(
+            ui,
+            cx.name.as_deref().map(|n| (n, cx.many)),
+            &mut out,
+            &mut add,
+        );
+        out.visible = if first == usize::MAX {
+            0..0
+        } else {
+            first..end
+        };
+        self.per_side = per_side;
+        out.columns = n.max(1);
+        out
+    }
+
+    fn step(&self, from: usize, count: usize, key: ModeKey) -> usize {
+        let last = count.saturating_sub(1);
+        let page = self.per_side.max(1);
+        match key {
+            ModeKey::Left => from.saturating_sub(1),
+            ModeKey::Right => (from + 1).min(last),
+            ModeKey::Up | ModeKey::Down => from,
+            ModeKey::PageUp => from.saturating_sub(page),
+            ModeKey::PageDown => (from + page).min(last),
+            ModeKey::Home => 0,
+            ModeKey::End => last,
+        }
+    }
+}
+
+/// The day (since 1970-01-01, UTC) an agenda files an entry under: when it
+/// was taken, else when it last changed; `None` without either.
+fn agenda_day(e: &SourceEntry) -> Option<(i64, i128)> {
+    let t = e.taken.or(e.modified)?;
+    let nanos = match t.duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(d) => d.as_nanos() as i128,
+        Err(e) => -(e.duration().as_nanos() as i128),
+    };
+    let day = nanos.div_euclid(86_400 * 1_000_000_000) as i64;
+    Some((day, nanos))
+}
+
+/// One line of an agenda: a day's heading, or a row of its entries.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AgendaLine {
+    /// The day (`None`: the entries without a time) and how many it holds.
+    Heading(Option<i64>, usize),
+    /// Positions in the agenda's order.
+    Cells(usize, usize),
+}
+
+/// The entries by day, the newest first: one heading per day (when the
+/// entry was taken, given by the application's source, else when it last
+/// changed; UTC), its entries under it in a grid, the newest first, those
+/// without a time last. The arrows move across the days' grids.
+#[derive(Clone, Debug, Default)]
+pub struct AgendaMode {
+    /// The entries' indices in the agenda's order, as last laid out.
+    order: Vec<usize>,
+    /// Each entry's position in `order`, by index.
+    position: Vec<usize>,
+    /// Each position's line.
+    line_of: Vec<usize>,
+    lines: Vec<AgendaLine>,
+    rows_in_view: usize,
+}
+
+impl AgendaMode {
+    /// The entries' indices in the agenda's order and its lines, `columns`
+    /// entries to a row.
+    fn arrange(entries: &[SourceEntry], columns: usize) -> (Vec<usize>, Vec<AgendaLine>) {
+        let days: Vec<_> = entries.iter().map(agenda_day).collect();
+        let mut order: Vec<usize> = (0..entries.len()).collect();
+        // The newest first, the undated last; the browser's order within.
+        order.sort_by(|&a, &b| match (days[a], days[b]) {
+            (Some(x), Some(y)) => y.1.cmp(&x.1).then(a.cmp(&b)),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => a.cmp(&b),
+        });
+        let mut lines = Vec::new();
+        let mut start = 0;
+        while start < order.len() {
+            let day = days[order[start]].map(|d| d.0);
+            let len = order[start..]
+                .iter()
+                .take_while(|&&i| days[i].map(|d| d.0) == day)
+                .count();
+            lines.push(AgendaLine::Heading(day, len));
+            let mut at = start;
+            while at < start + len {
+                let to = (at + columns).min(start + len);
+                lines.push(AgendaLine::Cells(at, to));
+                at = to;
+            }
+            start += len;
+        }
+        (order, lines)
+    }
+
+    /// The row `rows` rows above (negative) or below `p`, the same column
+    /// as near as it goes; `p` itself past the first or the last row.
+    fn rows_from(&self, p: usize, rows: isize) -> usize {
+        let Some(&line) = self.line_of.get(p) else {
+            return p;
+        };
+        let AgendaLine::Cells(start, _) = self.lines[line] else {
+            return p;
+        };
+        let column = p - start;
+        let mut at = line;
+        let mut target = None;
+        let mut left = rows.unsigned_abs();
+        while left > 0 {
+            let next = if rows < 0 {
+                at.checked_sub(1)
+            } else {
+                Some(at + 1).filter(|&l| l < self.lines.len())
+            };
+            let Some(next) = next else { break };
+            at = next;
+            if let AgendaLine::Cells(s, e) = self.lines[at] {
+                target = Some(s + column.min(e - s - 1));
+                left -= 1;
+            }
+        }
+        target.unwrap_or(p)
+    }
+}
+
+impl ViewMode for AgendaMode {
+    fn describe(&self) -> ModeInfo {
+        ModeInfo {
+            id: MODE_AGENDA.into(),
+            label: "Agenda".into(),
+            icon: "phosphor:calendar".into(),
+            keys: vec![
+                ("Arrows".into(), "Move across the days".into()),
+                ("Page Up, Page Down".into(), "A page up or down".into()),
+                ("Home, End".into(), "Newest, oldest entry".into()),
+            ],
+            gestures: vec!["Wheel: scroll".into()],
+            persist: MODE_AGENDA.into(),
+            role: egui::Role::ListBox,
+            needs: ModeNeeds {
+                thumbnails: true,
+                time: true,
+                ..ModeNeeds::default()
+            },
+        }
+    }
+
+    fn show(&mut self, ui: &mut Ui, cx: ModeContext<'_>) -> ModeOutput {
+        let mut out = ModeOutput::default();
+        let side = cx
+            .settings
+            .thumbnail_size
+            .clamp(ThumbnailsMode::MIN_SIZE, ThumbnailsMode::MAX_SIZE);
+        let mut plain = PlainDrawer {
+            entries: cx.entries,
+            selection: cx.selection,
+            focus: cx.focus,
+        };
+        let drawer: &mut dyn EntryDrawer = match cx.drawer {
+            Some(d) => d,
+            None => &mut plain,
+        };
+        let n = cx.entries.len();
+        let cell = drawer.cell_size(ui, side);
+        let gap = ui.spacing().item_spacing;
+        let width = ui.available_width() - ui.spacing().scroll.allocated_width();
+        let columns = (((width + gap.x) / (cell.x + gap.x)).floor() as usize).max(1);
+        let (order, lines) = Self::arrange(cx.entries, columns);
+        let mut position = vec![0; n];
+        for (p, &i) in order.iter().enumerate() {
+            position[i] = p;
+        }
+        let mut line_of = vec![0; n];
+        for (l, line) in lines.iter().enumerate() {
+            if let AgendaLine::Cells(s, e) = *line {
+                line_of[s..e].fill(l);
+            }
+        }
+        let heading_h = ui.text_style_height(&egui::TextStyle::Heading) + 2.0 * gap.y;
+        let row_h = cell.y + gap.y;
+        let mut tops = Vec::with_capacity(lines.len() + 1);
+        let mut y = 0.0;
+        for line in &lines {
+            tops.push(y);
+            y += match line {
+                AgendaLine::Heading(..) => heading_h,
+                AgendaLine::Cells(..) => row_h,
+            };
+        }
+        tops.push(y);
+        let total = y;
+        let ctx = ui.ctx().clone();
+        let thumbnails = cx.thumbnails;
+        let entries = cx.entries;
+        let pixels = (side * ctx.pixels_per_point()).round() as u32;
+        let ask = |i: usize, priority| {
+            thumbnails.request(
+                &ctx,
+                &ThumbRequest {
+                    entry: &entries[i],
+                    size: pixels,
+                    priority,
+                },
+            )
+        };
+        let undated = strings::tr(&ctx, &crate::strings::FILES_AGENDA_UNDATED);
+        let reveal = cx
+            .focus
+            .filter(|_| cx.reveal_focus && n > 0)
+            .map(|i| line_of[position[i]]);
+        let focus = cx.focus;
+        let mut first = usize::MAX;
+        let mut end = 0;
+        let mut drawn_rows = 0;
+        let mut near = None;
+        let mut area = egui::ScrollArea::vertical()
+            .id_salt(cx.id.with("agenda"))
+            .auto_shrink([false, false])
+            .animated(false);
+        if let Some(h) = cx.max_height {
+            area = area.max_height(h);
+        }
+        let mut add = |ui: &mut Ui, out: &mut ModeOutput| {
+            if n == 0 {
+                drawer.empty(ui);
+            }
+            area.clone().show_viewport(ui, |ui, viewport| {
+                ui.set_height(total);
+                ui.set_width(width);
+                let origin = ui.max_rect().min;
+                if let Some(l) = reveal {
+                    let r = egui::Rect::from_min_max(
+                        origin + egui::vec2(0.0, tops[l]),
+                        origin + egui::vec2(width, tops[l + 1]),
+                    );
+                    ui.scroll_to_rect(r, None);
+                    ui.ctx().request_repaint();
+                }
+                for (l, line) in lines.iter().enumerate() {
+                    if tops[l + 1] < viewport.min.y {
+                        continue;
+                    }
+                    if tops[l] > viewport.max.y {
+                        // The next row, for the next screen.
+                        near = lines[l..].iter().find_map(|line| match *line {
+                            AgendaLine::Cells(s, e) => Some(s..e),
+                            AgendaLine::Heading(..) => None,
+                        });
+                        break;
+                    }
+                    let top = origin + egui::vec2(0.0, tops[l]);
+                    match *line {
+                        AgendaLine::Heading(day, count) => {
+                            let text = match day {
+                                Some(d) => {
+                                    let (y, m, d) = civil(d);
+                                    format!("{y:04}-{m:02}-{d:02}")
+                                }
+                                None => undated.clone(),
+                            };
+                            let rect = egui::Rect::from_min_size(top, egui::vec2(width, heading_h));
+                            let resp = ui.allocate_rect(rect, egui::Sense::hover());
+                            let name = text.clone();
+                            resp.widget_info(|| {
+                                egui::WidgetInfo::labeled(egui::Role::Heading, true, &name)
+                            });
+                            let visuals = ui.visuals();
+                            let font = egui::TextStyle::Heading.resolve(ui.style());
+                            let at = egui::pos2(rect.left() + 4.0, rect.center().y);
+                            let galley = ui.painter().layout_no_wrap(
+                                text,
+                                font,
+                                visuals.strong_text_color(),
+                            );
+                            let after = at.x + galley.size().x + 8.0;
+                            ui.painter().galley(
+                                at - egui::vec2(0.0, galley.size().y / 2.0),
+                                galley,
+                                visuals.strong_text_color(),
+                            );
+                            ui.painter().text(
+                                egui::pos2(after, rect.center().y),
+                                egui::Align2::LEFT_CENTER,
+                                count.to_string(),
+                                egui::TextStyle::Body.resolve(ui.style()),
+                                visuals.weak_text_color(),
+                            );
+                        }
+                        AgendaLine::Cells(s, e) => {
+                            drawn_rows += 1;
+                            for (c, &i) in order[s..e].iter().enumerate() {
+                                let rect = egui::Rect::from_min_size(
+                                    top + egui::vec2(c as f32 * (cell.x + gap.x), 0.0),
+                                    cell,
+                                );
+                                let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+                                let r = drawer.cell(&mut child, i, cell, ask(i, Priority::Visible));
+                                if focus == Some(i) {
+                                    out.focused = Some(r.id);
+                                }
+                                report(&r, i, out);
+                                first = first.min(s);
+                                end = end.max(e);
+                            }
+                        }
+                    }
+                }
+            });
+        };
+        in_container(
+            ui,
+            cx.name.as_deref().map(|n| (n, cx.many)),
+            &mut out,
+            &mut add,
+        );
+        if let Some(r) = near {
+            for &i in &order[r] {
+                ask(i, Priority::Near);
+            }
+        }
+        // In the agenda's order: positions, not indices.
+        out.visible = if first == usize::MAX {
+            0..0
+        } else {
+            first..end
+        };
+        self.order = order;
+        self.position = position;
+        self.line_of = line_of;
+        self.lines = lines;
+        self.rows_in_view = drawn_rows.max(1);
+        out.columns = columns;
+        out
+    }
+
+    fn step(&self, from: usize, count: usize, key: ModeKey) -> usize {
+        let last = count.saturating_sub(1);
+        // Not laid out for these entries yet: their own order.
+        if self.order.len() != count || from >= count {
+            return match key {
+                ModeKey::Left | ModeKey::Up | ModeKey::PageUp => from.saturating_sub(1),
+                ModeKey::Right | ModeKey::Down | ModeKey::PageDown => (from + 1).min(last),
+                ModeKey::Home => 0,
+                ModeKey::End => last,
+            };
+        }
+        let p = self.position[from];
+        let page = self.rows_in_view.max(1) as isize;
+        let to = match key {
+            ModeKey::Left => p.saturating_sub(1),
+            ModeKey::Right => (p + 1).min(last),
+            ModeKey::Up => self.rows_from(p, -1),
+            ModeKey::Down => self.rows_from(p, 1),
+            ModeKey::PageUp => self.rows_from(p, -page),
+            ModeKey::PageDown => self.rows_from(p, page),
+            ModeKey::Home => 0,
+            ModeKey::End => last,
+        };
+        self.order[to]
+    }
+}
+
 // ---------------------------------------------------------------------------
 // The mode switcher and the mode keys
 // ---------------------------------------------------------------------------
@@ -1743,6 +2263,10 @@ pub const MODE_THUMBNAILS: &str = "thumbnails";
 pub const MODE_COLUMNS: &str = "columns";
 /// The id of the filmstrip mode.
 pub const MODE_FILMSTRIP: &str = "filmstrip";
+/// The id of the carousel mode.
+pub const MODE_CAROUSEL: &str = "carousel";
+/// The id of the agenda mode.
+pub const MODE_AGENDA: &str = "agenda";
 /// Up to this many modes, the switcher is a segmented control; beyond, a
 /// menu.
 pub const SEGMENTED_MAX: usize = 4;
@@ -2950,6 +3474,104 @@ mod tests {
         assert_eq!(t.step(10, 13, ModeKey::Down), 12);
         assert_eq!(t.step(0, 13, ModeKey::PageDown), 8);
         assert_eq!(t.step(12, 13, ModeKey::End), 12);
+    }
+
+    #[test]
+    fn the_carousel_steps_along_one_row() {
+        let c = CarouselMode { per_side: 3 };
+        assert_eq!(c.step(5, 13, ModeKey::Right), 6);
+        assert_eq!(c.step(5, 13, ModeKey::Left), 4);
+        assert_eq!(c.step(5, 13, ModeKey::Up), 5);
+        assert_eq!(c.step(5, 13, ModeKey::PageDown), 8);
+        assert_eq!(c.step(1, 13, ModeKey::PageUp), 0);
+        assert_eq!(c.step(5, 13, ModeKey::End), 12);
+    }
+
+    fn dated(name: &str, day: u64, taken: Option<u64>) -> SourceEntry {
+        let at =
+            |d: u64| SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(d * 86_400 + 3600);
+        SourceEntry {
+            path: PathBuf::from(format!("/p/{name}")),
+            name: name.into(),
+            kind: EntryKind::File,
+            size: None,
+            modified: (day > 0).then(|| at(day)),
+            taken: taken.map(at),
+            app_id: None,
+        }
+    }
+
+    #[test]
+    fn the_agenda_files_entries_by_day_the_newest_first_the_taken_time_first() {
+        let entries = [
+            dated("a", 10, None),
+            dated("b", 12, None),
+            // Changed on day 12, taken on day 3.
+            dated("c", 12, Some(3)),
+            dated("d", 10, None),
+            dated("e", 0, None),
+            dated("f", 10, None),
+        ];
+        let (order, lines) = AgendaMode::arrange(&entries, 2);
+        assert_eq!(order, [1, 0, 3, 5, 2, 4]);
+        assert_eq!(
+            lines,
+            [
+                AgendaLine::Heading(Some(12), 1),
+                AgendaLine::Cells(0, 1),
+                AgendaLine::Heading(Some(10), 3),
+                AgendaLine::Cells(1, 3),
+                AgendaLine::Cells(3, 4),
+                AgendaLine::Heading(Some(3), 1),
+                AgendaLine::Cells(4, 5),
+                AgendaLine::Heading(None, 1),
+                AgendaLine::Cells(5, 6),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_agenda_steps_across_its_days() {
+        let entries = [
+            dated("a", 10, None),
+            dated("b", 12, None),
+            dated("c", 3, None),
+            dated("d", 10, None),
+            dated("e", 10, None),
+        ];
+        let (order, lines) = AgendaMode::arrange(&entries, 2);
+        // Day 12: b. Day 10: a d / e. Day 3: c.
+        let mut a = AgendaMode {
+            position: vec![0; order.len()],
+            line_of: vec![0; order.len()],
+            rows_in_view: 2,
+            ..AgendaMode::default()
+        };
+        for (p, &i) in order.iter().enumerate() {
+            a.position[i] = p;
+        }
+        for (l, line) in lines.iter().enumerate() {
+            if let AgendaLine::Cells(s, e) = *line {
+                a.line_of[s..e].fill(l);
+            }
+        }
+        a.order = order;
+        a.lines = lines;
+        // Right and Left in the agenda's order, across days.
+        assert_eq!(a.step(1, 5, ModeKey::Right), 0);
+        assert_eq!(a.step(4, 5, ModeKey::Right), 2);
+        assert_eq!(a.step(0, 5, ModeKey::Left), 1);
+        // Down keeps the column as near as it goes, into the next day.
+        assert_eq!(a.step(1, 5, ModeKey::Down), 0);
+        assert_eq!(a.step(3, 5, ModeKey::Down), 4);
+        assert_eq!(a.step(4, 5, ModeKey::Down), 2);
+        assert_eq!(a.step(3, 5, ModeKey::Up), 1);
+        assert_eq!(a.step(2, 5, ModeKey::Down), 2);
+        assert_eq!(a.step(1, 5, ModeKey::PageDown), 4);
+        assert_eq!(a.step(0, 5, ModeKey::Home), 1);
+        assert_eq!(a.step(0, 5, ModeKey::End), 2);
+        // Laid out for other entries: their own order.
+        assert_eq!(a.step(1, 9, ModeKey::Right), 2);
     }
 
     #[test]

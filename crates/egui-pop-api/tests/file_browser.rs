@@ -21,8 +21,12 @@ fn source(n: usize) -> Arc<dyn FileSource> {
 }
 
 fn harness(browser: FileBrowser) -> Harness<'static, FileBrowser> {
+    harness_sized(browser, 400.0)
+}
+
+fn harness_sized(browser: FileBrowser, height: f32) -> Harness<'static, FileBrowser> {
     let mut h = Harness::builder()
-        .with_size(egui::vec2(640.0, 400.0))
+        .with_size(egui::vec2(640.0, height))
         .build_ui_state(
             |ui, b: &mut FileBrowser| {
                 b.show(ui);
@@ -320,6 +324,15 @@ fn columns_ask_for_the_focused_files_thumbnail_alone() {
     );
 }
 
+/// Picks a mode in the switcher's menu (more than four modes), as a
+/// person does: the menu opened, then its entry.
+fn pick(h: &mut Harness<'static, FileBrowser>, label: &str) {
+    h.get_by_label("View mode").click();
+    h.run();
+    h.get_all_by_label(label).last().unwrap().click();
+    h.run();
+}
+
 fn filmstrip(id: &str, n: usize) -> FileBrowser {
     let mut b = FileBrowser::new(id.to_owned(), source(n), "/p").with_modes(ViewModes::built_in());
     assert!(b.set_mode("filmstrip"));
@@ -330,7 +343,14 @@ fn filmstrip(id: &str, n: usize) -> FileBrowser {
 fn every_built_in_mode_is_offered_in_order() {
     assert_eq!(
         ViewModes::built_in().ids(),
-        ["details", "thumbnails", "filmstrip", "columns"]
+        [
+            "details",
+            "thumbnails",
+            "filmstrip",
+            "columns",
+            "carousel",
+            "agenda"
+        ]
     );
 }
 
@@ -439,14 +459,14 @@ fn the_selection_is_kept_across_every_built_in_mode() {
     h.run();
     let sel = h.state().selection().clone();
     assert_eq!(sel.len(), 2);
-    for mode in ["thumbnails", "filmstrip", "details"] {
-        h.get_by_label_contains(match mode {
-            "thumbnails" => "Thumbnails",
-            "filmstrip" => "Filmstrip",
-            _ => "Details",
-        })
-        .click();
-        h.run();
+    for (mode, label) in [
+        ("thumbnails", "Thumbnails"),
+        ("filmstrip", "Filmstrip"),
+        ("carousel", "Carousel"),
+        ("agenda", "Agenda"),
+        ("details", "Details"),
+    ] {
+        pick(&mut h, label);
         assert_eq!(h.state().mode(), mode);
         assert_eq!(h.state().selection(), &sel, "{mode}");
         assert_eq!(
@@ -515,4 +535,244 @@ fn quick_look_asks_for_its_thumbnail_as_visible() {
             .iter()
             .any(|(p, pr)| p == Path::new("/p/IMG_002.png") && *pr == Priority::Visible)
     );
+}
+
+fn carousel(id: &str, n: usize) -> FileBrowser {
+    let mut b = FileBrowser::new(id.to_owned(), source(n), "/p").with_modes(ViewModes::built_in());
+    assert!(b.set_mode("carousel"));
+    b
+}
+
+#[test]
+fn the_carousel_shows_the_focused_entry_large_in_the_middle_its_neighbours_smaller() {
+    let mut h = harness(carousel("car-show", 30));
+    h.state_mut().focus_on(Path::new("/p/IMG_010.png"), false);
+    h.run();
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    let mid = h.get_by_label("IMG_010.png").rect();
+    assert!(
+        (mid.center().x - 320.0).abs() < 2.0,
+        "in the middle: {mid:?}"
+    );
+    let next = h.get_by_label("IMG_011.png").rect();
+    let previous = h.get_by_label("IMG_009.png").rect();
+    assert!(next.width() < mid.width() && previous.width() < mid.width());
+    assert!(next.left() > mid.right() && previous.right() < mid.left());
+    let farther = h.get_by_label("IMG_012.png").rect();
+    assert!(farther.width() < next.width());
+    // Only what fits: not every entry.
+    assert!(h.query_by_label("IMG_030.png").is_none());
+    assert!(h.query_by_label("IMG_001.png").is_none());
+}
+
+#[test]
+fn the_carousel_moves_with_left_and_right() {
+    let mut h = harness(carousel("car-keys", 30));
+    h.run();
+    h.get_by_label("IMG_002.png").click();
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_002.png")));
+    h.key_press(Key::ArrowRight);
+    h.key_press(Key::ArrowRight);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_004.png")));
+    let mid = h.get_by_label("IMG_004.png").rect();
+    assert!((mid.center().x - 320.0).abs() < 2.0, "{mid:?}");
+    h.key_press(Key::ArrowLeft);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_003.png")));
+    // Up and Down stay: one row.
+    h.key_press(Key::ArrowUp);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_003.png")));
+    h.key_press(Key::End);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_030.png")));
+    assert!(h.query_by_label("IMG_030.png").is_some());
+    h.key_press(Key::Home);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_001.png")));
+}
+
+#[test]
+fn the_carousel_brings_a_clicked_neighbour_to_the_middle() {
+    let mut h = harness(carousel("car-click", 30));
+    h.state_mut().focus_on(Path::new("/p/IMG_010.png"), false);
+    h.run();
+    h.get_by_label("IMG_011.png").click();
+    h.run();
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_011.png")));
+    assert!(h.state().selection().contains(Path::new("/p/IMG_011.png")));
+    let mid = h.get_by_label("IMG_011.png").rect();
+    assert!((mid.center().x - 320.0).abs() < 2.0, "{mid:?}");
+    // Through accessibility too.
+    h.get_by_label("IMG_009.png").click_accesskit();
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_009.png")));
+}
+
+#[test]
+fn the_carousel_asks_for_the_middle_first_then_outwards() {
+    let rec = Arc::new(RecordingThumbnails::default());
+    let provider: Arc<dyn ThumbnailProvider> = rec.clone();
+    let mut h = harness(carousel("car-thumbs", 30).with_thumbnails(provider));
+    h.state_mut().focus_on(Path::new("/p/IMG_010.png"), false);
+    h.run();
+    h.run();
+    let r = rec.record.lock().unwrap();
+    let last = r.frames.last().unwrap();
+    let paths: Vec<_> = last.iter().map(|(p, _)| p.clone()).collect();
+    assert_eq!(
+        paths[..3],
+        [
+            PathBuf::from("/p/IMG_010.png"),
+            PathBuf::from("/p/IMG_011.png"),
+            PathBuf::from("/p/IMG_009.png"),
+        ]
+    );
+    let near = last
+        .iter()
+        .position(|(_, p)| *p == Priority::Near)
+        .expect("the next one beyond each side");
+    assert!(last[..near].iter().all(|(_, p)| *p == Priority::Visible));
+    assert_eq!(last.len() - near, 2);
+}
+
+/// `/d` holding files changed on three days and a folder without a time.
+fn days() -> Arc<dyn FileSource> {
+    let at = |day: u64, hour: u64| {
+        Some(std::time::UNIX_EPOCH + std::time::Duration::from_secs(day * 86_400 + hour * 3600))
+    };
+    // 2025-11-01 is day 20 393.
+    let fs = MemoryFs::new()
+        .dir("/d")
+        .dir("/d/sub")
+        .file_at("/d/a_old.png", vec![0; 1], at(20_390, 9))
+        .file_at("/d/b_mid1.png", vec![0; 1], at(20_393, 9))
+        .file_at("/d/c_mid2.png", vec![0; 1], at(20_393, 15))
+        .file_at("/d/d_new.png", vec![0; 1], at(20_395, 12));
+    Arc::new(FsSource::new(Arc::new(fs)))
+}
+
+/// An agenda tall enough for its four days.
+fn agenda(id: &str) -> Harness<'static, FileBrowser> {
+    let mut b = FileBrowser::new(id.to_owned(), days(), "/d").with_modes(ViewModes::built_in());
+    assert!(b.set_mode("agenda"));
+    b.set_thumbnail_size(64.0);
+    harness_sized(b, 800.0)
+}
+
+#[test]
+fn the_agenda_shows_one_heading_per_day_the_newest_first() {
+    let mut h = agenda("ag-show");
+    h.run();
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    let heading = |h: &Harness<'static, FileBrowser>, name: &str| {
+        h.get_by_role_and_label(egui::accesskit::Role::Heading, name)
+            .rect()
+    };
+    let newest = heading(&h, "2025-11-03");
+    let mid = heading(&h, "2025-11-01");
+    let old = heading(&h, "2025-10-29");
+    let undated = heading(&h, "No date");
+    assert!(newest.top() < mid.top() && mid.top() < old.top() && old.top() < undated.top());
+    // Each entry under its day's heading, the newest of a day first.
+    let y = |h: &Harness<'static, FileBrowser>, name: &str| h.get_by_label(name).rect().top();
+    assert!(newest.top() < y(&h, "d_new.png") && y(&h, "d_new.png") < mid.top());
+    assert!(mid.top() < y(&h, "c_mid2.png") && y(&h, "b_mid1.png") < old.top());
+    let (c, b) = (
+        h.get_by_label("c_mid2.png").rect(),
+        h.get_by_label("b_mid1.png").rect(),
+    );
+    assert!(c.left() < b.left(), "the newest of the day first");
+    assert!(old.top() < y(&h, "a_old.png") && y(&h, "a_old.png") < undated.top());
+    assert!(undated.top() < y(&h, "sub"));
+}
+
+#[test]
+fn the_agenda_moves_through_its_days_with_the_arrows() {
+    let mut h = agenda("ag-keys");
+    h.run();
+    h.get_by_label("d_new.png").click();
+    h.run();
+    h.key_press(Key::ArrowRight);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/d/c_mid2.png")));
+    h.key_press(Key::ArrowRight);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/d/b_mid1.png")));
+    // Down goes to the next day's row, its column as near as it goes.
+    h.key_press(Key::ArrowDown);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/d/a_old.png")));
+    h.key_press(Key::ArrowUp);
+    h.key_press(Key::ArrowUp);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/d/d_new.png")));
+    h.key_press(Key::End);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/d/sub")));
+    h.key_press(Key::Home);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/d/d_new.png")));
+}
+
+#[test]
+fn the_agenda_selects_a_clicked_entry_and_asks_for_its_thumbnails() {
+    let rec = Arc::new(RecordingThumbnails::default());
+    let provider: Arc<dyn ThumbnailProvider> = rec.clone();
+    let mut b = FileBrowser::new("ag-click", days(), "/d")
+        .with_modes(ViewModes::built_in())
+        .with_thumbnails(provider);
+    assert!(b.set_mode("agenda"));
+    b.set_thumbnail_size(64.0);
+    let mut h = harness_sized(b, 800.0);
+    h.run();
+    h.get_by_label("b_mid1.png").click();
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/d/b_mid1.png")));
+    assert!(h.state().selection().contains(Path::new("/d/b_mid1.png")));
+    h.get_by_label("a_old.png").click_accesskit();
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/d/a_old.png")));
+    let r = rec.record.lock().unwrap();
+    let paths: Vec<_> = r
+        .frames
+        .last()
+        .unwrap()
+        .iter()
+        .map(|(p, _)| p.to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        paths,
+        [
+            "/d/d_new.png",
+            "/d/c_mid2.png",
+            "/d/b_mid1.png",
+            "/d/a_old.png",
+            "/d/sub"
+        ]
+    );
+}
+
+#[test]
+fn the_switcher_offers_the_carousel_and_the_agenda() {
+    let mut h = harness(carousel("car-switch", 5));
+    h.run();
+    pick(&mut h, "Agenda");
+    assert_eq!(h.state().mode(), "agenda");
+    pick(&mut h, "Carousel");
+    assert_eq!(h.state().mode(), "carousel");
+    // Ctrl and a digit, in the switcher's order.
+    h.get_by_label("IMG_001.png").click();
+    h.run();
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Num6);
+    h.run();
+    assert_eq!(h.state().mode(), "agenda");
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Num5);
+    h.run();
+    assert_eq!(h.state().mode(), "carousel");
 }

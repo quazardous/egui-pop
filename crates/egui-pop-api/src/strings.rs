@@ -423,6 +423,10 @@ pub const FILES_MODE_THUMBNAILS: StrKey =
     StrKey::new("egui-pop-files-mode-thumbnails", "Thumbnails");
 pub const FILES_MODE_COLUMNS: StrKey = StrKey::new("egui-pop-files-mode-columns", "Columns");
 pub const FILES_MODE_FILMSTRIP: StrKey = StrKey::new("egui-pop-files-mode-filmstrip", "Filmstrip");
+pub const FILES_MODE_CAROUSEL: StrKey = StrKey::new("egui-pop-files-mode-carousel", "Carousel");
+pub const FILES_MODE_AGENDA: StrKey = StrKey::new("egui-pop-files-mode-agenda", "Agenda");
+/// The agenda's heading over the entries without a time.
+pub const FILES_AGENDA_UNDATED: StrKey = StrKey::new("egui-pop-files-agenda-undated", "No date");
 /// The file browser's large views: the filmstrip's, and quick look.
 pub const FILES_PREVIEW_OF: StrKey =
     StrKey::new("egui-pop-files-preview-of", "Preview of { $name }");
@@ -1424,6 +1428,9 @@ pub const ALL: &[StrKey] = &[
     FILES_MODE_THUMBNAILS,
     FILES_MODE_COLUMNS,
     FILES_MODE_FILMSTRIP,
+    FILES_MODE_CAROUSEL,
+    FILES_MODE_AGENDA,
+    FILES_AGENDA_UNDATED,
     FILES_PREVIEW_OF,
     FILES_QUICK_LOOK,
     FILES_CRUMB_OPEN,
