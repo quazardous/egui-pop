@@ -39,6 +39,8 @@
 //! - `viewport::TestSource` (feature `viewport`): a tile source for the
 //!   image viewport, every pixel its own colour, served when the test
 //!   says;
+//! - [`scenario`]: tests written as RON data, replayed with
+//!   invariants checked after every step (`docs/scenarios.md`);
 //! - [`wait`]: frames stepped until a journal event or the application
 //!   settles (`bridge.wait`'s conditions), or a deadline;
 //! - [`walk`]: a keyboard walk, real key presses and what holds the focus
@@ -67,6 +69,7 @@ pub use gpu::{
 
 pub mod hosts;
 pub mod jobs;
+pub mod scenario;
 pub mod wait;
 pub mod walk;
 

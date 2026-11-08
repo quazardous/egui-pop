@@ -1,0 +1,14 @@
+// An agent reads the application's About information through its
+// command, and the journal says it ran.
+Scenario(
+    name: "about",
+    description: "about.read answers with the gallery's name and nothing breaks.",
+    steps: [
+        Call("about.read", ()),
+        Wait(Any([Event("command.done"), Event("command.failed")])),
+        Expect(Journal(has: "command.done", data: { "command": "about.read" })),
+        Expect(NoError),
+        Wait(Settled),
+        Shot("settled"),
+    ],
+)

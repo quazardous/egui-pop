@@ -1,0 +1,12 @@
+// The bridge describes itself: the capabilities an agent may name, and
+// a wait that answers at once.
+Scenario(
+    name: "describe",
+    steps: [
+        Call("bridge.describe", ()),
+        Call("bridge.wait", { "settled": true }),
+        Call("journal.since", { "seq": 0 }),
+        Expect(Tree(lacks: (label: "No such button anywhere"))),
+        Expect(NoError),
+    ],
+)

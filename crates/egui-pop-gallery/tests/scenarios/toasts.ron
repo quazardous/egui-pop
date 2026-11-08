@@ -1,0 +1,16 @@
+// A person opens the toasts page and asks for an information toast;
+// then for an error toast, which this scenario expects (it lifts
+// NoErrorToast).
+Scenario(
+    name: "toasts",
+    allow: ["NoErrorToast"],
+    steps: [
+        Call("gallery.page", { "page": "toasts" }),
+        Wait(Event("command.done")),
+        Expect(Tree(has: (role: "Button", label: "Information"))),
+        Ui(Click(role: "Button", label: "Information")),
+        Expect(Value("toasts.shown.0.level", "info")),
+        Ui(Click(role: "Button", label: "Error")),
+        Expect(Journal(has: "command.done", data: { "command": "gallery.page" })),
+    ],
+)

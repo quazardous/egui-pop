@@ -1,0 +1,10 @@
+// Fails on purpose: the page does not exist, so the command fails and
+// NoFailedCommand breaks at step 2. `scenarios.rs` checks the report.
+Scenario(
+    name: "unknown-page",
+    steps: [
+        Call("gallery.page", { "page": "overview" }),
+        Call("gallery.page", { "page": "no-such-page" }),
+        Expect(NoError),
+    ],
+)
