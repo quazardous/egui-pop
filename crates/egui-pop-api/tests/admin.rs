@@ -237,11 +237,18 @@ fn the_search_finds_settings_in_every_scope_and_a_row_edits_its_scope() {
     );
     h.get_by_label("Where Worker threads is set");
     egui_pop_test::assert_all_named(&h);
-    // Escape clears the search first, then closes.
+    // Escape lets go of the search field first (egui-pop's Escape order),
+    // then clears the search, then closes.
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert_eq!(a.shown().2, "worker");
     h.key_press(egui::Key::Escape);
     h.run();
     assert!(admin::is_open(h.state().handle()));
     assert_eq!(a.shown().2, "");
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(!admin::is_open(h.state().handle()));
 }
 
 #[test]
