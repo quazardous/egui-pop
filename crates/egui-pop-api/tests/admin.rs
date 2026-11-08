@@ -566,3 +566,69 @@ fn row_fields_write_through_their_command_and_actions_confirm_first() {
     h.run();
     assert_eq!(last_run(&h, &NODE_REMOVE), Some(json!({ "node": "n1" })));
 }
+
+#[test]
+fn ctrl_comma_opens_the_settings_app_with_the_window_s_own_pages() {
+    use egui::{Key, Modifiers};
+    use egui_pop_api::app::CMD_UNDO;
+    use egui_pop_api::settings_window::{self, SHORTCUTS};
+    // `DefaultPlugins` alone: the Settings app comes with them.
+    let app = App::builder()
+        .plugins(DefaultPlugins)
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1100.0, 720.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Comma);
+    h.run();
+    let handle = h.state().handle().clone();
+    assert!(admin::is_open(&handle));
+    assert!(!settings_window::is_open(&handle));
+    // The shortcuts, gestures, fonts and Advanced pages are its own; the
+    // text settings show once, on the Fonts page.
+    let a = handle.service(&ADMIN).unwrap();
+    let tree = a.tree(&handle);
+    for path in [
+        "input/shortcuts",
+        "input/gestures",
+        "interface/fonts",
+        "general/advanced",
+    ] {
+        assert!(tree.section(path).is_some(), "{path}");
+    }
+    assert!(
+        tree.fields()
+            .iter()
+            .all(|(_, f)| f.setting_id() != Some("appearance.font_ui")),
+        "the Fonts page edits the families"
+    );
+    // Keys captured on its shortcuts page: Escape cancels the capture and
+    // leaves the app open.
+    run(&mut h, &CMD_OPEN, json!({ "path": "input/shortcuts" }));
+    assert_eq!(a.shown().1.as_deref(), Some("shortcuts"));
+    assert!(h.query_by_label(SHORTCUTS).is_some());
+    h.get_by_label("Change the keys of Edit: Undo").click();
+    h.run();
+    h.run();
+    assert!(handle.keys_captured());
+    h.key_press(Key::Escape);
+    h.run();
+    h.run();
+    assert!(admin::is_open(&handle), "the capture's Escape");
+    assert!(!handle.keys_captured());
+    assert_eq!(handle.keys_for(&CMD_UNDO), ["Ctrl+Z"]);
+    egui_pop_test::assert_all_named(&h);
+    // Advanced opens the settings window in its place.
+    run(&mut h, &CMD_OPEN, json!({ "path": "general/advanced" }));
+    h.get_by_label("Open the settings window…").click();
+    h.run();
+    h.run();
+    assert!(settings_window::is_open(&handle));
+    assert!(!admin::is_open(&handle));
+    // `Ctrl+,` again: the Settings app, the window closed.
+    run(&mut h, &settings_window::CMD_SETTINGS, json!({}));
+    assert!(admin::is_open(&handle));
+    assert!(!settings_window::is_open(&handle));
+}

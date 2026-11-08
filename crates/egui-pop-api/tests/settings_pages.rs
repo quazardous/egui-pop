@@ -71,7 +71,12 @@ fn harness() -> Harness<'static, App> {
 }
 
 fn open(h: &mut Harness<'_, App>) {
-    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Comma);
+    // The settings window itself (`Ctrl+,` opens the Settings app).
+    let _ = h.state_mut().run(
+        &egui_pop_api::settings_window::CMD_SETTINGS_WINDOW,
+        serde_json::Value::Null,
+        egui_pop_model::commands::Origin::User,
+    );
     h.run();
     assert!(settings_window::is_open(h.state().handle()));
 }
@@ -216,10 +221,17 @@ fn a_command_opens_a_page_and_agents_see_the_pages() {
         json!({ "page": PAGE }),
         Origin::Agent("test".into()),
     );
-    assert_eq!(out.now(), Some(Ok(json!({ "open": true, "page": PAGE }))));
+    // The Settings app's page for it, its settings' scope (General).
+    assert_eq!(
+        out.now(),
+        Some(Ok(
+            json!({ "open": true, "page": PAGE, "path": "general/compute-devices" })
+        ))
+    );
     h.run();
     h.run();
-    assert!(settings_window::is_open(h.state().handle()));
+    assert!(egui_pop_api::admin::is_open(h.state().handle()));
+    assert!(!settings_window::is_open(h.state().handle()));
     assert!(h.query_by_label("Devices found: none").is_some());
     let out = h.state_mut().run(
         &CMD_SETTINGS_PAGE,
@@ -229,8 +241,8 @@ fn a_command_opens_a_page_and_agents_see_the_pages() {
     assert!(matches!(out.now(), Some(Err(_))));
     let snapshot = h.state().handle().debug_snapshot();
     let window = &snapshot["settings_window"];
-    assert_eq!(window["open"], json!(true));
-    assert_eq!(window["section"], json!(PAGE));
+    assert_eq!(window["open"], json!(false));
+    assert_eq!(snapshot["admin"]["section"], json!("compute-devices"));
     assert_eq!(window["pages"][0]["id"], json!(PAGE));
     assert_eq!(window["pages"][0]["keywords"], json!(["OpenCL", "GPU"]));
     assert_eq!(window["pages"][0]["settings"], json!([THREADS.as_str()]));

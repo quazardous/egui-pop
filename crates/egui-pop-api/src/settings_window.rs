@@ -19,8 +19,15 @@
 //! ([`crate::settings_pages`]): drawn by the plugin, placed in the tree,
 //! found by the search, with their reset.
 //!
-//! `Ctrl+,` (or File > Settings) opens it; Escape closes it (or stops a
-//! capture of keys).
+//! `Ctrl+,` (or File > Settings, `app.settings`) opens the Settings app
+//! ([`crate::admin`]) when the application has it (`DefaultPlugins` do):
+//! the shortcuts editor, the gestures, the Fonts page and every custom
+//! page are its pages there, registered widget kinds
+//! ([`register_kinds`]) on pages this module declares
+//! ([`admin_manifest`]). The window itself opens from the Settings app's
+//! General › Advanced page (`app.settings.window`), and from `Ctrl+,`
+//! without the Settings app; Escape closes it (or stops a capture of
+//! keys).
 //!
 //! The settings have a history of their own (ADR 0014): what the
 //! window's form writes goes to the store's [`SETTINGS`] history, a
@@ -50,6 +57,7 @@ use egui_pop_model::keymap::{Action, Keys, Layer, Pointer};
 use egui_pop_model::values::{self, Change, Set};
 use serde_json::json;
 
+use crate::admin::{ADMIN, Admin};
 use crate::app::{AppHandle, MENU_FILE};
 use crate::history::StoreScope;
 use crate::hooks::SettingEntry;
@@ -62,8 +70,13 @@ use crate::{Ctx, Plugin, PluginError};
 /// Opens and closes the settings window.
 pub const CMD_SETTINGS: CommandId = CommandId::from_static("app.settings");
 
-/// Opens the settings window on a custom page (`{"page": "<id>"}`).
+/// Opens the settings on a custom page (`{"page": "<id>"}`): the
+/// Settings app's page when it has one, else the window's.
 pub const CMD_SETTINGS_PAGE: CommandId = CommandId::from_static("app.settings.page");
+
+/// Opens and closes the settings window itself (the Settings app's
+/// General › Advanced page).
+pub const CMD_SETTINGS_WINDOW: CommandId = CommandId::from_static("app.settings.window");
 
 /// The settings window's state, as a service.
 pub const SETTINGS_WINDOW: ServiceToken<SettingsWindow> = ServiceToken::new("app.settings_window");
@@ -180,6 +193,26 @@ impl Plugin for SettingsPlugin {
                 .menu(MENU_FILE, "8_settings", 0)
                 .args(json!({ "section": "" })),
             |call| {
+                let section = call
+                    .args
+                    .get("section")
+                    .and_then(|s| s.as_str())
+                    .filter(|s| !s.is_empty());
+                // The Settings app when there is one: a custom page's id
+                // opens its page there, another section the app where it
+                // was.
+                if let Some(admin) = call.app.service(&ADMIN) {
+                    if admin.is_open() {
+                        admin.close();
+                        return Ok(json!({ "open": false }));
+                    }
+                    if let Some(w) = call.app.service(&SETTINGS_WINDOW) {
+                        w.close();
+                    }
+                    let place = section.and_then(|s| page_path(call.app, s));
+                    admin.open(call.app, place.as_deref())?;
+                    return Ok(json!({ "open": true, "app": true }));
+                }
                 let w = call
                     .app
                     .service(&SETTINGS_WINDOW)
@@ -187,8 +220,29 @@ impl Plugin for SettingsPlugin {
                 if w.is_open() {
                     w.close();
                 } else {
-                    let section = call.args.get("section").and_then(|s| s.as_str());
-                    w.open(section.filter(|s| !s.is_empty()));
+                    w.open(section);
+                }
+                Ok(json!({ "open": w.is_open() }))
+            },
+        )?;
+        ctx.command(
+            CommandSpec::new(CMD_SETTINGS_WINDOW, "Settings window", "File")
+                .description(
+                    "Every setting and the keyboard shortcuts on one searchable form: the settings window of before.",
+                )
+                .hidden(),
+            |call| {
+                let w = call
+                    .app
+                    .service(&SETTINGS_WINDOW)
+                    .ok_or("no settings window")?;
+                if w.is_open() {
+                    w.close();
+                } else {
+                    if let Some(admin) = call.app.service(&ADMIN) {
+                        admin.close();
+                    }
+                    w.open(None);
                 }
                 Ok(json!({ "open": w.is_open() }))
             },
@@ -206,6 +260,12 @@ impl Plugin for SettingsPlugin {
                     .ok_or("`page` is missing")?;
                 if call.app.settings_page(page).is_none() {
                     return Err(format!("no settings page `{page}`"));
+                }
+                if let Some(admin) = call.app.service(&ADMIN)
+                    && let Some(path) = page_path(call.app, page)
+                {
+                    admin.open(call.app, Some(&path))?;
+                    return Ok(json!({ "open": true, "page": page, "path": path }));
                 }
                 let w = call
                     .app
@@ -367,7 +427,15 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         return;
     };
     if !w.is_open() {
-        app.capture_keys(false);
+        // The Settings app's shortcuts page captures through the same
+        // state while it is open.
+        let mut st = lock(&w.0);
+        if !crate::admin::is_open(app) {
+            st.capture = None;
+            st.capture_search = false;
+            st.pointer_capture = None;
+        }
+        app.capture_keys(st.capture.is_some() || st.capture_search || st.pointer_capture.is_some());
         return;
     }
     let ctx = ui.ctx().clone();
@@ -974,6 +1042,15 @@ fn pressed_keys(ui: &Ui) -> Option<(Key, egui::Modifiers)> {
 
 /// The shortcuts editor.
 fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
+    shortcuts_of(ui, app, st, filter, None);
+}
+
+/// The shortcuts editor; `pointer` set: the gestures alone (`true`) or
+/// every command (`false`), without the filter between them.
+fn shortcuts_of(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str, pointer: Option<bool>) {
+    if let Some(on) = pointer {
+        st.pointer_only = on;
+    }
     let t = Tokens::of(ui.ctx());
     let ctx = ui.ctx().clone();
     // Search by key: the next keys pressed.
@@ -1069,7 +1146,7 @@ fn shortcuts(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str) {
     } else {
         Layer::User
     };
-    pointer_header(ui, app, st);
+    pointer_header(ui, app, st, pointer.is_none());
     pointer_pad(ui, app, st, target);
     let pointer_only = st.pointer_only;
     let mut pointer_capture: Option<CommandId> = None;
@@ -1301,7 +1378,7 @@ fn reset_button(
 
 /// The pointer profile in force, how many of its gestures the user
 /// changed, and the filter showing the gestures alone.
-fn pointer_header(ui: &mut Ui, app: &AppHandle, st: &mut State) {
+fn pointer_header(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: bool) {
     let ctx = ui.ctx().clone();
     let profile = crate::pointer::profile(app);
     let changed = crate::pointer::overrides(app).len();
@@ -1319,11 +1396,13 @@ fn pointer_header(ui: &mut Ui, app: &AppHandle, st: &mut State) {
                 &[("profile", &profile.title), ("count", &changed.to_string())],
             )
         });
-        widgets::checkbox(
-            ui,
-            &mut st.pointer_only,
-            strings::tr(&ctx, &txt::SHORTCUTS_POINTER_ONLY),
-        );
+        if filter {
+            widgets::checkbox(
+                ui,
+                &mut st.pointer_only,
+                strings::tr(&ctx, &txt::SHORTCUTS_POINTER_ONLY),
+            );
+        }
     });
 }
 
@@ -1479,4 +1558,138 @@ fn pointer_pad(ui: &mut Ui, app: &AppHandle, st: &mut State, target: Layer) {
         *slot = candidate;
     }
     ui.add_space(t.space.s);
+}
+
+/// The Settings app's scope a custom page goes to: its first setting's,
+/// else its parent section's settings', else General.
+fn page_scope(entries: &[SettingEntry], page: &SettingsPage) -> &'static str {
+    use egui_pop_model::admin::generate::scope_of;
+    if let Some(id) = page.settings.first() {
+        return scope_of(id.as_str());
+    }
+    page.parent
+        .as_deref()
+        .and_then(|p| entries.iter().find(|e| e.section == p))
+        .map_or("general", |e| scope_of(e.id.as_str()))
+}
+
+/// Where a custom page is in the Settings app (`scope/section`).
+pub fn page_path(app: &AppHandle, id: &str) -> Option<String> {
+    let page = app.settings_page(id)?;
+    let all = app.settings();
+    Some(format!(
+        "{}/{}",
+        page_scope(&all, &page),
+        egui_pop_model::admin::generate::slug(&page.id)
+    ))
+}
+
+/// The Settings app's pages for what this window draws itself, each a
+/// registered widget kind ([`register_kinds`]): Input › Keyboard
+/// shortcuts (`shortcuts`), Input › Pointer gestures (`gestures`),
+/// Interface › Fonts (`fonts`, editing the text settings), a page per
+/// custom settings page (`settings-page`, editing its settings), and
+/// General › Advanced, which opens this window. After the generated
+/// pages, in that order.
+pub(crate) fn admin_manifest(app: &AppHandle) -> egui_pop_model::admin::Manifest {
+    use egui_pop_model::admin::{Action, FORMAT, Manifest, generate::slug};
+    let all = app.settings();
+    let pages = app.settings_pages();
+    let fonts: Vec<&str> = all
+        .iter()
+        .filter(|e| e.section == FONTS)
+        .map(|e| e.id.as_str())
+        .collect();
+    let mut m = Manifest::new(FORMAT)
+        .section("input/shortcuts", SHORTCUTS, |s| {
+            s.keywords(&["keys", "keyboard", "shortcuts", "bindings", "hotkeys"])
+                .widget("shortcuts", "shortcuts", serde_json::Value::Null);
+        })
+        .section(
+            "input/gestures",
+            txt::ADMIN_SECTION_GESTURES.fallback,
+            |s| {
+                s.keywords(&["pointer", "mouse", "gestures", "trackpad", "wheel"])
+                    .widget("gestures", "gestures", serde_json::Value::Null);
+            },
+        );
+    if !fonts.is_empty() {
+        m = m.section("interface/fonts", FONTS, |s| {
+            s.keywords(&["text", "font", "family", "size"]).widget(
+                "fonts",
+                "fonts",
+                json!({ "settings": fonts }),
+            );
+        });
+    }
+    let ids: Vec<&str> = pages.iter().map(|p| p.id.as_str()).collect();
+    for page in &pages {
+        let scope = page_scope(&all, page);
+        let settings: Vec<&str> = page.settings.iter().map(|s| s.as_str()).collect();
+        let parent = page
+            .parent
+            .as_deref()
+            .filter(|p| ids.contains(p))
+            .and_then(|p| pages.iter().find(|x| x.id == p))
+            .filter(|p| page_scope(&all, p) == scope)
+            .map(|p| slug(&p.id));
+        m = m.section(&format!("{scope}/{}", slug(&page.id)), &page.title, |s| {
+            let words: Vec<&str> = page.keywords.iter().map(String::as_str).collect();
+            s.keywords(&words).widget(
+                "page",
+                "settings-page",
+                json!({ "page": page.id, "settings": settings }),
+            );
+            if let Some(parent) = &parent {
+                s.under(parent);
+            }
+        });
+    }
+    m = m.section(
+        "general/advanced",
+        txt::ADMIN_SECTION_ADVANCED.fallback,
+        |s| {
+            s.description(txt::ADMIN_ADVANCED_ABOUT.fallback).action(
+                Action::command(CMD_SETTINGS_WINDOW.as_str())
+                    .title(txt::ADMIN_ADVANCED_OPEN.fallback),
+            );
+        },
+    );
+    let last = m.sections.len();
+    for (i, s) in m.sections.iter_mut().enumerate() {
+        // After the generated pages; Advanced last of all.
+        s.meta.order = if i + 1 == last { 2000 } else { 1000 + i as i32 };
+    }
+    m
+}
+
+/// Registers the widget kinds of [`admin_manifest`]'s pages: each draws
+/// what this window draws, with its state (the keys captured, the
+/// filters).
+pub(crate) fn register_kinds(admin: &Admin) {
+    fn editor(ui: &mut Ui, app: &AppHandle, pointer: bool) {
+        let Some(w) = app.service(&SETTINGS_WINDOW) else {
+            return;
+        };
+        let mut st = lock(&w.0);
+        shortcuts_of(ui, app, &mut st, "", Some(pointer));
+    }
+    admin.widget_kind("shortcuts", |ui, app, _| editor(ui, app, false));
+    admin.widget_kind("gestures", |ui, app, _| editor(ui, app, true));
+    admin.widget_kind("fonts", |ui, app, _| {
+        let all = app.settings();
+        fonts_page(ui, app, &all);
+    });
+    admin.widget_kind("settings-page", |ui, app, options| {
+        let Some(page) = options
+            .get("page")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|id| app.settings_page(id))
+        else {
+            return;
+        };
+        settings_pages::header(ui, app, &page);
+        ui.add_space(Tokens::of(ui.ctx()).space.s);
+        settings_pages::draw(ui, app, &page.id);
+    });
 }

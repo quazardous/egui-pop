@@ -43,6 +43,8 @@ command-app-quit.description e0bd058d4b8ec90e
 command-app-quit.title a4050ce0b3604cfc
 command-app-settings-page.description 4f66c3520ac03040
 command-app-settings-page.title da5bb2e8404c3093
+command-app-settings-window.description 8cf83cf855de960b
+command-app-settings-window.title eb8ca665c1eeddc2
 command-app-settings.description b2fbc689f22e879c
 command-app-settings.title 3b5b172596a8843e
 command-app-window-close.description 44ed8094ffd02436
@@ -529,6 +531,8 @@ egui-pop-about-repository a46ab8a49f5dbe4d
 egui-pop-about-title d51842d2cbfc1eb6
 egui-pop-about-version febfc27e25286119
 egui-pop-about-website fadc67ccd64e3e98
+egui-pop-admin-advanced-about c30276d6dc44837c
+egui-pop-admin-advanced-open 7b5c65da1b64a3eb
 egui-pop-admin-close 1f6b3eb35a454a53
 egui-pop-admin-for-app 3ca909b0a0bee51c
 egui-pop-admin-for-library 675618c602c695ec
@@ -552,6 +556,8 @@ egui-pop-admin-scope-input 458bbcbe2b1eb1eb
 egui-pop-admin-scope-interface 0a9836b1763e8516
 egui-pop-admin-scopes 69fa80640c152f59
 egui-pop-admin-search-hint 1e9712157663667c
+egui-pop-admin-section-advanced e172dc9a05b5446b
+egui-pop-admin-section-gestures a5f1be521254004c
 egui-pop-admin-sections 553ce4b6095455ad
 egui-pop-admin-set-for ca9028c6b4b2043a
 egui-pop-admin-set-for-name 698823d86e98552a

@@ -123,8 +123,9 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
             return;
         }
         let (scope, mut section, mut filter) = admin.shown();
-        // Escape clears the search, then closes.
-        if ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
+        // Escape clears the search, then closes; while a shortcuts editor
+        // captures keys, it is the editor's.
+        if !app.keys_captured() && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
             if filter.is_empty() {
                 close = true;
             } else {
@@ -369,8 +370,25 @@ fn section_title(
         });
     match first {
         Some(e) if e.section == s.meta.title => app.section_title(ctx, &e.owner, &e.section),
-        _ => s.meta.title.clone(),
+        _ => builtin_text(ctx, &s.meta.title),
     }
+}
+
+/// A text of the pages egui-pop declares itself (the shortcuts, gestures,
+/// fonts and Advanced pages), in the interface's language; any other as
+/// declared.
+fn builtin_text(ctx: &egui::Context, text: &str) -> String {
+    [
+        &txt::SETTINGS_SHORTCUTS,
+        &txt::SETTINGS_FONTS,
+        &txt::ADMIN_SECTION_GESTURES,
+        &txt::ADMIN_SECTION_ADVANCED,
+        &txt::ADMIN_ADVANCED_ABOUT,
+        &txt::ADMIN_ADVANCED_OPEN,
+    ]
+    .into_iter()
+    .find(|k| k.fallback == text)
+    .map_or_else(|| text.to_string(), |k| strings::tr(ctx, k))
 }
 
 fn entry_of<'a>(entries: &'a [SettingEntry], f: &Field) -> Option<&'a SettingEntry> {
@@ -504,7 +522,7 @@ fn section_page(
         });
     });
     if !s.meta.description.is_empty() {
-        ui.weak(&s.meta.description);
+        ui.weak(builtin_text(&ctx, &s.meta.description));
     }
     ui.add_space(t.space.s);
     let values = values_of(app, entries, s);
@@ -663,7 +681,7 @@ fn action_title(app: &AppHandle, a: &Action) -> String {
 /// from the values, after its confirmation when it asks one; answers
 /// read are read again after it.
 fn action_button(ui: &mut Ui, app: &AppHandle, admin: &Admin, a: &Action, values: &Values) {
-    let title = action_title(app, a);
+    let title = builtin_text(ui.ctx(), &action_title(app, a));
     let r = match a.style {
         ActionStyle::Link => ui.link(title),
         ActionStyle::Primary => ui.add(egui::Button::new(title).selected(true)),

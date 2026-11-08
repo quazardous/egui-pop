@@ -2,7 +2,6 @@
 //! window to egui's style, with the system raising `auto` and nothing else.
 
 use egui::accesskit::Role;
-use egui::{Key, Modifiers};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_api::core::theme::{ScrollBars, ThemeSpec};
@@ -128,7 +127,12 @@ fn a_system_that_says_nothing_does_not_lower_the_theme_s_bars() {
 #[test]
 fn the_settings_window_offers_the_choices() {
     let mut h = harness(false);
-    h.key_press_modifiers(Modifiers::COMMAND, Key::Comma);
+    // The settings window itself (`Ctrl+,` opens the Settings app).
+    let _ = h.state_mut().run(
+        &egui_pop_api::settings_window::CMD_SETTINGS_WINDOW,
+        serde_json::Value::Null,
+        egui_pop_model::commands::Origin::User,
+    );
     h.run();
     // The search brings the row into view, as a person would.
     h.get_by_role_and_label(Role::TextInput, "Settings").click();

@@ -95,6 +95,10 @@ command-app-settings-page =
     .description = Ouvre la fenêtre des réglages sur une page personnalisée (son identifiant).
     .title = Page de réglages
 
+command-app-settings-window =
+    .description = Tous les réglages et les raccourcis clavier sur un seul formulaire où chercher : la fenêtre des réglages d’avant.
+    .title = Fenêtre des réglages
+
 command-app-window-close =
     .description = Ferme la fenêtre, comme son bouton de fermeture.
     .title = Fermer la fenêtre
@@ -693,6 +697,10 @@ egui-pop-admin-modified-count = Modifiés : { $count }
 
 egui-pop-admin-no-widget = Aucun type de widget « { $kind } » n’est enregistré
 egui-pop-admin-no-records = Rien ici pour l’instant.
+egui-pop-admin-section-gestures = Gestes du pointeur
+egui-pop-admin-section-advanced = Avancé
+egui-pop-admin-advanced-about = La fenêtre des réglages d’avant : tous les réglages et les raccourcis sur un seul formulaire où chercher.
+egui-pop-admin-advanced-open = Ouvrir la fenêtre des réglages…
 
 egui-pop-admin-origin-library = bibliothèque
 

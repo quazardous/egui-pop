@@ -2,7 +2,6 @@
 //! scale, a family per role comes before the theme's (and both survive a
 //! change of theme), chosen on the settings window's Fonts page.
 
-use egui::{Key, Modifiers};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_api::settings_window::FONTS;
@@ -27,7 +26,12 @@ fn harness(spec: ThemeSpec) -> Harness<'static, App> {
 }
 
 fn open_fonts(h: &mut Harness<'_, App>) {
-    h.key_press_modifiers(Modifiers::COMMAND, Key::Comma);
+    // The settings window itself (`Ctrl+,` opens the Settings app).
+    let _ = h.state_mut().run(
+        &egui_pop_api::settings_window::CMD_SETTINGS_WINDOW,
+        serde_json::Value::Null,
+        egui_pop_model::commands::Origin::User,
+    );
     h.run();
     assert!(settings_window::is_open(h.state().handle()));
     h.get_by_label(FONTS).click();

@@ -959,6 +959,18 @@ pub struct Widget {
     pub options: Json,
 }
 
+impl Widget {
+    /// The settings it edits, its options' `settings` (setting ids).
+    pub fn settings(&self) -> impl Iterator<Item = &str> {
+        self.options
+            .get("settings")
+            .and_then(Json::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Json::as_str)
+    }
+}
+
 /// One owner's contribution: scopes and sections, each section placed in
 /// its scope. Versioned ([`FORMAT`]).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1149,16 +1161,20 @@ impl Manifest {
         serde_json::to_value(self).unwrap_or(Json::Null)
     }
 
-    /// The settings its fields bind: the generated pages leave them out,
-    /// so a setting a manifest places shows once, where it is placed.
+    /// The settings its fields bind, and those its widgets edit (their
+    /// options' `settings`): the generated pages leave them out, so a
+    /// setting a manifest places shows once, where it is placed.
     pub fn bound_settings(&self) -> impl Iterator<Item = &str> {
         self.sections
             .iter()
             .flat_map(|s| &s.groups)
             .flat_map(|g| &g.items)
-            .filter_map(|i| match i {
-                Item::Field(f) => f.setting_id(),
-                _ => None,
+            .flat_map(|i| -> Box<dyn Iterator<Item = &str> + '_> {
+                match i {
+                    Item::Field(f) => Box::new(f.setting_id().into_iter()),
+                    Item::Widget(w) => Box::new(w.settings()),
+                    _ => Box::new(std::iter::empty()),
+                }
             })
     }
 
@@ -1423,6 +1439,19 @@ mod tests {
                     .callout(Callout::new("hint", Tone::Warning, "No disk yet."))
                     .widget("browser", "file-browser", json!({"modes": ["grid"]}));
             })
+    }
+
+    #[test]
+    fn a_widget_claims_the_settings_it_edits() {
+        let m = Manifest::new(FORMAT).section("interface/fonts", "Fonts", |s| {
+            s.field(Field::setting("text.size")).widget(
+                "fonts",
+                "fonts",
+                json!({ "settings": ["text.font_ui", "text.font_mono"] }),
+            );
+        });
+        let bound: Vec<&str> = m.bound_settings().collect();
+        assert_eq!(bound, ["text.size", "text.font_ui", "text.font_mono"]);
     }
 
     #[test]

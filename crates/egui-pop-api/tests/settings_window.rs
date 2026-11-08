@@ -23,7 +23,12 @@ fn harness() -> Harness<'static, App> {
 }
 
 fn open(h: &mut Harness<'_, App>) {
-    h.key_press_modifiers(Modifiers::COMMAND, Key::Comma);
+    // The settings window itself (`Ctrl+,` opens the Settings app).
+    let _ = h.state_mut().run(
+        &egui_pop_api::settings_window::CMD_SETTINGS_WINDOW,
+        serde_json::Value::Null,
+        egui_pop_model::commands::Origin::User,
+    );
     h.run();
     assert!(settings_window::is_open(h.state().handle()));
 }

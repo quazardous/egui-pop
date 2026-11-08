@@ -2106,6 +2106,11 @@ impl AppHandle {
         self.0.capturing.set(on);
     }
 
+    /// Whether a shortcuts editor captures the keys ([`Self::capture_keys`]).
+    pub fn keys_captured(&self) -> bool {
+        self.0.capturing.get()
+    }
+
     /// [`AppHandle::key_conflicts`] by scope (`global`, `surface:<name>`).
     pub fn key_conflicts_by_scope(&self) -> BTreeMap<String, Vec<(Binding, Binding)>> {
         let mut out: BTreeMap<String, Vec<(Binding, Binding)>> = BTreeMap::new();
@@ -2965,6 +2970,9 @@ struct Slot {
 /// Builds an application.
 pub struct AppBuilder {
     plugins: Vec<Box<dyn Plugin>>,
+    /// The ids of the plugins a group added: one added on its own with
+    /// the same id takes its place.
+    grouped: Vec<PluginId>,
     theme: ThemeSpec,
     themes: Themes,
     persist: Option<Persist>,
@@ -3062,6 +3070,7 @@ impl AppBuilder {
     pub fn new() -> Self {
         Self {
             plugins: Vec::new(),
+            grouped: Vec::new(),
             theme: ThemeSpec::default(),
             themes: Themes::default(),
             persist: None,
@@ -3366,20 +3375,34 @@ impl AppBuilder {
         self
     }
 
-    /// Adds a plugin.
-    pub fn plugin(mut self, plugin: impl Plugin) -> Self {
-        self.plugins.push(Box::new(plugin));
-        self
+    /// Adds a plugin; one a group added with the same id gives it its
+    /// place.
+    pub fn plugin(self, plugin: impl Plugin) -> Self {
+        self.boxed(Box::new(plugin))
     }
 
-    /// Adds a group of plugins (`DefaultPlugins`, `MinimalPlugins`).
+    /// Adds a group of plugins (`DefaultPlugins`, `MinimalPlugins`),
+    /// less those whose id is already added.
     pub fn plugins(mut self, group: impl crate::PluginGroup) -> Self {
-        self.plugins.extend(group.plugins());
+        for p in group.plugins() {
+            let id = p.id();
+            if self.plugins.iter().any(|q| q.id() == id) {
+                continue;
+            }
+            self.grouped.push(id);
+            self.plugins.push(p);
+        }
         self
     }
 
-    /// Adds a boxed plugin.
+    /// Adds a boxed plugin; one a group added with the same id gives it
+    /// its place.
     pub fn boxed(mut self, plugin: Box<dyn Plugin>) -> Self {
+        let id = plugin.id();
+        if let Some(i) = self.grouped.iter().position(|g| *g == id) {
+            self.grouped.remove(i);
+            self.plugins.retain(|p| p.id() != id);
+        }
         self.plugins.push(plugin);
         self
     }

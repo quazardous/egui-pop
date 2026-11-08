@@ -96,6 +96,10 @@ command-app-settings-page =
     .description = Opens the settings window on a custom page (its id).
     .title = Settings page
 
+command-app-settings-window =
+    .description = Every setting and the keyboard shortcuts on one searchable form: the settings window of before.
+    .title = Settings window
+
 command-app-window-close =
     .description = Closes the window, as its close button does.
     .title = Close window
@@ -1064,6 +1068,10 @@ egui-pop-about-version = Version { $version }
 
 egui-pop-about-website = Website
 
+egui-pop-admin-advanced-about = The settings window of before: every setting and the shortcuts on one searchable form.
+
+egui-pop-admin-advanced-open = Open the settings window…
+
 egui-pop-admin-close = Close
 
 egui-pop-admin-for-app = This app
@@ -1109,6 +1117,10 @@ egui-pop-admin-scope-interface = Interface
 egui-pop-admin-scopes = Setting families
 
 egui-pop-admin-search-hint = Search every setting
+
+egui-pop-admin-section-advanced = Advanced
+
+egui-pop-admin-section-gestures = Pointer gestures
 
 egui-pop-admin-sections = Sections
 

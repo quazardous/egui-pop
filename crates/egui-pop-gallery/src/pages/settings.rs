@@ -173,13 +173,13 @@ impl Plugin for SettingsPage {
 
 fn show(ui: &mut Ui, app: &AppHandle) {
     let t = egui_pop::theme::Tokens::of(ui.ctx());
-    if ui.button("Open the settings window (Ctrl+,)").clicked() {
+    if ui.button("Open the settings window").clicked() {
         app.run(
-            egui_pop::api::settings_window::CMD_SETTINGS,
-            serde_json::json!({ "section": "" }),
+            egui_pop::api::settings_window::CMD_SETTINGS_WINDOW,
+            serde_json::Value::Null,
         );
     }
-    if ui.button("Open the Settings app").clicked() {
+    if ui.button("Open the Settings app (Ctrl+,)").clicked() {
         open_admin(app);
     }
     ui.add_space(t.space.s);

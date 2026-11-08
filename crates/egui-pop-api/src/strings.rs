@@ -126,6 +126,16 @@ pub const ADMIN_NO_WIDGET: StrKey = StrKey::new(
     "No widget kind `{ $kind }` is registered",
 );
 pub const ADMIN_NO_RECORDS: StrKey = StrKey::new("egui-pop-admin-no-records", "Nothing here yet.");
+pub const ADMIN_SECTION_GESTURES: StrKey =
+    StrKey::new("egui-pop-admin-section-gestures", "Pointer gestures");
+pub const ADMIN_SECTION_ADVANCED: StrKey =
+    StrKey::new("egui-pop-admin-section-advanced", "Advanced");
+pub const ADMIN_ADVANCED_ABOUT: StrKey = StrKey::new(
+    "egui-pop-admin-advanced-about",
+    "The settings window of before: every setting and the shortcuts on one searchable form.",
+);
+pub const ADMIN_ADVANCED_OPEN: StrKey =
+    StrKey::new("egui-pop-admin-advanced-open", "Open the settings window…");
 pub const ADMIN_SCOPE_GENERAL: StrKey = StrKey::new("egui-pop-admin-scope-general", "General");
 pub const ADMIN_SCOPE_INTERFACE: StrKey =
     StrKey::new("egui-pop-admin-scope-interface", "Interface");
@@ -1382,6 +1392,10 @@ pub const ALL: &[StrKey] = &[
     ADMIN_RUN_READ_ONLY,
     ADMIN_MODIFIED,
     ADMIN_NO_WIDGET,
+    ADMIN_SECTION_GESTURES,
+    ADMIN_SECTION_ADVANCED,
+    ADMIN_ADVANCED_ABOUT,
+    ADMIN_ADVANCED_OPEN,
     ADMIN_NO_RECORDS,
     ADMIN_SCOPE_GENERAL,
     ADMIN_SCOPE_INTERFACE,
