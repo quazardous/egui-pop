@@ -44,6 +44,11 @@ from jeepney.wrappers import unwrap_msg
 RD_BUS = "org.gnome.Mutter.RemoteDesktop"
 SC_BUS = "org.gnome.Mutter.ScreenCast"
 
+# mutter gives the pointer focus to the surface under it a little after a
+# motion (at its next pick): a press sent at once can go to no surface at
+# all, and the application sees only the release
+FOCUS_DELAY = 0.3
+
 # evdev codes (linux/input-event-codes.h)
 BUTTONS = {1: 0x110, 2: 0x112, 3: 0x111}
 KEYS = {
@@ -137,6 +142,9 @@ class MutterCompositor:
         env.update(XDG_RUNTIME_DIR=str(rt), XDG_CONFIG_HOME=str(config),
                    GSETTINGS_BACKEND="keyfile", NO_AT_BRIDGE="1",
                    GDK_BACKEND="wayland")
+        # mutter's own traces in its log: WBOX_MUTTER_DEBUG=window-ops,...
+        if os.environ.get("WBOX_MUTTER_DEBUG"):
+            env["MUTTER_DEBUG"] = os.environ["WBOX_MUTTER_DEBUG"]
         self.env = env
 
         bus_path = rt / "bus"
@@ -247,7 +255,7 @@ class MutterCompositor:
         if not self.is_running():
             return {"error": "compositor is not running"}
         self._move(x, y)
-        time.sleep(0.05)
+        time.sleep(FOCUS_DELAY)
         self._button(button, True)
         time.sleep(0.05)
         self._button(button, False)
@@ -260,7 +268,7 @@ class MutterCompositor:
             return {"error": "compositor is not running"}
         steps = max(1, int(steps))
         self._move(x1, y1)
-        time.sleep(0.05)
+        time.sleep(FOCUS_DELAY)
         self._button(button, True)
         try:
             for i in range(1, steps + 1):

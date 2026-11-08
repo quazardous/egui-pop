@@ -15,7 +15,7 @@ install), after a release build of the gallery:
 
 The gallery fills the output (1280x800) with its own frame
 (`--own-frame`): labwc puts it at the left edge, 28 px down, so its title
-bar's middle row is at y = 43. Two runs, each in
+bar's middle row is at y = 43. Three runs, each in
 its own compositor:
 
 1. **still**: the window is not moved. The title bar's right end is
@@ -23,6 +23,9 @@ its own compositor:
    the two captures must differ (the button hovers).
 2. **moved**: the caption is dragged 100 px to the left first, then the
    same captures, 100 px further left: they must differ too.
+3. **moved-twice**: two such moves, one after the other, then the same
+   captures 200 px to the left: the second move must start (the bar
+   answers a new drag after a move) and the button hover.
 
 `WBOX_COMPOSITOR=mutter` runs the same in a headless mutter (GNOME's
 compositor, `mutter.py`), where the window lands at the top left.
@@ -85,7 +88,7 @@ def capture(comp, out: Path, name: str, region: str | None = None) -> bytes:
     return dest.read_bytes()
 
 
-def run(cfg: dict, name: str, moved: bool, out: Path) -> dict:
+def run(cfg: dict, name: str, moves: int, out: Path) -> dict:
     out_dir = Path(cfg["_config_dir"]).resolve() / "out"
     jsonl = out_dir / "gallery.jsonl"
     if jsonl.exists():
@@ -110,12 +113,13 @@ def run(cfg: dict, name: str, moved: bool, out: Path) -> dict:
         time.sleep(2.0)
         origin_x, origin_y = getattr(comp, "window_origin", LABWC_ORIGIN)
         bar_y = origin_y + BAR_ROW
-        left = SHIFT if moved else 0
+        left = SHIFT * moves
         caption = (origin_x + WIDTH // 2, bar_y)
-        if moved:
+        for done in range(moves):
             # One press, travelled by steps, released: the compositor takes
             # the move after egui's drag threshold.
-            dragged = comp.drag(caption[0], bar_y, caption[0] - SHIFT, bar_y, steps=10, seconds=0.5)
+            start = caption[0] - SHIFT * done
+            dragged = comp.drag(start, bar_y, start - SHIFT, bar_y, steps=10, seconds=0.5)
             if isinstance(dragged, dict) and "error" in dragged:
                 return {"error": f"drag: {dragged['error']}"}
             time.sleep(1.0)
@@ -134,6 +138,11 @@ def run(cfg: dict, name: str, moved: bool, out: Path) -> dict:
         return {"ok": True}
     finally:
         comp.stop()
+        # the gallery's own log beside the compositor's
+        log = out_dir / "gallery.log"
+        if log.exists():
+            (out / "log").mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(log, out / "log" / f"{name}-gallery.log")
 
 
 def main() -> int:
@@ -145,9 +154,9 @@ def main() -> int:
     os.chdir(CONFIG.parent)
     out = Path(args.out).resolve()
     failed = 0
-    for name, moved in [("still", False), ("moved", True)]:
+    for name, moves in [("still", 0), ("moved", 1), ("moved-twice", 2)]:
         try:
-            result = run(cfg, name, moved, out)
+            result = run(cfg, name, moves, out)
         except Exception as exc:  # report and go on with the next run
             result = {"error": repr(exc)}
         failed += "error" in result
