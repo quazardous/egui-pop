@@ -308,7 +308,10 @@ fn the_overview_shows_only_when_the_graph_is_much_larger_than_the_view() {
     let mut h = graph("document");
     assert!(h.query_by_label("Graph overview").is_none(), "fitted");
     h.hover_at(empty_spot(&h));
+    // Zoomed in to the range's end (150 %): the graph is more than twice
+    // the view across.
     press(&mut h, Modifiers::COMMAND, Key::Num0);
+    press(&mut h, Modifiers::COMMAND, Key::Plus);
     press(&mut h, Modifiers::COMMAND, Key::Plus);
     h.run();
     assert!(h.query_by_label("Graph overview").is_some(), "zoomed in");
@@ -331,8 +334,9 @@ fn the_overview_shows_only_when_the_graph_is_much_larger_than_the_view() {
     });
     h.run();
     assert_ne!(h.state().view.view, v, "the overview moves the view");
-    press(&mut h, Modifiers::NONE, Key::Home);
     h.hover_at(empty_spot(&h));
+    h.run();
+    press(&mut h, Modifiers::NONE, Key::Home);
     h.run();
     assert!(h.query_by_label("Graph overview").is_none(), "fitted again");
 }
