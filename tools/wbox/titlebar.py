@@ -24,7 +24,11 @@ its own compositor:
 2. **moved**: the caption is dragged 100 px to the left first, then the
    same captures, 100 px further left: they must differ too.
 
-Full screenshots of each run go to the output directory. One JSON line per
+`WBOX_COMPOSITOR=mutter` runs the same in a headless mutter (GNOME's
+compositor, `mutter.py`), where the window lands at the top left.
+
+Full screenshots of each run go to the output directory, the compositor's
+logs to its `log/`. One JSON line per
 run on stdout, {"name", "ok"} or {"name", "error"}; the exit code is 1
 when one failed.
 """
@@ -40,13 +44,19 @@ import time
 from pathlib import Path
 
 from wbox.config import load_config, resolve_dir
-from wbox.server import _build_app_cmd, build_compositor
+from wbox.server import _build_app_cmd
 
 HERE = Path(__file__).resolve().parent
+# `python -I` leaves this directory out of the path: backend.py is here
+sys.path.insert(0, str(HERE))
+from backend import build_compositor  # noqa: E402
 CONFIG = HERE / "config.yaml"
 WIDTH, HEIGHT = 1280, 800
-# The title bar's middle row, and how far the move goes.
-BAR_Y = 43
+# The title bar's middle row below the window's top, and how far the move
+# goes. Where the window lands is the compositor's: labwc puts it 28 px
+# down; a backend may say otherwise (`window_origin`).
+BAR_ROW = 15
+LABWC_ORIGIN = (0, 28)
 SHIFT = 100
 
 
@@ -83,7 +93,8 @@ def run(cfg: dict, name: str, moved: bool, out: Path) -> dict:
     comp = build_compositor(cfg)
     comp.state.screenshot_dir = resolve_dir(cfg, "screenshot_dir", "./screenshots")
     if hasattr(comp, "set_log_dir"):
-        comp.set_log_dir(resolve_dir(cfg, "log.dir", "./log"))
+        # the compositor's logs beside the screenshots, for a box job's /out
+        comp.set_log_dir(out / "log")
     env = {
         "GALLERY_OWN_FRAME": "1",
         "GALLERY_SIZE": f"{WIDTH}x{HEIGHT}",
@@ -97,22 +108,24 @@ def run(cfg: dict, name: str, moved: bool, out: Path) -> dict:
         if not wait_ready(jsonl, 30):
             return {"error": "the gallery never printed its ready line"}
         time.sleep(2.0)
+        origin_x, origin_y = getattr(comp, "window_origin", LABWC_ORIGIN)
+        bar_y = origin_y + BAR_ROW
         left = SHIFT if moved else 0
-        caption = (WIDTH // 2, BAR_Y)
+        caption = (origin_x + WIDTH // 2, bar_y)
         if moved:
             # One press, travelled by steps, released: the compositor takes
             # the move after egui's drag threshold.
-            dragged = comp.drag(caption[0], BAR_Y, caption[0] - SHIFT, BAR_Y, steps=10, seconds=0.5)
+            dragged = comp.drag(caption[0], bar_y, caption[0] - SHIFT, bar_y, steps=10, seconds=0.5)
             if isinstance(dragged, dict) and "error" in dragged:
                 return {"error": f"drag: {dragged['error']}"}
             time.sleep(1.0)
         # The bar's right end, where the window buttons are.
-        right = WIDTH - left
-        region = f"{right - 160},{BAR_Y - 14} 160x28"
-        comp.mouse_move(caption[0] - left, BAR_Y)
+        right = origin_x + WIDTH - left
+        region = f"{right - 160},{bar_y - 14} 160x28"
+        comp.mouse_move(caption[0] - left, bar_y)
         time.sleep(0.8)
         idle = capture(comp, out, f"{name}-idle.png", region)
-        comp.mouse_move(right - 23, BAR_Y)
+        comp.mouse_move(right - 23, bar_y)
         time.sleep(0.8)
         hovered = capture(comp, out, f"{name}-hover.png", region)
         capture(comp, out, f"{name}.png")
