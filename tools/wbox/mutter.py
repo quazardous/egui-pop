@@ -41,6 +41,7 @@ from jeepney import DBusAddress, MatchRule, Properties, message_bus, new_method_
 from jeepney.io.blocking import open_dbus_connection
 from jeepney.wrappers import unwrap_msg
 
+os.environ.setdefault("WBOX_MUTTER_DEBUG", "window-ops,constraints,input")
 RD_BUS = "org.gnome.Mutter.RemoteDesktop"
 SC_BUS = "org.gnome.Mutter.ScreenCast"
 
