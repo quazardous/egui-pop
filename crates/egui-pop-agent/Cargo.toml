@@ -23,6 +23,20 @@ egui-pop-api.workspace = true
 log.workspace = true
 serde_json.workspace = true
 
+# Apache-2.0: the official MCP SDK, for the `mcp` feature.
+rmcp = { version = "3.9", optional = true, default-features = false, features = ["server", "transport-io"] }
+tokio = { version = "1", optional = true, default-features = false, features = ["rt", "io-std"] }
+
+[features]
+# MCP over the socket: `egui_pop_agent::mcp` and the `egui-pop-agent-mcp`
+# binary, tools generated from the application's `describe`.
+mcp = ["dep:rmcp", "dep:tokio"]
+
+[[bin]]
+name = "egui-pop-agent-mcp"
+path = "src/bin/egui-pop-agent-mcp.rs"
+required-features = ["mcp"]
+
 [target.'cfg(windows)'.dependencies]
 # MIT OR Apache-2.0: Windows named pipes through a safe API (the
 # workspace forbids `unsafe`).
@@ -33,3 +47,6 @@ egui = { workspace = true, features = ["default_fonts"] }
 egui-pop-api = { workspace = true, features = ["bundled-fonts"] }
 egui-pop-test.workspace = true
 egui_kittest.workspace = true
+# The crate itself with `mcp`, so the workspace's tests run the MCP tests.
+egui-pop-agent = { path = ".", features = ["mcp"] }
+tokio = { version = "1", features = ["rt", "io-util", "time"] }

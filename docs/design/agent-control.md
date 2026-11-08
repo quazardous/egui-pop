@@ -92,8 +92,8 @@ A transport only carries requests to the UI thread and replies back.
 | Adapter | Carries | Crate or feature | State |
 |---|---|---|---|
 | In-process | Rust calls | the bridge itself | exists |
-| Local socket | JSON-RPC 2.0: `describe`, `snapshot`, `call`, `wait` | `egui-pop-agent` (new, opt-in) | to build |
-| MCP | the same, as MCP tools generated from `describe`: a new capability becomes a tool with no code | `egui-pop-agent`, feature `mcp`, on an MCP SDK (below) | to build |
+| Local socket | JSON-RPC 2.0: `describe`, `snapshot`, `call`, `wait` | `egui-pop-agent` (new, opt-in) | built |
+| MCP | the same, as MCP tools generated from `describe`: a new capability becomes a tool with no code | `egui-pop-agent`, feature `mcp`, on an MCP SDK (below) | built: `egui-pop-agent-mcp` |
 | UI: tree, screenshot, input | egui's `egui_inspection` protocol | eframe's `inspection` feature, as the gallery does | exists; to document as the `ui.*` side |
 
 The UI side stays egui's protocol, with `egui_mcp` or our own client. An

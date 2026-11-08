@@ -1032,6 +1032,13 @@ impl AppHandle {
         self.0.requests.borrow().len()
     }
 
+    /// The debug bridge's mode now ([`AppBuilder::debug_bridge`]): what
+    /// it lets anyone but the user do. A transport out of the process
+    /// (`egui-pop-agent`) reads it to refuse snapshots when it is `Off`.
+    pub fn debug_bridge_mode(&self) -> egui_pop_core::debug::BridgeMode {
+        self.0.bridge.borrow().mode()
+    }
+
     /// Every collector's snapshot.
     pub fn debug_snapshot(&self) -> Json {
         self.0.bridge.borrow().snapshot(&self.egui())

@@ -37,7 +37,7 @@ impl RpcError {
     /// The application did not answer in time (it ran no frame).
     pub const NO_ANSWER: i64 = -32002;
 
-    fn new(code: i64, message: impl Into<String>) -> Self {
+    pub(crate) fn new(code: i64, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),
@@ -47,6 +47,14 @@ impl RpcError {
 
     pub(crate) fn params(message: impl Into<String>) -> Self {
         Self::new(Self::INVALID_PARAMS, message)
+    }
+
+    /// The bridge is off: nothing but the user may read or call it.
+    pub(crate) fn off() -> Self {
+        Self::new(
+            Self::REFUSED,
+            "the debug bridge is off; only the user may read or call it",
+        )
     }
 
     pub(crate) fn refused(f: &Feedback) -> Self {

@@ -222,6 +222,31 @@ fn an_application_may_offer_more() {
 }
 
 #[test]
+fn off_refuses_snapshots() {
+    let dir = private_dir("off");
+    let path = dir.join("app.sock");
+    let builder = App::builder().debug_bridge(egui_pop_api::core::debug::BridgeMode::Off);
+    let mut h = app(builder, &path);
+    let p = path.clone();
+    let (all, one, described) = with_client(&mut h, move || {
+        let mut c = Client::connect(&p);
+        (
+            c.request("snapshot", json!({})),
+            c.request("snapshot", json!({ "collector": "commands" })),
+            c.request("describe", json!({})),
+        )
+    });
+    for r in [&all, &one, &described] {
+        assert_eq!(r["error"]["code"], -32001, "{r}");
+        assert!(r.get("result").is_none(), "{r}");
+    }
+    assert!(
+        all["error"]["message"].as_str().unwrap().contains("off"),
+        "{all}"
+    );
+}
+
+#[test]
 fn the_socket_is_private() {
     let dir = private_dir("mode");
     let path = dir.join("app.sock");

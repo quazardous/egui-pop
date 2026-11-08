@@ -14,4 +14,8 @@ let builder = egui_pop_api::App::builder()
     .agent_socket_from_env();
 ```
 
+With the `mcp` feature, `egui-pop-agent-mcp <socket>` serves the socket
+as an MCP server over stdio (on `rmcp`): the tools are the application's
+capabilities, generated from its `describe`, plus `snapshot` and `wait`.
+
 See `docs/agent-socket.md` in the repository.

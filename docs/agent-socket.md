@@ -58,8 +58,8 @@ it with `wait { "event": "command.done", "since": <last> }`, `last` from
 an earlier `wait`.
 
 Errors: `-32700` (not JSON), `-32600` (not a request), `-32601` (no such
-method), `-32602` (bad params), `-32001` (the bridge refused `describe`
-or `wait`; `data` is the feedback block), `-32002` (the application did
+method), `-32602` (bad params), `-32001` (the bridge refused `describe`,
+`snapshot` or `wait`; `data` is the feedback block, when there is one), `-32002` (the application did
 not answer: it ran no frame, or it closed).
 
 ```console
@@ -67,6 +67,47 @@ $ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"wait","params":{"settled":tru
     | socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/egui-pop-agent-org.example.App.sock
 {"id":1,"jsonrpc":"2.0","result":{"by":"settled","event":null,"last":42,"met":true}}
 ```
+
+When the bridge is `Off`, `describe`, `snapshot`, `wait` and every
+`call` are refused: nothing but the user reads or drives it.
+
+## MCP
+
+With the `mcp` feature, the crate serves the socket as an MCP server
+(on [`rmcp`](https://crates.io/crates/rmcp)): the binary
+`egui-pop-agent-mcp <socket>` speaks MCP over stdio and the socket's
+JSON-RPC to the application.
+
+```console
+$ cargo install --path crates/egui-pop-agent --features mcp
+$ claude mcp add my-app -- egui-pop-agent-mcp $XDG_RUNTIME_DIR/egui-pop-agent-org.example.App.sock
+```
+
+- **Tools from `describe`.** `tools/list` asks the application's
+  `describe` each time, so a capability added since is a tool with no
+  code. Each capability offered to agents becomes a tool: its name
+  sanitised for MCP (`about.read` becomes `about_read`; `[A-Za-z0-9_-]`,
+  64 characters at most, a number added on a clash), its description,
+  its input schema (the args' JSON Schema; without one, an object schema
+  made from the example; a schema that is not an object's is taken as
+  `args`), its output schema when it declares a result schema of an
+  object, and `readOnlyHint` from `mutates`.
+- **Calls.** An action's tool is the socket's `call`: its `data` is the
+  result (structured when there is an output schema), a refusal an error
+  result (`isError: true`) the model reads. A command's tool runs it
+  with `commands.run`, then waits for its `command.done` (or
+  `command.failed`) on the journal, 10 s at most, and answers the
+  command's result.
+- **Built-ins.** `snapshot` (`collector`, optional) and `wait` (the
+  socket's `wait`, its params and its answer as structured content).
+  `bridge.wait`, which does not block, is not offered as a tool.
+- **Off.** When `describe` is refused (the bridge is off) or the
+  application does not answer, `tools/list` offers `snapshot` and
+  `wait`, which are refused too.
+
+In Rust, `egui_pop_agent::mcp::McpBridge` implements rmcp's
+`ServerHandler` over a `Backend` (`SocketClient` for a socket), and
+`mcp::tools` makes the tools from a `describe` reply.
 
 ## Threading
 
@@ -84,8 +125,6 @@ application's own (`settled` stays reachable).
 
 ## Known gaps
 
-- **No MCP yet.** The MCP side (tools generated from `describe` on
-  `rmcp`, a stdio bridge to the socket) comes next.
 - **No recording** of a session as a scenario yet.
 - **No `ui.*`.** Tree, screenshots and input go through eframe's
   `inspection` feature ([inspection.md](inspection.md)), a second

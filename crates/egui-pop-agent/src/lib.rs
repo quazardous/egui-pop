@@ -44,6 +44,8 @@ use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::PluginId;
 use serde_json::{Value as Json, json};
 
+#[cfg(feature = "mcp")]
+pub mod mcp;
 mod rpc;
 #[cfg(unix)]
 mod unix;
@@ -387,6 +389,12 @@ impl UiSide {
                 });
             }
             Job::Snapshot { collector, reply } => {
+                // Snapshots are the bridge's too: refused when it is off,
+                // as its calls are.
+                if app.debug_bridge_mode() == BridgeMode::Off {
+                    let _ = reply.send(Err(RpcError::off()));
+                    return;
+                }
                 let all = app.debug_snapshot();
                 let _ = reply.send(match collector {
                     None => Ok(all),
