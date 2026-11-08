@@ -127,7 +127,7 @@ use egui_pop_core::placeholder::SkeletonTokens;
 use egui_pop_core::slider::Slider;
 use egui_pop_core::strings::{self, CANCEL};
 use egui_pop_core::theme::Tokens;
-use egui_pop_core::thumbnail::{self, Thumbnail, ThumbnailGrid};
+use egui_pop_core::thumbnail::{self, Thumbnail};
 use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
 use egui_pop_model::commands::{CommandSpec, Origin};
@@ -157,6 +157,7 @@ pub mod preview;
 pub mod providers;
 pub mod sort;
 
+use browser::ViewMode as _;
 use fs::{Meta, SharedFs};
 use groups::{FileGroup, FileGrouping, Groupings};
 use places::SystemPlaces;
@@ -2765,6 +2766,9 @@ pub struct FilePicker {
     /// The height of what comes below the list, as last drawn.
     /// The cells in a row of the grid, as last drawn.
     columns: usize,
+    /// The modes drawing the list and the grid.
+    details: browser::DetailsMode,
+    thumbs: browser::ThumbnailsMode,
     /// The grid brings the highlighted cell into view at the next frame.
     reveal_cell: bool,
     /// The highlighted cell takes the focus when it is next drawn: the
@@ -2856,6 +2860,8 @@ impl FilePicker {
             focused: false,
             pane_dragging: false,
             columns: 1,
+            details: browser::DetailsMode::default(),
+            thumbs: browser::ThumbnailsMode::default(),
             reveal_cell: false,
             focus_cell: false,
             thumbnail_dragging: false,
@@ -4217,21 +4223,7 @@ impl FilePicker {
                 let bar = ui.spacing().scroll.allocated_width();
                 let row_width = list_width - if scrolls { bar } else { 0.0 };
                 let columns = list_columns(ui, row_width, self.kind);
-                let order = self.sort;
-                self.column_headers(ui, &columns, list_width);
-                // A click on a header shows in this frame.
-                let sorted;
-                let shown: &[Entry] = if self.sort == order {
-                    &shown
-                } else {
-                    sorted = self.visible();
-                    &sorted
-                };
-                if grid {
-                    self.grid(ui, shown, height, answer);
-                } else {
-                    self.list(ui, shown, &columns, row_width, height, answer);
-                }
+                self.entries_view(ui, shown, &columns, row_width, list_width, height, answer);
             });
             if let Some(pane_width) = pane_width {
                 ui.add_space(t.space.m);
@@ -5015,74 +5007,102 @@ impl FilePicker {
         });
     }
 
-    /// The list: the rows in view, each reading its facts once per listing.
-    fn list(
+    /// The entries, drawn by the mode shown (`details` or `thumbnails`)
+    /// through the picker's drawer: its column headers, its rows and cells,
+    /// the groups' badges, the highlight the field drives, and its clicks.
+    #[allow(clippy::too_many_arguments)]
+    fn entries_view(
         &mut self,
         ui: &mut Ui,
-        shown: &[Entry],
+        shown: Vec<Entry>,
         columns: &[ListColumn],
-        width: f32,
+        row_width: f32,
+        list_width: f32,
         height: f32,
         answer: &mut Option<PickerAnswer>,
     ) {
-        if shown.is_empty() {
-            ui.weak(strings::tr(ui.ctx(), &txt::NOTHING_MATCHES));
+        let grid = self.grid_on();
+        if grid {
+            // `Ctrl` and the wheel over the grid change the thumbnails' size.
+            let area =
+                egui::Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), height));
+            if ui.rect_contains_pointer(area) {
+                let zoom = ui.input(|i| i.zoom_delta());
+                if (zoom - 1.0).abs() > f32::EPSILON {
+                    self.resize_thumbnails(self.thumbnail_size * zoom);
+                }
+            }
         }
         let reveal = std::mem::take(&mut self.reveal_cell) && !shown.is_empty();
         let highlight = self.highlight.min(shown.len().saturating_sub(1));
-        let pointer = ui.input(|i| i.pointer.any_down() || i.pointer.any_released());
-        let modifiers = ui.input(|i| i.modifiers);
-        let cell = vec2(width, row_height(ui));
-        self.row_ids.clear();
-        self.columns = 1;
-        self.entries_box(ui, |picker, ui| {
-            let mut current = None;
-            ThumbnailGrid::new(shown.len(), cell)
-                .id_salt("egui_pop.files.entries")
-                .max_height(height)
-                .reveal(reveal.then_some(highlight))
-                .show(ui, |ui, n| {
-                    let r = picker.list_row(ui, &shown[n], n, columns);
-                    as_option(ui, &r);
-                    if n == highlight {
-                        current = Some(r.id);
-                    }
-                    picker.row_input(ui, &r, n, shown, modifiers, pointer, answer);
-                });
-            current
-        });
-    }
-
-    /// The entries as a list box for assistive technology, named by the folder,
-    /// several selectable when choosing several, the highlighted entry its
-    /// current one (`add` gives its id, if drawn).
-    fn entries_box(
-        &mut self,
-        ui: &mut Ui,
-        add: impl FnOnce(&mut FilePicker, &mut Ui) -> Option<egui::Id>,
-    ) {
+        let entries: Vec<browser::SourceEntry> = shown
+            .iter()
+            .map(|e| browser::SourceEntry {
+                path: e.path.clone(),
+                name: e.name.clone(),
+                kind: if e.is_dir {
+                    browser::EntryKind::Folder
+                } else {
+                    browser::EntryKind::File
+                },
+                size: None,
+                modified: None,
+                taken: None,
+                app_id: None,
+            })
+            .collect();
+        let selection = browser::Selection {
+            paths: self.selected.clone(),
+            anchor: self.anchor.clone(),
+        };
+        let mut settings = browser::ModeSettings {
+            thumbnail_size: self.thumbnail_size,
+        };
         let name = strings::tr_args(
             ui.ctx(),
             &txt::FILES_ENTRIES_OF,
             &[("folder", &folder_name(&self.dir))],
         );
         let many = self.kind == ChooseKind::OpenMany;
-        ui.scope_builder(
-            egui::UiBuilder::new()
-                .accessibility_role(egui::accesskit::Role::ListBox)
-                .accessibility_label(name),
-            |ui| {
-                let current = add(self, ui);
-                ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
-                    if many {
-                        node.set_multiselectable();
-                    }
-                    if let Some(id) = current {
-                        node.set_active_descendant(id.accesskit_id());
-                    }
-                });
-            },
-        );
+        self.row_ids.clear();
+        let mut details = std::mem::take(&mut self.details);
+        let mut thumbs = std::mem::take(&mut self.thumbs);
+        let mut drawer = PickerDrawer {
+            modifiers: ui.input(|i| i.modifiers),
+            pointer: ui.input(|i| i.pointer.any_down() || i.pointer.any_released()),
+            picker: self,
+            shown,
+            columns,
+            row_width,
+            list_width,
+            answer,
+            in_view: Vec::new(),
+        };
+        let cx = browser::ModeContext {
+            entries: &entries,
+            selection: &selection,
+            focus: (!entries.is_empty()).then_some(highlight),
+            thumbnails: &browser::NoThumbnails,
+            settings: &mut settings,
+            id: egui::Id::unique("egui_pop.files.entries"),
+            reveal_focus: reveal,
+            max_height: Some(height),
+            drawer: Some(&mut drawer),
+            name: Some(name),
+            many,
+        };
+        let out = if grid {
+            thumbs.show(ui, cx)
+        } else {
+            details.show(ui, cx)
+        };
+        let in_view = std::mem::take(&mut drawer.in_view);
+        self.details = details;
+        self.thumbs = thumbs;
+        self.columns = out.columns;
+        if grid && (!in_view.is_empty() || self.asked_thumbnails) {
+            self.want_thumbnails(ui.ctx(), &in_view);
+        }
     }
 
     /// Draws row `n`: a selectable row, named by the entry's name, its other
@@ -5240,58 +5260,6 @@ impl FilePicker {
             r.scroll_to_me(None);
         }
         self.entry_clicks(r, n, shown, modifiers, pointer, answer);
-    }
-
-    /// The grid: the cells in view, each asking for its thumbnail (nothing
-    /// else does). `Ctrl` and the wheel over it change their size.
-    fn grid(
-        &mut self,
-        ui: &mut Ui,
-        shown: &[Entry],
-        height: f32,
-        answer: &mut Option<PickerAnswer>,
-    ) {
-        let area = egui::Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), height));
-        if ui.rect_contains_pointer(area) {
-            let zoom = ui.input(|i| i.zoom_delta());
-            if (zoom - 1.0).abs() > f32::EPSILON {
-                self.resize_thumbnails(self.thumbnail_size * zoom);
-            }
-        }
-        let cell = {
-            let side = self.thumbnail_size;
-            vec2(side, side + thumbnail::caption_height(ui))
-        };
-        if shown.is_empty() {
-            ui.weak(strings::tr(ui.ctx(), &txt::NOTHING_MATCHES));
-        }
-        let reveal = std::mem::take(&mut self.reveal_cell) && !shown.is_empty();
-        let highlight = self.highlight.min(shown.len().saturating_sub(1));
-        let pointer = ui.input(|i| i.pointer.any_down() || i.pointer.any_released());
-        let modifiers = ui.input(|i| i.modifiers);
-        let mut in_view = Vec::new();
-        self.row_ids.clear();
-        let mut columns = 1;
-        self.entries_box(ui, |picker, ui| {
-            let mut current = None;
-            columns = ThumbnailGrid::new(shown.len(), cell)
-                .id_salt("egui_pop.files.grid")
-                .max_height(height)
-                .reveal(reveal.then_some(highlight))
-                .show(ui, |ui, n| {
-                    let r = picker.grid_cell(ui, n, shown, cell, &mut in_view);
-                    as_option(ui, &r);
-                    if n == highlight {
-                        current = Some(r.id);
-                    }
-                    picker.cell_input(ui, &r, n, shown, modifiers, pointer, answer);
-                });
-            current
-        });
-        self.columns = columns;
-        if !in_view.is_empty() || self.asked_thumbnails {
-            self.want_thumbnails(ui.ctx(), &in_view);
-        }
     }
 
     /// Tells the providers which files the grid has in view.
@@ -5585,6 +5553,86 @@ impl FilePicker {
                 ui.weak(strings::tr(ui.ctx(), &txt::FILES_PREVIEW_NONE));
             }
         }
+    }
+}
+
+/// The picker's [`browser::EntryDrawer`]: the layer between the modes and
+/// the picker. The modes lay the entries out; it draws the picker's rows
+/// with their columns and its thumbnail cells, with the groups' badges and
+/// the highlight, and runs the picker's own rules on a click.
+struct PickerDrawer<'a> {
+    picker: &'a mut FilePicker,
+    shown: Vec<Entry>,
+    columns: &'a [ListColumn],
+    row_width: f32,
+    list_width: f32,
+    modifiers: Modifiers,
+    pointer: bool,
+    answer: &'a mut Option<PickerAnswer>,
+    /// The files the cells in view showed, for the providers.
+    in_view: Vec<(PathBuf, Meta)>,
+}
+
+impl browser::EntryDrawer for PickerDrawer<'_> {
+    fn headers(&mut self, ui: &mut Ui, _width: f32) {
+        let order = self.picker.sort;
+        self.picker
+            .column_headers(ui, self.columns, self.list_width);
+        // A click on a header shows in this frame.
+        if self.picker.sort != order {
+            self.shown = self.picker.visible();
+        }
+    }
+
+    fn empty(&mut self, ui: &mut Ui) {
+        ui.weak(strings::tr(ui.ctx(), &txt::NOTHING_MATCHES));
+    }
+
+    fn row_size(&self, ui: &Ui, _width: f32) -> egui::Vec2 {
+        vec2(self.row_width, row_height(ui))
+    }
+
+    fn row(&mut self, ui: &mut Ui, n: usize, _size: egui::Vec2) -> egui::Response {
+        let r = self.picker.list_row(ui, &self.shown[n], n, self.columns);
+        as_option(ui, &r);
+        self.picker.row_input(
+            ui,
+            &r,
+            n,
+            &self.shown,
+            self.modifiers,
+            self.pointer,
+            self.answer,
+        );
+        r
+    }
+
+    fn cell_size(&self, ui: &Ui, _side: f32) -> egui::Vec2 {
+        let side = self.picker.thumbnail_size;
+        vec2(side, side + thumbnail::caption_height(ui))
+    }
+
+    fn cell(
+        &mut self,
+        ui: &mut Ui,
+        n: usize,
+        size: egui::Vec2,
+        _thumbnail: browser::ThumbState,
+    ) -> egui::Response {
+        let r = self
+            .picker
+            .grid_cell(ui, n, &self.shown, size, &mut self.in_view);
+        as_option(ui, &r);
+        self.picker.cell_input(
+            ui,
+            &r,
+            n,
+            &self.shown,
+            self.modifiers,
+            self.pointer,
+            self.answer,
+        );
+        r
     }
 }
 

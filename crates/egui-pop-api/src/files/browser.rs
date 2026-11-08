@@ -24,6 +24,7 @@ use egui::{Modifiers, Ui};
 
 use egui_pop_core::icon::Icon;
 use egui_pop_core::strings;
+use egui_pop_core::thumbnail::ThumbnailGrid;
 use egui_pop_core::widgets;
 
 use super::fs::{Meta, SharedFs};
@@ -545,6 +546,16 @@ pub struct ModeContext<'a> {
     pub id: egui::Id,
     /// Scroll the focused entry into view this frame.
     pub reveal_focus: bool,
+    /// The most the entries take in height; all that is left when `None`.
+    pub max_height: Option<f32>,
+    /// What draws each entry; the browser's [`PlainDrawer`] when `None`.
+    pub drawer: Option<&'a mut dyn EntryDrawer>,
+    /// The entries' container for assistive technology, when the mode
+    /// makes it: its name (a list box whose current entry is the focus).
+    /// The browser makes its own (`None`).
+    pub name: Option<String>,
+    /// Several entries can be selected: said by the container.
+    pub many: bool,
 }
 
 /// What the person did in a mode; the browser decides what it means.
@@ -555,6 +566,11 @@ pub struct ModeOutput {
     pub activated: Option<usize>,
     /// The entries it drew.
     pub visible: Range<usize>,
+    /// The focused entry's widget, when drawn: the container's active
+    /// descendant.
+    pub focused: Option<egui::Id>,
+    /// The entries in one of its rows, as last laid out.
+    pub columns: usize,
 }
 
 /// A way to show a browser's entries. It draws and reports; selection rules,
@@ -670,8 +686,262 @@ fn report(resp: &egui::Response, i: usize, out: &mut ModeOutput) {
     }
 }
 
+/// Draws the entries a mode lays out, one at a time: the layer that knows
+/// its host. A mode owns the layout (the virtualised rows or cells, the
+/// scrolling, the keys' moves, the thumbnails' order); the drawer owns what
+/// an entry looks like and does. The browser's own is [`PlainDrawer`]; the
+/// in-app picker gives its rows with their columns, its groups' badges, the
+/// highlight its field drives and its own clicks.
+pub trait EntryDrawer {
+    /// Above the entries, `width` wide: column headers that sort. Nothing
+    /// by default.
+    fn headers(&mut self, _ui: &mut Ui, _width: f32) {}
+    /// Said instead of the entries when there are none. Nothing by default.
+    fn empty(&mut self, _ui: &mut Ui) {}
+    /// A row's size, in `width` of room.
+    fn row_size(&self, ui: &Ui, width: f32) -> egui::Vec2;
+    /// Draws row `n`.
+    fn row(&mut self, ui: &mut Ui, n: usize, size: egui::Vec2) -> egui::Response;
+    /// A cell's size for a thumbnail `side` points wide.
+    fn cell_size(&self, ui: &Ui, side: f32) -> egui::Vec2;
+    /// Draws cell `n`; `thumbnail` is what the provider answered for it.
+    fn cell(
+        &mut self,
+        ui: &mut Ui,
+        n: usize,
+        size: egui::Vec2,
+        thumbnail: ThumbState,
+    ) -> egui::Response;
+}
+
+/// The browser's own drawing: a plain row (name, size, date) or a cell (the
+/// thumbnail and the name), selected and focused as the context says.
+#[allow(missing_debug_implementations)]
+pub struct PlainDrawer<'a> {
+    pub entries: &'a [SourceEntry],
+    pub selection: &'a Selection,
+    pub focus: Option<usize>,
+}
+
+impl PlainDrawer<'_> {
+    fn back(&self, ui: &Ui, resp: &egui::Response, n: usize, radius: f32) {
+        let e = &self.entries[n];
+        let selected = self.selection.contains(&e.path);
+        entry_response(resp, e, selected);
+        let visuals = ui.visuals();
+        let rect = resp.rect;
+        if selected {
+            ui.painter()
+                .rect_filled(rect, radius, visuals.selection.bg_fill);
+        } else if resp.hovered() {
+            ui.painter()
+                .rect_filled(rect, radius, visuals.widgets.hovered.weak_bg_fill);
+        }
+        if self.focus == Some(n) {
+            ui.painter().rect_stroke(
+                rect.shrink(0.5),
+                radius,
+                visuals.selection.stroke,
+                egui::StrokeKind::Inside,
+            );
+        }
+    }
+}
+
+impl EntryDrawer for PlainDrawer<'_> {
+    fn row_size(&self, _ui: &Ui, width: f32) -> egui::Vec2 {
+        egui::vec2(width, DetailsMode::ROW_HEIGHT)
+    }
+
+    fn row(&mut self, ui: &mut Ui, n: usize, size: egui::Vec2) -> egui::Response {
+        let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+        self.back(ui, &resp, n, 2.0);
+        let e = &self.entries[n];
+        let visuals = ui.visuals();
+        let text = if self.selection.contains(&e.path) {
+            visuals.selection.stroke.color
+        } else {
+            visuals.text_color()
+        };
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let w = rect.width();
+        let name = if e.is_dir() {
+            format!("{}/", e.name)
+        } else {
+            e.name.clone()
+        };
+        let y = rect.center().y;
+        ui.painter()
+            .with_clip_rect(rect.with_max_x(rect.left() + w * 0.6))
+            .text(
+                egui::pos2(rect.left() + 4.0, y),
+                egui::Align2::LEFT_CENTER,
+                name,
+                font.clone(),
+                text,
+            );
+        if let Some(s) = e.size {
+            ui.painter().text(
+                egui::pos2(rect.left() + w * 0.6 + 4.0, y),
+                egui::Align2::LEFT_CENTER,
+                human_size(s),
+                font.clone(),
+                text,
+            );
+        }
+        if let Some(t) = e
+            .modified
+            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+        {
+            let days = t.as_secs() / 86_400;
+            let (y_, m, d) = civil(days as i64);
+            ui.painter().text(
+                egui::pos2(rect.left() + w * 0.78 + 4.0, y),
+                egui::Align2::LEFT_CENTER,
+                format!("{y_:04}-{m:02}-{d:02}"),
+                font,
+                text,
+            );
+        }
+        resp
+    }
+
+    fn cell_size(&self, ui: &Ui, side: f32) -> egui::Vec2 {
+        let caption = ui.text_style_height(&egui::TextStyle::Small) + 4.0;
+        egui::vec2(side + 8.0, side + caption + 8.0)
+    }
+
+    fn cell(
+        &mut self,
+        ui: &mut Ui,
+        n: usize,
+        size: egui::Vec2,
+        thumbnail: ThumbState,
+    ) -> egui::Response {
+        let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+        self.back(ui, &resp, n, 4.0);
+        paint_cell(ui, rect, &self.entries[n], thumbnail);
+        resp
+    }
+}
+
+/// A cell's thumbnail (or what stands in for it) and its name, in `rect`.
+pub fn paint_cell(ui: &Ui, rect: egui::Rect, e: &SourceEntry, thumbnail: ThumbState) {
+    let visuals = ui.visuals();
+    let caption = ui.text_style_height(&egui::TextStyle::Small) + 4.0;
+    let side = (rect.width() - 8.0)
+        .min(rect.height() - caption - 8.0)
+        .max(1.0);
+    let image = egui::Rect::from_min_size(rect.min + egui::vec2(4.0, 4.0), egui::vec2(side, side));
+    match thumbnail {
+        ThumbState::Ready(t) => {
+            let s = t.size_vec2();
+            let scale = (side / s.x.max(s.y)).min(1.0);
+            let r = egui::Rect::from_center_size(image.center(), s * scale);
+            ui.painter().image(
+                t.id(),
+                r,
+                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                egui::Color32::WHITE,
+            );
+        }
+        other => {
+            let glyph = match other {
+                _ if e.is_dir() => "Folder",
+                ThumbState::Failed(_) => "!",
+                ThumbState::Loading => "...",
+                _ => "File",
+            };
+            ui.painter()
+                .rect_filled(image, 4.0, visuals.extreme_bg_color);
+            ui.painter().text(
+                image.center(),
+                egui::Align2::CENTER_CENTER,
+                glyph,
+                egui::FontId::proportional(side * 0.15),
+                visuals.weak_text_color(),
+            );
+        }
+    }
+    ui.painter().with_clip_rect(rect).text(
+        egui::pos2(rect.center().x, image.bottom() + 2.0 + caption / 2.0),
+        egui::Align2::CENTER_CENTER,
+        &e.name,
+        egui::TextStyle::Small.resolve(ui.style()),
+        visuals.text_color(),
+    );
+}
+
+/// Lays `count` entries out in a virtualised grid of `cell`s through
+/// `draw`, reporting what was drawn: the one way every built-in mode lays
+/// its entries out. Gives the entries in a row.
+#[allow(clippy::too_many_arguments)]
+fn lay_out(
+    ui: &mut Ui,
+    container: Option<(&str, bool)>,
+    drawer: &mut dyn EntryDrawer,
+    salt: egui::Id,
+    count: usize,
+    cell: egui::Vec2,
+    max_height: Option<f32>,
+    reveal: Option<usize>,
+    focus: Option<usize>,
+    out: &mut ModeOutput,
+    mut draw: impl FnMut(&mut dyn EntryDrawer, &mut Ui, usize) -> egui::Response,
+) -> usize {
+    let mut grid = ThumbnailGrid::new(count, cell).id_salt(salt).reveal(reveal);
+    if let Some(h) = max_height {
+        grid = grid.max_height(h);
+    }
+    let mut first = usize::MAX;
+    let mut end = 0;
+    let mut columns = 1;
+    let add = |ui: &mut Ui, out: &mut ModeOutput| {
+        if count == 0 {
+            drawer.empty(ui);
+        }
+        columns = grid.show(ui, |ui, n| {
+            let r = draw(&mut *drawer, ui, n);
+            if focus == Some(n) {
+                out.focused = Some(r.id);
+            }
+            report(&r, n, out);
+            first = first.min(n);
+            end = end.max(n + 1);
+        });
+    };
+    match container {
+        Some((name, many)) => {
+            ui.scope_builder(
+                egui::UiBuilder::new()
+                    .accessibility_role(egui::accesskit::Role::ListBox)
+                    .accessibility_label(name),
+                |ui| {
+                    add(ui, out);
+                    let current = out.focused;
+                    ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+                        if many {
+                            node.set_multiselectable();
+                        }
+                        if let Some(id) = current {
+                            node.set_active_descendant(id.accesskit_id());
+                        }
+                    });
+                },
+            );
+        }
+        None => add(ui, out),
+    }
+    out.visible = if first == usize::MAX {
+        0..0
+    } else {
+        first..end
+    };
+    columns.max(1)
+}
+
 /// Rows with columns: the name, the size and when it last changed.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct DetailsMode {
     rows_in_view: usize,
 }
@@ -700,105 +970,35 @@ impl ViewMode for DetailsMode {
 
     fn show(&mut self, ui: &mut Ui, cx: ModeContext<'_>) -> ModeOutput {
         let mut out = ModeOutput::default();
-        let row = Self::ROW_HEIGHT;
-        let mut area = egui::ScrollArea::vertical()
-            .id_salt(cx.id.with("details"))
-            .auto_shrink([false, false]);
-        if cx.reveal_focus
-            && let Some(f) = cx.focus
-        {
-            // Keep the focused row in view, scrolling as little as it takes.
-            let spacing = ui.spacing().item_spacing.y;
-            let top = f as f32 * (row + spacing);
-            let state = egui::scroll_area::State::load(
-                ui.ctx(),
-                ui.make_persistent_id(cx.id.with("details")),
-            );
-            let (offset, height) = state
-                .map(|s| (s.clamped_offset().y, ui.available_height()))
-                .unwrap_or((0.0, ui.available_height()));
-            if top < offset {
-                area = area.vertical_scroll_offset(top);
-            } else if top + row > offset + height {
-                area = area.vertical_scroll_offset(top + row - height);
-            }
-        }
-        area.show_rows(ui, row, cx.entries.len(), |ui, range| {
-            self.rows_in_view = range.len().max(1);
-            out.visible = range.clone();
-            for i in range {
-                let e = &cx.entries[i];
-                let selected = cx.selection.contains(&e.path);
-                let focused = cx.focus == Some(i);
-                let (rect, resp) = ui.allocate_exact_size(
-                    egui::vec2(ui.available_width(), row),
-                    egui::Sense::click(),
-                );
-                entry_response(&resp, e, selected);
-                let visuals = ui.visuals();
-                if selected {
-                    ui.painter()
-                        .rect_filled(rect, 2.0, visuals.selection.bg_fill);
-                } else if resp.hovered() {
-                    ui.painter()
-                        .rect_filled(rect, 2.0, visuals.widgets.hovered.weak_bg_fill);
-                }
-                if focused {
-                    ui.painter().rect_stroke(
-                        rect.shrink(0.5),
-                        2.0,
-                        visuals.selection.stroke,
-                        egui::StrokeKind::Inside,
-                    );
-                }
-                let text = if selected {
-                    visuals.selection.stroke.color
-                } else {
-                    visuals.text_color()
-                };
-                let font = egui::TextStyle::Body.resolve(ui.style());
-                let w = rect.width();
-                let name = if e.is_dir() {
-                    format!("{}/", e.name)
-                } else {
-                    e.name.clone()
-                };
-                let y = rect.center().y;
-                ui.painter()
-                    .with_clip_rect(rect.with_max_x(rect.left() + w * 0.6))
-                    .text(
-                        egui::pos2(rect.left() + 4.0, y),
-                        egui::Align2::LEFT_CENTER,
-                        name,
-                        font.clone(),
-                        text,
-                    );
-                if let Some(s) = e.size {
-                    ui.painter().text(
-                        egui::pos2(rect.left() + w * 0.6 + 4.0, y),
-                        egui::Align2::LEFT_CENTER,
-                        human_size(s),
-                        font.clone(),
-                        text,
-                    );
-                }
-                if let Some(t) = e
-                    .modified
-                    .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-                {
-                    let days = t.as_secs() / 86_400;
-                    let (y_, m, d) = civil(days as i64);
-                    ui.painter().text(
-                        egui::pos2(rect.left() + w * 0.78 + 4.0, y),
-                        egui::Align2::LEFT_CENTER,
-                        format!("{y_:04}-{m:02}-{d:02}"),
-                        font,
-                        text,
-                    );
-                }
-                report(&resp, i, &mut out);
-            }
-        });
+        let mut plain = PlainDrawer {
+            entries: cx.entries,
+            selection: cx.selection,
+            focus: cx.focus,
+        };
+        let drawer: &mut dyn EntryDrawer = match cx.drawer {
+            Some(d) => d,
+            None => &mut plain,
+        };
+        let width = ui.available_width();
+        drawer.headers(ui, width);
+        let n = cx.entries.len();
+        let size = drawer.row_size(ui, width - ui.spacing().scroll.allocated_width());
+        let reveal = cx.focus.filter(|_| cx.reveal_focus && n > 0);
+        lay_out(
+            ui,
+            cx.name.as_deref().map(|n| (n, cx.many)),
+            drawer,
+            cx.id.with("details"),
+            n,
+            size,
+            cx.max_height,
+            reveal,
+            cx.focus,
+            &mut out,
+            |d, ui, i| d.row(ui, i, size),
+        );
+        self.rows_in_view = out.visible.len().max(1);
+        out.columns = 1;
         out
     }
 
@@ -829,10 +1029,10 @@ fn civil(z: i64) -> (i64, u32, u32) {
     (yoe + era * 400 + i64::from(m <= 2), m, d)
 }
 
-/// A virtualised grid of thumbnails with their names. Only the rows in view
-/// ask for a thumbnail (the next row as `Near`), so what scrolls away is
-/// cancelled by the provider.
-#[derive(Debug, Default)]
+/// A virtualised grid of thumbnails with their names. Only the cells in view
+/// ask for a thumbnail, in reading order, then the next row as `Near`, so
+/// what scrolls away is cancelled by the provider.
+#[derive(Clone, Debug, Default)]
 pub struct ThumbnailsMode {
     columns: usize,
     rows_in_view: usize,
@@ -859,7 +1059,7 @@ impl ViewMode for ThumbnailsMode {
             role: egui::Role::ListBox,
             needs: ModeNeeds {
                 thumbnails: true,
-                time: false,
+                ..ModeNeeds::default()
             },
         }
     }
@@ -870,143 +1070,56 @@ impl ViewMode for ThumbnailsMode {
             .settings
             .thumbnail_size
             .clamp(Self::MIN_SIZE, Self::MAX_SIZE);
-        let caption = ui.text_style_height(&egui::TextStyle::Small) + 4.0;
-        let cell = egui::vec2(side + 8.0, side + caption + 8.0);
-        let columns = ((ui.available_width() / cell.x).floor() as usize).max(1);
-        self.columns = columns;
+        let mut plain = PlainDrawer {
+            entries: cx.entries,
+            selection: cx.selection,
+            focus: cx.focus,
+        };
+        let drawer: &mut dyn EntryDrawer = match cx.drawer {
+            Some(d) => d,
+            None => &mut plain,
+        };
+        let width = ui.available_width();
+        drawer.headers(ui, width);
         let n = cx.entries.len();
-        let rows = n.div_ceil(columns);
+        let cell = drawer.cell_size(ui, side);
         let pixels = (side * ui.ctx().pixels_per_point()).round() as u32;
-        let spacing = ui.spacing().item_spacing.y;
-        let mut area = egui::ScrollArea::vertical()
-            .id_salt(cx.id.with("thumbnails"))
-            .auto_shrink([false, false]);
-        if cx.reveal_focus
-            && let Some(f) = cx.focus
-        {
-            let top = (f / columns) as f32 * (cell.y + spacing);
-            let state = egui::scroll_area::State::load(
-                ui.ctx(),
-                ui.make_persistent_id(cx.id.with("thumbnails")),
-            );
-            let offset = state.map(|s| s.clamped_offset().y).unwrap_or(0.0);
-            let height = ui.available_height();
-            if top < offset {
-                area = area.vertical_scroll_offset(top);
-            } else if top + cell.y > offset + height {
-                area = area.vertical_scroll_offset(top + cell.y - height);
-            }
-        }
         let ctx = ui.ctx().clone();
-        area.show_rows(ui, cell.y, rows, |ui, range| {
-            self.rows_in_view = range.len().max(1);
-            let first = range.start * columns;
-            let end = (range.end * columns).min(n);
-            out.visible = first..end;
-            // Visible first, in reading order; then the next row.
-            for e in &cx.entries[first..end] {
-                cx.thumbnails.request(
-                    &ctx,
-                    &ThumbRequest {
-                        entry: e,
-                        size: pixels,
-                        priority: Priority::Visible,
-                    },
-                );
-            }
-            for e in &cx.entries[end..(end + columns).min(n)] {
-                cx.thumbnails.request(
-                    &ctx,
-                    &ThumbRequest {
-                        entry: e,
-                        size: pixels,
-                        priority: Priority::Near,
-                    },
-                );
-            }
-            for row in range {
-                ui.horizontal(|ui| {
-                    for i in row * columns..((row + 1) * columns).min(n) {
-                        let e = &cx.entries[i];
-                        let selected = cx.selection.contains(&e.path);
-                        let (rect, resp) = ui.allocate_exact_size(cell, egui::Sense::click());
-                        entry_response(&resp, e, selected);
-                        let visuals = ui.visuals();
-                        if selected {
-                            ui.painter()
-                                .rect_filled(rect, 4.0, visuals.selection.bg_fill);
-                        } else if resp.hovered() {
-                            ui.painter().rect_filled(
-                                rect,
-                                4.0,
-                                visuals.widgets.hovered.weak_bg_fill,
-                            );
-                        }
-                        if cx.focus == Some(i) {
-                            ui.painter().rect_stroke(
-                                rect.shrink(0.5),
-                                4.0,
-                                visuals.selection.stroke,
-                                egui::StrokeKind::Inside,
-                            );
-                        }
-                        let image = egui::Rect::from_min_size(
-                            rect.min + egui::vec2(4.0, 4.0),
-                            egui::vec2(side, side),
-                        );
-                        let state = cx.thumbnails.request(
-                            &ctx,
-                            &ThumbRequest {
-                                entry: e,
-                                size: pixels,
-                                priority: Priority::Visible,
-                            },
-                        );
-                        match state {
-                            ThumbState::Ready(t) => {
-                                let s = t.size_vec2();
-                                let scale = (side / s.x.max(s.y)).min(1.0);
-                                let r = egui::Rect::from_center_size(image.center(), s * scale);
-                                ui.painter().image(
-                                    t.id(),
-                                    r,
-                                    egui::Rect::from_min_max(
-                                        egui::pos2(0.0, 0.0),
-                                        egui::pos2(1.0, 1.0),
-                                    ),
-                                    egui::Color32::WHITE,
-                                );
-                            }
-                            other => {
-                                let glyph = match other {
-                                    _ if e.is_dir() => "Folder",
-                                    ThumbState::Failed(_) => "!",
-                                    ThumbState::Loading => "...",
-                                    _ => "File",
-                                };
-                                ui.painter()
-                                    .rect_filled(image, 4.0, visuals.extreme_bg_color);
-                                ui.painter().text(
-                                    image.center(),
-                                    egui::Align2::CENTER_CENTER,
-                                    glyph,
-                                    egui::FontId::proportional(side * 0.15),
-                                    visuals.weak_text_color(),
-                                );
-                            }
-                        }
-                        ui.painter().with_clip_rect(rect).text(
-                            egui::pos2(rect.center().x, image.bottom() + 2.0 + caption / 2.0),
-                            egui::Align2::CENTER_CENTER,
-                            &e.name,
-                            egui::TextStyle::Small.resolve(ui.style()),
-                            visuals.text_color(),
-                        );
-                        report(&resp, i, &mut out);
-                    }
-                });
-            }
-        });
+        let thumbnails = cx.thumbnails;
+        let entries = cx.entries;
+        let ask = |i: usize, priority| {
+            thumbnails.request(
+                &ctx,
+                &ThumbRequest {
+                    entry: &entries[i],
+                    size: pixels,
+                    priority,
+                },
+            )
+        };
+        let reveal = cx.focus.filter(|_| cx.reveal_focus && n > 0);
+        let columns = lay_out(
+            ui,
+            cx.name.as_deref().map(|n| (n, cx.many)),
+            drawer,
+            cx.id.with("thumbnails"),
+            n,
+            cell,
+            cx.max_height,
+            reveal,
+            cx.focus,
+            &mut out,
+            // Visible first, in reading order.
+            |d, ui, i| d.cell(ui, i, cell, ask(i, Priority::Visible)),
+        );
+        // Then the next row.
+        let end = out.visible.end;
+        for i in end..(end + columns).min(n) {
+            ask(i, Priority::Near);
+        }
+        self.columns = columns;
+        self.rows_in_view = out.visible.len().div_ceil(columns).max(1);
+        out.columns = columns;
         out
     }
 
@@ -1697,6 +1810,10 @@ impl FileBrowser {
                     settings: &mut self.settings,
                     id: self.id,
                     reveal_focus: reveal,
+                    max_height: None,
+                    drawer: None,
+                    name: None,
+                    many: false,
                 },
             )
         });
