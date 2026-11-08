@@ -530,6 +530,31 @@ tip, and the key shows the reason in the picker. So on the web, whose
 picker reads from memory, no folder can be made, and it says so; saving
 still chooses a path and still asks before replacing a file held there.
 
+## The file browser
+
+`files::browser` is the component the choosers are moving onto (the
+[design](design/file-browser.md)): a `FileBrowser` shows the entries of a
+place from a `FileSource` in a `ViewMode` chosen in its toolbar, and
+remembers the mode under its id. The in-app picker does not draw it yet.
+
+- **Sources.** `FsSource` lists a `FileSystem` in pages (on a thread of its
+  own for the system's, at once for a `MemoryFs`); a source of your own
+  streams `Page`s through a `Listing`, errors included.
+- **Modes.** `details` (rows: the name, the size, the date) and `thumbnails`
+  (a virtualised grid, its size from 64 to 256 points) are built in;
+  `ViewModes::register` adds others. A mode draws and reports clicks; the
+  browser keeps the selection (one or several, Ctrl and Shift as in the
+  picker) and the focus, which a change of mode keeps.
+- **Keys**, while the entries hold the focus: the arrows, Page Up and Page
+  Down, Home and End as the mode's layout says; Enter opens; Ctrl+A and
+  Ctrl+Space select; typed letters jump to the first name that starts with
+  them, one letter again goes round them, and a pause of a second starts
+  again.
+- **Thumbnails** come from a `ThumbnailProvider`: each frame, the mode asks
+  for what it shows (`Visible`) and the next row (`Near`), and what is not
+  asked again is cancelled. `PreviewThumbnails` makes them with the
+  preview providers below.
+
 ## Previews
 
 Previews come from providers (`files::preview::PreviewProvider`) that
