@@ -132,9 +132,13 @@ def run(cfg: dict, name: str, moves: int, out: Path) -> dict:
         # The bar's right end, where the window buttons are.
         right = origin_x + WIDTH - left
         region = f"{right - 160},{bar_y - 14} 160x28"
+        # Each position reached by a move from a pixel aside: a pointer
+        # already there gives no motion, and the hover would be stale.
+        comp.mouse_move(caption[0] - left + 1, bar_y)
         comp.mouse_move(caption[0] - left, bar_y)
         time.sleep(0.8)
         idle = capture(comp, out, f"{name}-idle.png", region)
+        comp.mouse_move(right - 24, bar_y)
         comp.mouse_move(right - 23, bar_y)
         time.sleep(0.8)
         hovered = capture(comp, out, f"{name}-hover.png", region)
