@@ -174,7 +174,7 @@ Pan and zoom follow the pointer profile
 |---|---|
 | Wheel, two fingers | Pans (Shift and the wheel: sideways) |
 | Ctrl (Cmd) and the wheel, a pinch | Zooms around the pointer |
-| Drag with the middle button, or with Space held | Pans |
+| Drag with the middle button, or with Space held | Pans, wherever it starts on the graph (a node, a port, a wire too) |
 | Drag on the canvas | A rubber band: selects the nodes it touches (Shift or Ctrl adds) |
 | Click on the canvas | Clears the selection (nodes and wires), drops a wire begun with a click |
 | Double click on the canvas | Fits the graph (`gesture.graph.fit`) |

@@ -115,5 +115,6 @@
 - [Micro-indicators, the design](design/indicators.md)
 - [Icons: an inventory](icons.md)
 - [Pointer gestures, a study](design/pointer-gestures.md)
+- [Navigation on large canvases, a study](design/navigation.md)
 - [Wide gamut on Wayland](wayland-colour.md)
 - [The logo](logo/README.md)
