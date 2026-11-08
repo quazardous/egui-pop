@@ -64,6 +64,13 @@ impl Plugin for Demo {
                 ui.label("main body");
             }),
         );
+        // A zone that is not a dock: no tab is dropped there.
+        ctx.block(
+            zones::STATUS_BAR,
+            Block::add(BlockId::from_static("demo.status"), 0, |ui, _| {
+                ui.label("status text");
+            }),
+        );
         let veto = self.veto;
         let moves = self.moves.clone();
         ctx.before(STEP_MOVE, move |_, args| {
@@ -147,6 +154,14 @@ fn drag(h: &mut Harness<'_, App>, from: Pos2, to: Pos2) {
     // Held there: egui_stack keeps a target it found for a moment (its
     // `max_preference_time`) before it takes the next one.
     for _ in 0..4 {
+        h.step();
+    }
+}
+
+/// Keeps a drag going, the button held, to `to`; held there.
+fn drag_on(h: &mut Harness<'_, App>, to: Pos2) {
+    for _ in 0..8 {
+        h.input_mut().events.push(egui::Event::PointerMoved(to));
         h.step();
     }
 }
@@ -276,6 +291,31 @@ fn an_area_a_panel_stays_out_of_refuses_its_tab_with_the_reason() {
     release(&mut h, to);
     assert_eq!(app.layout().area_of(&PINNED), Some(Area::Bottom));
     assert_eq!(group(tree(&h, Area::StartSide)), Some(vec![FILES, SEARCH]));
+    assert_eq!(moves.load(Ordering::SeqCst), 0, "no step for a refusal");
+}
+
+#[test]
+fn a_tab_released_over_the_status_bar_goes_back_with_no_preview() {
+    let (mut h, moves) = harness(false);
+    let app = h.state().handle().clone();
+    let before = app.layout();
+    let from = tab(&h, "Console").center();
+    let status = h.get_by_label("status text").rect();
+    assert!(
+        !area(&h, Area::Bottom).contains(status.center()),
+        "the status bar is not the bottom area"
+    );
+    // Through the bottom area, whose edges would take it, to the bar.
+    let bottom = area(&h, Area::Bottom).center();
+    drag(&mut h, from, bottom);
+    drag_on(&mut h, status.center());
+    assert!(
+        app.drop_hint().is_none(),
+        "no drop preview over a zone that is not a dock: {:?}",
+        app.drop_hint()
+    );
+    release(&mut h, status.center());
+    assert_eq!(app.layout().areas, before.areas, "back where it was");
     assert_eq!(moves.load(Ordering::SeqCst), 0, "no step for a refusal");
 }
 

@@ -988,6 +988,10 @@ pub(crate) struct Workbench {
     pub flyout_rect: Option<Rect>,
     /// The panel whose flyout was held in the overlay stack last frame.
     flyout_held: Option<PanelId>,
+    /// The shell's zones that hold no dock this frame (the title, top and
+    /// status bars, the activity bar): a tab released there goes back
+    /// where it was, with no drop preview.
+    pub no_drop: Vec<Rect>,
     /// The primary (start) side bar lies on the right, the secondary on
     /// the left (`workbench.side_bar_position`), as of the last pass.
     pub flipped: bool,
@@ -1024,6 +1028,7 @@ impl Default for Workbench {
             flyout: None,
             flyout_rect: None,
             flyout_held: None,
+            no_drop: Vec::new(),
             flipped: false,
         }
     }
@@ -2424,7 +2429,8 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         } else {
             egui::Panel::left(id)
         };
-        bar.resizable(false)
+        let shown = bar
+            .resizable(false)
             .exact_size(t.size.icon_panel + 2.0 * t.space.s + 2.0 * t.space.xs)
             .show(ui, |ui| {
                 let region = focus::Region::new("activityBar", RANK_ACTIVITY_BAR);
@@ -2436,6 +2442,16 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
                     });
                 });
             });
+        app.workbench_mut().no_drop.push(shown.response.rect);
+    }
+    {
+        // Zones that are not docks refuse drops, before the docks resolve
+        // the drag.
+        let mut wb = app.workbench_mut();
+        let zones = std::mem::take(&mut wb.no_drop);
+        if let Some(space) = wb.space.as_mut() {
+            space.no_drop_zones(zones);
+        }
     }
     let (folded, over) = {
         let wb = app.workbench_mut();
