@@ -22,6 +22,10 @@ use std::time::SystemTime;
 
 use egui::{Modifiers, Ui};
 
+use egui_pop_core::icon::Icon;
+use egui_pop_core::strings;
+use egui_pop_core::widgets;
+
 use super::fs::{Meta, SharedFs};
 use super::preview::{Previews, Shown};
 use super::sort::natural_cmp;
@@ -495,8 +499,11 @@ pub struct ModeNeeds {
 pub struct ModeInfo {
     /// `details`, `thumbnails`, `filmstrip`…
     pub id: String,
+    /// Its English name: translated under `egui-pop-files-mode-<id>`
+    /// ([`mode_label`]).
     pub label: String,
-    /// The name of its icon in the icon registry (`list`, `grid`).
+    /// The name of its icon in the icon registry (`phosphor:list`); one
+    /// that does not resolve leaves the label alone.
     pub icon: String,
     /// The keys it moves with, as its tip says them.
     pub keys: Vec<(String, String)>,
@@ -678,7 +685,7 @@ impl ViewMode for DetailsMode {
         ModeInfo {
             id: "details".into(),
             label: "Details".into(),
-            icon: "list".into(),
+            icon: "phosphor:list".into(),
             keys: vec![
                 ("Up, Down".into(), "Previous, next entry".into()),
                 ("Page Up, Page Down".into(), "A page up or down".into()),
@@ -841,7 +848,7 @@ impl ViewMode for ThumbnailsMode {
         ModeInfo {
             id: "thumbnails".into(),
             label: "Thumbnails".into(),
-            icon: "grid".into(),
+            icon: "phosphor:squares-four".into(),
             keys: vec![
                 ("Arrows".into(), "Move in the grid".into()),
                 ("Page Up, Page Down".into(), "A page up or down".into()),
@@ -1025,6 +1032,143 @@ impl ViewMode for ThumbnailsMode {
 }
 
 // ---------------------------------------------------------------------------
+// The mode switcher and the mode keys
+// ---------------------------------------------------------------------------
+
+/// The id of the details mode, the first in the switcher.
+pub const MODE_DETAILS: &str = "details";
+/// The id of the thumbnails mode.
+pub const MODE_THUMBNAILS: &str = "thumbnails";
+/// Up to this many modes, the switcher is a segmented control; beyond, a
+/// menu.
+pub const SEGMENTED_MAX: usize = 4;
+/// How many modes have a key (`Ctrl+1` to `Ctrl+9`).
+pub const MODE_KEYS: usize = 9;
+
+fn request_id() -> egui::Id {
+    egui::Id::unique("egui_pop.file_browser.mode_request")
+}
+
+fn focused_id() -> egui::Id {
+    egui::Id::unique("egui_pop.file_browser.focused")
+}
+
+/// A mode's name in the interface's language: the catalogue's
+/// `egui-pop-files-mode-<id>`, else its English label.
+pub fn mode_label(ctx: &egui::Context, info: &ModeInfo) -> String {
+    strings::lookup(
+        ctx,
+        &format!("egui-pop-files-mode-{}", info.id),
+        &info.label,
+    )
+}
+
+/// Asks the file browser holding the keyboard for its `n`-th mode
+/// (from 1, in the switcher's order): what the `file.view.mode<n>`
+/// commands do. Taken by the browser's next frame.
+pub fn request_mode(ctx: &egui::Context, n: usize) {
+    ctx.data_mut(|d| d.insert_temp(request_id(), n));
+    ctx.request_repaint();
+}
+
+/// Whether a file browser held the keyboard in the frame drawn last; read
+/// once (the flag is cleared), for the mode keys' `when` clause.
+pub fn take_focused(ctx: &egui::Context) -> bool {
+    ctx.data_mut(|d| d.remove_temp::<bool>(focused_id()))
+        .unwrap_or(false)
+}
+
+/// The `n`-th mode key pressed (`Ctrl+1` is 1), consumed; `None` when
+/// none was.
+pub fn mode_key(ui: &mut Ui) -> Option<usize> {
+    const KEYS: [egui::Key; MODE_KEYS] = [
+        egui::Key::Num1,
+        egui::Key::Num2,
+        egui::Key::Num3,
+        egui::Key::Num4,
+        egui::Key::Num5,
+        egui::Key::Num6,
+        egui::Key::Num7,
+        egui::Key::Num8,
+        egui::Key::Num9,
+    ];
+    ui.input_mut(|i| {
+        KEYS.iter()
+            .position(|k| i.consume_key(Modifiers::COMMAND, *k))
+            .map(|n| n + 1)
+    })
+}
+
+/// The mode switcher: a segmented control for up to [`SEGMENTED_MAX`]
+/// modes, a menu beyond. Each mode's label is translated
+/// ([`mode_label`]), its icon drawn from the icon registry when it
+/// resolves, its keys in its tip. Answers the mode pressed, if one was
+/// (the one shown too: a press may move the keyboard elsewhere).
+pub fn mode_switcher(
+    ui: &mut Ui,
+    id: egui::Id,
+    modes: &[ModeInfo],
+    current: &str,
+) -> Option<(String, egui::Response)> {
+    let ctx = ui.ctx().clone();
+    let tip = |n: usize, info: &ModeInfo| {
+        let mut lines = Vec::new();
+        if n < MODE_KEYS {
+            lines.push(format!("Ctrl+{}", n + 1));
+        }
+        lines.extend(info.keys.iter().map(|(k, what)| format!("{k}: {what}")));
+        lines.join("\n")
+    };
+    let mut picked = None;
+    if modes.len() <= SEGMENTED_MAX {
+        ui.scope(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            for (n, info) in modes.iter().enumerate() {
+                let label = mode_label(&ctx, info);
+                let on = info.id == current;
+                let glyph = Icon::by_name(&info.icon).and_then(Icon::glyph);
+                let r = match glyph {
+                    Some(g) => {
+                        let family = egui::FontFamily::Name(egui_pop_core::icon::FAMILY.into());
+                        let icon = egui::RichText::new(g).family(family);
+                        widgets::selectable_label(ui, on, (icon, label.as_str()))
+                    }
+                    None => widgets::selectable_label(ui, on, label.as_str()),
+                };
+                // Its name is the label alone, not the icon's glyph.
+                r.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, on, &label));
+                let r = r.on_hover_text(tip(n, info));
+                if r.clicked() {
+                    picked = Some((info.id.clone(), r));
+                }
+            }
+        });
+    } else {
+        let shown = modes
+            .iter()
+            .find(|m| m.id == current)
+            .map(|m| mode_label(&ctx, m))
+            .unwrap_or_default();
+        let r = egui::ComboBox::from_id_salt(id.with("modes"))
+            .selected_text(shown)
+            .show_ui(ui, |ui| {
+                for (n, info) in modes.iter().enumerate() {
+                    let on = info.id == current;
+                    let r = widgets::selectable_label(ui, on, mode_label(&ctx, info))
+                        .on_hover_text(tip(n, info));
+                    if r.clicked() {
+                        picked = Some((info.id.clone(), r));
+                    }
+                }
+            });
+        let name = strings::tr(&ctx, &crate::strings::FILES_MODES);
+        r.response
+            .widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, &name));
+    }
+    picked
+}
+
+// ---------------------------------------------------------------------------
 // The browser
 // ---------------------------------------------------------------------------
 
@@ -1052,7 +1196,8 @@ struct TypeAhead {
 }
 
 /// The file browser: entries from a [`FileSource`], shown by a
-/// [`ViewMode`] chosen in its toolbar and remembered under its id.
+/// [`ViewMode`] chosen in its toolbar (or with `Ctrl+1` to `Ctrl+9`), kept
+/// per dialog in the host's store when drawn with [`FileBrowser::show_in`].
 pub struct FileBrowser {
     id: egui::Id,
     source: Arc<dyn FileSource>,
@@ -1395,67 +1540,80 @@ impl FileBrowser {
         }
     }
 
-    fn mode_key() -> &'static str {
-        "egui_pop.file_browser.mode"
+    /// What each of its modes is, in the switcher's order.
+    pub fn mode_infos(&self) -> Vec<ModeInfo> {
+        self.modes
+            .ids()
+            .iter()
+            .filter_map(|id| self.modes.make(id).map(|m| m.describe()))
+            .collect()
+    }
+
+    /// Shows the `n`-th mode (from 1, in the switcher's order), as
+    /// `Ctrl+n` does; `false` when there is none or it is shown already.
+    pub fn set_mode_index(&mut self, n: usize) -> bool {
+        let Some(id) = n
+            .checked_sub(1)
+            .and_then(|i| self.modes.ids().get(i).cloned())
+        else {
+            return false;
+        };
+        id != self.mode_id && self.set_mode(&id)
+    }
+
+    /// Draws it as [`FileBrowser::show`], its mode kept in the host's store
+    /// under `dialog` (the last used for that dialog: a request's purpose,
+    /// a window's name), read when it is first drawn.
+    pub fn show_in(
+        &mut self,
+        ui: &mut Ui,
+        app: &crate::app::AppHandle,
+        dialog: &str,
+    ) -> BrowserOutput {
+        if !self.restored {
+            self.restored = true;
+            if let Some(kept) = super::view_for(app, dialog) {
+                self.set_mode(&kept);
+            }
+        }
+        let out = self.show(ui);
+        if out.mode_changed {
+            super::want_view_for(app, dialog, &self.mode_id);
+        }
+        out
     }
 
     /// Draws the toolbar's mode switcher and the entries.
     pub fn show(&mut self, ui: &mut Ui) -> BrowserOutput {
         let mut out = BrowserOutput::default();
-        if !self.restored {
-            self.restored = true;
-            let kept: Option<String> = ui
-                .ctx()
-                .data_mut(|d| d.get_persisted(self.id.with(Self::mode_key())));
-            if let Some(kept) = kept {
-                self.set_mode(&kept);
-            }
-        }
         self.pump();
         if self.loading() {
             ui.ctx().request_repaint();
         }
         // The switcher.
         ui.horizontal(|ui| {
-            for id in self.modes.ids() {
-                let Some(info) = self.modes.make(&id).map(|m| m.describe()) else {
-                    continue;
-                };
-                let on = id == self.mode_id;
-                let tip = info
-                    .keys
-                    .iter()
-                    .map(|(k, what)| format!("{k}: {what}"))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                let resp = ui
-                    .selectable_label(on, info.label.as_str())
-                    .on_hover_text(tip);
-                if resp.clicked() && !on {
-                    self.set_mode(&id);
-                    out.mode_changed = true;
-                }
-            }
-            if self
-                .modes
-                .make(&self.mode_id)
-                .is_some_and(|m| m.describe().needs.thumbnails)
+            let infos = self.mode_infos();
+            if let Some((id, _)) = mode_switcher(ui, self.id, &infos, &self.mode_id)
+                && id != self.mode_id
+                && self.set_mode(&id)
             {
+                out.mode_changed = true;
+            }
+            if infos
+                .iter()
+                .any(|m| m.id == self.mode_id && m.needs.thumbnails)
+            {
+                let name = strings::tr(ui.ctx(), &crate::strings::FILES_THUMBNAIL_SIZE);
                 ui.add(
                     egui::Slider::new(
                         &mut self.settings.thumbnail_size,
                         ThumbnailsMode::MIN_SIZE..=ThumbnailsMode::MAX_SIZE,
                     )
                     .show_value(false)
-                    .text("Size"),
+                    .text(name),
                 );
             }
         });
-        if out.mode_changed {
-            let id = self.mode_id.clone();
-            ui.ctx()
-                .data_mut(|d| d.insert_persisted(self.id.with(Self::mode_key()), id));
-        }
         if let Some(e) = &self.error {
             ui.label(e.to_string());
             return out;
@@ -1464,6 +1622,15 @@ impl FileBrowser {
         let keys_id = self.id.with("entries");
         let focused = ui.memory(|m| m.has_focus(keys_id));
         if focused {
+            ui.ctx().data_mut(|d| d.insert_temp(focused_id(), true));
+            // A mode key: pressed here, or run as a command of the keymap.
+            let asked = mode_key(ui)
+                .or_else(|| ui.ctx().data_mut(|d| d.remove_temp::<usize>(request_id())));
+            if let Some(n) = asked
+                && self.set_mode_index(n)
+            {
+                out.mode_changed = true;
+            }
             let (events, modifiers) = ui.input(|i| (i.events.clone(), i.modifiers));
             for ev in events {
                 match ev {

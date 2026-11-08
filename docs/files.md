@@ -243,10 +243,17 @@ which swaps the first two (`SetFolder`).
   Enter gives the default width back (`preview::PANE_WIDTH`, 240). The
   width is kept in `settings/files.pane_width` (`files::pane_width`). The
   places column keeps its fixed 150 points.
-- With previews, a switch beside the folder shows the entries as a list or as a
-  grid of thumbnails from the same providers (`PickerView`, kept in
-  `settings/files.view`, read with `files::view`); a picker without previews
-  keeps its list. The thumbnails' size goes from `THUMBNAIL_MIN_SIZE` to
+- With previews, the file browser's mode switcher beside the folder shows the
+  entries in its `details` mode (a list with columns) or its `thumbnails` mode
+  (a grid of thumbnails from the same providers), also with `Ctrl+1` and
+  `Ctrl+2` (the `file.view.mode1` to `file.view.mode9` commands, active while a
+  file browser holds the keyboard). Each dialog reopens in the mode it was last
+  shown in: by its request's purpose, else its kind (`open`, `open_many`,
+  `save`, `folder`), kept in the host's store (`settings/files.views`, read with
+  `files::view_for`); a dialog never shown opens in the mode last used
+  (`settings/files.view`, `files::view`; `list` and `grid`, kept before the
+  modes, read as `details` and `thumbnails`). A picker without previews keeps
+  its list. The thumbnails' size goes from `THUMBNAIL_MIN_SIZE` to
   `THUMBNAIL_MAX_SIZE` (64 to 256 points, 128 at first): the slider beside the
   switch, `Ctrl` and the wheel over the grid, or `Ctrl` and `+` or `-`; it is
   kept in `settings/files.thumbnail_size` (`files::thumbnail_size`). Only the
@@ -534,8 +541,9 @@ still chooses a path and still asks before replacing a file held there.
 
 `files::browser` is the component the choosers are moving onto (the
 [design](design/file-browser.md)): a `FileBrowser` shows the entries of a
-place from a `FileSource` in a `ViewMode` chosen in its toolbar, and
-remembers the mode under its id. The in-app picker does not draw it yet.
+place from a `FileSource` in a `ViewMode` chosen in its toolbar. The in-app
+picker shares its modes' ids, its switcher and its mode keys; it still draws
+its own list and grid (columns to sort by, groups) for its two modes.
 
 - **Sources.** `FsSource` lists a `FileSystem` in pages (on a thread of its
   own for the system's, at once for a `MemoryFs`); a source of your own
@@ -549,7 +557,15 @@ remembers the mode under its id. The in-app picker does not draw it yet.
   Down, Home and End as the mode's layout says; Enter opens; Ctrl+A and
   Ctrl+Space select; typed letters jump to the first name that starts with
   them, one letter again goes round them, and a pause of a second starts
-  again.
+  again. `Ctrl+1` to `Ctrl+9` show the switcher's modes in order
+  (`browser::request_mode` is what the keymap's commands do).
+- **The switcher** is a segmented control up to four modes (`SEGMENTED_MAX`),
+  a menu beyond; each mode's label is translated under
+  `egui-pop-files-mode-<id>` (`mode_label`), its icon drawn from the icon
+  registry when the name resolves.
+- **The mode** is kept per dialog in the host's store when the browser is
+  drawn with `FileBrowser::show_in(ui, app, dialog)`; with `show`, it lasts
+  as long as the browser.
 - **Thumbnails** come from a `ThumbnailProvider`: each frame, the mode asks
   for what it shows (`Visible`) and the next row (`Near`), and what is not
   asked again is cancelled. `PreviewThumbnails` makes them with the

@@ -3512,13 +3512,13 @@ fn the_files_page_shows_a_grid_of_thumbnails() {
     h.run();
     h.get_by_label("Open an image…").click();
     settle_picker(&mut h);
-    h.get_by_label("Grid").click();
+    h.get_by_label("Thumbnails").click();
     settle_thumbnails(&mut h);
     assert!(h.query_by_label("harbour.png").is_some());
     let picker = |h: &Harness<'_, Gallery>, what: &str| {
         h.state().app.handle().debug_snapshot()["files"]["open"][0]["picker"][what].clone()
     };
-    assert_eq!(picker(&h, "view"), "grid");
+    assert_eq!(picker(&h, "view"), "thumbnails");
     h.snapshot("files-grid-pop-dark");
     // In the dialog, Ctrl and + are the thumbnails', not the interface's scale.
     let (size, zoom) = (picker(&h, "thumbnail_size"), h.ctx.zoom_factor());
@@ -3597,7 +3597,7 @@ fn the_files_page_groups_a_raw_with_its_sidecars() {
     );
     egui_pop_test::assert_all_named(&h);
     h.snapshot("files-grouped-pop-dark");
-    h.get_by_label("Grid").click();
+    h.get_by_label("Thumbnails").click();
     for _ in 0..3 {
         settle_thumbnails(&mut h);
     }

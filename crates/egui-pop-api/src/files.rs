@@ -211,6 +211,12 @@ const WHEN_EDIT_PATH: &str = "filePickerEditPath";
 /// That, in a modal (as the picker's own and a dialog are): where `Alt+Left` is
 /// not the context stack's back (`nav.back`).
 const WHEN_IN_MODAL: &str = "modalOpen && filePickerEditPath";
+/// A file browser holds the keyboard (an in-app picker with previews open,
+/// or a [`browser::FileBrowser`]'s entries): the mode keys work.
+pub const WHEN_BROWSER: &str = "fileBrowserFocused";
+/// The prefix of the mode keys' commands: `file.view.mode1` (`Ctrl+1`) to
+/// `file.view.mode9`.
+pub const CMD_VIEW_MODE: &str = "file.view.mode";
 
 /// The setting: use the system's chooser when there is one. Declared only
 /// when the application allows that chooser
@@ -235,8 +241,15 @@ pub const DIALOG_SIZE: &str = "settings/files.dialog_size";
 /// Where the width of the in-app picker's preview pane is kept.
 pub const PANE_WIDTH: &str = "settings/files.pane_width";
 
-/// Where the in-app picker's view is kept ([`PickerView`]).
+/// Where the in-app picker's view last used is kept: a mode id of
+/// [`browser::ViewModes`] (`details`, `thumbnails`); a dialog never seen
+/// opens in it.
 pub const VIEW: &str = "settings/files.view";
+/// The mode each dialog was last shown in, by dialog (a request's purpose,
+/// else its kind): a JSON list of pairs ([`view_for`]).
+pub const VIEWS: &str = "settings/files.views";
+/// How many dialogs' modes are kept.
+pub const VIEWS_KEPT: usize = 32;
 /// Where the size of the in-app picker's thumbnails is kept, in points.
 pub const THUMBNAIL_SIZE: &str = "settings/files.thumbnail_size";
 /// Where the in-app picker's order is kept: `name`, `-name` (descending), and
@@ -1423,6 +1436,7 @@ impl Plugin for FilesPlugin {
                 (BOOKMARKS, "Bookmarks"),
                 (BOOKMARK_NAMES, "Bookmark names"),
                 (LAST_FOLDERS, "Last folders by purpose"),
+                (VIEWS, "File views by dialog"),
             ] {
                 store
                     .declare(
@@ -1454,7 +1468,7 @@ impl Plugin for FilesPlugin {
                     Descriptor::choice(
                         "File picker view",
                         &[PickerView::List.as_str(), PickerView::Grid.as_str()],
-                        PickerView::List.as_str(),
+                        browser::MODE_DETAILS,
                     ),
                 ),
                 (
@@ -1600,6 +1614,38 @@ impl Plugin for FilesPlugin {
             CMD_FORWARD,
         );
         ctx.command(spec, run)?;
+        for n in 1..=browser::MODE_KEYS {
+            let f = files.clone();
+            let id = CommandId::new(format!("{CMD_VIEW_MODE}{n}"))
+                .map_err(|e| PluginError::Failed(format!("{CMD_VIEW_MODE}{n}: {e:?}")))?;
+            ctx.command(
+                CommandSpec::new(id, &format!("View mode {n}"), "File")
+                    .description(&format!("Shows the entries of the file browser holding the keyboard (the open in-app file picker first) in its mode number {n}, in the order of its switcher; nothing when it has fewer modes."))
+                    .when(WHEN_BROWSER)
+                    .key_with(&format!("Ctrl+{n}"), BindOptions::global().through_modal()),
+                move |call| {
+                    // The picker reads its view from the store each frame:
+                    // the change goes there.
+                    let dialog = lock(&f.0)
+                        .active_picker()
+                        .filter(|p| p.previews.is_some())
+                        .map(|p| p.dialog.clone());
+                    match dialog {
+                        Some(dialog) => {
+                            if let Some(view) = n
+                                .checked_sub(1)
+                                .and_then(|i| PickerView::ALL.get(i))
+                            {
+                                want_view_for(call.app, &dialog, view.as_str());
+                            }
+                        }
+                        None => browser::request_mode(&call.app.egui(), n),
+                    }
+                    call.app.egui().request_repaint();
+                    Ok(Json::Null)
+                },
+            )?;
+        }
         ctx.command(
             CommandSpec::new(CMD_TOGGLE_PREVIEW, "Show or hide the preview", "File")
                 .description("Shows or hides the preview pane of the in-app file picker, kept for the next one (the `files.preview` setting).")
@@ -1671,7 +1717,8 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
         .and_then(|e| e.value.as_bool())
         .unwrap_or(false);
     let refused = system_chooser_refusal(ui.ctx());
-    let (new_folder, select_all, selects, edit_path) = {
+    let browsing = browser::take_focused(ui.ctx());
+    let (new_folder, select_all, selects, edit_path, picker_modes) = {
         let mut s = lock(&files.0);
         s.native = native;
         s.refused = refused;
@@ -1686,6 +1733,7 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
             any(&|p| p.kind == ChooseKind::OpenMany && !p.is_path()),
             any(&FilePicker::selects_apart),
             any(&|_| true),
+            any(&|p| p.previews.is_some()),
         )
     };
     let say = |on: bool| if on { "true" } else { "false" };
@@ -1693,6 +1741,7 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
     app.set_context(WHEN_SELECT_ALL, say(select_all));
     app.set_context(WHEN_SELECTS, say(selects));
     app.set_context(WHEN_EDIT_PATH, say(edit_path));
+    app.set_context(WHEN_BROWSER, say(picker_modes || browsing));
     let done: Vec<(
         u64,
         FileRequest,
@@ -2013,7 +2062,9 @@ fn load_view(app: &AppHandle, picker: &mut FilePicker) {
     if !picker.pane_dragging {
         picker.pane_width = pane_width(app);
     }
-    picker.view = view(app);
+    picker.view = view_for(app, &picker.dialog)
+        .and_then(|m| PickerView::parse(&m))
+        .unwrap_or_else(|| view(app));
     if !picker.thumbnail_dragging {
         picker.thumbnail_size = thumbnail_size(app);
     }
@@ -2031,8 +2082,8 @@ fn keep_view(app: &AppHandle, picker: &FilePicker) {
     if !picker.pane_dragging && picker.pane_width != pane_width(app) {
         want_pane_width(app, picker.pane_width);
     }
-    if picker.view != view(app) {
-        want_view(app, picker.view);
+    if view_for(app, &picker.dialog).and_then(|m| PickerView::parse(&m)) != Some(picker.view) {
+        want_view_for(app, &picker.dialog, picker.view.as_str());
     }
     if !picker.thumbnail_dragging && picker.thumbnail_size != thumbnail_size(app) {
         want_thumbnail_size(app, picker.thumbnail_size);
@@ -2132,7 +2183,7 @@ pub fn want_pane_width(app: &AppHandle, width: f32) {
     keep_value(app, PANE_WIDTH, Value::Float(f64::from(width)));
 }
 
-/// The in-app picker's view, as kept.
+/// The in-app picker's view last used, as kept.
 pub fn view(app: &AppHandle) -> PickerView {
     lock(&app.store())
         .get(VIEW)
@@ -2140,9 +2191,53 @@ pub fn view(app: &AppHandle) -> PickerView {
         .unwrap_or_default()
 }
 
-/// Keeps the in-app picker's view.
+/// Keeps the in-app picker's view last used.
 pub fn want_view(app: &AppHandle, view: PickerView) {
     keep_value(app, VIEW, Value::Choice(view.as_str().into()));
+}
+
+fn views(app: &AppHandle) -> Vec<(String, String)> {
+    lock(&app.store())
+        .get(VIEWS)
+        .and_then(|e| e.value.as_text().map(str::to_string))
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+/// The mode a dialog was last shown in (a mode id: `details`,
+/// `thumbnails`), kept in the host's store; `None` for a dialog never
+/// shown.
+pub fn view_for(app: &AppHandle, dialog: &str) -> Option<String> {
+    views(app)
+        .into_iter()
+        .find_map(|(d, mode)| (d == dialog).then_some(mode))
+}
+
+/// Keeps the mode a dialog is shown in, and as the view last used.
+pub fn want_view_for(app: &AppHandle, dialog: &str, mode: &str) {
+    let mut list = views(app);
+    list.retain(|(d, _)| d != dialog);
+    list.insert(0, (dialog.to_string(), mode.to_string()));
+    list.truncate(VIEWS_KEPT);
+    if let Ok(text) = serde_json::to_string(&list) {
+        write_text(app, VIEWS, text);
+    }
+    if let Some(view) = PickerView::parse(mode) {
+        want_view(app, view);
+    }
+}
+
+/// The dialog a request's view is kept under: its purpose, else its kind.
+pub fn dialog_of(request: &FileRequest) -> String {
+    request.purpose.clone().unwrap_or_else(|| {
+        match request.kind {
+            ChooseKind::Open => "open",
+            ChooseKind::OpenMany => "open_many",
+            ChooseKind::Save => "save",
+            ChooseKind::Folder => "folder",
+        }
+        .to_string()
+    })
 }
 
 /// The size of the in-app picker's thumbnails, as kept.
@@ -2238,31 +2333,36 @@ fn folder_name(dir: &Path) -> String {
         .unwrap_or_else(|| dir.display().to_string())
 }
 
-/// How the in-app picker shows a folder's entries.
+/// How the in-app picker shows a folder's entries: the file browser's
+/// modes it draws ([`browser::MODE_DETAILS`], [`browser::MODE_THUMBNAILS`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PickerView {
-    /// One entry per row, with its facts in columns.
+    /// The details mode: one entry per row, with its facts in columns.
     #[default]
     List,
-    /// Thumbnails from the preview providers (only with previews,
-    /// [`FilePicker::with_previews`]: a list without them).
+    /// The thumbnails mode: thumbnails from the preview providers (only
+    /// with previews, [`FilePicker::with_previews`]: details without them).
     Grid,
 }
 
 impl PickerView {
-    /// Its name in the store.
+    /// Both, in the switcher's order.
+    pub const ALL: [PickerView; 2] = [PickerView::List, PickerView::Grid];
+
+    /// Its mode's id, its name in the store.
     pub fn as_str(self) -> &'static str {
         match self {
-            PickerView::List => "list",
-            PickerView::Grid => "grid",
+            PickerView::List => browser::MODE_DETAILS,
+            PickerView::Grid => browser::MODE_THUMBNAILS,
         }
     }
 
-    /// The view of a name in the store.
+    /// The view of a mode's id; the names kept before the modes (`list`,
+    /// `grid`) too.
     pub fn parse(name: &str) -> Option<PickerView> {
         match name {
-            "list" => Some(PickerView::List),
-            "grid" => Some(PickerView::Grid),
+            browser::MODE_DETAILS | "list" => Some(PickerView::List),
+            browser::MODE_THUMBNAILS | "grid" => Some(PickerView::Grid),
             _ => None,
         }
     }
@@ -2591,6 +2691,8 @@ pub struct FilePicker {
     pub pane_width: f32,
     /// How the entries are shown.
     pub view: PickerView,
+    /// The dialog its view is kept under ([`dialog_of`]).
+    pub dialog: String,
     /// The thumbnails' size in the grid, in points.
     pub thumbnail_size: f32,
     /// The order of the entries, in the list and in the grid.
@@ -2720,6 +2822,7 @@ impl FilePicker {
             show_preview: false,
             pane_width: preview::PANE_WIDTH,
             view: PickerView::List,
+            dialog: dialog_of(request),
             thumbnail_size: THUMBNAIL_DEFAULT_SIZE,
             sort: PickerSort::default(),
             folders_first: true,
@@ -3877,6 +3980,13 @@ impl FilePicker {
             })
         };
         // Drawn on its own, the picker reads its commands' keys itself.
+        if !waiting
+            && !self.declared_keys
+            && self.previews.is_some()
+            && let Some(n) = browser::mode_key(ui)
+        {
+            self.set_mode_index(n);
+        }
         if !waiting && !self.declared_keys {
             // Alt+P, as the preview pane of the Windows file explorer.
             if self.previews.is_some() && ui.input_mut(|i| i.consume_key(Modifiers::ALT, Key::P)) {
@@ -4444,22 +4554,46 @@ impl FilePicker {
         None
     }
 
-    /// The list or grid switch, and the thumbnails' size with the grid.
+    /// The modes it offers, in the switcher's order: the file browser's
+    /// details and thumbnails.
+    fn mode_infos() -> Vec<browser::ModeInfo> {
+        PickerView::ALL
+            .iter()
+            .filter_map(|v| browser::ViewModes::default().make(v.as_str()))
+            .map(|m| m.describe())
+            .collect()
+    }
+
+    /// Shows the `n`-th mode (from 1), as `Ctrl+n` does; `false` without
+    /// previews (no thumbnails) or without such a mode.
+    pub fn set_mode_index(&mut self, n: usize) -> bool {
+        let Some(view) = n
+            .checked_sub(1)
+            .and_then(|i| PickerView::ALL.get(i).copied())
+        else {
+            return false;
+        };
+        if self.previews.is_none() || self.view == view {
+            return false;
+        }
+        self.view = view;
+        self.reveal_cell = true;
+        true
+    }
+
+    /// The mode switcher, and the thumbnails' size with the thumbnails.
     fn view_controls(&mut self, ui: &mut Ui) {
-        for (view, name) in [
-            (PickerView::List, &txt::FILES_VIEW_LIST),
-            (PickerView::Grid, &txt::FILES_VIEW_GRID),
-        ] {
-            let name = strings::tr(ui.ctx(), name);
-            let r = widgets::selectable_label(ui, self.view == view, name);
-            if r.clicked() {
-                if self.view != view {
-                    self.view = view;
-                    self.reveal_cell = true;
-                }
-                // A press leaves nothing focused: typing goes on filtering.
-                self.refocus |= by_pointer(&r);
+        let id = ui.scope_id().with("egui_pop.files.modes");
+        let modes = Self::mode_infos();
+        if let Some((mode, r)) = browser::mode_switcher(ui, id, &modes, self.view.as_str()) {
+            if let Some(view) = PickerView::parse(&mode)
+                && view != self.view
+            {
+                self.view = view;
+                self.reveal_cell = true;
             }
+            // A press leaves nothing focused: typing goes on filtering.
+            self.refocus |= by_pointer(&r);
         }
         self.thumbnail_dragging = false;
         if self.view != PickerView::Grid {

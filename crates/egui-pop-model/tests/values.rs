@@ -993,3 +993,23 @@ fn a_new_step_keeps_the_redo_list_as_a_replaced_line_reachable_by_a_jump() {
     let replaced: Vec<u64> = store.replaced_in(&APP).iter().map(|(_, s)| s.id).collect();
     assert_eq!(replaced, vec![new]);
 }
+
+#[test]
+fn the_file_pickers_views_read_as_the_file_browsers_modes() {
+    for (old, new) in [
+        ("list", "details"),
+        ("grid", "thumbnails"),
+        ("details", "details"),
+    ] {
+        let doc = format!(
+            r#"{{"version": 2, "kind": "settings", "values": {{"settings/files.view": "{old}", "settings/files.preview": false}}}}"#
+        );
+        let read = settings_schema().load::<SettingsDoc>(&doc).unwrap();
+        assert_eq!(
+            read.value.values["settings/files.view"],
+            json!(new),
+            "{old}"
+        );
+        assert_eq!(read.value.values["settings/files.preview"], json!(false));
+    }
+}

@@ -557,11 +557,31 @@ pub struct SettingsDoc {
 }
 
 /// The `settings` document's schema. Version 2 reads a retired pointer
-/// profile id as the profile it names (`adobe` as `lightroom`).
+/// profile id as the profile it names (`adobe` as `lightroom`); version 3
+/// reads the file picker's views as the file browser's modes (`list` as
+/// `details`, `grid` as `thumbnails`).
 pub fn settings_schema() -> Schema {
-    Schema::new("settings", 2)
+    Schema::new("settings", 3)
         .migration(0, same)
         .migration(1, crate::pointer::settings_profile_aliases)
+        .migration(2, file_views_as_modes)
+}
+
+/// `settings/files.view`: the picker's views became the file browser's
+/// modes.
+fn file_views_as_modes(mut json: serde_json::Value) -> Result<serde_json::Value, String> {
+    if let Some(v) = json
+        .get_mut("values")
+        .and_then(|values| values.get_mut("settings/files.view"))
+    {
+        let to = match v.as_str() {
+            Some("list") => "details",
+            Some("grid") => "thumbnails",
+            _ => return Ok(json),
+        };
+        *v = serde_json::Value::String(to.into());
+    }
+    Ok(json)
 }
 
 impl Store {

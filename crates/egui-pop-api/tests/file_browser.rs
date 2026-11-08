@@ -7,7 +7,8 @@ use egui::{Key, Modifiers};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_api::files::browser::{
-    FileBrowser, FileSource, FsSource, Priority, RecordingThumbnails, ThumbnailProvider,
+    self, DetailsMode, FileBrowser, FileSource, FsSource, Priority, RecordingThumbnails,
+    ThumbnailProvider, ViewModes,
 };
 use egui_pop_api::files::fs::MemoryFs;
 
@@ -126,4 +127,49 @@ fn thumbnails_ask_for_what_is_visible_first_and_cancel_what_scrolled_away() {
             .any(|p| p == Path::new("/p/IMG_001.png")),
         "the first thumbnail, scrolled away, is cancelled"
     );
+}
+
+#[test]
+fn ctrl_and_a_digit_switch_modes_while_the_entries_hold_the_keyboard() {
+    let mut h = harness(FileBrowser::new("digits", source(20), "/p"));
+    h.run();
+    // Not before: the keys are the entries'.
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Num2);
+    h.run();
+    assert_eq!(h.state().mode(), "details");
+    h.get_by_label("IMG_003.png").click();
+    h.run();
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Num2);
+    h.run();
+    assert_eq!(h.state().mode(), "thumbnails");
+    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_003.png")));
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Num1);
+    h.run();
+    assert_eq!(h.state().mode(), "details");
+    // A mode the switcher does not have changes nothing.
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Num9);
+    h.run();
+    assert_eq!(h.state().mode(), "details");
+    // As the keymap's command does it.
+    browser::request_mode(&h.ctx, 2);
+    h.run();
+    assert_eq!(h.state().mode(), "thumbnails");
+}
+
+#[test]
+fn the_switcher_is_segmented_up_to_four_modes_then_a_menu() {
+    let many = ViewModes::default();
+    for id in ["a", "b", "c"] {
+        many.register(id, Arc::new(|| Box::new(DetailsMode::default())))
+            .unwrap();
+    }
+    let mut h = harness(FileBrowser::new("many", source(3), "/p").with_modes(many.clone()));
+    h.run();
+    assert!(h.query_by_label("Thumbnails").is_none());
+    assert!(h.query_by_label("View mode").is_some());
+    many.unregister("c");
+    let mut h = harness(FileBrowser::new("four", source(3), "/p").with_modes(many));
+    h.run();
+    assert!(h.query_by_label("Thumbnails").is_some());
+    assert!(h.query_by_label("View mode").is_none());
 }
