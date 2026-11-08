@@ -17,7 +17,9 @@
 //! command with an icon shows it framed (`menu-item-gutter`'s `selected`
 //! state), as Word does. Labels start after it whether a row has an icon
 //! or not, so they align; shortcuts keep a right-aligned column, before
-//! the submenu arrows' column. The [`SETTING_ICONS`] setting turns the
+//! the submenu arrows' column. Labels, keys and notes are in egui's `Body`
+//! text style (as egui's own menus, not `Button`); a theme's
+//! `menu-item.key-font-size` draws the keys and notes smaller. The [`SETTING_ICONS`] setting turns the
 //! icons off (the gutter is then kept only in a menu with a check or radio
 //! item) or follows the platform. The gutter is decorative: AccessKit
 //! reads the title, and a check or radio item as checked or not.
@@ -1361,6 +1363,7 @@ fn command_row(
     let note = spec.as_ref().and_then(|s| s.menu_note.clone());
     let link = spec.as_ref().is_some_and(|s| s.opens_link);
     let link_id = tick.with("link");
+    let key_size = key_font_size(&ctx);
     // egui lays the item out and takes its clicks; the kit paints its box
     // under it (`slot`), in the state egui's button draws with.
     let slot = ui.painter().add(Shape::Noop);
@@ -1375,11 +1378,18 @@ fn command_row(
                 atoms.push(Atom::grow());
             }
             let muted = item.style_toned(Tone::Muted, state).text;
+            let meta = |text: &str| {
+                let t = RichText::new(text).color(muted);
+                match key_size {
+                    Some(size) => t.size(size),
+                    None => t,
+                }
+            };
             if let Some(k) = shortcut {
-                atoms.push(RichText::new(k).color(muted).into());
+                atoms.push(meta(&k).into());
             }
             if let Some(n) = &note {
-                atoms.push(RichText::new(n.as_str()).color(muted).into());
+                atoms.push(meta(n).into());
             }
             if link {
                 let s = side * 0.75;
@@ -1529,6 +1539,15 @@ fn item_text(ui: &Ui, item: &Component, state: State, text: &str) -> RichText {
         item.style(State::REST).text
     };
     RichText::new(text).color(colour)
+}
+
+/// The size of a menu's keys and notes, `menu-item.key-font-size`; `None`
+/// when the theme gives none: the label's size, the `Body` text style.
+fn key_font_size(ctx: &egui::Context) -> Option<f32> {
+    Tokens::of(ctx)
+        .resolved()
+        .dimension("menu-item.key-font-size")
+        .filter(|s| *s > 0.0)
 }
 
 /// Paints a menu item's box under what egui drew of it.

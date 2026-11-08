@@ -449,7 +449,11 @@ compiled at install.
   the room around a label, `width` the menu's least width (else egui's,
   and 200 points for a popup menu), and `separator-inset` how far a
   separator stays from the menu's edges (0: edge to edge; not given:
-  egui's, inside the menu's margin). A `menu-item-gutter.width` of 0
+  egui's, inside the menu's margin). Labels, keys and notes are laid
+  out in egui's `Body` text style (`font.text-style.body`), as egui's
+  own menus, not in `Button`'s; `key-font-size` draws the keys and the
+  notes at a size of their own (12 points beside 14 point labels), else
+  at the labels'. A `menu-item-gutter.width` of 0
   keeps no gutter at all: no icons and no marks, whatever the
   `menus.icons` setting (a checked item still says so to assistive
   technology). A command's `CommandSpec::menu_note` ends its entries,
