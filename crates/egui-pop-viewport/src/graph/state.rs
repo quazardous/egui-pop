@@ -84,6 +84,10 @@ pub struct GraphState {
     pub(crate) node_width: f32,
     /// Orthogonal routes, by layout.
     pub(crate) routes: RouteCache,
+    /// The canvas or a node had the keyboard at the last frame.
+    pub(crate) had_focus: bool,
+    /// Where the overview was drawn at the last frame (screen).
+    pub(crate) overview_rect: Option<Rect>,
 }
 
 impl Default for Drawn {
@@ -120,6 +124,8 @@ impl Default for GraphState {
             wire_style: WireStyle::default(),
             node_width: super::NODE_WIDTH,
             routes: RouteCache::default(),
+            had_focus: false,
+            overview_rect: None,
         }
     }
 }

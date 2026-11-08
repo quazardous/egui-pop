@@ -174,7 +174,7 @@ Pan and zoom follow the pointer profile
 |---|---|
 | Wheel, two fingers | Pans (Shift and the wheel: sideways) |
 | Ctrl (Cmd) and the wheel, a pinch | Zooms around the pointer |
-| Drag with the middle button, or with Space held | Pans, wherever it starts on the graph (a node, a port, a wire too) |
+| Drag with the middle button, with Space held, or any primary drag in hand mode (H) | Pans, wherever it starts on the graph (a node, a port, a wire too) |
 | Drag on the canvas | A rubber band: selects the nodes it touches (Shift or Ctrl adds) |
 | Click on the canvas | Clears the selection (nodes and wires), drops a wire begun with a click |
 | Double click on the canvas | Fits the graph (`gesture.graph.fit`) |
@@ -190,6 +190,30 @@ Pan and zoom follow the pointer profile
 | Delete with wires selected | One `Disconnect` of them all; with nodes selected too, one `Delete` |
 | A group's title | Folds the group into a stack; a click on the stack unfolds it; dragging either moves the group |
 | Secondary click | The canvas's menu (add a node), a node's (duplicate, delete), a port's (disconnect), a wire's (disconnect, select the source, select the destination) |
+
+The graph follows the shared navigation model
+([design/navigation.md](design/navigation.md),
+`egui_pop::viewport::navigation`), the same on every canvas:
+
+| Key or command | What it does |
+|---|---|
+| H, `view.hand` | Hand mode on or off: a primary drag pans from anywhere; the grab cursor and an indicator in the top-left corner show it |
+| Home, `view.fit` (Document: also Shift+1) | Fits the graph |
+| F, `view.frame_selection` (Blender: also `.`; Document: also Shift+2) | Frames the selected nodes (the whole graph when none is) |
+| Ctrl and `+` / `-`, `view.zoom_in` / `view.zoom_out` | Zooms around the view's centre |
+| Ctrl+0, `view.zoom_100` | 100 % (within the zoom range) |
+| Ctrl and the arrows, `view.pan_*` | Pans a tenth of the view |
+
+The keys work while the pointer is over the graph or the graph has the
+keyboard; in an application the same commands are in the palette and
+the keymap and reach the canvas in use. The overview (the minimap) shows
+in the bottom-right corner when the graph is more than twice the view on
+one axis (`GraphEditor::overview`: when needed, always or never); a click
+or a drag on it moves the view. `GraphEditor::keep_view(id)` keeps the
+view across sessions in egui's persisted memory: the graph opens where
+it was left. On a canvas kind's first use a one-time hint says how to
+move around; the first pan or a click dismisses it for good
+(`GraphEditor::hint(false)` turns it off).
 
 Wires answer the pointer at the ports and detail levels, between nodes
 (not into a folded group's stack). A node selection and a wire selection

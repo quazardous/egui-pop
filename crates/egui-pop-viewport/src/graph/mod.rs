@@ -135,6 +135,7 @@ pub use state::GraphState;
 pub use wires::WireStyle;
 
 use crate::change::{Cause, Verdict};
+use crate::navigation::{self, NavCommand, Overview};
 use crate::strings as s;
 use state::{Moving, Wire};
 
@@ -334,6 +335,9 @@ pub struct GraphEditor<'a> {
     describe: bool,
     keep_export: bool,
     tab_stops: TabStops,
+    keep_view: Option<Id>,
+    overview: Overview,
+    hint: bool,
 }
 
 impl fmt::Debug for GraphEditor<'_> {
@@ -388,7 +392,32 @@ impl<'a> GraphEditor<'a> {
             describe: false,
             keep_export: false,
             tab_stops: TabStops::Auto,
+            keep_view: None,
+            overview: Overview::WhenNeeded,
+            hint: true,
         }
+    }
+
+    /// Keeps the view across sessions under `id` (egui's persisted
+    /// memory, saved with the application's): the graph opens where it
+    /// was left instead of fitted.
+    pub fn keep_view(mut self, id: impl std::hash::Hash + fmt::Debug) -> Self {
+        self.keep_view = Some(Id::unique(id));
+        self
+    }
+
+    /// When the overview (a minimap in the bottom-right corner) shows:
+    /// when the graph is much larger than the view by default.
+    pub fn overview(mut self, policy: Overview) -> Self {
+        self.overview = policy;
+        self
+    }
+
+    /// Whether the one-time navigation hint shows on the graph's first
+    /// use (on by default; once seen, never again on this installation).
+    pub fn hint(mut self, on: bool) -> Self {
+        self.hint = on;
+        self
     }
 
     /// Tells two editors in one `Ui` apart.
@@ -558,6 +587,47 @@ impl<'a> GraphEditor<'a> {
         moved
     }
 
+    /// Does a navigation command (`docs/design/navigation.md`).
+    fn navigate(&mut self, c: NavCommand, outer: Rect, nodes: &[Node]) {
+        if !self.state.has_view() {
+            if matches!(c, NavCommand::Fit | NavCommand::FrameSelection) {
+                self.state.fit = true;
+            }
+            return;
+        }
+        let zoom = zoom_of(outer.size(), self.state.view, self.zoom_range);
+        let center = self.state.view.center();
+        let zoom_to = |state: &mut GraphState, to: f32| {
+            let to = self.zoom_range.clamp(to);
+            if to > 0.0 && zoom > 0.0 {
+                state.zoom_by(to / zoom, center);
+            }
+        };
+        match c {
+            NavCommand::Fit => self.state.fit = true,
+            NavCommand::FrameSelection => {
+                let selected: Vec<Node> = nodes
+                    .iter()
+                    .filter(|n| self.state.selection.contains(&n.id))
+                    .cloned()
+                    .collect();
+                if selected.is_empty() {
+                    self.state.fit = true;
+                } else {
+                    self.state.view = fit_rect(&selected, self.node_width);
+                }
+            }
+            NavCommand::ZoomIn => zoom_to(self.state, zoom * ZOOM_STEP),
+            NavCommand::ZoomOut => zoom_to(self.state, zoom / ZOOM_STEP),
+            NavCommand::Zoom100 => zoom_to(self.state, 1.0),
+            NavCommand::Pan(d) => {
+                let step = self.state.view.size() * PAN_STEP;
+                self.state.pan(d.vec() * step);
+            }
+            NavCommand::Hand => {}
+        }
+    }
+
     /// The level a zoom shows.
     fn level_at(&self, zoom: f32) -> Level {
         if zoom < self.overview_below {
@@ -654,6 +724,22 @@ impl<'a> GraphEditor<'a> {
             }
         }
 
+        if let Some(key) = self.keep_view
+            && !self.state.has_view()
+            && let Some(view) = navigation::load_view(&ctx, key)
+        {
+            self.state.view = view;
+        }
+        let had_view = self.state.has_view();
+        let start_view = self.state.view;
+        let hovered = ui.rect_contains_pointer(outer)
+            && !self
+                .state
+                .overview_rect
+                .is_some_and(|r| ui.rect_contains_pointer(r));
+        for c in navigation::commands(&ctx, id, hovered, self.state.had_focus) {
+            self.navigate(c, outer, &nodes);
+        }
         let gestures = crate::gestures::graph_gestures(&ctx);
         if self.wheel(ui, outer, &gestures) {
             ctx.request_repaint();
@@ -684,6 +770,7 @@ impl<'a> GraphEditor<'a> {
         };
         let shown = self.state.view;
         let mut view = shown;
+        let overview_rect = self.state.overview_rect;
         let mut cx = Cx {
             ctx: ctx.clone(),
             id,
@@ -707,7 +794,7 @@ impl<'a> GraphEditor<'a> {
             reveal: None,
             gestures,
             one_stop,
-            pan_drag: pan_drag(ui, outer, &gestures),
+            pan_drag: pan_drag(ui, outer, overview_rect, &gestures),
             paths: Vec::new(),
             hover: None,
         };
@@ -737,6 +824,7 @@ impl<'a> GraphEditor<'a> {
         cx.state.over_canvas = response.hovered();
         let reveal = cx.reveal.take();
         let visible = cx.lay.visible;
+        let node_focused = cx.focused.is_some();
         drop(cx);
         // The scene's rect changes only by its own (rounding); a pan by a
         // drag (`canvas`) already moved the state's view and stays.
@@ -747,6 +835,30 @@ impl<'a> GraphEditor<'a> {
             && !visible.contains_rect(r)
         {
             self.state.center_on(r.center());
+        }
+        self.state.had_focus = response.has_focus() || node_focused;
+        // The navigation model's overlays: the overview, hand mode's
+        // indicator, the one-time hint.
+        let panned = had_view && self.state.view != start_view;
+        self.state.overview_rect = None;
+        let (bounds, visible) = (self.state.drawn.bounds, self.state.drawn.visible);
+        if self.overview.shows(bounds, visible) {
+            let w = (outer.width() * 0.25).clamp(120.0, 240.0);
+            let size = vec2(w, (w * 2.0 / 3.0).round());
+            let r = Rect::from_min_size(outer.right_bottom() - size - vec2(8.0, 8.0), size);
+            if outer.contains_rect(r) {
+                ui.scope_builder(UiBuilder::new().max_rect(r), |ui| {
+                    GraphMinimap::new(self.state).size(size).show(ui);
+                });
+                self.state.overview_rect = Some(r);
+            }
+        }
+        navigation::indicator(ui, outer, &response);
+        if self.hint {
+            navigation::hint(ui, id, outer, "graph", &response, panned);
+        }
+        if let Some(key) = self.keep_view {
+            navigation::save_view(&ctx, key, self.state.view);
         }
 
         if self.state.selection != before_selection {
@@ -806,25 +918,35 @@ impl<'a> GraphEditor<'a> {
     }
 }
 
+/// What a zoom in or out multiplies the zoom by.
+const ZOOM_STEP: f32 = 1.25;
+/// A pan by key moves the view by this part of its size.
+const PAN_STEP: f32 = 0.1;
+
 /// The button of a drag that pans the graph this pass: one pressed on
-/// the graph (not on a window above it), moving, that the profile pans
-/// with, or a primary drag with Space held. Read before the graph's
+/// the graph (not on its overview, nor on a window above it), moving,
+/// that the profile pans with, or a primary drag in hand mode or with
+/// Space held. Read before the graph's
 /// widgets, so a node, a port or a wire under the pointer does not take
 /// the drag for its own.
 fn pan_drag(
     ui: &Ui,
     outer: Rect,
+    overview: Option<Rect>,
     g: &crate::gestures::ViewGestures,
 ) -> Option<egui::PointerButton> {
     let ctx = ui.ctx();
     let order = ui.layer_id().order;
+    let space = navigation::primary_pans(ctx);
     ctx.input(|i| {
         let p = &i.pointer;
         let origin = p.press_origin()?;
-        if !p.is_decidedly_dragging() || !outer.contains(origin) {
+        if !p.is_decidedly_dragging()
+            || !outer.contains(origin)
+            || overview.is_some_and(|r| r.contains(origin))
+        {
             return None;
         }
-        let space = i.key_down(Key::Space);
         [
             egui::PointerButton::Primary,
             egui::PointerButton::Secondary,

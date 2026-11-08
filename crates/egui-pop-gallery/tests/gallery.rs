@@ -1631,6 +1631,54 @@ fn the_node_graph_page_moves_with_every_navigation_gesture() {
     }
 }
 
+/// The shared navigation model on the gallery's node graph page: hand
+/// mode pans with a primary drag from a node, the view keys move the
+/// view, F frames, and the commands reach the graph from the keymap.
+#[test]
+fn the_node_graph_page_follows_the_navigation_model() {
+    use egui::{Key, Modifiers, PointerButton};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "node-graph"));
+    h.run();
+    let graph = h.get_by_label("Processing graph").rect();
+    let canvas = graph.left_bottom() + egui::vec2(12.0, -12.0);
+    let node = h
+        .query_all_by_role(egui::accesskit::Role::Group)
+        .map(|n| n.rect())
+        .find(|r| graph.contains_rect(*r) && r.width() < graph.width() / 2.0)
+        .expect("a node on the graph")
+        .center();
+    // Off: a primary drag from a node does not pan.
+    h.hover_at(canvas);
+    h.run();
+    let before = graph_view(&mut h);
+    h.key_press(Key::H);
+    h.run();
+    assert!(
+        egui_pop::viewport::navigation::hand(&h.ctx),
+        "H turns hand mode on"
+    );
+    graph_drag(&mut h, node, PointerButton::Primary);
+    assert_ne!(graph_view(&mut h), before, "hand mode pans from a node");
+    h.hover_at(canvas);
+    h.key_press(Key::H);
+    h.run();
+    assert!(!egui_pop::viewport::navigation::hand(&h.ctx));
+    let (_, zoom) = graph_view(&mut h);
+    h.hover_at(canvas);
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Plus);
+    h.run();
+    let (_, zoomed) = graph_view(&mut h);
+    assert!(zoomed > zoom, "Ctrl+Plus zooms in");
+    let before = graph_view(&mut h);
+    h.key_press_modifiers(Modifiers::COMMAND, Key::ArrowRight);
+    h.run();
+    assert_ne!(graph_view(&mut h), before, "Ctrl+Right pans");
+    let before = graph_view(&mut h);
+    h.key_press(Key::Home);
+    h.run();
+    assert_ne!(graph_view(&mut h), before, "Home fits");
+}
+
 #[test]
 fn the_node_graph_page_routes_wires_around_the_nodes() {
     use egui_pop::imaging::graph::CMD_GRAPH_READ;

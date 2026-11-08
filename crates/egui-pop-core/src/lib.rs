@@ -70,6 +70,7 @@
 pub mod a11y;
 pub mod band;
 pub mod binding;
+pub mod canvas;
 pub mod debug;
 pub mod fault;
 pub mod field;
