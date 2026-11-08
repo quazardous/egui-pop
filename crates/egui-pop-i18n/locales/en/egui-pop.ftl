@@ -775,6 +775,18 @@ command-video-volume =
     .description = Sets a video's volume (`volume`, from 0 to 1), or changes it (`by`); either gives the sound back.
     .title = Set a video's volume
 
+command-view-fit =
+    .description = Frames all the content of the canvas in use.
+    .title = Fit the view
+
+command-view-frame-selection =
+    .description = Frames the selection of the canvas in use (all its content when nothing is selected).
+    .title = Frame the selection
+
+command-view-hand =
+    .description = Toggles hand mode: a primary drag pans the canvases (for a pen, a touch screen or a mouse without a middle button). Space held does the same for a moment.
+    .title = Hand mode
+
 command-view-interface-zoom-in =
     .description = Makes the whole interface one step larger.
     .title = Zoom in the interface
@@ -787,6 +799,22 @@ command-view-interface-zoom-reset =
     .description = Gives the interface its normal size.
     .title = Reset the interface zoom
 
+command-view-pan-down =
+    .description = Moves the view of the canvas in use down.
+    .title = Pan down
+
+command-view-pan-left =
+    .description = Moves the view of the canvas in use left.
+    .title = Pan left
+
+command-view-pan-right =
+    .description = Moves the view of the canvas in use right.
+    .title = Pan right
+
+command-view-pan-up =
+    .description = Moves the view of the canvas in use up.
+    .title = Pan up
+
 command-view-side-bar-toggle =
     .description = Folds the start side bar to its strip, or unfolds it.
     .title = Fold the side bar
@@ -794,6 +822,18 @@ command-view-side-bar-toggle =
 command-view-theme-toggle-light-dark =
     .description = Shows the other variant of the theme, light or dark, when it has one.
     .title = Toggle light and dark theme
+
+command-view-zoom-100 =
+    .description = Shows the canvas in use at 100 % (one unit, or one pixel, to a point).
+    .title = Zoom to 100 %
+
+command-view-zoom-in =
+    .description = Zooms the canvas in use in, around its centre.
+    .title = Zoom in
+
+command-view-zoom-out =
+    .description = Zooms the canvas in use out, around its centre.
+    .title = Zoom out
 
 command-viewer-back =
     .description = Shows the viewer's previous page.
@@ -2174,6 +2214,10 @@ egui-pop-viewport-loupe-display = display
 egui-pop-viewport-loupe-none = no value
 
 egui-pop-viewport-loupe-scene = scene
+
+egui-pop-viewport-nav-hand = Hand: drag to pan (H to leave)
+
+egui-pop-viewport-nav-hint = Middle-drag, Space+drag or H to pan · Ctrl+wheel to zoom · F to frame
 
 egui-pop-viewport-navigator-label = Navigator
 
