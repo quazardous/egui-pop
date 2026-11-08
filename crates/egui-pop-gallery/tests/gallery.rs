@@ -1116,6 +1116,14 @@ fn the_settings_app_shows_generated_pages_value_scopes_and_search() {
     h.get_by_label("5 letters");
     egui_pop_test::assert_all_named(&h);
     results.add(h.try_snapshot("admin-manifest-pop-dark"));
+    // Records from a hook, as a table and a list.
+    h.get_by_label("Greetings").click();
+    h.run();
+    h.run();
+    h.get_by_label("Esperanto");
+    h.get_by_label("No hook gives these records yet.");
+    egui_pop_test::assert_all_named(&h);
+    results.add(h.try_snapshot("admin-records-pop-dark"));
     // The search covers every scope; the hits are editable in place.
     let hint = "Search every setting";
     h.get_by_role_and_label(egui::accesskit::Role::SearchInput, hint)
