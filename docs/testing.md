@@ -237,6 +237,25 @@ lists what is still open, each failing. The change closing an item removes
 its `ignore`. A page's stops come last in the window's order, so these tests
 get there with Shift+Tab: each press is a few passes of the whole gallery.
 
+## Waiting on the application
+
+A test that starts something asynchronous (a command whose host answers
+later, a job) waits with `egui_pop_test::wait::wait_until`: it steps the
+harness's frames until a journal event matches or the application
+settles, the conditions of the bridge's `bridge.wait`
+([Agents](agents.md#wait)), and fails past a deadline (120 frames or 10
+seconds by default) with the condition and the journal's last events.
+
+```rust,ignore
+use egui_pop::api::wait::WaitFor;
+use egui_pop_test::wait::{Deadline, settle, wait_until};
+
+let since = h.state().handle().last_event();
+// ... start something ...
+wait_until(&mut h, &WaitFor::event("command.done"), since, Deadline::default())?;
+settle(&mut h, Deadline::default())?;
+```
+
 ## One GPU device per test process
 
 Rendering tests run on a software Vulkan driver (lavapipe) in CI and

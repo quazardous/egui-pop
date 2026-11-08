@@ -39,6 +39,8 @@
 //! - `viewport::TestSource` (feature `viewport`): a tile source for the
 //!   image viewport, every pixel its own colour, served when the test
 //!   says;
+//! - [`wait`]: frames stepped until a journal event or the application
+//!   settles (`bridge.wait`'s conditions), or a deadline;
 //! - [`walk`]: a keyboard walk, real key presses and what holds the focus
 //!   after each;
 //! - [`macro@critical`]: the mark of a test that runs on every change,
@@ -65,6 +67,7 @@ pub use gpu::{
 
 pub mod hosts;
 pub mod jobs;
+pub mod wait;
 pub mod walk;
 
 pub use egui_pop_test_macros::critical;
