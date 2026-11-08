@@ -847,9 +847,15 @@ impl<'a> GraphEditor<'a> {
             let size = vec2(w, (w * 2.0 / 3.0).round());
             let r = Rect::from_min_size(outer.right_bottom() - size - vec2(8.0, 8.0), size);
             if outer.contains_rect(r) {
-                ui.scope_builder(UiBuilder::new().max_rect(r), |ui| {
-                    GraphMinimap::new(self.state).size(size).show(ui);
-                });
+                // Above the scene's own layer, where the nodes are: a
+                // click on the overview is the overview's.
+                egui::Area::new(id.with("overview"))
+                    .order(egui::Order::Foreground)
+                    .fixed_pos(r.min)
+                    .constrain(false)
+                    .show(&ctx, |ui| {
+                        GraphMinimap::new(self.state).size(size).show(ui);
+                    });
                 self.state.overview_rect = Some(r);
             }
         }
