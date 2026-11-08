@@ -30,6 +30,8 @@
 //!   its repair;
 //! - [`sections`] (deprecated): how a stack of collapsible sections
 //!   shares a panel; moved to `egui_stack::sections::plan`;
+//! - [`admin`]: the administration app's declarative form tree
+//!   (manifests, value scopes, hooks);
 //! - [`values`]: the value store (descriptors, writes with origins,
 //!   gestures, undo, listeners, settings);
 //! - [`doc`]: versioned documents and their migrations;
@@ -39,6 +41,7 @@
 //! - [`tab`]: the Tab order of a focus scope (reading order, indices,
 //!   groups).
 
+pub mod admin;
 pub mod clipboard;
 pub mod clock;
 pub mod commands;
