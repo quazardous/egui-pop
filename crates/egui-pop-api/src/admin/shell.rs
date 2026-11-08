@@ -20,8 +20,9 @@ use egui_pop_core::widgets;
 use egui_pop_model::admin::hooks::Values;
 use egui_pop_model::admin::layers::ValueScope;
 use egui_pop_model::admin::{
-    Action, ActionStyle, Field, Item, RecordSource, Records, Section, StatusSource, Tone, Tree,
-    cell_text, form_context, holds, template, tone_named,
+    Action, ActionStyle, CellKind, Column, Field, FieldKind, Item, RecordSource, Records, RowField,
+    Section, StatusSource, Tone, Tree, cell_text, form_context, holds, meter_share, row_context,
+    template, tone_named,
 };
 use egui_pop_model::fuzzy;
 use egui_pop_model::ids::{CommandId, SettingId};
@@ -314,6 +315,9 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
         let moved = {
             let mut s = lock(&admin.state);
             let moved = s.section != section || s.scope.as_deref() != Some(scope.as_str());
+            if moved {
+                s.row = None;
+            }
             s.scope = Some(scope);
             s.section = section;
             s.filter = filter;
@@ -656,7 +660,8 @@ fn action_title(app: &AppHandle, a: &Action) -> String {
 }
 
 /// An action as its button: runs its command with its arguments filled
-/// from the values; answers read are read again after it.
+/// from the values, after its confirmation when it asks one; answers
+/// read are read again after it.
 fn action_button(ui: &mut Ui, app: &AppHandle, admin: &Admin, a: &Action, values: &Values) {
     let title = action_title(app, a);
     let r = match a.style {
@@ -671,13 +676,240 @@ fn action_button(ui: &mut Ui, app: &AppHandle, admin: &Admin, a: &Action, values
         && let Ok(id) = CommandId::new(&a.command)
     {
         let (args, _) = template::expand(&a.args, values);
-        app.run(id, args);
+        let asked = a
+            .confirmation
+            .as_ref()
+            .map(|c| c.filled(values))
+            .map(|c| (c.title, c.text, c.verb, c.danger))
+            .or_else(|| {
+                a.confirm
+                    .as_ref()
+                    .and_then(|h| admin.hooks().confirm(h, values))
+                    .map(|c| (c.message.clone(), String::new(), c.verb, c.danger))
+            });
+        match asked {
+            Some((title, text, verb, danger)) => {
+                let Some(dialogs) = app.service(&crate::dialogs::DIALOGS) else {
+                    log::warn!(
+                        "`{}` asks a confirmation and there are no dialogs: not run",
+                        a.command
+                    );
+                    return;
+                };
+                let mut c = crate::dialogs::Confirm::new(&title, &verb, id)
+                    .detail(&text)
+                    .args(args);
+                if danger {
+                    c = c.danger();
+                }
+                dialogs.open(c);
+            }
+            None => {
+                app.run(id, args);
+                admin.refresh();
+            }
+        }
+    }
+}
+
+/// A row field's cell: the record's value as a toggle, a text or a
+/// choice; a change runs its command with the record and the value.
+#[allow(clippy::too_many_arguments)]
+fn row_field(
+    ui: &mut Ui,
+    app: &AppHandle,
+    admin: &Admin,
+    r: &Records,
+    f: &RowField,
+    row: &Json,
+    values: &Values,
+    labelled: bool,
+) {
+    let value = &row[f.key.as_str()];
+    let row_id = cell_text(&row[r.key.as_str()]);
+    let mut wrote = None;
+    let resp = match f.kind {
+        FieldKind::Toggle => {
+            let mut on = value.as_bool().unwrap_or(false);
+            let text = if labelled { f.meta.title.as_str() } else { "" };
+            let resp = ui.checkbox(&mut on, text);
+            if resp.changed() {
+                wrote = Some(Json::Bool(on));
+            }
+            a11y::name(&resp, Role::CheckBox, &f.meta.title);
+            resp
+        }
+        FieldKind::Choice => {
+            let choices = f.choices_of(row);
+            let now = cell_text(value);
+            let shown = choices
+                .iter()
+                .find(|c| cell_text(&c.value) == now)
+                .map_or(now.clone(), |c| c.label.clone());
+            if labelled {
+                ui.label(&f.meta.title);
+            }
+            let mut picked = None;
+            let resp = ui
+                .combo_box(
+                    widgets::combo_box((
+                        "egui_pop.admin.row_field",
+                        &r.meta.id,
+                        &row_id,
+                        &f.meta.id,
+                    ))
+                    .selected_text(shown),
+                    |ui| {
+                        for c in &choices {
+                            if ui
+                                .add(widgets::SelectableRow::new(
+                                    cell_text(&c.value) == now,
+                                    &c.label,
+                                ))
+                                .clicked()
+                            {
+                                picked = Some(c.value.clone());
+                            }
+                        }
+                    },
+                )
+                .response;
+            a11y::name(&resp, Role::ComboBox, &f.meta.title);
+            if let Some(p) = picked.filter(|p| cell_text(p) != now) {
+                wrote = Some(p);
+            }
+            resp
+        }
+        _ => {
+            // A text: typed into a buffer, written when left or on Enter.
+            let id = egui::Id::unique(("egui_pop.admin.row_text", &r.meta.id, &row_id, &f.meta.id));
+            let now = cell_text(value);
+            let mut text = ui
+                .data(|d| d.get_temp::<String>(id))
+                .unwrap_or_else(|| now.clone());
+            if labelled {
+                ui.label(&f.meta.title);
+            }
+            let resp = ui.add(
+                egui::TextEdit::singleline(&mut text)
+                    .id(id.with("edit"))
+                    .desired_width(180.0),
+            );
+            a11y::name(&resp, Role::TextInput, &f.meta.title);
+            if resp.has_focus() {
+                ui.data_mut(|d| d.insert_temp(id, text.clone()));
+            } else {
+                ui.data_mut(|d| d.remove::<String>(id));
+                if resp.lost_focus() && text.trim() != now && !text.trim().is_empty() {
+                    wrote = Some(Json::String(text.trim().to_string()));
+                }
+            }
+            resp
+        }
+    };
+    if !f.meta.description.is_empty() {
+        resp.on_hover_text(&f.meta.description);
+    }
+    if let Some(v) = wrote
+        && let Ok(id) = CommandId::new(&f.command)
+    {
+        app.run(id, f.write_args(values, v));
         admin.refresh();
     }
 }
 
+/// A row's field, when its `when` holds, greyed when its `enabled` does
+/// not.
+#[allow(clippy::too_many_arguments)]
+fn row_field_shown(
+    ui: &mut Ui,
+    app: &AppHandle,
+    admin: &Admin,
+    r: &Records,
+    f: &RowField,
+    row: &Json,
+    values: &Values,
+    cx: &egui_pop_model::when::WhenContext,
+    labelled: bool,
+) {
+    if !holds(f.meta.when.as_deref(), cx) {
+        if !labelled {
+            ui.label("");
+        }
+        return;
+    }
+    let on = holds(f.meta.enabled.as_deref(), cx);
+    let resp = ui
+        .add_enabled_ui(on, |ui| {
+            row_field(ui, app, admin, r, f, row, values, labelled);
+        })
+        .response;
+    if !on && let Some(reason) = &f.meta.reason {
+        resp.on_disabled_hover_text(reason);
+    }
+}
+
+/// A row's actions whose `when` holds, greyed when their `enabled` does
+/// not.
+fn row_actions(
+    ui: &mut Ui,
+    app: &AppHandle,
+    admin: &Admin,
+    actions: &mut dyn Iterator<Item = &Action>,
+    values: &Values,
+    cx: &egui_pop_model::when::WhenContext,
+) {
+    for a in actions {
+        if !holds(a.meta.when.as_deref(), cx) {
+            continue;
+        }
+        let on = holds(a.meta.enabled.as_deref(), cx);
+        let resp = ui
+            .add_enabled_ui(on, |ui| action_button(ui, app, admin, a, values))
+            .response;
+        if !on && let Some(reason) = &a.meta.reason {
+            resp.on_disabled_hover_text(reason);
+        }
+    }
+}
+
+/// A column's cell: its text, or its meter.
+fn cell(ui: &mut Ui, c: &Column, row: &Json, tone: Option<Tone>) -> egui::Response {
+    let v = &row[c.key.as_str()];
+    if c.kind == CellKind::Meter
+        && let Some(share) = meter_share(v)
+    {
+        let text = c
+            .text
+            .as_ref()
+            .map(|k| cell_text(&row[k.as_str()]))
+            .unwrap_or_else(|| format!("{:.0} %", share * 100.0));
+        let resp = ui.add(
+            egui::ProgressBar::new(share)
+                .desired_width(160.0)
+                .text(text.clone()),
+        );
+        a11y::name(
+            &resp,
+            Role::ProgressIndicator,
+            &format!("{}: {text}", c.title),
+        );
+        return resp;
+    }
+    let text = match (c.kind, &c.text) {
+        (CellKind::Meter, Some(k)) => cell_text(&row[k.as_str()]),
+        _ => cell_text(v),
+    };
+    match tone {
+        Some(tone) => ui.add(Indicator::text(text).tone(kit_tone(tone))),
+        None => ui.label(text),
+    }
+}
+
 /// A record list or table: its rows read from its source, each with its
-/// actions; its empty state; what went wrong reading it.
+/// fields and actions; its empty state; what went wrong reading it. The
+/// row a deep link names (`scope/section/<row key>`) is marked and
+/// scrolled to.
 fn records(ui: &mut Ui, app: &AppHandle, admin: &Admin, r: &Records, values: &Values, table: bool) {
     let ctx = ui.ctx().clone();
     let t = Tokens::of(&ctx);
@@ -721,31 +953,53 @@ fn records(ui: &mut Ui, app: &AppHandle, admin: &Admin, r: &Records, values: &Va
         });
         return;
     }
-    let row_values = |row: &Json| {
-        let mut v = values.clone();
-        if let Some(o) = row.as_object() {
-            for (k, x) in o {
-                v.insert(format!("row.{k}"), x.clone());
-            }
-        }
-        v
-    };
+    let base = form_context(app.when_context(), values);
     let tone_of = |row: &Json| {
         r.tone_key
             .as_ref()
             .and_then(|k| row[k.as_str()].as_str())
             .and_then(tone_named)
     };
+    // The row a deep link named: marked while the page shows, scrolled
+    // to once.
+    let (selected, scroll) = {
+        let mut s = lock(&admin.state);
+        let hit = s
+            .key
+            .clone()
+            .filter(|k| rows.iter().any(|row| cell_text(&row[r.key.as_str()]) == *k));
+        if let Some(k) = &hit {
+            s.row = Some(k.clone());
+            s.key = None;
+        }
+        (s.row.clone(), hit.is_some())
+    };
+    let is_selected =
+        |row: &Json| selected.as_deref() == Some(cell_text(&row[r.key.as_str()]).as_str());
     if table {
+        let marked = rows.iter().position(&is_selected);
+        let extra: Vec<&RowField> = r.extra_fields().collect();
         egui::ScrollArea::horizontal()
             .id_salt(("egui_pop.admin.table", &r.meta.id))
             .show(ui, |ui| {
+                let selection = t.accent.default.gamma_multiply(0.25);
                 egui::Grid::new(("egui_pop.admin.table", &r.meta.id))
-                    .striped(true)
+                    .with_row_color(move |i, style| {
+                        if marked.is_some_and(|m| m + 1 == i) {
+                            Some(selection)
+                        } else if i % 2 == 1 {
+                            Some(style.visuals.faint_bg_color)
+                        } else {
+                            None
+                        }
+                    })
                     .spacing([t.space.l, t.space.s])
                     .show(ui, |ui| {
                         for c in &r.columns {
                             ui.label(egui::RichText::new(&c.title).strong());
+                        }
+                        for f in &extra {
+                            ui.label(egui::RichText::new(&f.meta.title).strong());
                         }
                         if !r.row_actions.is_empty() {
                             ui.label("");
@@ -753,23 +1007,27 @@ fn records(ui: &mut Ui, app: &AppHandle, admin: &Admin, r: &Records, values: &Va
                         ui.end_row();
                         for row in &rows {
                             let tone = tone_of(row);
+                            let v = Records::row_values(values, row);
+                            let cx = row_context(base.clone(), row);
                             for (i, c) in r.columns.iter().enumerate() {
-                                let text = cell_text(&row[c.key.as_str()]);
-                                match tone.filter(|_| i == 0) {
-                                    Some(tone) => {
-                                        ui.add(Indicator::text(text).tone(kit_tone(tone)));
+                                match r.field_for(&c.key) {
+                                    Some(f) => {
+                                        row_field_shown(ui, app, admin, r, f, row, &v, &cx, false);
                                     }
                                     None => {
-                                        ui.label(text);
+                                        let resp = cell(ui, c, row, tone.filter(|_| i == 0));
+                                        if i == 0 && scroll && is_selected(row) {
+                                            resp.scroll_to_me(Some(Align::Center));
+                                        }
                                     }
                                 }
                             }
+                            for f in &extra {
+                                row_field_shown(ui, app, admin, r, f, row, &v, &cx, false);
+                            }
                             if !r.row_actions.is_empty() {
-                                let v = row_values(row);
                                 ui.horizontal(|ui| {
-                                    for a in &r.row_actions {
-                                        action_button(ui, app, admin, a, &v);
-                                    }
+                                    row_actions(ui, app, admin, &mut r.row_actions.iter(), &v, &cx);
                                 });
                             }
                             ui.end_row();
@@ -779,46 +1037,70 @@ fn records(ui: &mut Ui, app: &AppHandle, admin: &Admin, r: &Records, values: &Va
         return;
     }
     for row in &rows {
-        let v = row_values(row);
+        let v = Records::row_values(values, row);
+        let cx = row_context(base.clone(), row);
         let width = ui.available_width();
-        ui.allocate_ui_with_layout(
-            egui::vec2(width, ui.spacing().interact_size.y),
-            egui::Layout::right_to_left(Align::Center),
-            |ui| {
-                ui.set_max_width(width);
-                for a in r.row_actions.iter().rev() {
-                    action_button(ui, app, admin, a, &v);
-                }
-                for c in r.columns.iter().rev() {
-                    let text = cell_text(&row[c.key.as_str()]);
-                    if !text.is_empty() {
-                        ui.weak(text);
-                    }
-                }
-                ui.with_layout(egui::Layout::left_to_right(Align::Center), |ui| {
-                    ui.vertical(|ui| {
-                        let title = r.title_key.as_ref().map_or_else(
-                            || cell_text(&row[r.key.as_str()]),
-                            |k| cell_text(&row[k.as_str()]),
-                        );
-                        match tone_of(row) {
-                            Some(tone) => {
-                                ui.add(Indicator::text(title).tone(kit_tone(tone)));
+        let frame = if is_selected(row) {
+            egui::Frame::NONE.fill(t.accent.default.gamma_multiply(0.25))
+        } else {
+            egui::Frame::NONE
+        };
+        let resp = frame
+            .show(ui, |ui| {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, ui.spacing().interact_size.y),
+                    egui::Layout::right_to_left(Align::Center),
+                    |ui| {
+                        ui.set_max_width(width);
+                        row_actions(ui, app, admin, &mut r.row_actions.iter().rev(), &v, &cx);
+                        for c in r.columns.iter().rev() {
+                            if c.kind == CellKind::Meter {
+                                cell(ui, c, row, None);
+                                continue;
                             }
-                            None => {
-                                ui.label(title);
+                            let text = cell_text(&row[c.key.as_str()]);
+                            if !text.is_empty() {
+                                ui.weak(text);
                             }
                         }
-                        if let Some(k) = &r.subtitle_key {
-                            let sub = cell_text(&row[k.as_str()]);
-                            if !sub.is_empty() {
-                                ui.weak(sub);
-                            }
+                        ui.with_layout(egui::Layout::left_to_right(Align::Center), |ui| {
+                            ui.vertical(|ui| {
+                                let title = r.title_key.as_ref().map_or_else(
+                                    || cell_text(&row[r.key.as_str()]),
+                                    |k| cell_text(&row[k.as_str()]),
+                                );
+                                match tone_of(row) {
+                                    Some(tone) => {
+                                        ui.add(Indicator::text(title).tone(kit_tone(tone)));
+                                    }
+                                    None => {
+                                        ui.label(title);
+                                    }
+                                }
+                                if let Some(k) = &r.subtitle_key {
+                                    let sub = cell_text(&row[k.as_str()]);
+                                    if !sub.is_empty() {
+                                        ui.weak(sub);
+                                    }
+                                }
+                            });
+                        });
+                    },
+                );
+                // The row's fields, under its title, wrapped.
+                if !r.row_fields.is_empty() {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.set_max_width(width);
+                        for f in &r.row_fields {
+                            row_field_shown(ui, app, admin, r, f, row, &v, &cx, true);
                         }
                     });
-                });
-            },
-        );
+                }
+            })
+            .response;
+        if scroll && is_selected(row) {
+            resp.scroll_to_me(Some(Align::Center));
+        }
         ui.add_space(t.space.xs);
     }
 }

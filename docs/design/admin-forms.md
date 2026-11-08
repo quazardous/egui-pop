@@ -32,6 +32,23 @@ declared, since declared titles are shown as given. Its hand-drawn
 Storage window stays until row fields (a role per column, a name edited
 in place), confirmations and the strategy as a form exist.
 
+Slice 5 adds the editing bricks. **Row fields** (`RowField`): a
+record's value shown as a toggle, a text (written when left or on
+Enter) or a choice (declared choices, and choices the record holds at a
+key), written through a command whose arguments name the record
+(`${row.<key>}`) and the value (`${value}`); in a table one takes the
+place of its key's column or adds a column, in a list it shows under
+the record's title. **Confirmations**: an action declares one (title,
+text, verb, danger; its texts may name the row) and the dialogs'
+Confirm asks it before the command runs; a `confirm` hook is asked the
+same way. A **meter** column (`CellKind::Meter`): a share from 0 to 1
+drawn as a bar with the words of another key. Row fields and row
+actions read their `when` and `enabled` against the record
+(`row.<key>`). A source answering an object at its pointer is one
+record, so a single record (a backup strategy) is edited as a list of
+one. A deep link `scope/section/<record key>` marks that record and
+scrolls to it. Helios's Storage and Backup pages are built on these.
+
 Slice 1 leaves for later: `Ctrl+,`, File > Settings and the aliases
 `app.settings` and `app.settings.page` (the settings window keeps them
 until the shortcuts editor, gestures and fonts become widget kinds and

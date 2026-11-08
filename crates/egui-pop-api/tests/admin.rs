@@ -8,7 +8,8 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_api::admin::model::hooks::Hook;
 use egui_pop_api::admin::model::{
-    Action, Callout, Clauses as _, FORMAT, Field, Manifest, Records, Status, Tone,
+    Action, Callout, Clauses as _, Confirmation, FORMAT, Field, Manifest, Records, RowField,
+    Status, Tone,
 };
 use egui_pop_api::admin::{self, ADMIN, AdminPlugin, CMD_OPEN, CMD_POP_OUT, CMD_RESET, CMD_SET};
 use egui_pop_api::{App, Ctx, DefaultPlugins, Plugin, PluginError};
@@ -24,6 +25,12 @@ const DEVICES: egui_pop_model::ids::CommandId =
     egui_pop_model::ids::CommandId::from_static("compute.devices");
 const DISABLE: egui_pop_model::ids::CommandId =
     egui_pop_model::ids::CommandId::from_static("compute.disable");
+const NODES: egui_pop_model::ids::CommandId =
+    egui_pop_model::ids::CommandId::from_static("compute.nodes");
+const NODE_SET: egui_pop_model::ids::CommandId =
+    egui_pop_model::ids::CommandId::from_static("compute.nodeSet");
+const NODE_REMOVE: egui_pop_model::ids::CommandId =
+    egui_pop_model::ids::CommandId::from_static("compute.nodeRemove");
 
 struct Compute;
 
@@ -63,6 +70,26 @@ impl Plugin for Compute {
         ctx.command(
             egui_pop_model::commands::CommandSpec::new(DISABLE, "Disable a device", "Compute"),
             |call| Ok(json!({ "disabled": call.args["device"] })),
+        )?;
+        ctx.command(
+            egui_pop_model::commands::CommandSpec::new(NODES, "Nodes", "Compute").read_only(),
+            |_| {
+                Ok(json!({ "nodes": [
+                    { "id": "n1", "name": "Render box", "on": true, "pool": "fast",
+                      "pools": [{ "value": "slow", "label": "Slow pool" }],
+                      "share": 0.25, "shareText": "A quarter busy", "remote": true },
+                    { "id": "n2", "name": "Desk", "on": false, "pool": "slow",
+                      "share": 0.5, "shareText": "Half busy", "remote": false }
+                ] }))
+            },
+        )?;
+        ctx.command(
+            egui_pop_model::commands::CommandSpec::new(NODE_SET, "Set a node", "Compute"),
+            |call| Ok(call.args.clone()),
+        )?;
+        ctx.command(
+            egui_pop_model::commands::CommandSpec::new(NODE_REMOVE, "Remove a node", "Compute"),
+            |call| Ok(call.args.clone()),
         )?;
         let admin = ctx.app().service(&ADMIN).expect("the admin service");
         admin.hook(
@@ -124,6 +151,50 @@ impl Plugin for Compute {
                             .when("form.compute.threads == 100"),
                     )
                     .field(Field::setting("compute.threads"));
+                })
+                .section("hardware/nodes", "Nodes", |s| {
+                    let set = |key: &str| json!({ "node": "${row.id}", key: "${value}" });
+                    s.table(
+                        Records::command("nodes", "", "compute.nodes", "/nodes", "id")
+                            .column("name", "Name")
+                            .meter("share", "Load", "shareText")
+                            .row_field(RowField::text(
+                                "name",
+                                "Node name",
+                                "compute.nodeSet",
+                                set("name"),
+                            ))
+                            .row_field(RowField::toggle(
+                                "on",
+                                "Enabled",
+                                "compute.nodeSet",
+                                set("on"),
+                            ))
+                            .row_field(
+                                RowField::choice(
+                                    "pool",
+                                    "Pool",
+                                    &[(json!("fast"), "Fast pool")],
+                                    "compute.nodeSet",
+                                    set("pool"),
+                                )
+                                .choices_from("pools"),
+                            )
+                            .row_action(
+                                Action::command("compute.nodeRemove")
+                                    .title("Remove")
+                                    .args(json!({ "node": "${row.id}" }))
+                                    .when("row.remote")
+                                    .confirmation(
+                                        Confirmation::new(
+                                            "Remove ${row.name}?",
+                                            "Its jobs go back to the queue.",
+                                            "Remove the node",
+                                        )
+                                        .danger(),
+                                    ),
+                            ),
+                    );
                 }),
         );
         Ok(())
@@ -422,4 +493,71 @@ fn records_and_statuses_read_commands_and_clauses_apply() {
             .iter()
             .all(|d| d.code != "admin-bad-clause")
     );
+}
+
+fn last_run(h: &Harness<'_, App>, id: &egui_pop_model::ids::CommandId) -> Option<Json> {
+    h.state()
+        .handle()
+        .history()
+        .into_iter()
+        .rev()
+        .find(|r| r.id == *id)
+        .map(|r| r.args)
+}
+
+#[test]
+fn row_fields_write_through_their_command_and_actions_confirm_first() {
+    let mut h = harness();
+    run(&mut h, &CMD_OPEN, json!({ "path": "hardware/nodes/n2" }));
+    for _ in 0..3 {
+        h.run();
+    }
+    // The meter, a choice from the declared and the record's choices.
+    h.get_by_label("Load: A quarter busy");
+    h.get_by_label("Half busy");
+    h.get_by_label("Fast pool");
+    egui_pop_test::assert_all_named(&h);
+    // A toggle writes the row's id and the new value.
+    h.get_all_by_role_and_label(egui::accesskit::Role::CheckBox, "Enabled")
+        .next()
+        .unwrap()
+        .click();
+    h.run();
+    h.run();
+    assert_eq!(
+        last_run(&h, &NODE_SET),
+        Some(json!({ "node": "n1", "on": false }))
+    );
+    // A text is written when left.
+    macro_rules! edit {
+        () => {
+            h.get_all_by_role_and_label(egui::accesskit::Role::TextInput, "Node name")
+                .nth(1)
+                .unwrap()
+        };
+    }
+    edit!().click();
+    h.run();
+    h.key_press(egui::Key::End);
+    edit!().type_text(" 2");
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    h.run();
+    assert_eq!(
+        last_run(&h, &NODE_SET),
+        Some(json!({ "node": "n2", "name": "Desk 2" }))
+    );
+    // `when` reads the row: only the remote node can be removed, and
+    // only after its confirmation.
+    assert_eq!(h.get_all_by_label("Remove").count(), 1);
+    h.get_by_label("Remove").click();
+    h.run();
+    h.run();
+    assert!(last_run(&h, &NODE_REMOVE).is_none(), "asked first");
+    h.get_by_label("Remove Render box?");
+    h.get_by_label("Remove the node").click();
+    h.run();
+    h.run();
+    assert_eq!(last_run(&h, &NODE_REMOVE), Some(json!({ "node": "n1" })));
 }

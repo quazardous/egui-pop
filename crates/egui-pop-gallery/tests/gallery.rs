@@ -1128,6 +1128,15 @@ fn the_settings_app_shows_generated_pages_value_scopes_and_search() {
     h.get_by_label("No hook gives these records yet.");
     egui_pop_test::assert_all_named(&h);
     results.add(h.try_snapshot("admin-records-pop-dark"));
+    // A row action that asks first: its confirmation names the row.
+    h.get_all_by_label("Use").next().unwrap().click();
+    h.run();
+    h.run();
+    h.get_by_label("Greet in English?");
+    results.add(h.try_snapshot("admin-confirm-pop-dark"));
+    h.get_by_label("Cancel").click();
+    h.run();
+    h.run();
     // The search covers every scope; the hits are editable in place.
     let hint = "Search every setting";
     h.get_by_role_and_label(egui::accesskit::Role::SearchInput, hint)
