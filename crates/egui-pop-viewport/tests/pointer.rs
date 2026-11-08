@@ -513,3 +513,77 @@ fn a_secondary_drag_claimed_by_a_widget_does_not_pan_the_graph() {
     h.run();
     assert_ne!(h.state().view.view, view, "a claim elsewhere");
 }
+
+/// The centre of the node titled `title`.
+fn node_at(h: &Harness<'_, GraphScene>, title: &str) -> Pos2 {
+    h.get_by_label(title).rect().center()
+}
+
+#[test]
+fn a_middle_drag_pans_the_graph_even_from_a_node() {
+    for at in ["canvas", "node"] {
+        let mut h = graph("document");
+        let from = if at == "node" {
+            node_at(&h, "A")
+        } else {
+            empty_spot(&h)
+        };
+        let view = h.state().view.view;
+        drag(&mut h, from, vec2(60.0, 30.0), PointerButton::Middle);
+        let moved = h.state().view.view.min - view.min;
+        assert!(moved.x < -1.0 && moved.y < -1.0, "{at}: {moved:?}");
+        assert_eq!(h.state().view.view.size(), view.size(), "{at}: no zoom");
+    }
+}
+
+#[test]
+fn a_drag_with_space_held_pans_even_from_a_node_and_leaves_it_in_place() {
+    for at in ["canvas", "node"] {
+        let mut h = graph("document");
+        let from = if at == "node" {
+            node_at(&h, "A")
+        } else {
+            empty_spot(&h)
+        };
+        let view = h.state().view.view;
+        h.key_down(egui::Key::Space);
+        h.run();
+        drag(&mut h, from, vec2(-50.0, 0.0), PointerButton::Primary);
+        h.key_up(egui::Key::Space);
+        h.run();
+        assert!(h.state().view.view.min.x > view.min.x + 1.0, "{at}");
+    }
+    // The pan follows the pointer: a node under it stays under it.
+    let mut h = graph("document");
+    let a = node_at(&h, "A");
+    h.key_down(egui::Key::Space);
+    h.run();
+    drag(&mut h, a, vec2(-50.0, 20.0), PointerButton::Primary);
+    h.key_up(egui::Key::Space);
+    h.run();
+    let now = node_at(&h, "A");
+    assert!(
+        (now - (a + vec2(-50.0, 20.0))).length() < 12.0,
+        "{a:?} {now:?}"
+    );
+}
+
+#[test]
+fn two_fingers_pan_the_graph_and_a_pinch_zooms_it_in_every_profile() {
+    for id in pointer::ids() {
+        let mut h = graph(id);
+        h.hover_at(empty_spot(&h));
+        let (zoom, view) = (h.state().view.zoom(), h.state().view.view);
+        wheel(
+            &mut h,
+            MouseWheelUnit::Point,
+            vec2(0.0, -40.0),
+            Modifiers::NONE,
+        );
+        assert_ne!(h.state().view.view, view, "{id}: two fingers pan");
+        assert_eq!(h.state().view.zoom(), zoom, "{id}");
+        h.input_mut().events.push(Event::Zoom(0.7));
+        h.run();
+        assert!(h.state().view.zoom() < zoom, "{id}: a pinch zooms");
+    }
+}

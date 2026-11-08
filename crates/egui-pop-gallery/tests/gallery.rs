@@ -1507,6 +1507,130 @@ fn the_node_graph_page_shows_fifty_nodes_and_edits_through_its_steps() {
     results.add(h.try_snapshot("node-graph-detail-pop-dark"));
 }
 
+/// The node graph page's view: the part of the graph shown and the zoom.
+fn graph_view(h: &mut Harness<'_, Gallery>) -> ([f64; 4], f64) {
+    use egui_pop::imaging::graph::CMD_GRAPH_READ;
+    let g = h
+        .state_mut()
+        .app
+        .run(
+            &CMD_GRAPH_READ,
+            serde_json::json!({ "graph": "gallery" }),
+            egui_pop::model::commands::Origin::Agent("test".into()),
+        )
+        .now()
+        .expect("answered now")
+        .expect("read");
+    let v: Vec<f64> = g["visible"]
+        .as_array()
+        .expect("visible")
+        .iter()
+        .filter_map(serde_json::Value::as_f64)
+        .collect();
+    ([v[0], v[1], v[2], v[3]], g["zoom"].as_f64().expect("zoom"))
+}
+
+fn graph_drag(h: &mut Harness<'_, Gallery>, from: egui::Pos2, button: egui::PointerButton) {
+    let by = egui::vec2(60.0, 30.0);
+    h.hover_at(from);
+    h.event(egui::Event::PointerButton {
+        pos: from,
+        button,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.step();
+    for i in 1..=4 {
+        h.hover_at(from + by * (i as f32 / 4.0));
+        h.step();
+    }
+    h.event(egui::Event::PointerButton {
+        pos: from + by,
+        button,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run();
+}
+
+fn graph_wheel(
+    h: &mut Harness<'_, Gallery>,
+    at: egui::Pos2,
+    unit: egui::MouseWheelUnit,
+    dy: f32,
+    modifiers: egui::Modifiers,
+) {
+    h.hover_at(at);
+    h.run();
+    h.event(egui::Event::MouseWheel {
+        unit,
+        delta: egui::vec2(0.0, dy),
+        modifiers,
+        phase: egui::TouchPhase::Move,
+        source: if unit == egui::MouseWheelUnit::Point {
+            egui::MouseWheelSource::Trackpad
+        } else {
+            egui::MouseWheelSource::Wheel
+        },
+    });
+    h.run();
+}
+
+/// Each documented gesture moves the page's graph: the wheel, two
+/// fingers, a pinch, Ctrl and the wheel, a middle drag and a drag with
+/// Space held, from the canvas and from a node (the overview's fifty
+/// nodes cover most of it).
+#[test]
+fn the_node_graph_page_moves_with_every_navigation_gesture() {
+    use egui::{Modifiers, MouseWheelUnit, PointerButton};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "node-graph"));
+    h.run();
+    let graph = h.get_by_label("Processing graph").rect();
+    let canvas = graph.left_bottom() + egui::vec2(12.0, -12.0);
+    let node = h
+        .query_all_by_role(egui::accesskit::Role::Group)
+        .map(|n| n.rect())
+        .find(|r| graph.contains_rect(*r) && r.width() < graph.width() / 2.0)
+        .expect("a node on the graph")
+        .center();
+    let moved =
+        |h: &mut Harness<'_, Gallery>, what: &str, f: &dyn Fn(&mut Harness<'_, Gallery>)| {
+            let before = graph_view(h);
+            f(h);
+            let after = graph_view(h);
+            assert_ne!(before, after, "{what} moves the view");
+            after
+        };
+    moved(&mut h, "the wheel", &|h| {
+        graph_wheel(h, canvas, MouseWheelUnit::Line, -3.0, Modifiers::NONE)
+    });
+    moved(&mut h, "two fingers", &|h| {
+        graph_wheel(h, canvas, MouseWheelUnit::Point, -40.0, Modifiers::NONE)
+    });
+    let (_, zoom) = graph_view(&mut h);
+    let (_, zoomed) = moved(&mut h, "Ctrl and the wheel", &|h| {
+        graph_wheel(h, canvas, MouseWheelUnit::Line, 2.0, Modifiers::COMMAND)
+    });
+    assert!(zoomed > zoom, "Ctrl and the wheel zoom in");
+    moved(&mut h, "a pinch", &|h| {
+        h.hover_at(canvas);
+        h.event(egui::Event::Zoom(0.8));
+        h.run();
+    });
+    for (what, at) in [("canvas", canvas), ("node", node)] {
+        moved(&mut h, &format!("a middle drag from the {what}"), &|h| {
+            graph_drag(h, at, PointerButton::Middle)
+        });
+        moved(&mut h, &format!("a Space drag from the {what}"), &|h| {
+            h.key_down(egui::Key::Space);
+            h.run();
+            graph_drag(h, at, PointerButton::Primary);
+            h.key_up(egui::Key::Space);
+            h.run();
+        });
+    }
+}
+
 #[test]
 fn the_node_graph_page_routes_wires_around_the_nodes() {
     use egui_pop::imaging::graph::CMD_GRAPH_READ;

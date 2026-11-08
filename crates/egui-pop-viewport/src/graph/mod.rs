@@ -707,6 +707,7 @@ impl<'a> GraphEditor<'a> {
             reveal: None,
             gestures,
             one_stop,
+            pan_drag: pan_drag(ui, outer, &gestures),
             paths: Vec::new(),
             hover: None,
         };
@@ -803,6 +804,44 @@ impl<'a> GraphEditor<'a> {
             hint,
         }
     }
+}
+
+/// The button of a drag that pans the graph this pass: one pressed on
+/// the graph (not on a window above it), moving, that the profile pans
+/// with, or a primary drag with Space held. Read before the graph's
+/// widgets, so a node, a port or a wire under the pointer does not take
+/// the drag for its own.
+fn pan_drag(
+    ui: &Ui,
+    outer: Rect,
+    g: &crate::gestures::ViewGestures,
+) -> Option<egui::PointerButton> {
+    let ctx = ui.ctx();
+    let order = ui.layer_id().order;
+    ctx.input(|i| {
+        let p = &i.pointer;
+        let origin = p.press_origin()?;
+        if !p.is_decidedly_dragging() || !outer.contains(origin) {
+            return None;
+        }
+        let space = i.key_down(Key::Space);
+        [
+            egui::PointerButton::Primary,
+            egui::PointerButton::Secondary,
+            egui::PointerButton::Middle,
+            egui::PointerButton::Extra1,
+            egui::PointerButton::Extra2,
+        ]
+        .into_iter()
+        .find(|&b| {
+            p.button_down(b)
+                && (g.drag_pans(b, i.modifiers) || (space && b == egui::PointerButton::Primary))
+        })
+    })
+    .filter(|_| {
+        ctx.layer_id_at(ctx.input(|i| i.pointer.press_origin()).unwrap_or_default())
+            .is_none_or(|l| l.order == order)
+    })
 }
 
 /// Screen points per graph unit when `view` is fitted in `size` (as
@@ -1057,6 +1096,10 @@ struct Cx<'a, 'g, 'h> {
     gestures: crate::gestures::ViewGestures,
     /// The graph is one Tab stop ([`TabStops`]).
     one_stop: bool,
+    /// The button of a drag that pans the view this pass, wherever it
+    /// started on the graph (a node, a port, a wire, the canvas): the
+    /// profile's panning drags, and any primary drag with Space held.
+    pan_drag: Option<egui::PointerButton>,
     /// The wires that answer the pointer this frame, as drawn (graph
     /// units): not in the overview, nor into a stack.
     paths: Vec<(Edge, Vec<Pos2>)>,
@@ -1558,7 +1601,7 @@ impl Cx<'_, '_, '_> {
                 let id = self.groups[g].id.clone();
                 self.toggle_fold(&id);
             }
-            if resp.drag_started_by(egui::PointerButton::Primary) {
+            if resp.drag_started_by(egui::PointerButton::Primary) && self.pan_drag.is_none() {
                 let members = self.members(g);
                 self.start_move(members);
             }
@@ -1673,7 +1716,7 @@ impl Cx<'_, '_, '_> {
             let id = self.groups[g].id.clone();
             self.toggle_fold(&id);
         }
-        if resp.drag_started_by(egui::PointerButton::Primary) {
+        if resp.drag_started_by(egui::PointerButton::Primary) && self.pan_drag.is_none() {
             self.start_move(members);
         }
         self.drag_move(ui, &resp);
@@ -1788,7 +1831,7 @@ impl Cx<'_, '_, '_> {
         if resp.double_clicked() && self.level != Level::Overview {
             self.toggle_collapsed(&n.id);
         }
-        if resp.drag_started_by(egui::PointerButton::Primary) {
+        if resp.drag_started_by(egui::PointerButton::Primary) && self.pan_drag.is_none() {
             if !selected {
                 self.state.selection = BTreeSet::from([n.id.clone()]);
             }
@@ -2222,7 +2265,7 @@ impl Cx<'_, '_, '_> {
             if pr.gained_focus() {
                 self.reveal = Some(r);
             }
-            if pr.drag_started_by(egui::PointerButton::Primary) {
+            if pr.drag_started_by(egui::PointerButton::Primary) && self.pan_drag.is_none() {
                 self.start_wire(&pref, side, port.multiple, true);
             }
             egui_pop_core::pointer::drag_cursor(&pr, DragKind::Carry);
@@ -2614,28 +2657,16 @@ impl Cx<'_, '_, '_> {
         self.bounds(response.id, self.lay.visible);
         let to_scene = self.to_global.inverse();
         let pointer = ctx.input(|i| i.pointer.latest_pos()).map(|p| to_scene * p);
-        let space = ctx.input(|i| i.key_down(Key::Space));
         let modifiers = ctx.input(|i| i.modifiers);
-        // A drag the profile pans with (Space held: any drag).
-        let panning = [
-            egui::PointerButton::Primary,
-            egui::PointerButton::Secondary,
-            egui::PointerButton::Middle,
-            egui::PointerButton::Extra1,
-            egui::PointerButton::Extra2,
-        ]
-        .into_iter()
-        .any(|b| {
-            response.dragged_by(b)
-                && (self.gestures.drag_pans(b, modifiers)
-                    || (space && b == egui::PointerButton::Primary))
-                // A widget on the graph that claims the secondary drag
-                // keeps it.
-                && !(b == egui::PointerButton::Secondary
-                    && claim::claimed(&ctx, Secondary::Drag).is_some())
+        // A drag the profile pans with, from anywhere on the graph (a
+        // widget on the graph that claims the secondary drag keeps it).
+        let panning = self.pan_drag.is_some_and(|b| {
+            !(b == egui::PointerButton::Secondary
+                && claim::claimed(&ctx, Secondary::Drag).is_some())
         });
         if panning {
-            self.state.pan(-response.drag_delta());
+            let delta = ctx.input(|i| i.pointer.delta());
+            self.state.pan(-delta / self.zoom.max(1e-6));
         } else if response.drag_started_by(egui::PointerButton::Primary)
             && let Some(p) = pointer
         {
