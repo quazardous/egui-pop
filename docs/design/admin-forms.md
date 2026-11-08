@@ -1,7 +1,25 @@
 # Administration as forms: one declarative surface for settings, tools and tasks
 
-Status: **proposed** (2026-11-08). Nothing here is decided until the
-maintainer answers the questions in section 8.
+Status: **accepted** (2026-11-08), with the recommendations of section 8
+(Q1 to Q10). Slice 1 is built: the model (`egui_pop_model::admin`:
+manifests, value scopes, hooks, argument templates, the settings'
+generated pages) and the shell (`egui_pop_api::admin`, `AdminPlugin`:
+overlay and pop out, scope tabs, sections, search, rows with a modified
+bar, an origin tag, reset and "Set for", deep links, commands `admin.*`,
+the `admin` collector), shown in the gallery's Settings page.
+
+Slice 1 leaves for later: `Ctrl+,`, File > Settings and the aliases
+`app.settings` and `app.settings.page` (the settings window keeps them
+until the shortcuts editor, gestures and fonts become widget kinds and
+the window goes); the kit components of section 4.4 (the shell draws
+with the existing selectable rows, buttons, combo boxes and indicators);
+icons on the scope tabs and their overflow; the scopes' order and the
+search's filters (`@modified`, `@scope:`); statuses read from commands
+(hook statuses only); `when` and `enabled` clauses on nodes; draft
+fields, record lists and tables, tasks, the wizard kit; the alter hook
+over the tree (`Hook::admin`); the last place kept across runs (only the
+mode is); the application's link scheme; Helios's scopes and its
+`helios-config` bridge.
 
 The request: an application's non-image side (its settings, its tools,
 its import and export, its backups, its storage, its health check, its

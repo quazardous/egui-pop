@@ -381,6 +381,7 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::frame::FramePage)
         .plugin(pages::scale::ScalePage)
         .plugin(pages::pointer::PointerPage)
+        .plugin(egui_pop::api::admin::AdminPlugin)
         .plugin(pages::settings::SettingsPage)
         .plugin(
             egui_pop::i18n::I18nPlugin::new()
