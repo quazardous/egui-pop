@@ -166,6 +166,7 @@ pub mod theme_editor;
 pub mod tips;
 pub mod toasts;
 pub mod toolbars;
+pub mod wait;
 pub mod window;
 pub mod workbench;
 mod zen;

@@ -66,6 +66,67 @@ pub struct ActionSpec {
     pub args: Json,
 }
 
+/// The JSON Schemas of an action: of its arguments and of its result,
+/// when its author gives them. `describe` lists them; the example of
+/// the arguments ([`ActionSpec::args`]) stays beside them.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct Schemas {
+    /// A JSON Schema of the arguments.
+    pub args: Option<Json>,
+    /// A JSON Schema of the result (the feedback's `data`).
+    pub result: Option<Json>,
+}
+
+/// The version of the capability protocol: what
+/// [`DebugBridge::capabilities`] lists and how. It changes only when a
+/// field changes meaning; adding capabilities or fields keeps it.
+pub const PROTOCOL: u32 = 1;
+
+/// Whether a command's or an action's free description of its arguments
+/// is a JSON Schema rather than an example: an object of schema keywords
+/// naming a `type`, `$schema`, `properties` or a combinator.
+pub fn is_schema(j: &Json) -> bool {
+    const KEYWORDS: [&str; 22] = [
+        "$schema",
+        "$id",
+        "$ref",
+        "$defs",
+        "title",
+        "description",
+        "type",
+        "properties",
+        "required",
+        "additionalProperties",
+        "items",
+        "enum",
+        "const",
+        "default",
+        "minimum",
+        "maximum",
+        "minLength",
+        "maxLength",
+        "pattern",
+        "oneOf",
+        "anyOf",
+        "allOf",
+    ];
+    const TYPES: [&str; 7] = [
+        "object", "array", "string", "number", "integer", "boolean", "null",
+    ];
+    let Some(m) = j.as_object() else { return false };
+    let typed = match m.get("type") {
+        Some(Json::String(t)) => TYPES.contains(&t.as_str()),
+        Some(Json::Array(ts)) => ts
+            .iter()
+            .all(|t| t.as_str().is_some_and(|t| TYPES.contains(&t))),
+        Some(_) => false,
+        None => ["$schema", "properties", "oneOf", "anyOf", "allOf", "$ref"]
+            .iter()
+            .any(|k| m.contains_key(*k)),
+    };
+    typed && !m.is_empty() && m.keys().all(|k| KEYWORDS.contains(&k.as_str()))
+}
+
 /// What a call did. Always returned, success or not.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Feedback {
@@ -109,6 +170,11 @@ pub trait Collector {
     ) -> Result<Json, String> {
         Err(format!("no action `{action}`"))
     }
+    /// The JSON Schemas of an action's arguments and result, when its
+    /// author gives them (none by default).
+    fn schemas(&self, _action: &str) -> Schemas {
+        Schemas::default()
+    }
 }
 
 type SnapshotFn = Box<dyn Fn(&Context) -> Json>;
@@ -123,6 +189,8 @@ pub struct FnCollector {
     actions: Vec<(ActionSpec, ActionFn)>,
     /// Per action, whether a call mutates when it depends on the call.
     mutates_when: Vec<(String, MutatesFn)>,
+    /// Per action, its schemas.
+    schemas: Vec<(String, Schemas)>,
 }
 
 impl fmt::Debug for FnCollector {
@@ -141,6 +209,7 @@ impl FnCollector {
             snapshot: Box::new(|_| Json::Null),
             actions: Vec::new(),
             mutates_when: Vec::new(),
+            schemas: Vec::new(),
         }
     }
 
@@ -212,6 +281,34 @@ impl FnCollector {
         }
         self
     }
+
+    fn schemas_mut(&mut self) -> Option<&mut Schemas> {
+        let name = self.actions.last()?.0.name.clone();
+        if !self.schemas.iter().any(|(n, _)| *n == name) {
+            self.schemas.push((name.clone(), Schemas::default()));
+        }
+        self.schemas
+            .iter_mut()
+            .find(|(n, _)| *n == name)
+            .map(|(_, s)| s)
+    }
+
+    /// Sets the JSON Schema of the last action's arguments; its example
+    /// ([`FnCollector::args`]) stays.
+    pub fn schema(mut self, schema: Json) -> Self {
+        if let Some(s) = self.schemas_mut() {
+            s.args = Some(schema);
+        }
+        self
+    }
+
+    /// Sets the JSON Schema of the last action's result.
+    pub fn result_schema(mut self, schema: Json) -> Self {
+        if let Some(s) = self.schemas_mut() {
+            s.result = Some(schema);
+        }
+        self
+    }
 }
 
 impl Collector for FnCollector {
@@ -229,6 +326,14 @@ impl Collector for FnCollector {
 
     fn snapshot(&self, ctx: &Context) -> Json {
         (self.snapshot)(ctx)
+    }
+
+    fn schemas(&self, action: &str) -> Schemas {
+        self.schemas
+            .iter()
+            .find(|(n, _)| n == action)
+            .map(|(_, s)| s.clone())
+            .unwrap_or_default()
     }
 
     fn mutates(&self, action: &str, args: &Json) -> Option<bool> {
@@ -441,14 +546,61 @@ impl DebugBridge {
             self.collectors
                 .iter()
                 .map(|c| {
+                    let actions: Vec<Json> = self
+                        .actions_of(c.as_ref())
+                        .into_iter()
+                        .map(|a| {
+                            let schemas = c.schemas(&a.name);
+                            let mut j = json!(a);
+                            if let Some(s) = schemas.args {
+                                j["schema"] = s;
+                            }
+                            if let Some(s) = schemas.result {
+                                j["result"] = s;
+                            }
+                            j
+                        })
+                        .collect();
                     json!({
                         "name": c.name(),
                         "description": c.description(),
-                        "actions": self.actions_of(c.as_ref()),
+                        "actions": actions,
                     })
                 })
                 .collect(),
         )
+    }
+
+    /// Every collector action as a capability of [`PROTOCOL`] 1, one
+    /// entry each: `kind` (`action`), `name` (`collector.action`),
+    /// `description`, `mutates`, `agent`, `args` (a JSON Schema, or
+    /// `null`), `example` (example arguments), `result` (a JSON Schema,
+    /// or `null`) and `call` (`collector`, `action`). An application adds
+    /// its commands beside them (`AppHandle::debug_capabilities`).
+    pub fn capabilities(&self) -> Vec<Json> {
+        let mut out = Vec::new();
+        for c in &self.collectors {
+            for a in self.actions_of(c.as_ref()) {
+                let schemas = c.schemas(&a.name);
+                let (args, example) = match schemas.args {
+                    Some(s) => (s, a.args),
+                    None if is_schema(&a.args) => (a.args, Json::Null),
+                    None => (Json::Null, a.args),
+                };
+                out.push(json!({
+                    "kind": "action",
+                    "name": format!("{}.{}", c.name(), a.name),
+                    "description": a.description,
+                    "mutates": a.mutates,
+                    "agent": a.agent,
+                    "args": args,
+                    "example": example,
+                    "result": schemas.result,
+                    "call": { "collector": c.name(), "action": a.name },
+                }));
+            }
+        }
+        out
     }
 
     /// Every collector's snapshot, by name.

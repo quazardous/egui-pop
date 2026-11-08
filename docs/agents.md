@@ -27,7 +27,8 @@ connect to, loopback or not. It is reached by Rust calls:
 
 | Call | What it does |
 |---|---|
-| `AppHandle::debug_describe()` | every collector: name, description, actions (each with `mutates`, `agent` and an example of its arguments) |
+| `AppHandle::debug_describe()` | every collector: name, description, actions (each with `mutates`, `agent`, an example of its arguments, and its JSON Schemas when given) |
+| `AppHandle::debug_capabilities()` | every collector action and command as one list, protocol 1 (`bridge.describe`, [Capabilities](#capabilities)) |
 | `AppHandle::debug_snapshot()` | every collector's snapshot, by name, as one JSON object |
 | `AppHandle::debug_call(collector, action, args)` | calls an action as the agent (`debug-bridge`); always returns a `Feedback`; `commands.run` is queued for the next frame |
 | `App::debug_call(collector, action, args)` | the same, but `commands.run` runs at once and its result is in the feedback |
@@ -257,12 +258,37 @@ An application may offer a writing action to agents it trusts with it
 
 ### Wait
 
-There is no blocking wait on the bridge (`egui-mcp`'s `wait_for` waits
-on the accessibility tree, [inspection.md](inspection.md)). An agent
-polls: `journal.since` for a command's `command.done`, the `steps`
-collector for the last runs of each step (who vetoed, redirected, ran),
-the `jobs` collector's `idle`. An application may add its own (the gallery's
+`bridge.wait` checks a condition: a journal event after `since`
+(`{ "event": "command.done", "cause": 42 }`), the application settled
+(`{ "settled": true }`: no command queued or running, every job idle,
+no repaint asked for), or the first of several (`{ "any": [..] }`). It
+answers `{ "met", "by", "event", "last" }`; `last` is the next check's
+`since`. In-process the call answers at once, it never blocks the UI
+thread: whoever waits checks again after each frame. A transport holds
+the call until it is met or its `deadline_ms` passes.
+
+In Rust, `AppHandle::wait_met(&WaitFor, since)` is the same check
+(`egui_pop::api::wait`), and a test steps frames until it holds with
+`egui_pop_test::wait::wait_until(&mut harness, &until, since,
+Deadline::default())`, or `settle` ([Testing](testing.md)). The
+`steps` collector still gives the last runs of each step, and an
+application may add its own waits (the gallery's
 `gallery.viewport.wait_idle`).
+
+### Capabilities
+
+`bridge.describe` (`AppHandle::debug_capabilities()`) lists everything
+an agent may name as one list, under `protocol: 1`: every collector
+action (`kind: "action"`, `name` as `collector.action`) and every
+command (`kind: "command"`, run through `commands.run`), each with
+`description`, `mutates`, `agent`, `args` (a JSON Schema when the author
+gives one, else `null`), `example` (example arguments), `result` (a JSON
+Schema of the result, or `null`) and `call` (how to call it). A
+collector gives its schemas with `FnCollector::schema` and
+`FnCollector::result_schema`; a command whose `args` is a JSON Schema is
+listed with it. The protocol number changes only when a field changes
+meaning: a client calls only names the list gives, so adding
+capabilities breaks none.
 
 ### Screenshots and the accessibility tree
 
@@ -600,7 +626,8 @@ What is not protected today. None of these is fixed by documenting it.
   reports `mutates` from the command's `read_only` flag, and a read-only
   bridge runs only those; a command that says it only reads and writes
   all the same is not caught.
-- **No wait and no rate limit.** An agent polls (`journal.since`, a
-  collector's snapshot); nothing blocks until something happens, and
-  nothing limits how often it calls. A transport that exposes the bridge
-  limits the rate itself.
+- **No rate limit, and no blocking wait in-process.** `bridge.wait`
+  answers at once; holding a call until it is met is the transport's
+  (or `egui_pop_test::wait`'s, stepping frames). Nothing limits how
+  often an agent calls: a transport that exposes the bridge limits the
+  rate itself.

@@ -957,6 +957,81 @@ impl AppHandle {
         self.0.bridge.borrow().describe()
     }
 
+    /// Every capability an agent may name, as one list of
+    /// [`PROTOCOL`](egui_pop_core::debug::PROTOCOL) 1:
+    /// `{ "protocol", "capabilities": [..] }`. The collectors' actions
+    /// (`kind: "action"`, see `DebugBridge::capabilities`), then every
+    /// command (`kind: "command"`, `name` its id, called through
+    /// `commands.run` with `{ "id", "args" }`): `description`,
+    /// `mutates` (not read-only), `agent`, `args` (a JSON Schema, or
+    /// `null`), `example` (its free description of the arguments when
+    /// not a schema), `result` (`null`) and `call`. `bridge.describe`
+    /// answers it to an agent.
+    pub fn debug_capabilities(&self) -> Json {
+        use egui_pop_core::debug::{PROTOCOL, is_schema};
+        let mut caps = self.0.bridge.borrow().capabilities();
+        for (s, _) in self.commands() {
+            let (args, example) = if is_schema(&s.args) {
+                (s.args.clone(), Json::Null)
+            } else {
+                (Json::Null, s.args.clone())
+            };
+            caps.push(json!({
+                "kind": "command",
+                "name": s.id,
+                "title": s.title,
+                "description": s.description,
+                "mutates": !s.read_only,
+                "agent": s.agent,
+                "args": args,
+                "example": example,
+                "result": Json::Null,
+                "call": { "collector": "commands", "action": "run", "id": s.id },
+            }));
+        }
+        json!({ "protocol": PROTOCOL, "capabilities": caps })
+    }
+
+    /// A bridge call, outside any step. `bridge.describe` lists the
+    /// bridge itself, so it is answered here, the bridge not borrowed.
+    fn bridge_call_as(
+        &self,
+        collector: &str,
+        action: &str,
+        args: &Json,
+        origin: &Origin,
+    ) -> Feedback {
+        if collector == BRIDGE && action == "describe" {
+            let refused = self
+                .0
+                .bridge
+                .borrow()
+                .refusal(collector, action, args, origin);
+            if refused.is_none() {
+                let f = Feedback {
+                    ok: true,
+                    collector: collector.into(),
+                    action: action.into(),
+                    mutates: false,
+                    message: format!("`{collector}.{action}` read"),
+                    data: self.debug_capabilities(),
+                };
+                self.0.bridge.borrow_mut().record(f.clone());
+                return f;
+            }
+        }
+        self.0
+            .bridge
+            .borrow_mut()
+            .call_as(&self.egui(), collector, action, args, origin)
+    }
+
+    /// The number of requests queued for the next frame (commands to
+    /// run, plugins to connect...).
+    pub(crate) fn queued_requests(&self) -> usize {
+        self.0.requests.borrow().len()
+    }
+
     /// Every collector's snapshot.
     pub fn debug_snapshot(&self) -> Json {
         self.0.bridge.borrow().snapshot(&self.egui())
@@ -1028,8 +1103,7 @@ impl AppHandle {
         // (an agent polling would fill both); its veto and its failure
         // are.
         let out = self.step_with(&STEP_DEBUG_CALL, asked, !mutates, |app, a| {
-            let f = app.0.bridge.borrow_mut().call_as(
-                &app.egui(),
+            let f = app.bridge_call_as(
                 a["collector"].as_str().unwrap_or_default(),
                 a["action"].as_str().unwrap_or_default(),
                 &a["args"],
@@ -2942,6 +3016,9 @@ pub const STEP_EXIT: StepId = StepId::from_static("app.exit");
 /// `agent` flag refuses never reaches the step: it is refused first
 /// (`debug.call.refused`).
 pub const STEP_DEBUG_CALL: StepId = StepId::from_static("debug.call");
+
+/// The bridge's own collector: `bridge.describe`, `bridge.wait`.
+pub const BRIDGE: &str = "bridge";
 /// The workbench's layout is loaded (`{ "document" }`, from
 /// `Host::layout_document`): at the start, and on `App::load_layout`. A
 /// before-hook may redirect the document or veto; a run-hook loads it
@@ -4425,6 +4502,40 @@ impl App {
                 Ok(json!(app.events_since(seq)))
             })
             .args(json!({ "seq": 0 })),
+        )
+        .expect("distinct names");
+        let w = h.weak();
+        b.register(
+            FnCollector::new(
+                BRIDGE,
+                "The bridge itself, for agents: every capability as one list (`describe`), and a wait on the journal or for the application to settle (`wait`).",
+            )
+            .action(
+                "describe",
+                "Every capability: the collectors' actions and the commands, with their JSON Schemas when given (`AppHandle::debug_capabilities`).",
+                false,
+                |_, _| Err("answered by the application (`AppHandle::debug_capabilities`)".into()),
+            )
+            .agent(true)
+            .args(Json::Null)
+            .result_schema(json!({
+                "type": "object",
+                "required": ["protocol", "capabilities"],
+                "properties": {
+                    "protocol": { "type": "integer" },
+                    "capabilities": { "type": "array", "items": { "type": "object" } }
+                }
+            }))
+            .action(
+                "wait",
+                "Whether a journal event after `since` matches (`event`, `cause`), the application is settled (`settled: true`), or the first of several (`any`); in-process it answers at once, a transport holds it until met or `deadline_ms`.",
+                false,
+                move |_, args| up(&w)?.wait_answer(args),
+            )
+            .agent(true)
+            .args(json!({ "event": "command.done", "since": 0 }))
+            .schema(crate::wait::args_schema())
+            .result_schema(crate::wait::result_schema()),
         )
         .expect("distinct names");
         let w = h.weak();

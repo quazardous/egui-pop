@@ -6,7 +6,9 @@ use egui_pop_gallery::{Gallery, Options};
 use serde_json::Value as Json;
 
 /// What agents may call in the gallery.
-const OFFERED: [&str; 10] = [
+const OFFERED: [&str; 12] = [
+    "bridge.describe",
+    "bridge.wait",
     "commands.run",
     "fonts.check",
     "frame.hit",
