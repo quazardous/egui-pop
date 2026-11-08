@@ -120,5 +120,6 @@
 - [Pointer gestures, a study](design/pointer-gestures.md)
 - [Navigation on large canvases, a study](design/navigation.md)
 - [One file browser, many views](design/file-browser.md)
+- [Administration as forms, a design](design/admin-forms.md)
 - [Wide gamut on Wayland](wayland-colour.md)
 - [The logo](logo/README.md)
