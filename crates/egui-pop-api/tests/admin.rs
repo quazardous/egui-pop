@@ -514,7 +514,7 @@ fn row_fields_write_through_their_command_and_actions_confirm_first() {
     }
     // The meter, a choice from the declared and the record's choices.
     h.get_by_label("Load: A quarter busy");
-    h.get_by_label("Half busy");
+    h.get_by_label("Load: Half busy");
     h.get_by_label("Fast pool");
     egui_pop_test::assert_all_named(&h);
     // A toggle writes the row's id and the new value.
