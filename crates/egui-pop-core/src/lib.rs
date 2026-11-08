@@ -109,6 +109,7 @@ pub mod strings;
 pub mod tab;
 pub mod theme;
 pub mod thumbnail;
+pub mod tooltip;
 pub mod ui;
 pub mod widgets;
 

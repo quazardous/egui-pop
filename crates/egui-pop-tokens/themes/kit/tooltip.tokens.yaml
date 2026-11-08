@@ -1,0 +1,51 @@
+$description: "The `tooltip` component of the default kit (docs/kit.md), layered into pop-dark."
+tooltip:
+  $description: "A tooltip's frame, drawn by `egui_pop_core::tooltip` (`TooltipExt::tip`): its fill, border, radius, padding, text colour and size, and where it goes. The defaults are the popup's, as egui draws `on_hover_text`."
+  shape:
+    $type: "string"
+    $value: "card"
+  placement:
+    $type: "string"
+    $value: "widget"
+    $description: "widget: under the hovered widget, from its start edge (egui's); pointer: under the pointer, from its position."
+  offset:
+    $type: "dimension"
+    $value: {value: 4, unit: "px"}
+    $description: "The gap between the tooltip and the widget's bottom edge, or the pointer."
+  padding-x:
+    $type: "dimension"
+    $value: "{space.m}"
+  padding-y:
+    $type: "dimension"
+    $value: "{space.m}"
+  shadow-offset-x:
+    $type: "dimension"
+    $value: "{shadow.popup.offset-x}"
+  shadow-offset-y:
+    $type: "dimension"
+    $value: "{shadow.popup.offset-y}"
+  shadow-blur:
+    $type: "dimension"
+    $value: "{shadow.popup.blur}"
+  shadow-spread:
+    $type: "dimension"
+    $value: "{shadow.popup.spread}"
+  shadow-color:
+    $type: "color"
+    $value: "{shadow.popup.color}"
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.overlay}"
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 1, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: "{radius.window}"
+    text:
+      $type: "color"
+      $value: "{text.default}"

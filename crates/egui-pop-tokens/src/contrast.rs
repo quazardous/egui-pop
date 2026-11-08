@@ -137,6 +137,7 @@ pub const PAIRS: &[Pair] = &[
     text("menu-item.rest.text", "menu-item.hover.fill"),
     text("menu-item.tone.muted.text", "surface.overlay"),
     text("toast.rest.text", "toast.rest.fill"),
+    text("tooltip.rest.text", "tooltip.rest.fill"),
     text("field.rest.text", "field.rest.fill"),
     text("field.rest.text", "field.tone.muted.fill"),
     text("field.tone.muted.text", "field.rest.fill"),
