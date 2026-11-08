@@ -14,8 +14,8 @@
 //! takes their input.
 
 use egui::{
-    Color32, CornerRadius, FontFamily, FontId, Painter, Rect, Shadow, Stroke, StrokeKind, pos2,
-    vec2,
+    Color32, CornerRadius, FontFamily, FontId, Painter, Rect, Shadow, Stroke, StrokeKind, Vec2,
+    pos2, vec2,
 };
 use egui_stack::layout::{FlyoutPaint, LayoutPainter, SashPaint, Shown, StripPaint};
 use egui_stack::toolbar::ToolKind;
@@ -136,6 +136,49 @@ fn cx(painter: &Painter) -> KitCx<'_> {
 }
 
 impl Kit {
+    /// The breadth an area keeps for the line on its side facing the
+    /// centre, as an egui side panel reserved it in its frame's outer
+    /// margin: the resting line's width when the kit's `side-area` has a
+    /// border (the line shows at rest), else none.
+    pub fn area_line_room(&self, style: &egui::Style) -> f32 {
+        if self.side_area.style(State::REST).border_width > 0.0 {
+            style.visuals.widgets.noninteractive.bg_stroke.width.round()
+        } else {
+            0.0
+        }
+    }
+
+    /// The line between two areas (an egui side panel's separator): shown
+    /// at rest only when the kit's `side-area` has a border, highlighted
+    /// while hovered, focused or dragged. `inward` points from the
+    /// boundary into the area the line belongs to (zero: centred on the
+    /// boundary); the line then lies in the room the area keeps for it
+    /// ([`Kit::area_line_room`]), where egui drew a panel's separator.
+    pub fn paint_area_line(&self, painter: &Painter, sash: &SashPaint<'_>, inward: Vec2) {
+        let style = painter.ctx().global_style();
+        let widgets = &style.visuals.widgets;
+        let flags = sash.state;
+        let stroke = if flags.contains(PartState::DRAGGED) {
+            widgets.active.fg_stroke
+        } else if flags.contains(PartState::HOVERED) || flags.contains(PartState::FOCUSED) {
+            widgets.hovered.fg_stroke
+        } else if self.side_area.style(State::REST).border_width > 0.0 {
+            widgets.noninteractive.bg_stroke
+        } else {
+            return;
+        };
+        let room = self.area_line_room(&style);
+        let c = sash.rect.center() + inward * (room - 0.5 * stroke.width);
+        match sash.axis {
+            SeparatorAxis::Vertical => {
+                painter.vline(c.x, sash.rect.y_range(), stroke);
+            }
+            SeparatorAxis::Horizontal => {
+                painter.hline(sash.rect.x_range(), c.y, stroke);
+            }
+        }
+    }
+
     /// A folded area's strip (`area-strip`): its box, the line on the side
     /// facing the centre (`inner`), and the drag-handle glyph near its top.
     pub fn paint_area_strip(&self, painter: &Painter, rect: Rect, state: State, inner: Side) {
@@ -173,27 +216,7 @@ impl Kit {
 /// the frame of what lies over the centre (`side-area`, its shadow).
 impl LayoutPainter for Kit {
     fn sash(&self, painter: &Painter, sash: &SashPaint<'_>) {
-        let style = painter.ctx().global_style();
-        let widgets = &style.visuals.widgets;
-        let flags = sash.state;
-        let stroke = if flags.contains(PartState::DRAGGED) {
-            widgets.active.fg_stroke
-        } else if flags.contains(PartState::HOVERED) || flags.contains(PartState::FOCUSED) {
-            widgets.hovered.fg_stroke
-        } else if self.side_area.style(State::REST).border_width > 0.0 {
-            widgets.noninteractive.bg_stroke
-        } else {
-            return;
-        };
-        let c = sash.rect.center();
-        match sash.axis {
-            SeparatorAxis::Vertical => {
-                painter.vline(c.x, sash.rect.y_range(), stroke);
-            }
-            SeparatorAxis::Horizontal => {
-                painter.hline(sash.rect.x_range(), c.y, stroke);
-            }
-        }
+        self.paint_area_line(painter, sash, Vec2::ZERO);
     }
 
     fn strip(&self, painter: &Painter, strip: &StripPaint<'_>) {

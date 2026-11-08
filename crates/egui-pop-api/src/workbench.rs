@@ -2535,6 +2535,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         kit: &kit,
         open: &open,
         areas: &areas,
+        flipped,
     };
     let rect = ui.available_rect_before_wrap();
     let mut inner = ui.new_child(
@@ -2905,7 +2906,11 @@ struct ShellPainter<'a> {
 
 impl LayoutPainter for ShellPainter<'_> {
     fn sash(&self, painter: &egui::Painter, sash: &SashPaint<'_>) {
-        LayoutPainter::sash(self.kit, painter, sash);
+        // The line lies inside the area it resizes, on its side facing the
+        // centre, where egui drew a side or bottom panel's separator.
+        let inward =
+            area_from(&sash.zone.0).map_or(egui::Vec2::ZERO, |area| inward(area, self.flipped));
+        self.kit.paint_area_line(painter, sash, inward);
     }
 
     fn strip(&self, painter: &egui::Painter, strip: &StripPaint<'_>) {
@@ -2932,12 +2937,32 @@ impl LayoutPainter for ShellPainter<'_> {
     }
 }
 
+/// The edge of a side or bottom area facing the centre, where its line is.
+fn edge_toward_centre(area: Area, flipped: bool) -> Side {
+    match area {
+        Area::Bottom => Side::Top,
+        _ if on_left(area, flipped) => Side::Right,
+        _ => Side::Left,
+    }
+}
+
+/// The way from an area's edge facing the centre into the area.
+fn inward(area: Area, flipped: bool) -> egui::Vec2 {
+    match edge_toward_centre(area, flipped) {
+        Side::Left => egui::Vec2::X,
+        Side::Right => -egui::Vec2::X,
+        Side::Top => egui::Vec2::Y,
+        Side::Bottom => -egui::Vec2::Y,
+    }
+}
+
 /// Draws the shell's zones: each area in its frame, the strips' icons.
 struct ShellViewer<'a> {
     app: &'a AppHandle,
     kit: &'a Kit,
     open: &'a BTreeSet<Area>,
     areas: &'a [Area],
+    flipped: bool,
 }
 
 impl ZoneViewer for ShellViewer<'_> {
@@ -2966,8 +2991,19 @@ impl ZoneViewer for ShellViewer<'_> {
         } else {
             egui::Margin::symmetric(pad(side.padding_x), pad(side.padding_y))
         };
+        // The room the line facing the centre takes, outside the frame, as
+        // an egui panel reserved it.
+        let room = self.kit.area_line_room(ui.style()).clamp(0.0, 127.0) as i8;
+        let mut outer = egui::Margin::ZERO;
+        match edge_toward_centre(area, self.flipped) {
+            Side::Left => outer.left = room,
+            Side::Right => outer.right = room,
+            Side::Top => outer.top = room,
+            Side::Bottom => outer.bottom = room,
+        }
         egui::Frame::side_top_panel(ui.style())
             .inner_margin(margin)
+            .outer_margin(outer)
             .show(ui, |ui| {
                 // The area keeps its size; content narrower than it does
                 // not shrink it.
