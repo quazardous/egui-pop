@@ -18,8 +18,12 @@ The shell's side bar, main and inspector zones are panels of their areas.
 **One dock space.** The areas are the named docks of one egui_stack
 `DockSpace` (`center`, `start_side`, `end_side`, `bottom`). The
 workbench lays the areas out (a side area's width, its fold and flyout,
-an area lying over the centre, the bottom panel's alignment) and draws
-each area's dock where it put the area; the docks share one drag, so a
+an area lying over the centre, the bottom panel's alignment) with
+egui_stack's layout layer: each area is a zone holding its dock, with
+its least, largest and default sizes as constraints, the centre the zone
+that grows, a folded side area the zone's strip; the zones that hold no
+dock refuse a dragged tab (`DockSpace::bind`). It draws each area's dock
+where the layout put the area; the docks share one drag, so a
 tab goes from any area to any other as it goes inside one. Each area's
 rules are its dock's: any split, as inside one area; never one of
 egui_stack's floating windows (a panel leaves the main window through
@@ -67,9 +71,10 @@ itself the margin it wants. `main_edge_to_edge` takes away only the
 centre's outer margin.
 
 **Lines between panels.** Two panels of one area meet at the dock's
-separator (the kit's `dock-separator`); two areas meet at the side
-area's separator, which egui draws and which takes the drag that resizes
-the area. Those are the lines that mean something: the bodies' borders
+separator (the kit's `dock-separator`); two areas meet at the layout's
+line between them, which the kit draws (as wide as the widgets' border,
+shown at rest only when `side-area` has a border) and which takes the
+drag that resizes the area. Those are the lines that mean something: the bodies' borders
 beside them only repeat them, and a kit that wants one line where two
 panels meet sets `dock-body.rest.border-width` to 0, as the Rerun-like
 kit does (it also hides the dock's separator at rest).
@@ -284,7 +289,7 @@ it (`workbench.place`, `{ "area", "placement": "over" }`;
 folded strip keeps the room in the layout, so the centre keeps its
 width (a terminal in it is not resized), and the area, unfolded, lies
 above the centre next to its strip, with the kit's `side-area` shadow
-(`shadow.side`). A click on the strip folds or unfolds it; its edge on
+(`shadow.side`). A click on the strip's grip folds or unfolds it; its edge on
 the centre's side resizes it. The placement is saved with the layout
 (`over`), like folding; a plugin may veto the step. The centre never
 folds: `workbench.fold` refuses it.
@@ -293,8 +298,10 @@ The line between a side or bottom area lying beside the centre and the
 centre resizes the area: by a drag, or with the keyboard once Tab or
 Shift+Tab reaches it ("Resize the start side bar", a splitter to assistive
 technology). An arrow across the line moves it 16 points, with Shift 64,
-and Enter gives the area its default size back, as a dock separator and a
-section's boundary do.
+and Enter or a double click gives the area its default size back, as a
+dock separator and a section's boundary do. The sizes the user gave are
+kept with egui's memory, as egui's side panels kept theirs; a session
+saved when the areas were egui panels keeps its areas' sizes.
 
 ### Strip icons and flyouts
 

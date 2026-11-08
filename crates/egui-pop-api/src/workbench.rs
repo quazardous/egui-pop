@@ -135,17 +135,20 @@ use std::sync::{Arc, Mutex};
 
 use egui::{Color32, Id, Pos2, Rect, Role, Ui, ViewportBuilder, ViewportId, WidgetInfo};
 use egui_pop_core::focus;
-use egui_pop_core::kit::{
-    BoxStyle, Corners, Glyph, Kit, KitCx, Part, Side, State, paint_box, paint_indicator,
-};
+use egui_pop_core::kit::{Kit, KitCx, Part, Side, State};
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 use egui_pop_model::ids::{PanelId, StepId, ZoneId};
 use egui_pop_model::layout::{Auxiliary, FloatingGroup, Join, Layout, Node, Placement};
 use egui_pop_model::panels::{Area, PanelSpec, Panels, Place};
+use egui_stack::layout::{
+    Content, Dir, FlyoutPaint, Layout as ZoneLayout, LayoutArea, LayoutEvent, LayoutPainter,
+    LayoutStyle, SashPaint, Shown, Size, StripPaint, Zone, ZoneName, ZoneViewer,
+};
 use egui_stack::tab_viewer::DropVerdict;
 use egui_stack::{
-    DockArea, DockDrop, DockRules, DockSpace, DockState, DropZone, NodeIndex, Split, TabViewer,
+    DockArea, DockDrop, DockRules, DockSpace, DockState, DropZone, NodeIndex, PartState, Split,
+    TabViewer,
 };
 use serde_json::{Value as Json, json};
 
@@ -995,6 +998,9 @@ pub(crate) struct Workbench {
     /// The primary (start) side bar lies on the right, the secondary on
     /// the left (`workbench.side_bar_position`), as of the last pass.
     pub flipped: bool,
+    /// The sizes the user gave the side and bottom areas, by zone name
+    /// (`shell_sizes`); `None` until loaded.
+    shell_sizes: Option<BTreeMap<String, f32>>,
 }
 
 impl Default for Workbench {
@@ -1030,6 +1036,7 @@ impl Default for Workbench {
             flyout_held: None,
             no_drop: Vec::new(),
             flipped: false,
+            shell_sizes: None,
         }
     }
 }
@@ -2363,14 +2370,10 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     let ctx = ui.ctx().clone();
     let across = ui.max_rect().width();
     let bounds = app.shell_bounds();
-    let (areas, sizes, widths_before, before) = {
+    let (areas, sizes, before) = {
         let mut wb = app.workbench_mut();
         wb.project();
         wb.content = ui.max_rect();
-        // The side areas' widths on the last pass: what the centre's least
-        // width weighs them against.
-        let widths_before: BTreeMap<Area, f32> =
-            wb.rects.iter().map(|(a, r)| (*a, r.width())).collect();
         wb.rects.clear();
         wb.bars.clear();
         wb.bare.clear();
@@ -2410,7 +2413,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
                 (a, (min, default, max))
             })
             .collect();
-        (wb.areas(), sizes, widths_before, before)
+        (wb.areas(), sizes, before)
     };
     let centre_min = app.centre_min_size().map(|m| m.resolve(across));
     let flipped = crate::layout_controls::side_bar_position(app).flipped();
@@ -2458,46 +2461,28 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         (wb.layout.folded.clone(), wb.layout.over.clone())
     };
     let kit = Kit::of(&ctx);
-    // Side areas lying over the centre, open, next to their strip; the
-    // strips of folded side areas, where a flyout may open.
-    let mut lying = Vec::new();
-    let mut strips = Vec::new();
-    for area in panel_alignment(app).order() {
-        // Zen mode: the centre alone.
-        if zen || !areas.contains(&area) || !visible_in(app, area) {
-            continue;
-        }
-        let side = matches!(area, Area::StartSide | Area::EndSide);
-        let is_over = side && over.contains(&area);
-        if folded.contains(&area) || is_over {
-            if side {
-                let open = is_over && !folded.contains(&area);
-                let rect = draw_strip(app, ui, &kit, area, open);
-                if open {
-                    lying.push((area, rect));
-                } else {
-                    strips.push((area, rect));
-                }
-            }
-            continue;
+    let mut saved = shell_sizes(app, &ctx, ui.scope_id());
+    // Side areas lying over the centre, open next to their strip: the
+    // layout lays them out folded (their strip keeps the room) and the
+    // workbench draws them over the centre (`lie_over`).
+    let open: BTreeSet<Area> = over
+        .iter()
+        .copied()
+        .filter(|a| matches!(a, Area::StartSide | Area::EndSide) && !folded.contains(a))
+        .collect();
+    let shown_now: BTreeSet<Area> = Area::ALL
+        .into_iter()
+        .filter(|a| !zen && areas.contains(a) && visible_in(app, *a))
+        .collect();
+    let leaf = |area: Area| -> Zone {
+        let name = area_name(area);
+        let zone = Zone::leaf(name, Content::Dock(name.to_owned()));
+        if area == Area::Center {
+            return zone.with(|c| c.grow = true);
         }
         let (min, default, max) = sizes[&area];
-        // The centre's least width: a side area gives way to it, never
-        // under its own least.
-        let max = match (area, centre_min) {
-            (Area::StartSide | Area::EndSide, Some(centre)) => {
-                let others: f32 = widths_before
-                    .iter()
-                    .filter(|(a, _)| matches!(a, Area::StartSide | Area::EndSide) && **a != area)
-                    .map(|(_, w)| *w)
-                    .sum();
-                max.min(across - centre - others)
-            }
-            _ => max,
-        };
         let min = min.max(48.0);
         let max = max.max(min);
-        let id = dock_id(area);
         let fallback: f32 = match area {
             Area::Bottom => 200.0,
             _ => 240.0,
@@ -2507,52 +2492,125 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         } else {
             fallback.max(min)
         };
-        let panel = match area {
-            Area::StartSide | Area::EndSide if on_left(area, flipped) => egui::Panel::left(id),
-            Area::StartSide | Area::EndSide => egui::Panel::right(id),
-            _ => egui::Panel::bottom(id),
+        let side = matches!(area, Area::StartSide | Area::EndSide);
+        let strip = folded.contains(&area) || (side && over.contains(&area));
+        zone.with(|c| {
+            c.min = Some(Size::Points(min));
+            c.max = max.is_finite().then_some(Size::Points(max));
+            c.default = Some(Size::Points(default.clamp(min, max)));
+        })
+        .with_state(|s| {
+            s.size = saved.get(name).copied();
+            if !shown_now.contains(&area) {
+                s.hidden = true;
+            } else if strip && side {
+                s.folded = true;
+            } else if strip {
+                // A folded bottom area leaves no strip.
+                s.hidden = true;
+            }
+        })
+    };
+    let mut layout = ZoneLayout::new(shell_tree(
+        &panel_alignment(app).order(),
+        flipped,
+        centre_min,
+        &leaf,
+    ));
+    // One strip breadth for the layout: the widest folded side's.
+    let strip = [Area::StartSide, Area::EndSide]
+        .into_iter()
+        .filter(|a| shown_now.contains(a) && (folded.contains(a) || over.contains(a)))
+        .map(|a| strip_width(app, &ctx, &kit, a))
+        .fold(kit.area_strip.data.width.max(1.0), f32::max);
+    let mut style = LayoutStyle::from_egui(ui.style());
+    style.strip = strip;
+    style.key_step = SASH_STEP;
+    style.large_key_step = SASH_STEP * 4.0;
+    style.sash_grab = 2.0 * ctx.global_style().interaction.resize_grab_radius_side;
+    style.sash_width = ui.visuals().widgets.noninteractive.bg_stroke.width.max(1.0);
+    let painter = ShellPainter {
+        kit: &kit,
+        open: &open,
+        flipped,
+    };
+    let mut viewer = ShellViewer {
+        app,
+        kit: &kit,
+        open: &open,
+        areas: &areas,
+    };
+    let rect = ui.available_rect_before_wrap();
+    let mut inner = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt("egui_pop.shell")
+            .max_rect(rect),
+    );
+    let laid = LayoutArea::new(&mut layout)
+        .id(shell_id())
+        .style(style)
+        .painter(&painter)
+        .show_inside(&mut inner, &mut viewer);
+    ui.advance_cursor_after_rect(rect);
+    // Strips of folded side areas, where a flyout may open.
+    let mut lying = Vec::new();
+    let mut strips = Vec::new();
+    for zone in &laid.zones {
+        let Some(area) = area_from(&zone.name.0) else {
+            continue;
         };
-        sash_keys(ui, area, id, flipped, default);
-        let pad = |p: f32| p.round().clamp(0.0, 127.0) as i8;
-        let side = &kit.side_area.data;
-        let margin = if app.frameless(area) {
-            egui::Margin::ZERO
-        } else {
-            egui::Margin::symmetric(pad(side.padding_x), pad(side.padding_y))
-        };
-        let shown = panel
-            .frame(egui::Frame::side_top_panel(ui.style()).inner_margin(margin))
-            .show_separator_line(kit.side_area.style(State::REST).border_width > 0.0)
-            .resizable(true)
-            .default_size(default.clamp(min, max))
-            .min_size(min)
-            .max_size(max)
-            .show(ui, |ui| {
-                // The panel keeps its width; content narrower than it does
-                // not shrink it.
-                ui.set_min_size(ui.available_size());
-                draw_area(app, ui, area);
-            });
-        app.workbench_mut().rects.insert(area, shown.response.rect);
-        // egui names the line "Resize panel": which one, it cannot say.
-        let name = strings::tr_args(&ctx, &txt::AREA_RESIZE, &[("area", &area_text(&ctx, area))]);
-        ctx.accesskit_node_builder(sash_id(ui, id), |node| node.set_label(name));
-        grip(&ctx, &kit, area, shown.response.rect, flipped);
-    }
-    let mut central = egui::CentralPanel::default();
-    if app.edge_to_edge() || app.frameless(Area::Center) {
-        central = central.frame(egui::Frame::central_panel(ui.style()).inner_margin(0.0));
-    }
-    let shown = central.show(ui, |ui| {
-        if areas.contains(&Area::Center) && visible_in(app, Area::Center) {
-            draw_area(app, ui, Area::Center);
+        if let Some(strip) = zone.strip {
+            if open.contains(&area) {
+                lying.push((area, strip));
+            } else {
+                strips.push((area, strip));
+            }
+            name_grip(&ctx, area, &zone.name.0, open.contains(&area));
         }
-    });
-    app.workbench_mut()
-        .rects
-        .insert(Area::Center, shown.response.rect);
+        if zone.shown == Shown::Open {
+            app.workbench_mut().rects.insert(area, zone.rect);
+            if area != Area::Center {
+                // The line resizing it, named after the area.
+                let name =
+                    strings::tr_args(&ctx, &txt::AREA_RESIZE, &[("area", &area_text(&ctx, area))]);
+                let sash = shell_id().with(("sash", &zone.name.0));
+                ctx.accesskit_node_builder(sash, |node| node.set_label(name));
+                grip(&ctx, &kit, area, zone.rect, flipped);
+            }
+        }
+    }
+    // What the user changed: sizes kept, folds asked through their step
+    // (a plugin may veto; the layout is built again from the workbench's
+    // state each pass, so a veto puts it back).
+    let mut resized = false;
+    for event in &laid.events {
+        match event {
+            LayoutEvent::Resized { zone, size } => {
+                saved.insert(zone.0.clone(), *size);
+                resized = true;
+            }
+            LayoutEvent::Reset { zone } => {
+                resized |= saved.remove(&zone.0).is_some();
+            }
+            LayoutEvent::Unfolded { zone } => {
+                if let Some(area) = area_from(&zone.0) {
+                    app.fold_area(area, open.contains(&area));
+                }
+            }
+            _ => {}
+        }
+    }
+    if resized {
+        ctx.data_mut(|d| d.insert_persisted(sizes_id(), saved.clone()));
+        app.workbench_mut().shell_sizes = Some(saved.clone());
+    }
+    if let Some(space) = app.workbench_mut().space.as_mut() {
+        // The zones holding no dock refuse a tab's drop on the next pass.
+        space.bind(&laid);
+    }
     for (area, strip) in lying {
-        lie_over(app, &ctx, &kit, area, strip, sizes[&area]);
+        let size = saved.get(area_name(area)).copied();
+        lie_over(app, &ctx, &kit, area, strip, sizes[&area], size);
     }
     // The flyout, while its panel is still in a folded side area drawn
     // with its strip; otherwise it is gone.
@@ -2654,111 +2712,256 @@ fn drop_targets(app: &AppHandle, ui: &mut Ui, zen: bool) {
     }
 }
 
-/// A folded side area's strip (the kit's `area-strip`): its box, the line
-/// on the centre's side, the drag-handle glyph; a click unfolds the area
-/// through the `workbench.fold` step. A side area lying over the centre
-/// keeps its strip while `open` (`selected` then), and a click folds it.
-/// Below the glyph, an icon per panel ([`strip_icon`]), the strip
-/// widened to hold them, unless the strip is bare
-/// ([`AppHandle::bare_strip`]). Returns where the strip was drawn.
-fn draw_strip(app: &AppHandle, ui: &mut Ui, kit: &Kit, area: Area, open: bool) -> Rect {
-    let component = &kit.area_strip;
-    let grip = component.data.width.max(1.0);
+/// A folded side area's strip: the layout draws it, its grip a button
+/// that unfolds the area (or folds it back while it lies over the centre);
+/// the kit paints it (`ShellPainter`). Below the grip, an icon per panel
+/// ([`strip_icon`]), the strip widened to hold them, unless the strip is
+/// bare ([`AppHandle::bare_strip`]): `rect` is the whole strip.
+fn strip_icons(app: &AppHandle, ui: &mut Ui, kit: &Kit, area: Area, rect: Rect, open: bool) {
+    let grip = kit.area_strip.data.width.max(1.0);
     let panels = strip_panels(app, area);
     let t = egui_pop_core::theme::Tokens::of(ui.ctx());
     let cell = t.size.icon_inline + 2.0 * t.space.s;
-    let width = if panels.is_empty() {
-        grip
-    } else {
-        grip.max(cell)
+    // The panels' icons, under the glyph, in tab order.
+    let shown: Vec<PanelId> = {
+        let wb = app.workbench_mut();
+        wb.layout.active_in(area).into_iter().cloned().collect()
     };
-    let id = dock_id(area).with("egui_pop.strip");
-    let left = app.workbench_mut().on_left(area);
-    let (panel, inner) = if left {
-        (egui::Panel::left(id), Side::Right)
-    } else {
-        (egui::Panel::right(id), Side::Left)
+    let mut top = rect.top() + grip * 2.5;
+    for p in &panels {
+        let cell_rect =
+            Rect::from_min_size(egui::pos2(rect.left(), top), egui::vec2(rect.width(), cell));
+        if cell_rect.bottom() > rect.bottom() {
+            break;
+        }
+        strip_icon(
+            app,
+            ui,
+            kit,
+            area,
+            p,
+            cell_rect,
+            open,
+            open && shown.contains(p),
+        );
+        top += cell + t.space.xs;
+    }
+}
+
+/// A folded side area's strip breadth: the kit's, widened to an icon's
+/// cell when it shows its panels' icons.
+fn strip_width(app: &AppHandle, ctx: &egui::Context, kit: &Kit, area: Area) -> f32 {
+    let grip = kit.area_strip.data.width.max(1.0);
+    if strip_panels(app, area).is_empty() {
+        return grip;
+    }
+    let t = egui_pop_core::theme::Tokens::of(ctx);
+    grip.max(t.size.icon_inline + 2.0 * t.space.s)
+}
+
+/// Names a strip's grip after its area ("Unfold the start side bar",
+/// "Fold ..." while it lies over the centre), for assistive technology and
+/// as its tooltip.
+fn name_grip(ctx: &egui::Context, area: Area, zone: &str, open: bool) {
+    let name = strings::tr_args(
+        ctx,
+        if open {
+            &txt::WORKBENCH_FOLD
+        } else {
+            &txt::WORKBENCH_UNFOLD
+        },
+        &[("area", &area_text(ctx, area))],
+    );
+    let id = shell_id().with(("grip", zone));
+    let label = name.clone();
+    ctx.accesskit_node_builder(id, |node| node.set_label(label));
+    if let Some(r) = ctx.read_response(id) {
+        r.on_hover_text(name);
+    }
+}
+
+/// The shell's layout: the side and bottom areas around the centre, each
+/// a zone holding the area's dock. `order` is the order the areas are
+/// peeled off the window ([`PanelAlignment::order`]): an area peeled
+/// earlier spans the whole height (a side bar) or width (the bottom). The
+/// rest grows; the centre's least width holds against the side areas.
+fn shell_tree(
+    order: &[Area],
+    flipped: bool,
+    centre_min: Option<f32>,
+    leaf: &dyn Fn(Area) -> Zone,
+) -> Zone {
+    let Some((&first, rest)) = order.split_first() else {
+        return leaf(Area::Center);
     };
-    panel
-        .resizable(false)
-        .exact_size(width)
-        .show_separator_line(false)
-        .frame(egui::Frame::NONE)
-        .show(ui, |ui| {
-            let rect = ui.max_rect();
-            let ctx = ui.ctx().clone();
-            let name = strings::tr_args(
-                &ctx,
-                if open {
-                    &txt::WORKBENCH_FOLD
-                } else {
-                    &txt::WORKBENCH_UNFOLD
-                },
-                &[("area", &area_text(&ctx, area))],
-            );
-            let r = ui.interact(rect, id.with("unfold"), egui::Sense::click());
-            let label = name.clone();
-            r.widget_info(move || WidgetInfo::labeled(Role::Button, true, &label));
-            let r = r.on_hover_text(name);
-            let state = State::from_response(&r).with(State::SELECTED, open);
-            let b = component.style(state);
-            let cx = KitCx {
-                painter: ui.painter(),
-                ppp: ctx.pixels_per_point(),
-            };
-            paint_box(
-                &cx,
-                rect,
-                &BoxStyle {
-                    border_width: 0.0,
-                    ..*b
-                },
-                Corners::None,
-                inner,
-            );
-            let line = BoxStyle {
-                indicator_color: b.border_color,
-                indicator_size: b.border_width,
-                ..BoxStyle::default()
-            };
-            paint_indicator(&cx, rect, &line, inner);
-            let at = Rect::from_center_size(
-                egui::pos2(rect.center().x, rect.top() + grip * 1.25),
-                egui::vec2(grip, grip),
-            );
-            kit.glyph(Glyph::DragHandle).paint(ui.painter(), at, b.text);
-            if r.clicked() {
-                app.fold_area(area, open);
+    let side = matches!(first, Area::StartSide | Area::EndSide);
+    let inner = shell_tree(rest, flipped, centre_min, leaf).with(|c| {
+        c.grow = true;
+        if side && let Some(least) = centre_min {
+            c.min = Some(Size::Points(least));
+        }
+    });
+    let name = format!("around.{}", area_name(first));
+    if side {
+        let children = if on_left(first, flipped) {
+            vec![leaf(first), inner]
+        } else {
+            vec![inner, leaf(first)]
+        };
+        Zone::split(name, Dir::Horizontal, children)
+    } else {
+        Zone::split(name, Dir::Vertical, vec![inner, leaf(first)])
+    }
+}
+
+/// The shell's layout's id: its sashes' and strips' ids derive from it.
+fn shell_id() -> Id {
+    Id::unique("egui_pop.shell")
+}
+
+/// Where the areas' sizes the user gave are kept in egui's memory (saved
+/// with it, as egui's side panels kept theirs).
+fn sizes_id() -> Id {
+    Id::unique("egui_pop.shell.sizes")
+}
+
+/// The sizes the user gave the side and bottom areas, by zone name: kept
+/// in the workbench, loaded once from egui's memory.
+fn shell_sizes(app: &AppHandle, ctx: &egui::Context, scope: Id) -> BTreeMap<String, f32> {
+    if let Some(sizes) = app.workbench_mut().shell_sizes.clone() {
+        return sizes;
+    }
+    let saved = ctx.data_mut(|d| d.get_persisted::<BTreeMap<String, f32>>(sizes_id()));
+    let sizes = migrate_sizes(saved, |area| old_panel_size(ctx, scope, area));
+    app.workbench_mut().shell_sizes = Some(sizes.clone());
+    sizes
+}
+
+/// The areas' sizes as saved, completed by what the areas' former egui
+/// panels kept (`old`), for a session saved before the shell was laid out
+/// by egui_stack: an area keeps the width it had.
+fn migrate_sizes(
+    saved: Option<BTreeMap<String, f32>>,
+    old: impl Fn(Area) -> Option<f32>,
+) -> BTreeMap<String, f32> {
+    let mut sizes = saved.unwrap_or_default();
+    for area in [Area::StartSide, Area::EndSide, Area::Bottom] {
+        let name = area_name(area);
+        if !sizes.contains_key(name)
+            && let Some(size) = old(area)
+        {
+            sizes.insert(name.to_owned(), size);
+        }
+    }
+    sizes
+}
+
+/// The size an area's egui panel had (its `PanelState`, under the `Ui`
+/// the workbench was drawn in, `scope`): its width, the bottom's height.
+fn old_panel_size(ctx: &egui::Context, scope: Id, area: Area) -> Option<f32> {
+    let state = egui::containers::panel::PanelState::load(ctx, scope.with(dock_id(area)))?;
+    let size = state.size();
+    Some(if area == Area::Bottom { size.y } else { size.x })
+}
+
+/// Paints the shell's layout with the kit: a strip's grip `selected`
+/// while its area lies over the centre.
+struct ShellPainter<'a> {
+    kit: &'a Kit,
+    open: &'a BTreeSet<Area>,
+    flipped: bool,
+}
+
+impl LayoutPainter for ShellPainter<'_> {
+    fn sash(&self, painter: &egui::Painter, sash: &SashPaint<'_>) {
+        LayoutPainter::sash(self.kit, painter, sash);
+    }
+
+    fn strip(&self, painter: &egui::Painter, strip: &StripPaint<'_>) {
+        let Some(area) = area_from(&strip.zone.0) else {
+            LayoutPainter::strip(self.kit, painter, strip);
+            return;
+        };
+        let inner = if on_left(area, self.flipped) {
+            Side::Right
+        } else {
+            Side::Left
+        };
+        let flags = strip.grip_state;
+        let state = State::REST
+            .with(State::HOVER, flags.contains(PartState::HOVERED))
+            .with(State::ACTIVE, flags.contains(PartState::PRESSED))
+            .with(State::FOCUS, flags.contains(PartState::FOCUSED))
+            .with(State::SELECTED, self.open.contains(&area));
+        self.kit.paint_area_strip(painter, strip.rect, state, inner);
+    }
+
+    fn flyout_frame(&self, painter: &egui::Painter, frame: &FlyoutPaint<'_>) {
+        LayoutPainter::flyout_frame(self.kit, painter, frame);
+    }
+}
+
+/// Draws the shell's zones: each area in its frame, the strips' icons.
+struct ShellViewer<'a> {
+    app: &'a AppHandle,
+    kit: &'a Kit,
+    open: &'a BTreeSet<Area>,
+    areas: &'a [Area],
+}
+
+impl ZoneViewer for ShellViewer<'_> {
+    fn ui(&mut self, ui: &mut Ui, zone: &ZoneName) {
+        let Some(area) = area_from(&zone.0) else {
+            return;
+        };
+        let app = self.app;
+        if area == Area::Center {
+            let mut frame = egui::Frame::central_panel(ui.style());
+            if app.edge_to_edge() || app.frameless(Area::Center) {
+                frame = frame.inner_margin(0.0);
             }
-            // The panels' icons, under the glyph, in tab order.
-            let shown: Vec<PanelId> = {
-                let wb = app.workbench_mut();
-                wb.layout.active_in(area).into_iter().cloned().collect()
-            };
-            let mut top = rect.top() + grip * 2.5;
-            for p in &panels {
-                let cell_rect = Rect::from_min_size(
-                    egui::pos2(rect.left(), top),
-                    egui::vec2(rect.width(), cell),
-                );
-                if cell_rect.bottom() > rect.bottom() {
-                    break;
+            frame.show(ui, |ui| {
+                ui.set_min_size(ui.available_size());
+                if self.areas.contains(&Area::Center) && visible_in(app, Area::Center) {
+                    draw_area(app, ui, Area::Center);
                 }
-                strip_icon(
-                    app,
-                    ui,
-                    kit,
-                    area,
-                    p,
-                    cell_rect,
-                    open,
-                    open && shown.contains(p),
-                );
-                top += cell + t.space.xs;
-            }
-            rect
-        })
-        .inner
+            });
+            return;
+        }
+        let pad = |p: f32| p.round().clamp(0.0, 127.0) as i8;
+        let side = &self.kit.side_area.data;
+        let margin = if app.frameless(area) {
+            egui::Margin::ZERO
+        } else {
+            egui::Margin::symmetric(pad(side.padding_x), pad(side.padding_y))
+        };
+        egui::Frame::side_top_panel(ui.style())
+            .inner_margin(margin)
+            .show(ui, |ui| {
+                // The area keeps its size; content narrower than it does
+                // not shrink it.
+                ui.set_min_size(ui.available_size());
+                draw_area(app, ui, area);
+            });
+    }
+
+    fn strip(&mut self, ui: &mut Ui, zone: &ZoneName) {
+        let Some(area) = area_from(&zone.0) else {
+            return;
+        };
+        // The `Ui` is the strip under its grip, a square at its top.
+        let rest = ui.max_rect();
+        let rect = Rect::from_min_max(egui::pos2(rest.left(), rest.top() - rest.width()), rest.max);
+        ui.set_clip_rect(rect);
+        strip_icons(
+            self.app,
+            ui,
+            self.kit,
+            area,
+            rect,
+            self.open.contains(&area),
+        );
+    }
 }
 
 /// A panel's icon in a side area's strip, as agents read it
@@ -3210,7 +3413,8 @@ fn show_flyout(
         .or(saved)
         .or(spec.default_size)
         .or_else(|| {
-            egui::containers::panel::PanelState::load(ctx, dock_id(area)).map(|s| s.size().x)
+            let wb = app.workbench_mut();
+            wb.shell_sizes.as_ref()?.get(area_name(area)).copied()
         })
         .unwrap_or(240.0)
         .clamp(min, max);
@@ -3389,7 +3593,7 @@ fn draw_flyout(
 /// as tall, above the centre (an egui area on the middle layer, as
 /// palettes), in the kit's `side-area` box with its shadow cast towards
 /// the centre. Its edge on the centre's side resizes it; its width is
-/// kept per area (from the side panel's when it lay beside).
+/// kept per area (from the size it had beside, `beside`).
 fn lie_over(
     app: &AppHandle,
     ctx: &egui::Context,
@@ -3397,6 +3601,7 @@ fn lie_over(
     area: Area,
     strip: Rect,
     (min, default, most): (f32, f32, f32),
+    beside: Option<f32>,
 ) {
     let id = dock_id(area).with("egui_pop.over");
     let width_id = id.with("width");
@@ -3405,9 +3610,7 @@ fn lie_over(
     let max = (content.width() - 2.0 * strip.width()).min(most).max(min);
     let width = ctx
         .data_mut(|d| d.get_persisted::<f32>(width_id))
-        .or_else(|| {
-            egui::containers::panel::PanelState::load(ctx, dock_id(area)).map(|s| s.size().x)
-        })
+        .or(beside)
         .unwrap_or(if default > 0.0 { default } else { 240.0 })
         .clamp(min, max);
     let flipped = app.workbench_mut().flipped;
@@ -3474,88 +3677,14 @@ fn lie_over(
     grip(ctx, kit, area, rect, flipped);
 }
 
-/// A side area's resize grip (the kit's `area-grip`) at the middle of its
-/// edge, above the panels; egui takes the drag. Nothing is drawn while
-/// the kit's grip is transparent in every state (the default kit).
-/// The line resizing an area: egui's resize handle of the area's panel,
-/// shown in `ui` under `panel`.
-///
-/// upstream: egui does not give a panel's ids out; this is how it makes them
-/// (`Panel::id`, `resize_widget_id`), checked by the keyboard walk's tests.
-fn sash_id(ui: &Ui, panel: Id) -> Id {
-    ui.scope_id().with(panel).with("__resize")
-}
-
 /// How far an arrow moves an area's line, in points; Shift moves it four
 /// times as far (as egui_stack's separators).
 const SASH_STEP: f32 = 16.0;
 
-/// Keys on the line of a side or bottom area while it has the focus, before
-/// the area is drawn: the arrows move it, with Shift by bigger steps, and
-/// Enter gives the area back its default size, as a dock separator or a
-/// section's boundary does.
-///
-/// upstream: egui's panel resize handle answers the pointer and AccessKit
-/// (`Increment`, `Decrement`, `SetValue`), not the keyboard. The keys are
-/// handed to it as an AccessKit `SetValue`, so its own clamping and storing
-/// apply.
-fn sash_keys(ui: &Ui, area: Area, panel: Id, flipped: bool, default: f32) {
-    use egui::accesskit::{Action, ActionData, ActionRequest, TreeId};
-    use egui::{Key, Modifiers};
-    let ctx = ui.ctx();
-    let handle = sash_id(ui, panel);
-    if !ctx.memory(|m| m.has_focus(handle)) {
-        return;
-    }
-    let (grow, shrink, axis) = match area {
-        Area::StartSide | Area::EndSide if on_left(area, flipped) => {
-            (Key::ArrowRight, Key::ArrowLeft, 0)
-        }
-        Area::StartSide | Area::EndSide => (Key::ArrowLeft, Key::ArrowRight, 0),
-        _ => (Key::ArrowUp, Key::ArrowDown, 1),
-    };
-    // The arrows across the line are its own; along it, egui's.
-    ctx.memory_mut(|m| {
-        m.set_focus_lock_filter(
-            handle,
-            egui::EventFilter {
-                horizontal_arrows: axis == 0,
-                vertical_arrows: axis == 1,
-                ..Default::default()
-            },
-        );
-    });
-    let (by, reset) = ctx.input_mut(|i| {
-        let mut by = 0.0;
-        for (key, way) in [(grow, 1.0), (shrink, -1.0)] {
-            // Shift first: the plain key takes it too.
-            if i.consume_key(Modifiers::SHIFT, key) {
-                by += way * SASH_STEP * 4.0;
-            }
-            if i.consume_key(Modifiers::NONE, key) {
-                by += way * SASH_STEP;
-            }
-        }
-        (by, i.consume_key(Modifiers::NONE, Key::Enter))
-    });
-    if by == 0.0 && !reset {
-        return;
-    }
-    let available = ui.available_rect_before_wrap().size()[axis].max(1.0);
-    let now = egui::containers::panel::PanelState::load(ctx, ui.scope_id().with(panel))
-        .map_or(default, |s| s.size()[axis]);
-    let size = if reset { default } else { now + by };
-    ctx.input_mut(|i| {
-        i.events
-            .push(egui::Event::AccessKitActionRequest(ActionRequest {
-                action: Action::SetValue,
-                target_tree: TreeId::ROOT,
-                target_node: handle.accesskit_id(),
-                data: Some(ActionData::NumericValue(f64::from(size / available))),
-            }));
-    });
-}
-
+/// A side area's resize grip (the kit's `area-grip`) at the middle of its
+/// edge, above the panels; the layout's sash takes the drag. Nothing is
+/// drawn while the kit's grip is transparent in every state (the default
+/// kit).
 fn grip(ctx: &egui::Context, kit: &Kit, area: Area, rect: Rect, flipped: bool) {
     let g = &kit.area_grip;
     if [State::REST, State::HOVER, State::ACTIVE]
@@ -4343,4 +4472,69 @@ fn ghost_rect(kit: &Kit, bar: Option<TabBar>, hint: Rect, content: Rect, width: 
     };
     let x = start.min(row.right() - width).max(row.left());
     Rect::from_min_size(egui::pos2(x, row.top()), egui::vec2(width, row.height()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_former_panels_sizes_carry_over_once() {
+        // A session saved before the shell was laid out by egui_stack:
+        // the areas' egui panels kept their outer rect.
+        let ctx = egui::Context::default();
+        let scope = Id::unique("scope");
+        let store = |area: Area, rect: Rect| {
+            let state = egui::containers::panel::PanelState { outer_rect: rect };
+            ctx.data_mut(|d| d.insert_persisted(scope.with(dock_id(area)), state));
+        };
+        store(
+            Area::StartSide,
+            Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(312.0, 700.0)),
+        );
+        store(
+            Area::Bottom,
+            Rect::from_min_size(egui::pos2(0.0, 500.0), egui::vec2(900.0, 180.0)),
+        );
+        // The side's width, the bottom's height; none for the end side.
+        let sizes = migrate_sizes(None, |a| old_panel_size(&ctx, scope, a));
+        assert_eq!(sizes.get("start_side"), Some(&312.0));
+        assert_eq!(sizes.get("bottom"), Some(&180.0));
+        assert_eq!(sizes.get("end_side"), None);
+        // What the layout saved since wins over the former panel's.
+        let saved = BTreeMap::from([("start_side".to_owned(), 250.0)]);
+        let sizes = migrate_sizes(Some(saved), |a| old_panel_size(&ctx, scope, a));
+        assert_eq!(sizes.get("start_side"), Some(&250.0));
+        assert_eq!(sizes.get("bottom"), Some(&180.0));
+    }
+
+    #[test]
+    fn the_shell_tree_follows_the_alignment_and_the_side_bar_position() {
+        let leaf = |area: Area| Zone::leaf(area_name(area), Content::Dock(area_name(area).into()));
+        let order = |zone: &Zone| {
+            let mut names = Vec::new();
+            zone.visit(&mut |z| {
+                if matches!(z.kind, egui_stack::layout::ZoneKind::Leaf { .. }) {
+                    names.push(z.name.0.clone());
+                }
+            });
+            names
+        };
+        // The default: the side bars down to the bottom, the bottom area
+        // under the centre.
+        let tree = shell_tree(&PanelAlignment::Center.order(), false, Some(320.0), &leaf);
+        assert_eq!(order(&tree), ["start_side", "end_side", "center", "bottom"]);
+        let centre = tree.find("center").unwrap();
+        assert!(centre.constraints.grow);
+        // The middle, between the side bars, keeps the centre's least width.
+        let middle = tree.find("around.end_side").unwrap();
+        let inner = &middle.children()[0];
+        assert_eq!(inner.constraints.min, Some(Size::Points(320.0)));
+        // The side bar on the right: the start side last.
+        let tree = shell_tree(&PanelAlignment::Center.order(), true, None, &leaf);
+        assert_eq!(tree.children()[1].name.0, "start_side");
+        // Justified: the bottom area across the whole width.
+        let tree = shell_tree(&PanelAlignment::Justify.order(), false, None, &leaf);
+        assert_eq!(tree.children()[1].name.0, "bottom");
+    }
 }
