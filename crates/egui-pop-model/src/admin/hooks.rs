@@ -44,9 +44,10 @@ pub type PreviewFn = Box<dyn Fn(&Values) -> String + Send + Sync>;
 pub type TransformFn = Box<dyn Fn(&Json, bool) -> Json + Send + Sync>;
 pub type ConfirmFn = Box<dyn Fn(&Values) -> Option<Confirm> + Send + Sync>;
 pub type StatusFn = Box<dyn Fn() -> (String, Tone) + Send + Sync>;
+/// The records of a list or table, each an object.
+pub type RecordsFn = Box<dyn Fn() -> Vec<Json> + Send + Sync>;
 
-/// A hook of one of the kinds the note lists (`records` comes with the
-/// record lists).
+/// A hook of one of the kinds the note lists.
 pub enum Hook {
     Validate(ValidateFn),
     Choices(ChoicesFn),
@@ -54,6 +55,7 @@ pub enum Hook {
     Transform(TransformFn),
     Confirm(ConfirmFn),
     Status(StatusFn),
+    Records(RecordsFn),
 }
 
 impl Hook {
@@ -65,6 +67,7 @@ impl Hook {
             Hook::Transform(_) => "transform",
             Hook::Confirm(_) => "confirm",
             Hook::Status(_) => "status",
+            Hook::Records(_) => "records",
         }
     }
 }
@@ -122,6 +125,13 @@ impl Hooks {
     pub fn preview(&self, name: &str, values: &Values) -> Option<String> {
         match self.get(name) {
             Some(Hook::Preview(f)) => Some(f(values)),
+            _ => None,
+        }
+    }
+
+    pub fn records(&self, name: &str) -> Option<Vec<Json>> {
+        match self.get(name) {
+            Some(Hook::Records(f)) => Some(f()),
             _ => None,
         }
     }

@@ -125,6 +125,7 @@ pub const ADMIN_NO_WIDGET: StrKey = StrKey::new(
     "egui-pop-admin-no-widget",
     "No widget kind `{ $kind }` is registered",
 );
+pub const ADMIN_NO_RECORDS: StrKey = StrKey::new("egui-pop-admin-no-records", "Nothing here yet.");
 pub const ADMIN_SCOPE_GENERAL: StrKey = StrKey::new("egui-pop-admin-scope-general", "General");
 pub const ADMIN_SCOPE_INTERFACE: StrKey =
     StrKey::new("egui-pop-admin-scope-interface", "Interface");
@@ -1381,6 +1382,7 @@ pub const ALL: &[StrKey] = &[
     ADMIN_RUN_READ_ONLY,
     ADMIN_MODIFIED,
     ADMIN_NO_WIDGET,
+    ADMIN_NO_RECORDS,
     ADMIN_SCOPE_GENERAL,
     ADMIN_SCOPE_INTERFACE,
     ADMIN_SCOPE_INPUT,

@@ -27,6 +27,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 
 use crate::diagnostics::Diagnostics;
+use crate::when::{When, WhenContext};
 pub use layers::ValueScope;
 
 /// The manifest format this framework reads. A newer one is refused.
@@ -54,6 +55,9 @@ pub struct Meta {
     /// Greyed, with its reason, when it does not hold.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enabled: Option<String>,
+    /// Why it is greyed when `enabled` does not hold (a tooltip).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 impl Meta {
@@ -113,6 +117,10 @@ pub enum Item {
     Callout(Callout),
     /// A registered widget kind: the declared exception.
     Widget(Widget),
+    /// Records as list items: a title, a subtitle, a trailing value.
+    List(Records),
+    /// Records as a table: a column per key.
+    Table(Records),
 }
 
 impl Item {
@@ -123,9 +131,42 @@ impl Item {
             Item::Status(s) => &s.meta,
             Item::Callout(c) => &c.meta,
             Item::Widget(w) => &w.meta,
+            Item::List(r) | Item::Table(r) => &r.meta,
         }
     }
 }
+
+/// The `when` and `enabled` clauses, for every node's builder.
+pub trait Clauses: Sized {
+    fn meta_mut(&mut self) -> &mut Meta;
+
+    /// Shown only when the clause holds (the `when` language; the
+    /// section's values as `form.<field id>`).
+    fn when(mut self, clause: &str) -> Self {
+        self.meta_mut().when = Some(clause.into());
+        self
+    }
+
+    /// Greyed, with its reason, when the clause does not hold.
+    fn enabled(mut self, clause: &str, reason: &str) -> Self {
+        let m = self.meta_mut();
+        m.enabled = Some(clause.into());
+        m.reason = Some(reason.into());
+        self
+    }
+}
+
+macro_rules! clauses {
+    ($($t:ty),*) => {$(
+        impl Clauses for $t {
+            fn meta_mut(&mut self) -> &mut Meta {
+                &mut self.meta
+            }
+        }
+    )*};
+}
+
+clauses!(Field, Action, Status, Callout, Records);
 
 /// The ten field kinds. The list is closed: a new one is a decision in
 /// the design note, not in a plugin.
@@ -456,6 +497,199 @@ impl Callout {
     }
 }
 
+/// Where a list's or table's records come from.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "from", rename_all = "snake_case")]
+pub enum RecordSource {
+    /// A `read_only` command whose answer, at the JSON pointer, is an
+    /// array of objects (`""`: the whole answer).
+    Command {
+        command: String,
+        #[serde(default, skip_serializing_if = "Json::is_null")]
+        args: Json,
+        #[serde(default)]
+        pointer: String,
+    },
+    /// A `records` hook registered in Rust.
+    Hook { hook: String },
+}
+
+/// A column of a table, or a part of a list item: the record's key it
+/// shows and its heading.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Column {
+    pub key: String,
+    pub title: String,
+}
+
+/// What an empty source shows: a message and an optional action.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Empty {
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<Action>,
+}
+
+/// A record list or table: rows read from a source, each with its
+/// actions (`${row.<key>}` in their arguments).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Records {
+    #[serde(flatten)]
+    pub meta: Meta,
+    pub source: RecordSource,
+    /// The record's id (its key in a row action's `${row.<key>}`).
+    pub key: String,
+    /// A list: the title and subtitle keys; a table: unused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subtitle_key: Option<String>,
+    /// A table's columns; a list's trailing values.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub columns: Vec<Column>,
+    /// A key whose value (`info`, `success`, `warning`, `danger`) tones
+    /// the row.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tone_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub row_actions: Vec<Action>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub empty: Option<Empty>,
+    /// Event kinds after which it is read again (`storage.*`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub refresh: Vec<String>,
+}
+
+impl Records {
+    fn new(id: &str, title: &str, source: RecordSource, key: &str) -> Records {
+        Records {
+            meta: Meta::new(id, title),
+            source,
+            key: key.into(),
+            title_key: None,
+            subtitle_key: None,
+            columns: Vec::new(),
+            tone_key: None,
+            row_actions: Vec::new(),
+            empty: None,
+            refresh: Vec::new(),
+        }
+    }
+
+    /// Records a `read_only` command answers (an array at `pointer`).
+    pub fn command(id: &str, title: &str, command: &str, pointer: &str, key: &str) -> Records {
+        Records::new(
+            id,
+            title,
+            RecordSource::Command {
+                command: command.into(),
+                args: Json::Null,
+                pointer: pointer.into(),
+            },
+            key,
+        )
+    }
+
+    /// Records a `records` hook gives.
+    pub fn hook(id: &str, title: &str, hook: &str, key: &str) -> Records {
+        Records::new(id, title, RecordSource::Hook { hook: hook.into() }, key)
+    }
+
+    /// The read command's arguments.
+    pub fn args(mut self, args: Json) -> Records {
+        if let RecordSource::Command { args: a, .. } = &mut self.source {
+            *a = args;
+        }
+        self
+    }
+
+    /// A list item's title and subtitle keys.
+    pub fn titles(mut self, title: &str, subtitle: Option<&str>) -> Records {
+        self.title_key = Some(title.into());
+        self.subtitle_key = subtitle.map(Into::into);
+        self
+    }
+
+    pub fn column(mut self, key: &str, title: &str) -> Records {
+        self.columns.push(Column {
+            key: key.into(),
+            title: title.into(),
+        });
+        self
+    }
+
+    pub fn tone(mut self, key: &str) -> Records {
+        self.tone_key = Some(key.into());
+        self
+    }
+
+    pub fn row_action(mut self, action: Action) -> Records {
+        self.row_actions.push(action);
+        self
+    }
+
+    pub fn empty(mut self, text: &str, action: Option<Action>) -> Records {
+        self.empty = Some(Empty {
+            text: text.into(),
+            action,
+        });
+        self
+    }
+
+    pub fn refresh(mut self, event: &str) -> Records {
+        self.refresh.push(event.into());
+        self
+    }
+
+    /// The rows in a source's answer: the array at the pointer, its
+    /// objects only.
+    pub fn rows_of(answer: &Json, pointer: &str) -> Vec<Json> {
+        answer
+            .pointer(pointer)
+            .and_then(Json::as_array)
+            .map(|a| a.iter().filter(|r| r.is_object()).cloned().collect())
+            .unwrap_or_default()
+    }
+}
+
+/// A record value as shown in a cell: text as it is, numbers and
+/// booleans written out, nothing for null.
+pub fn cell_text(v: &Json) -> String {
+    match v {
+        Json::Null => String::new(),
+        Json::String(s) => s.clone(),
+        Json::Array(a) => a.iter().map(cell_text).collect::<Vec<_>>().join(", "),
+        other => other.to_string(),
+    }
+}
+
+/// A tone from its name (a record's tone key, a status's answer).
+pub fn tone_named(name: &str) -> Option<Tone> {
+    match name {
+        "info" => Some(Tone::Info),
+        "success" | "ok" | "fine" => Some(Tone::Success),
+        "warning" | "warn" => Some(Tone::Warning),
+        "danger" | "error" | "problem" => Some(Tone::Danger),
+        _ => None,
+    }
+}
+
+/// The context a section's clauses read: the application's keys, and the
+/// section's values as `form.<field id>` (booleans `true` or `false`,
+/// texts as they are, numbers written out).
+pub fn form_context(mut cx: WhenContext, values: &hooks::Values) -> WhenContext {
+    for (k, v) in values {
+        cx.set(&format!("form.{k}"), &cell_text(v));
+    }
+    cx
+}
+
+/// Whether a clause holds (none: it does). One that does not parse
+/// holds: [`Manifest::check`] reports it.
+pub fn holds(clause: Option<&str>, cx: &WhenContext) -> bool {
+    clause.is_none_or(|c| When::parse(c).map_or(true, |w| w.eval(cx)))
+}
+
 /// A registered widget kind and its options: the declared exception.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Widget {
@@ -553,6 +787,30 @@ impl SectionBuilder<'_> {
             kind: kind.into(),
             options,
         }))
+    }
+
+    /// A record list.
+    pub fn list(&mut self, records: Records) -> &mut Self {
+        self.push(Item::List(records))
+    }
+
+    /// A record table.
+    pub fn table(&mut self, records: Records) -> &mut Self {
+        self.push(Item::Table(records))
+    }
+
+    /// The last group's `when` clause.
+    pub fn group_when(&mut self, clause: &str) -> &mut Self {
+        if let Some(g) = self.section.groups.last_mut() {
+            g.meta.when = Some(clause.into());
+        }
+        self
+    }
+
+    /// The section's `when` clause.
+    pub fn when(&mut self, clause: &str) -> &mut Self {
+        self.section.meta.when = Some(clause.into());
+        self
     }
 
     pub fn description(&mut self, text: &str) -> &mut Self {
@@ -683,7 +941,10 @@ impl Manifest {
                 return false;
             }
             paths.push(s.path());
+            let at = s.path();
+            bad_clauses(&mut d, &at, &mut s.meta);
             for g in &mut s.groups {
+                bad_clauses(&mut d, &at, &mut g.meta);
                 let mut ids: Vec<String> = Vec::new();
                 g.items.retain(|item| {
                     let id = item.meta().id.clone();
@@ -697,6 +958,19 @@ impl Manifest {
                         return false;
                     }
                     ids.push(id.clone());
+                    for clause in [&item.meta().when, &item.meta().enabled]
+                        .into_iter()
+                        .flatten()
+                    {
+                        if let Err(e) = When::parse(clause) {
+                            d.warn(
+                                "admin-bad-clause",
+                                None,
+                                format!("{}/{}/{id}", s.scope, s.meta.id),
+                                format!("`{clause}` does not parse ({e}): it always holds"),
+                            );
+                        }
+                    }
                     if let Item::Field(f) = item
                         && let Some(setting) = f.setting_id()
                         && !setting_exists(setting)
@@ -715,6 +989,24 @@ impl Manifest {
             true
         });
         d
+    }
+}
+
+/// Reports a section's or group's clause that does not parse, and drops
+/// it (it would always hold).
+fn bad_clauses(d: &mut Diagnostics, at: &str, meta: &mut Meta) {
+    for clause in [&mut meta.when, &mut meta.enabled] {
+        if let Some(c) = clause.as_deref()
+            && let Err(e) = When::parse(c)
+        {
+            d.warn(
+                "admin-bad-clause",
+                None,
+                at,
+                format!("`{c}` does not parse ({e}): left out"),
+            );
+            *clause = None;
+        }
     }
 }
 
@@ -909,6 +1201,53 @@ mod tests {
         assert!(t.resolve("backup/none").is_none());
         assert!(t.resolve("nothing").is_none());
         assert_eq!(t.shown_scopes().len(), 1);
+    }
+
+    #[test]
+    fn records_read_their_rows_and_round_trip() {
+        let r = Records::command("volumes", "Volumes", "storage.volumes", "/volumes", "id")
+            .column("name", "Name")
+            .tone("level")
+            .row_action(Action::command("storage.forget").args(json!({"volume": "${row.id}"})))
+            .empty("No disk yet.", None)
+            .when("form.copies > 0");
+        let m = Manifest::new(FORMAT)
+            .scope("storage", "Storage", "disk")
+            .section("storage/volumes", "Volumes", |s| {
+                s.table(r.clone());
+            });
+        assert_eq!(Manifest::from_json(&m.to_json()).unwrap(), m);
+        assert_eq!(
+            m.to_json()["sections"][0]["groups"][0]["items"][0]["node"],
+            "table"
+        );
+        let answer = json!({"volumes": [{"id": "a", "name": "Disk"}, 3]});
+        assert_eq!(Records::rows_of(&answer, "/volumes").len(), 1);
+        assert!(Records::rows_of(&answer, "/none").is_empty());
+        assert_eq!(cell_text(&json!(["a", 2])), "a, 2");
+        assert_eq!(tone_named("problem"), Some(Tone::Danger));
+    }
+
+    #[test]
+    fn clauses_read_the_forms_values_and_bad_ones_are_reported() {
+        let mut v = hooks::Values::new();
+        v.insert("copy".into(), json!(true));
+        v.insert("mode".into(), json!("fast"));
+        let cx = form_context(WhenContext::new(), &v);
+        assert!(holds(Some("form.copy"), &cx));
+        assert!(holds(Some("form.mode == fast"), &cx));
+        assert!(!holds(Some("!form.copy"), &cx));
+        assert!(holds(None, &cx));
+        let mut m = Manifest::new(FORMAT)
+            .scope("a", "A", "x")
+            .section("a/b", "B", |s| {
+                s.when("((")
+                    .action(Action::command("x").enabled("(((", "never"));
+            });
+        let d = m.check(&[], &|_| true);
+        let codes: Vec<&str> = d.all().iter().map(|x| x.code).collect();
+        assert_eq!(codes, ["admin-bad-clause", "admin-bad-clause"]);
+        assert!(m.sections[0].meta.when.is_none());
     }
 
     #[test]

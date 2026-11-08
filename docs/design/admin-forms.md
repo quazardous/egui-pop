@@ -8,6 +8,20 @@ overlay and pop out, scope tabs, sections, search, rows with a modified
 bar, an origin tag, reset and "Set for", deep links, commands `admin.*`,
 the `admin` collector), shown in the gallery's Settings page.
 
+Slice 2 adds the record bricks: `list` and `table` items (`Records`)
+read from a `read_only` command (an array at a JSON pointer) or a
+`records` hook, with columns, a tone key, row actions and an empty
+state; statuses read from `read_only` commands; `when` and `enabled`
+evaluated (the context keys plus the section's values as
+`form.<field id>`; a clause that does not parse is reported). A read is
+asked as a command run before the next frame and its answer taken from
+the runs; it is kept until a command that changes something runs or an
+event a node names in `refresh` arrives. Tables draw as a striped grid,
+not yet through `egui-pop-views`' data table; row fields, add and
+remove, selection, bulk actions and group-by are still to come. Rows lay
+their right-hand controls from the page's right edge and wrap their help,
+so nothing passes the page.
+
 Slice 1 leaves for later: `Ctrl+,`, File > Settings and the aliases
 `app.settings` and `app.settings.page` (the settings window keeps them
 until the shortcuts editor, gestures and fonts become widget kinds and
@@ -15,8 +29,9 @@ the window goes); the kit components of section 4.4 (the shell draws
 with the existing selectable rows, buttons, combo boxes and indicators);
 icons on the scope tabs and their overflow; the scopes' order and the
 search's filters (`@modified`, `@scope:`); statuses read from commands
-(hook statuses only); `when` and `enabled` clauses on nodes; draft
-fields, record lists and tables, tasks, the wizard kit; the alter hook
+(done in slice 2); `when` and `enabled` clauses on nodes (done in
+slice 2); draft fields, record lists and tables (lists and tables done
+in slice 2), tasks, the wizard kit; the alter hook
 over the tree (`Hook::admin`); the last place kept across runs (only the
 mode is); the application's link scheme; Helios's scopes and its
 `helios-config` bridge.

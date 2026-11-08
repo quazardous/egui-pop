@@ -19,10 +19,14 @@ use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
 use egui_pop_model::admin::hooks::Values;
 use egui_pop_model::admin::layers::ValueScope;
-use egui_pop_model::admin::{Field, Item, Section, Tone, Tree, template};
+use egui_pop_model::admin::{
+    Action, ActionStyle, Field, Item, RecordSource, Records, Section, StatusSource, Tone, Tree,
+    cell_text, form_context, holds, template, tone_named,
+};
 use egui_pop_model::fuzzy;
 use egui_pop_model::ids::{CommandId, SettingId};
 use egui_pop_model::values::{self, Value};
+use serde_json::Value as Json;
 
 use super::{ADMIN, Admin, SURFACE, in_window};
 use crate::app::AppHandle;
@@ -210,6 +214,18 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
             .clone()
             .filter(|s| sections.iter().any(|x| x.meta.id == *s))
             .or_else(|| sections.first().map(|s| s.meta.id.clone()));
+        // Answers read again after the events the scope's nodes name.
+        let patterns: Vec<String> = tree
+            .sections
+            .iter()
+            .flat_map(|s| s.groups.iter().flat_map(|g| &g.items))
+            .flat_map(|i| match i {
+                Item::Status(st) => st.refresh.clone(),
+                Item::List(r) | Item::Table(r) => r.refresh.clone(),
+                _ => Vec::new(),
+            })
+            .collect();
+        admin.watch(app, &patterns);
         let height = ui.available_height();
         ui.horizontal_top(|ui| {
             // The left panel: the scope's sections, or the hits.
@@ -219,6 +235,10 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
                     ui.set_min_height(height);
                     if query.is_empty() {
                         for s in &sections {
+                            let cx = form_context(app.when_context(), &values_of(app, &entries, s));
+                            if !holds(s.meta.when.as_deref(), &cx) {
+                                continue;
+                            }
                             let n = modified(app, admin, &entries, s);
                             let mut title = section_title(&ctx, app, &entries, s);
                             if n > 0 {
@@ -249,11 +269,17 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
                 .response;
             a11y::name(&nav, Role::Tree, &strings::tr(&ctx, &txt::ADMIN_SECTIONS));
             ui.separator();
+            // The page's width, kept: nothing in it pushes its right edge
+            // out (rows wrap, their controls stay inside).
+            let width = ui.available_width();
             egui::ScrollArea::vertical()
                 .id_salt("egui_pop.admin.page")
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
+                    let width = (width - ui.spacing().scroll.allocated_width()).max(0.0);
+                    ui.set_max_width(width);
                     ui.vertical(|ui| {
+                        ui.set_max_width(width);
                         if query.is_empty() {
                             if let Some(s) = current
                                 .as_deref()
@@ -285,10 +311,17 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
                     });
                 });
         });
-        let mut s = lock(&admin.state);
-        s.scope = Some(scope);
-        s.section = section;
-        s.filter = filter;
+        let moved = {
+            let mut s = lock(&admin.state);
+            let moved = s.section != section || s.scope.as_deref() != Some(scope.as_str());
+            s.scope = Some(scope);
+            s.section = section;
+            s.filter = filter;
+            moved
+        };
+        if moved {
+            admin.refresh();
+        }
     });
     close
 }
@@ -470,24 +503,12 @@ fn section_page(
         ui.weak(&s.meta.description);
     }
     ui.add_space(t.space.s);
-    // The values a section's actions take: its settings, by id.
-    let mut values = Values::new();
-    for f in s
-        .groups
-        .iter()
-        .flat_map(|g| &g.items)
-        .filter_map(|i| match i {
-            Item::Field(f) => Some(f),
-            _ => None,
-        })
-    {
-        if let Some(e) = entry_of(entries, f)
-            && let Some(x) = lock(&app.store()).get(&e.path)
-        {
-            values.insert(f.meta.id.clone(), x.value.to_json());
-        }
-    }
+    let values = values_of(app, entries, s);
+    let cx = form_context(app.when_context(), &values);
     for g in &s.groups {
+        if !holds(g.meta.when.as_deref(), &cx) {
+            continue;
+        }
         if !g.meta.title.is_empty() {
             ui.strong(&g.meta.title);
         }
@@ -501,65 +522,304 @@ fn section_page(
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 for item in &g.items {
-                    match item {
-                        Item::Field(f) => match entry_of(entries, f) {
-                            Some(e) => field_row(ui, app, admin, e, f),
-                            None => {
-                                ui.weak(format!("{}: {}", f.meta.id, f.meta.title));
-                            }
-                        },
-                        Item::Action(a) => {
-                            let title = if a.meta.title.is_empty() {
-                                app.command(&CommandId::new(&a.command).unwrap_or(super::CMD_OPEN))
-                                    .map_or(a.command.clone(), |c| c.title)
-                            } else {
-                                a.meta.title.clone()
-                            };
-                            if ui.button(title).clicked()
-                                && let Ok(id) = CommandId::new(&a.command)
-                            {
-                                let (args, _) = template::expand(&a.args, &values);
-                                app.run(id, args);
-                            }
-                        }
-                        Item::Status(st) => {
-                            let shown = match &st.source {
-                                egui_pop_model::admin::StatusSource::Hook { hook } => {
-                                    admin.hooks().status(hook)
-                                }
-                                egui_pop_model::admin::StatusSource::Command { .. } => None,
-                            };
-                            ui.horizontal(|ui| {
-                                ui.label(&st.meta.title);
-                                ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                                    match shown {
-                                        Some((text, tone)) => {
-                                            ui.add(Indicator::text(text).tone(kit_tone(tone)));
-                                        }
-                                        None => {
-                                            ui.weak("—");
-                                        }
-                                    }
-                                });
-                            });
-                        }
-                        Item::Callout(c) => {
-                            ui.add(Indicator::text(&c.text).tone(kit_tone(c.tone)));
-                        }
-                        Item::Widget(w) => match admin.widget(&w.kind) {
-                            Some(draw) => draw(ui, app, &w.options),
-                            None => {
-                                ui.weak(strings::tr_args(
-                                    &ctx,
-                                    &txt::ADMIN_NO_WIDGET,
-                                    &[("kind", &w.kind)],
-                                ));
-                            }
-                        },
+                    let meta = item.meta();
+                    if !holds(meta.when.as_deref(), &cx) {
+                        continue;
+                    }
+                    let on = holds(meta.enabled.as_deref(), &cx);
+                    let r = ui
+                        .add_enabled_ui(on, |ui| item_row(ui, app, admin, entries, item, &values))
+                        .response;
+                    if !on && let Some(reason) = &meta.reason {
+                        r.on_disabled_hover_text(reason);
                     }
                 }
             });
         ui.add_space(t.space.m);
+    }
+}
+
+/// The values a section's clauses and actions read: its settings, by
+/// field id.
+fn values_of(app: &AppHandle, entries: &[SettingEntry], s: &Section) -> Values {
+    let mut values = Values::new();
+    let store = app.store();
+    let st = lock(&store);
+    for f in s
+        .groups
+        .iter()
+        .flat_map(|g| &g.items)
+        .filter_map(|i| match i {
+            Item::Field(f) => Some(f),
+            _ => None,
+        })
+    {
+        if let Some(e) = entry_of(entries, f)
+            && let Some(x) = st.get(&e.path)
+        {
+            values.insert(f.meta.id.clone(), x.value.to_json());
+        }
+    }
+    values
+}
+
+/// One item of a group, as its brick draws it.
+fn item_row(
+    ui: &mut Ui,
+    app: &AppHandle,
+    admin: &Admin,
+    entries: &[SettingEntry],
+    item: &Item,
+    values: &Values,
+) {
+    let ctx = ui.ctx().clone();
+    match item {
+        Item::Field(f) => match entry_of(entries, f) {
+            Some(e) => field_row(ui, app, admin, e, f),
+            None => {
+                ui.weak(format!("{}: {}", f.meta.id, f.meta.title));
+            }
+        },
+        Item::Action(a) => {
+            action_button(ui, app, admin, a, values);
+        }
+        Item::Status(st) => {
+            let shown = match &st.source {
+                StatusSource::Hook { hook } => admin.hooks().status(hook).map(Ok),
+                StatusSource::Command { command, pointer } => admin
+                    .read(app, command, &Json::Null)
+                    .map(|r| r.map(|answer| status_of(&answer, pointer))),
+            };
+            ui.horizontal_wrapped(|ui| {
+                ui.label(&st.meta.title);
+                ui.with_layout(
+                    egui::Layout::right_to_left(Align::Center),
+                    |ui| match shown {
+                        Some(Ok((text, tone))) => {
+                            ui.add(Indicator::text(text).tone(kit_tone(tone)));
+                        }
+                        Some(Err(e)) => {
+                            ui.weak("—").on_hover_text(e);
+                        }
+                        None => {
+                            ui.weak("…");
+                        }
+                    },
+                );
+            });
+        }
+        Item::Callout(c) => {
+            ui.horizontal_wrapped(|ui| {
+                ui.add(Indicator::text(&c.text).tone(kit_tone(c.tone)));
+                if let Some(a) = &c.action {
+                    action_button(ui, app, admin, a, values);
+                }
+            });
+        }
+        Item::Widget(w) => match admin.widget(&w.kind) {
+            Some(draw) => draw(ui, app, &w.options),
+            None => {
+                ui.weak(strings::tr_args(
+                    &ctx,
+                    &txt::ADMIN_NO_WIDGET,
+                    &[("kind", &w.kind)],
+                ));
+            }
+        },
+        Item::List(r) => records(ui, app, admin, r, values, false),
+        Item::Table(r) => records(ui, app, admin, r, values, true),
+    }
+}
+
+/// A status's value and tone in a command's answer: at the pointer, a
+/// value written out, or an object's `text` and `tone`.
+fn status_of(answer: &Json, pointer: &str) -> (String, Tone) {
+    let v = answer.pointer(pointer).unwrap_or(&Json::Null);
+    match v.get("text") {
+        Some(text) => (
+            cell_text(text),
+            v["tone"].as_str().and_then(tone_named).unwrap_or_default(),
+        ),
+        None => (cell_text(v), Tone::Info),
+    }
+}
+
+/// An action's title: its own, else its command's.
+fn action_title(app: &AppHandle, a: &Action) -> String {
+    if !a.meta.title.is_empty() {
+        return a.meta.title.clone();
+    }
+    CommandId::new(&a.command)
+        .ok()
+        .and_then(|id| app.command(&id))
+        .map_or(a.command.clone(), |c| c.title)
+}
+
+/// An action as its button: runs its command with its arguments filled
+/// from the values; answers read are read again after it.
+fn action_button(ui: &mut Ui, app: &AppHandle, admin: &Admin, a: &Action, values: &Values) {
+    let title = action_title(app, a);
+    let r = match a.style {
+        ActionStyle::Link => ui.link(title),
+        ActionStyle::Primary => ui.add(egui::Button::new(title).selected(true)),
+        ActionStyle::Danger => ui.add(egui::Button::new(
+            egui::RichText::new(title).color(Tokens::of(ui.ctx()).status.danger),
+        )),
+        ActionStyle::Secondary => ui.button(title),
+    };
+    if r.clicked()
+        && let Ok(id) = CommandId::new(&a.command)
+    {
+        let (args, _) = template::expand(&a.args, values);
+        app.run(id, args);
+        admin.refresh();
+    }
+}
+
+/// A record list or table: its rows read from its source, each with its
+/// actions; its empty state; what went wrong reading it.
+fn records(ui: &mut Ui, app: &AppHandle, admin: &Admin, r: &Records, values: &Values, table: bool) {
+    let ctx = ui.ctx().clone();
+    let t = Tokens::of(&ctx);
+    if !r.meta.title.is_empty() {
+        ui.label(egui::RichText::new(&r.meta.title).strong());
+    }
+    let rows = match &r.source {
+        RecordSource::Hook { hook } => admin
+            .hooks()
+            .records(hook)
+            .ok_or_else(|| format!("no records hook `{hook}`")),
+        RecordSource::Command {
+            command,
+            args,
+            pointer,
+        } => match admin.read(app, command, args) {
+            None => {
+                ui.weak("…");
+                return;
+            }
+            Some(answer) => answer.map(|a| Records::rows_of(&a, pointer)),
+        },
+    };
+    let rows = match rows {
+        Ok(rows) => rows,
+        Err(e) => {
+            ui.add(Indicator::text(e).tone(KitTone::Danger));
+            return;
+        }
+    };
+    if rows.is_empty() {
+        ui.horizontal_wrapped(|ui| {
+            let text = r.empty.as_ref().map_or_else(
+                || strings::tr(&ctx, &txt::ADMIN_NO_RECORDS),
+                |e| e.text.clone(),
+            );
+            ui.weak(text);
+            if let Some(a) = r.empty.as_ref().and_then(|e| e.action.as_ref()) {
+                action_button(ui, app, admin, a, values);
+            }
+        });
+        return;
+    }
+    let row_values = |row: &Json| {
+        let mut v = values.clone();
+        if let Some(o) = row.as_object() {
+            for (k, x) in o {
+                v.insert(format!("row.{k}"), x.clone());
+            }
+        }
+        v
+    };
+    let tone_of = |row: &Json| {
+        r.tone_key
+            .as_ref()
+            .and_then(|k| row[k.as_str()].as_str())
+            .and_then(tone_named)
+    };
+    if table {
+        egui::ScrollArea::horizontal()
+            .id_salt(("egui_pop.admin.table", &r.meta.id))
+            .show(ui, |ui| {
+                egui::Grid::new(("egui_pop.admin.table", &r.meta.id))
+                    .striped(true)
+                    .spacing([t.space.l, t.space.s])
+                    .show(ui, |ui| {
+                        for c in &r.columns {
+                            ui.label(egui::RichText::new(&c.title).strong());
+                        }
+                        if !r.row_actions.is_empty() {
+                            ui.label("");
+                        }
+                        ui.end_row();
+                        for row in &rows {
+                            let tone = tone_of(row);
+                            for (i, c) in r.columns.iter().enumerate() {
+                                let text = cell_text(&row[c.key.as_str()]);
+                                match tone.filter(|_| i == 0) {
+                                    Some(tone) => {
+                                        ui.add(Indicator::text(text).tone(kit_tone(tone)));
+                                    }
+                                    None => {
+                                        ui.label(text);
+                                    }
+                                }
+                            }
+                            if !r.row_actions.is_empty() {
+                                let v = row_values(row);
+                                ui.horizontal(|ui| {
+                                    for a in &r.row_actions {
+                                        action_button(ui, app, admin, a, &v);
+                                    }
+                                });
+                            }
+                            ui.end_row();
+                        }
+                    });
+            });
+        return;
+    }
+    for row in &rows {
+        let v = row_values(row);
+        let width = ui.available_width();
+        ui.allocate_ui_with_layout(
+            egui::vec2(width, ui.spacing().interact_size.y),
+            egui::Layout::right_to_left(Align::Center),
+            |ui| {
+                ui.set_max_width(width);
+                for a in r.row_actions.iter().rev() {
+                    action_button(ui, app, admin, a, &v);
+                }
+                for c in r.columns.iter().rev() {
+                    let text = cell_text(&row[c.key.as_str()]);
+                    if !text.is_empty() {
+                        ui.weak(text);
+                    }
+                }
+                ui.with_layout(egui::Layout::left_to_right(Align::Center), |ui| {
+                    ui.vertical(|ui| {
+                        let title = r.title_key.as_ref().map_or_else(
+                            || cell_text(&row[r.key.as_str()]),
+                            |k| cell_text(&row[k.as_str()]),
+                        );
+                        match tone_of(row) {
+                            Some(tone) => {
+                                ui.add(Indicator::text(title).tone(kit_tone(tone)));
+                            }
+                            None => {
+                                ui.label(title);
+                            }
+                        }
+                        if let Some(k) = &r.subtitle_key {
+                            let sub = cell_text(&row[k.as_str()]);
+                            if !sub.is_empty() {
+                                ui.weak(sub);
+                            }
+                        }
+                    });
+                });
+            },
+        );
+        ui.add_space(t.space.xs);
     }
 }
 
@@ -629,41 +889,16 @@ fn field_row(ui: &mut Ui, app: &AppHandle, admin: &Admin, e: &SettingEntry, f: &
     let d = settings_window::shown(&ctx, e);
     let id = e.id.as_str();
     let focus_me = lock(&admin.state).key.as_deref() == Some(id);
+    // The row: its right-hand controls laid first, from the page's right
+    // edge, then the bar and the editor in what is left; nothing goes
+    // past the page.
+    let width = ui.available_width();
     let row = ui
-        .horizontal(|ui| {
-            let h = ui.spacing().interact_size.y;
-            let (bar, _) = ui.allocate_exact_size(egui::vec2(3.0, h), egui::Sense::hover());
-            if modified {
-                ui.painter().rect_filled(bar, 1.0, t.accent.default);
-            }
-            let read_only = origin == ValueScope::Run;
-            let tail = 260.0;
-            ui.add_enabled_ui(!read_only, |ui| {
-                ui.allocate_ui(
-                    egui::vec2((ui.available_width() - tail).max(160.0), 0.0),
-                    |ui| {
-                        let shown = |c: &str| strings::setting_choice(&ctx, id, c);
-                        if target == ValueScope::App && origin == ValueScope::App {
-                            param::param_shown(ui, &d, Mode::Bound(&store, &e.path), &shown);
-                        } else {
-                            let now = layers
-                                .value_in(target, &e.path, &value)
-                                .unwrap_or(value.clone());
-                            let mut v = Value::from_json(d.ty, &now).unwrap_or(d.default.clone());
-                            let before = v.clone();
-                            param::param_shown(ui, &d, Mode::Plain(&mut v), &shown);
-                            if v != before
-                                && let Ok(sid) = SettingId::new(id)
-                            {
-                                let _ = admin.set_in(app, target, &sid, v.to_json());
-                            }
-                        }
-                    },
-                )
-                .response
-                .on_disabled_hover_text(strings::tr(&ctx, &txt::ADMIN_RUN_READ_ONLY));
-            });
-            ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+        .allocate_ui_with_layout(
+            egui::vec2(width, ui.spacing().interact_size.y),
+            egui::Layout::right_to_left(Align::Center),
+            |ui| {
+                ui.set_max_width(width);
                 // The reset, of the layer the value comes from.
                 let can_reset = match origin {
                     ValueScope::App => value != default,
@@ -718,8 +953,37 @@ fn field_row(ui: &mut Ui, app: &AppHandle, admin: &Admin, e: &SettingEntry, f: &
                             )),
                     );
                 }
-            });
-        })
+                ui.with_layout(egui::Layout::left_to_right(Align::Center), |ui| {
+                    let h = ui.spacing().interact_size.y;
+                    let (bar, _) = ui.allocate_exact_size(egui::vec2(3.0, h), egui::Sense::hover());
+                    if modified {
+                        ui.painter().rect_filled(bar, 1.0, t.accent.default);
+                    }
+                    let read_only = origin == ValueScope::Run;
+                    ui.add_enabled_ui(!read_only, |ui| {
+                        ui.set_max_width(ui.available_width());
+                        let shown = |c: &str| strings::setting_choice(&ctx, id, c);
+                        if target == ValueScope::App && origin == ValueScope::App {
+                            param::param_shown(ui, &d, Mode::Bound(&store, &e.path), &shown);
+                        } else {
+                            let now = layers
+                                .value_in(target, &e.path, &value)
+                                .unwrap_or(value.clone());
+                            let mut v = Value::from_json(d.ty, &now).unwrap_or(d.default.clone());
+                            let before = v.clone();
+                            param::param_shown(ui, &d, Mode::Plain(&mut v), &shown);
+                            if v != before
+                                && let Ok(sid) = SettingId::new(id)
+                            {
+                                let _ = admin.set_in(app, target, &sid, v.to_json());
+                            }
+                        }
+                    })
+                    .response
+                    .on_disabled_hover_text(strings::tr(&ctx, &txt::ADMIN_RUN_READ_ONLY));
+                });
+            },
+        )
         .response;
     let mut name = d.label.clone();
     if modified {
@@ -739,10 +1003,19 @@ fn field_row(ui: &mut Ui, app: &AppHandle, admin: &Admin, e: &SettingEntry, f: &
         f.help.clone()
     };
     if !help.is_empty() {
-        ui.horizontal(|ui| {
-            ui.add_space(3.0 + ui.spacing().item_spacing.x);
-            crate::links::Inline::new(&help).weak().show(ui, app);
-        });
+        // Under the label, wrapped to the page's width.
+        let indent = (3.0 + ui.spacing().item_spacing.x)
+            .round()
+            .clamp(0.0, 127.0) as i8;
+        egui::Frame::NONE
+            .inner_margin(egui::Margin {
+                left: indent,
+                ..egui::Margin::ZERO
+            })
+            .show(ui, |ui| {
+                ui.set_max_width(ui.available_width());
+                crate::links::Inline::new(&help).weak().show(ui, app);
+            });
     }
     ui.add_space(t.space.s);
 }
