@@ -527,6 +527,40 @@ fn an_application_bounds_the_shell_panels_and_keeps_room_for_the_centre() {
     assert!(end >= 258.0, "{start} {centre} {end}");
 }
 
+#[test]
+fn a_shell_panel_least_size_set_while_running_widens_its_area() {
+    let app = builder(false).build(&egui::Context::default()).unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1280.0, 800.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    let handle = h.state().handle().clone();
+    let end = |h: &Harness<'_, App>| {
+        h.state()
+            .handle()
+            .area_rect(Area::EndSide)
+            .map_or(0.0, |r| r.width())
+    };
+    assert!((end(&h) - 240.0).abs() < 2.0, "{}", end(&h));
+    // Measured from the content, say: the area widens on the next pass.
+    handle.set_shell_panel_min_size(PANEL_INSPECTOR, Some(341.0.into()));
+    for _ in 0..3 {
+        h.run();
+    }
+    assert!((end(&h) - 341.0).abs() < 2.0, "{}", end(&h));
+    // Put back: the area keeps its width, and may be narrowed again.
+    handle.set_shell_panel_min_size(PANEL_INSPECTOR, None);
+    assert_eq!(handle.shell_panel_min_size(&PANEL_INSPECTOR), None);
+    h.run();
+    assert!((end(&h) - 341.0).abs() < 2.0, "{}", end(&h));
+    // A largest size set while running narrows it.
+    handle.set_shell_panel_max_size(PANEL_INSPECTOR, Some(200.0.into()));
+    for _ in 0..3 {
+        h.run();
+    }
+    assert!((end(&h) - 200.0).abs() < 2.0, "{}", end(&h));
+}
+
 /// Vetoes the end side bar lying over the centre.
 struct KeepEndBeside;
 

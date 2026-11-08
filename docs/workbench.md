@@ -149,7 +149,12 @@ least; `PANEL_INSPECTOR`, 160) take the application's sizes:
 `AppBuilder::shell_panel_size` the width they start at,
 `shell_panel_min_size` and `shell_panel_max_size` their least and
 largest, in points or as a share of the window
-(`workbench::ShellSize::Share(0.6)`). `AppBuilder::centre_min_size`
+(`workbench::ShellSize::Share(0.6)`). While the application runs,
+`AppHandle::set_shell_panel_min_size` and `set_shell_panel_max_size`
+change them (`None` puts back the default): a least width measured from
+the panel's content, which depends on the fonts and the text size, is
+set there, each frame or when it changes, and the area widens to it on
+the next pass. `AppBuilder::centre_min_size`
 keeps the centre at least that wide: the side areas give way to it,
 each down to its own least, and a window too narrow for all of them
 squeezes the centre.

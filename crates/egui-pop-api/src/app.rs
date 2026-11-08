@@ -2449,6 +2449,85 @@ impl AppHandle {
         self.0.shell_bounds.borrow().clone()
     }
 
+    /// Sets a shell panel's least size across its area while the
+    /// application runs, as [`AppBuilder::shell_panel_min_size`] does at
+    /// build time: a size its content needs, measured with the fonts and
+    /// the text size of the moment (a header's row of buttons), set each
+    /// frame or when it changes. The area widens to it on the next pass;
+    /// the user's drag stops there. `None` puts back the panel's own
+    /// least (`PanelSpec::min_size`, or egui-pop's).
+    ///
+    /// ```
+    /// use egui_pop_api::App;
+    /// use egui_pop_api::workbench::PANEL_SIDE_BAR;
+    ///
+    /// let app = App::builder().build(&egui::Context::default()).unwrap();
+    /// let handle = app.handle();
+    /// handle.set_shell_panel_min_size(PANEL_SIDE_BAR, Some(341.0.into()));
+    /// assert_eq!(handle.shell_panel_min_size(&PANEL_SIDE_BAR), Some(341.0.into()));
+    /// handle.set_shell_panel_min_size(PANEL_SIDE_BAR, None);
+    /// assert_eq!(handle.shell_panel_min_size(&PANEL_SIDE_BAR), None);
+    /// ```
+    pub fn set_shell_panel_min_size(
+        &self,
+        panel: PanelId,
+        size: Option<crate::workbench::ShellSize>,
+    ) {
+        if self.shell_panel_min_size(&panel) == size {
+            return;
+        }
+        self.with_bounds(panel, |b| b.min = size);
+    }
+
+    /// Sets a shell panel's largest size across its area while the
+    /// application runs, as [`AppBuilder::shell_panel_max_size`] does at
+    /// build time; `None`: no largest size.
+    pub fn set_shell_panel_max_size(
+        &self,
+        panel: PanelId,
+        size: Option<crate::workbench::ShellSize>,
+    ) {
+        if self.shell_panel_max_size(&panel) == size {
+            return;
+        }
+        self.with_bounds(panel, |b| b.max = size);
+    }
+
+    /// A shell panel's least size the application set, at build time or
+    /// since; `None` when it set none.
+    pub fn shell_panel_min_size(&self, panel: &PanelId) -> Option<crate::workbench::ShellSize> {
+        let bounds = self.0.shell_bounds.borrow();
+        bounds
+            .iter()
+            .find(|(p, _)| p == panel)
+            .and_then(|(_, b)| b.min)
+    }
+
+    /// A shell panel's largest size the application set, at build time
+    /// or since; `None` when it set none.
+    pub fn shell_panel_max_size(&self, panel: &PanelId) -> Option<crate::workbench::ShellSize> {
+        let bounds = self.0.shell_bounds.borrow();
+        bounds
+            .iter()
+            .find(|(p, _)| p == panel)
+            .and_then(|(_, b)| b.max)
+    }
+
+    fn with_bounds(&self, panel: PanelId, f: impl FnOnce(&mut crate::workbench::ShellBounds)) {
+        {
+            let mut bounds = self.0.shell_bounds.borrow_mut();
+            let at = match bounds.iter().position(|(p, _)| *p == panel) {
+                Some(at) => at,
+                None => {
+                    bounds.push((panel, Default::default()));
+                    bounds.len() - 1
+                }
+            };
+            f(&mut bounds[at].1);
+        }
+        self.egui().request_repaint();
+    }
+
     /// The centre's least width the application set
     /// ([`AppBuilder::centre_min_size`]).
     pub fn centre_min_size(&self) -> Option<crate::workbench::ShellSize> {
@@ -3105,7 +3184,9 @@ impl AppBuilder {
     /// `PANEL_INSPECTOR`: their width), in points or as a share of the
     /// window ([`ShellSize`](crate::workbench::ShellSize)), instead of
     /// egui-pop's (120 points for the side bar, 160 for the inspector) or
-    /// the panel's own `PanelSpec::min_size`. Dragging stops there.
+    /// the panel's own `PanelSpec::min_size`. Dragging stops there. A
+    /// least size measured from the panel's content, while running:
+    /// [`AppHandle::set_shell_panel_min_size`].
     ///
     /// ```
     /// use egui_pop_api::App;
