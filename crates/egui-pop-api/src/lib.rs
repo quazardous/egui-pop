@@ -61,6 +61,8 @@
 //! - [`zoom`]: the interface zoom in steps, its commands and keys;
 //! - [`sliders`]: the `slider.change` step, and the hook that runs it
 //!   from egui-pop's sliders;
+//! - [`admin`]: the administration app, settings as full pages generated
+//!   from declarations (scope tabs, sections, value scopes);
 //! - [`settings_window`]: the settings window (search, sections, form)
 //!   and the shortcuts editor, a plugin;
 //! - [`settings_pages`]: custom pages a plugin draws in the settings
@@ -122,6 +124,7 @@
 //! ```
 
 pub mod about;
+pub mod admin;
 pub mod app;
 pub mod arrangements;
 pub mod busy;
