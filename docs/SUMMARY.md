@@ -57,6 +57,7 @@
 - [About the application](about.md)
 - [Debugging](debugging.md)
 - [Agents and the debug bridge](agents.md)
+- [The agent socket](agent-socket.md)
 - [Driving the gallery with egui-mcp](inspection.md)
 - [Extensions](extensions.md)
 - [The gallery](gallery.md)

@@ -181,9 +181,13 @@ of every crate with every feature on.
   info to copy, `about.read` for agents.
 - [Debugging](debugging.md): the debug bridge and devtools.
 - [Agents and the debug bridge](agents.md): how an agent reaches an
-  application (in process, no socket), discovering and running
-  commands, reading state, the replies' shapes, what is refused, and
-  the known gaps.
+  application (in process, or over the opt-in agent socket),
+  discovering and running commands, reading state, the replies' shapes,
+  what is refused, and the known gaps.
+- [The agent socket](agent-socket.md): `egui-pop-agent`, the bridge as
+  JSON-RPC 2.0 over a private Unix socket or a Windows named pipe
+  (`describe`, `snapshot`, `call`, `wait`), off unless the application
+  turns it on, read-only unless it offers more.
 - [Driving the gallery with egui-mcp](inspection.md): the gallery's
   opt-in `inspection` feature, the `egui_inspection` endpoint it opens
   (loopback, no authentication) and Rerun's `egui-mcp` on it: the tree,

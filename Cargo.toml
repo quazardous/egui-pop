@@ -14,6 +14,7 @@ members = [
     "crates/egui-pop-views",
     "crates/egui-pop-editors",
     "crates/egui-pop-imaging",
+    "crates/egui-pop-agent",
     "crates/egui-pop-test-macros",
     "crates/egui-pop-test",
     "crates/egui-pop",
@@ -71,6 +72,7 @@ egui-pop-wayland = { version = "0.2.0", path = "crates/egui-pop-wayland" }
 egui-pop-views = { version = "0.7.0", path = "crates/egui-pop-views" }
 egui-pop-editors = { version = "0.7.0", path = "crates/egui-pop-editors", default-features = false }
 egui-pop-imaging = { version = "0.7.0", path = "crates/egui-pop-imaging" }
+egui-pop-agent = { version = "0.1.0", path = "crates/egui-pop-agent" }
 egui = { version = "0.37", default-features = false }
 # MIT OR Apache-2.0: the scopes egui, egui-wgpu and wgpu already use;
 # compiled out unless a profiler backend is chosen (docs/threading.md).

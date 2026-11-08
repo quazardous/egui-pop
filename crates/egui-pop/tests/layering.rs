@@ -22,6 +22,7 @@ const LAYERS: &[(&str, u32)] = &[
     ("egui-pop-views", 4),
     ("egui-pop-editors", 4),
     ("egui-pop-imaging", 4),
+    ("egui-pop-agent", 4),
     ("egui-pop", 5),
     ("egui-pop-gallery", 6),
     ("consumer-smoke", 6),

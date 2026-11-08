@@ -2991,7 +2991,7 @@ pub struct AppBuilder {
     writer_check: Option<egui_pop_model::values::WriterCheck>,
     offered: Vec<String>,
     offered_commands: Vec<CommandId>,
-    bridge_mode: egui_pop_core::debug::BridgeMode,
+    bridge_mode: Option<egui_pop_core::debug::BridgeMode>,
 }
 
 /// Draws around the whole application (`AppBuilder::wrap`): gets the
@@ -3062,7 +3062,7 @@ impl AppBuilder {
             writer_check: None,
             offered: Vec::new(),
             offered_commands: Vec::new(),
-            bridge_mode: egui_pop_core::debug::BridgeMode::On,
+            bridge_mode: None,
             host: None,
             system_focus: None,
             system_text_scale: crate::text::SystemTextScale::default(),
@@ -3515,8 +3515,16 @@ impl AppBuilder {
     /// `Origin::User`) are never refused by it; snapshots stay readable
     /// by code in the process.
     pub fn debug_bridge(mut self, mode: egui_pop_core::debug::BridgeMode) -> Self {
-        self.bridge_mode = mode;
+        self.bridge_mode = Some(mode);
         self
+    }
+
+    /// The debug bridge's mode the application chose
+    /// ([`AppBuilder::debug_bridge`]), `None` when it chose none (the
+    /// bridge is then `On`). A transport the application turns on
+    /// (`egui-pop-agent`) reads it to default to `ReadOnly`.
+    pub fn chosen_debug_bridge(&self) -> Option<egui_pop_core::debug::BridgeMode> {
+        self.bridge_mode
     }
 
     /// Offers a command to agents whatever it declares
@@ -3720,7 +3728,11 @@ impl AppBuilder {
         )
         .expect("the framework's registrations are valid");
         app.install_collectors();
-        app.handle.0.bridge.borrow_mut().set_mode(self.bridge_mode);
+        app.handle
+            .0
+            .bridge
+            .borrow_mut()
+            .set_mode(self.bridge_mode.unwrap_or_default());
         for a in &self.offered {
             app.handle.0.bridge.borrow_mut().offer_to_agents(a);
         }
