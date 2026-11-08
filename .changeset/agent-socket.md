@@ -1,5 +1,5 @@
 ---
-egui-pop-agent: minor
+egui-pop-agent: major
 egui-pop-api: minor
 ---
 
