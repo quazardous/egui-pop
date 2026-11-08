@@ -1,12 +1,13 @@
 //! The file browser page: a `FileBrowser` over the demo images held in
-//! memory, its mode switcher (details, thumbnails; `Ctrl+1`, `Ctrl+2`)
-//! and the thumbnails' size slider. The mode is kept in the host's store
+//! memory, its mode switcher (details, thumbnails, filmstrip, columns;
+//! `Ctrl+1` to `Ctrl+4`), the thumbnails' size slider and quick look
+//! (`Ctrl+Y`, or Space on an entry). The mode is kept in the host's store
 //! under this page's dialog id, as a file dialog's is.
 
 use std::sync::{Arc, Mutex};
 
 use egui::Ui;
-use egui_pop::api::files::browser::{FileBrowser, FsSource, PreviewThumbnails};
+use egui_pop::api::files::browser::{FileBrowser, FsSource, PreviewThumbnails, ViewModes};
 use egui_pop::api::files::{self, FILES};
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
@@ -42,7 +43,7 @@ impl Plugin for FileBrowserPage {
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         ctx.story(
             Story::new(StoryId::from_static("file-browser"), "File browser", show)
-                .description("One file browser, many views: the entries of a folder from a source (here held in memory), shown by a mode chosen in the switcher or with Ctrl+1, Ctrl+2 (details, thumbnails), the thumbnails' size on a slider, the mode remembered per dialog.")
+                .description("One file browser, many views: the entries of a folder from a source (here held in memory), shown by a mode chosen in the switcher or with Ctrl+1 to Ctrl+4 (details, thumbnails, filmstrip, Finder's columns), the thumbnails' size on a slider, quick look with Ctrl+Y or Space, the mode remembered per dialog.")
                 .group("Components", 53),
         )?;
         Ok(())
@@ -65,6 +66,8 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         let thumbnails = Arc::new(PreviewThumbnails::new(f.previews(), fs));
         Arc::new(Mutex::new(
             FileBrowser::new(DIALOG, source, demo_root().join("Photos"))
+                .with_root(demo_root())
+                .with_modes(ViewModes::built_in())
                 .with_thumbnails(thumbnails),
         ))
     });

@@ -7903,3 +7903,23 @@ fn the_tracks_page_shows_clips_that_the_keys_select_move_and_trim() {
     assert!(h.query_by_label("selected: Close-up").is_some());
     results.add(h.try_snapshot("tracks-keys-pop-dark"));
 }
+
+#[test]
+fn the_file_browser_page_shows_the_filmstrip_and_the_columns() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "file-browser"));
+    h.run();
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Filmstrip")
+        .click();
+    for _ in 0..3 {
+        settle_thumbnails(&mut h);
+    }
+    egui_pop_test::assert_all_named(&h);
+    h.snapshot("file-browser-filmstrip-pop-dark");
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Columns")
+        .click();
+    for _ in 0..3 {
+        settle_thumbnails(&mut h);
+    }
+    egui_pop_test::assert_all_named(&h);
+    h.snapshot("file-browser-columns-pop-dark");
+}

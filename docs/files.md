@@ -553,6 +553,17 @@ its own list and grid (columns to sort by, groups) for its two modes.
   `ViewModes::register` adds others. A mode draws and reports clicks; the
   browser keeps the selection (one or several, Ctrl and Shift as in the
   picker) and the focus, which a change of mode keeps.
+- **Filmstrip.** `filmstrip` is one virtualised row of thumbnails (64 to
+  128 points) under a large view of the focused entry (Lightroom's Loupe
+  and Filmstrip). Left and Right move along the strip, Page Up and Page
+  Down by a strip's width. The large view asks the provider first
+  (`Visible`), then the strip's cells in view, then the next screen of
+  them (`Near`).
+- **Quick look.** `Ctrl+Y`, or Space while the entries hold the keyboard
+  (and no type-ahead prefix is being typed), opens a large view of the
+  focused entry over the entries, in every mode; the arrows move to the
+  previous or next entry behind it, and Escape, Space or `Ctrl+Y` closes
+  it (`FileBrowser::set_quick_look`, `quick_look`).
 - **Columns.** `columns` is Finder's column view: one column per folder of
   the path, from the browser's root (`with_root`, else the file system's)
   down to the place, then the focused entry looked into (a folder's
@@ -561,7 +572,7 @@ its own list and grid (columns to sort by, groups) for its two modes.
   goes back to the parent (the folder left focused); a click in another
   column goes to that folder. `ViewModes::folders()` is the folder
   chooser's set, `details` and `columns`; `ViewModes::built_in()` has every
-  built-in mode. A mode that needs the path says so
+  built-in mode (details, thumbnails, filmstrip, columns). A mode that needs the path says so
   (`ModeNeeds::hierarchy`): the browser then lists the ancestors and the
   focused folder too and hands them over in `ModeContext::ancestors` and
   `ModeContext::peek`; the mode answers a `Reach` (a place and the entry to

@@ -422,6 +422,12 @@ pub const FILES_MODE_DETAILS: StrKey = StrKey::new("egui-pop-files-mode-details"
 pub const FILES_MODE_THUMBNAILS: StrKey =
     StrKey::new("egui-pop-files-mode-thumbnails", "Thumbnails");
 pub const FILES_MODE_COLUMNS: StrKey = StrKey::new("egui-pop-files-mode-columns", "Columns");
+pub const FILES_MODE_FILMSTRIP: StrKey = StrKey::new("egui-pop-files-mode-filmstrip", "Filmstrip");
+/// The file browser's large views: the filmstrip's, and quick look.
+pub const FILES_PREVIEW_OF: StrKey =
+    StrKey::new("egui-pop-files-preview-of", "Preview of { $name }");
+pub const FILES_QUICK_LOOK: StrKey =
+    StrKey::new("egui-pop-files-quick-look", "Quick look: { $name }");
 /// The in-app picker's breadcrumbs: what each part is called, and what a
 /// segment's menu says when it has nothing to list.
 pub const FILES_CRUMB_OPEN: StrKey =
@@ -1417,6 +1423,9 @@ pub const ALL: &[StrKey] = &[
     FILES_MODE_DETAILS,
     FILES_MODE_THUMBNAILS,
     FILES_MODE_COLUMNS,
+    FILES_MODE_FILMSTRIP,
+    FILES_PREVIEW_OF,
+    FILES_QUICK_LOOK,
     FILES_CRUMB_OPEN,
     FILES_CRUMB_CURRENT,
     FILES_CRUMB_SUBFOLDERS,

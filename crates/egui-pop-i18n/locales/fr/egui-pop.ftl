@@ -932,6 +932,12 @@ egui-pop-files-mode-details = Détails
 
 egui-pop-files-mode-columns = Colonnes
 
+egui-pop-files-mode-filmstrip = Pellicule
+
+egui-pop-files-preview-of = Aperçu de { $name }
+
+egui-pop-files-quick-look = Coup d’œil : { $name }
+
 egui-pop-files-mode-thumbnails = Vignettes
 
 egui-pop-files-crumb-open = Ouvrir le dossier { $name }
