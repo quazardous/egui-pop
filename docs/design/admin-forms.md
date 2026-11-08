@@ -29,8 +29,8 @@ The volume table and the strategy statuses read the application's own
 `read_only` commands, with row actions over its commands; the scope and
 section titles go through the application's catalogues before they are
 declared, since declared titles are shown as given. Its hand-drawn
-Storage window stays until row fields (a role per column, a name edited
-in place), confirmations and the strategy as a form exist.
+Storage window went with slice 5, once row fields, confirmations and
+the strategy as a form existed.
 
 Slice 5 adds the editing bricks. **Row fields** (`RowField`): a
 record's value shown as a toggle, a text (written when left or on
