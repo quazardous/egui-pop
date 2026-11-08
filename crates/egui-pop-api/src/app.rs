@@ -4105,7 +4105,7 @@ impl App {
                 "view.fit",
                 "Fit the view",
                 "Frames all the content of the canvas in use.",
-                &["Home"],
+                &["Shift+1"],
             ),
             (
                 "view.frame_selection",
