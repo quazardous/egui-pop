@@ -540,6 +540,20 @@ impl Plugin for Tv {
     }
 }
 
+/// The size of the first painted text that reads `t`.
+fn font_size(h: &Harness<'_, App>, t: &str) -> f32 {
+    h.output()
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(s) if s.galley.job.text == t => {
+                s.galley.job.sections.first().map(|x| x.format.font_id.size)
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("`{t}` painted"))
+}
+
 /// The menu opened in a theme; the rows' rects by label, the separator's
 /// span, what the rows say.
 fn tv_menu(theme: Option<&str>) -> (Harness<'static, App>, egui::Rect, Vec<menus::RowTrace>) {
@@ -598,6 +612,8 @@ fn a_theme_sets_a_menu_s_rows_width_separator_and_gutter_and_items_carry_notes()
     };
     let (label, note) = (text(&h, "About"), text(&h, "0.7.0"));
     assert!(note.left() > label.right() + 40.0, "{label:?} {note:?}");
+    // The keys and notes at the label's size by default.
+    assert_eq!(font_size(&h, "0.7.0"), font_size(&h, "About"));
     assert!(about.right() - note.right() < 30.0, "{note:?} in {about:?}");
 
     // tvty's menu, in a theme of its own (the tokens are optional: a
@@ -609,6 +625,7 @@ menu-item:
   padding-x: {$type: "dimension", $value: {value: 12, unit: "px"}}
   width: {$type: "dimension", $value: {value: 336, unit: "px"}}
   separator-inset: {$type: "dimension", $value: {value: 0, unit: "px"}}
+  key-font-size: {$type: "dimension", $value: {value: 12, unit: "px"}}
 menu-item-gutter:
   width: {$type: "dimension", $value: {value: 0, unit: "px"}}
 "#;
@@ -620,6 +637,9 @@ menu-item-gutter:
     assert!(about.height() >= 31.0 - 0.5, "{about:?}");
     assert!(about.height() > default_height, "{about:?}");
     // The label 12 points into its row.
+    // The notes smaller than the labels, at the theme's size.
+    assert_eq!(font_size(&h, "0.7.0"), 12.0);
+    assert!(font_size(&h, "About") > 12.0);
     let about_row = rows.iter().find(|r| r.label == "About").expect("drawn");
     assert!((about_row.label_x - 12.0).abs() < 0.5, "{about_row:?}");
     // The separator across the whole menu.
