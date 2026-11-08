@@ -4521,9 +4521,9 @@ mod tests {
             names
         };
         // The default: the side bars down to the bottom, the bottom area
-        // under the centre.
+        // under the centre; leaves left to right, top to bottom.
         let tree = shell_tree(&PanelAlignment::Center.order(), false, Some(320.0), &leaf);
-        assert_eq!(order(&tree), ["start_side", "end_side", "center", "bottom"]);
+        assert_eq!(order(&tree), ["start_side", "center", "bottom", "end_side"]);
         let centre = tree.find("center").unwrap();
         assert!(centre.constraints.grow);
         // The middle, between the side bars, keeps the centre's least width.
