@@ -55,6 +55,23 @@ command-about-read =
     .description = The application's name, version, description, licences, authors and links, egui-pop's and egui's versions, the platform, the renderer and the version info as text.
     .title = Read about the application
 
+command-admin-close =
+    .title = Close settings
+
+command-admin-open =
+    .description = Every setting as full pages: families on top, sections on the side, one search.
+    .title = Settings
+
+command-admin-popOut =
+    .description = Moves the settings between the main window and a window of their own.
+    .title = Settings: pop out
+
+command-admin-reset =
+    .title = Reset a setting in a value scope
+
+command-admin-set =
+    .title = Set a setting in a value scope
+
 command-app-devtools =
     .description = Opens or closes the devtools panel (when the Devtools setting is on).
     .title = Devtools
@@ -1046,6 +1063,56 @@ egui-pop-about-title = About { $application }
 egui-pop-about-version = Version { $version }
 
 egui-pop-about-website = Website
+
+egui-pop-admin-close = Close
+
+egui-pop-admin-for-app = This app
+
+egui-pop-admin-for-library = This library
+
+egui-pop-admin-for-workspace = This workspace
+
+egui-pop-admin-modified = modified
+
+egui-pop-admin-modified-count = Changed: { $count }
+
+egui-pop-admin-no-widget = No widget kind `{ $kind }` is registered
+
+egui-pop-admin-origin-library = library
+
+egui-pop-admin-origin-run = command line
+
+egui-pop-admin-origin-tip = This value comes from the { $origin } layer
+
+egui-pop-admin-origin-workspace = workspace
+
+egui-pop-admin-pop-in = Back into the window
+
+egui-pop-admin-pop-out = Pop out
+
+egui-pop-admin-pop-out-tip = Move the settings to a window of their own
+
+egui-pop-admin-reset-section = Reset section
+
+egui-pop-admin-run-read-only = Set on the command line for this run: not editable here
+
+egui-pop-admin-scope-developer = Developer
+
+egui-pop-admin-scope-general = General
+
+egui-pop-admin-scope-input = Input
+
+egui-pop-admin-scope-interface = Interface
+
+egui-pop-admin-scopes = Setting families
+
+egui-pop-admin-search-hint = Search every setting
+
+egui-pop-admin-sections = Sections
+
+egui-pop-admin-set-for = Set for
+
+egui-pop-admin-set-for-name = Where { $setting } is set
 
 egui-pop-area-bottom = the bottom panel
 
@@ -2627,6 +2694,9 @@ panel-egui-pop-viewer =
 plugin-egui-pop-about =
     .title = About
 
+plugin-egui-pop-admin =
+    .title = Settings
+
 plugin-egui-pop-agent-socket =
     .title = Agent socket
 
@@ -2731,6 +2801,10 @@ plugin-egui-pop-views =
 
 plugin-egui-pop-window =
     .title = Window
+
+setting-admin-window =
+    .description = Opens the settings in a window of their own rather than over the main window.
+    .label = Settings in their own window
 
 setting-appearance-accent-color =
     .description = A colour (#rrggbb) the accent is generated from, light and dark: twelve steps whose text and contrast read in the theme. Empty keeps the theme's own accent.
