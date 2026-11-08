@@ -1077,6 +1077,7 @@ egui-pop-admin-modified = modified
 egui-pop-admin-modified-count = Changed: { $count }
 
 egui-pop-admin-no-widget = No widget kind `{ $kind }` is registered
+egui-pop-admin-no-records = Nothing here yet.
 
 egui-pop-admin-origin-library = library
 

@@ -19,6 +19,13 @@
 //! - **Value scopes**: [`Admin::offer`] opens the library or workspace
 //!   layer, [`Admin::load_layer`] fills it, [`Admin::set_run`] records a
 //!   command line override ([`egui_pop_model::admin::layers`]).
+//! - **Records and statuses**: lists and tables read their rows from a
+//!   `read_only` command or a `records` hook, statuses their value from a
+//!   `read_only` command or a `status` hook; read once, and again after
+//!   a command that changes something or an event they name.
+//! - **Clauses**: a node's `when` hides it and its `enabled` greys it
+//!   (with its reason), read against the application's context keys and
+//!   the section's values as `form.<field id>`.
 //! - **Commands**: `admin.open` (`{"path": "scope/section/key"}`, or
 //!   `{"key": "<setting id>"}`, and `{"mode": "overlay" | "window"}`),
 //!   `admin.close`, `admin.popOut`, `admin.set` and `admin.reset` (a value
@@ -100,6 +107,23 @@ pub struct Admin {
     hooks: Mutex<Hooks>,
     widgets: Mutex<BTreeMap<String, WidgetKindFn>>,
     diagnostics: Mutex<Diagnostics>,
+    reads: Mutex<Reads>,
+}
+
+/// The answers of the `read_only` commands statuses and records read:
+/// asked once, kept until an event says they changed (a command that
+/// changes something ran, or an event a node names in `refresh`), never
+/// read per frame.
+#[derive(Debug, Default)]
+struct Reads {
+    answers: BTreeMap<String, Result<Json, String>>,
+    asked: BTreeMap<String, (CommandId, Json)>,
+    /// The last journal event looked at.
+    seq: Option<crate::host::Seq>,
+}
+
+fn read_key(command: &str, args: &Json) -> String {
+    format!("{command} {args}")
 }
 
 impl std::fmt::Debug for Admin {
@@ -138,6 +162,7 @@ impl Admin {
             s.filter.clear();
         }
         lock(&self.state).open = true;
+        self.refresh();
         Ok(())
     }
 
@@ -344,6 +369,96 @@ impl Admin {
             write(app, &path, &v);
         }
         Ok(())
+    }
+
+    /// A `read_only` command's answer: `None` while it is being read (the
+    /// command is asked for, run before the next frame; its result is
+    /// taken from the runs).
+    pub fn read(
+        &self,
+        app: &AppHandle,
+        command: &str,
+        args: &Json,
+    ) -> Option<Result<Json, String>> {
+        let args = if args.is_null() {
+            json!({})
+        } else {
+            args.clone()
+        };
+        let key = read_key(command, &args);
+        let mut r = lock(&self.reads);
+        if let Some(a) = r.answers.get(&key) {
+            return Some(a.clone());
+        }
+        if let Some((id, args)) = r.asked.get(&key).cloned() {
+            // Its run, by its arguments, else the last of the command (a
+            // host may record them completed with their defaults).
+            let runs = app.history();
+            let run = runs
+                .iter()
+                .rev()
+                .find(|x| x.id == id && x.args == args)
+                .or_else(|| runs.iter().rev().find(|x| x.id == id))?
+                .clone();
+            r.asked.remove(&key);
+            r.answers.insert(key, run.result.clone());
+            return Some(run.result);
+        }
+        let answer = match CommandId::new(command) {
+            Err(e) => Err(format!("{e:?}")),
+            Ok(id) => match app.command(&id) {
+                None => Err(format!("no command `{command}`")),
+                Some(spec) if !spec.read_only => {
+                    Err(format!("`{command}` is not read-only: it is not read here"))
+                }
+                Some(_) => {
+                    app.run(id.clone(), args.clone());
+                    r.asked.insert(key, (id, args));
+                    return None;
+                }
+            },
+        };
+        r.answers.insert(key, answer.clone());
+        Some(answer)
+    }
+
+    /// Forgets the answers read: they are read again when shown.
+    pub fn refresh(&self) {
+        let mut r = lock(&self.reads);
+        r.answers.clear();
+    }
+
+    /// Looks at the journal since the last look: a command that changes
+    /// something, or an event matching one of `patterns` (`name`, or
+    /// `prefix.*`), and the answers are read again.
+    pub(crate) fn watch(&self, app: &AppHandle, patterns: &[String]) {
+        let since = lock(&self.reads).seq;
+        let events = app.events_since(since.unwrap_or(0));
+        let Some(last) = events.last().map(|e| e.seq) else {
+            return;
+        };
+        lock(&self.reads).seq = Some(last);
+        if since.is_none() {
+            return;
+        }
+        let matches = |name: &str| {
+            patterns.iter().any(|p| match p.strip_suffix('*') {
+                Some(prefix) => name.starts_with(prefix),
+                None => name == p,
+            })
+        };
+        let changed = events.iter().any(|e| {
+            matches(&e.name)
+                || (e.name == "command.done"
+                    && e.data["command"]
+                        .as_str()
+                        .and_then(|c| CommandId::new(c).ok())
+                        .and_then(|c| app.command(&c))
+                        .is_some_and(|s| !s.read_only))
+        });
+        if changed {
+            self.refresh();
+        }
     }
 
     /// The row's target scope ("Set for").

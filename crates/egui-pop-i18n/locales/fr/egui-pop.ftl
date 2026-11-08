@@ -692,6 +692,7 @@ egui-pop-admin-modified = modifié
 egui-pop-admin-modified-count = Modifiés : { $count }
 
 egui-pop-admin-no-widget = Aucun type de widget « { $kind } » n’est enregistré
+egui-pop-admin-no-records = Rien ici pour l’instant.
 
 egui-pop-admin-origin-library = bibliothèque
 

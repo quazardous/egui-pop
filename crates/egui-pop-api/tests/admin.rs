@@ -5,9 +5,11 @@
 //! data; every row a named node.
 
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable as _;
+use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_api::admin::model::hooks::Hook;
-use egui_pop_api::admin::model::{Action, Callout, FORMAT, Field, Manifest, Tone};
+use egui_pop_api::admin::model::{
+    Action, Callout, Clauses as _, FORMAT, Field, Manifest, Records, Status, Tone,
+};
 use egui_pop_api::admin::{self, ADMIN, AdminPlugin, CMD_OPEN, CMD_POP_OUT, CMD_RESET, CMD_SET};
 use egui_pop_api::{App, Ctx, DefaultPlugins, Plugin, PluginError};
 use egui_pop_model::admin::ValueScope;
@@ -17,6 +19,11 @@ use egui_pop_model::values::Descriptor;
 use serde_json::{Value as Json, json};
 
 const THREADS: SettingId = SettingId::from_static("compute.threads");
+const LONG: SettingId = SettingId::from_static("compute.long");
+const DEVICES: egui_pop_model::ids::CommandId =
+    egui_pop_model::ids::CommandId::from_static("compute.devices");
+const DISABLE: egui_pop_model::ids::CommandId =
+    egui_pop_model::ids::CommandId::from_static("compute.disable");
 
 struct Compute;
 
@@ -38,6 +45,25 @@ impl Plugin for Compute {
             THREADS,
             Descriptor::int("Worker threads", 1, 64, 4).description("Threads the pipeline uses."),
         )?;
+        ctx.setting(
+            LONG,
+            Descriptor::choice("Long words", &["one", "two"], "one").description(
+                "A description long enough to run past the right edge of a narrow page if the row did not wrap it, which it must, so that every control of the row stays inside the page and none is cut off.",
+            ),
+        )?;
+        ctx.command(
+            egui_pop_model::commands::CommandSpec::new(DEVICES, "Devices", "Compute").read_only(),
+            |_| {
+                Ok(json!({ "devices": [
+                { "id": "gpu0", "name": "Main GPU", "level": "success", "speed": 12 },
+                { "id": "cpu", "name": "Processor", "level": "warning", "speed": 1 }
+            ], "state": { "text": "Two devices", "tone": "success" } }))
+            },
+        )?;
+        ctx.command(
+            egui_pop_model::commands::CommandSpec::new(DISABLE, "Disable a device", "Compute"),
+            |call| Ok(json!({ "disabled": call.args["device"] })),
+        )?;
         let admin = ctx.app().service(&ADMIN).expect("the admin service");
         admin.hook(
             "compute.load",
@@ -52,16 +78,52 @@ impl Plugin for Compute {
                         .group("workers", "Workers")
                         .field(Field::setting("compute.threads"))
                         .field(Field::setting("compute.missing"))
-                        .status(egui_pop_api::admin::model::Status::hook(
-                            "load",
-                            "Load",
-                            "compute.load",
-                        ))
+                        .status(Status::hook("load", "Load", "compute.load"))
                         .action(
                             Action::command("admin.open")
                                 .title("Open the interface settings")
                                 .args(json!({ "path": "interface" })),
                         );
+                })
+                .section("hardware/devices", "Devices", |s| {
+                    s.status(Status::command(
+                        "state",
+                        "State",
+                        "compute.devices",
+                        "/state",
+                    ))
+                    .action(
+                        Action::command("admin.close")
+                            .title("Greyed")
+                            .enabled("form.never", "Never available."),
+                    )
+                    .table(
+                        Records::command("devices", "Devices", "compute.devices", "/devices", "id")
+                            .column("name", "Name")
+                            .column("speed", "Speed")
+                            .tone("level")
+                            .row_action(
+                                Action::command("compute.disable")
+                                    .title("Disable")
+                                    .args(json!({ "device": "${row.id}" })),
+                            ),
+                    )
+                    .list(
+                        Records::command(
+                            "none",
+                            "Remote nodes",
+                            "compute.devices",
+                            "/remote",
+                            "id",
+                        )
+                        .empty("No remote node yet.", None),
+                    )
+                    .action(
+                        Action::command("admin.close")
+                            .title("Shown when threads are many")
+                            .when("form.compute.threads == 100"),
+                    )
+                    .field(Field::setting("compute.threads"));
                 }),
         );
         Ok(())
@@ -260,4 +322,83 @@ fn pop_out_is_remembered() {
     assert!(admin::in_window(h.state().handle()));
     run(&mut h, &CMD_OPEN, json!({ "mode": "overlay" }));
     assert!(!admin::in_window(h.state().handle()));
+}
+
+#[test]
+fn rows_keep_their_controls_inside_the_page() {
+    let width = 640.0;
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(width, 600.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app());
+    h.run();
+    let a = h.state().handle().service(&ADMIN).unwrap();
+    a.offer(ValueScope::Library, true);
+    a.set_in(h.state().handle(), ValueScope::Library, &LONG, json!("two"))
+        .unwrap();
+    let inside = |h: &Harness<'_, App>, what: &str| {
+        let right = width - 1.0;
+        for label in [
+            "Reset Long words".to_string(),
+            "Where Long words is set".to_string(),
+        ] {
+            let r = h.get_by_label(&label).rect();
+            assert!(
+                r.max.x <= right,
+                "{what}: `{label}` ends at {} past the page ({right})",
+                r.max.x
+            );
+        }
+    };
+    // On its page, and among the search's hits.
+    run(&mut h, &CMD_OPEN, json!({ "key": "compute.long" }));
+    h.run();
+    inside(&h, "page");
+    let hint = "Search every setting";
+    h.get_by_role_and_label(egui::accesskit::Role::SearchInput, hint)
+        .click();
+    h.run();
+    h.get_by_role_and_label(egui::accesskit::Role::SearchInput, hint)
+        .type_text("long");
+    h.run();
+    h.run();
+    inside(&h, "search");
+}
+
+#[test]
+fn records_and_statuses_read_commands_and_clauses_apply() {
+    let mut h = harness();
+    run(&mut h, &CMD_OPEN, json!({ "path": "hardware/devices" }));
+    for _ in 0..3 {
+        h.run();
+    }
+    // The status and the table read the read-only command.
+    h.get_by_label("Two devices");
+    h.get_by_label("Main GPU");
+    h.get_by_label("Processor");
+    // An empty source says so.
+    h.get_by_label("No remote node yet.");
+    // `when` hides, `enabled` greys.
+    assert!(h.query_by_label("Shown when threads are many").is_none());
+    assert!(h.get_by_label("Greyed").accesskit_node().is_disabled());
+    egui_pop_test::assert_all_named(&h);
+    // A row action runs with its row's values.
+    h.get_all_by_label("Disable").next().unwrap().click();
+    h.run();
+    h.run();
+    let last = h
+        .state()
+        .handle()
+        .history()
+        .into_iter()
+        .rev()
+        .find(|r| r.id == DISABLE)
+        .expect("the row action ran");
+    assert_eq!(last.args, json!({ "device": "gpu0" }));
+    let a = h.state().handle().service(&ADMIN).unwrap();
+    assert!(
+        a.diagnostics()
+            .all()
+            .iter()
+            .all(|d| d.code != "admin-bad-clause")
+    );
 }
