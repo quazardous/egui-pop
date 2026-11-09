@@ -4,14 +4,17 @@
 //! preview; and the Settings app (`admin`), every setting as full pages
 //! generated from the declarations, with a manifest's section (a
 //! callout, a status from a hook, an action) and a library and a
-//! workspace layer over the user's values.
+//! workspace layer over the user's values; and a wizard (the wizard kit)
+//! that sets the greeting up in four steps, one of them shown only for a
+//! bold greeting, and hands its draft to a command.
 
 use egui::{RichText, Ui};
 use egui_pop::api::admin::model::hooks::Hook;
 use egui_pop::api::admin::model::{
-    Action, Callout, Confirmation, FORMAT, Field, Manifest, Records, RowField, Status, Tone,
+    Action, Callout, Confirmation, FORMAT, Field, FieldKind, Manifest, Records, RowField, Status,
+    Tone, Wizard,
 };
-use egui_pop::api::admin::{ADMIN, CMD_OPEN};
+use egui_pop::api::admin::{ADMIN, CMD_OPEN, CMD_WIZARD_OPEN};
 use egui_pop::api::settings;
 use egui_pop::api::settings_pages::SettingsPage as CustomPage;
 use egui_pop::api::settings_window;
@@ -27,6 +30,13 @@ pub const SETTINGS: PluginId = PluginId::from_static("gallery.settings");
 
 /// The custom page of the settings window.
 pub const PREVIEW_PAGE: &str = "gallery.preview";
+
+/// The greeting wizard's id.
+pub const WIZARD: &str = "gallery.greeting";
+
+/// What the greeting wizard's finish runs.
+const APPLY: egui_pop::model::ids::CommandId =
+    egui_pop::model::ids::CommandId::from_static("gallery.greeting.apply");
 
 const SIZE: SettingId = SettingId::from_static("gallery.size");
 const STRONG: SettingId = SettingId::from_static("gallery.strong");
@@ -152,7 +162,29 @@ impl Plugin for SettingsPage {
                 },
             ));
             admin.hook("gallery.greeting.none", Hook::Records(Box::new(Vec::new)));
+            admin.manifest(Manifest::new(FORMAT).wizard(greeting_wizard()));
         }
+        ctx.command(
+            egui_pop::model::commands::CommandSpec::new(APPLY, "Use a greeting", "Gallery")
+                .description("The greeting wizard's result: its words, weight, size and colour.")
+                .args(serde_json::json!({ "words": "Hello", "bold": false, "size": 18, "colour": null })),
+            |call| {
+                use egui_pop::model::admin::ValueScope;
+                let admin = call.app.service(&ADMIN).ok_or("no admin")?;
+                let set = |id: &str, v: &serde_json::Value| -> Result<(), String> {
+                    if v.is_null() {
+                        return Ok(());
+                    }
+                    let id = SettingId::new(id).map_err(|e| format!("{e:?}"))?;
+                    admin.set_in(call.app, ValueScope::App, &id, v.clone())
+                };
+                set("gallery.greeting", &call.args["words"])?;
+                set("gallery.strong", &call.args["bold"])?;
+                set("gallery.size", &call.args["size"])?;
+                set("gallery.tone", &call.args["colour"])?;
+                Ok(call.args.clone())
+            },
+        )?;
         // A page of its own in the settings window, under this plugin's
         // section: the size and weight with the preview they change.
         ctx.settings_page(
@@ -182,11 +214,56 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     if ui.button("Open the Settings app").clicked() {
         open_admin(app);
     }
+    if ui.button("Open the greeting wizard").clicked() {
+        app.run(CMD_WIZARD_OPEN, serde_json::json!({ "id": WIZARD }));
+    }
     ui.add_space(t.space.s);
     settings::form(ui, app);
     ui.add_space(t.space.l);
     ui.strong("Preview");
     preview(ui, app);
+}
+
+/// The greeting wizard: the words (required), the weight and size, the
+/// colour (a step only for a bold greeting), a summary, then
+/// `gallery.greeting.apply` with the draft.
+fn greeting_wizard() -> Wizard {
+    let field = |key: &str, title: &str, kind| Field::draft(WIZARD, key, title, kind);
+    Wizard::new(WIZARD, "Set up the greeting", "gallery.greeting.apply")
+        .description("A wizard declared as data: each step a form, checked before the next.")
+        .step("words", "Words", |s| {
+            s.description("What the preview says.").field(
+                field("words", "Words", FieldKind::Text)
+                    .required()
+                    .help("Shown in the preview, in the colour and size chosen next."),
+            );
+        })
+        .step("weight", "Weight and size", |s| {
+            s.field(field("bold", "Bold", FieldKind::Toggle).default_value(serde_json::json!(false)))
+                .field(
+                    field("size", "Size in points", FieldKind::Number)
+                        .range(8.0, 48.0)
+                        .default_value(serde_json::json!(18)),
+                )
+                .callout(Callout::new(
+                    "bold",
+                    Tone::Info,
+                    "A bold greeting gets a colour step.",
+                ));
+        })
+        .step("colour", "Colour", |s| {
+            s.field(
+                field("colour", "Colour", FieldKind::Choice)
+                    .choice(serde_json::json!("default"), "The text's colour")
+                    .choice(serde_json::json!("accent"), "The accent")
+                    .choice(serde_json::json!("muted"), "Muted")
+                    .default_value(serde_json::json!("accent")),
+            );
+        })
+        .when("form.bold")
+        .optional()
+        .args(serde_json::json!({ "words": "${words}", "bold": "${bold}", "size": "${size}", "colour": "${colour}" }))
+        .verb("Use this greeting")
 }
 
 /// The greeting, drawn as the settings say.

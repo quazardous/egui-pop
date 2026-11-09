@@ -113,6 +113,11 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
     let _history = values::enter_history(&egui_pop_model::history::SETTINGS);
     let mut close = false;
     egui_pop_core::focus::scope(ui, SURFACE, &[], |ui| {
+        // A wizard running fills the page.
+        if admin.running().is_some() {
+            super::wizard::page(ui, app, admin);
+            return;
+        }
         let ctx = ui.ctx().clone();
         let t = Tokens::of(&ctx);
         let tree = admin.tree(app);
@@ -726,31 +731,39 @@ fn section_page(
         if !g.meta.title.is_empty() {
             ui.strong(&g.meta.title);
         }
-        egui::Frame::new()
-            .fill(t.surface.raised)
-            .stroke(egui::Stroke::new(1.0, t.border.default))
-            .corner_radius(egui::CornerRadius::same(
-                t.radius.widget.round().clamp(0.0, 255.0) as u8,
-            ))
-            .inner_margin(egui::Margin::same(t.space.m.round().clamp(0.0, 127.0) as i8))
-            .show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                for item in &g.items {
-                    let meta = item.meta();
-                    if !holds(meta.when.as_deref(), &cx) {
-                        continue;
-                    }
-                    let on = holds(meta.enabled.as_deref(), &cx);
-                    let r = ui
-                        .add_enabled_ui(on, |ui| item_row(ui, app, admin, entries, item, &values))
-                        .response;
-                    if !on && let Some(reason) = &meta.reason {
-                        r.on_disabled_hover_text(reason);
-                    }
+        inset(ui, |ui| {
+            for item in &g.items {
+                let meta = item.meta();
+                if !holds(meta.when.as_deref(), &cx) {
+                    continue;
                 }
-            });
+                let on = holds(meta.enabled.as_deref(), &cx);
+                let r = ui
+                    .add_enabled_ui(on, |ui| item_row(ui, app, admin, entries, item, &values))
+                    .response;
+                if !on && let Some(reason) = &meta.reason {
+                    r.on_disabled_hover_text(reason);
+                }
+            }
+        });
         ui.add_space(t.space.m);
     }
+}
+
+/// A group's inset box (the `form-group` brick).
+pub(super) fn inset(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
+    let t = Tokens::of(ui.ctx());
+    egui::Frame::new()
+        .fill(t.surface.raised)
+        .stroke(egui::Stroke::new(1.0, t.border.default))
+        .corner_radius(egui::CornerRadius::same(
+            t.radius.widget.round().clamp(0.0, 255.0) as u8,
+        ))
+        .inner_margin(egui::Margin::same(t.space.m.round().clamp(0.0, 127.0) as i8))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            add(ui);
+        });
 }
 
 /// The values a section's clauses and actions read: its settings, by
@@ -778,7 +791,7 @@ fn values_of(app: &AppHandle, entries: &[SettingEntry], s: &Section) -> Values {
 }
 
 /// One item of a group, as its brick draws it.
-fn item_row(
+pub(super) fn item_row(
     ui: &mut Ui,
     app: &AppHandle,
     admin: &Admin,
@@ -1328,7 +1341,7 @@ fn records(ui: &mut Ui, app: &AppHandle, admin: &Admin, r: &Records, values: &Va
     }
 }
 
-fn kit_tone(tone: Tone) -> KitTone {
+pub(super) fn kit_tone(tone: Tone) -> KitTone {
     match tone {
         Tone::Info => KitTone::Info,
         Tone::Success => KitTone::Success,

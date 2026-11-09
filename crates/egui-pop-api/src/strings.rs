@@ -148,6 +148,56 @@ pub const ADMIN_SCOPE_INPUT: StrKey = StrKey::new("egui-pop-admin-scope-input", 
 pub const ADMIN_SCOPE_DEVELOPER: StrKey =
     StrKey::new("egui-pop-admin-scope-developer", "Developer");
 
+// The wizard kit (`admin::wizard`).
+
+pub const ADMIN_WIZARD_NEXT: StrKey = StrKey::new("egui-pop-admin-wizard-next", "Next");
+pub const ADMIN_WIZARD_BACK: StrKey = StrKey::new("egui-pop-admin-wizard-back", "Back");
+pub const ADMIN_WIZARD_SKIP: StrKey = StrKey::new("egui-pop-admin-wizard-skip", "Skip");
+pub const ADMIN_WIZARD_CANCEL: StrKey = StrKey::new("egui-pop-admin-wizard-cancel", "Cancel");
+pub const ADMIN_WIZARD_FINISH: StrKey = StrKey::new("egui-pop-admin-wizard-finish", "Finish");
+pub const ADMIN_WIZARD_STEPS: StrKey = StrKey::new("egui-pop-admin-wizard-steps", "Steps");
+pub const ADMIN_WIZARD_STEP_OF: StrKey = StrKey::new(
+    "egui-pop-admin-wizard-step-of",
+    "Step { $n } of { $count }, { $title }",
+);
+pub const ADMIN_WIZARD_DONE: StrKey = StrKey::new("egui-pop-admin-wizard-done", "done");
+pub const ADMIN_WIZARD_LATER: StrKey =
+    StrKey::new("egui-pop-admin-wizard-later", "not reachable yet");
+pub const ADMIN_WIZARD_OPTIONAL: StrKey = StrKey::new("egui-pop-admin-wizard-optional", "optional");
+pub const ADMIN_WIZARD_SUMMARY: StrKey = StrKey::new("egui-pop-admin-wizard-summary", "Summary");
+pub const ADMIN_WIZARD_SUMMARY_ABOUT: StrKey = StrKey::new(
+    "egui-pop-admin-wizard-summary-about",
+    "Check your choices: Change goes back to a step.",
+);
+pub const ADMIN_WIZARD_CHANGE: StrKey = StrKey::new("egui-pop-admin-wizard-change", "Change");
+pub const ADMIN_WIZARD_CHANGE_NAME: StrKey =
+    StrKey::new("egui-pop-admin-wizard-change-name", "Change { $step }");
+pub const ADMIN_WIZARD_YES: StrKey = StrKey::new("egui-pop-admin-wizard-yes", "Yes");
+pub const ADMIN_WIZARD_NO: StrKey = StrKey::new("egui-pop-admin-wizard-no", "No");
+pub const ADMIN_WIZARD_NOT_SET: StrKey = StrKey::new("egui-pop-admin-wizard-not-set", "Not set");
+pub const ADMIN_WIZARD_REQUIRED: StrKey =
+    StrKey::new("egui-pop-admin-wizard-required", "{ $field }: required.");
+pub const ADMIN_WIZARD_BELOW: StrKey = StrKey::new(
+    "egui-pop-admin-wizard-below",
+    "{ $field }: at least { $min }.",
+);
+pub const ADMIN_WIZARD_ABOVE: StrKey = StrKey::new(
+    "egui-pop-admin-wizard-above",
+    "{ $field }: at most { $max }.",
+);
+pub const ADMIN_WIZARD_NOT_A_CHOICE: StrKey = StrKey::new(
+    "egui-pop-admin-wizard-not-a-choice",
+    "{ $field }: choose one of those offered.",
+);
+pub const ADMIN_WIZARD_CANCEL_TITLE: StrKey =
+    StrKey::new("egui-pop-admin-wizard-cancel-title", "Cancel { $wizard }?");
+pub const ADMIN_WIZARD_CANCEL_TEXT: StrKey = StrKey::new(
+    "egui-pop-admin-wizard-cancel-text",
+    "What you entered is lost.",
+);
+pub const ADMIN_WIZARD_CANCEL_VERB: StrKey =
+    StrKey::new("egui-pop-admin-wizard-cancel-verb", "Discard");
+
 // The settings window and form.
 
 pub const SETTINGS_TITLE: StrKey = StrKey::new("egui-pop-settings-title", "Settings");
@@ -1408,6 +1458,30 @@ pub const ALL: &[StrKey] = &[
     ADMIN_SCOPE_INTERFACE,
     ADMIN_SCOPE_INPUT,
     ADMIN_SCOPE_DEVELOPER,
+    ADMIN_WIZARD_NEXT,
+    ADMIN_WIZARD_BACK,
+    ADMIN_WIZARD_SKIP,
+    ADMIN_WIZARD_CANCEL,
+    ADMIN_WIZARD_FINISH,
+    ADMIN_WIZARD_STEPS,
+    ADMIN_WIZARD_STEP_OF,
+    ADMIN_WIZARD_DONE,
+    ADMIN_WIZARD_LATER,
+    ADMIN_WIZARD_OPTIONAL,
+    ADMIN_WIZARD_SUMMARY,
+    ADMIN_WIZARD_SUMMARY_ABOUT,
+    ADMIN_WIZARD_CHANGE,
+    ADMIN_WIZARD_CHANGE_NAME,
+    ADMIN_WIZARD_YES,
+    ADMIN_WIZARD_NO,
+    ADMIN_WIZARD_NOT_SET,
+    ADMIN_WIZARD_REQUIRED,
+    ADMIN_WIZARD_BELOW,
+    ADMIN_WIZARD_ABOVE,
+    ADMIN_WIZARD_NOT_A_CHOICE,
+    ADMIN_WIZARD_CANCEL_TITLE,
+    ADMIN_WIZARD_CANCEL_TEXT,
+    ADMIN_WIZARD_CANCEL_VERB,
     SETTINGS_TITLE,
     SETTINGS_SEARCH_HINT,
     SETTINGS_SHORTCUTS,

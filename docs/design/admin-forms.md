@@ -77,13 +77,39 @@ leave the generated pages, so each shows once, and
 app draws the page. A setting id that a widget edits resolves to the
 widget's section (`Tree::resolve`).
 
+Slice 8 is the wizard kit (section 5.3), in `egui_pop_model::admin::wizard`
+and `egui_pop_api::admin::wizard`. A manifest declares wizards
+(`Manifest::wizard`); a step is built as a section is, its fields draft
+fields (`Field::draft`) that declare their own `Input` (default, choices,
+range, `required`) in place of a setting's descriptor. `Flow` is the pure
+state of a wizard being filled: Next checks the step (each field's own
+checks, its `validate` hook, the step's hook; a danger problem blocks, a
+warning lets through), a step's `when` reads the draft as `form.<key>`,
+an optional step's Skip takes its values back, going to a step lands on
+the first invalid one before it with its reason, and Finish fills the
+command's template from the draft (a field of a step not shown is
+`null`; no template: the draft as an object). While a wizard runs it
+fills the Settings app's page: the stepper on the left (a list whose
+items say "Step 2 of 4, Destination, done"), the step's form with each
+problem under its field, and a footer with Cancel, Back, Skip and Next
+(the summary's Finish carries the wizard's verb), Next greyed with its
+reason beside it and in its tooltip. Cancel and Escape ask first once
+something was entered. Enter (nothing focused) and `Alt+N` go next or
+finish, `Alt+B` back. Every gesture is a command (`admin.wizard.open`,
+`set`, `next`, `back`, `skip`, `go`, `finish`, `cancel`; `admin.open
+{"wizard"}` too), each answering the flow's state, which the `admin`
+collector shows with the last finish. Left for later: the run step with
+its job's progress and results, the draft kept per library and "Continue
+where you left", the `page` rendering, `done_when`, the `wizard-step`
+kit component, steps in the search.
+
 Slice 1 leaves for later: the kit components of section 4.4 (the shell draws
 with the existing selectable rows, buttons, combo boxes and indicators);
 icons on the scope tabs and their overflow; the scopes' order and the
 search's filters (`@modified`, `@scope:`); statuses read from commands
 (done in slice 2); `when` and `enabled` clauses on nodes (done in
 slice 2); draft fields, record lists and tables (lists and tables done
-in slice 2), tasks, the wizard kit; the alter hook
+in slice 2), tasks, the wizard kit (done in slice 8); the alter hook
 over the tree (`Hook::admin`); the last place kept across runs (only the
 mode is); the application's link scheme; Helios's scopes and its
 `helios-config` bridge.

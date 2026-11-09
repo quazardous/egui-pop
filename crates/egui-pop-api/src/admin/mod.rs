@@ -29,7 +29,11 @@
 //! - **Commands**: `admin.open` (`{"path": "scope/section/key"}`, or
 //!   `{"key": "<setting id>"}`, and `{"mode": "overlay" | "window"}`),
 //!   `admin.close`, `admin.popOut`, `admin.set` and `admin.reset` (a value
-//!   in a scope, for agents). The `admin` collector shows the tree.
+//!   in a scope, for agents); `{"wizard": "<id>"}` opens a wizard. The `admin` collector shows the tree.
+//!
+//! - **Wizards**: multi-step flows declared in a manifest
+//!   ([`egui_pop_model::admin::wizard`]) fill the page while they run
+//!   ([`wizard`]): `admin.wizard.open` and its sibling commands drive one.
 //!
 //! `Ctrl+,` and `app.settings` open it ([`crate::settings_window`]).
 //! The shortcuts editor, the gestures, the Fonts page and the custom
@@ -38,6 +42,7 @@
 //! opens from General › Advanced.
 
 mod shell;
+pub mod wizard;
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -61,6 +66,10 @@ use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
 
 pub use egui_pop_model::admin as model;
+pub use wizard::{
+    CMD_WIZARD_BACK, CMD_WIZARD_CANCEL, CMD_WIZARD_FINISH, CMD_WIZARD_GO, CMD_WIZARD_NEXT,
+    CMD_WIZARD_OPEN, CMD_WIZARD_SET, CMD_WIZARD_SKIP,
+};
 
 /// Opens the administration app (`{"path"}`, `{"key"}`, `{"mode"}`).
 pub const CMD_OPEN: CommandId = CommandId::from_static("admin.open");
@@ -125,6 +134,10 @@ pub struct Admin {
     searches: Mutex<BTreeMap<String, WidgetSearchFn>>,
     diagnostics: Mutex<Diagnostics>,
     reads: Mutex<Reads>,
+    /// The wizard running, if any.
+    wizard: Mutex<Option<wizard::Running>>,
+    /// What the last wizard finished ran.
+    finished: Mutex<Option<Json>>,
 }
 
 /// The answers of the `read_only` commands statuses and records read:
@@ -187,7 +200,9 @@ impl Admin {
         Ok(())
     }
 
+    /// Closes it, and the wizard running with it.
     pub fn close(&self) {
+        lock(&self.wizard).take();
         let mut s = lock(&self.state);
         s.open = false;
         s.filter.clear();
@@ -682,9 +697,18 @@ impl Plugin for AdminPlugin {
                 .description(
                     "Every setting as full pages: families on top, sections on the side, one search.",
                 )
-                .args(json!({ "path": "", "key": "", "mode": "" })),
+                .args(json!({ "path": "", "key": "", "mode": "", "wizard": "" })),
             |call| {
                 let a = admin(call)?;
+                // A wizard: its own page.
+                if let Some(id) = call
+                    .args
+                    .get("wizard")
+                    .and_then(Json::as_str)
+                    .filter(|w| !w.is_empty())
+                {
+                    return a.open_wizard(call.app, id, None, Default::default());
+                }
                 if let Some(mode) = call.args.get("mode").and_then(Json::as_str)
                     && !mode.is_empty()
                 {
@@ -753,6 +777,7 @@ impl Plugin for AdminPlugin {
                 Ok(json!({ "key": id.as_str(), "scope": scope.name() }))
             },
         )?;
+        wizard::commands(ctx)?;
         ctx.block(
             zones::OVERLAYS,
             Block::add(BlockId::from_static("egui_pop.admin"), 6, shell::show),
@@ -799,6 +824,8 @@ fn describe(app: &AppHandle) -> Json {
         "offered": a.offered().iter().map(|s| s.name()).collect::<Vec<_>>(),
         "origins": origins,
         "tree": tree,
+        "wizard": a.wizard_state(app),
+        "lastFinished": a.last_finished(),
         "hooks": a.hooks().list().into_iter().map(|(n, k)| json!({"name": n, "kind": k})).collect::<Vec<_>>(),
         "diagnostics": a.diagnostics().all().iter().map(|d| json!({"code": d.code, "subject": d.subject, "message": d.message})).collect::<Vec<_>>(),
     })

@@ -72,6 +72,30 @@ command-admin-reset =
 command-admin-set =
     .title = Set a setting in a value scope
 
+command-admin-wizard-back =
+    .title = Wizard: previous step
+
+command-admin-wizard-cancel =
+    .title = Wizard: cancel
+
+command-admin-wizard-finish =
+    .title = Wizard: finish
+
+command-admin-wizard-go =
+    .title = Wizard: go to a step
+
+command-admin-wizard-next =
+    .title = Wizard: next step
+
+command-admin-wizard-open =
+    .title = Open a wizard
+
+command-admin-wizard-set =
+    .title = Set a wizard's values
+
+command-admin-wizard-skip =
+    .title = Wizard: skip this step
+
 command-app-devtools =
     .description = Opens or closes the devtools panel (when the Devtools setting is on).
     .title = Devtools
@@ -1131,6 +1155,54 @@ egui-pop-admin-set-for-name = Where { $setting } is set
 egui-pop-admin-show-item = Show
 
 egui-pop-admin-show-item-name = Show { $item } in its page
+
+egui-pop-admin-wizard-above = { $field }: at most { $max }.
+
+egui-pop-admin-wizard-back = Back
+
+egui-pop-admin-wizard-below = { $field }: at least { $min }.
+
+egui-pop-admin-wizard-cancel = Cancel
+
+egui-pop-admin-wizard-cancel-text = What you entered is lost.
+
+egui-pop-admin-wizard-cancel-title = Cancel { $wizard }?
+
+egui-pop-admin-wizard-cancel-verb = Discard
+
+egui-pop-admin-wizard-change = Change
+
+egui-pop-admin-wizard-change-name = Change { $step }
+
+egui-pop-admin-wizard-done = done
+
+egui-pop-admin-wizard-finish = Finish
+
+egui-pop-admin-wizard-later = not reachable yet
+
+egui-pop-admin-wizard-next = Next
+
+egui-pop-admin-wizard-no = No
+
+egui-pop-admin-wizard-not-a-choice = { $field }: choose one of those offered.
+
+egui-pop-admin-wizard-not-set = Not set
+
+egui-pop-admin-wizard-optional = optional
+
+egui-pop-admin-wizard-required = { $field }: required.
+
+egui-pop-admin-wizard-skip = Skip
+
+egui-pop-admin-wizard-step-of = Step { $n } of { $count }, { $title }
+
+egui-pop-admin-wizard-steps = Steps
+
+egui-pop-admin-wizard-summary = Summary
+
+egui-pop-admin-wizard-summary-about = Check your choices: Change goes back to a step.
+
+egui-pop-admin-wizard-yes = Yes
 
 egui-pop-area-bottom = the bottom panel
 

@@ -16,12 +16,15 @@
 //!   with no hand-written page;
 //! - [`layers`]: the value scopes a field may be set in (app, library,
 //!   workspace, and the run's overrides, shown, never edited);
-//! - [`template`]: an action's argument template (`${field}`).
+//! - [`template`]: an action's argument template (`${field}`);
+//! - [`wizard`]: the wizard kit, declared steps (each a form over a
+//!   draft) with their validation, a summary and a command run on finish.
 
 pub mod generate;
 pub mod hooks;
 pub mod layers;
 pub mod template;
+pub mod wizard;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
@@ -29,6 +32,7 @@ use serde_json::Value as Json;
 use crate::diagnostics::Diagnostics;
 use crate::when::{When, WhenContext};
 pub use layers::ValueScope;
+pub use wizard::{Check, Finish, Flow, Step, Wizard};
 
 /// The manifest format this framework reads. A newer one is refused.
 pub const FORMAT: u32 = 1;
@@ -246,6 +250,35 @@ pub struct Field {
     /// Hooks by name ([`hooks`]).
     #[serde(default, skip_serializing_if = "FieldHooks::is_empty")]
     pub hooks: FieldHooks,
+    /// A draft field's own descriptor: its default, choices, range and
+    /// whether it is required (a setting's comes from its declaration).
+    #[serde(default, skip_serializing_if = "Input::is_empty")]
+    pub input: Input,
+}
+
+/// What a draft field declares of its value, in place of a setting's
+/// descriptor: its default, its choices (value and label), its range,
+/// and whether it may be left empty. The checks it allows need no hook
+/// ([`Field::check`]).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Input {
+    #[serde(skip_serializing_if = "Json::is_null")]
+    pub default: Json,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub choices: Vec<RowChoice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub required: bool,
+}
+
+impl Input {
+    pub fn is_empty(&self) -> bool {
+        *self == Input::default()
+    }
 }
 
 /// The hooks a field names.
@@ -279,6 +312,7 @@ impl Field {
             help: String::new(),
             restart: false,
             hooks: FieldHooks::default(),
+            input: Input::default(),
         }
     }
 
@@ -333,6 +367,79 @@ impl Field {
     pub fn transform(mut self, hook: &str) -> Field {
         self.hooks.transform = Some(hook.into());
         self
+    }
+
+    /// A draft field's value at the start.
+    pub fn default_value(mut self, value: Json) -> Field {
+        self.input.default = value;
+        self
+    }
+
+    /// A draft field's choice: the value kept and its label.
+    pub fn choice(mut self, value: Json, label: &str) -> Field {
+        self.input.choices.push(RowChoice {
+            value,
+            label: label.into(),
+        });
+        self
+    }
+
+    /// A draft number's range.
+    pub fn range(mut self, min: f64, max: f64) -> Field {
+        self.input.min = Some(min);
+        self.input.max = Some(max);
+        self
+    }
+
+    /// A draft field that may not be left empty.
+    pub fn required(mut self) -> Field {
+        self.input.required = true;
+        self
+    }
+
+    /// The draft key it is bound to, if any.
+    pub fn draft_key(&self) -> Option<&str> {
+        match &self.bind {
+            Bind::Draft { key, .. } => Some(key),
+            Bind::Setting { .. } => None,
+        }
+    }
+
+    /// What its input says of a value: empty when required, out of its
+    /// range, not one of its choices. `None`: fine.
+    pub fn check(&self, value: &Json) -> Option<Check> {
+        let i = &self.input;
+        let empty = match value {
+            Json::Null => true,
+            Json::String(s) => s.trim().is_empty(),
+            Json::Array(a) => a.is_empty(),
+            _ => false,
+        };
+        if empty {
+            return i.required.then_some(Check::Required);
+        }
+        if let Some(n) = value.as_f64() {
+            if let Some(min) = i.min.filter(|m| n < *m) {
+                return Some(Check::Below(min));
+            }
+            if let Some(max) = i.max.filter(|m| n > *m) {
+                return Some(Check::Above(max));
+            }
+        }
+        if !i.choices.is_empty() && !i.choices.iter().any(|c| c.value == *value) {
+            return Some(Check::NotAChoice);
+        }
+        None
+    }
+
+    /// A value as the summary shows it: its choice's label, else written
+    /// out (a toggle's words are the shell's).
+    pub fn shown(&self, value: &Json) -> String {
+        self.input
+            .choices
+            .iter()
+            .find(|c| c.value == *value)
+            .map_or_else(|| cell_text(value), |c| c.label.clone())
     }
 
     /// The setting it is bound to, if any.
@@ -980,6 +1087,9 @@ pub struct Manifest {
     pub scopes: Vec<Scope>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sections: Vec<Section>,
+    /// Multi-step flows ([`wizard`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub wizards: Vec<Wizard>,
 }
 
 /// Why a manifest cannot be read.
@@ -1107,7 +1217,14 @@ impl Manifest {
             version,
             scopes: Vec::new(),
             sections: Vec::new(),
+            wizards: Vec::new(),
         }
+    }
+
+    /// A wizard ([`wizard`]): opened by `admin.wizard.open` or an action.
+    pub fn wizard(mut self, wizard: Wizard) -> Manifest {
+        self.wizards.push(wizard);
+        self
     }
 
     /// A scope placed among the others by `order` (the default scopes
@@ -1286,13 +1403,28 @@ impl Manifest {
             }
             true
         });
+        let mut ids: Vec<String> = Vec::new();
+        self.wizards.retain_mut(|w| {
+            if ids.contains(&w.meta.id) {
+                d.warn(
+                    "admin-duplicate",
+                    None,
+                    &w.meta.id,
+                    "a wizard with this id is already declared: left out",
+                );
+                return false;
+            }
+            ids.push(w.meta.id.clone());
+            w.check(&mut d, setting_exists);
+            true
+        });
         d
     }
 }
 
 /// Reports a section's or group's clause that does not parse, and drops
 /// it (it would always hold).
-fn bad_clauses(d: &mut Diagnostics, at: &str, meta: &mut Meta) {
+pub(crate) fn bad_clauses(d: &mut Diagnostics, at: &str, meta: &mut Meta) {
     for clause in [&mut meta.when, &mut meta.enabled] {
         if let Some(c) = clause.as_deref()
             && let Err(e) = When::parse(c)
@@ -1314,6 +1446,8 @@ fn bad_clauses(d: &mut Diagnostics, at: &str, meta: &mut Meta) {
 pub struct Tree {
     pub scopes: Vec<Scope>,
     pub sections: Vec<Section>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub wizards: Vec<Wizard>,
 }
 
 /// Where a deep link leads: `scope/section/key` (any tail may be left
@@ -1342,6 +1476,11 @@ impl Tree {
                 None => self.sections.push(s),
             }
         }
+        for w in m.wizards {
+            if !self.wizards.iter().any(|x| x.meta.id == w.meta.id) {
+                self.wizards.push(w);
+            }
+        }
         self.scopes.sort_by_key(|s| s.meta.order);
         self.sections.sort_by_key(|s| s.meta.order);
     }
@@ -1361,6 +1500,10 @@ impl Tree {
 
     pub fn section(&self, path: &str) -> Option<&Section> {
         self.sections.iter().find(|s| s.path() == path)
+    }
+
+    pub fn wizard(&self, id: &str) -> Option<&Wizard> {
+        self.wizards.iter().find(|w| w.meta.id == id)
     }
 
     /// Resolves a deep link: `scope`, `scope/section`,

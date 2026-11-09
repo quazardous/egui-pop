@@ -1156,6 +1156,62 @@ fn the_settings_app_shows_generated_pages_value_scopes_and_search() {
     results.add(h.try_snapshot("admin-search-pop-dark"));
 }
 
+/// The wizard kit: the greeting wizard checks its words before Next, adds
+/// its colour step for a bold greeting, shows a summary, and hands its
+/// draft to its command, which sets the greeting.
+#[test]
+fn the_greeting_wizard_checks_each_step_and_applies_its_draft() {
+    use egui::accesskit::Role;
+    let mut results = egui_kittest::SnapshotResults::new();
+    let mut h = harness(options("pop-dark", Density::Comfortable, "settings"));
+    h.run();
+    h.get_by_label("Open the greeting wizard").click();
+    h.run();
+    h.run();
+    let app = h.state().app.handle().clone();
+    assert!(egui_pop::api::admin::is_open(&app));
+    egui_pop_test::assert_all_named(&h);
+    // The words are required: Next is greyed, the reason said.
+    assert!(h.get_by_label("Next").accesskit_node().is_disabled());
+    h.get_all_by_label("Words: required.").next().unwrap();
+    h.get_by_role_and_label(Role::TextInput, "Words").click();
+    h.run();
+    h.get_by_role_and_label(Role::TextInput, "Words")
+        .type_text("Bonjour");
+    h.run();
+    h.run();
+    h.get_by_label("Next").click();
+    h.run();
+    h.run();
+    // Bold: the colour step comes.
+    h.get_by_role_and_label(Role::ListItem, "Step 1 of 3, Words, done");
+    h.get_by_label("Bold").click();
+    h.run();
+    h.run();
+    h.get_by_role_and_label(Role::ListItem, "Step 3 of 4, Colour");
+    egui_pop_test::assert_all_named(&h);
+    results.add(h.try_snapshot("admin-wizard-pop-dark"));
+    h.get_by_label("Next").click();
+    h.run();
+    h.run();
+    h.get_by_label("Next").click();
+    h.run();
+    h.run();
+    // The summary, each value as shown.
+    h.get_by_role_and_label(Role::Group, "Colour: The accent");
+    egui_pop_test::assert_all_named(&h);
+    results.add(h.try_snapshot("admin-wizard-summary-pop-dark"));
+    h.get_by_label("Use this greeting").click();
+    for _ in 0..3 {
+        h.run();
+    }
+    assert!(!egui_pop::api::admin::is_open(&app));
+    let greeting = egui_pop::model::ids::SettingId::from_static("gallery.greeting");
+    assert_eq!(app.setting::<String>(&greeting).as_deref(), Some("Bonjour"));
+    let strong = egui_pop::model::ids::SettingId::from_static("gallery.strong");
+    assert_eq!(app.setting::<bool>(&strong), Some(true));
+}
+
 #[test]
 fn the_settings_window_searches_and_edits_shortcuts() {
     let mut results = egui_kittest::SnapshotResults::new();
