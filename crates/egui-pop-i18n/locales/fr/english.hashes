@@ -687,7 +687,10 @@ egui-pop-field-modified-saved 5459baf0eac3bc94
 egui-pop-field-pending c3b0aa438f1b4399
 egui-pop-field-required a13c939a31e0bbe6
 egui-pop-field-reset 5a2e444b21057c4c
+egui-pop-files-agenda-day 4fb1a19794da10cd
+egui-pop-files-agenda-month c43fb1240ad9dae5
 egui-pop-files-agenda-undated c683cb396d051c18
+egui-pop-files-agenda-year a72cb4c42090cd0a
 egui-pop-files-all 45bed3078932475b
 egui-pop-files-bookmark 6b0e2a63b0284481
 egui-pop-files-bookmark-name d6f8334d610b5af6
@@ -709,6 +712,8 @@ egui-pop-files-devices 3a9b15217ec0d856
 egui-pop-files-dimensions 9448f1438bcf86c6
 egui-pop-files-documents c901a6cd9405fa95
 egui-pop-files-downloads fa6341d7af74e884
+egui-pop-files-drop-into cc57aa16f0e9f8db
+egui-pop-files-drop-refused 97b72f659d25e7d7
 egui-pop-files-entries-of e5c2774d984bd70d
 egui-pop-files-exposure 4a9a022c75d279d6
 egui-pop-files-filter 629d424a814e621a
@@ -734,6 +739,7 @@ egui-pop-files-items e0d1e5c84cf292a7
 egui-pop-files-kind-file 181d912a9545ccc3
 egui-pop-files-kind-folder 385fe1e894da806d
 egui-pop-files-lens 666f135f6076a31d
+egui-pop-files-listing 9b1d17dc3e1ad8a1
 egui-pop-files-mode-agenda bdc8dd1d1687f9d5
 egui-pop-files-mode-carousel c68384b41898b633
 egui-pop-files-mode-columns 3c00a07c96cb7b8a

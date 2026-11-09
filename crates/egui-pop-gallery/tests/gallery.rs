@@ -8100,3 +8100,51 @@ fn the_file_browser_page_shows_the_carousel_and_the_agenda() {
     );
     h.snapshot("file-browser-agenda-pop-dark");
 }
+
+#[test]
+fn the_file_browser_page_groups_its_agenda_by_month_and_collapses_a_group() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "file-browser"));
+    h.run();
+    pick_browser_mode(&mut h, "Agenda");
+    h.get_by_label("Month").click();
+    h.run();
+    h.get_by_role_and_label(egui::accesskit::Role::Heading, "No date")
+        .click();
+    for _ in 0..3 {
+        settle_thumbnails(&mut h);
+    }
+    egui_pop_test::assert_all_named(&h);
+    h.snapshot("file-browser-agenda-months-pop-dark");
+}
+
+#[test]
+fn the_file_browser_page_lights_the_folder_a_drag_is_over_and_takes_the_drop() {
+    use egui_pop::api::files::browser::DraggedPaths;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "file-browser"));
+    h.run();
+    pick_browser_mode(&mut h, "Details");
+    for _ in 0..3 {
+        settle_thumbnails(&mut h);
+    }
+    let over = h.get_by_label("2026").rect().center();
+    egui::DragAndDrop::set_payload(
+        &h.ctx,
+        DraggedPaths(vec![std::path::PathBuf::from("/elsewhere/new.jpg")]),
+    );
+    h.hover_at(over);
+    h.run();
+    assert!(h.query_by_label("Drop into 2026").is_some());
+    egui_pop_test::assert_all_named(&h);
+    h.snapshot("file-browser-drop-pop-dark");
+    h.event(egui::Event::PointerButton {
+        pos: over,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run();
+    assert!(
+        h.query_by_label_contains("Last drop: 1 file(s) into")
+            .is_some()
+    );
+}

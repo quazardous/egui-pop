@@ -220,6 +220,10 @@ impl FsSource {
     }
 
     fn run(fs: &SharedFs, place: &Path, options: ListOptions, page: usize, out: &ListingSender) {
+        // Cancelled before it started: the focus already moved on.
+        if out.cancelled() {
+            return;
+        }
         let items = match fs.read_dir(place) {
             Ok(items) => items,
             Err(e) => {
@@ -236,6 +240,11 @@ impl FsSource {
         };
         let mut batch = Vec::with_capacity(page.min(items.len()));
         for item in items {
+            // Each entry's facts cost a call: a listing no longer wanted
+            // stops at the next one, not at the end of a page.
+            if out.cancelled() {
+                return;
+            }
             if !options.hidden && item.name.starts_with('.') {
                 continue;
             }
@@ -559,12 +568,113 @@ pub struct ModeInfo {
 pub struct ModeSettings {
     /// The thumbnails' side, in points.
     pub thumbnail_size: f32,
+    /// The agenda's level and its collapsed groups.
+    pub agenda: AgendaSettings,
 }
 
 impl Default for ModeSettings {
     fn default() -> Self {
         Self {
             thumbnail_size: 128.0,
+            agenda: AgendaSettings::default(),
+        }
+    }
+}
+
+/// What an agenda groups its entries by.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum AgendaLevel {
+    #[default]
+    Day,
+    Month,
+    Year,
+}
+
+impl AgendaLevel {
+    /// The three, finest first.
+    pub const ALL: [AgendaLevel; 3] = [AgendaLevel::Day, AgendaLevel::Month, AgendaLevel::Year];
+
+    /// One step coarser (a day to a month); the year stays.
+    pub fn coarser(self) -> Self {
+        match self {
+            AgendaLevel::Day => AgendaLevel::Month,
+            _ => AgendaLevel::Year,
+        }
+    }
+
+    /// One step finer (a year to a month); the day stays.
+    pub fn finer(self) -> Self {
+        match self {
+            AgendaLevel::Year => AgendaLevel::Month,
+            _ => AgendaLevel::Day,
+        }
+    }
+
+    /// The group a day (since 1970-01-01) falls in at this level: the day,
+    /// the month (`year * 12 + month - 1`) or the year.
+    pub fn group(self, day: i64) -> i64 {
+        match self {
+            AgendaLevel::Day => day,
+            AgendaLevel::Month => {
+                let (y, m, _) = civil(day);
+                y * 12 + i64::from(m) - 1
+            }
+            AgendaLevel::Year => civil(day).0,
+        }
+    }
+
+    /// A group's heading: `2025-11-03`, `2025-11` or `2025`.
+    pub fn heading(self, group: i64) -> String {
+        match self {
+            AgendaLevel::Day => {
+                let (y, m, d) = civil(group);
+                format!("{y:04}-{m:02}-{d:02}")
+            }
+            AgendaLevel::Month => {
+                format!(
+                    "{:04}-{:02}",
+                    group.div_euclid(12),
+                    group.rem_euclid(12) + 1
+                )
+            }
+            AgendaLevel::Year => format!("{group:04}"),
+        }
+    }
+
+    fn label(self) -> &'static strings::StrKey {
+        match self {
+            AgendaLevel::Day => &crate::strings::FILES_AGENDA_DAY,
+            AgendaLevel::Month => &crate::strings::FILES_AGENDA_MONTH,
+            AgendaLevel::Year => &crate::strings::FILES_AGENDA_YEAR,
+        }
+    }
+}
+
+/// The agenda's settings: its level, and the groups collapsed at that level
+/// (`None`: the entries without a time). A change of level expands them all.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AgendaSettings {
+    pub level: AgendaLevel,
+    pub collapsed: BTreeSet<Option<i64>>,
+}
+
+impl AgendaSettings {
+    /// Groups by `level`, every group expanded; `false` when it was already.
+    pub fn set_level(&mut self, level: AgendaLevel) -> bool {
+        if self.level == level {
+            return false;
+        }
+        self.level = level;
+        self.collapsed.clear();
+        true
+    }
+
+    /// Collapses or expands one group.
+    pub fn set_collapsed(&mut self, group: Option<i64>, collapsed: bool) -> bool {
+        if collapsed {
+            self.collapsed.insert(group)
+        } else {
+            self.collapsed.remove(&group)
         }
     }
 }
@@ -601,6 +711,11 @@ pub struct ModeContext<'a> {
     /// The focused folder's listing, when the mode needs a hierarchy and a
     /// folder has the focus.
     pub peek: Option<&'a Column>,
+    /// The place's listing is still under way: more entries may come.
+    pub loading: bool,
+    /// Changes whenever the entries do (a page arrived, a refresh): what a
+    /// mode computes from the entries alone is kept until it changes.
+    pub generation: u64,
 }
 
 /// What the person did in a mode; the browser decides what it means.
@@ -619,6 +734,11 @@ pub struct ModeOutput {
     /// Another place to show: a click in an ancestor's column or in the
     /// focused folder's.
     pub reach: Option<Reach>,
+    /// The entry under the pointer and its rectangle: where a drop goes.
+    pub pointed: Option<(usize, egui::Rect)>,
+    /// A folder under the pointer in a column beside the place's (an
+    /// ancestor's, the focused folder's), and its rectangle.
+    pub pointed_beside: Option<(PathBuf, egui::Rect)>,
 }
 
 /// A way to show a browser's entries. It draws and reports; selection rules,
@@ -637,6 +757,25 @@ pub trait ViewMode: Send {
     /// [`ViewMode::step`].
     fn travel(&self, _key: ModeKey) -> Option<Travel> {
         None
+    }
+
+    /// Draws the mode's own controls in the browser's toolbar, after the
+    /// switcher (the agenda's level). `true` when a setting changed.
+    fn toolbar(&mut self, _ui: &mut Ui, _settings: &mut ModeSettings) -> bool {
+        false
+    }
+
+    /// A key of the mode's own, beyond the arrows (`Ctrl+Up` in the agenda),
+    /// pressed while the entry `focus` has the focus. `true` when taken: the
+    /// browser then brings the focus into view and does nothing else with it.
+    fn own_key(
+        &mut self,
+        _key: egui::Key,
+        _modifiers: Modifiers,
+        _focus: Option<usize>,
+        _settings: &mut ModeSettings,
+    ) -> bool {
+        false
     }
 }
 
@@ -771,6 +910,10 @@ fn entry_response(resp: &egui::Response, entry: &SourceEntry, selected: bool) {
 }
 
 fn report(resp: &egui::Response, i: usize, out: &mut ModeOutput) {
+    // While something is dragged too: where a drop would go.
+    if resp.contains_pointer() {
+        out.pointed = Some((i, resp.rect));
+    }
     if resp.double_clicked() {
         out.activated = Some(i);
     } else if resp.clicked() {
@@ -1269,9 +1412,16 @@ impl ColumnsMode {
     /// A column's width, in points.
     pub const COLUMN_WIDTH: f32 = 200.0;
 
-    /// One column of plain rows: an ancestor's, or the focused folder's.
-    /// Answers the entry clicked.
-    fn side(ui: &mut Ui, column: &Column, height: f32, salt: egui::Id) -> Option<PathBuf> {
+    /// One column of plain rows: an ancestor's, or the focused folder's,
+    /// its listing's busy row last while it is under way. Answers the entry
+    /// clicked; the folder under the pointer goes to `out`.
+    fn side(
+        ui: &mut Ui,
+        column: &Column,
+        height: f32,
+        salt: egui::Id,
+        out: &mut ModeOutput,
+    ) -> Option<PathBuf> {
         let mut clicked = None;
         let name = column.place.file_name().map_or_else(
             || column.place.display().to_string(),
@@ -1289,10 +1439,13 @@ impl ColumnsMode {
                     .show_rows(
                         ui,
                         DetailsMode::ROW_HEIGHT,
-                        column.entries.len(),
+                        column.entries.len() + usize::from(column.loading),
                         |ui, range| {
                             for i in range {
-                                let e = &column.entries[i];
+                                let Some(e) = column.entries.get(i) else {
+                                    busy_row(ui);
+                                    continue;
+                                };
                                 let on = column.open == Some(i);
                                 let (rect, resp) = ui.allocate_exact_size(
                                     egui::vec2(ui.available_width(), DetailsMode::ROW_HEIGHT),
@@ -1314,6 +1467,9 @@ impl ColumnsMode {
                                     );
                                 }
                                 paint_row_name(ui, rect, e, visuals.text_color());
+                                if resp.contains_pointer() && e.is_dir() {
+                                    out.pointed_beside = Some((e.path.clone(), rect));
+                                }
                                 if resp.clicked() {
                                     clicked = Some(e.path.clone());
                                 }
@@ -1324,6 +1480,31 @@ impl ColumnsMode {
         );
         clicked
     }
+}
+
+/// The row a column ends with while its listing is under way: a spinner
+/// and "Listing…", said to assistive technology.
+fn busy_row(ui: &mut Ui) {
+    let text = strings::tr(ui.ctx(), &crate::strings::FILES_LISTING);
+    let (rect, resp) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width(), DetailsMode::ROW_HEIGHT),
+        egui::Sense::hover(),
+    );
+    let name = text.clone();
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ProgressIndicator, true, &name));
+    let side = DetailsMode::ROW_HEIGHT - 6.0;
+    let spinner = egui::Rect::from_center_size(
+        egui::pos2(rect.left() + 4.0 + side / 2.0, rect.center().y),
+        egui::vec2(side, side),
+    );
+    egui::Spinner::new().size(side).paint_at(ui, spinner);
+    ui.painter().text(
+        egui::pos2(spinner.right() + 6.0, rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        text,
+        egui::TextStyle::Body.resolve(ui.style()),
+        ui.visuals().weak_text_color(),
+    );
 }
 
 /// A row's name, and a chevron after a folder's.
@@ -1396,6 +1577,12 @@ impl ViewMode for ColumnsMode {
         let ctx = ui.ctx().clone();
         let thumbnails = cx.thumbnails;
         let focused = cx.focus.and_then(|i| cx.entries.get(i));
+        // Room for the busy row under the place's entries.
+        let busy = if cx.loading {
+            DetailsMode::ROW_HEIGHT
+        } else {
+            0.0
+        };
         egui::ScrollArea::horizontal()
             .id_salt(cx.id.with("columns"))
             .auto_shrink([false, true])
@@ -1415,7 +1602,8 @@ impl ViewMode for ColumnsMode {
                     };
                     for (k, a) in cx.ancestors.iter().enumerate() {
                         column(ui, &mut |ui| {
-                            if let Some(p) = Self::side(ui, a, height, cx.id.with(("ancestor", k)))
+                            if let Some(p) =
+                                Self::side(ui, a, height, cx.id.with(("ancestor", k)), &mut out)
                             {
                                 out.reach = Some(Reach {
                                     place: a.place.clone(),
@@ -1434,18 +1622,24 @@ impl ViewMode for ColumnsMode {
                             cx.id.with("columns.here"),
                             n,
                             size,
-                            Some(height),
+                            Some(height - busy),
                             reveal,
                             cx.focus,
                             &mut out,
                             |d, ui, i| d.row(ui, i, size),
                         );
+                        // The place's listing streams in: more may come.
+                        if cx.loading {
+                            busy_row(ui);
+                        }
                     });
                     if let Some(f) = focused {
                         ui.separator();
                         column(ui, &mut |ui| match cx.peek {
                             Some(p) if f.is_dir() => {
-                                if let Some(e) = Self::side(ui, p, height, cx.id.with("peek")) {
+                                if let Some(e) =
+                                    Self::side(ui, p, height, cx.id.with("peek"), &mut out)
+                                {
                                     out.reach = Some(Reach {
                                         place: p.place.clone(),
                                         focus: Some(e),
@@ -1914,83 +2108,200 @@ impl ViewMode for CarouselMode {
     }
 }
 
-/// The day (since 1970-01-01, UTC) an agenda files an entry under: when it
-/// was taken, else when it last changed; `None` without either.
-fn agenda_day(e: &SourceEntry) -> Option<(i64, i128)> {
+/// When an agenda files an entry: when it was taken, else when it last
+/// changed, in nanoseconds since 1970-01-01 (UTC); `None` without either.
+fn agenda_time(e: &SourceEntry) -> Option<i128> {
     let t = e.taken.or(e.modified)?;
-    let nanos = match t.duration_since(SystemTime::UNIX_EPOCH) {
+    Some(match t.duration_since(SystemTime::UNIX_EPOCH) {
         Ok(d) => d.as_nanos() as i128,
         Err(e) => -(e.duration().as_nanos() as i128),
-    };
-    let day = nanos.div_euclid(86_400 * 1_000_000_000) as i64;
-    Some((day, nanos))
+    })
 }
 
-/// One line of an agenda: a day's heading, or a row of its entries.
+const NANOS_PER_DAY: i128 = 86_400 * 1_000_000_000;
+
+/// One line of an agenda: a group's heading, or a row of its entries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AgendaLine {
-    /// The day (`None`: the entries without a time) and how many it holds.
-    Heading(Option<i64>, usize),
-    /// Positions in the agenda's order.
+    /// The group's number.
+    Heading(usize),
+    /// Positions in the order shown.
     Cells(usize, usize),
 }
 
-/// The entries by day, the newest first: one heading per day (when the
-/// entry was taken, given by the application's source, else when it last
-/// changed; UTC), its entries under it in a grid, the newest first, those
-/// without a time last. The arrows move across the days' grids.
+/// What an agenda computes from its entries alone, once per listing (per
+/// [`ModeContext::generation`]): each entry's day and the agenda's order;
+/// then once per level, the groups.
 #[derive(Clone, Debug, Default)]
-pub struct AgendaMode {
-    /// The entries' indices in the agenda's order, as last laid out.
+struct AgendaIndex {
+    built: bool,
+    generation: u64,
+    count: usize,
+    /// The entries' indices, the newest first, the undated last, the
+    /// browser's order within one time.
     order: Vec<usize>,
-    /// Each entry's position in `order`, by index.
-    position: Vec<usize>,
+    /// Each entry's day since 1970-01-01, by index.
+    days: Vec<Option<i64>>,
+    level: AgendaLevel,
+    /// Each group: its key at the level (`None`: undated) and its span of
+    /// `order`.
+    groups: Vec<(Option<i64>, Range<usize>)>,
+}
+
+impl AgendaIndex {
+    /// Brings it up to date; `true` when the dates and the order were
+    /// computed again.
+    fn update(&mut self, entries: &[SourceEntry], generation: u64, level: AgendaLevel) -> bool {
+        let fresh = !self.built || self.generation != generation || self.count != entries.len();
+        if fresh {
+            let times: Vec<Option<i128>> = entries.iter().map(agenda_time).collect();
+            let mut order: Vec<usize> = (0..entries.len()).collect();
+            order.sort_by(|&a, &b| match (times[a], times[b]) {
+                (Some(x), Some(y)) => y.cmp(&x).then(a.cmp(&b)),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => a.cmp(&b),
+            });
+            self.days = times
+                .iter()
+                .map(|t| t.map(|t| t.div_euclid(NANOS_PER_DAY) as i64))
+                .collect();
+            self.order = order;
+            self.built = true;
+            self.generation = generation;
+            self.count = entries.len();
+        }
+        if fresh || self.level != level || self.groups.is_empty() != self.order.is_empty() {
+            self.level = level;
+            self.groups.clear();
+            let key = |i: usize| self.days[i].map(|d| level.group(d));
+            let mut start = 0;
+            while start < self.order.len() {
+                let k = key(self.order[start]);
+                let len = self.order[start..]
+                    .iter()
+                    .take_while(|&&i| key(i) == k)
+                    .count();
+                self.groups.push((k, start..start + len));
+                start += len;
+            }
+        }
+        fresh
+    }
+}
+
+/// What an agenda's lines depend on: the entries (generation, count), the
+/// level, the entries in a row, the groups collapsed.
+type LayoutKey = (u64, usize, AgendaLevel, usize, BTreeSet<Option<i64>>);
+
+/// The agenda's lines for a width and the groups collapsed, kept until one
+/// of them, the level or the entries change.
+#[derive(Clone, Debug, Default)]
+struct AgendaLayout {
+    key: Option<LayoutKey>,
+    /// The entries shown (those of expanded groups), in the agenda's order.
+    shown: Vec<usize>,
+    /// Each entry's position in `shown`, by index; `None` when its group
+    /// is collapsed.
+    position: Vec<Option<usize>>,
+    /// Each entry's group, by index.
+    group_of: Vec<usize>,
+    /// Each group's heading line.
+    heading_of: Vec<usize>,
     /// Each position's line.
     line_of: Vec<usize>,
     lines: Vec<AgendaLine>,
+}
+
+impl AgendaLayout {
+    fn update(&mut self, index: &AgendaIndex, columns: usize, collapsed: &BTreeSet<Option<i64>>) {
+        let key = (
+            index.generation,
+            index.count,
+            index.level,
+            columns,
+            collapsed.clone(),
+        );
+        if self.key.as_ref() == Some(&key) {
+            return;
+        }
+        let n = index.count;
+        let mut shown = Vec::with_capacity(n);
+        let mut position = vec![None; n];
+        let mut group_of = vec![0; n];
+        let mut heading_of = Vec::with_capacity(index.groups.len());
+        let mut line_of = Vec::with_capacity(n);
+        let mut lines = Vec::new();
+        for (g, (k, span)) in index.groups.iter().enumerate() {
+            heading_of.push(lines.len());
+            lines.push(AgendaLine::Heading(g));
+            for &i in &index.order[span.clone()] {
+                group_of[i] = g;
+            }
+            if collapsed.contains(k) {
+                continue;
+            }
+            let start = shown.len();
+            for &i in &index.order[span.clone()] {
+                position[i] = Some(shown.len());
+                shown.push(i);
+            }
+            let end = shown.len();
+            let mut at = start;
+            while at < end {
+                let to = (at + columns).min(end);
+                line_of.extend(std::iter::repeat_n(lines.len(), to - at));
+                lines.push(AgendaLine::Cells(at, to));
+                at = to;
+            }
+        }
+        *self = AgendaLayout {
+            key: Some(key),
+            shown,
+            position,
+            group_of,
+            heading_of,
+            line_of,
+            lines,
+        };
+    }
+}
+
+/// The entries by day, month or year, the newest first: one heading per
+/// group (when the entry was taken, given by the application's source, else
+/// when it last changed; UTC), which a click collapses or expands, its
+/// entries under it in a grid, the newest first, those without a time last.
+/// The arrows move across the groups' grids; `Ctrl+Up` and `Ctrl+Down`
+/// change the level, `Ctrl+Left` and `Ctrl+Right` collapse and expand the
+/// focused entry's group. The dates and the groups are computed once per
+/// listing, not every frame.
+#[derive(Clone, Debug, Default)]
+pub struct AgendaMode {
+    index: AgendaIndex,
+    layout: AgendaLayout,
     rows_in_view: usize,
 }
 
 impl AgendaMode {
-    /// The entries' indices in the agenda's order and its lines, `columns`
-    /// entries to a row.
-    fn arrange(entries: &[SourceEntry], columns: usize) -> (Vec<usize>, Vec<AgendaLine>) {
-        let days: Vec<_> = entries.iter().map(agenda_day).collect();
-        let mut order: Vec<usize> = (0..entries.len()).collect();
-        // The newest first, the undated last; the browser's order within.
-        order.sort_by(|&a, &b| match (days[a], days[b]) {
-            (Some(x), Some(y)) => y.1.cmp(&x.1).then(a.cmp(&b)),
-            (Some(_), None) => std::cmp::Ordering::Less,
-            (None, Some(_)) => std::cmp::Ordering::Greater,
-            (None, None) => a.cmp(&b),
-        });
-        let mut lines = Vec::new();
-        let mut start = 0;
-        while start < order.len() {
-            let day = days[order[start]].map(|d| d.0);
-            let len = order[start..]
-                .iter()
-                .take_while(|&&i| days[i].map(|d| d.0) == day)
-                .count();
-            lines.push(AgendaLine::Heading(day, len));
-            let mut at = start;
-            while at < start + len {
-                let to = (at + columns).min(start + len);
-                lines.push(AgendaLine::Cells(at, to));
-                at = to;
-            }
-            start += len;
-        }
-        (order, lines)
+    fn arranged_id() -> egui::Id {
+        egui::Id::unique("egui_pop.file_browser.agenda_arranged")
     }
 
-    /// The row `rows` rows above (negative) or below `p`, the same column
-    /// as near as it goes; `p` itself past the first or the last row.
+    /// How many times an agenda drawn in `ctx` computed its entries' dates
+    /// and order: once per listing, for tests and agents to check.
+    pub fn arrangements(ctx: &egui::Context) -> u64 {
+        ctx.data(|d| d.get_temp::<u64>(Self::arranged_id()))
+            .unwrap_or(0)
+    }
+
+    /// The position `rows` rows above (negative) or below `p`, the same
+    /// column as near as it goes; `p` itself past the first or the last row.
     fn rows_from(&self, p: usize, rows: isize) -> usize {
-        let Some(&line) = self.line_of.get(p) else {
+        let l = &self.layout;
+        let Some(&line) = l.line_of.get(p) else {
             return p;
         };
-        let AgendaLine::Cells(start, _) = self.lines[line] else {
+        let AgendaLine::Cells(start, _) = l.lines[line] else {
             return p;
         };
         let column = p - start;
@@ -2001,11 +2312,11 @@ impl AgendaMode {
             let next = if rows < 0 {
                 at.checked_sub(1)
             } else {
-                Some(at + 1).filter(|&l| l < self.lines.len())
+                Some(at + 1).filter(|&k| k < l.lines.len())
             };
             let Some(next) = next else { break };
             at = next;
-            if let AgendaLine::Cells(s, e) = self.lines[at] {
+            if let AgendaLine::Cells(s, e) = l.lines[at] {
                 target = Some(s + column.min(e - s - 1));
                 left -= 1;
             }
@@ -2021,11 +2332,19 @@ impl ViewMode for AgendaMode {
             label: "Agenda".into(),
             icon: "phosphor:calendar".into(),
             keys: vec![
-                ("Arrows".into(), "Move across the days".into()),
+                ("Arrows".into(), "Move across the groups".into()),
                 ("Page Up, Page Down".into(), "A page up or down".into()),
                 ("Home, End".into(), "Newest, oldest entry".into()),
+                ("Ctrl+Up, Ctrl+Down".into(), "By year, month or day".into()),
+                (
+                    "Ctrl+Left, Ctrl+Right".into(),
+                    "Collapse, expand the group".into(),
+                ),
             ],
-            gestures: vec!["Wheel: scroll".into()],
+            gestures: vec![
+                "Wheel: scroll".into(),
+                "Click on a heading: collapse or expand".into(),
+            ],
             persist: MODE_AGENDA.into(),
             role: egui::Role::ListBox,
             needs: ModeNeeds {
@@ -2036,8 +2355,67 @@ impl ViewMode for AgendaMode {
         }
     }
 
+    fn toolbar(&mut self, ui: &mut Ui, settings: &mut ModeSettings) -> bool {
+        let ctx = ui.ctx().clone();
+        let mut changed = false;
+        ui.separator();
+        ui.scope(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            for level in AgendaLevel::ALL {
+                let label = strings::tr(&ctx, level.label());
+                let on = settings.agenda.level == level;
+                let r = widgets::selectable_label(ui, on, label.as_str());
+                r.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, on, &label));
+                let r = r.on_hover_text("Ctrl+Up, Ctrl+Down");
+                if r.clicked() {
+                    changed |= settings.agenda.set_level(level);
+                }
+            }
+        });
+        changed
+    }
+
+    fn own_key(
+        &mut self,
+        key: egui::Key,
+        modifiers: Modifiers,
+        focus: Option<usize>,
+        settings: &mut ModeSettings,
+    ) -> bool {
+        if !modifiers.command || modifiers.shift || modifiers.alt {
+            return false;
+        }
+        let a = &mut settings.agenda;
+        match key {
+            egui::Key::ArrowUp => {
+                a.set_level(a.level.coarser());
+            }
+            egui::Key::ArrowDown => {
+                a.set_level(a.level.finer());
+            }
+            egui::Key::ArrowLeft | egui::Key::ArrowRight => {
+                let group = focus
+                    .and_then(|i| self.layout.group_of.get(i))
+                    .and_then(|&g| self.index.groups.get(g))
+                    .map(|(k, _)| *k);
+                if let Some(g) = group {
+                    a.set_collapsed(g, key == egui::Key::ArrowLeft);
+                }
+            }
+            _ => return false,
+        }
+        true
+    }
+
     fn show(&mut self, ui: &mut Ui, cx: ModeContext<'_>) -> ModeOutput {
         let mut out = ModeOutput::default();
+        let ctx = ui.ctx().clone();
+        let level = cx.settings.agenda.level;
+        if self.index.update(cx.entries, cx.generation, level) {
+            ctx.data_mut(|d| {
+                *d.get_temp_mut_or_default::<u64>(Self::arranged_id()) += 1;
+            });
+        }
         let side = cx
             .settings
             .thumbnail_size
@@ -2056,22 +2434,14 @@ impl ViewMode for AgendaMode {
         let gap = ui.spacing().item_spacing;
         let width = ui.available_width() - ui.spacing().scroll.allocated_width();
         let columns = (((width + gap.x) / (cell.x + gap.x)).floor() as usize).max(1);
-        let (order, lines) = Self::arrange(cx.entries, columns);
-        let mut position = vec![0; n];
-        for (p, &i) in order.iter().enumerate() {
-            position[i] = p;
-        }
-        let mut line_of = vec![0; n];
-        for (l, line) in lines.iter().enumerate() {
-            if let AgendaLine::Cells(s, e) = *line {
-                line_of[s..e].fill(l);
-            }
-        }
+        self.layout
+            .update(&self.index, columns, &cx.settings.agenda.collapsed);
+        let (index, layout) = (&self.index, &self.layout);
         let heading_h = ui.text_style_height(&egui::TextStyle::Heading) + 2.0 * gap.y;
         let row_h = cell.y + gap.y;
-        let mut tops = Vec::with_capacity(lines.len() + 1);
+        let mut tops = Vec::with_capacity(layout.lines.len() + 1);
         let mut y = 0.0;
-        for line in &lines {
+        for line in &layout.lines {
             tops.push(y);
             y += match line {
                 AgendaLine::Heading(..) => heading_h,
@@ -2080,7 +2450,6 @@ impl ViewMode for AgendaMode {
         }
         tops.push(y);
         let total = y;
-        let ctx = ui.ctx().clone();
         let thumbnails = cx.thumbnails;
         let entries = cx.entries;
         let pixels = (side * ctx.pixels_per_point()).round() as u32;
@@ -2095,11 +2464,17 @@ impl ViewMode for AgendaMode {
             )
         };
         let undated = strings::tr(&ctx, &crate::strings::FILES_AGENDA_UNDATED);
+        // The focused entry's row, or its group's heading when collapsed.
         let reveal = cx
             .focus
-            .filter(|_| cx.reveal_focus && n > 0)
-            .map(|i| line_of[position[i]]);
+            .filter(|&i| cx.reveal_focus && i < layout.position.len())
+            .map(|i| match layout.position[i] {
+                Some(p) => layout.line_of[p],
+                None => layout.heading_of[layout.group_of[i]],
+            });
         let focus = cx.focus;
+        let collapsed = &cx.settings.agenda.collapsed;
+        let mut toggled = None;
         let mut first = usize::MAX;
         let mut end = 0;
         let mut drawn_rows = 0;
@@ -2127,13 +2502,13 @@ impl ViewMode for AgendaMode {
                     ui.scroll_to_rect(r, None);
                     ui.ctx().request_repaint();
                 }
-                for (l, line) in lines.iter().enumerate() {
+                for (l, line) in layout.lines.iter().enumerate() {
                     if tops[l + 1] < viewport.min.y {
                         continue;
                     }
                     if tops[l] > viewport.max.y {
                         // The next row, for the next screen.
-                        near = lines[l..].iter().find_map(|line| match *line {
+                        near = layout.lines[l..].iter().find_map(|line| match *line {
                             AgendaLine::Cells(s, e) => Some(s..e),
                             AgendaLine::Heading(..) => None,
                         });
@@ -2141,45 +2516,79 @@ impl ViewMode for AgendaMode {
                     }
                     let top = origin + egui::vec2(0.0, tops[l]);
                     match *line {
-                        AgendaLine::Heading(day, count) => {
-                            let text = match day {
-                                Some(d) => {
-                                    let (y, m, d) = civil(d);
-                                    format!("{y:04}-{m:02}-{d:02}")
-                                }
+                        AgendaLine::Heading(g) => {
+                            let (key, span) = &index.groups[g];
+                            let shut = collapsed.contains(key);
+                            let text = match key {
+                                Some(k) => index.level.heading(*k),
                                 None => undated.clone(),
                             };
                             let rect = egui::Rect::from_min_size(top, egui::vec2(width, heading_h));
-                            let resp = ui.allocate_rect(rect, egui::Sense::hover());
+                            let resp = ui.interact(
+                                rect,
+                                cx.id.with(("agenda.heading", *key)),
+                                egui::Sense::click(),
+                            );
                             let name = text.clone();
                             resp.widget_info(|| {
                                 egui::WidgetInfo::labeled(egui::Role::Heading, true, &name)
                             });
+                            ui.ctx().accesskit_node_builder(resp.id, |node| {
+                                node.set_expanded(!shut);
+                            });
+                            if resp.clicked() {
+                                toggled = Some((*key, !shut));
+                            }
                             let visuals = ui.visuals();
+                            if resp.hovered() {
+                                ui.painter().rect_filled(
+                                    rect,
+                                    2.0,
+                                    visuals.widgets.hovered.weak_bg_fill,
+                                );
+                            }
+                            let color = visuals.strong_text_color();
+                            // The disclosure triangle: down when expanded.
+                            let c = egui::pos2(rect.left() + 10.0, rect.center().y);
+                            let r = 4.5;
+                            let points = if shut {
+                                vec![
+                                    c + egui::vec2(-r * 0.6, -r),
+                                    c + egui::vec2(r, 0.0),
+                                    c + egui::vec2(-r * 0.6, r),
+                                ]
+                            } else {
+                                vec![
+                                    c + egui::vec2(-r, -r * 0.6),
+                                    c + egui::vec2(r, -r * 0.6),
+                                    c + egui::vec2(0.0, r),
+                                ]
+                            };
+                            ui.painter().add(egui::Shape::convex_polygon(
+                                points,
+                                color,
+                                egui::Stroke::NONE,
+                            ));
                             let font = egui::TextStyle::Heading.resolve(ui.style());
-                            let at = egui::pos2(rect.left() + 4.0, rect.center().y);
-                            let galley = ui.painter().layout_no_wrap(
-                                text,
-                                font,
-                                visuals.strong_text_color(),
-                            );
+                            let at = egui::pos2(rect.left() + 22.0, rect.center().y);
+                            let galley = ui.painter().layout_no_wrap(text, font, color);
                             let after = at.x + galley.size().x + 8.0;
                             ui.painter().galley(
                                 at - egui::vec2(0.0, galley.size().y / 2.0),
                                 galley,
-                                visuals.strong_text_color(),
+                                color,
                             );
                             ui.painter().text(
                                 egui::pos2(after, rect.center().y),
                                 egui::Align2::LEFT_CENTER,
-                                count.to_string(),
+                                span.len().to_string(),
                                 egui::TextStyle::Body.resolve(ui.style()),
                                 visuals.weak_text_color(),
                             );
                         }
                         AgendaLine::Cells(s, e) => {
                             drawn_rows += 1;
-                            for (c, &i) in order[s..e].iter().enumerate() {
+                            for (c, &i) in layout.shown[s..e].iter().enumerate() {
                                 let rect = egui::Rect::from_min_size(
                                     top + egui::vec2(c as f32 * (cell.x + gap.x), 0.0),
                                     cell,
@@ -2205,9 +2614,13 @@ impl ViewMode for AgendaMode {
             &mut add,
         );
         if let Some(r) = near {
-            for &i in &order[r] {
+            for &i in &layout.shown[r] {
                 ask(i, Priority::Near);
             }
+        }
+        if let Some((key, shut)) = toggled {
+            cx.settings.agenda.set_collapsed(key, shut);
+            ctx.request_repaint();
         }
         // In the agenda's order: positions, not indices.
         out.visible = if first == usize::MAX {
@@ -2215,10 +2628,6 @@ impl ViewMode for AgendaMode {
         } else {
             first..end
         };
-        self.order = order;
-        self.position = position;
-        self.line_of = line_of;
-        self.lines = lines;
         self.rows_in_view = drawn_rows.max(1);
         out.columns = columns;
         out
@@ -2226,8 +2635,9 @@ impl ViewMode for AgendaMode {
 
     fn step(&self, from: usize, count: usize, key: ModeKey) -> usize {
         let last = count.saturating_sub(1);
+        let l = &self.layout;
         // Not laid out for these entries yet: their own order.
-        if self.order.len() != count || from >= count {
+        if l.position.len() != count || from >= count {
             return match key {
                 ModeKey::Left | ModeKey::Up | ModeKey::PageUp => from.saturating_sub(1),
                 ModeKey::Right | ModeKey::Down | ModeKey::PageDown => (from + 1).min(last),
@@ -2235,19 +2645,48 @@ impl ViewMode for AgendaMode {
                 ModeKey::End => last,
             };
         }
-        let p = self.position[from];
+        let (Some(&first), Some(&final_)) = (l.shown.first(), l.shown.last()) else {
+            // Every group collapsed.
+            return from;
+        };
+        let back = matches!(
+            key,
+            ModeKey::Left | ModeKey::Up | ModeKey::PageUp | ModeKey::Home
+        );
+        let Some(p) = l.position[from] else {
+            // In a collapsed group: the nearest entry shown that way.
+            let g = l.group_of[from];
+            return match key {
+                ModeKey::Home => first,
+                ModeKey::End => final_,
+                _ if back => l
+                    .shown
+                    .iter()
+                    .rev()
+                    .find(|&&i| l.group_of[i] < g)
+                    .copied()
+                    .unwrap_or(first),
+                _ => l
+                    .shown
+                    .iter()
+                    .find(|&&i| l.group_of[i] > g)
+                    .copied()
+                    .unwrap_or(final_),
+            };
+        };
+        let last_p = l.shown.len() - 1;
         let page = self.rows_in_view.max(1) as isize;
         let to = match key {
             ModeKey::Left => p.saturating_sub(1),
-            ModeKey::Right => (p + 1).min(last),
+            ModeKey::Right => (p + 1).min(last_p),
             ModeKey::Up => self.rows_from(p, -1),
             ModeKey::Down => self.rows_from(p, 1),
             ModeKey::PageUp => self.rows_from(p, -page),
             ModeKey::PageDown => self.rows_from(p, page),
             ModeKey::Home => 0,
-            ModeKey::End => last,
+            ModeKey::End => last_p,
         };
-        self.order[to]
+        l.shown[to]
     }
 }
 
@@ -2421,6 +2860,8 @@ pub struct BrowserOutput {
     /// The place shown changed: a click in another column, or Left and
     /// Right in a mode that shows the path.
     pub place_changed: bool,
+    /// A drop its target took ([`FileBrowser::with_drops`]).
+    pub dropped: Option<DropOffer>,
 }
 
 /// Type-ahead's prefix and when it was last typed.
@@ -2455,9 +2896,14 @@ pub struct FileBrowser {
     root: Option<PathBuf>,
     /// The ancestors' and the focused folder's listings, for a mode that
     /// shows the path.
-    ancestors: Vec<Column>,
-    ancestor_listings: Vec<Option<Listing>>,
-    peek: Option<(Column, Option<Listing>)>,
+    columns: ColumnListings,
+    /// Bumped whenever the entries change: [`ModeContext::generation`].
+    generation: u64,
+    /// Whether, and where, drops are taken.
+    drops: Option<DropPolicy>,
+    drop_targets: Vec<AppDropTarget>,
+    /// What a drag over the browser would do, as last drawn.
+    drop_hover: Option<(DropOffer, bool)>,
     /// Focus the first entry once the listing gives one (Right into a
     /// folder).
     focus_first: bool,
@@ -2474,9 +2920,9 @@ fn sort_entries(entries: &mut [SourceEntry]) {
     });
 }
 
-/// Takes what a side listing delivered into its column; `true` while it is
-/// under way.
-fn pump_column(column: &mut Column, listing: &mut Option<Listing>) -> bool {
+/// Takes what a side listing delivered into its column (its folders alone
+/// with `folders_only`); `true` while it is under way.
+fn pump_column(column: &mut Column, listing: &mut Option<Listing>, folders_only: bool) -> bool {
     let Some(l) = listing else {
         return false;
     };
@@ -2485,6 +2931,9 @@ fn pump_column(column: &mut Column, listing: &mut Option<Listing>) -> bool {
     for page in l.poll() {
         match page {
             Page::Entries(mut e) => {
+                if folders_only {
+                    e.retain(SourceEntry::is_dir);
+                }
                 column.entries.append(&mut e);
                 changed = true;
             }
@@ -2508,6 +2957,135 @@ fn pump_column(column: &mut Column, listing: &mut Option<Listing>) -> bool {
     }
     column.loading = listing.is_some();
     column.loading
+}
+
+/// The listings of the columns beside the place's, for a mode that shows
+/// the path (Finder's columns): the place's ancestors and the focused folder
+/// looked into. Each lists off the interface thread when its source does
+/// (a [`FsSource`] over the system's file system), its entries streaming in
+/// page by page, [`Column::loading`] until the end; one no longer wanted
+/// (the focus moved on, the place changed) is dropped, which cancels it.
+#[derive(Debug, Default)]
+pub struct ColumnListings {
+    ancestors: Vec<Column>,
+    listings: Vec<Option<Listing>>,
+    peek: Option<(Column, Option<Listing>)>,
+    options: ListOptions,
+    folders_only: bool,
+}
+
+impl ColumnListings {
+    /// Columns that list the folders alone (a folder chooser's).
+    pub fn folders_only(mut self, on: bool) -> Self {
+        self.folders_only = on;
+        self
+    }
+
+    /// Lists `wanted` (the ancestors to show, the topmost first) and `peek`
+    /// (the focused folder), reusing the columns already there, starting
+    /// what is missing, dropping what is not wanted; then takes what each
+    /// listing delivered. `place` is the folder after the last ancestor:
+    /// each column's open entry leads to the next. `true` while a listing
+    /// is under way.
+    pub fn sync(
+        &mut self,
+        source: &dyn FileSource,
+        options: &ListOptions,
+        wanted: &[PathBuf],
+        place: &Path,
+        peek: Option<&Path>,
+    ) -> bool {
+        if self.options != *options {
+            self.clear();
+            self.options = *options;
+        }
+        if self.ancestors.iter().map(|c| &c.place).ne(wanted.iter()) {
+            let mut old: Vec<(Column, Option<Listing>)> = self
+                .ancestors
+                .drain(..)
+                .zip(self.listings.drain(..))
+                .collect();
+            for place in wanted {
+                match old.iter().position(|(c, _)| &c.place == place) {
+                    Some(i) => {
+                        let (c, l) = old.swap_remove(i);
+                        self.ancestors.push(c);
+                        self.listings.push(l);
+                    }
+                    None => {
+                        let l = source.list(place, options);
+                        self.ancestors.push(Column {
+                            place: place.clone(),
+                            loading: true,
+                            ..Column::default()
+                        });
+                        self.listings.push(Some(l));
+                    }
+                }
+            }
+            // What is left of `old` drops here: cancelled.
+        }
+        let mut busy = false;
+        for (c, l) in self.ancestors.iter_mut().zip(self.listings.iter_mut()) {
+            busy |= pump_column(c, l, self.folders_only);
+        }
+        // Each column's open entry: the path's next folder.
+        let n = self.ancestors.len();
+        for k in 0..n {
+            let next = if k + 1 < n {
+                self.ancestors[k + 1].place.clone()
+            } else {
+                place.to_path_buf()
+            };
+            let c = &mut self.ancestors[k];
+            c.open = c.entries.iter().position(|e| e.path == next);
+        }
+        match peek {
+            Some(f) => {
+                if self.peek.as_ref().is_none_or(|(c, _)| c.place != f) {
+                    // The folder focused before is dropped: cancelled.
+                    let l = source.list(f, options);
+                    self.peek = Some((
+                        Column {
+                            place: f.to_path_buf(),
+                            loading: true,
+                            ..Column::default()
+                        },
+                        Some(l),
+                    ));
+                }
+                if let Some((c, l)) = &mut self.peek {
+                    busy |= pump_column(c, l, self.folders_only);
+                }
+            }
+            None => self.peek = None,
+        }
+        busy
+    }
+
+    /// The ancestors' columns, the topmost first.
+    pub fn ancestors(&self) -> &[Column] {
+        &self.ancestors
+    }
+
+    /// The focused folder's column.
+    pub fn peek(&self) -> Option<&Column> {
+        self.peek.as_ref().map(|(c, _)| c)
+    }
+
+    /// Whether a listing is under way.
+    pub fn loading(&self) -> bool {
+        self.listings.iter().any(Option::is_some)
+            || self.peek.as_ref().is_some_and(|(_, l)| l.is_some())
+    }
+
+    /// Drops every column and cancels their listings: a refresh lists them
+    /// again.
+    pub fn clear(&mut self) {
+        self.ancestors.clear();
+        self.listings.clear();
+        self.peek = None;
+    }
 }
 
 impl fmt::Debug for FileBrowser {
@@ -2568,9 +3146,11 @@ impl FileBrowser {
             reveal: false,
             restored: false,
             root: None,
-            ancestors: Vec::new(),
-            ancestor_listings: Vec::new(),
-            peek: None,
+            columns: ColumnListings::default(),
+            generation: 0,
+            drops: None,
+            drop_targets: Vec::new(),
+            drop_hover: None,
             focus_first: false,
             quick_look: false,
         };
@@ -2610,7 +3190,44 @@ impl FileBrowser {
     /// The ancestors' listings, the topmost first, as a mode that shows the
     /// path is given them (kept only while such a mode is shown).
     pub fn ancestors(&self) -> &[Column] {
-        &self.ancestors
+        self.columns.ancestors()
+    }
+
+    /// The focused folder's listing, as a mode that shows the path is given
+    /// it.
+    pub fn peek(&self) -> Option<&Column> {
+        self.columns.peek()
+    }
+
+    /// Takes drops: files and folders dragged from inside the application
+    /// (a [`DraggedPaths`] payload of `egui::DragAndDrop`) or from the system
+    /// (egui's hovered and dropped files, where the platform gives them). A
+    /// drop goes to a folder entry under the pointer, else to the folder
+    /// shown, else to one of the application's own targets
+    /// ([`FileBrowser::with_drop_targets`]); `accept` says whether that
+    /// target takes it, shown while hovering, and an accepted drop comes
+    /// out as [`BrowserOutput::dropped`]. A folder never takes itself or a
+    /// folder it holds.
+    pub fn with_drops(
+        mut self,
+        accept: impl Fn(&DropOffer) -> bool + Send + Sync + 'static,
+    ) -> Self {
+        self.drops = Some(Arc::new(accept));
+        self
+    }
+
+    /// The application's own drop targets, drawn as zones under the
+    /// toolbar (an import's "Add to the catalogue"); taken only with
+    /// [`FileBrowser::with_drops`].
+    pub fn with_drop_targets(mut self, targets: Vec<AppDropTarget>) -> Self {
+        self.drop_targets = targets;
+        self
+    }
+
+    /// What a drag over the browser would do, as last drawn: the offer and
+    /// whether its target takes it. `None` when nothing is dragged over it.
+    pub fn drop_hover(&self) -> Option<&(DropOffer, bool)> {
+        self.drop_hover.as_ref()
     }
 
     /// The place's ancestors a mode that shows the path lists, the topmost
@@ -2633,80 +3250,22 @@ impl FileBrowser {
     }
 
     /// Keeps the side listings a mode that shows the path needs: started
-    /// when missing, polled, dropped when not wanted. `true` while one is
-    /// under way.
+    /// when missing, polled, dropped (cancelled) when not wanted. `true`
+    /// while one is under way.
     fn sync_columns(&mut self) -> bool {
         let wanted = self.wanted_ancestors();
-        if self.ancestors.iter().map(|c| &c.place).ne(wanted.iter()) {
-            let mut old: Vec<(Column, Option<Listing>)> = self
-                .ancestors
-                .drain(..)
-                .zip(self.ancestor_listings.drain(..))
-                .collect();
-            for place in wanted {
-                match old.iter().position(|(c, _)| c.place == place) {
-                    Some(i) => {
-                        let (c, l) = old.swap_remove(i);
-                        self.ancestors.push(c);
-                        self.ancestor_listings.push(l);
-                    }
-                    None => {
-                        let l = self.source.list(&place, &self.options);
-                        self.ancestors.push(Column {
-                            place,
-                            loading: true,
-                            ..Column::default()
-                        });
-                        self.ancestor_listings.push(Some(l));
-                    }
-                }
-            }
-        }
-        let mut busy = false;
-        for (c, l) in self
-            .ancestors
-            .iter_mut()
-            .zip(self.ancestor_listings.iter_mut())
-        {
-            busy |= pump_column(c, l);
-        }
-        // Each column's open entry: the path's next folder.
-        let n = self.ancestors.len();
-        for k in 0..n {
-            let next = if k + 1 < n {
-                self.ancestors[k + 1].place.clone()
-            } else {
-                self.place.clone()
-            };
-            let c = &mut self.ancestors[k];
-            c.open = c.entries.iter().position(|e| e.path == next);
-        }
-        // The focused folder, looked into.
         let folder = self
             .focus_index()
             .map(|i| &self.entries[i])
             .filter(|e| e.is_dir())
             .map(|e| e.path.clone());
-        match folder {
-            Some(f) => {
-                if self.peek.as_ref().is_none_or(|(c, _)| c.place != f) {
-                    let l = self.source.list(&f, &self.options);
-                    self.peek = Some((
-                        Column {
-                            place: f,
-                            loading: true,
-                            ..Column::default()
-                        },
-                        Some(l),
-                    ));
-                }
-                if let Some((c, l)) = &mut self.peek {
-                    busy |= pump_column(c, l);
-                }
-            }
-            None => self.peek = None,
-        }
-        busy
+        self.columns.sync(
+            self.source.as_ref(),
+            &self.options,
+            &wanted,
+            &self.place,
+            folder.as_deref(),
+        )
     }
 
     /// Leaves the place as a mode's key asks: into the focused folder, or
@@ -2881,6 +3440,7 @@ impl FileBrowser {
     /// Lists the place again, keeping the selection and the focus by path.
     pub fn reload(&mut self) {
         self.entries.clear();
+        self.generation += 1;
         self.error = None;
         self.listing = Some(self.source.list(&self.place, &self.options));
         self.pump();
@@ -2905,9 +3465,12 @@ impl FileBrowser {
                             *old = u;
                         }
                     }
+                    // A time learnt later moves an entry in an agenda.
+                    changed = true;
                 }
                 Page::Removed(paths) => {
                     self.entries.retain(|e| !paths.contains(&e.path));
+                    self.generation += 1;
                     for p in &paths {
                         self.selection.paths.remove(p);
                     }
@@ -2925,6 +3488,7 @@ impl FileBrowser {
         }
         if changed {
             sort_entries(&mut self.entries);
+            self.generation += 1;
         }
         if done {
             self.listing = None;
@@ -3175,11 +3739,19 @@ impl FileBrowser {
                     .text(name),
                 );
             }
+            // The mode's own controls (the agenda's level).
+            if self.mode.toolbar(ui, &mut self.settings) {
+                self.reveal = true;
+            }
         });
         if let Some(e) = &self.error {
             ui.label(e.to_string());
             return out;
         }
+        // What is dragged, if anything: from the system, or from the app.
+        let drag = self.drops.as_ref().and_then(|_| dragged(ui.ctx()));
+        // The application's own drop targets.
+        let zones = self.drop_zones(ui);
         // The keyboard, while the entries hold the focus.
         let keys_id = self.id.with("entries");
         let focused = ui.memory(|m| m.has_focus(keys_id));
@@ -3207,6 +3779,17 @@ impl FileBrowser {
             let mut spaced = false;
             for ev in events {
                 match ev {
+                    egui::Event::Key {
+                        key,
+                        pressed: true,
+                        modifiers: mods,
+                        ..
+                    } if self
+                        .mode
+                        .own_key(key, mods, self.focus_index(), &mut self.settings) =>
+                    {
+                        self.reveal = true;
+                    }
                     egui::Event::Key {
                         key, pressed: true, ..
                     } => {
@@ -3267,10 +3850,9 @@ impl FileBrowser {
             if self.sync_columns() {
                 ui.ctx().request_repaint();
             }
-        } else if !self.ancestors.is_empty() || self.peek.is_some() {
-            self.ancestors.clear();
-            self.ancestor_listings.clear();
-            self.peek = None;
+        } else {
+            // Not shown: dropped, which cancels what is under way.
+            self.columns.clear();
         }
         let focus = self.focus_index();
         let reveal = std::mem::take(&mut self.reveal);
@@ -3291,8 +3873,10 @@ impl FileBrowser {
                     name: None,
                     many: false,
                     place: &self.place,
-                    ancestors: &self.ancestors,
-                    peek: self.peek.as_ref().map(|(c, _)| c),
+                    ancestors: self.columns.ancestors(),
+                    peek: self.columns.peek(),
+                    loading: self.listing.is_some(),
+                    generation: self.generation,
                 },
             )
         });
@@ -3326,6 +3910,32 @@ impl FileBrowser {
             out.activated = Some(self.entries[i].path.clone());
             ui.memory_mut(|m| m.request_focus(keys_id));
         }
+        // Drops: the target under the pointer, shown, and taken on release.
+        self.drop_hover = None;
+        if let Some((paths, origin, released)) = drag {
+            let at = ui.input(|i| i.pointer.latest_pos());
+            let entries_rect = inner.response.rect;
+            let target = self.drop_target(at, entries_rect, &zones, &mode_out);
+            if let Some((target, rect)) = target {
+                let offer = DropOffer {
+                    target,
+                    paths,
+                    origin,
+                };
+                let accepted = self.accepts(&offer);
+                self.paint_drop(ui, entries_rect, rect, &offer, accepted);
+                if released {
+                    if accepted {
+                        if origin == DropOrigin::App {
+                            egui::DragAndDrop::clear_payload(ui.ctx());
+                        }
+                        out.dropped = Some(offer);
+                    }
+                } else {
+                    self.drop_hover = Some((offer, accepted));
+                }
+            }
+        }
         if let Some(r) = mode_out.reach {
             self.reach(&r);
             out.selection_changed = true;
@@ -3334,6 +3944,255 @@ impl FileBrowser {
         }
         out
     }
+
+    /// Draws the application's drop targets, each a zone named by its
+    /// label, lit while a drag is over it. Answers their rectangles.
+    fn drop_zones(&self, ui: &mut Ui) -> Vec<(String, egui::Rect)> {
+        if self.drops.is_none() || self.drop_targets.is_empty() {
+            return Vec::new();
+        }
+        let mut zones = Vec::new();
+        ui.horizontal(|ui| {
+            for t in &self.drop_targets {
+                let lit = self
+                    .drop_hover
+                    .as_ref()
+                    .filter(|(o, _)| o.target == DropTarget::App(t.id.clone()));
+                let visuals = ui.visuals();
+                let (stroke, fill) = match lit {
+                    Some((_, true)) => (
+                        egui::Stroke::new(2.0, visuals.selection.stroke.color),
+                        visuals.selection.bg_fill.gamma_multiply(0.5),
+                    ),
+                    Some((_, false)) => (
+                        egui::Stroke::new(2.0, visuals.error_fg_color),
+                        egui::Color32::TRANSPARENT,
+                    ),
+                    None => (
+                        egui::Stroke::new(1.0, visuals.widgets.noninteractive.bg_stroke.color),
+                        egui::Color32::TRANSPARENT,
+                    ),
+                };
+                let r = egui::Frame::new()
+                    .inner_margin(egui::Margin::symmetric(10, 4))
+                    .corner_radius(4.0)
+                    .stroke(stroke)
+                    .fill(fill)
+                    .show(ui, |ui| ui.label(&t.label))
+                    .response;
+                zones.push((t.id.clone(), r.rect));
+            }
+        });
+        zones
+    }
+
+    /// Where a drop at `at` goes: an application's zone, a folder entry
+    /// (in the place's column or beside it), else the folder shown when the
+    /// pointer is over the entries, or not known (a system drag the
+    /// platform gives no position for). With the rectangle to light.
+    fn drop_target(
+        &self,
+        at: Option<egui::Pos2>,
+        entries: egui::Rect,
+        zones: &[(String, egui::Rect)],
+        mode_out: &ModeOutput,
+    ) -> Option<(DropTarget, egui::Rect)> {
+        let Some(at) = at else {
+            return Some((DropTarget::Place(self.place.clone()), entries));
+        };
+        if let Some((id, r)) = zones.iter().find(|(_, r)| r.contains(at)) {
+            return Some((DropTarget::App(id.clone()), *r));
+        }
+        if !entries.contains(at) {
+            return None;
+        }
+        if let Some((i, r)) = mode_out.pointed
+            && let Some(e) = self.entries.get(i).filter(|e| e.is_dir())
+        {
+            return Some((DropTarget::Folder(e.path.clone()), r));
+        }
+        if let Some((p, r)) = &mode_out.pointed_beside {
+            return Some((DropTarget::Folder(p.clone()), *r));
+        }
+        Some((DropTarget::Place(self.place.clone()), entries))
+    }
+
+    /// Whether the target takes the offer: never a folder into itself or
+    /// into a folder it holds, else as the application says.
+    fn accepts(&self, offer: &DropOffer) -> bool {
+        let into = match &offer.target {
+            DropTarget::Folder(f) | DropTarget::Place(f) => Some(f),
+            DropTarget::App(_) => None,
+        };
+        if into.is_some_and(|f| offer.paths.iter().any(|p| f.starts_with(p))) {
+            return false;
+        }
+        self.drops.as_ref().is_some_and(|accept| accept(offer))
+    }
+
+    /// The feedback of a drag: the target's outline (the selection's
+    /// colour when it takes the drop, the error's when it refuses), the
+    /// cursor, and a caption over the entries that says what a release
+    /// does, for assistive technology too.
+    fn paint_drop(
+        &self,
+        ui: &mut Ui,
+        entries: egui::Rect,
+        rect: egui::Rect,
+        offer: &DropOffer,
+        accepted: bool,
+    ) {
+        let ctx = ui.ctx().clone();
+        let visuals = ui.visuals().clone();
+        let color = if accepted {
+            visuals.selection.stroke.color
+        } else {
+            visuals.error_fg_color
+        };
+        let painter = ctx.layer_painter(egui::LayerId::new(
+            egui::Order::Foreground,
+            self.id.with("drop"),
+        ));
+        if accepted {
+            painter.rect_filled(rect, 4.0, visuals.selection.bg_fill.gamma_multiply(0.35));
+        }
+        painter.rect_stroke(
+            rect.shrink(1.0),
+            4.0,
+            egui::Stroke::new(2.0, color),
+            egui::StrokeKind::Inside,
+        );
+        ctx.set_cursor_icon(if accepted {
+            egui::CursorIcon::Copy
+        } else {
+            egui::CursorIcon::NoDrop
+        });
+        let text = if accepted {
+            let name = match &offer.target {
+                DropTarget::Folder(p) | DropTarget::Place(p) => p.file_name().map_or_else(
+                    || p.display().to_string(),
+                    |n| n.to_string_lossy().into_owned(),
+                ),
+                DropTarget::App(id) => self
+                    .drop_targets
+                    .iter()
+                    .find(|t| &t.id == id)
+                    .map_or_else(|| id.clone(), |t| t.label.clone()),
+            };
+            strings::tr_args(&ctx, &crate::strings::FILES_DROP_INTO, &[("name", &name)])
+        } else {
+            strings::tr(&ctx, &crate::strings::FILES_DROP_REFUSED)
+        };
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let galley = painter.layout_no_wrap(text.clone(), font, visuals.strong_text_color());
+        let size = galley.size() + egui::vec2(16.0, 8.0);
+        let caption = egui::Rect::from_center_size(
+            egui::pos2(entries.center().x, entries.bottom() - size.y / 2.0 - 8.0),
+            size,
+        );
+        painter.rect_filled(caption, 4.0, visuals.window_fill);
+        painter.rect_stroke(
+            caption,
+            4.0,
+            egui::Stroke::new(1.0, color),
+            egui::StrokeKind::Inside,
+        );
+        painter.galley(
+            caption.center() - galley.size() / 2.0,
+            galley,
+            visuals.strong_text_color(),
+        );
+        let r = ui.interact(caption, self.id.with("drop.caption"), egui::Sense::hover());
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &text));
+    }
+}
+
+/// Paths dragged inside the application, for a file browser to take: the
+/// payload a widget sets with `egui::DragAndDrop::set_payload` as a drag
+/// starts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DraggedPaths(pub Vec<PathBuf>);
+
+/// Where a drop goes.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum DropTarget {
+    /// A folder entry: in the place's column, or beside it in Finder's
+    /// columns.
+    Folder(PathBuf),
+    /// The folder shown: a drop on a file or on empty space.
+    Place(PathBuf),
+    /// One of the application's own targets, by its id.
+    App(String),
+}
+
+/// Where what is dropped comes from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum DropOrigin {
+    /// A [`DraggedPaths`] payload set inside the application.
+    App,
+    /// Files dragged from another program, through egui's hovered and
+    /// dropped files.
+    System,
+}
+
+/// A drop on offer: what the application's `accept` is asked about while
+/// hovering, and what [`BrowserOutput::dropped`] gives once it is taken.
+/// While a system drag hovers, `paths` may be empty: some platforms say the
+/// files only on the drop.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropOffer {
+    pub target: DropTarget,
+    pub paths: Vec<PathBuf>,
+    pub origin: DropOrigin,
+}
+
+/// One of the application's own drop targets: an id it is reported by, and
+/// the label its zone shows.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AppDropTarget {
+    pub id: String,
+    pub label: String,
+}
+
+impl AppDropTarget {
+    pub fn new(id: impl Into<String>, label: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            label: label.into(),
+        }
+    }
+}
+
+type DropPolicy = Arc<dyn Fn(&DropOffer) -> bool + Send + Sync>;
+
+/// What is being dragged this frame: its paths, where from, and whether it
+/// is released (dropped) this frame.
+fn dragged(ctx: &egui::Context) -> Option<(Vec<PathBuf>, DropOrigin, bool)> {
+    let (hovered, dropped, any_hovered, released) = ctx.input(|i| {
+        (
+            i.raw
+                .hovered_files
+                .iter()
+                .filter_map(|f| f.path.clone())
+                .collect::<Vec<_>>(),
+            i.raw
+                .dropped_files
+                .iter()
+                .map(|f| f.path().to_path_buf())
+                .filter(|p| !p.as_os_str().is_empty())
+                .collect::<Vec<_>>(),
+            !i.raw.hovered_files.is_empty(),
+            i.pointer.any_released(),
+        )
+    });
+    if !dropped.is_empty() {
+        return Some((dropped, DropOrigin::System, true));
+    }
+    if any_hovered {
+        return Some((hovered, DropOrigin::System, false));
+    }
+    let payload = egui::DragAndDrop::payload::<DraggedPaths>(ctx)?;
+    Some((payload.0.clone(), DropOrigin::App, released))
 }
 
 /// What a recording [`ThumbnailProvider`] saw, for tests and agents.
@@ -3501,6 +4360,23 @@ mod tests {
         }
     }
 
+    /// An agenda laid out for `entries`, `columns` to a row.
+    fn laid(
+        entries: &[SourceEntry],
+        columns: usize,
+        level: AgendaLevel,
+        collapsed: &[Option<i64>],
+    ) -> AgendaMode {
+        let mut a = AgendaMode {
+            rows_in_view: 2,
+            ..AgendaMode::default()
+        };
+        a.index.update(entries, 1, level);
+        a.layout
+            .update(&a.index, columns, &collapsed.iter().copied().collect());
+        a
+    }
+
     #[test]
     fn the_agenda_files_entries_by_day_the_newest_first_the_taken_time_first() {
         let entries = [
@@ -3512,22 +4388,64 @@ mod tests {
             dated("e", 0, None),
             dated("f", 10, None),
         ];
-        let (order, lines) = AgendaMode::arrange(&entries, 2);
-        assert_eq!(order, [1, 0, 3, 5, 2, 4]);
+        let a = laid(&entries, 2, AgendaLevel::Day, &[]);
+        assert_eq!(a.index.order, [1, 0, 3, 5, 2, 4]);
+        let keys: Vec<_> = a.index.groups.iter().map(|(k, r)| (*k, r.len())).collect();
         assert_eq!(
-            lines,
+            keys,
+            [(Some(12), 1), (Some(10), 3), (Some(3), 1), (None, 1)]
+        );
+        assert_eq!(
+            a.layout.lines,
             [
-                AgendaLine::Heading(Some(12), 1),
+                AgendaLine::Heading(0),
                 AgendaLine::Cells(0, 1),
-                AgendaLine::Heading(Some(10), 3),
+                AgendaLine::Heading(1),
                 AgendaLine::Cells(1, 3),
                 AgendaLine::Cells(3, 4),
-                AgendaLine::Heading(Some(3), 1),
+                AgendaLine::Heading(2),
                 AgendaLine::Cells(4, 5),
-                AgendaLine::Heading(None, 1),
+                AgendaLine::Heading(3),
                 AgendaLine::Cells(5, 6),
             ]
         );
+    }
+
+    #[test]
+    fn the_agenda_groups_by_month_and_by_year() {
+        // 1970-01-11, 1970-01-13, 1970-02-15, 1971-01-01.
+        let entries = [
+            dated("a", 10, None),
+            dated("b", 12, None),
+            dated("c", 45, None),
+            dated("d", 365, None),
+        ];
+        let a = laid(&entries, 4, AgendaLevel::Month, &[]);
+        let heads: Vec<_> = a
+            .index
+            .groups
+            .iter()
+            .map(|(k, r)| (AgendaLevel::Month.heading(k.unwrap()), r.len()))
+            .collect();
+        assert_eq!(
+            heads,
+            [
+                ("1971-01".into(), 1),
+                ("1970-02".into(), 1),
+                ("1970-01".into(), 2)
+            ]
+        );
+        let a = laid(&entries, 4, AgendaLevel::Year, &[]);
+        let heads: Vec<_> = a
+            .index
+            .groups
+            .iter()
+            .map(|(k, r)| (AgendaLevel::Year.heading(k.unwrap()), r.len()))
+            .collect();
+        assert_eq!(heads, [("1971".into(), 1), ("1970".into(), 3)]);
+        assert_eq!(AgendaLevel::Day.coarser().coarser(), AgendaLevel::Year);
+        assert_eq!(AgendaLevel::Year.coarser(), AgendaLevel::Year);
+        assert_eq!(AgendaLevel::Year.finer().finer(), AgendaLevel::Day);
     }
 
     #[test]
@@ -3539,24 +4457,8 @@ mod tests {
             dated("d", 10, None),
             dated("e", 10, None),
         ];
-        let (order, lines) = AgendaMode::arrange(&entries, 2);
         // Day 12: b. Day 10: a d / e. Day 3: c.
-        let mut a = AgendaMode {
-            position: vec![0; order.len()],
-            line_of: vec![0; order.len()],
-            rows_in_view: 2,
-            ..AgendaMode::default()
-        };
-        for (p, &i) in order.iter().enumerate() {
-            a.position[i] = p;
-        }
-        for (l, line) in lines.iter().enumerate() {
-            if let AgendaLine::Cells(s, e) = *line {
-                a.line_of[s..e].fill(l);
-            }
-        }
-        a.order = order;
-        a.lines = lines;
+        let a = laid(&entries, 2, AgendaLevel::Day, &[]);
         // Right and Left in the agenda's order, across days.
         assert_eq!(a.step(1, 5, ModeKey::Right), 0);
         assert_eq!(a.step(4, 5, ModeKey::Right), 2);
@@ -3572,6 +4474,32 @@ mod tests {
         assert_eq!(a.step(0, 5, ModeKey::End), 2);
         // Laid out for other entries: their own order.
         assert_eq!(a.step(1, 9, ModeKey::Right), 2);
+    }
+
+    #[test]
+    fn the_agenda_skips_a_collapsed_group() {
+        let entries = [
+            dated("a", 10, None),
+            dated("b", 12, None),
+            dated("c", 3, None),
+            dated("d", 10, None),
+        ];
+        // Day 12: b. Day 10 (collapsed): a d. Day 3: c.
+        let a = laid(&entries, 2, AgendaLevel::Day, &[Some(10)]);
+        assert_eq!(a.layout.shown, [1, 2]);
+        assert_eq!(a.step(1, 4, ModeKey::Right), 2);
+        assert_eq!(a.step(1, 4, ModeKey::Down), 2);
+        // From inside the collapsed group: the nearest entry shown that way.
+        assert_eq!(a.step(0, 4, ModeKey::Down), 2);
+        assert_eq!(a.step(3, 4, ModeKey::Up), 1);
+        assert_eq!(a.step(0, 4, ModeKey::End), 2);
+        let all = laid(
+            &entries,
+            2,
+            AgendaLevel::Day,
+            &[Some(12), Some(10), Some(3)],
+        );
+        assert_eq!(all.step(0, 4, ModeKey::Down), 0);
     }
 
     #[test]

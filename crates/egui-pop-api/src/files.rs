@@ -2650,7 +2650,7 @@ struct Listing {
 
 /// The subfolders the picker's columns list, by folder and whether hidden
 /// ones are shown.
-type ColumnCache = Arc<Mutex<HashMap<(PathBuf, bool), Arc<Vec<browser::SourceEntry>>>>>;
+type ColumnCache = Arc<Mutex<browser::ColumnListings>>;
 
 /// The in-app picker: a folder's entries, a field that filters them
 /// (fuzzy) or takes a typed path (with completion), places, filters.
@@ -2758,8 +2758,10 @@ pub struct FilePicker {
     details: browser::DetailsMode,
     thumbs: browser::ThumbnailsMode,
     cols: browser::ColumnsMode,
-    /// The subfolders the columns list, by folder and whether hidden ones
-    /// are shown, read once. Shared: the picker is copied every frame.
+    /// The listings of the columns beside the folder shown (its ancestors'
+    /// subfolders, the highlighted folder's), each off the interface thread
+    /// on the system's file system. Shared: the picker is copied every
+    /// frame.
     column_cache: ColumnCache,
     /// The grid brings the highlighted cell into view at the next frame.
     reveal_cell: bool,
@@ -2855,7 +2857,9 @@ impl FilePicker {
             details: browser::DetailsMode::default(),
             thumbs: browser::ThumbnailsMode::default(),
             cols: browser::ColumnsMode::default(),
-            column_cache: Arc::default(),
+            column_cache: Arc::new(Mutex::new(
+                browser::ColumnListings::default().folders_only(true),
+            )),
             reveal_cell: false,
             focus_cell: false,
             thumbnail_dragging: false,
@@ -4832,51 +4836,6 @@ impl FilePicker {
         )
     }
 
-    /// A column of the columns view: `dir`'s subfolders, read once.
-    fn column(&self, dir: &Path, open: Option<&Path>) -> browser::Column {
-        let key = (dir.to_path_buf(), self.show_hidden);
-        let cached = lock(&self.column_cache).get(&key).cloned();
-        let entries = cached.unwrap_or_else(|| {
-            let read: Arc<Vec<browser::SourceEntry>> = Arc::new(
-                self.subfolders(dir)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|c| browser::SourceEntry {
-                        path: c.path,
-                        name: c.name,
-                        kind: browser::EntryKind::Folder,
-                        size: None,
-                        modified: None,
-                        taken: None,
-                        app_id: None,
-                    })
-                    .collect(),
-            );
-            lock(&self.column_cache).insert(key, read.clone());
-            read
-        });
-        browser::Column {
-            place: dir.to_path_buf(),
-            open: open.and_then(|o| entries.iter().position(|e| e.path == o)),
-            entries: entries.to_vec(),
-            loading: false,
-        }
-    }
-
-    /// The columns before the folder shown, the topmost first: each
-    /// ancestor's subfolders, the path's next one open.
-    fn ancestor_columns(&self) -> Vec<browser::Column> {
-        let mut out: Vec<browser::Column> = self
-            .dir
-            .ancestors()
-            .skip(1)
-            .zip(self.dir.ancestors())
-            .map(|(dir, next)| self.column(dir, Some(next)))
-            .collect();
-        out.reverse();
-        out
-    }
-
     /// A key the columns' mode reads as leaving the folder shown: into the
     /// highlighted folder (the selection left behind, so the folder entered
     /// is the choice), or back to the parent, the folder left selected.
@@ -5159,6 +5118,7 @@ impl FilePicker {
         };
         let mut settings = browser::ModeSettings {
             thumbnail_size: self.thumbnail_size,
+            ..browser::ModeSettings::default()
         };
         let name = strings::tr_args(
             ui.ctx(),
@@ -5172,14 +5132,36 @@ impl FilePicker {
         let mut cols = std::mem::take(&mut self.cols);
         let place = self.dir.clone();
         let columns_on = self.columns_on();
-        let (ancestors, peek) = if columns_on {
+        // The columns beside the folder shown list off the interface
+        // thread: their entries stream in, a busy row while they do.
+        let column_cache = self.column_cache.clone();
+        let mut side = lock(&column_cache);
+        if columns_on {
+            let mut wanted: Vec<PathBuf> = self
+                .dir
+                .ancestors()
+                .skip(1)
+                .map(Path::to_path_buf)
+                .collect();
+            wanted.reverse();
             let peek = entries
                 .get(highlight)
                 .filter(|e| e.is_dir())
-                .map(|e| self.column(&e.path, None));
-            (self.ancestor_columns(), peek)
+                .map(|e| e.path.clone());
+            let source = browser::FsSource::new(self.fs.clone());
+            let options = browser::ListOptions {
+                hidden: self.show_hidden,
+            };
+            if side.sync(&source, &options, &wanted, &self.dir, peek.as_deref()) {
+                ui.ctx().request_repaint();
+            }
         } else {
-            (Vec::new(), None)
+            side.clear();
+        }
+        let (ancestors, peek) = if columns_on {
+            (side.ancestors(), side.peek())
+        } else {
+            (&[][..], None)
         };
         // A column holds the names alone.
         let name_only;
@@ -5219,8 +5201,10 @@ impl FilePicker {
             name: Some(name),
             many,
             place: &place,
-            ancestors: &ancestors,
-            peek: peek.as_ref(),
+            ancestors,
+            peek,
+            loading: false,
+            generation: 0,
         };
         let out = if columns_on {
             cols.show(ui, cx)
@@ -5229,6 +5213,7 @@ impl FilePicker {
         } else {
             details.show(ui, cx)
         };
+        drop(side);
         let in_view = std::mem::take(&mut drawer.in_view);
         self.details = details;
         self.thumbs = thumbs;

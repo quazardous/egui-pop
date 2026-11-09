@@ -1388,7 +1388,13 @@ egui-pop-field-required = Required
 
 egui-pop-field-reset = Reset { $label } to default
 
+egui-pop-files-agenda-day = Day
+
+egui-pop-files-agenda-month = Month
+
 egui-pop-files-agenda-undated = No date
+
+egui-pop-files-agenda-year = Year
 
 egui-pop-files-all = All files
 
@@ -1431,6 +1437,10 @@ egui-pop-files-dimensions = Dimensions
 egui-pop-files-documents = Documents
 
 egui-pop-files-downloads = Downloads
+
+egui-pop-files-drop-into = Drop into { $name }
+
+egui-pop-files-drop-refused = Cannot drop here
 
 egui-pop-files-entries-of = Files in { $folder }
 
@@ -1481,6 +1491,8 @@ egui-pop-files-kind-file = File
 egui-pop-files-kind-folder = Folder
 
 egui-pop-files-lens = Lens
+
+egui-pop-files-listing = Listing…
 
 egui-pop-files-mode-agenda = Agenda
 

@@ -1072,6 +1072,18 @@ egui-pop-files-preview-of = Aperçu de { $name }
 
 egui-pop-files-quick-look = Coup d’œil : { $name }
 
+egui-pop-files-agenda-day = Jour
+
+egui-pop-files-agenda-month = Mois
+
+egui-pop-files-agenda-year = Année
+
+egui-pop-files-listing = Lecture…
+
+egui-pop-files-drop-into = Déposer dans { $name }
+
+egui-pop-files-drop-refused = Impossible de déposer ici
+
 egui-pop-files-mode-thumbnails = Vignettes
 
 egui-pop-files-crumb-open = Ouvrir le dossier { $name }

@@ -230,6 +230,17 @@ pub enum SourceError { NotFound(PathBuf), Denied(PathBuf), Io(String), Unsupport
   browser says them where the entries would be.
 - **Refresh** is a new `list`; the browser keeps the focus and the selection
   by path.
+- **Columns off the frame** (built, 2026-11-09): Finder's columns list
+  the place's ancestors and the focused folder through `ColumnListings`,
+  shared by the browser and the in-app picker (whose columns list folders
+  alone). Each column is a `Listing` of the source, so on the system's
+  file system it runs on a thread of its own and streams pages; a column
+  under way ends with a busy row (a spinner and "Listing…", a progress
+  indicator to assistive technology), the place's own column too
+  (`ModeContext::loading`). A listing no longer wanted (the focus moved to
+  another folder, the place changed, the mode left) is dropped, which
+  cancels it; `FsSource` checks the cancellation before reading the folder
+  and between entries, so a huge folder left behind stops at once.
 - **Watch** is optional (`notify` on desktop, nothing on the web);
   `Page::Changed` or `Removed` comes through the same `poll`.
 - **Built in:** `FsSource` over today's `files::fs::FileSystem` (`StdFs`,
@@ -318,6 +329,19 @@ Built-in modes:
 | `columns` | One column per folder of the path, the last one a preview | Up, Down in a column; Right enters, Left goes back | a hierarchy | Finder's Columns; the place changes as the focus moves |
 | `agenda` | Entries grouped by year, month or day of `taken` (else `modified`), each group a grid; a level switch | Four arrows across groups | a time | digiKam's Dates, darktable's timeline, Lightroom's date folders |
 
+The agenda (levels built 2026-11-09): Day, Month and Year in its toolbar
+(`ViewMode::toolbar`) or `Ctrl+Up` (coarser) and `Ctrl+Down` (finer);
+a click on a heading, or `Ctrl+Left` and `Ctrl+Right` on the focused
+entry's group, collapses and expands it (the heading's expanded state is
+said to assistive technology), and the arrows skip what is collapsed. The
+level and the collapsed groups are the browser's `ModeSettings::agenda`, so
+they survive a change of mode. Each entry's day and the agenda's order are
+computed once per listing (`ModeContext::generation`, bumped by the browser
+whenever its entries change), the groups once per level, the lines once
+per width and set of collapsed groups; `AgendaMode::arrangements` counts
+the first, for tests. Keys of a mode's own reach it through
+`ViewMode::own_key` before the browser's arrows.
+
 ### 3.3 `ThumbnailProvider`
 
 ```rust
@@ -383,10 +407,28 @@ pub enum ThumbState {
   then the preview providers; arrows move the focus behind it; Space or
   Escape closes it. In a chooser with a field, Space is the field's: quick
   look is then `Ctrl+Y` (unconfirmed default; section 7, Q5).
-- **Drop targets**: the browser accepts files dropped from outside (egui's
-  `dropped_files`) and reports them with the entry under the pointer
-  (a folder) or none; a chooser goes to the dropped folder or selects the
-  dropped file (JetBrains' chooser), an import adds the files.
+- **Drop targets** (built, 2026-11-09): `FileBrowser::with_drops(accept)`
+  turns them on. What is dragged comes from inside the application (a
+  `DraggedPaths` payload of `egui::DragAndDrop`, which any widget sets as a
+  drag starts) or from the system (egui's `hovered_files` and
+  `dropped_files`, where the platform gives them). The target under the
+  pointer is, in order: one of the application's own targets
+  (`with_drop_targets`, zones under the toolbar), a folder entry (each
+  mode reports the entry under the pointer in `ModeOutput::pointed`, and
+  Finder's columns the folders beside the place in `pointed_beside`), else
+  the folder shown (a file or empty space; also when the platform gives no
+  pointer position during a system drag). The browser refuses a folder
+  dropped into itself or a folder it holds; otherwise `accept(&DropOffer)`
+  decides. While hovering, the target is outlined in the selection's
+  colour (taken) or the error's (refused), the cursor says it, and a
+  caption over the entries ("Drop into Photos", "Cannot drop here") is
+  said to assistive technology too; `FileBrowser::drop_hover` gives the
+  same to tests and agents. A drop taken comes out as
+  `BrowserOutput::dropped`; what it means is the frame's: a chooser goes
+  to the dropped folder or selects the dropped file (JetBrains' chooser),
+  an import adds the files. Not built: the browser's own entries as drag
+  sources (they sense clicks only; a rubber band and dragging out need one
+  gesture model).
 - **Canvas-like modes** (carousel, agenda zoomed out, a future map) follow
   the [navigation model](navigation.md): the wheel scrolls, Ctrl and the
   wheel or a pinch zooms the thumbnails, hand mode and `view.fit` where the
@@ -421,6 +463,12 @@ pub enum ThumbState {
 - Keyboard per mode: each arrow's result on a known layout.
 - A `FileSource` that pages slowly: the focus and the selection hold while
   pages arrive.
+- Columns over a source the test feeds: the busy row, entries shown while
+  more may come, the listing the focus left cancelled.
+- Drops from the application and from the system: the target lit, the
+  caption, a refusal, the offer on release.
+- The agenda: levels from the toolbar and the keys, collapse and expand,
+  the dates computed once per listing.
 
 ## 7. Open questions
 
@@ -482,7 +530,8 @@ pub enum ThumbState {
    `details` and `thumbnails` modes, the switcher, the picker on the
    browser, a gallery demo, kittests.
 3. Filmstrip, columns, then carousel and agenda, each with its tests.
-4. Quick look and drop targets.
+4. Quick look and drop targets (done), columns off the frame and the
+   agenda's levels (done).
 5. Helios's import window on the browser, with its source and provider.
 
 ## 9. Sources (read 2026-11-08)
