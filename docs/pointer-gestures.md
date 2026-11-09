@@ -110,6 +110,26 @@ let app = App::builder()
 assert_eq!(egui_pop::api::pointer::profile_id(app.handle()), "darktable");
 ```
 
+## Navigation keys
+
+A profile also gives the keys of the canvas navigation commands
+(`view.fit`, `view.frame_selection`, `view.zoom_in`, `view.zoom_out`,
+`view.zoom_100`, `view.pan_*`, `view.hand`), after its application:
+Photoshop's Ctrl+1 for 100 % and Ctrl+0 to fit, darktable's Alt+1 and
+Alt+3, Figma's Shift+1 and Shift+2 in Document, Blender's `.`. They are
+the `view_keys` of the profile document, loaded with its gestures into
+the keymap's default layer, active while a canvas is in use
+(`canvasActive && !textInputFocus && !modalOpen`): the shortcuts editor
+lists them under View and the user rebinds them there. The full table
+is in [the navigation study](design/navigation.md).
+
+```json
+"view_keys": {
+  "view.fit": ["Home", "Ctrl+0"],
+  "view.zoom_100": ["Ctrl+1"]
+}
+```
+
 ## Drag cursors
 
 What a drag does decides its cursor, not the widget it starts on: a

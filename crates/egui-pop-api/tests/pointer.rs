@@ -276,3 +276,39 @@ fn a_change_of_profile_asks_whether_to_keep_the_users_changes() {
     );
     assert_eq!(out.now(), Some(Ok(serde_json::json!({ "kept": 0 }))));
 }
+
+#[test]
+fn the_profiles_navigation_keys_are_keymap_bindings_the_user_can_change() {
+    use egui_pop_model::ids::CommandId;
+    let ctx = egui::Context::default();
+    let mut app = App::builder().build(&ctx).unwrap();
+    passes(&mut app, &ctx, 2);
+    let h = app.handle();
+    let fit = CommandId::from_static("view.fit");
+    let zoom_100 = CommandId::from_static("view.zoom_100");
+    // Document's: Home and Figma's Shift+1, shown as the command's keys
+    // (the shortcuts editor's), and published for the canvases, which
+    // leave them to the keymap.
+    let keys = h.keys_for(&fit);
+    assert!(keys.contains(&"Home".to_string()), "{keys:?}");
+    assert!(keys.contains(&"Shift+1".to_string()), "{keys:?}");
+    let map = egui_pop_core::pointer::map(&ctx);
+    assert!(map.keys_dispatched);
+    assert!(map.view_keys("view.fit").contains(&chord("Home")));
+    assert_eq!(h.keys_for(&zoom_100), ["Ctrl+0"]);
+    // Photoshop's: Ctrl+1 is 100 %, Ctrl+0 fits.
+    pointer::set_profile(h, "photoshop").unwrap();
+    passes(&mut app, &ctx, 2);
+    let h = app.handle();
+    assert_eq!(h.keys_for(&zoom_100), ["Ctrl+1"]);
+    assert!(h.keys_for(&fit).contains(&"Ctrl+0".to_string()));
+    // The user's keys replace the profile's.
+    h.rebind(fit.clone(), Some("K".into()));
+    passes(&mut app, &ctx, 2);
+    let h = app.handle();
+    assert_eq!(h.keys_for(&fit), ["K"]);
+    assert_eq!(
+        egui_pop_core::pointer::map(&ctx).view_keys("view.fit"),
+        [chord("K")]
+    );
+}

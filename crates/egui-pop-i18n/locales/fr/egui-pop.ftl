@@ -1966,7 +1966,11 @@ egui-pop-viewport-zoom-actual = 100 %
 
 egui-pop-viewport-zoom-fit = Ajuster
 
+egui-pop-viewport-zoom-frame-selection = Cadrer la sélection
+
 egui-pop-viewport-zoom-in = Zoom avant
+
+egui-pop-viewport-zoom-level = Niveau de zoom
 
 egui-pop-viewport-zoom-out = Zoom arrière
 
@@ -3103,6 +3107,8 @@ plugin-egui-pop-timeline =
     .title = Ligne de temps
 
 egui-pop-viewport-nav-hand = Main : glisser pour déplacer (H pour quitter)
+
+egui-pop-viewport-nav-hand-button = Main
 
 egui-pop-viewport-nav-hint = Glisser du bouton du milieu, Espace+glisser ou H pour déplacer · Ctrl+molette pour zoomer · F pour cadrer
 

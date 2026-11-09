@@ -2442,6 +2442,8 @@ egui-pop-viewport-loupe-scene = scene
 
 egui-pop-viewport-nav-hand = Hand: drag to pan (H to leave)
 
+egui-pop-viewport-nav-hand-button = Hand
+
 egui-pop-viewport-nav-hint = Middle-drag, Space+drag or H to pan · Ctrl+wheel to zoom · F to frame
 
 egui-pop-viewport-navigator-label = Navigator
@@ -2456,7 +2458,11 @@ egui-pop-viewport-zoom-actual = 100 %
 
 egui-pop-viewport-zoom-fit = Fit
 
+egui-pop-viewport-zoom-frame-selection = Frame the selection
+
 egui-pop-viewport-zoom-in = Zoom in
+
+egui-pop-viewport-zoom-level = Zoom level
 
 egui-pop-viewport-zoom-out = Zoom out
 

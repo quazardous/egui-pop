@@ -1214,6 +1214,7 @@ egui-pop-viewport-loupe-display 997fac196909c4e5
 egui-pop-viewport-loupe-none 943642825ea03987
 egui-pop-viewport-loupe-scene 32d1b721dff28733
 egui-pop-viewport-nav-hand 8b30fd40cb7c9387
+egui-pop-viewport-nav-hand-button be5c01bdcfc311f6
 egui-pop-viewport-nav-hint ea1515f398cb4268
 egui-pop-viewport-navigator-label 8a16ed40ed2d7514
 egui-pop-viewport-navigator-value d55c9d4d71c145d0
@@ -1221,7 +1222,9 @@ egui-pop-viewport-wheel-luminance 3c4cae8e63a22ee6
 egui-pop-viewport-wheel-value ee809a237d899180
 egui-pop-viewport-zoom-actual 2740820b77106913
 egui-pop-viewport-zoom-fit d584f3a86901a72a
+egui-pop-viewport-zoom-frame-selection c19332296fbb33df
 egui-pop-viewport-zoom-in 4bacd41ea7477971
+egui-pop-viewport-zoom-level 487b2fc6d56e27e2
 egui-pop-viewport-zoom-out b9ce99e5b371d7f8
 egui-pop-views-add-filter 2930b3c00d05b85f
 egui-pop-views-add-tag 44e6a6a19ccd71c3

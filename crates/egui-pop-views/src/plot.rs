@@ -93,9 +93,15 @@ use serde::Serialize;
 use serde_json::{Value as Json, json};
 
 use crate::strings as s;
+
 use crate::timeline::{TimeRange, TimeScale, TimeView, TimelineState, TimelineTokens, ruler};
 
 mod decimate;
+
+/// What a navigation zoom command multiplies a plot's zoom by.
+const NAV_ZOOM: f32 = 1.25;
+/// A navigation pan moves a plot's view by this part of its size.
+const NAV_PAN: f32 = 0.1;
 
 use decimate::Window;
 
@@ -782,6 +788,22 @@ impl<'a> Plot<'a> {
         };
         let ring = style.text;
         let tl = TimelineTokens::of(ui.ctx());
+        // The navigation commands sent to the plot as the canvas in use
+        // (`egui_pop_core::canvas`, docs/design/navigation.md): fit and
+        // frame the selection give egui_plot its automatic bounds back,
+        // the zooms go around the centre, the pans move a tenth of the
+        // view; `view.hand` toggles hand mode (a primary drag already
+        // pans a plot). A plot has no 100 %.
+        let nav = if interactive {
+            egui_pop_core::canvas::take(&ctx, id)
+        } else {
+            Vec::new()
+        };
+        for c in &nav {
+            if c == "view.hand" {
+                egui_pop_core::canvas::set_hand(&ctx, !egui_pop_core::canvas::hand(&ctx));
+            }
+        }
         let inner = ui
             .scope(|ui| {
                 // egui_plot reads its axis text, its legend's and its
@@ -790,6 +812,23 @@ impl<'a> Plot<'a> {
                 v.override_text_color = Some(style.text);
                 v.extreme_bg_color = style.fill;
                 plot.show(ui, |p| {
+                    let b = p.plot_bounds();
+                    let center = b.center();
+                    let size = vec2(b.width() as f32, b.height() as f32);
+                    for c in &nav {
+                        match c.as_str() {
+                            "view.fit" | "view.frame_selection" => p.set_auto_bounds(Vec2b::TRUE),
+                            "view.zoom_in" => p.zoom_bounds(vec2(NAV_ZOOM, NAV_ZOOM), center),
+                            "view.zoom_out" => {
+                                p.zoom_bounds(vec2(1.0 / NAV_ZOOM, 1.0 / NAV_ZOOM), center);
+                            }
+                            "view.pan_left" => p.translate_bounds(vec2(-size.x * NAV_PAN, 0.0)),
+                            "view.pan_right" => p.translate_bounds(vec2(size.x * NAV_PAN, 0.0)),
+                            "view.pan_up" => p.translate_bounds(vec2(0.0, size.y * NAV_PAN)),
+                            "view.pan_down" => p.translate_bounds(vec2(0.0, -size.y * NAV_PAN)),
+                            _ => {}
+                        }
+                    }
                     // The range first, under everything.
                     if let Some(r) = range.filter(|r| r.end > r.start) {
                         let edge = if looping {
@@ -932,6 +971,9 @@ impl<'a> Plot<'a> {
             })
             .inner;
         let response = inner.response.clone();
+        if interactive && (response.hovered() || response.has_focus()) {
+            egui_pop_core::canvas::mark_active(&ctx, id);
+        }
         let transform = inner.transform;
         let (hovered, pointer, drawn, columns) = inner.inner;
         let frame = *transform.frame();

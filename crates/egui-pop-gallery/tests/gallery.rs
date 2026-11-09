@@ -1822,6 +1822,51 @@ fn the_node_graph_page_follows_the_navigation_model() {
     assert_ne!(graph_view(&mut h), before, "Home fits");
 }
 
+/// The canvas zoom control under the gallery's node graph: its buttons
+/// and its menu send the navigation commands to the graph, its
+/// percentage follows the graph's zoom.
+#[test]
+fn the_node_graph_pages_zoom_control_drives_the_graph() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "node-graph"));
+    h.run();
+    let (_, fitted) = graph_view(&mut h);
+    h.get_by_label("Zoom in").click();
+    h.run();
+    let (_, zoomed) = graph_view(&mut h);
+    assert!(zoomed > fitted, "Zoom in zooms in");
+    h.get_by_label("Zoom level").click();
+    h.run();
+    for item in ["Fit", "Frame the selection", "100 %", "25 %", "50 %"] {
+        assert!(h.query_by_label(item).is_some(), "the menu offers {item}");
+    }
+    h.snapshot("node-graph-zoom-menu-pop-dark");
+    // The menu's item, not the playground's button of the same name.
+    let menu_item = |h: &Harness<'_, Gallery>, label: &str| {
+        let level = h.get_by_label("Zoom level").rect().center();
+        h.get_all_by_label(label)
+            .min_by(|a, b| {
+                let d = |n: &egui_kittest::Node<'_>| (n.rect().center() - level).length();
+                d(a).total_cmp(&d(b))
+            })
+            .expect("the menu's item")
+            .click();
+    };
+    menu_item(&h, "100 %");
+    h.run();
+    let (_, zoom) = graph_view(&mut h);
+    assert!((zoom - 1.0).abs() < 0.01, "100 %: {zoom}");
+    assert_eq!(
+        h.get_by_label("Zoom level").value().as_deref(),
+        Some("100 %")
+    );
+    h.get_by_label("Zoom level").click();
+    h.run();
+    menu_item(&h, "Fit");
+    h.run();
+    let (_, zoom) = graph_view(&mut h);
+    assert!((zoom - fitted).abs() < 1e-6, "Fit: {zoom} against {fitted}");
+}
+
 #[test]
 fn the_node_graph_page_routes_wires_around_the_nodes() {
     use egui_pop::imaging::graph::CMD_GRAPH_READ;

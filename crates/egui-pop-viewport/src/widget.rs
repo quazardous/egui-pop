@@ -28,6 +28,7 @@ use crate::display::{self, DisplayTarget, DisplayTransform, LinearSrgb, Stage};
 use crate::gestures::{self, Gestures, ViewAction};
 use crate::hooks::{Cause, HandleMove, Hooks, TRACE_KEPT, TraceEntry, Verdict, ViewChange};
 use crate::loupe::{self, Loupe, LoupeFrame};
+use crate::navigation::{self, NavCommand};
 use crate::overlay::{self, Handle, HandleKind, HandleState, Overlay};
 use crate::source::{Readout, Side, Stats, TileSink, TileSource};
 use crate::tiles::{self, Texture, Tiles, Transfers, UploadBudget, UploadReport};
@@ -553,6 +554,10 @@ pub struct ViewportOutput {
     /// keys held now, as the profile says (`Wheel: pan · Ctrl+...`
     /// gestures with Ctrl held), for a status line; empty otherwise.
     pub hint: String,
+    /// The canvas's id for the navigation commands
+    /// (`egui_pop_core::canvas::request_to`, a
+    /// [`CanvasZoom`](crate::navigation::CanvasZoom)): the response's.
+    pub canvas: Id,
 }
 
 /// The viewport widget, built per frame.
@@ -570,6 +575,7 @@ pub struct Viewport<'a> {
     size: Option<Vec2>,
     tool: Tool,
     on_cursor: Option<OnCursor<'a>>,
+    nav_hint: bool,
 }
 
 /// A cursor hook: the situation and the default, the cursor to show.
@@ -653,7 +659,15 @@ impl<'a> Viewport<'a> {
             size: None,
             tool: Tool::None,
             on_cursor: None,
+            nav_hint: false,
         }
+    }
+
+    /// Shows the navigation model's one-time hint on the first hover
+    /// (`navigation::hint`, kind `image`; default: off).
+    pub fn hint(mut self, on: bool) -> Viewport<'a> {
+        self.nav_hint = on;
+        self
     }
 
     /// Decides the cursor: gets the situation (the tool, the keys held, a
@@ -789,6 +803,7 @@ impl<'a> Viewport<'a> {
             name(&response, self.label.as_deref(), None);
             state.last_mapping = None;
             return ViewportOutput {
+                canvas: response.id,
                 response,
                 mapping: None,
                 hover_pixel: None,
@@ -808,11 +823,30 @@ impl<'a> Viewport<'a> {
         for to in debug::take_commands(ui.ctx(), &self.name) {
             f.change(to, Cause::Command, Phase::Once);
         }
-        let pan_key = response.hovered() && ui.input(|i| i.key_down(g.pan_key));
+        // The navigation model (docs/design/navigation.md): the canvas
+        // in use takes the `view.*` commands and their keys; hand mode
+        // makes a drag pan as the pan key held does.
+        let nav = navigation::commands(
+            ui.ctx(),
+            response.id,
+            response.hovered(),
+            response.has_focus(),
+        );
+        let start_view = *f.view;
+        let touching = navigation::touching(ui.ctx());
+        let pan_key = response.hovered()
+            && (navigation::hand(ui.ctx()) || ui.input(|i| i.key_down(g.pan_key)));
         let compare = handle_compare(ui, &response, &g, self.compare, &mut f);
         let captured = handle_overlays(ui, &response, &g, pan_key, self.overlays, compare, &mut f);
-        if !captured.drag {
+        if !captured.drag && !touching {
             handle_pan(ui, &response, &g, pan_key, &mut f);
+        }
+        // Two fingers on a touch screen: the image follows them (their
+        // pinch zooms with the wheel's inputs).
+        let touch = navigation::touch_pan(ui.ctx(), rect);
+        if touch != Vec2::ZERO {
+            let to = f.mapping.panned(touch);
+            f.change(to, Cause::Pan, Phase::Once);
         }
         if !captured.double_click {
             handle_double_click(ui, &response, &g, &mut f);
@@ -823,7 +857,20 @@ impl<'a> Viewport<'a> {
         if !captured.wheel {
             handle_wheel(ui, &response, &g, &mut f);
         }
+        for c in nav {
+            handle_nav(c, &mut f);
+        }
         handle_keys(ui, &response, &g, &mut f);
+        let panned = *f.view != start_view
+            && f.signals.iter().any(|s| {
+                matches!(
+                    s,
+                    Signal::View {
+                        cause: Cause::Pan,
+                        ..
+                    }
+                )
+            });
         if let Some(k) = f.state.loupe.key
             && (response.hovered() || response.has_focus())
             && ui.input(|i| i.key_pressed(k))
@@ -999,6 +1046,15 @@ impl<'a> Viewport<'a> {
             &mapping,
         );
         name(&response, self.label.as_deref(), Some(mapping.zoom));
+        egui_pop_core::canvas::set_zoom(
+            ui.ctx(),
+            response.id,
+            (zoom_percent(view, Some(&mapping)) / 100.0) as f32,
+        );
+        navigation::indicator(ui, rect, &response);
+        if self.nav_hint {
+            navigation::hint(ui, response.id, rect, "image", &response, panned);
+        }
         state.last_mapping = Some(mapping);
         debug::publish(ui.ctx(), &self.name, state, view, &mapping, &signals);
         let hint = if response.hovered() {
@@ -1009,6 +1065,7 @@ impl<'a> Viewport<'a> {
             String::new()
         };
         ViewportOutput {
+            canvas: response.id,
             response,
             mapping: Some(mapping),
             hover_pixel,
@@ -1017,6 +1074,30 @@ impl<'a> Viewport<'a> {
             hint,
         }
     }
+}
+
+/// A pan by command moves the view by this part of its size.
+const PAN_STEP: f32 = 0.1;
+
+/// A navigation command (`view.fit`, `view.zoom_in`...), on the image:
+/// fit and frame the selection both fit it (the image is the
+/// selection), the zooms go around the centre.
+fn handle_nav(c: NavCommand, f: &mut Frame<'_>) {
+    let m = f.mapping;
+    let center = m.rect.center();
+    let to = match c {
+        NavCommand::Fit | NavCommand::FrameSelection => View::fit(),
+        NavCommand::ZoomIn => m.zoom_around(center, view::zoom_in(m.zoom)),
+        NavCommand::ZoomOut => m.zoom_around(center, view::zoom_out(m.zoom)),
+        NavCommand::Zoom100 => m.zoom_around(center, 1.0),
+        NavCommand::ZoomTo(p) => m.zoom_around(
+            center,
+            (f64::from(p) / 100.0).clamp(view::MIN_ZOOM, view::MAX_ZOOM),
+        ),
+        NavCommand::Pan(d) => m.panned(-d.vec() * m.rect.size() * PAN_STEP),
+        NavCommand::Hand => return,
+    };
+    f.change(to, Cause::Command, Phase::Once);
 }
 
 /// The button of a drag that starts this frame and pans with the keys

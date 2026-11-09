@@ -369,6 +369,10 @@ pub struct GraphOutput {
     /// keys held now, as the profile says, for a status line; empty
     /// otherwise.
     pub hint: String,
+    /// The canvas's id for the navigation commands
+    /// (`egui_pop_core::canvas::request_to`, a
+    /// [`CanvasZoom`](crate::navigation::CanvasZoom)).
+    pub canvas: Id,
 }
 
 impl<'a> GraphEditor<'a> {
@@ -538,8 +542,17 @@ impl<'a> GraphEditor<'a> {
     fn wheel(&mut self, ui: &Ui, outer: Rect, g: &crate::gestures::ViewGestures) -> bool {
         use crate::gestures::ViewAction;
         let ctx = ui.ctx();
-        if !self.state.has_view() || !ui.rect_contains_pointer(outer) {
+        if !self.state.has_view() {
             return false;
+        }
+        if !ui.rect_contains_pointer(outer) {
+            let touch = navigation::touch_pan(ctx, outer);
+            if touch == Vec2::ZERO {
+                return false;
+            }
+            let zoom = zoom_of(outer.size(), self.state.view, self.zoom_range);
+            self.state.pan(-touch / zoom.max(1e-6));
+            return true;
         }
         let inputs = egui_pop_core::pointer::wheel_inputs(ctx);
         // The scene would scroll with egui's smoothed wheel: never.
@@ -578,6 +591,13 @@ impl<'a> GraphEditor<'a> {
                 }
                 _ => {}
             }
+        }
+        // Two fingers on a touch screen: the graph follows them.
+        let touch = navigation::touch_pan(ctx, outer);
+        if touch != Vec2::ZERO {
+            let zoom = zoom_of(outer.size(), self.state.view, self.zoom_range);
+            self.state.pan(-touch / zoom.max(1e-6));
+            moved = true;
         }
         // What the graph used is not the nodes' (a slider stepped by
         // the wheel's modifiers keeps its wheel when the graph has none).
@@ -620,6 +640,7 @@ impl<'a> GraphEditor<'a> {
             NavCommand::ZoomIn => zoom_to(self.state, zoom * ZOOM_STEP),
             NavCommand::ZoomOut => zoom_to(self.state, zoom / ZOOM_STEP),
             NavCommand::Zoom100 => zoom_to(self.state, 1.0),
+            NavCommand::ZoomTo(p) => zoom_to(self.state, p as f32 / 100.0),
             NavCommand::Pan(d) => {
                 let step = self.state.view.size() * PAN_STEP;
                 self.state.pan(d.vec() * step);
@@ -749,6 +770,7 @@ impl<'a> GraphEditor<'a> {
             self.state.fit = false;
         }
         let zoom = zoom_of(outer.size(), self.state.view, self.zoom_range);
+        egui_pop_core::canvas::set_zoom(&ctx, id, zoom);
         let level = self.level_at(zoom);
         if self.state.level != Some(level) {
             if self.state.level.is_some() {
@@ -920,6 +942,7 @@ impl<'a> GraphEditor<'a> {
             snapshot,
             export,
             hint,
+            canvas: id,
         }
     }
 }
@@ -944,6 +967,10 @@ fn pan_drag(
     let ctx = ui.ctx();
     let order = ui.layer_id().order;
     let space = navigation::primary_pans(ctx);
+    if navigation::touching(ctx) {
+        // Two fingers pan (`wheel`); the first one's drag is not a pan.
+        return None;
+    }
     ctx.input(|i| {
         let p = &i.pointer;
         let origin = p.press_origin()?;

@@ -74,6 +74,13 @@ pub const ZOOM_IN: StrKey = StrKey::new("egui-pop-viewport-zoom-in", "Zoom in");
 pub const ZOOM_FIT: StrKey = StrKey::new("egui-pop-viewport-zoom-fit", "Fit");
 /// The zoom control's button showing one image pixel per screen pixel.
 pub const ZOOM_ACTUAL: StrKey = StrKey::new("egui-pop-viewport-zoom-actual", "100 %");
+/// A canvas zoom control's menu item framing the selection.
+pub const ZOOM_FRAME_SELECTION: StrKey = StrKey::new(
+    "egui-pop-viewport-zoom-frame-selection",
+    "Frame the selection",
+);
+/// A canvas zoom control's percentage, a menu of zoom levels.
+pub const ZOOM_LEVEL: StrKey = StrKey::new("egui-pop-viewport-zoom-level", "Zoom level");
 
 /// A node graph's accessible name, unless the application gives one.
 pub const GRAPH: StrKey = StrKey::new("egui-pop-viewport-graph-label", "Node graph");
@@ -201,6 +208,8 @@ pub const NAV_HINT: StrKey = StrKey::new(
     "egui-pop-viewport-nav-hint",
     "Middle-drag, Space+drag or H to pan · Ctrl+wheel to zoom · F to frame",
 );
+/// A canvas zoom control's hand mode button.
+pub const NAV_HAND_BUTTON: StrKey = StrKey::new("egui-pop-viewport-nav-hand-button", "Hand");
 /// The indicator shown while hand mode is on.
 pub const NAV_HAND: StrKey = StrKey::new(
     "egui-pop-viewport-nav-hand",
@@ -287,6 +296,8 @@ pub const ALL: &[StrKey] = &[
     ZOOM_IN,
     ZOOM_FIT,
     ZOOM_ACTUAL,
+    ZOOM_FRAME_SELECTION,
+    ZOOM_LEVEL,
     GRAPH,
     GRAPH_VALUE,
     GRAPH_LEVEL_OVERVIEW,
@@ -330,6 +341,7 @@ pub const ALL: &[StrKey] = &[
     GRAPH_MINIMAP_VALUE,
     NAV_HINT,
     NAV_HAND,
+    NAV_HAND_BUTTON,
 ];
 
 #[cfg(test)]
