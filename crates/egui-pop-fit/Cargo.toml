@@ -1,0 +1,21 @@
+[package]
+name = "slotflow"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+description = "A slot layout engine: dense grid packing of plain boxes in standard slot sizes, with forms, orientations, growth and hysteresis."
+keywords = ["layout", "grid", "packing", "gui"]
+categories = ["gui", "algorithms"]
+readme = "README.md"
+publish = false
+
+[features]
+default = []
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"], optional = true }
+
+[dev-dependencies]
+proptest = "1"
