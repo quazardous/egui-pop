@@ -903,7 +903,8 @@ fn system_files_drop_on_the_folder_shown_or_on_an_app_target() {
         path: Some("/home/me/raw.cr3".into()),
         ..Default::default()
     });
-    h.run();
+    // egui repaints every frame while system files hover.
+    h.run_steps(3);
     assert_eq!(
         h.state().b.drop_hover(),
         Some(&(
