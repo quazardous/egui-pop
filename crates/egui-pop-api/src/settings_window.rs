@@ -706,8 +706,12 @@ fn history(ui: &mut Ui, app: &AppHandle) {
 
 /// Draws a declared setting as the settings window does (its editor
 /// bound to the store, its reset, its description), for a custom page;
-/// `false` when no setting has that id.
+/// `false` when no setting has that id. In the Settings app, the app's
+/// row: its value scopes, its origin, its modified bar.
 pub fn setting_row(ui: &mut Ui, app: &AppHandle, id: &egui_pop_model::ids::SettingId) -> bool {
+    if crate::admin::setting_row(ui, app, id) {
+        return true;
+    }
     match app.settings().into_iter().find(|e| e.id == *id) {
         Some(e) => {
             row(ui, app, &e);
@@ -1160,6 +1164,18 @@ fn shortcuts_of(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str, poin
     pointer_header(ui, app, st, pointer.is_none());
     pointer_pad(ui, app, st, target);
     let pointer_only = st.pointer_only;
+    // The command a search hit of the Settings app landed on: shown even
+    // when the search by key hid it.
+    let admin = app.service(&ADMIN);
+    let mark = admin.as_ref().and_then(|a| a.marked());
+    if let Some(m) = &mark
+        && st.key_filter.is_some()
+        && !shortcut_rows(&ctx, app, filter, st.key_filter.as_deref(), pointer_only)
+            .iter()
+            .any(|(s, _)| s.id.as_str() == m)
+    {
+        st.key_filter = None;
+    }
     let mut pointer_capture: Option<CommandId> = None;
     let capture = &mut st.capture;
     let key_filter = st.key_filter.clone();
@@ -1192,15 +1208,38 @@ fn shortcuts_of(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str, poin
         ui.add_space(t.space.s);
     }
     let conflicts = app.key_conflicts();
+    let rows = shortcut_rows(&ctx, app, filter, key_filter.as_deref(), pointer_only);
+    let marked = mark
+        .as_deref()
+        .and_then(|m| rows.iter().position(|(s, _)| s.id.as_str() == m));
+    let selection = t.accent.default.gamma_multiply(0.25);
     egui::Grid::new("egui_pop.shortcuts")
         .num_columns(4)
-        .striped(true)
+        .with_row_color(move |i, style| {
+            if marked == Some(i) {
+                Some(selection)
+            } else if i % 2 == 1 {
+                Some(style.visuals.faint_bg_color)
+            } else {
+                None
+            }
+        })
         .spacing([t.space.m, t.space.xs])
         .show(ui, |ui| {
-            for (spec, label) in
-                shortcut_rows(&ctx, app, filter, key_filter.as_deref(), pointer_only)
-            {
+            for (i, (spec, label)) in rows.into_iter().enumerate() {
                 let name = ui.label(&label);
+                if marked == Some(i) {
+                    // Said selected, scrolled to once.
+                    let text = label.clone();
+                    name.widget_info(move || {
+                        let mut info = egui::WidgetInfo::labeled(egui::Role::Label, true, &text);
+                        info.selected = Some(true);
+                        info
+                    });
+                    if admin.as_ref().is_some_and(|a| a.take_key(spec.id.as_str())) {
+                        name.scroll_to_me(Some(egui::Align::Center));
+                    }
+                }
                 let keys = app.keys_for(&spec.id);
                 let gesture = is_gesture(&spec.id);
                 // Each key with where it comes from when it is not a default
@@ -1599,8 +1638,8 @@ pub fn page_path(app: &AppHandle, id: &str) -> Option<String> {
 /// registered widget kind ([`register_kinds`]): Input › Keyboard
 /// shortcuts (`shortcuts`), Input › Pointer gestures (`gestures`),
 /// Interface › Fonts (`fonts`, editing the text settings), a page per
-/// custom settings page (`settings-page`; its settings keep their rows
-/// on the generated pages, with their value scopes), and
+/// custom settings page (`settings-page`, claiming the settings it
+/// edits: they show on it alone, drawn as the app's rows), and
 /// General › Advanced, which opens this window. After the generated
 /// pages, in that order.
 pub(crate) fn admin_manifest(app: &AppHandle) -> egui_pop_model::admin::Manifest {
@@ -1646,8 +1685,12 @@ pub(crate) fn admin_manifest(app: &AppHandle) -> egui_pop_model::admin::Manifest
             .map(|p| slug(&p.id));
         m = m.section(&format!("{scope}/{}", slug(&page.id)), &page.title, |s| {
             let words: Vec<&str> = page.keywords.iter().map(String::as_str).collect();
-            s.keywords(&words)
-                .widget("page", "settings-page", json!({ "page": page.id }));
+            let settings: Vec<&str> = page.settings.iter().map(|id| id.as_str()).collect();
+            s.keywords(&words).widget(
+                "page",
+                "settings-page",
+                json!({ "page": page.id, "settings": settings }),
+            );
             if let Some(parent) = &parent {
                 s.under(parent);
             }
@@ -1684,6 +1727,34 @@ pub(crate) fn register_kinds(admin: &Admin) {
     }
     admin.widget_kind("shortcuts", |ui, app, _| editor(ui, app, false));
     admin.widget_kind("gestures", |ui, app, _| editor(ui, app, true));
+    // The search finds the commands by name and by key: the gestures on
+    // their page, the others on the shortcuts'.
+    fn commands(
+        ctx: &egui::Context,
+        app: &AppHandle,
+        query: &str,
+        gestures: bool,
+    ) -> Vec<(String, String)> {
+        shortcut_rows(ctx, app, query, None, gestures)
+            .into_iter()
+            .filter(|(s, _)| is_gesture(&s.id) == gestures)
+            .map(|(s, label)| {
+                let keys = app.keys_for(&s.id);
+                let title = if keys.is_empty() {
+                    label
+                } else {
+                    format!("{label} ({})", keys.join(", "))
+                };
+                (s.id.as_str().to_string(), title)
+            })
+            .collect()
+    }
+    admin.widget_search("shortcuts", |ctx, app, _, query| {
+        commands(ctx, app, query, false)
+    });
+    admin.widget_search("gestures", |ctx, app, _, query| {
+        commands(ctx, app, query, true)
+    });
     admin.widget_kind("fonts", |ui, app, _| {
         let all = app.settings();
         fonts_page(ui, app, &all);

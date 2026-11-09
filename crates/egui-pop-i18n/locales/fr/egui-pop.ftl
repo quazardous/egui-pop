@@ -738,6 +738,10 @@ egui-pop-admin-set-for = Pour
 
 egui-pop-admin-set-for-name = Où { $setting } est fixé
 
+egui-pop-admin-show-item = Montrer
+
+egui-pop-admin-show-item-name = Montrer { $item } dans sa page
+
 egui-pop-about-authors = Auteurs
 
 egui-pop-about-copied = Copié.

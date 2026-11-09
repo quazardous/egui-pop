@@ -59,11 +59,23 @@ page per custom `SettingsPage` (`settings-page`, in its first setting's
 scope; `app.settings.page` opens it there). A widget names the settings
 it edits in its options' `settings`, so the generated pages leave them
 out. The window stays behind General › Advanced
-(`app.settings.window`) for what the Settings app does not do yet: its
-search does not look inside the shortcuts editor (commands by name, by
-key) nor inside a custom page's settings, only at the pages' titles and
-keywords. Helios's health check is its Health scope (findings as a
-record list with their fix and Ignore as row actions).
+(`app.settings.window`). Helios's health check is its Health scope
+(findings as a record list with their fix and Ignore as row actions).
+
+Slice 7 takes the search inside the pages. A widget kind registers its
+search (`Admin::widget_search`): the shortcuts and gestures editors find
+their commands by name and by key. The settings a widget names in its
+options' `settings` are searched as fields are, and a section is found by
+its title, description and keywords. The left panel lists each section
+found with up to eight of its items; choosing one, or "Show" on the page
+of results, lands on its section with the item marked (a setting id, or
+the widget's item key: `Admin::marked`), scrolled to once
+(`Admin::take_key`) and said selected to assistive technology. A custom
+page now claims its settings (`settings-page` options' `settings`): they
+leave the generated pages, so each shows once, and
+`settings_window::setting_row` draws them as the app's rows while the
+app draws the page. A setting id that a widget edits resolves to the
+widget's section (`Tree::resolve`).
 
 Slice 1 leaves for later: the kit components of section 4.4 (the shell draws
 with the existing selectable rows, buttons, combo boxes and indicators);

@@ -123,6 +123,8 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
             return;
         }
         let (scope, mut section, mut filter) = admin.shown();
+        // A search hit chosen: the item to land on.
+        let mut landed: Option<String> = None;
         // Escape clears the search, then closes; while a shortcuts editor
         // captures keys, it is the editor's.
         if !app.keys_captured() && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
@@ -211,6 +213,11 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
         });
         ui.separator();
         let query = filter.trim().to_string();
+        let found = if query.is_empty() {
+            Vec::new()
+        } else {
+            search(&ctx, app, admin, &entries, &tree, &query)
+        };
         let sections = tree.sections_of(&scope);
         let current = section
             .clone()
@@ -253,17 +260,40 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
                             }
                         }
                     } else {
-                        for (s, list) in search(&ctx, app, &entries, &tree, &query) {
-                            let hits = list.len();
-                            let title = format!(
-                                "{} › {}  ({hits})",
+                        // Each section found, then the items found in it:
+                        // choosing one lands on it.
+                        for (s, list) in &found {
+                            let mut title = format!(
+                                "{} › {}",
                                 scope_title_of(&ctx, &tree, &s.scope),
                                 section_title(&ctx, app, &entries, s)
                             );
-                            if ui.add(widgets::SelectableRow::new(false, title)).clicked() {
+                            if !list.is_empty() {
+                                title = format!("{title}  ({})", list.len());
+                            }
+                            let mut chosen = ui
+                                .add(widgets::SelectableRow::new(false, title))
+                                .clicked()
+                                .then_some(None);
+                            for h in list.iter().take(NAV_HITS) {
+                                let r = ui
+                                    .horizontal(|ui| {
+                                        ui.add_space(t.space.l);
+                                        ui.add(widgets::SelectableRow::new(
+                                            false,
+                                            h.title(&ctx, &entries),
+                                        ))
+                                    })
+                                    .inner;
+                                if r.clicked() {
+                                    chosen = Some(Some(h.key().to_string()));
+                                }
+                            }
+                            if let Some(key) = chosen {
                                 scope = s.scope.clone();
                                 section = Some(s.meta.id.clone());
                                 filter.clear();
+                                landed = key;
                             }
                         }
                     }
@@ -290,23 +320,58 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
                                 section_page(ui, app, admin, &entries, s);
                             }
                         } else {
-                            let mut any = false;
-                            for (s, list) in search(&ctx, app, &entries, &tree, &query) {
-                                any = true;
-                                ui.strong(format!(
+                            for (s, list) in &found {
+                                let crumb = format!(
                                     "{} › {}",
                                     scope_title_of(&ctx, &tree, &s.scope),
                                     section_title(&ctx, app, &entries, s)
-                                ));
-                                ui.add_space(t.space.s);
-                                for f in list {
-                                    if let Some(e) = entry_of(&entries, f) {
-                                        field_row(ui, app, admin, e, f);
+                                );
+                                // A section found by its title or keywords:
+                                // the way to it.
+                                let mut open = false;
+                                ui.horizontal(|ui| {
+                                    ui.strong(&crumb);
+                                    if list.is_empty() {
+                                        let r = ui.small_button(strings::tr(
+                                            &ctx,
+                                            &txt::SETTINGS_OPEN_PAGE,
+                                        ));
+                                        a11y::name(
+                                            &r,
+                                            Role::Button,
+                                            &strings::tr_args(
+                                                &ctx,
+                                                &txt::SETTINGS_OPEN_PAGE_NAME,
+                                                &[("page", &crumb)],
+                                            ),
+                                        );
+                                        open = r.clicked();
                                     }
+                                });
+                                ui.add_space(t.space.s);
+                                for h in list {
+                                    match h {
+                                        Hit::Setting(f) => {
+                                            if let Some(e) = entry_of(&entries, f) {
+                                                field_row(ui, app, admin, e, f);
+                                            }
+                                        }
+                                        Hit::Item(key, title) => {
+                                            if item_hit(ui, title) {
+                                                landed = Some(key.clone());
+                                                open = true;
+                                            }
+                                        }
+                                    }
+                                }
+                                if open {
+                                    scope = s.scope.clone();
+                                    section = Some(s.meta.id.clone());
+                                    filter.clear();
                                 }
                                 ui.add_space(t.space.m);
                             }
-                            if !any {
+                            if found.is_empty() {
                                 ui.weak(strings::tr(&ctx, &txt::NOTHING_MATCHES));
                             }
                         }
@@ -318,6 +383,11 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
             let moved = s.section != section || s.scope.as_deref() != Some(scope.as_str());
             if moved {
                 s.row = None;
+                s.mark = None;
+            }
+            if let Some(key) = landed {
+                s.mark = Some(key.clone());
+                s.key = Some(key);
             }
             s.scope = Some(scope);
             s.section = section;
@@ -396,55 +466,151 @@ fn entry_of<'a>(entries: &'a [SettingEntry], f: &Field) -> Option<&'a SettingEnt
     entries.iter().find(|e| e.id.as_str() == id)
 }
 
-/// The fields of a section matching the search: label, description,
-/// section and id, as shown.
-fn hits<'a>(
+/// How many items found a section lists under it in the left panel
+/// (its count says them all; the page shows them all).
+const NAV_HITS: usize = 8;
+
+/// What the search found inside a section.
+enum Hit {
+    /// A setting: its row, editable in place.
+    Setting(Box<Field>),
+    /// An item inside a widget (a command of the shortcuts editor): its
+    /// key and its title.
+    Item(String, String),
+}
+
+impl Hit {
+    /// What landing on it marks: the setting id, or the item's key.
+    fn key(&self) -> &str {
+        match self {
+            Hit::Setting(f) => f.setting_id().unwrap_or_default(),
+            Hit::Item(key, _) => key,
+        }
+    }
+
+    fn title(&self, ctx: &egui::Context, entries: &[SettingEntry]) -> String {
+        match self {
+            Hit::Setting(f) => entry_of(entries, f).map_or_else(
+                || f.meta.id.clone(),
+                |e| settings_window::shown(ctx, e).label,
+            ),
+            Hit::Item(_, title) => title.clone(),
+        }
+    }
+}
+
+/// An item found inside a widget, on the search's page: its title and
+/// the button landing on it. `true` when chosen.
+fn item_hit(ui: &mut Ui, title: &str) -> bool {
+    let ctx = ui.ctx().clone();
+    ui.horizontal_wrapped(|ui| {
+        ui.label(title);
+        let r = ui.small_button(strings::tr(&ctx, &txt::ADMIN_SHOW_ITEM));
+        a11y::name(
+            &r,
+            Role::Button,
+            &strings::tr_args(&ctx, &txt::ADMIN_SHOW_ITEM_NAME, &[("item", title)]),
+        );
+        r.clicked()
+    })
+    .inner
+}
+
+/// What a section holds matching the search: its fields and the
+/// settings its widgets edit (label, description, section and id, as
+/// shown), and the items a widget kind's search finds in its widgets.
+fn hits(
     ctx: &egui::Context,
     app: &AppHandle,
+    admin: &Admin,
     entries: &[SettingEntry],
-    s: &'a Section,
+    s: &Section,
     query: &str,
-) -> Vec<&'a Field> {
-    s.groups
-        .iter()
-        .flat_map(|g| &g.items)
-        .filter_map(|i| match i {
-            Item::Field(f) => Some(f),
-            _ => None,
-        })
-        .filter(|f| {
-            entry_of(entries, f).is_some_and(|e| {
+) -> Vec<Hit> {
+    let found = |id: &str| {
+        entries
+            .iter()
+            .find(|e| e.id.as_str() == id)
+            .is_some_and(|e| {
                 settings_window::matches(ctx, app, e, query)
                     || query
                         .split_whitespace()
                         .all(|w| fuzzy::score(w, e.id.as_str()).is_some())
             })
-        })
-        .collect()
+    };
+    let mut out = Vec::new();
+    for item in s.groups.iter().flat_map(|g| &g.items) {
+        match item {
+            Item::Field(f) if f.setting_id().is_some_and(found) => {
+                out.push(Hit::Setting(Box::new(f.clone())));
+            }
+            Item::Widget(w) => {
+                out.extend(
+                    w.settings()
+                        .filter(|id| found(id))
+                        .map(|id| Hit::Setting(Box::new(Field::setting(id)))),
+                );
+                if let Some(search) = admin.search_of(&w.kind) {
+                    out.extend(
+                        search(ctx, app, &w.options, query)
+                            .into_iter()
+                            .map(|(key, title)| Hit::Item(key, title)),
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+    out
 }
 
-/// The search's hits by section, a setting placed in several sections
-/// shown once, at its first place.
-fn search<'a>(
+/// Whether a section's title, description or keywords hold every word
+/// of the search.
+fn section_found(
     ctx: &egui::Context,
     app: &AppHandle,
     entries: &[SettingEntry],
+    s: &Section,
+    query: &str,
+) -> bool {
+    let text = format!(
+        "{} {} {}",
+        section_title(ctx, app, entries, s),
+        builtin_text(ctx, &s.meta.description),
+        s.meta.keywords.join(" ")
+    )
+    .to_lowercase();
+    query
+        .split_whitespace()
+        .all(|w| text.contains(&w.to_lowercase()))
+}
+
+/// The search's hits by section: a setting placed in several sections
+/// shown once, at its first place, as an item is; a section found by its
+/// title or keywords listed even with nothing found inside it.
+fn search<'a>(
+    ctx: &egui::Context,
+    app: &AppHandle,
+    admin: &Admin,
+    entries: &[SettingEntry],
     tree: &'a Tree,
     query: &str,
-) -> Vec<(&'a Section, Vec<&'a Field>)> {
-    let mut seen: Vec<&str> = Vec::new();
+) -> Vec<(&'a Section, Vec<Hit>)> {
+    let mut seen: Vec<(bool, String)> = Vec::new();
     let mut out = Vec::new();
     for s in &tree.sections {
-        let list: Vec<&Field> = hits(ctx, app, entries, s, query)
+        let list: Vec<Hit> = hits(ctx, app, admin, entries, s, query)
             .into_iter()
-            .filter(|f| {
-                let id = f.setting_id().unwrap_or_default();
-                let fresh = !seen.contains(&id);
-                seen.push(id);
+            .filter(|h| {
+                let k = (matches!(h, Hit::Item(..)), h.key().to_string());
+                let fresh = !seen.contains(&k);
+                if fresh {
+                    seen.push(k);
+                }
                 fresh
             })
             .collect();
-        if !list.is_empty() {
+        if !list.is_empty() || section_found(ctx, app, entries, s, query) {
             out.push((s, list));
         }
     }
@@ -472,6 +638,32 @@ fn modified(app: &AppHandle, admin: &Admin, entries: &[SettingEntry], s: &Sectio
             })
         })
         .count()
+}
+
+/// Set while a widget of a page draws.
+const IN_WIDGET: &str = "egui_pop.admin.in_widget";
+
+/// A setting a custom page draws ([`settings_window::setting_row`]),
+/// while the Settings app draws the page: the app's own row (its value
+/// scopes, origin, modified bar, and the mark a search hit leaves).
+/// `false` elsewhere, or when no setting has that id.
+pub(super) fn setting_row(ui: &mut Ui, app: &AppHandle, id: &SettingId) -> bool {
+    if !ui
+        .ctx()
+        .data(|d| d.get_temp::<bool>(egui::Id::unique(IN_WIDGET)))
+        .unwrap_or(false)
+    {
+        return false;
+    }
+    let Some(admin) = app.service(&ADMIN) else {
+        return false;
+    };
+    let entries = app.settings();
+    let Some(e) = entries.iter().find(|e| e.id == *id) else {
+        return false;
+    };
+    field_row(ui, app, &admin, e, &Field::setting(id.as_str()));
+    true
 }
 
 /// A section's page: its title and "Reset section", its description,
@@ -639,7 +831,20 @@ fn item_row(
             });
         }
         Item::Widget(w) => match admin.widget(&w.kind) {
-            Some(draw) => draw(ui, app, &w.options),
+            Some(draw) => {
+                // A custom page's settings drawn inside it take the
+                // Settings app's rows ([`setting_row`]).
+                let id = egui::Id::unique(IN_WIDGET);
+                let before = ctx.data(|d| d.get_temp::<bool>(id));
+                ctx.data_mut(|d| d.insert_temp(id, true));
+                draw(ui, app, &w.options);
+                ctx.data_mut(|d| match before {
+                    Some(b) => {
+                        d.insert_temp(id, b);
+                    }
+                    None => d.remove::<bool>(id),
+                });
+            }
             None => {
                 ui.weak(strings::tr_args(
                     &ctx,
@@ -1188,7 +1393,10 @@ fn field_row(ui: &mut Ui, app: &AppHandle, admin: &Admin, e: &SettingEntry, f: &
     let modified = !layers.holders(&e.path, &value, &default).is_empty();
     let d = settings_window::shown(&ctx, e);
     let id = e.id.as_str();
-    let focus_me = lock(&admin.state).key.as_deref() == Some(id);
+    let focus_me = admin.key_is(id);
+    // The item a search hit or a deep link landed on: marked behind.
+    let marked = admin.marked().as_deref() == Some(id);
+    let behind = ui.painter().add(egui::Shape::Noop);
     // The row: its right-hand controls laid first, from the page's right
     // edge, then the bar and the editor in what is left; nothing goes
     // past the page.
@@ -1292,10 +1500,26 @@ fn field_row(ui: &mut Ui, app: &AppHandle, admin: &Admin, e: &SettingEntry, f: &
     if origin != ValueScope::App {
         name = format!("{name}, {}", origin_text(&ctx, origin));
     }
-    a11y::name(&row, Role::Group, &name);
-    if focus_me {
+    if marked {
+        ui.painter().set(
+            behind,
+            egui::epaint::RectShape::filled(
+                row.rect.expand(t.space.xs),
+                t.radius.widget,
+                t.accent.default.gamma_multiply(0.25),
+            ),
+        );
+        // Said selected to assistive technology.
+        row.widget_info(move || {
+            let mut info = egui::WidgetInfo::labeled(Role::Group, true, &name);
+            info.selected = Some(true);
+            info
+        });
+    } else {
+        a11y::name(&row, Role::Group, &name);
+    }
+    if focus_me && admin.take_key(id) {
         row.scroll_to_me(Some(Align::Center));
-        lock(&admin.state).key = None;
     }
     let help = if f.help.is_empty() {
         d.description.clone()

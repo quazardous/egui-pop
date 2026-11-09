@@ -87,6 +87,14 @@ pub const SURFACE: &str = "adminWindow";
 /// (the declared exception to "components never draw").
 pub type WidgetKindFn = Arc<dyn Fn(&mut Ui, &AppHandle, &Json) + Send + Sync>;
 
+/// A widget kind's search: the items of a node of its kind matching the
+/// query (every word), each as its key and its title. The key is what
+/// `scope/section/<key>` lands on: the widget marks the item while its
+/// section shows ([`Admin::marked`]) and scrolls to it once
+/// ([`Admin::take_key`]).
+pub type WidgetSearchFn =
+    Arc<dyn Fn(&egui::Context, &AppHandle, &Json, &str) -> Vec<(String, String)> + Send + Sync>;
+
 #[derive(Debug, Default)]
 struct State {
     open: bool,
@@ -97,6 +105,9 @@ struct State {
     /// A record a deep link named (its key's value): marked while its
     /// section shows.
     row: Option<String>,
+    /// The item a deep link or a search hit landed on (a setting id, or
+    /// a widget's item key): marked while its section shows.
+    mark: Option<String>,
     filter: String,
     /// The value scope a row writes to, when its "Set for" menu chose.
     target: BTreeMap<String, ValueScope>,
@@ -111,6 +122,7 @@ pub struct Admin {
     manifests: Mutex<Vec<Manifest>>,
     hooks: Mutex<Hooks>,
     widgets: Mutex<BTreeMap<String, WidgetKindFn>>,
+    searches: Mutex<BTreeMap<String, WidgetSearchFn>>,
     diagnostics: Mutex<Diagnostics>,
     reads: Mutex<Reads>,
 }
@@ -166,6 +178,7 @@ impl Admin {
             s.scope = Some(p.scope);
             s.section = p.section;
             s.row = None;
+            s.mark.clone_from(&p.key);
             s.key = p.key;
             s.filter.clear();
         }
@@ -178,6 +191,7 @@ impl Admin {
         let mut s = lock(&self.state);
         s.open = false;
         s.filter.clear();
+        s.mark = None;
     }
 
     /// The scope, section and search shown.
@@ -211,6 +225,48 @@ impl Admin {
 
     pub(crate) fn widget(&self, id: &str) -> Option<WidgetKindFn> {
         lock(&self.widgets).get(id).cloned()
+    }
+
+    /// Registers a widget kind's search, so the Settings app's search
+    /// finds the items inside a node of that kind (the shortcuts editor's
+    /// commands, by name and by key). The settings a widget names in its
+    /// options' `settings` are searched without it.
+    pub fn widget_search(
+        &self,
+        kind: &str,
+        search: impl Fn(&egui::Context, &AppHandle, &Json, &str) -> Vec<(String, String)>
+        + Send
+        + Sync
+        + 'static,
+    ) {
+        lock(&self.searches).insert(kind.into(), Arc::new(search));
+    }
+
+    pub(crate) fn search_of(&self, kind: &str) -> Option<WidgetSearchFn> {
+        lock(&self.searches).get(kind).cloned()
+    }
+
+    /// The item a deep link or a search hit landed on, marked while its
+    /// section shows: a setting id, or a widget's item key.
+    pub fn marked(&self) -> Option<String> {
+        lock(&self.state).mark.clone()
+    }
+
+    /// Whether `key` is the item to scroll to, taken once: the widget
+    /// that draws it scrolls to it.
+    pub fn take_key(&self, key: &str) -> bool {
+        let mut s = lock(&self.state);
+        if s.key.as_deref() == Some(key) {
+            s.key = None;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Whether `key` is still waiting to be scrolled to.
+    pub(crate) fn key_is(&self, key: &str) -> bool {
+        lock(&self.state).key.as_deref() == Some(key)
     }
 
     pub(crate) fn hooks(&self) -> std::sync::MutexGuard<'_, Hooks> {
@@ -548,6 +604,12 @@ fn write(app: &AppHandle, path: &str, v: &Json) {
     }
 }
 
+/// Draws a setting a custom page draws as the Settings app's row, while
+/// the app draws the page; `false` elsewhere.
+pub(crate) fn setting_row(ui: &mut Ui, app: &AppHandle, id: &SettingId) -> bool {
+    shell::setting_row(ui, app, id)
+}
+
 /// A value scope from its name.
 pub fn scope_named(name: &str) -> Option<ValueScope> {
     ValueScope::ALL.into_iter().find(|s| s.name() == name)
@@ -733,6 +795,7 @@ fn describe(app: &AppHandle) -> Json {
         "scope": scope,
         "section": section,
         "filter": filter,
+        "marked": a.marked(),
         "offered": a.offered().iter().map(|s| s.name()).collect::<Vec<_>>(),
         "origins": origins,
         "tree": tree,
