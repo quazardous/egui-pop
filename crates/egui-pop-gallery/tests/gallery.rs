@@ -8133,14 +8133,12 @@ fn the_file_browser_page_lights_the_folder_a_drag_is_over_and_takes_the_drop() {
     );
     h.hover_at(over);
     h.run();
-    assert!(
-        h.query_by_label("Drop into 2026").is_some(),
-        "payload: {}, caption: {:?}, refused: {}, over: {over:?}",
-        egui::DragAndDrop::has_any_payload(&h.ctx),
-        h.query_by_label_contains("Drop into")
-            .map(|n| n.accesskit_node().label()),
-        h.query_by_label("Cannot drop here").is_some(),
-    );
+    // The catalogue isolates the folder's name: matched by its parts.
+    let caption = h
+        .query_by_label_contains("Drop into")
+        .and_then(|n| n.accesskit_node().value().or(n.accesskit_node().label()))
+        .unwrap_or_default();
+    assert!(caption.contains("2026"), "the caption: {caption:?}");
     egui_pop_test::assert_all_named(&h);
     h.snapshot("file-browser-drop-pop-dark");
     h.event(egui::Event::PointerButton {
