@@ -5,7 +5,7 @@
 //! page.
 
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable as _;
+use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_api::mounts::SETTINGS_PAGE;
 use egui_pop_api::settings_pages::SettingsPage;
 use egui_pop_api::settings_window::{self, CMD_SETTINGS_PAGE};
@@ -284,4 +284,136 @@ fn the_page_reset_takes_its_settings_back_in_one_step() {
             .len(),
         steps + 1
     );
+}
+
+/// The Settings app, opened on a place (`admin.open`).
+fn open_app(h: &mut Harness<'_, App>, args: serde_json::Value) {
+    let out = h
+        .state_mut()
+        .run(&egui_pop_api::admin::CMD_OPEN, args, Origin::User)
+        .now();
+    assert!(matches!(out, Some(Ok(_))), "{out:?}");
+    h.run();
+    h.run();
+}
+
+/// Types in the Settings app's search field, clicked first.
+fn search_app(h: &mut Harness<'_, App>, text: &str) {
+    let hint = "Search every setting";
+    h.get_by_role_and_label(egui::accesskit::Role::SearchInput, hint)
+        .click();
+    h.run();
+    h.get_by_role_and_label(egui::accesskit::Role::SearchInput, hint)
+        .type_text(text);
+    h.run();
+    h.run();
+}
+
+fn admin(h: &Harness<'_, App>) -> std::sync::Arc<egui_pop_api::admin::Admin> {
+    h.state()
+        .handle()
+        .service(&egui_pop_api::admin::ADMIN)
+        .unwrap()
+}
+
+/// Whether a node is said selected (egui says it toggled on).
+fn marked(n: &egui_kittest::Node<'_>) -> bool {
+    n.accesskit_node().toggled() == Some(egui::accesskit::Toggled::True)
+}
+
+/// How many rows of a setting the page shows, and whether one is
+/// marked (said selected).
+fn rows(h: &Harness<'_, App>, label: &str) -> (usize, bool) {
+    let all: Vec<_> = h
+        .query_all_by_role_and_label(egui::accesskit::Role::Group, label)
+        .collect();
+    let marked = all.iter().any(|n| marked(n));
+    (all.len(), marked)
+}
+
+#[test]
+fn in_the_settings_app_a_page_s_settings_show_once_on_the_page() {
+    let mut h = harness();
+    let handle = h.state().handle().clone();
+    // No generated row for it: the page claims it.
+    let tree = admin(&h).tree(&handle);
+    assert!(
+        tree.fields()
+            .iter()
+            .all(|(_, f)| f.setting_id() != Some(THREADS.as_str())),
+        "no generated row for a page's setting"
+    );
+    // A deep link to the setting lands on the page, its row marked.
+    open_app(&mut h, json!({ "key": THREADS.as_str() }));
+    assert_eq!(
+        admin(&h).shown().1.as_deref(),
+        Some("compute-devices"),
+        "the page's section"
+    );
+    assert!(h.query_by_label("Devices found: none").is_some());
+    assert_eq!(rows(&h, "Worker threads"), (1, true));
+    // Every section of every scope: the setting's row once in all.
+    let mut seen = 0;
+    for s in &tree.sections {
+        open_app(&mut h, json!({ "path": s.path() }));
+        seen += rows(&h, "Worker threads").0;
+    }
+    assert_eq!(seen, 1);
+    egui_pop_test::assert_all_named(&h);
+}
+
+#[test]
+fn the_settings_app_s_search_finds_a_page_s_setting_and_lands_on_it() {
+    let mut h = harness();
+    open_app(&mut h, json!({ "path": "general" }));
+    search_app(&mut h, "worker threads");
+    // Under the page's breadcrumb, editable in place, once.
+    h.get_by_label("General › Devices");
+    assert_eq!(rows(&h, "Worker threads").0, 1);
+    // Chosen in the left panel: the page, the row marked.
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Worker threads")
+        .click();
+    h.run();
+    h.run();
+    let a = admin(&h);
+    assert_eq!(a.shown().1.as_deref(), Some("compute-devices"));
+    assert_eq!(a.shown().2, "", "the search cleared");
+    assert_eq!(a.marked().as_deref(), Some(THREADS.as_str()));
+    assert!(h.query_by_label("Devices found: none").is_some());
+    assert_eq!(rows(&h, "Worker threads"), (1, true));
+    // Another section: the mark goes.
+    open_app(&mut h, json!({ "path": "input/shortcuts" }));
+    assert_eq!(a.marked(), None);
+}
+
+#[test]
+fn the_settings_app_s_search_finds_a_shortcut_by_name_and_by_key() {
+    use egui_pop_api::app::CMD_UNDO;
+    let mut h = harness();
+    open_app(&mut h, json!({ "path": "general" }));
+    // By key.
+    search_app(&mut h, "ctrl+z");
+    h.get_by_label("Input › Keyboard shortcuts  (1)");
+    let found = "Edit: Undo (Ctrl+Z)";
+    h.get_by_label(&format!("Show {found} in its page")).click();
+    h.run();
+    h.run();
+    let a = admin(&h);
+    assert_eq!(a.shown().1.as_deref(), Some("shortcuts"));
+    assert_eq!(a.marked().as_deref(), Some(CMD_UNDO.as_str()));
+    // The command's row, marked.
+    let undo = h.get_by_label("Edit: Undo");
+    assert!(marked(&undo));
+    egui_pop_test::assert_all_named(&h);
+    // By name, chosen in the left panel.
+    open_app(&mut h, json!({ "path": "general" }));
+    assert_eq!(a.marked(), None);
+    search_app(&mut h, "undo");
+    h.get_by_role_and_label(egui::accesskit::Role::Button, found)
+        .click();
+    h.run();
+    h.run();
+    assert_eq!(a.shown().1.as_deref(), Some("shortcuts"));
+    assert_eq!(a.marked().as_deref(), Some(CMD_UNDO.as_str()));
+    assert!(marked(&h.get_by_label("Edit: Undo")));
 }

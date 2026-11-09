@@ -88,6 +88,11 @@ pub const PALETTE_NOT_JSON: StrKey =
 
 pub const ADMIN_SEARCH_HINT: StrKey =
     StrKey::new("egui-pop-admin-search-hint", "Search every setting");
+pub const ADMIN_SHOW_ITEM: StrKey = StrKey::new("egui-pop-admin-show-item", "Show");
+pub const ADMIN_SHOW_ITEM_NAME: StrKey = StrKey::new(
+    "egui-pop-admin-show-item-name",
+    "Show { $item } in its page",
+);
 pub const ADMIN_POP_OUT: StrKey = StrKey::new("egui-pop-admin-pop-out", "Pop out");
 pub const ADMIN_POP_OUT_TIP: StrKey = StrKey::new(
     "egui-pop-admin-pop-out-tip",
@@ -1372,6 +1377,8 @@ pub const ALL: &[StrKey] = &[
     PALETTE_NOT_NUMBER,
     PALETTE_NOT_JSON,
     ADMIN_SEARCH_HINT,
+    ADMIN_SHOW_ITEM,
+    ADMIN_SHOW_ITEM_NAME,
     ADMIN_POP_OUT,
     ADMIN_POP_OUT_TIP,
     ADMIN_POP_IN,

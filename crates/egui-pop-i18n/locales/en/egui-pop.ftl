@@ -1128,6 +1128,10 @@ egui-pop-admin-set-for = Set for
 
 egui-pop-admin-set-for-name = Where { $setting } is set
 
+egui-pop-admin-show-item = Show
+
+egui-pop-admin-show-item-name = Show { $item } in its page
+
 egui-pop-area-bottom = the bottom panel
 
 egui-pop-area-center = the centre

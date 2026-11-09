@@ -1364,7 +1364,8 @@ impl Tree {
     }
 
     /// Resolves a deep link: `scope`, `scope/section`,
-    /// `scope/section/key`, or a setting id alone (its first place).
+    /// `scope/section/key`, or a setting id alone (its first place: a
+    /// field bound to it, or a widget that edits it).
     pub fn resolve(&self, link: &str) -> Option<Place> {
         let parts: Vec<&str> = link.splitn(3, '/').collect();
         if self.scopes.iter().any(|s| s.meta.id == parts[0]) {
@@ -1384,7 +1385,11 @@ impl Tree {
             s.groups
                 .iter()
                 .flat_map(|g| &g.items)
-                .any(|i| matches!(i, Item::Field(f) if f.setting_id() == Some(link)))
+                .any(|i| match i {
+                    Item::Field(f) => f.setting_id() == Some(link),
+                    Item::Widget(w) => w.settings().any(|x| x == link),
+                    _ => false,
+                })
                 .then(|| Place {
                     scope: s.scope.clone(),
                     section: Some(s.meta.id.clone()),
@@ -1512,6 +1517,19 @@ mod tests {
         assert!(t.resolve("backup/none").is_none());
         assert!(t.resolve("nothing").is_none());
         assert_eq!(t.shown_scopes().len(), 1);
+        // A setting a widget edits resolves to the widget's section.
+        t.merge(Manifest::new(FORMAT).section("backup/disks", "Disks", |s| {
+            s.widget(
+                "page",
+                "settings-page",
+                json!({ "settings": ["backup.disk"] }),
+            );
+        }));
+        let p = t.resolve("backup.disk").unwrap();
+        assert_eq!(
+            (p.section.as_deref(), p.key.as_deref()),
+            (Some("disks"), Some("backup.disk"))
+        );
     }
 
     #[test]

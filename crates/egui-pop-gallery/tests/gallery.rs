@@ -1105,10 +1105,16 @@ fn the_settings_app_shows_generated_pages_value_scopes_and_search() {
     let app = h.state().app.handle();
     assert!(egui_pop::api::admin::is_open(app));
     egui_pop_test::assert_all_named(&h);
-    // The library's size and the workspace's tone, each said.
-    h.get_by_role_and_label(egui::accesskit::Role::Group, "Size, modified, library");
+    // The workspace's tone, said.
     h.get_by_role_and_label(egui::accesskit::Role::Group, "Tone, modified, workspace");
     results.add(h.try_snapshot("admin-pop-dark"));
+    // The library's size, on the custom page that edits it (only there),
+    // drawn as the app's row.
+    h.get_by_label("Greeting preview").click();
+    h.run();
+    h.run();
+    h.get_by_role_and_label(egui::accesskit::Role::Group, "Size, modified, library");
+    egui_pop_test::assert_all_named(&h);
     // The section a manifest declares.
     h.get_by_label("Greeting text").click();
     h.run();
