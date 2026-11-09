@@ -208,6 +208,11 @@ impl Plugin for SettingsPlugin {
                     }
                     if let Some(w) = call.app.service(&SETTINGS_WINDOW) {
                         w.close();
+                        // Its modal goes too, or it would stay over the app.
+                        egui_pop_core::overlay::close(
+                            &call.app.egui(),
+                            egui::Id::unique("egui_pop.settings"),
+                        );
                     }
                     let place = section.and_then(|s| page_path(call.app, s));
                     admin.open(call.app, place.as_deref())?;
@@ -241,6 +246,12 @@ impl Plugin for SettingsPlugin {
                 } else {
                     if let Some(admin) = call.app.service(&ADMIN) {
                         admin.close();
+                        // Its overlay goes too, or the window's modal
+                        // would open under it and close at once.
+                        egui_pop_core::overlay::close(
+                            &call.app.egui(),
+                            egui::Id::unique("egui_pop.admin"),
+                        );
                     }
                     w.open(None);
                 }
@@ -1588,7 +1599,8 @@ pub fn page_path(app: &AppHandle, id: &str) -> Option<String> {
 /// registered widget kind ([`register_kinds`]): Input › Keyboard
 /// shortcuts (`shortcuts`), Input › Pointer gestures (`gestures`),
 /// Interface › Fonts (`fonts`, editing the text settings), a page per
-/// custom settings page (`settings-page`, editing its settings), and
+/// custom settings page (`settings-page`; its settings keep their rows
+/// on the generated pages, with their value scopes), and
 /// General › Advanced, which opens this window. After the generated
 /// pages, in that order.
 pub(crate) fn admin_manifest(app: &AppHandle) -> egui_pop_model::admin::Manifest {
@@ -1625,7 +1637,6 @@ pub(crate) fn admin_manifest(app: &AppHandle) -> egui_pop_model::admin::Manifest
     let ids: Vec<&str> = pages.iter().map(|p| p.id.as_str()).collect();
     for page in &pages {
         let scope = page_scope(&all, page);
-        let settings: Vec<&str> = page.settings.iter().map(|s| s.as_str()).collect();
         let parent = page
             .parent
             .as_deref()
@@ -1635,11 +1646,8 @@ pub(crate) fn admin_manifest(app: &AppHandle) -> egui_pop_model::admin::Manifest
             .map(|p| slug(&p.id));
         m = m.section(&format!("{scope}/{}", slug(&page.id)), &page.title, |s| {
             let words: Vec<&str> = page.keywords.iter().map(String::as_str).collect();
-            s.keywords(&words).widget(
-                "page",
-                "settings-page",
-                json!({ "page": page.id, "settings": settings }),
-            );
+            s.keywords(&words)
+                .widget("page", "settings-page", json!({ "page": page.id }));
             if let Some(parent) = &parent {
                 s.under(parent);
             }

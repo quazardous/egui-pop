@@ -445,10 +445,12 @@ impl Admin {
         Some(answer)
     }
 
-    /// Forgets the answers read: they are read again when shown.
+    /// Forgets the answers read, and the reads still in flight (their
+    /// answer may predate the change): they are read again when shown.
     pub fn refresh(&self) {
         let mut r = lock(&self.reads);
         r.answers.clear();
+        r.asked.clear();
     }
 
     /// Looks at the journal since the last look: a command that changes
