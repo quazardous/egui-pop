@@ -608,7 +608,7 @@ fn ctrl_comma_opens_the_settings_app_with_the_window_s_own_pages() {
     // leaves the app open.
     run(&mut h, &CMD_OPEN, json!({ "path": "input/shortcuts" }));
     assert_eq!(a.shown().1.as_deref(), Some("shortcuts"));
-    assert!(h.query_by_label(SHORTCUTS).is_some());
+    assert!(h.query_all_by_label(SHORTCUTS).count() > 0);
     h.get_by_label("Change the keys of Edit: Undo").click();
     h.run();
     h.run();
