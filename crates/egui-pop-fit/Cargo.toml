@@ -8,6 +8,7 @@ description = "A slot layout engine with no egui dependency: dense grid packing 
 keywords = ["layout", "grid", "packing", "gui"]
 categories = ["gui", "algorithms"]
 readme = "README.md"
+repository = "https://github.com/quazardous/egui_gridflow"
 publish = false
 
 [lib]
