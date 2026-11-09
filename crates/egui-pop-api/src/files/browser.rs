@@ -4086,8 +4086,11 @@ impl FileBrowser {
         let font = egui::TextStyle::Body.resolve(ui.style());
         let galley = painter.layout_no_wrap(text.clone(), font, visuals.strong_text_color());
         let size = galley.size() + egui::vec2(16.0, 8.0);
+        // Over the part of the entries in view: they may run on below.
+        let shown = entries.intersect(ui.clip_rect());
+        let shown = if shown.is_positive() { shown } else { entries };
         let caption = egui::Rect::from_center_size(
-            egui::pos2(entries.center().x, entries.bottom() - size.y / 2.0 - 8.0),
+            egui::pos2(shown.center().x, shown.bottom() - size.y / 2.0 - 8.0),
             size,
         );
         painter.rect_filled(caption, 4.0, visuals.window_fill);
