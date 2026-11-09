@@ -223,70 +223,69 @@ struct Choice {
 /// input order. This function never panics.
 pub fn layout(container: &Container, elements: &[Element], previous: Option<&Layout>) -> Layout {
     let unit = container.unit;
-    let columns = columns(container, previous);
+    let natural = container.twelfths(container.width);
+    let columns = columns(natural, container.unit, previous);
     let max_rows = container.height.map(|h| container.twelfths(h));
 
     // 1. Choose a form and an orientation for each element.
     let choices: Vec<Result<Choice, (Reason, usize, Orientation)>> = elements
         .iter()
         .map(|e| {
-            let prev = previous
-                .and_then(|l| l.get(e.key))
-                .filter(|p| p.status.is_placed());
-            choose(e, columns, max_rows, prev)
+            // An overflow's choice is kept too: dropping it would make the
+            // next layout of the same box differ.
+            let prev = previous.and_then(|l| l.get(e.key));
+            choose(e, columns, natural, max_rows, prev)
         })
         .collect();
 
     // 2. Place: pins first, then the flow, densely.
-    let mut rects: Vec<Option<GridRect>> = vec![None; elements.len()];
-    let mut status: Vec<Status> = vec![Status::Placed; elements.len()];
-    let mut taken: Vec<GridRect> = Vec::new();
-    for (i, e) in elements.iter().enumerate() {
-        let (Ok(c), Some(pin)) = (&choices[i], e.pin) else {
-            continue;
-        };
-        let r = GridRect {
-            x: pin.col,
-            y: pin.row,
-            w: c.w,
-            h: c.h,
-        };
-        let inside = r.x.checked_add(r.w).is_some_and(|right| right <= columns)
-            && r.y
-                .checked_add(r.h)
-                .is_some_and(|b| max_rows.is_none_or(|m| b <= m));
-        if !inside {
-            status[i] = Status::Unpinned(Reason::PinOutOfBounds);
-        } else if taken.iter().any(|t| t.overlaps(&r)) {
-            status[i] = Status::Unpinned(Reason::PinOverlap);
-        } else {
-            rects[i] = Some(r);
-            taken.push(r);
-        }
-    }
-    for (i, choice) in choices.iter().enumerate() {
-        match choice {
-            Err((reason, _, _)) => status[i] = Status::Overflow(*reason),
-            Ok(_) if rects[i].is_some() => {}
-            Ok(c) => match first_fit(&taken, c.w, c.h, columns, max_rows) {
-                Some(r) => {
-                    rects[i] = Some(r);
-                    taken.push(r);
-                }
-                None => status[i] = Status::Overflow(Reason::NoRoom),
-            },
-        }
-    }
-
-    // 3. Grow into the leftover room, one step per element per round.
-    let content = rects
+    let mut sizes: Vec<Option<(u32, u32)>> = choices
         .iter()
-        .flatten()
-        .map(GridRect::bottom)
-        .max()
-        .unwrap_or(0);
-    let row_limit = max_rows.unwrap_or(content);
-    grow(&choices, &mut rects, columns, row_limit);
+        .map(|c| c.as_ref().ok().map(|c| (c.w, c.h)))
+        .collect();
+    let (mut rects, mut status) = place(elements, &sizes, columns, max_rows);
+
+    // 3. Grow into the leftover room, one step per element per round. A step
+    // is kept when the dense placement at the new sizes changes no status and
+    // stays within the bounded height, or for a container growing down, the
+    // height used before growth.
+    let rows_of = |rects: &[Option<GridRect>]| {
+        rects
+            .iter()
+            .flatten()
+            .map(GridRect::bottom)
+            .max()
+            .unwrap_or(0)
+    };
+    let row_limit = max_rows.unwrap_or_else(|| rows_of(&rects));
+    loop {
+        let mut grew = false;
+        for i in 0..elements.len() {
+            let (Ok(c), Some(size)) = (&choices[i], sizes[i]) else {
+                continue;
+            };
+            if !status[i].is_placed() {
+                continue;
+            }
+            let Some(next) = grown(&c.policy, size, columns) else {
+                continue;
+            };
+            let mut tried = sizes.clone();
+            tried[i] = Some(next);
+            let (r, s) = place(elements, &tried, columns, max_rows);
+            if s == status && rows_of(&r) <= row_limit {
+                (sizes, rects, grew) = (tried, r, true);
+            }
+        }
+        if !grew {
+            break;
+        }
+    }
+    for (i, c) in choices.iter().enumerate() {
+        if let Err((reason, _, _)) = c {
+            status[i] = Status::Overflow(*reason);
+        }
+    }
 
     // 4. Visual order and output.
     let mut order: Vec<usize> = (0..elements.len())
@@ -326,12 +325,7 @@ pub fn layout(container: &Container, elements: &[Element], previous: Option<&Lay
         .collect();
     Layout {
         columns,
-        rows: rects
-            .iter()
-            .flatten()
-            .map(GridRect::bottom)
-            .max()
-            .unwrap_or(0),
+        rows: rows_of(&rects),
         unit,
         placements,
     }
@@ -340,10 +334,9 @@ pub fn layout(container: &Container, elements: &[Element], previous: Option<&Lay
 /// The grid width in twelfths. A wider grid than before waits until the box
 /// is half a unit wider than the previous one; a narrower one is taken at
 /// once, so the grid never exceeds the box.
-fn columns(container: &Container, previous: Option<&Layout>) -> u32 {
-    let natural = container.twelfths(container.width);
+fn columns(natural: u32, unit: f32, previous: Option<&Layout>) -> u32 {
     match previous {
-        Some(p) if p.unit == container.unit && natural > p.columns => {
+        Some(p) if p.unit == unit && natural > p.columns => {
             if natural < p.columns.saturating_add(HALF_UNIT) {
                 p.columns
             } else {
@@ -355,10 +348,12 @@ fn columns(container: &Container, previous: Option<&Layout>) -> u32 {
 }
 
 /// The first form and orientation that fits, keeping the previous one unless
-/// a better one fits with half a unit to spare.
+/// a better one fits with half a unit to spare in the box's natural width
+/// (not the grid's, which may lag behind it).
 fn choose(
     e: &Element,
     columns: u32,
+    natural: u32,
     max_rows: Option<u32>,
     prev: Option<&Placement>,
 ) -> Result<Choice, (Reason, usize, Orientation)> {
@@ -385,12 +380,12 @@ fn choose(
         fits(&candidates[at], columns).ok().map(|c| (at, c))
     });
     if let Some((at, kept)) = kept {
-        let margin = columns.saturating_sub(HALF_UNIT);
+        let margin = natural.saturating_sub(HALF_UNIT);
         // A better choice must fit with half a unit to spare; its slot is
         // still sized at the real width.
         let better = candidates[..at]
             .iter()
-            .filter(|c| fits(c, margin).is_ok())
+            .filter(|c| fits(c, margin.min(columns)).is_ok())
             .find_map(|c| fits(c, columns).ok());
         return Ok(better.unwrap_or(kept));
     }
@@ -448,69 +443,91 @@ fn height_for(p: &SizePolicy, w: u32, max_rows: Option<u32>) -> Option<u32> {
     }
 }
 
-/// Grows growable elements in rounds: each, in logical order, takes one slot
-/// step along its axis when the larger slot stays inside the grid, under its
-/// maximum and clear of every other slot.
-fn grow(
-    choices: &[Result<Choice, (Reason, usize, Orientation)>],
-    rects: &mut [Option<GridRect>],
+/// Places slots of the given sizes: pinned ones at their pins, in logical
+/// order, then the others at the first free position in reading order.
+/// Elements without a size are left out with a placeholder status, which
+/// the caller replaces.
+fn place(
+    elements: &[Element],
+    sizes: &[Option<(u32, u32)>],
     columns: u32,
-    row_limit: u32,
-) {
-    loop {
-        let mut grew = false;
-        for i in 0..rects.len() {
-            let (Ok(c), Some(r)) = (&choices[i], rects[i]) else {
-                continue;
-            };
-            let Some(next) = grown(&c.policy, r, columns, row_limit) else {
-                continue;
-            };
-            let clear = rects
-                .iter()
-                .enumerate()
-                .all(|(j, o)| j == i || o.is_none_or(|o| !o.overlaps(&next)));
-            if clear {
-                rects[i] = Some(next);
-                grew = true;
-            }
-        }
-        if !grew {
-            return;
+    max_rows: Option<u32>,
+) -> (Vec<Option<GridRect>>, Vec<Status>) {
+    let mut rects: Vec<Option<GridRect>> = vec![None; elements.len()];
+    let mut status = vec![Status::Placed; elements.len()];
+    let mut taken: Vec<GridRect> = Vec::new();
+    for (i, e) in elements.iter().enumerate() {
+        let (Some((w, h)), Some(pin)) = (sizes[i], e.pin) else {
+            continue;
+        };
+        let r = GridRect {
+            x: pin.col,
+            y: pin.row,
+            w,
+            h,
+        };
+        let inside = r.x.checked_add(w).is_some_and(|right| right <= columns)
+            && r.y
+                .checked_add(h)
+                .is_some_and(|b| max_rows.is_none_or(|m| b <= m));
+        if !inside {
+            status[i] = Status::Unpinned(Reason::PinOutOfBounds);
+        } else if taken.iter().any(|t| t.overlaps(&r)) {
+            status[i] = Status::Unpinned(Reason::PinOverlap);
+        } else {
+            rects[i] = Some(r);
+            taken.push(r);
         }
     }
+    for i in 0..elements.len() {
+        let Some((w, h)) = sizes[i] else {
+            status[i] = Status::Overflow(Reason::NoForms);
+            continue;
+        };
+        if rects[i].is_some() {
+            continue;
+        }
+        match first_fit(&taken, w, h, columns, max_rows) {
+            Some(r) => {
+                rects[i] = Some(r);
+                taken.push(r);
+            }
+            None => status[i] = Status::Overflow(Reason::NoRoom),
+        }
+    }
+    (rects, status)
 }
 
-/// The rectangle one growth step larger, if the policy and grid allow it.
-fn grown(p: &SizePolicy, r: GridRect, columns: u32, row_limit: u32) -> Option<GridRect> {
+/// The size one growth step larger, if the policy allows it and it is no
+/// wider than the grid.
+fn grown(p: &SizePolicy, (w, h): (u32, u32), columns: u32) -> Option<(u32, u32)> {
     let Grow::Along(axis) = p.grow else {
         return None;
     };
-    let (max_w, max_h) = (p.max_size.width.twelfths(), p.max_size.height.twelfths());
-    let mut next = r;
+    let (mut w, mut h) = (w, h);
     match axis {
-        Axis::Width => next.w = next_step(r.w)?,
-        Axis::Height => next.h = next_step(r.h)?,
+        Axis::Width => w = next_step(w)?,
+        Axis::Height => h = next_step(h)?,
     }
     if let Some(ratio) = p.aspect_ratio {
         match axis {
             Axis::Width => {
-                let num = next.w.checked_mul(ratio.height)?;
+                let num = w.checked_mul(ratio.height)?;
                 (num % ratio.width == 0).then_some(())?;
-                next.h = num / ratio.width;
+                h = num / ratio.width;
             }
             Axis::Height => {
-                let num = next.h.checked_mul(ratio.width)?;
+                let num = h.checked_mul(ratio.width)?;
                 (num % ratio.height == 0).then_some(())?;
-                next.w = num / ratio.height;
+                w = num / ratio.height;
             }
         }
-        if !is_allowed(next.w) || !is_allowed(next.h) {
+        if !is_allowed(w) || !is_allowed(h) {
             return None;
         }
     }
-    let inside = next.right() <= columns && next.bottom() <= row_limit;
-    (inside && next.w <= max_w && next.h <= max_h).then_some(next)
+    let within = w <= p.max_size.width.twelfths() && h <= p.max_size.height.twelfths();
+    (within && w <= columns).then_some((w, h))
 }
 
 /// The first free position in reading order for a `w` by `h` slot.
