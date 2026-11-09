@@ -546,6 +546,16 @@ pub const FILES_PREVIEW_OF: StrKey =
     StrKey::new("egui-pop-files-preview-of", "Preview of { $name }");
 pub const FILES_QUICK_LOOK: StrKey =
     StrKey::new("egui-pop-files-quick-look", "Quick look: { $name }");
+/// The agenda's levels, in its toolbar.
+pub const FILES_AGENDA_DAY: StrKey = StrKey::new("egui-pop-files-agenda-day", "Day");
+pub const FILES_AGENDA_MONTH: StrKey = StrKey::new("egui-pop-files-agenda-month", "Month");
+pub const FILES_AGENDA_YEAR: StrKey = StrKey::new("egui-pop-files-agenda-year", "Year");
+/// The row a column ends with while its folder is being listed.
+pub const FILES_LISTING: StrKey = StrKey::new("egui-pop-files-listing", "Listing…");
+/// What a drop over the file browser would do.
+pub const FILES_DROP_INTO: StrKey = StrKey::new("egui-pop-files-drop-into", "Drop into { $name }");
+pub const FILES_DROP_REFUSED: StrKey =
+    StrKey::new("egui-pop-files-drop-refused", "Cannot drop here");
 /// The in-app picker's breadcrumbs: what each part is called, and what a
 /// segment's menu says when it has nothing to list.
 pub const FILES_CRUMB_OPEN: StrKey =
@@ -1603,6 +1613,12 @@ pub const ALL: &[StrKey] = &[
     FILES_AGENDA_UNDATED,
     FILES_PREVIEW_OF,
     FILES_QUICK_LOOK,
+    FILES_AGENDA_DAY,
+    FILES_AGENDA_MONTH,
+    FILES_AGENDA_YEAR,
+    FILES_LISTING,
+    FILES_DROP_INTO,
+    FILES_DROP_REFUSED,
     FILES_CRUMB_OPEN,
     FILES_CRUMB_CURRENT,
     FILES_CRUMB_SUBFOLDERS,
