@@ -221,6 +221,13 @@ struct Choice {
 /// choices (column count, forms, orientations) while the box stays within
 /// half a unit of a threshold. The result has one placement per element, in
 /// input order. This function never panics.
+///
+/// Forms and orientations are chosen from the grid's shape (its width, and
+/// its height when bounded), not from the room other elements leave: in a
+/// full bounded container, an element may overflow in a form that would
+/// have fit in another orientation. Each growth step re-runs the dense
+/// placement, so the cost grows with the cube of the element count; the
+/// engine is meant for panels of tens of elements, not thousands.
 pub fn layout(container: &Container, elements: &[Element], previous: Option<&Layout>) -> Layout {
     let unit = container.unit;
     let natural = container.twelfths(container.width);

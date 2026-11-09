@@ -56,3 +56,7 @@ mod size;
 pub use element::{AspectRatio, Axis, Cell, Element, Grow, Orientation, Size2, SizePolicy};
 pub use layout::{layout, Container, GridRect, Layout, Placement, PointRect, Reason, Status};
 pub use size::{InvalidSize, Size, TWELFTHS_PER_UNIT};
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;
