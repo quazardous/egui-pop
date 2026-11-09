@@ -4,11 +4,36 @@ Status: **accepted, under way** (2026-11-08). The maintainer chose B
 for Q1 (hand mode: H, and Space held), Q2 (the profile's key plus F
 everywhere), Q3 (the overview when needed), Q4 (the view kept by id)
 and Q6 (a one-time hint, dismissed by the first pan or a click); Q5
-stays A. Built so far, in `egui_pop::viewport::navigation` and on the
-node graph: hand mode, the `view.*` commands and their keys, fit
-selection, the overview's rule, the kept view and the hint. Still to
-do: the image viewport and plots on the same model (hand mode, fit,
-100 % and the commands at least), the zoom control on the graph.
+stays A. Built so far, in `egui_pop::viewport::navigation`:
+
+- on the node graph: hand mode, the `view.*` commands and their keys,
+  fit selection, the overview's rule, the kept view and the hint;
+- on the image viewport (2026-11-09): the same commands, keys, hand
+  mode (which pans from a handle, as Space held does) and canvas
+  activation; fit and frame the selection both fit the image; the hint
+  is an option (`Viewport::hint`), the kept view stays the
+  application's;
+- on plots (2026-11-09): the commands through the canvas in use (fit,
+  zoom, pan, hand); egui_plot keeps its own gestures, and a primary
+  drag already pans a plot;
+- the zoom control, `CanvasZoom` (2026-11-09): zoom out, the
+  percentage with a menu (fit, frame the selection, 100 %, steps), zoom
+  in and the hand button, over any canvas through the canvas commands
+  (`view.zoom_to:<percent>` for a step); the gallery shows it under the
+  graph and above the viewport;
+- touch screens (2026-11-09): two fingers pan every canvas and a pinch
+  zooms it (egui's multi-touch); while two fingers are down, the first
+  one's drag is not a pan;
+- the profiles' navigation keys in the keymap (2026-11-09): each
+  pointer profile gives them (`view_keys` in its document), loaded with
+  its gestures into the default layer, so the shortcuts editor shows
+  them and the user rebinds them; in an application the keymap
+  dispatches them, a canvas on its own reads them from the profile.
+
+The curve editor and the histogram neither pan nor zoom: nothing to
+move there. Still to do: the overview on the image (the navigator) by
+the same rule, and a keyboard pan and fit on plots without an
+application.
 
 A report started it: in Helios and in the gallery "you cannot move
 around in the diagrams". The quick check (section 1) found a real fault
@@ -296,12 +321,29 @@ pans, Ctrl + drag selects)?
 
 ## 8. Steps (once the questions are settled)
 
+Steps 1 to 4 are done on the graph, the image viewport and plots (see
+the status above); step 5 on the graph.
+
 1. The panning-drag-from-anywhere rule on the image viewport and the
    plots (the graph has it, section 1).
 2. The navigation commands and their keys; fit selection on the graph.
 3. Hand mode; one finger pans on a touch screen.
 4. The zoom control on the graph; the overview policy.
 5. Keeping the view; the hint overlay.
+
+### The navigation keys per profile (2026-11-09)
+
+Every profile binds Home (fit), F (frame the selection), Ctrl and `+`,
+`=` or `-` (zoom), Ctrl+0 (100 %), Ctrl and the arrows (pan) and H
+(hand mode), and adds what its application has:
+
+| Profile | Fit | Frame the selection | 100 % |
+|---|---|---|---|
+| Document | Home, Shift+1 | F, Shift+2 | Ctrl+0 |
+| Blender / node editors | Home | F, `.` | Ctrl+0 |
+| darktable | Home, Alt+3 | F | Ctrl+0, Alt+1 |
+| Photoshop | Home, Ctrl+0 | F | Ctrl+1 |
+| Lightroom Classic, Trackpad | Home | F | Ctrl+0 |
 
 ## 9. Sources (read 2026-11-08)
 

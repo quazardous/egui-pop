@@ -6,9 +6,10 @@
 //! (`view.fit`, `view.frame_selection`, `view.zoom_in`, ...) go to the
 //! active canvas through [`request`], and the canvas takes them at its
 //! next frame ([`take`]); the `canvasActive` context key says whether
-//! one is active, so the commands' keys reach nothing else. The
-//! navigation model itself is the viewport crate's
-//! (`egui_pop_viewport::navigation`).
+//! one is active, so the commands' keys reach nothing else. A canvas
+//! publishes its zoom ([`set_zoom`]) for a zoom control to show; hand
+//! mode ([`hand`]) is shared by every canvas. The navigation model
+//! itself is the viewport crate's (`egui_pop_viewport::navigation`).
 
 use egui::{Context, Id};
 
@@ -77,4 +78,36 @@ pub fn take(ctx: &Context, id: Id) -> Vec<String> {
     let mut out = Vec::new();
     slot.update(ctx, |q| out = std::mem::take(q));
     out
+}
+
+const HAND: Slot<bool> = Slot::new("core.canvas.hand");
+
+/// Whether hand mode is on: a primary drag pans every canvas (for a pen,
+/// a touch screen or a mouse without a middle button). `view.hand`
+/// toggles it on whichever canvas takes it.
+pub fn hand(ctx: &Context) -> bool {
+    HAND.get_or_default(ctx)
+}
+
+/// Turns hand mode on or off.
+pub fn set_hand(ctx: &Context, on: bool) {
+    HAND.set(ctx, on);
+    ctx.request_repaint();
+}
+
+/// A canvas's zoom, by its id: what a zoom control shows.
+const ZOOM: Slot<f32> = Slot::new("core.canvas.zoom");
+
+/// Publishes a canvas's zoom (1 is 100 %: one content unit, or one
+/// image pixel, to a point), each frame it draws.
+pub fn set_zoom(ctx: &Context, id: Id, zoom: f32) {
+    let slot = ZOOM.keyed(id);
+    if slot.get(ctx) != Some(zoom) {
+        slot.set(ctx, zoom);
+    }
+}
+
+/// A canvas's zoom as it last published it.
+pub fn zoom(ctx: &Context, id: Id) -> Option<f32> {
+    ZOOM.keyed(id).get(ctx)
 }

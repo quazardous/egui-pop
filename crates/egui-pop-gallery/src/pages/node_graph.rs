@@ -25,6 +25,7 @@ use egui_pop::viewport::graph::{
     Edge, Edit, ExportOptions, GraphEditor, GraphExport, GraphMinimap, GraphModel, GraphState,
     Group, Kind, Level, Node, Param, Port, PortRef, PortType, Request, WireStyle,
 };
+use egui_pop::viewport::navigation::CanvasZoom;
 use serde_json::json;
 
 use crate::shell::SHELL;
@@ -617,6 +618,9 @@ fn show(ui: &mut Ui, app: &AppHandle, s: &mut State, asked: &Cell<Option<(bool, 
                 // Until the first wire selected: wires are targets too.
                 ui.weak("Click a wire to select it");
             }
+            // The canvas zoom control: the navigation commands, sent to
+            // the graph.
+            CanvasZoom::new(out.canvas).show(ui);
             ui.horizontal(|ui| {
                 let menu = ui.button("Export");
                 if menu.clicked() {

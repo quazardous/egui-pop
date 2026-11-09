@@ -14,8 +14,46 @@
     "vertical_scroll": "Alt"
   },
   "drag_cursors": {
-    "pan": { "hover": "default" },
-    "move": { "hover": "default" }
+    "pan": {
+      "hover": "default"
+    },
+    "move": {
+      "hover": "default"
+    }
+  },
+  "view_keys": {
+    "view.fit": [
+      "Home"
+    ],
+    "view.frame_selection": [
+      "F",
+      "Period"
+    ],
+    "view.zoom_in": [
+      "Ctrl+Plus",
+      "Ctrl+Equals"
+    ],
+    "view.zoom_out": [
+      "Ctrl+Minus"
+    ],
+    "view.zoom_100": [
+      "Ctrl+0"
+    ],
+    "view.pan_left": [
+      "Ctrl+ArrowLeft"
+    ],
+    "view.pan_right": [
+      "Ctrl+ArrowRight"
+    ],
+    "view.pan_up": [
+      "Ctrl+ArrowUp"
+    ],
+    "view.pan_down": [
+      "Ctrl+ArrowDown"
+    ],
+    "view.hand": [
+      "H"
+    ]
   },
   "bindings": [
     {

@@ -56,6 +56,26 @@ pub const SCOPES: [&str; 4] = [SCOPE_IMAGE, SCOPE_GRAPH, SCOPE_VALUE, SCOPE_SECT
 /// The profile a library or an application gets unless it picks one.
 pub const DEFAULT_PROFILE: &str = "document";
 
+/// The navigation commands every canvas takes (the node graph, the
+/// image viewport, plots; `docs/design/navigation.md`), whose keys a
+/// profile gives ([`Profile::view_keys`]).
+pub const VIEW_COMMANDS: [&str; 10] = [
+    "view.fit",
+    "view.frame_selection",
+    "view.zoom_in",
+    "view.zoom_out",
+    "view.zoom_100",
+    "view.pan_left",
+    "view.pan_right",
+    "view.pan_up",
+    "view.pan_down",
+    "view.hand",
+];
+
+/// When a profile's navigation keys apply: a canvas is in use and no
+/// text input or modal has the keyboard.
+pub const VIEW_KEYS_WHEN: &str = "canvasActive && !textInputFocus && !modalOpen";
+
 /// Gesture commands, by canvas kind.
 pub mod gesture {
     use crate::ids::CommandId;
@@ -658,6 +678,12 @@ pub struct Profile {
     /// Default-layer bindings, as in a keymap document.
     #[serde(default)]
     pub bindings: Vec<DocBinding>,
+    /// The navigation commands' keys ([`VIEW_COMMANDS`]), by command
+    /// (`{"view.fit": ["Home", "Shift+1"]}`), after the application the
+    /// profile is named after; default-layer bindings like the others,
+    /// active while a canvas is in use ([`VIEW_KEYS_WHEN`]).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub view_keys: BTreeMap<String, Vec<String>>,
 }
 
 /// The `pointer-profile` document's schema.
@@ -772,6 +798,13 @@ pub struct PointerMap {
     /// The profile's drag cursors ([`Profile::drag_cursors`]); read them
     /// with [`PointerMap::drag_cursor`].
     pub drag_cursors: BTreeMap<DragKind, DragCursor>,
+    /// The navigation commands' keys in force ([`VIEW_COMMANDS`]), by
+    /// command: the profile's, or the keymap's with the user's changes.
+    pub view_keys: BTreeMap<String, Vec<Chord>>,
+    /// The application's keymap dispatches the navigation keys (and
+    /// sends the commands to the canvas in use): a canvas does not read
+    /// them itself. Off for a map made from a profile alone.
+    pub keys_dispatched: bool,
 }
 
 impl Default for PointerMap {
@@ -809,6 +842,19 @@ impl PointerMap {
                 })
             })
             .collect();
+        let view_keys = VIEW_COMMANDS
+            .iter()
+            .map(|id| {
+                let chords = CommandId::new(*id)
+                    .map(|c| keymap.keys_for(&c))
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|k| k.0.len() == 1 && !k.0[0].is_pointer())
+                    .map(|k| k.0[0].clone())
+                    .collect();
+                ((*id).to_string(), chords)
+            })
+            .collect();
         PointerMap {
             profile: profile.id.clone(),
             options: profile.options,
@@ -818,7 +864,14 @@ impl PointerMap {
             wheel_speed: 1.0,
             bindings,
             drag_cursors: profile.drag_cursors.clone(),
+            view_keys,
+            keys_dispatched: false,
         }
+    }
+
+    /// The keys of a navigation command (`view.fit`) in force.
+    pub fn view_keys(&self, command: &str) -> &[Chord] {
+        self.view_keys.get(command).map_or(&[], Vec::as_slice)
     }
 
     /// The cursors a drag kind shows: the profile's, each name it leaves
@@ -864,9 +917,21 @@ impl PointerMap {
     }
 }
 
-/// A profile's bindings as a keymap document.
+/// A profile's bindings as a keymap document: its pointer gestures,
+/// then its navigation keys.
 pub fn profile_doc(profile: &Profile) -> crate::keymap::KeymapDoc {
-    crate::keymap::KeymapDoc {
-        bindings: profile.bindings.clone(),
+    let mut bindings = profile.bindings.clone();
+    for (command, keys) in &profile.view_keys {
+        for k in keys {
+            bindings.push(DocBinding {
+                keys: k.clone(),
+                command: Some(command.clone()),
+                when: VIEW_KEYS_WHEN.to_string(),
+                scope: String::new(),
+                typing: crate::keymap::Typing::Auto,
+                through_modal: false,
+            });
+        }
     }
+    crate::keymap::KeymapDoc { bindings }
 }

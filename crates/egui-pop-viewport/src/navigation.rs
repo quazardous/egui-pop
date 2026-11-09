@@ -10,10 +10,16 @@
 //! - **Navigation commands** ([`NavCommand`]): `view.fit`,
 //!   `view.frame_selection`, `view.zoom_in`, `view.zoom_out`,
 //!   `view.zoom_100`, `view.pan_left` (`_right`, `_up`, `_down`) and
-//!   `view.hand`. Their keys ([`NavKeys`], after the pointer profile in
-//!   force) work on the widget alone; in an application the same
-//!   commands are in the keymap and the palette, and reach the canvas in
-//!   use through `egui_pop_core::canvas`.
+//!   `view.hand`. Their keys ([`NavKeys`]) are the pointer profile's
+//!   (its `view_keys`): on the widget alone it reads them; in an
+//!   application they are keymap bindings (shown and rebound in the
+//!   shortcuts editor), and the commands reach the canvas in use through
+//!   `egui_pop_core::canvas`.
+//! - **The zoom control** ([`CanvasZoom`]): zoom out, the percentage
+//!   with a menu of fit, 100 % and steps, zoom in and hand mode, over
+//!   any canvas, through the same commands.
+//! - **Touch screens**: two fingers pan ([`touch_pan`]) and a pinch
+//!   zooms every canvas.
 //! - **The overview** shows when the content is much larger than the
 //!   view ([`overview_needed`]).
 //! - **The view kept** across sessions for a canvas given an id
@@ -41,6 +47,9 @@ pub enum NavCommand {
     ZoomOut,
     /// One content unit to one point (an image's pixel to a pixel).
     Zoom100,
+    /// A zoom in percent, around the view's centre (a zoom control's
+    /// step); sent as `view.zoom_to:<percent>`, it has no key.
+    ZoomTo(u32),
     /// Pans a step that way.
     Pan(PanDir),
     /// Toggles hand mode.
@@ -69,7 +78,7 @@ impl PanDir {
 }
 
 impl NavCommand {
-    /// Every command, in the palette's order.
+    /// Every command with keys, in the palette's order.
     pub const ALL: [NavCommand; 10] = [
         NavCommand::Fit,
         NavCommand::FrameSelection,
@@ -83,7 +92,8 @@ impl NavCommand {
         NavCommand::Hand,
     ];
 
-    /// The command's id (`view.fit`).
+    /// The command's id (`view.fit`; `view.zoom_to` for any zoom to a
+    /// percent).
     pub fn id(self) -> &'static str {
         match self {
             NavCommand::Fit => "view.fit",
@@ -91,6 +101,7 @@ impl NavCommand {
             NavCommand::ZoomIn => "view.zoom_in",
             NavCommand::ZoomOut => "view.zoom_out",
             NavCommand::Zoom100 => "view.zoom_100",
+            NavCommand::ZoomTo(_) => "view.zoom_to",
             NavCommand::Pan(PanDir::Left) => "view.pan_left",
             NavCommand::Pan(PanDir::Right) => "view.pan_right",
             NavCommand::Pan(PanDir::Up) => "view.pan_up",
@@ -99,91 +110,86 @@ impl NavCommand {
         }
     }
 
-    /// A command by its id.
+    /// A command by its id (one of [`NavCommand::ALL`]).
     pub fn from_id(id: &str) -> Option<NavCommand> {
         NavCommand::ALL.into_iter().find(|c| c.id() == id)
+    }
+
+    /// The command as sent to a canvas (`egui_pop_core::canvas::request`):
+    /// its id, or `view.zoom_to:<percent>`.
+    pub fn request(self) -> String {
+        match self {
+            NavCommand::ZoomTo(p) => format!("view.zoom_to:{p}"),
+            c => c.id().to_string(),
+        }
+    }
+
+    /// A command as sent to a canvas ([`NavCommand::request`]).
+    pub fn parse(text: &str) -> Option<NavCommand> {
+        if let Some(p) = text.strip_prefix("view.zoom_to:") {
+            return p
+                .trim()
+                .parse()
+                .ok()
+                .filter(|p| *p > 0)
+                .map(NavCommand::ZoomTo);
+        }
+        NavCommand::from_id(text)
     }
 }
 
 /// A key and its modifiers.
 pub type Chord = (Modifiers, Key);
 
-/// The navigation keys, per pointer profile ([`NavKeys::for_profile`]).
-#[derive(Clone, Debug, PartialEq)]
+/// The navigation keys: each command's chords. A pointer profile gives
+/// them ([`egui_pop_core::model::pointer::Profile::view_keys`]), through
+/// the keymap in an application, where the user rebinds them in the
+/// shortcuts editor.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct NavKeys {
-    pub fit: Vec<Chord>,
-    pub frame_selection: Vec<Chord>,
-    pub zoom_in: Vec<Chord>,
-    pub zoom_out: Vec<Chord>,
-    pub zoom_100: Vec<Chord>,
-    /// Held with the arrows: pans.
-    pub pan: Modifiers,
-    pub hand: Vec<Chord>,
-}
-
-impl Default for NavKeys {
-    /// The Document profile's.
-    fn default() -> Self {
-        NavKeys::for_profile(egui_pop_core::model::pointer::DEFAULT_PROFILE)
-    }
+    pub bindings: Vec<(NavCommand, Chord)>,
 }
 
 impl NavKeys {
-    /// The keys every profile shares: Home fits, F frames the selection,
-    /// Ctrl and `+` / `-` / `0` zoom, Ctrl and the arrows pan, H toggles
-    /// hand mode.
-    pub fn common() -> NavKeys {
-        let none = Modifiers::NONE;
-        let cmd = Modifiers::COMMAND;
-        NavKeys {
-            fit: vec![(none, Key::Home)],
-            frame_selection: vec![(none, Key::F)],
-            zoom_in: vec![(cmd, Key::Plus), (cmd, Key::Equals)],
-            zoom_out: vec![(cmd, Key::Minus)],
-            zoom_100: vec![(cmd, Key::Num0)],
-            pan: cmd,
-            hand: vec![(none, Key::H)],
+    /// The keys of a pointer map ([`PointerMap::view_keys`]).
+    ///
+    /// [`PointerMap::view_keys`]: egui_pop_core::model::pointer::PointerMap::view_keys
+    pub fn from_map(map: &egui_pop_core::model::pointer::PointerMap) -> NavKeys {
+        let mut bindings = Vec::new();
+        for c in NavCommand::ALL {
+            for chord in map.view_keys(c.id()) {
+                if let Some(k) = egui_pop_core::keys::key_of(chord) {
+                    bindings.push((c, k));
+                }
+            }
         }
+        // More modifiers first: Shift+2 is not read as a plain 2.
+        bindings.sort_by_key(|(_, (m, _))| {
+            std::cmp::Reverse(u8::from(m.ctrl || m.command) + u8::from(m.shift) + u8::from(m.alt))
+        });
+        NavKeys { bindings }
     }
 
-    /// A profile's keys: the common ones, plus Blender's `.` (frame
-    /// selected) and Document's Shift+1 / Shift+2 (Figma's fit all, fit
-    /// selection).
+    /// A shipped profile's keys (the default profile's for an unknown
+    /// id).
     pub fn for_profile(id: &str) -> NavKeys {
-        let mut k = NavKeys::common();
-        match egui_pop_core::model::pointer::canonical_id(id) {
-            "blender" => k.frame_selection.push((Modifiers::NONE, Key::Period)),
-            "document" => {
-                k.fit.push((Modifiers::SHIFT, Key::Num1));
-                k.frame_selection.push((Modifiers::SHIFT, Key::Num2));
-            }
-            _ => {}
-        }
-        k
+        use egui_pop_core::model::pointer;
+        let p = pointer::profile(id).unwrap_or_else(pointer::default_profile);
+        NavKeys::from_map(&pointer::PointerMap::from_profile(p))
+    }
+
+    /// The chords of a command.
+    pub fn chords(&self, command: NavCommand) -> impl Iterator<Item = Chord> + '_ {
+        self.bindings
+            .iter()
+            .filter(move |(c, _)| *c == command)
+            .map(|(_, k)| *k)
     }
 
     /// The keymap's spelling of a command's keys (`Ctrl+Plus`), for
     /// tooltips and the palette.
     pub fn keys_of(&self, command: NavCommand) -> Vec<String> {
-        let chords: Vec<Chord> = match command {
-            NavCommand::Fit => self.fit.clone(),
-            NavCommand::FrameSelection => self.frame_selection.clone(),
-            NavCommand::ZoomIn => self.zoom_in.clone(),
-            NavCommand::ZoomOut => self.zoom_out.clone(),
-            NavCommand::Zoom100 => self.zoom_100.clone(),
-            NavCommand::Hand => self.hand.clone(),
-            NavCommand::Pan(d) => vec![(
-                self.pan,
-                match d {
-                    PanDir::Left => Key::ArrowLeft,
-                    PanDir::Right => Key::ArrowRight,
-                    PanDir::Up => Key::ArrowUp,
-                    PanDir::Down => Key::ArrowDown,
-                },
-            )],
-        };
-        chords
-            .into_iter()
+        self.chords(command)
             .map(|(m, k)| egui_pop_core::keys::chord_of(k, m).to_string())
             .collect()
     }
@@ -192,25 +198,10 @@ impl NavKeys {
     fn read(&self, ctx: &Context) -> Vec<NavCommand> {
         let mut out = Vec::new();
         ctx.input_mut(|i| {
-            let mut any = |cmd: NavCommand, chords: &[Chord]| {
-                if chords.iter().any(|&(m, k)| i.consume_key(m, k)) {
-                    out.push(cmd);
+            for &(c, (m, k)) in &self.bindings {
+                if i.consume_key(m, k) && !out.contains(&c) {
+                    out.push(c);
                 }
-            };
-            any(NavCommand::Fit, &self.fit);
-            any(NavCommand::FrameSelection, &self.frame_selection);
-            any(NavCommand::ZoomIn, &self.zoom_in);
-            any(NavCommand::ZoomOut, &self.zoom_out);
-            any(NavCommand::Zoom100, &self.zoom_100);
-            any(NavCommand::Hand, &self.hand);
-            for d in [PanDir::Left, PanDir::Right, PanDir::Up, PanDir::Down] {
-                let key = match d {
-                    PanDir::Left => Key::ArrowLeft,
-                    PanDir::Right => Key::ArrowRight,
-                    PanDir::Up => Key::ArrowUp,
-                    PanDir::Down => Key::ArrowDown,
-                };
-                any(NavCommand::Pan(d), &[(self.pan, key)]);
             }
         });
         out
@@ -220,28 +211,26 @@ impl NavKeys {
 const KEYS: Slot<NavKeys> = Slot::new("viewport.navigation.keys");
 
 /// The navigation keys in force: set with [`set_keys`], else the pointer
-/// profile's.
+/// map's (the profile's, with the user's changes in an application).
 pub fn keys(ctx: &Context) -> NavKeys {
     KEYS.get(ctx)
-        .unwrap_or_else(|| NavKeys::for_profile(&egui_pop_core::pointer::map(ctx).profile))
+        .unwrap_or_else(|| NavKeys::from_map(&egui_pop_core::pointer::map(ctx)))
 }
 
-/// Sets the navigation keys outright.
+/// Sets the navigation keys outright; a canvas then reads them itself,
+/// in an application too.
 pub fn set_keys(ctx: &Context, keys: NavKeys) {
     KEYS.set(ctx, keys);
 }
 
-const HAND: Slot<bool> = Slot::new("viewport.navigation.hand");
-
 /// Whether hand mode is on (a primary drag pans).
 pub fn hand(ctx: &Context) -> bool {
-    HAND.get_or_default(ctx)
+    canvas::hand(ctx)
 }
 
 /// Turns hand mode on or off.
 pub fn set_hand(ctx: &Context, on: bool) {
-    HAND.set(ctx, on);
-    ctx.request_repaint();
+    canvas::set_hand(ctx, on);
 }
 
 /// Whether a primary drag pans now: hand mode, or Space held.
@@ -251,21 +240,25 @@ pub fn primary_pans(ctx: &Context) -> bool {
 
 /// A canvas's navigation for this frame: marks it active when the
 /// pointer is over it or it has the keyboard, reads its keys then (not
-/// while a text input owns the keyboard), and gives what was asked, the
-/// application's commands included. Hand mode is toggled here and not
-/// returned.
+/// while a text input owns the keyboard, nor in an application, whose
+/// keymap reads them and sends the commands), and gives what was asked,
+/// the application's commands included. Hand mode is toggled here and
+/// not returned.
 pub fn commands(ctx: &Context, id: Id, hovered: bool, focused: bool) -> Vec<NavCommand> {
     let mut out = Vec::new();
     if hovered || focused {
         canvas::mark_active(ctx, id);
-        if !egui_pop_core::focus::text_input_owns_keyboard(ctx) && !ctx.text_edit_focused() {
-            out = keys(ctx).read(ctx);
+        let own = KEYS.get(ctx);
+        let reads = own.is_some() || !egui_pop_core::pointer::map(ctx).keys_dispatched;
+        if reads && !egui_pop_core::focus::text_input_owns_keyboard(ctx) && !ctx.text_edit_focused()
+        {
+            out = own.unwrap_or_else(|| keys(ctx)).read(ctx);
         }
     }
     out.extend(
         canvas::take(ctx, id)
             .iter()
-            .filter_map(|c| NavCommand::from_id(c)),
+            .filter_map(|c| NavCommand::parse(c)),
     );
     out.retain(|c| {
         if *c == NavCommand::Hand {
@@ -276,6 +269,25 @@ pub fn commands(ctx: &Context, id: Id, hovered: bool, focused: bool) -> Vec<NavC
         }
     });
     out
+}
+
+/// Whether two fingers or more are on a touch screen now (egui's
+/// multi-touch): a canvas then pans and zooms with them, and leaves the
+/// first finger's drag alone.
+pub fn touching(ctx: &Context) -> bool {
+    ctx.input(|i| i.multi_touch().is_some())
+}
+
+/// How far two fingers or more moved this frame on a touch screen, in
+/// points, when they started over `rect`: the content follows them. A
+/// pinch's zoom comes with the wheel's inputs
+/// (`egui_pop_core::pointer::wheel_inputs`).
+pub fn touch_pan(ctx: &Context, rect: Rect) -> Vec2 {
+    ctx.input(|i| {
+        i.multi_touch()
+            .filter(|t| rect.contains(t.start_pos))
+            .map_or(Vec2::ZERO, |t| t.translation_delta)
+    })
 }
 
 /// How much larger than the view the content must be, on one axis, for
@@ -462,4 +474,190 @@ fn overlay_label(
             resp
         })
         .inner
+}
+
+/// The zoom steps a [`CanvasZoom`]'s menu offers by default, in percent
+/// (100 % is always offered).
+pub const ZOOM_STEPS: [u32; 5] = [25, 50, 200, 400, 800];
+
+/// A zoom control for any canvas: zoom out, the zoom in percent (a menu
+/// of fit, frame the selection, 100 % and the steps), zoom in, and hand
+/// mode. It sends the canvas commands (`view.zoom_out`, `view.fit`,
+/// `view.zoom_to:200`...) to the canvas it drives through
+/// `egui_pop_core::canvas`, and shows the zoom the canvas published;
+/// each button's tooltip says its keys.
+///
+/// ```no_run
+/// # fn page(ui: &mut egui::Ui, graph: &dyn egui_pop_viewport::graph::GraphModel, state: &mut egui_pop_viewport::graph::GraphState) {
+/// use egui_pop_viewport::graph::GraphEditor;
+/// use egui_pop_viewport::navigation::CanvasZoom;
+///
+/// let out = GraphEditor::new(graph, state).show(ui);
+/// CanvasZoom::new(out.canvas).show(ui);
+/// # }
+/// ```
+#[derive(Clone, Debug)]
+pub struct CanvasZoom {
+    canvas: Option<Id>,
+    steps: Vec<u32>,
+    hand: bool,
+    frame_selection: bool,
+}
+
+impl CanvasZoom {
+    /// Drives a canvas by its id (`GraphOutput::canvas`,
+    /// `ViewportOutput::canvas`).
+    pub fn new(canvas: Id) -> CanvasZoom {
+        CanvasZoom {
+            canvas: Some(canvas),
+            steps: ZOOM_STEPS.to_vec(),
+            hand: true,
+            frame_selection: true,
+        }
+    }
+
+    /// Drives the canvas in use, else the one used last (a toolbar's
+    /// control for every canvas of a window).
+    pub fn active() -> CanvasZoom {
+        CanvasZoom {
+            canvas: None,
+            ..CanvasZoom::new(Id::NULL)
+        }
+    }
+
+    /// The menu's steps, in percent.
+    pub fn steps(mut self, steps: impl IntoIterator<Item = u32>) -> CanvasZoom {
+        self.steps = steps.into_iter().filter(|p| *p > 0).collect();
+        self
+    }
+
+    /// Shows the hand mode button (default: on).
+    pub fn hand_button(mut self, on: bool) -> CanvasZoom {
+        self.hand = on;
+        self
+    }
+
+    /// Offers "frame the selection" in the menu (default: on; off for a
+    /// canvas without a selection, an image).
+    pub fn frame_selection(mut self, on: bool) -> CanvasZoom {
+        self.frame_selection = on;
+        self
+    }
+
+    /// Draws the row. Its response is clicked when a command was sent.
+    pub fn show(self, ui: &mut Ui) -> Response {
+        use egui_pop_core::icon::{Icon, Size};
+        use egui_pop_core::ui::{Stock, Tone, UiPop as _};
+        let ctx = ui.ctx().clone();
+        let target = self
+            .canvas
+            .or_else(|| canvas::active(&ctx).or_else(|| canvas::last(&ctx)));
+        let keys = keys(&ctx);
+        let tip = |title: &str, c: NavCommand| {
+            let k = keys.keys_of(c);
+            if k.is_empty() {
+                title.to_string()
+            } else {
+                format!("{title} ({})", k.join(", "))
+            }
+        };
+        let mut sent: Vec<NavCommand> = Vec::new();
+        let inner = ui.horizontal(|ui| {
+            ui.add_enabled_ui(target.is_some(), |ui| {
+                let out = ui
+                    .add(
+                        Icon::Minus
+                            .size(Size::Toolbar)
+                            .label(&tr(&ctx, &s::ZOOM_OUT))
+                            .sense_click(),
+                    )
+                    .on_hover_text(tip(&tr(&ctx, &s::ZOOM_OUT), NavCommand::ZoomOut));
+                if out.clicked() {
+                    sent.push(NavCommand::ZoomOut);
+                }
+                let zoom = target.and_then(|id| canvas::zoom(&ctx, id));
+                let text = zoom.map_or_else(
+                    || "– %".to_string(),
+                    |z| {
+                        format!(
+                            "{} %",
+                            crate::navigator::percent_text(&ctx, f64::from(z) * 100.0)
+                        )
+                    },
+                );
+                let level = tr(&ctx, &s::ZOOM_LEVEL);
+                let menu = ui.menu_button(text.clone(), |ui| {
+                    let mut item = |ui: &mut Ui, label: String, c: NavCommand| {
+                        let mut b = ui.button(label);
+                        let k = keys.keys_of(c);
+                        if !k.is_empty() {
+                            b = b.on_hover_text(k.join(", "));
+                        }
+                        if b.clicked() {
+                            sent.push(c);
+                            ui.close();
+                        }
+                    };
+                    item(ui, tr(&ctx, &s::ZOOM_FIT), NavCommand::Fit);
+                    if self.frame_selection {
+                        item(
+                            ui,
+                            tr(&ctx, &s::ZOOM_FRAME_SELECTION),
+                            NavCommand::FrameSelection,
+                        );
+                    }
+                    item(ui, tr(&ctx, &s::ZOOM_ACTUAL), NavCommand::Zoom100);
+                    if !self.steps.is_empty() {
+                        ui.separator();
+                    }
+                    for &p in self.steps.iter().filter(|p| **p != 100) {
+                        item(
+                            ui,
+                            format!("{} %", crate::navigator::percent_text(&ctx, f64::from(p))),
+                            NavCommand::ZoomTo(p),
+                        );
+                    }
+                });
+                let r = menu.response.on_hover_text(level.clone());
+                ctx.accesskit_node_builder(r.id, |node| {
+                    node.set_label(level.clone());
+                    node.set_value(text.clone());
+                });
+                let into = ui
+                    .add(
+                        Icon::Plus
+                            .size(Size::Toolbar)
+                            .label(&tr(&ctx, &s::ZOOM_IN))
+                            .sense_click(),
+                    )
+                    .on_hover_text(tip(&tr(&ctx, &s::ZOOM_IN), NavCommand::ZoomIn));
+                if into.clicked() {
+                    sent.push(NavCommand::ZoomIn);
+                }
+                if self.hand {
+                    let on = hand(&ctx);
+                    let label = tr(&ctx, &s::NAV_HAND_BUTTON);
+                    let b = ui
+                        .scoped(Stock::ToggleButton, Tone::Neutral, |ui| {
+                            ui.add(egui::Button::new(label.clone()).selected(on))
+                        })
+                        .inner
+                        .on_hover_text(tip(&label, NavCommand::Hand));
+                    if b.clicked() {
+                        set_hand(&ctx, !on);
+                    }
+                }
+            });
+        });
+        let mut response = inner.response;
+        if let Some(id) = target {
+            for c in &sent {
+                canvas::request_to(&ctx, id, &c.request());
+            }
+        }
+        if !sent.is_empty() {
+            response.mark_changed();
+        }
+        response
+    }
 }

@@ -15,6 +15,7 @@ use egui_pop::core::widgets;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::viewport::demo::Procedural;
 use egui_pop::viewport::hooks::Verdict;
+use egui_pop::viewport::navigation::CanvasZoom;
 use egui_pop::viewport::overlay::{Emphasis, Overlay, Shape};
 use egui_pop::viewport::view::Zoom;
 use egui_pop::viewport::{Compare, Phase, Signal, View, Viewport, ViewportState};
@@ -47,6 +48,9 @@ pub struct PageState {
     pub clamp: bool,
     /// The playground's hue shift.
     pub shift: f32,
+    /// The viewport's canvas id, for the zoom control above it (the
+    /// last frame's).
+    pub canvas: Option<egui::Id>,
 }
 
 /// The page's overlays: a crop box, a circle, a dashed ellipse, a
@@ -162,7 +166,7 @@ impl Plugin for ViewportPage {
 
 /// The page, a plain function over its state.
 pub fn show(ui: &mut Ui, page: &mut PageState) {
-    ui.label("Drag a handle to edit a shape (Escape puts it back; the shape touched is selected), drag or Space-drag to pan (Escape puts the view back), the wheel zooms around the pointer and stops at 100 %, a double click fits; when focused: + and - walk the ladder, 0 fits, 1 is 100 %, 2 is 200 %, the arrows pan.");
+    ui.label("Drag a handle to edit a shape (Escape puts it back; the shape touched is selected), drag, Space-drag or H (hand mode) to pan (Escape puts the view back), the wheel zooms around the pointer and stops at 100 %, a double click fits; when focused: + and - walk the ladder, 0 fits, 1 is 100 %, 2 is 200 %, the arrows pan.");
     ui.horizontal(|ui| {
         if ui.button("Fit").clicked() {
             page.state.propose(&mut page.view, View::fit());
@@ -173,11 +177,10 @@ pub fn show(ui: &mut Ui, page: &mut PageState) {
             page.state
                 .propose(&mut page.view, m.zoom_around(m.rect.center(), 1.0));
         }
-        if ui.button("Zoom out").clicked() {
-            page.state.zoom_out(&mut page.view);
-        }
-        if ui.button("Zoom in").clicked() {
-            page.state.zoom_in(&mut page.view);
+        // The canvas zoom control: the navigation commands, sent to
+        // the viewport.
+        if let Some(id) = page.canvas {
+            CanvasZoom::new(id).frame_selection(false).show(ui);
         }
         let zoom = page.state.mapping().map_or(1.0, |m| m.zoom);
         let fit = if page.view.zoom == Zoom::Fit {
@@ -210,6 +213,7 @@ pub fn show(ui: &mut Ui, page: &mut PageState) {
         vp = vp.before(b);
     }
     let out = vp.show(ui, state, view);
+    page.canvas = Some(out.canvas);
     for s in &out.signals {
         match s {
             Signal::Handle {

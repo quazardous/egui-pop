@@ -451,6 +451,7 @@ the display, and a preview dialog (a custom dialog holding a viewport).
   </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/node-graph-wire-selected-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/node-graph-wire-selected-pop-dark.png" width="200" alt="node-graph-wire-selected-pop-dark"></a><br>node-graph-wire-selected-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/node-graph-zoom-menu-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/node-graph-zoom-menu-pop-dark.png" width="200" alt="node-graph-zoom-menu-pop-dark"></a><br>node-graph-zoom-menu-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/preview-dialog-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/preview-dialog-pop-dark.png" width="200" alt="preview-dialog-pop-dark"></a><br>preview-dialog-pop-dark</td>
   </tr>
 </table>

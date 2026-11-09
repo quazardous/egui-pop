@@ -176,6 +176,7 @@ pub(crate) fn map(app: &AppHandle, keymap: &Keymap) -> PointerMap {
     m.options = options;
     m.wheel_device = device;
     m.wheel_speed = wheel_speed(app);
+    m.keys_dispatched = true;
     m
 }
 

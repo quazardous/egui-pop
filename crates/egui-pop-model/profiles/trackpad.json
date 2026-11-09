@@ -13,6 +13,39 @@
     "horizontal_scroll": "Shift",
     "vertical_scroll": "Alt"
   },
+  "view_keys": {
+    "view.fit": [
+      "Home"
+    ],
+    "view.frame_selection": [
+      "F"
+    ],
+    "view.zoom_in": [
+      "Ctrl+Plus",
+      "Ctrl+Equals"
+    ],
+    "view.zoom_out": [
+      "Ctrl+Minus"
+    ],
+    "view.zoom_100": [
+      "Ctrl+0"
+    ],
+    "view.pan_left": [
+      "Ctrl+ArrowLeft"
+    ],
+    "view.pan_right": [
+      "Ctrl+ArrowRight"
+    ],
+    "view.pan_up": [
+      "Ctrl+ArrowUp"
+    ],
+    "view.pan_down": [
+      "Ctrl+ArrowDown"
+    ],
+    "view.hand": [
+      "H"
+    ]
+  },
   "bindings": [
     {
       "keys": "Scroll",

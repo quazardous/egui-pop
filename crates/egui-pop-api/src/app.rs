@@ -4141,76 +4141,65 @@ impl App {
         )?;
         // The navigation commands of every canvas (the node graph, the
         // image viewport, plots; docs/design/navigation.md): they go to
-        // the canvas under the pointer or with the keyboard.
-        let views: [(&str, &str, &str, &[&str]); 10] = [
+        // the canvas under the pointer or with the keyboard. Their keys
+        // are the pointer profile's (`Profile::view_keys`), loaded with
+        // its gestures.
+        let views: [(&str, &str, &str); 10] = [
             (
                 "view.fit",
                 "Fit the view",
                 "Frames all the content of the canvas in use.",
-                &["Shift+1"],
             ),
             (
                 "view.frame_selection",
                 "Frame the selection",
                 "Frames the selection of the canvas in use (all its content when nothing is selected).",
-                &["F"],
             ),
             (
                 "view.zoom_in",
                 "Zoom in",
                 "Zooms the canvas in use in, around its centre.",
-                &["Ctrl+Plus", "Ctrl+Equals"],
             ),
             (
                 "view.zoom_out",
                 "Zoom out",
                 "Zooms the canvas in use out, around its centre.",
-                &["Ctrl+Minus"],
             ),
             (
                 "view.zoom_100",
                 "Zoom to 100 %",
                 "Shows the canvas in use at 100 % (one unit, or one pixel, to a point).",
-                &["Ctrl+0"],
             ),
             (
                 "view.pan_left",
                 "Pan left",
                 "Moves the view of the canvas in use left.",
-                &["Ctrl+ArrowLeft"],
             ),
             (
                 "view.pan_right",
                 "Pan right",
                 "Moves the view of the canvas in use right.",
-                &["Ctrl+ArrowRight"],
             ),
             (
                 "view.pan_up",
                 "Pan up",
                 "Moves the view of the canvas in use up.",
-                &["Ctrl+ArrowUp"],
             ),
             (
                 "view.pan_down",
                 "Pan down",
                 "Moves the view of the canvas in use down.",
-                &["Ctrl+ArrowDown"],
             ),
             (
                 "view.hand",
                 "Hand mode",
                 "Toggles hand mode: a primary drag pans the canvases (for a pen, a touch screen or a mouse without a middle button). Space held does the same for a moment.",
-                &["H"],
             ),
         ];
-        for (id, title, description, keys) in views {
-            let mut spec = CommandSpec::new(CommandId::from_static(id), title, "View")
+        for (id, title, description) in views {
+            let spec = CommandSpec::new(CommandId::from_static(id), title, "View")
                 .description(description)
-                .when("canvasActive && !textInputFocus && !modalOpen");
-            for k in keys {
-                spec = spec.key(k);
-            }
+                .when(egui_pop_model::pointer::VIEW_KEYS_WHEN);
             ctx.command(spec, move |call| {
                 if egui_pop_core::canvas::request(&call.app.egui(), id) {
                     Ok(json!({ "queued": id }))
