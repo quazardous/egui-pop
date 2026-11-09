@@ -555,6 +555,8 @@ Settings, the Settings app (generated pages, a manifest's section, value scopes,
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/admin-confirm-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/admin-confirm-pop-dark.png" width="200" alt="admin-confirm-pop-dark"></a><br>admin-confirm-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/admin-shortcuts-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/admin-shortcuts-pop-dark.png" width="200" alt="admin-shortcuts-pop-dark"></a><br>admin-shortcuts-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/admin-wizard-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/admin-wizard-pop-dark.png" width="200" alt="admin-wizard-pop-dark"></a><br>admin-wizard-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/admin-wizard-summary-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/admin-wizard-summary-pop-dark.png" width="200" alt="admin-wizard-summary-pop-dark"></a><br>admin-wizard-summary-pop-dark</td>
   </tr>
 </table>
 

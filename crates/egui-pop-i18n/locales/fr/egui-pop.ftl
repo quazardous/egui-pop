@@ -55,6 +55,30 @@ command-admin-reset =
 command-admin-set =
     .title = Changer un réglage dans une portée de valeurs
 
+command-admin-wizard-open =
+    .title = Ouvrir un assistant
+
+command-admin-wizard-set =
+    .title = Changer les valeurs d’un assistant
+
+command-admin-wizard-next =
+    .title = Assistant : étape suivante
+
+command-admin-wizard-back =
+    .title = Assistant : étape précédente
+
+command-admin-wizard-skip =
+    .title = Assistant : passer cette étape
+
+command-admin-wizard-go =
+    .title = Assistant : aller à une étape
+
+command-admin-wizard-finish =
+    .title = Assistant : terminer
+
+command-admin-wizard-cancel =
+    .title = Assistant : annuler
+
 command-about =
     .description = Le nom de l’application, sa version, sa licence, ses auteurs et ses liens, avec ses informations de version à copier.
     .title = À propos de { $application }
@@ -697,6 +721,30 @@ egui-pop-admin-modified-count = Modifiés : { $count }
 
 egui-pop-admin-no-widget = Aucun type de widget « { $kind } » n’est enregistré
 egui-pop-admin-no-records = Rien ici pour l’instant.
+egui-pop-admin-wizard-next = Suivant
+egui-pop-admin-wizard-back = Précédent
+egui-pop-admin-wizard-skip = Passer
+egui-pop-admin-wizard-cancel = Annuler
+egui-pop-admin-wizard-finish = Terminer
+egui-pop-admin-wizard-steps = Étapes
+egui-pop-admin-wizard-step-of = Étape { $n } sur { $count }, { $title }
+egui-pop-admin-wizard-done = faite
+egui-pop-admin-wizard-later = pas encore accessible
+egui-pop-admin-wizard-optional = facultative
+egui-pop-admin-wizard-summary = Récapitulatif
+egui-pop-admin-wizard-summary-about = Vérifiez vos choix : Modifier revient à une étape.
+egui-pop-admin-wizard-change = Modifier
+egui-pop-admin-wizard-change-name = Modifier { $step }
+egui-pop-admin-wizard-yes = Oui
+egui-pop-admin-wizard-no = Non
+egui-pop-admin-wizard-not-set = Non renseigné
+egui-pop-admin-wizard-required = { $field } : obligatoire.
+egui-pop-admin-wizard-below = { $field } : au moins { $min }.
+egui-pop-admin-wizard-above = { $field } : au plus { $max }.
+egui-pop-admin-wizard-not-a-choice = { $field } : choisissez parmi ce qui est proposé.
+egui-pop-admin-wizard-cancel-title = Annuler « { $wizard } » ?
+egui-pop-admin-wizard-cancel-text = Ce que vous avez saisi est perdu.
+egui-pop-admin-wizard-cancel-verb = Abandonner
 egui-pop-admin-section-gestures = Gestes du pointeur
 egui-pop-admin-section-advanced = Avancé
 egui-pop-admin-advanced-about = La fenêtre des réglages d’avant : tous les réglages et les raccourcis sur un seul formulaire où chercher.
