@@ -179,7 +179,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             serde_json::Value::Null,
         );
     }
-    if ui.button("Open the Settings app (Ctrl+,)").clicked() {
+    if ui.button("Open the Settings app").clicked() {
         open_admin(app);
     }
     ui.add_space(t.space.s);
