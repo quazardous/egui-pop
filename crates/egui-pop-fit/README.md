@@ -1,5 +1,9 @@
 # egui_gridflow
 
+**[Live demo](https://quazardous.github.io/egui_gridflow/)**: real egui-pop
+widgets laid out in a box you resize, with the engine's choices drawn over
+them.
+
 A slot layout engine over plain boxes. It packs ordered elements into a
 container in standard slot sizes and says where each one goes. It knows
 nothing of widgets, values or drawing.
@@ -71,6 +75,28 @@ slot steps (½, ⅔, ¾, 1). The next step, 2 units, does not fit, so half a
 unit stays empty.
 
 `cargo run --example dump` lays out a small panel at several widths.
+
+## Demo
+
+The demo (`demo/`, not published) lays out real
+[egui-pop](https://github.com/quazardous/egui-pop) widgets (sliders, toggles,
+drop-downs, fields, a curve editor, colour wheels, a meter and a histogram)
+in a box you resize by its right edge. It lets you edit each element's
+forms, sizes, orientations and pins, add, remove and reorder elements, and
+shows the grid, each slot's status, logical and visual order, the
+hysteresis trail and the `dump()`. Only the demo depends on egui; the
+engine does not.
+
+Run it in a browser with [Trunk](https://trunkrs.dev):
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install --locked trunk
+cd demo
+trunk serve    # then open http://127.0.0.1:8080
+```
+
+or on the desktop with `cargo run -p egui_gridflow_demo`.
 
 ## Features
 
