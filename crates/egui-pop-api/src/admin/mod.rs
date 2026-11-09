@@ -122,7 +122,9 @@ pub struct Admin {
 #[derive(Debug, Default)]
 struct Reads {
     answers: BTreeMap<String, Result<Json, String>>,
-    asked: BTreeMap<String, (CommandId, Json)>,
+    /// A read asked: its command, its arguments, and how many runs of
+    /// that command the history held then (its answer is a later one).
+    asked: BTreeMap<String, (CommandId, Json, usize)>,
     /// The last journal event looked at.
     seq: Option<crate::host::Seq>,
 }
@@ -413,10 +415,17 @@ impl Admin {
         if let Some(a) = r.answers.get(&key) {
             return Some(a.clone());
         }
-        if let Some((id, args)) = r.asked.get(&key).cloned() {
+        if let Some((id, args, before)) = r.asked.get(&key).cloned() {
             // Its run, by its arguments, else the last of the command (a
-            // host may record them completed with their defaults).
+            // host may record them completed with their defaults); not
+            // one from before it was asked.
             let runs = app.history();
+            // (A full history drops runs: the count proves nothing then.)
+            if runs.len() < egui_pop_model::commands::HISTORY
+                && runs.iter().filter(|x| x.id == id).count() == before
+            {
+                return None;
+            }
             let run = runs
                 .iter()
                 .rev()
@@ -435,8 +444,9 @@ impl Admin {
                     Err(format!("`{command}` is not read-only: it is not read here"))
                 }
                 Some(_) => {
+                    let before = app.history().iter().filter(|x| x.id == id).count();
                     app.run(id.clone(), args.clone());
-                    r.asked.insert(key, (id, args));
+                    r.asked.insert(key, (id, args, before));
                     return None;
                 }
             },
