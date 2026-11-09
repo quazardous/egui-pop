@@ -23,8 +23,8 @@
 //! ([`crate::admin`]) when the application has it (`DefaultPlugins` do):
 //! the shortcuts editor, the gestures, the Fonts page and every custom
 //! page are its pages there, registered widget kinds
-//! ([`register_kinds`]) on pages this module declares
-//! ([`admin_manifest`]). The window itself opens from the Settings app's
+//! (`register_kinds`) on pages this module declares
+//! (`admin_manifest`). The window itself opens from the Settings app's
 //! General › Advanced page (`app.settings.window`), and from `Ctrl+,`
 //! without the Settings app; Escape closes it (or stops a capture of
 //! keys).
