@@ -2,7 +2,7 @@
 //!
 //! Run with `cargo run --example dump`.
 
-use slotflow::{layout, Axis, Container, Element, Orientation, Size, Size2, SizePolicy};
+use egui_gridflow::{layout, Axis, Container, Element, Orientation, Size, Size2, SizePolicy};
 
 fn main() {
     let unit = 24.0;

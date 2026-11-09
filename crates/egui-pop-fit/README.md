@@ -1,8 +1,12 @@
-# slotflow
+# egui_gridflow
 
 A slot layout engine over plain boxes. It packs ordered elements into a
 container in standard slot sizes and says where each one goes. It knows
-nothing of widgets, values or drawing, and depends on no GUI toolkit.
+nothing of widgets, values or drawing.
+
+**It has no egui dependency.** The `egui_` prefix only marks it as part of
+the egui-pop family of crates: the engine works on plain boxes, in twelfths
+of a unit and in points, and any toolkit can use its results.
 
 - **Base unit:** one row, scaled by density, given in points by the caller.
 - **Allowed sizes:** ¼, ⅓, ½, ⅔, ¾ of the unit and whole multiples. The
@@ -34,7 +38,7 @@ nothing of widgets, values or drawing, and depends on no GUI toolkit.
 ## Example
 
 ```rust
-use slotflow::{layout, Axis, Container, Element, Size, Size2, SizePolicy};
+use egui_gridflow::{layout, Axis, Container, Element, Size, Size2, SizePolicy};
 
 let half = Size2::new(Size::HALF, Size::ONE);
 let row = Size2::new(Size::units(2), Size::ONE);

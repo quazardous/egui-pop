@@ -1,7 +1,7 @@
 //! Scenario tests: each checks one rule on a small layout, mostly through
 //! its ASCII dump.
 
-use slotflow::{
+use egui_gridflow::{
     layout, Axis, Container, Element, GridRect, Orientation, Reason, Size, Size2, SizePolicy,
     Status,
 };
@@ -25,7 +25,7 @@ fn gr(x: u32, y: u32, w: u32, h: u32) -> GridRect {
     GridRect { x, y, w, h }
 }
 
-fn rect(l: &slotflow::Layout, key: u64) -> GridRect {
+fn rect(l: &egui_gridflow::Layout, key: u64) -> GridRect {
     l.get(key).and_then(|p| p.rect).expect("placed")
 }
 
@@ -238,7 +238,7 @@ fn hysteresis_keeps_choices_near_a_threshold() {
             .with_form(SizePolicy::fixed(sz(Size::ONE, Size::ONE))),
     ];
     let at = |units: f32| Container::new(units * UNIT, UNIT);
-    let form = |l: &slotflow::Layout| l.get(1).unwrap().form;
+    let form = |l: &egui_gridflow::Layout| l.get(1).unwrap().form;
 
     let narrow = layout(&at(1.99), &el, None);
     assert_eq!((narrow.columns, form(&narrow)), (23, 1));

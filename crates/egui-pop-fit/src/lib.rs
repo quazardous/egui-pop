@@ -1,8 +1,12 @@
-//! # slotflow
+//! # egui_gridflow
 //!
 //! A slot layout engine over plain boxes. It knows nothing of widgets,
 //! values or drawing: it packs ordered elements into a container in
 //! standard slot sizes, and says where each one goes.
+//!
+//! It has no egui dependency: the `egui_` prefix only marks it as part of
+//! the egui-pop family. Results are plain rectangles, in twelfths of the
+//! unit and in points.
 //!
 //! - **Base unit.** One row, scaled by density, given in points by the
 //!   caller ([`Container::unit`]).
@@ -22,7 +26,7 @@
 //!   threshold.
 //!
 //! ```
-//! use slotflow::{layout, Axis, Container, Element, Size, Size2, SizePolicy};
+//! use egui_gridflow::{layout, Axis, Container, Element, Size, Size2, SizePolicy};
 //!
 //! let half = Size2::new(Size::HALF, Size::ONE);
 //! let row = Size2::new(Size::units(2), Size::ONE);

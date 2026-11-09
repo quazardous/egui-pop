@@ -1,14 +1,17 @@
 [package]
-name = "slotflow"
+name = "egui_gridflow"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.95"
 license = "MIT OR Apache-2.0"
-description = "A slot layout engine: dense grid packing of plain boxes in standard slot sizes, with forms, orientations, growth and hysteresis."
+description = "A slot layout engine with no egui dependency: dense grid packing of plain boxes in standard slot sizes, with forms, orientations, growth and hysteresis."
 keywords = ["layout", "grid", "packing", "gui"]
 categories = ["gui", "algorithms"]
 readme = "README.md"
 publish = false
+
+[lib]
+name = "egui_gridflow"
 
 [features]
 default = []

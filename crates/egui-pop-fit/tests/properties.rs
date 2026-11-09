@@ -1,9 +1,9 @@
 //! Property tests over random elements and boxes.
 
-use proptest::prelude::*;
-use slotflow::{
+use egui_gridflow::{
     layout, Axis, Container, Element, Grow, Layout, Orientation, Size, Size2, SizePolicy, Status,
 };
+use proptest::prelude::*;
 
 const STEPS: [u32; 8] = [3, 4, 6, 8, 9, 12, 24, 36];
 const UNIT: f32 = 24.0;
@@ -27,7 +27,7 @@ fn policy() -> impl Strategy<Value = SizePolicy> {
         min_size: a,
         size: b,
         max_size: c,
-        aspect_ratio: ratio.map(|(w, h)| slotflow::AspectRatio {
+        aspect_ratio: ratio.map(|(w, h)| egui_gridflow::AspectRatio {
             width: w,
             height: h,
         }),
@@ -57,7 +57,7 @@ fn element(key: u64) -> impl Strategy<Value = Element> {
             forms,
             orientations: o.to_vec(),
             pinned_orientation: pinned,
-            pin: pin.map(|(col, row)| slotflow::Cell { col, row }),
+            pin: pin.map(|(col, row)| egui_gridflow::Cell { col, row }),
         })
 }
 
