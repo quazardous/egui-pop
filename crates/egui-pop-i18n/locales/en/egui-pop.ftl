@@ -1222,6 +1222,8 @@ egui-pop-admin-wizard-summary-about = Check your choices: Change goes back to a 
 
 egui-pop-admin-wizard-yes = Yes
 
+egui-pop-area-activity-bar = the activity bar
+
 egui-pop-area-bottom = the bottom panel
 
 egui-pop-area-center = the centre

@@ -105,6 +105,69 @@ fn the_activity_bar_shows_panels_and_folds_the_side_bar() {
 }
 
 #[test]
+fn the_activity_bar_is_a_fixed_zone_of_the_layout_that_refuses_tabs() {
+    let mut h = harness();
+    let app = h.state().handle().clone();
+    // A pane at the start of the window's content (within its margin),
+    // beside the primary side bar.
+    let bar = h.get_by_label("the activity bar").rect();
+    let side = app.area_rect(Area::StartSide).unwrap();
+    assert!(bar.left() <= 8.0, "{bar:?}");
+    assert!(bar.width() > 0.0, "{bar:?}");
+    assert!((side.left() - bar.right()).abs() < 1.0, "{bar:?} {side:?}");
+    // Its breadth is fixed: no sash resizes it.
+    assert!(h.query_by_label("Resize the activity bar").is_none());
+
+    // The Files tab, dragged and released over it, stays where it was.
+    let before = app.layout();
+    let tab = h
+        .query_all_by_label("Files")
+        .map(|n| n.rect())
+        .find(|r| side.contains(r.center()))
+        .expect("the Files tab");
+    let to = bar.center();
+    drag(&mut h, tab.center(), to);
+    assert!(
+        app.drop_hint().is_none(),
+        "no drop preview over the activity bar: {:?}",
+        app.drop_hint()
+    );
+    h.input_mut().events.push(egui::Event::PointerButton {
+        pos: to,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run();
+    assert_eq!(app.layout().areas, before.areas, "back where it was");
+    assert_eq!(h.get_by_label("the activity bar").rect(), bar);
+}
+
+/// Presses on `from` and drags to `to` a frame at a time, as egui_stack
+/// follows a tab's drag; held there.
+fn drag(h: &mut Harness<'_, App>, from: egui::Pos2, to: egui::Pos2) {
+    let mut send = |e: egui::Event| {
+        h.input_mut().events.push(e);
+        h.step();
+    };
+    send(egui::Event::PointerMoved(from));
+    send(egui::Event::PointerButton {
+        pos: from,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    for i in 1..=8 {
+        send(egui::Event::PointerMoved(
+            from + (to - from) * (i as f32 / 8.0),
+        ));
+    }
+    for _ in 0..4 {
+        h.step();
+    }
+}
+
+#[test]
 fn indicators_follow_the_hosts_events() {
     let mut h = harness();
     assert!(h.query_by_label("Idle").is_some());

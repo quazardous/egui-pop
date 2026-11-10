@@ -142,7 +142,7 @@ use egui_pop_model::ids::{PanelId, StepId, ZoneId};
 use egui_pop_model::layout::{Auxiliary, FloatingGroup, Join, Layout, Node, Placement};
 use egui_pop_model::panels::{Area, PanelSpec, Panels, Place};
 use egui_stack::layout::{
-    Content, Dir, FlyoutPaint, Layout as ZoneLayout, LayoutArea, LayoutEvent, LayoutPainter,
+    Content, Dir, Drops, FlyoutPaint, Layout as ZoneLayout, LayoutArea, LayoutEvent, LayoutPainter,
     LayoutStyle, SashPaint, Shown, Size, StripPaint, Zone, ZoneName, ZoneViewer,
 };
 use egui_stack::tab_viewer::DropVerdict;
@@ -2423,30 +2423,9 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         wb.zen
     };
     app.set_drawing_areas(true);
-    if !zen && app.zone_has_blocks(&crate::zones::ACTIVITY_BAR) {
-        let t = egui_pop_core::theme::Tokens::of(&ctx);
-        // Beside the primary side bar, as VS Code's.
-        let id = Id::unique("egui_pop.activity_bar");
-        let bar = if flipped {
-            egui::Panel::right(id)
-        } else {
-            egui::Panel::left(id)
-        };
-        let shown = bar
-            .resizable(false)
-            .exact_size(t.size.icon_panel + 2.0 * t.space.s + 2.0 * t.space.xs)
-            .show(ui, |ui| {
-                let region = focus::Region::new("activityBar", RANK_ACTIVITY_BAR);
-                focus::region(ui, &region, |ui| {
-                    // One Tab stop, Up and Down between its items.
-                    let axis = egui_pop_core::tab::Axis::Vertical;
-                    egui_pop_core::tab::roving(ui, "activityBar", axis, |ui| {
-                        app.show_zone(ui, &crate::zones::ACTIVITY_BAR);
-                    });
-                });
-            });
-        app.workbench_mut().no_drop.push(shown.response.rect);
-    }
+    // The activity bar: a zone of the layout, beside the primary side bar
+    // as VS Code's, of a fixed breadth (no sash) and refusing drops.
+    let activity = !zen && app.zone_has_blocks(&crate::zones::ACTIVITY_BAR);
     {
         // Zones that are not docks refuse drops, before the docks resolve
         // the drag.
@@ -2507,11 +2486,11 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             }
         })
     };
-    let mut layout = ZoneLayout::new(shell_tree(
-        &panel_alignment(app).order(),
+    let areas_tree = shell_tree(&panel_alignment(app).order(), flipped, centre_min, &leaf);
+    let mut layout = ZoneLayout::new(with_activity_bar(
+        areas_tree,
         flipped,
-        centre_min,
-        &leaf,
+        activity.then(|| activity_bar_width(&ctx)),
     ));
     // One strip breadth for the layout: the widest folded side's.
     let strip = [Area::StartSide, Area::EndSide]
@@ -2865,6 +2844,81 @@ fn shell_tree(
     }
 }
 
+/// The activity bar's zone (`Content::App`) and the shell's root, holding
+/// it beside the areas' tree: on the primary side bar's side, `width`
+/// wide (its least and largest size, so it has no sash), refusing drops;
+/// hidden when `width` is `None`.
+fn with_activity_bar(areas: Zone, flipped: bool, width: Option<f32>) -> Zone {
+    let bar = Zone::leaf(ACTIVITY_ZONE, Content::App)
+        .with(|c| {
+            let width = Size::Points(width.unwrap_or(0.0));
+            c.min = Some(width);
+            c.max = Some(width);
+            c.default = Some(width);
+            c.drops = Drops::Refuse;
+        })
+        .with_state(|s| s.hidden = width.is_none());
+    let areas = areas.with(|c| c.grow = true);
+    let children = if flipped {
+        vec![areas, bar]
+    } else {
+        vec![bar, areas]
+    };
+    Zone::split("shell", Dir::Horizontal, children)
+}
+
+/// The activity bar's zone's name.
+const ACTIVITY_ZONE: &str = "activity_bar";
+
+/// The activity bar's breadth: an icon and its padding.
+fn activity_bar_width(ctx: &egui::Context) -> f32 {
+    let t = egui_pop_core::theme::Tokens::of(ctx);
+    t.size.icon_panel + 2.0 * t.space.s + 2.0 * t.space.xs
+}
+
+/// Draws the activity bar in its zone, as the egui side panel it was:
+/// the side panel's frame, its line on the edge facing the areas.
+fn activity_bar(app: &AppHandle, ui: &mut Ui, flipped: bool) {
+    let rect = ui.max_rect();
+    let stroke = ui.visuals().widgets.noninteractive.bg_stroke;
+    let line = stroke.width.round() as i8;
+    let mut frame = egui::Frame::side_top_panel(ui.style());
+    if flipped {
+        frame.outer_margin.left = frame.outer_margin.left.saturating_add(line);
+    } else {
+        frame.outer_margin.right = frame.outer_margin.right.saturating_add(line);
+    }
+    let mut panel = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt("egui_pop.activity_bar")
+            .max_rect(rect)
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+    );
+    let least = (rect.width() - frame.total_margin().sum().x).max(0.0);
+    frame.show(&mut panel, |ui| {
+        ui.set_min_height(ui.max_rect().height());
+        ui.set_min_width(least);
+        let region = focus::Region::new("activityBar", RANK_ACTIVITY_BAR);
+        focus::region(ui, &region, |ui| {
+            // One Tab stop, Up and Down between its items.
+            let axis = egui_pop_core::tab::Axis::Vertical;
+            egui_pop_core::tab::roving(ui, "activityBar", axis, |ui| {
+                app.show_zone(ui, &crate::zones::ACTIVITY_BAR);
+            });
+        });
+    });
+    if stroke.width > 0.0 {
+        // Just outside the frame, in the room kept for it.
+        let margin = f32::from(line);
+        let x = if flipped {
+            rect.left() + margin - 0.5 * stroke.width
+        } else {
+            rect.right() - margin + 0.5 * stroke.width
+        };
+        ui.painter().vline(x, rect.y_range(), stroke);
+    }
+}
+
 /// An area's default size: its panels' (`default`, 0 when none says),
 /// else 240 for a side area and 200 for the bottom one.
 fn area_default(area: Area, default: f32) -> f32 {
@@ -3002,10 +3056,17 @@ impl ZoneViewer for ShellViewer<'_> {
     /// for screen readers and tests: its pane, and its sash and grip ("Resize
     /// the start side bar"); a split keeps its name.
     fn title(&mut self, zone: &ZoneName) -> String {
+        if zone.0 == ACTIVITY_ZONE {
+            return strings::tr(self.ctx, &txt::AREA_ACTIVITY_BAR);
+        }
         area_from(&zone.0).map_or_else(|| zone.0.clone(), |area| area_text(self.ctx, area))
     }
 
     fn ui(&mut self, ui: &mut Ui, zone: &ZoneName) {
+        if zone.0 == ACTIVITY_ZONE {
+            activity_bar(self.app, ui, self.flipped);
+            return;
+        }
         let Some(area) = area_from(&zone.0) else {
             return;
         };
