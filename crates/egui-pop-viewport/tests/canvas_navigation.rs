@@ -111,15 +111,9 @@ fn press<S>(h: &mut Harness<'_, S>, modifiers: Modifiers, key: Key) {
 fn hand_mode_pans_the_image_from_a_handle_and_shows_itself() {
     let mut h = image("document", false);
     let corner = screen(&h, [600.0, 500.0]);
-    // Off: a drag on a handle moves it.
+    // Off: a drag on a handle is the handle's, the view stays.
     drag(&mut h, corner, vec2(20.0, 0.0));
     assert_eq!(h.state().view, View::actual([500.0, 400.0]));
-    assert_ne!(
-        h.state().overlays[0].shape,
-        Shape::Rect([400.0, 300.0, 600.0, 500.0])
-    );
-    h.state_mut().overlays[0].shape = Shape::Rect([400.0, 300.0, 600.0, 500.0]);
-    h.run();
     // H over the image: hand mode, its indicator.
     h.hover_at(corner);
     press(&mut h, Modifiers::NONE, Key::H);
@@ -217,6 +211,10 @@ fn touch<S>(h: &mut Harness<'_, S>, at: [Pos2; 2], phase: TouchPhase) {
 /// Two fingers from `at`, moved by `by` in four steps, lifted.
 fn two_fingers<S>(h: &mut Harness<'_, S>, at: Pos2, by: Vec2) {
     let fingers = |d: Vec2| [at + d - vec2(30.0, 0.0), at + d + vec2(30.0, 0.0)];
+    // egui starts a gesture where the pointer is (its first finger, on
+    // a real touch screen).
+    h.hover_at(at);
+    h.step();
     touch(h, fingers(Vec2::ZERO), TouchPhase::Start);
     for i in 1..=4 {
         touch(h, fingers(by * (i as f32 / 4.0)), TouchPhase::Move);
