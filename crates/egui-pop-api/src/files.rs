@@ -5205,6 +5205,7 @@ impl FilePicker {
             peek,
             loading: false,
             generation: 0,
+            marks: None,
         };
         let out = if columns_on {
             cols.show(ui, cx)

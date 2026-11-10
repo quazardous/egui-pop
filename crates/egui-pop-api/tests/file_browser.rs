@@ -1188,3 +1188,48 @@ fn the_agenda_computes_its_dates_once_per_listing() {
     h.run();
     assert_eq!(browser::AgendaMode::arrangements(&h.ctx), once + 1);
 }
+
+#[test]
+fn marks_badge_and_dim_entries_in_every_mode_and_are_said_with_their_names() {
+    let browser = FileBrowser::new("marks", source(6), "/p")
+        .with_modes(ViewModes::built_in())
+        .with_marks(|e| browser::EntryMarks {
+            badges: if e.name == "IMG_002.png" {
+                vec!["in your Library".into()]
+            } else {
+                Vec::new()
+            },
+            dimmed: e.name == "IMG_002.png",
+        });
+    let mut h = harness(browser);
+    for mode in ["details", "thumbnails", "filmstrip", "agenda"] {
+        assert!(h.state_mut().set_mode(mode));
+        h.run();
+        assert!(
+            h.query_by_label("IMG_002.png · in your Library").is_some(),
+            "{mode}: the badge is said with the name"
+        );
+        assert!(h.query_by_label("IMG_001.png").is_some(), "{mode}");
+    }
+}
+
+#[test]
+fn an_application_sets_the_selection_among_the_entries_listed() {
+    let mut h = harness(FileBrowser::new("set", source(6), "/p"));
+    h.state_mut().set_selection([
+        PathBuf::from("/p/IMG_002.png"),
+        PathBuf::from("/p/IMG_004.png"),
+        PathBuf::from("/p/missing.png"),
+    ]);
+    h.run();
+    let sel: Vec<PathBuf> = h.state().selection().paths.iter().cloned().collect();
+    assert_eq!(
+        sel,
+        [
+            PathBuf::from("/p/IMG_002.png"),
+            PathBuf::from("/p/IMG_004.png")
+        ]
+    );
+    h.state_mut().set_selection(Vec::new());
+    assert!(h.state().selection().is_empty());
+}
