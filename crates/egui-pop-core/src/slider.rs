@@ -83,8 +83,8 @@ use std::fmt;
 use std::ops::RangeInclusive;
 
 use egui::{
-    Color32, Id, Key, Modifiers, Rect, Response, Role, Sense, TextEdit, Ui, Widget, WidgetInfo,
-    pos2, vec2,
+    Color32, Id, Key, Modifiers, Rect, Response, Role, Sense, TextEdit, Ui, Vec2, Widget,
+    WidgetInfo, pos2, vec2,
 };
 use egui_pop_model::values::{Descriptor, Type};
 
@@ -291,7 +291,7 @@ pub enum Verdict {
 }
 
 /// A hook seeing each change before it is written.
-pub(crate) struct Hook<'a>(Box<dyn FnMut(&Change) -> Verdict + 'a>);
+pub(crate) struct Hook<'a>(pub(crate) Box<dyn FnMut(&Change) -> Verdict + 'a>);
 
 impl fmt::Debug for Hook<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -301,7 +301,7 @@ impl fmt::Debug for Hook<'_> {
 
 /// The change as the hook leaves it; `None` when vetoed, or when the
 /// field's state refuses changes (read-only, disabled).
-fn decide(hook: &mut Option<Hook<'_>>, change: Change, spec: &Spec) -> Option<Change> {
+pub(crate) fn decide(hook: &mut Option<Hook<'_>>, change: Change, spec: &Spec) -> Option<Change> {
     if !spec.state.is_editable() {
         return None;
     }
@@ -588,7 +588,18 @@ pub struct Slider<'a> {
     default: Option<f64>,
     hook: Option<Hook<'a>>,
     quad: Option<Quad<'a>>,
+    vertical: bool,
+    size: Option<Vec2>,
+    compact: bool,
 }
+
+/// The least width a horizontal slider takes, whatever its room: below
+/// it the bar is clipped. In a narrow room the label goes first (into
+/// the tooltip), then the unit ([`Slider::compact`]).
+pub const MIN_WIDTH: f32 = 24.0;
+
+/// A vertical slider's length when no size is given.
+pub const VERTICAL_LENGTH: f32 = 160.0;
 
 /// Parses a typed number or expression ([`expr::eval`], with no current
 /// value): units after it are ignored, a comma is a point.
@@ -606,6 +617,9 @@ impl<'a> Slider<'a> {
             default: None,
             hook: None,
             quad: None,
+            vertical: false,
+            size: None,
+            compact: false,
         }
     }
 
@@ -618,6 +632,9 @@ impl<'a> Slider<'a> {
             default: d.default.as_f64(),
             hook: None,
             quad: None,
+            vertical: false,
+            size: None,
+            compact: false,
         }
     }
 
@@ -626,6 +643,34 @@ impl<'a> Slider<'a> {
     /// What a double click goes back to.
     pub fn default(mut self, default: f64) -> Self {
         self.default = Some(default);
+        self
+    }
+
+    /// A vertical slider, as a mixer's fader: up is more. The same
+    /// gestures along the other axis (a drag up does what a drag right
+    /// does on a horizontal bar; Up and Right step up), the value at the
+    /// top, the label at the bottom, under the track. It has no quad
+    /// button.
+    pub fn vertical(mut self) -> Self {
+        self.vertical = true;
+        self
+    }
+
+    /// Its size, in points: the room it fills (a slot). By default a
+    /// horizontal slider takes the width available (at least
+    /// [`MIN_WIDTH`]) and a row's height; a vertical one is
+    /// [`VERTICAL_LENGTH`] high and a row and a half wide.
+    pub fn size(mut self, size: Vec2) -> Self {
+        self.size = Some(size);
+        self
+    }
+
+    /// The compact representation: the value alone, the label in the
+    /// tooltip (and still the bar's name for assistive technologies). A
+    /// slider too narrow for its label and value turns compact by
+    /// itself, and drops the unit when even the value does not fit.
+    pub fn compact(mut self) -> Self {
+        self.compact = true;
         self
     }
 
@@ -676,10 +721,19 @@ impl<'a> Slider<'a> {
             default,
             mut hook,
             quad,
+            vertical,
+            size,
+            compact,
         } = self;
-        let height = ui.spacing().interact_size.y;
-        let width = ui.available_width().max(120.0);
-        let (id, row) = ui.allocate_space(vec2(width, height));
+        let row_height = ui.spacing().interact_size.y;
+        let wanted = match (size, vertical) {
+            (Some(s), false) => vec2(s.x.max(MIN_WIDTH), s.y.max(1.0)),
+            (Some(s), true) => vec2(s.x.max(1.0), s.y.max(MIN_WIDTH)),
+            (None, false) => vec2(ui.available_width().max(MIN_WIDTH), row_height),
+            (None, true) => vec2(row_height * 1.5, VERTICAL_LENGTH),
+        };
+        let (id, row) = ui.allocate_space(wanted);
+        let quad = if vertical { None } else { quad };
         let (bar, quad_rect) = split_quad(row, quad.is_some(), ui);
         let mut response = ui.interact(bar, id, Sense::click_and_drag());
         let quad = quad.map(|q| show_quad(ui, quad_rect, id, q));
@@ -703,6 +757,7 @@ impl<'a> Slider<'a> {
             done,
         };
         let typing_id = typing_id(id);
+        let mut label_shown = true;
         if let Some(text) = typing_text(ui.ctx(), typing_id) {
             if let Some(end) = typed_entry(ui, bar, typing_id, text, &spec, *value) {
                 if let Some(v) = end.value {
@@ -719,7 +774,12 @@ impl<'a> Slider<'a> {
             keep_auto_ids(ui);
             let g = gestures(ui.ctx());
             let scale = modifier_scale(ui, &g);
-            match drag(ui, &response, &spec, *value, spec.soft, scale, bar.width()) {
+            let along = if vertical {
+                Axis::Vertical(bar.height())
+            } else {
+                Axis::Horizontal(bar.width())
+            };
+            match drag_along(ui, &response, &spec, *value, spec.soft, scale, along) {
                 Drag::None => {}
                 Drag::Moved(v) => {
                     let to = spec.settle(v, spec.hard);
@@ -765,8 +825,23 @@ impl<'a> Slider<'a> {
             }
             let text = spec.text(ui.ctx(), *value);
             let past = *value < spec.soft.0 || *value > spec.soft.1;
-            paint_bar(ui, bar, &[&response], &spec, &[*value], &text, past);
-            paint_state(ui, bar, &spec);
+            label_shown = if vertical {
+                paint_vertical(ui, bar, &response, &spec, *value, past)
+            } else {
+                paint_bar_fitted(
+                    ui,
+                    bar,
+                    &[&response],
+                    &spec,
+                    &[*value],
+                    &text,
+                    past,
+                    compact,
+                )
+            };
+            if label_shown {
+                paint_state(ui, bar, &spec);
+            }
         }
         if *value != before {
             response.mark_changed();
@@ -775,8 +850,17 @@ impl<'a> Slider<'a> {
         let v = *value;
         response.widget_info(|| WidgetInfo::slider(enabled, v, &spec.label));
         access(ui, response.id, &spec, v, spec.soft);
+        if vertical {
+            ui.ctx().accesskit_node_builder(response.id, |node| {
+                node.set_orientation(egui::accesskit::Orientation::Vertical);
+            });
+        }
         state_of(ui, &[&response], &spec, "slider");
-        let response = crate::field::hover(ui, &response, &spec.state);
+        let mut response = crate::field::hover(ui, &response, &spec.state);
+        if !label_shown {
+            // Compact: the label is read in the tooltip.
+            response = response.on_hover_text(&spec.label);
+        }
         SliderOutput {
             response,
             changes,
@@ -896,6 +980,14 @@ pub(crate) enum Drag {
     Cancelled(f64),
 }
 
+/// The axis a bar lies along, and its length in points.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Axis {
+    Horizontal(f32),
+    /// Up is more.
+    Vertical(f32),
+}
+
 /// A relative drag on `response`: the pointer's motion over `width`
 /// (the bar's) moves the value over the soft range, within `bounds` (unless
 /// already past them). The motion accumulates exactly, in bar
@@ -908,6 +1000,27 @@ pub(crate) fn drag(
     bounds: (f64, f64),
     scale: f64,
     width: f32,
+) -> Drag {
+    drag_along(
+        ui,
+        response,
+        spec,
+        value,
+        bounds,
+        scale,
+        Axis::Horizontal(width),
+    )
+}
+
+/// [`drag`] along either axis: up is more on a vertical bar.
+pub(crate) fn drag_along(
+    ui: &Ui,
+    response: &Response,
+    spec: &Spec,
+    value: f64,
+    bounds: (f64, f64),
+    scale: f64,
+    axis: Axis,
 ) -> Drag {
     let acc = DRAG_ACC.keyed(response.id);
     let start = DRAG_START.keyed(response.id);
@@ -927,8 +1040,12 @@ pub(crate) fn drag(
         };
     }
     if response.dragged() {
-        let width = f64::from(width.max(1.0));
-        let delta = f64::from(response.drag_delta().x) / width * scale;
+        let d = response.drag_delta();
+        let (moved, length) = match axis {
+            Axis::Horizontal(w) => (d.x, w),
+            Axis::Vertical(h) => (-d.y, h),
+        };
+        let delta = f64::from(moved) / f64::from(length.max(1.0)) * scale;
         if delta != 0.0 {
             let slot = acc;
             let acc = slot.get(ui.ctx()).unwrap_or_else(|| spec.frac(value));
@@ -1172,10 +1289,52 @@ pub(crate) fn paint_bar(
     text: &str,
     past: bool,
 ) {
-    if !ui.is_rect_visible(rect) {
-        return;
-    }
+    paint_bar_fitted(ui, rect, responses, spec, thumbs, text, past, false);
+}
+
+/// [`paint_bar`] fitted to its width: the label and the value when both
+/// fit (and not `compact`), else the value alone, without its unit when
+/// even that does not fit. Says whether the label shows.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "paint_bar's arguments and the compact wish"
+)]
+pub(crate) fn paint_bar_fitted(
+    ui: &Ui,
+    rect: Rect,
+    responses: &[&Response],
+    spec: &Spec,
+    thumbs: &[f64],
+    text: &str,
+    past: bool,
+    compact: bool,
+) -> bool {
     let kit = Kit::of(ui.ctx());
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let pad = kit.slider.data.padding_x.max(0.0);
+    let measure = |t: &str| {
+        ui.painter()
+            .layout_no_wrap(t.to_owned(), font.clone(), Color32::PLACEHOLDER)
+            .size()
+            .x
+    };
+    let value_w = measure(text);
+    let gap = ui.spacing().item_spacing.x;
+    let label_shown = !compact && measure(&spec.label) + value_w + gap + 2.0 * pad <= rect.width();
+    // Too narrow for the value with its unit: the number alone.
+    let number;
+    let text = if !label_shown && value_w + 2.0 * pad > rect.width() && !spec.unit.is_empty() {
+        number = text
+            .strip_suffix(spec.unit.as_str())
+            .map_or(text, str::trim_end)
+            .to_owned();
+        number.as_str()
+    } else {
+        text
+    };
+    if !ui.is_rect_visible(rect) {
+        return label_shown;
+    }
     let tone = if past { Tone::Warning } else { Tone::Neutral };
     // The bar is in the states of every thumb (a range's two).
     let state = responses
@@ -1187,13 +1346,12 @@ pub(crate) fn paint_bar(
         painter: &painter,
         ppp: ui.ctx().pixels_per_point(),
     };
-    let font = egui::TextStyle::Button.resolve(ui.style());
     let label = painter.layout_no_wrap(spec.label.clone(), font.clone(), Color32::PLACEHOLDER);
     let bar = Part {
         rect,
         room: rect,
         state,
-        label: Some(&label),
+        label: label_shown.then_some(&label),
     };
     kit.slider.paint(&cx, &bar);
     let x_of = |v: f64| rect.left() + rect.width() * spec.frac(v).clamp(0.0, 1.0) as f32;
@@ -1261,6 +1419,109 @@ pub(crate) fn paint_bar(
             label: Some(&value),
         },
     );
+    label_shown
+}
+
+/// A vertical bar: the track drawn by the kit (`slider`), the fill
+/// (`slider-fill`) rising from the bottom, the thumb across it
+/// (`slider-thumb`), the value at the top and the label at the bottom,
+/// each cut to the width. Says whether the label shows whole.
+fn paint_vertical(
+    ui: &Ui,
+    rect: Rect,
+    response: &Response,
+    spec: &Spec,
+    v: f64,
+    past: bool,
+) -> bool {
+    let kit = Kit::of(ui.ctx());
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let tone = if past { Tone::Warning } else { Tone::Neutral };
+    let state = State::from_response(response).toned(tone);
+    let style = kit.slider.style(state);
+    let line = ui.fonts_mut(|f| f.row_height(&font));
+    let pad = 2.0;
+    let fit = |text: String, color: Color32| {
+        let mut job = egui::text::LayoutJob::simple_singleline(text, font.clone(), color);
+        job.wrap = egui::text::TextWrapping::truncate_at_width((rect.width() - 2.0 * pad).max(1.0));
+        ui.painter().layout_job(job)
+    };
+    let label = fit(spec.label.clone(), style.text);
+    let label_shown = !label.elided;
+    if !ui.is_rect_visible(rect) {
+        return label_shown;
+    }
+    let full = spec.text(ui.ctx(), v);
+    let mut value = fit(full.clone(), style.text);
+    if value.elided {
+        value = fit(spec.number(ui.ctx(), v), style.text);
+    }
+    let value_band = Rect::from_min_max(rect.min, pos2(rect.right(), rect.top() + line + pad));
+    let label_band = Rect::from_min_max(pos2(rect.left(), rect.bottom() - line - pad), rect.max);
+    let track = Rect::from_min_max(
+        pos2(rect.left(), value_band.bottom()),
+        pos2(rect.right(), label_band.top()),
+    );
+    let painter = clipped(ui, rect, style);
+    let cx = KitCx {
+        painter: &painter,
+        ppp: ui.ctx().pixels_per_point(),
+    };
+    if track.height() > 0.0 {
+        kit.slider.paint(
+            &cx,
+            &Part {
+                rect: track,
+                room: track,
+                state,
+                label: None,
+            },
+        );
+        let y = track.bottom() - track.height() * spec.frac(v).clamp(0.0, 1.0) as f32;
+        let strip = match kit.slider_fill.data.height {
+            h if h > 0.0 => h.min(track.width()),
+            _ => (track.width() * 0.15).max(3.0),
+        };
+        if let Some(g) = &spec.gradient {
+            // A gradient's colours run along the bar: a side strip.
+            let r = Rect::from_min_max(
+                pos2(track.left(), track.top()),
+                pos2(track.left() + strip.max(4.0), track.bottom()),
+            );
+            g.paint_vertical(&painter, r);
+        } else {
+            kit.slider_fill.paint_part(
+                &cx,
+                &Part {
+                    rect: Rect::from_min_max(
+                        pos2(track.left(), y),
+                        pos2(track.left() + strip, track.bottom()),
+                    ),
+                    room: track,
+                    state,
+                    label: None,
+                },
+            );
+        }
+        // The thumb: a line across the track, in the thumb's colour.
+        let thumb = kit.slider_thumb.style(state);
+        let color = if thumb.fill == Color32::TRANSPARENT {
+            style.text
+        } else {
+            thumb.fill
+        };
+        let thickness = kit.slider_thumb.data.width.max(2.0);
+        painter.hline(track.x_range(), y, egui::Stroke::new(thickness, color));
+    }
+    let at = |band: Rect, g: &std::sync::Arc<egui::Galley>| {
+        pos2(
+            band.center().x - g.size().x / 2.0,
+            band.center().y - g.size().y / 2.0,
+        )
+    };
+    painter.galley(at(value_band, &value), value.clone(), style.text);
+    painter.galley(at(label_band, &label), label.clone(), style.text);
+    label_shown
 }
 
 /// Paints the field state on the bar: the edge, and the markers after

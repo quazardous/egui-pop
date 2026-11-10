@@ -122,8 +122,8 @@ requires. A verdict changed on 2026-11-03 says why.
 | egui-modal | 0.6.0 (2024-12-21) | 0.30 | MIT | Modals | **Dead**: egui's `Modal` replaces it |
 | catppuccin-egui | 5.7.0 (2025-11-15) | 0.26 to 0.33 | MIT | Themes | Stale; our tokens replace it |
 | egui_double_slider | 4.0.0 (2026-08-19) | 0.36 | **Apache-2.0** only | A range slider | **Skip** (2026-10-13): ideas only for the range slider (see "Sliders" below) |
-| egui_fader | 0.1.2 (2025-06-12) | 0.31 | MIT | An audio fader | **Skip** (2026-10-13): a vertical audio idiom, no soft range or typed entry |
-| egui_knob | 0.6.3 (2026-09-01) | 0.36 | MIT | Knob | Skip (knobs fit audio, not photos) |
+| egui_fader | 0.1.2 (2025-06-12) | 0.31 | MIT | An audio fader | **Skip** (2026-10-13): no soft range or typed entry; the slider turns vertical itself (`Slider::vertical`, 2026-11-10) |
+| egui_knob | 0.6.3 (2026-09-01) | 0.36 | MIT | Knob | Ideas only (2026-11-10): egui-pop's own `knob::Knob` shares the slider's terms, gestures and history, which egui_knob lacks |
 | egui_colors | 0.14.0 (2026-10-16) | 0.37 | MIT | 12-step palettes | Theme work only |
 | egui_colorgradient | 0.2.3 (2025-07-25) | 0.32 | MIT | Gradient editor | Reference only |
 | egui-keyframe | 0.1.0 (2026-02-13) | 0.33 | MIT OR Apache-2.0 | Keyframes and curve editing | Reference for curve handles; too young |
@@ -579,7 +579,6 @@ egui-pop widget bound to values and commands; "adopt" = used as it is;
 
 | Widget | Why |
 |---|---|
-| Knob / dial (egui_knob, `QDial`, imgui-knobs) | Audio idiom; a slider is faster and more precise for photos |
 | Carousel, speed dial, floating action button, watermark, QR code, transfer list, cascader, statistic and countdown | Web and mobile patterns with no use here |
 | Pull to refresh, infinite scroll by pages | The host windows the data; there is no "refresh" gesture on desktop |
 | egui_circular_progress_bar | GPL-3.0, not usable in an MIT library |

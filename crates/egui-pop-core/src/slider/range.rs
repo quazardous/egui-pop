@@ -88,7 +88,7 @@ impl<'a> RangeSlider<'a> {
             std::mem::swap(low, high);
         }
         let height = ui.spacing().interact_size.y;
-        let width = ui.available_width().max(120.0);
+        let width = ui.available_width().max(super::MIN_WIDTH);
         let (id, bar) = ui.allocate_space(vec2(width, height));
         let (low_rect, high_rect) = halves(bar, &spec, *low, *high);
         let mut lo_r = ui.interact(low_rect, id.with("low"), Sense::click_and_drag());

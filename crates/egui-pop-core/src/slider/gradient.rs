@@ -125,6 +125,22 @@ impl Gradient {
         }
         painter.add(Shape::mesh(mesh));
     }
+
+    /// Paints the gradient over `rect`, bottom to top (a vertical bar's).
+    pub(crate) fn paint_vertical(&self, painter: &Painter, rect: Rect) {
+        let mut mesh = Mesh::default();
+        for (i, (at, c)) in self.stops.iter().enumerate() {
+            let y = rect.bottom() - rect.height() * at;
+            mesh.colored_vertex(pos2(rect.left(), y), *c);
+            mesh.colored_vertex(pos2(rect.right(), y), *c);
+            if i > 0 {
+                let b = 2 * i as u32;
+                mesh.add_triangle(b - 2, b - 1, b);
+                mesh.add_triangle(b - 1, b, b + 1);
+            }
+        }
+        painter.add(Shape::mesh(mesh));
+    }
 }
 
 fn lerp(a: Color32, b: Color32, t: f32) -> Color32 {
