@@ -1837,7 +1837,10 @@ fn the_node_graph_pages_zoom_control_drives_the_graph() {
     h.get_by_label("Zoom level").click();
     h.run();
     for item in ["Fit", "Frame the selection", "100 %", "25 %", "50 %"] {
-        assert!(h.query_by_label(item).is_some(), "the menu offers {item}");
+        assert!(
+            h.query_all_by_label(item).next().is_some(),
+            "the menu offers {item}"
+        );
     }
     h.snapshot("node-graph-zoom-menu-pop-dark");
     // The menu's item, not the playground's button of the same name.
