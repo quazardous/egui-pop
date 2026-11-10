@@ -40,7 +40,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 68] = [
+pub const PAGES: [&str; 69] = [
     "overview",
     "tokens",
     "builtins",
@@ -54,6 +54,7 @@ pub const PAGES: [&str; 68] = [
     "values",
     "history",
     "sliders",
+    "faders",
     "inputs",
     "menus",
     "toolbars",
@@ -243,6 +244,16 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(egui_pop::api::history_view::HistoryPlugin::default())
         .plugin(pages::history::HistoryPage)
         .plugin(pages::sliders::SlidersPage)
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.faders"),
+            story: StoryId::from_static("faders"),
+            title: "Faders and knobs",
+            description: "The slider along the other axis (a strip of faders, up is more), a rotary knob (drag up or around, Shift finer, the wheel, double click to reset) in the layouts its room gives it, sliders shrinking to narrow slots, and a standalone section band.",
+            group: "Components",
+            weight: 46,
+            show: pages::faders::show,
+            playground: None,
+        })
         .plugin(pages::inputs::InputsPage)
         .plugin(pages::menus::MenusPage)
         .plugin(pages::toolbars::ToolbarsPage)

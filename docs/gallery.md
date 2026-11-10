@@ -83,7 +83,7 @@ over the size kept. `--no-persistence` or `--quit-after` run the gallery with
 nothing read and nothing kept, as `tools/wbox/app.sh` does.
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
-built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (layout by role: text roles, spacing by intent, cards and buttons by tone), `scoped` (egui's own buttons, toggles, combo box and text fields restyled by the kit in a scope), `theme-editor` (the theme editor), `fonts` (candidate font pairs side by side), `icons`, `indicators` (dots, badges, pips, flags, swatches), `sections` (collapsible sections stacked in a panel), `motion` (the motion clock), `values`, `history` (the application's history: its panel's list, a click jumping to a step), `sliders`, `inputs` (decorated inputs, field states and Tab order),
+built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (layout by role: text roles, spacing by intent, cards and buttons by tone), `scoped` (egui's own buttons, toggles, combo box and text fields restyled by the kit in a scope), `theme-editor` (the theme editor), `fonts` (candidate font pairs side by side), `icons`, `indicators` (dots, badges, pips, flags, swatches), `sections` (collapsible sections stacked in a panel), `motion` (the motion clock), `values`, `history` (the application's history: its panel's list, a click jumping to a step), `sliders`, `faders` (vertical sliders as a strip of faders, knobs in their three layouts, sliders in narrow slots, a standalone section band), `inputs` (decorated inputs, field states and Tab order),
 `menus`, `toolbars` (toolbars of commands, More tools, a tool palette), `dialogs`, `files` (the file chooser), `toasts`, `tips` (tips of the day and
 hints), `about` (Help > About: what the gallery says about itself, its
 version info to copy), `progress`,
@@ -181,7 +181,7 @@ Themes, design tokens, the theme editor, icons and scaling.
 
 ### Widgets
 
-Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, the history (its list, an agent's step, one undone), sliders, inputs (decorators, field states, Tab order), menus, toolbars (icons, titles, More tools, a tool palette), dialogs (movable ones, a clear backdrop), file choosing (and an image's preview), toasts, micro-indicators (still under reduced motion), collapsible sections (folded, resized, a windowed one scrolled to its end, pulled with empty room under the last), and progress (bars, rings, meters, spinners; still under reduced motion).
+Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, the history (its list, an agent's step, one undone), sliders, faders and knobs, inputs (decorators, field states, Tab order), menus, toolbars (icons, titles, More tools, a tool palette), dialogs (movable ones, a clear backdrop), file choosing (and an image's preview), toasts, micro-indicators (still under reduced motion), collapsible sections (folded, resized, a windowed one scrolled to its end, pulled with empty room under the last), and progress (bars, rings, meters, spinners; still under reduced motion).
 
 <table>
     <tr>
@@ -296,6 +296,10 @@ Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, 
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/scoped-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/scoped-pop-dark.png" width="200" alt="scoped-pop-dark"></a><br>scoped-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/scoped-kit-restyled.png"><img src="../crates/egui-pop-gallery/tests/snapshots/scoped-kit-restyled.png" width="200" alt="scoped-kit-restyled"></a><br>scoped-kit-restyled</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/history-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/history-pop-dark.png" width="200" alt="history-pop-dark"></a><br>history-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/faders-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/faders-pop-dark.png" width="200" alt="faders-pop-dark"></a><br>faders-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/faders-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/faders-pop-light.png" width="200" alt="faders-pop-light"></a><br>faders-pop-light</td>
   </tr>
 </table>
 
