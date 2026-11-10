@@ -376,6 +376,127 @@ impl DockPainter for Kit {
     }
 
     fn section_band(&self, painter: &Painter, band: &SectionBandPaint<'_>) {
+        self.paint_section_band(
+            painter,
+            &Band {
+                rect: band.rect,
+                id: band.id,
+                title: band.title,
+                count: band.count,
+                open: band.open,
+                state: band.state,
+            },
+        );
+    }
+
+    fn section_boundary(&self, painter: &Painter, boundary: &SectionBoundaryPaint<'_>) {
+        // Nothing at rest nor under the pointer: the bands' own lines part
+        // the sections. The focus shows as the band's ring, over the line.
+        if !boundary.state.contains(PartState::FOCUSED) {
+            return;
+        }
+        crate::focus::own_ring(painter.ctx(), boundary.id);
+        let focus = self.section_band.data.states.get(State::FOCUS);
+        paint_ring(&cx(painter), boundary.rect, focus, Corners::All);
+    }
+
+    fn tool_item(&self, painter: &Painter, item: &ToolItemPaint<'_>) {
+        let cx = cx(painter);
+        let ctx = painter.ctx();
+        if item.state.contains(PartState::FOCUSED) {
+            // The tool shows its focus itself, as any kit part does.
+            crate::ring::own(ctx, item.id);
+        }
+        if item.in_menu {
+            let on = item.state.contains(PartState::SELECTED) && item.kind != ToolKind::Menu;
+            self.tool_menu_row(painter, item, on);
+            return;
+        }
+        let look = &self.toolbar_button;
+        let state = tool_state(item.state, item.kind != ToolKind::Menu);
+        look.paint(
+            &cx,
+            &Part {
+                rect: item.rect,
+                room: item.rect,
+                state,
+                label: None,
+            },
+        );
+        let color = look.style(state).text;
+        let enabled = !state.contains(State::DISABLED);
+        if item.busy {
+            paint_spinner_on(painter, item.icon_rect, color);
+        } else if let Some(icon) = item.icon {
+            icon.paint(painter, item.icon_rect, color, enabled);
+        }
+        if let Some(label) = item.label {
+            painter.galley(item.label_pos, label.clone(), color);
+        }
+        if item.kind == ToolKind::Menu {
+            // The drop-down mark at the end, as wide as 0.6 icon, a
+            // padding off the edge (the icon's room starts a padding in).
+            let side = item.icon_rect.width() * 0.6;
+            let pad = item.icon_rect.left() - item.rect.left();
+            let at = Rect::from_center_size(
+                pos2(item.rect.right() - pad - side / 2.0, item.rect.center().y),
+                vec2(side, side),
+            );
+            self.glyph(Glyph::Dropdown).paint(painter, at, color);
+        }
+    }
+
+    fn tool_more(&self, painter: &Painter, more: &ToolMorePaint<'_>) {
+        let ctx = painter.ctx();
+        if more.state.contains(PartState::FOCUSED) {
+            crate::ring::own(ctx, more.id);
+        }
+        // Not framed while its menu is open: framed says "on".
+        let state = tool_state(more.state, false);
+        let look = &self.toolbar_button;
+        look.paint(
+            &cx(painter),
+            &Part {
+                rect: more.rect,
+                room: more.rect,
+                state,
+                label: None,
+            },
+        );
+        let side = Size::Toolbar.points(&Tokens::of(ctx));
+        let at = Rect::from_center_size(more.rect.center(), vec2(side, side));
+        self.glyph(Glyph::More)
+            .paint(painter, at, look.style(state).text);
+    }
+
+    fn tool_separator(&self, painter: &Painter, separator: &ToolSeparatorPaint<'_>) {
+        // A line across the separator's room, in the border's colour.
+        let rect = separator.rect;
+        let stroke = egui::Stroke::new(1.0, Tokens::of(painter.ctx()).border.default);
+        let line = if separator.vertical {
+            [rect.left_center(), rect.right_center()]
+        } else {
+            [rect.center_top(), rect.center_bottom()]
+        };
+        painter.line_segment(line, stroke);
+    }
+}
+
+/// What a section band shows.
+pub(crate) struct Band<'a> {
+    pub rect: Rect,
+    pub id: egui::Id,
+    pub title: &'a str,
+    pub count: Option<u64>,
+    pub open: bool,
+    pub state: PartState,
+}
+
+impl Kit {
+    /// A section's band: the box, the disclosure mark, the title and the
+    /// count (the stack's, and a band standing alone,
+    /// [`crate::sections::band`]).
+    pub(crate) fn paint_section_band(&self, painter: &Painter, band: &Band<'_>) {
         let cx = cx(painter);
         let ctx = painter.ctx();
         let tokens = Tokens::of(ctx);
@@ -504,100 +625,6 @@ impl DockPainter for Kit {
         );
     }
 
-    fn section_boundary(&self, painter: &Painter, boundary: &SectionBoundaryPaint<'_>) {
-        // Nothing at rest nor under the pointer: the bands' own lines part
-        // the sections. The focus shows as the band's ring, over the line.
-        if !boundary.state.contains(PartState::FOCUSED) {
-            return;
-        }
-        crate::focus::own_ring(painter.ctx(), boundary.id);
-        let focus = self.section_band.data.states.get(State::FOCUS);
-        paint_ring(&cx(painter), boundary.rect, focus, Corners::All);
-    }
-
-    fn tool_item(&self, painter: &Painter, item: &ToolItemPaint<'_>) {
-        let cx = cx(painter);
-        let ctx = painter.ctx();
-        if item.state.contains(PartState::FOCUSED) {
-            // The tool shows its focus itself, as any kit part does.
-            crate::ring::own(ctx, item.id);
-        }
-        if item.in_menu {
-            let on = item.state.contains(PartState::SELECTED) && item.kind != ToolKind::Menu;
-            self.tool_menu_row(painter, item, on);
-            return;
-        }
-        let look = &self.toolbar_button;
-        let state = tool_state(item.state, item.kind != ToolKind::Menu);
-        look.paint(
-            &cx,
-            &Part {
-                rect: item.rect,
-                room: item.rect,
-                state,
-                label: None,
-            },
-        );
-        let color = look.style(state).text;
-        let enabled = !state.contains(State::DISABLED);
-        if item.busy {
-            paint_spinner_on(painter, item.icon_rect, color);
-        } else if let Some(icon) = item.icon {
-            icon.paint(painter, item.icon_rect, color, enabled);
-        }
-        if let Some(label) = item.label {
-            painter.galley(item.label_pos, label.clone(), color);
-        }
-        if item.kind == ToolKind::Menu {
-            // The drop-down mark at the end, as wide as 0.6 icon, a
-            // padding off the edge (the icon's room starts a padding in).
-            let side = item.icon_rect.width() * 0.6;
-            let pad = item.icon_rect.left() - item.rect.left();
-            let at = Rect::from_center_size(
-                pos2(item.rect.right() - pad - side / 2.0, item.rect.center().y),
-                vec2(side, side),
-            );
-            self.glyph(Glyph::Dropdown).paint(painter, at, color);
-        }
-    }
-
-    fn tool_more(&self, painter: &Painter, more: &ToolMorePaint<'_>) {
-        let ctx = painter.ctx();
-        if more.state.contains(PartState::FOCUSED) {
-            crate::ring::own(ctx, more.id);
-        }
-        // Not framed while its menu is open: framed says "on".
-        let state = tool_state(more.state, false);
-        let look = &self.toolbar_button;
-        look.paint(
-            &cx(painter),
-            &Part {
-                rect: more.rect,
-                room: more.rect,
-                state,
-                label: None,
-            },
-        );
-        let side = Size::Toolbar.points(&Tokens::of(ctx));
-        let at = Rect::from_center_size(more.rect.center(), vec2(side, side));
-        self.glyph(Glyph::More)
-            .paint(painter, at, look.style(state).text);
-    }
-
-    fn tool_separator(&self, painter: &Painter, separator: &ToolSeparatorPaint<'_>) {
-        // A line across the separator's room, in the border's colour.
-        let rect = separator.rect;
-        let stroke = egui::Stroke::new(1.0, Tokens::of(painter.ctx()).border.default);
-        let line = if separator.vertical {
-            [rect.left_center(), rect.right_center()]
-        } else {
-            [rect.center_top(), rect.center_bottom()]
-        };
-        painter.line_segment(line, stroke);
-    }
-}
-
-impl Kit {
     /// A tool as a row of a toolbar's More menu, in the look of a menu's
     /// items: the `menu-item` box, the icon in the gutter (framed by
     /// `menu-item-gutter` while on, else a tick or a dot there), the key
