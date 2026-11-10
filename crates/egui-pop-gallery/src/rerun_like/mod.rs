@@ -436,7 +436,14 @@ impl RerunLike {
                 Ok(serde_json::Value::Null)
             },
         )?;
-        ctx.keybinding("Home", CMD_RESTART, in_time, Layer::Default)?;
+        // Over a plot, Home fits it (the canvas navigation keys); in the
+        // time panel otherwise, it restarts.
+        ctx.keybinding(
+            "Home",
+            CMD_RESTART,
+            &format!("{in_time} && !canvasActive"),
+            Layer::Default,
+        )?;
         let m = self.model.clone();
         ctx.command(
             CommandSpec::new(CMD_LOOP, "Toggle looping", "Playback")
