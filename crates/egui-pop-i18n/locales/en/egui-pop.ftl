@@ -596,6 +596,20 @@ command-pointer-overrides =
     .description = Keeps the pointer gestures the user changed on the current profile, or drops them (`value`: keep or drop).
     .title = Keep or drop pointer gesture changes
 
+command-settings-export =
+    .description = Writes the settings you changed to a file; secrets are left out.
+    .title = Export settings
+
+command-settings-import =
+    .description = Reads a settings file: what it would change, then the changes chosen, as one undo step.
+    .title = Import settings
+
+command-settings-importPreview =
+    .title = Preview a settings import
+
+command-settings-undoImport =
+    .title = Undo the last settings import
+
 command-status-item-hide =
     .description = Hides a status bar item (`id`) where the user is, or shows it again (`hidden`: false).
     .title = Hide a status item
@@ -1158,6 +1172,8 @@ egui-pop-admin-show-item-name = Show { $item } in its page
 
 egui-pop-admin-wizard-above = { $field }: at most { $max }.
 
+egui-pop-admin-wizard-all = All
+
 egui-pop-admin-wizard-back = Back
 
 egui-pop-admin-wizard-below = { $field }: at least { $min }.
@@ -1183,6 +1199,8 @@ egui-pop-admin-wizard-later = not reachable yet
 egui-pop-admin-wizard-next = Next
 
 egui-pop-admin-wizard-no = No
+
+egui-pop-admin-wizard-no-choices = Nothing to choose.
 
 egui-pop-admin-wizard-not-a-choice = { $field }: choose one of those offered.
 

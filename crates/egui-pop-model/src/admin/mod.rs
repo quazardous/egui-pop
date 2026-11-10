@@ -24,6 +24,7 @@ pub mod generate;
 pub mod hooks;
 pub mod layers;
 pub mod template;
+pub mod transfer;
 pub mod wizard;
 
 use serde::{Deserialize, Serialize};
@@ -273,6 +274,26 @@ pub struct Input {
     pub max: Option<f64>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub required: bool,
+    /// A path field's chooser: a file to open, or to save under a
+    /// proposed name ("Browse..." beside the field).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file: Option<FileInput>,
+}
+
+/// What a path field's Browse chooses.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FileInput {
+    /// A file to write (the chooser asks before replacing one), else one
+    /// to read.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub save: bool,
+    /// The name proposed when saving.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    /// The extensions offered, without the dot (none: any file).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub extensions: Vec<String>,
 }
 
 impl Input {
@@ -391,6 +412,29 @@ impl Field {
         self
     }
 
+    /// A draft path field whose Browse chooses a file to read.
+    pub fn open_file(mut self, extensions: &[&str]) -> Field {
+        self.kind = Some(FieldKind::Path);
+        self.input.file = Some(FileInput {
+            save: false,
+            name: String::new(),
+            extensions: extensions.iter().map(|e| e.to_string()).collect(),
+        });
+        self
+    }
+
+    /// A draft path field whose Browse chooses a file to write, `name`
+    /// proposed.
+    pub fn save_file(mut self, name: &str, extensions: &[&str]) -> Field {
+        self.kind = Some(FieldKind::Path);
+        self.input.file = Some(FileInput {
+            save: true,
+            name: name.into(),
+            extensions: extensions.iter().map(|e| e.to_string()).collect(),
+        });
+        self
+    }
+
     /// A draft field that may not be left empty.
     pub fn required(mut self) -> Field {
         self.input.required = true;
@@ -426,7 +470,12 @@ impl Field {
                 return Some(Check::Above(max));
             }
         }
-        if !i.choices.is_empty() && !i.choices.iter().any(|c| c.value == *value) {
+        // A multi's value is the choices ticked among those offered: one
+        // no longer offered is not ticked, not an error.
+        if self.kind != Some(FieldKind::Multi)
+            && !i.choices.is_empty()
+            && !i.choices.iter().any(|c| c.value == *value)
+        {
             return Some(Check::NotAChoice);
         }
         None
@@ -435,11 +484,19 @@ impl Field {
     /// A value as the summary shows it: its choice's label, else written
     /// out (a toggle's words are the shell's).
     pub fn shown(&self, value: &Json) -> String {
-        self.input
-            .choices
-            .iter()
-            .find(|c| c.value == *value)
-            .map_or_else(|| cell_text(value), |c| c.label.clone())
+        let one = |v: &Json| {
+            self.input
+                .choices
+                .iter()
+                .find(|c| c.value == *v)
+                .map_or_else(|| cell_text(v), |c| c.label.clone())
+        };
+        match value {
+            Json::Array(a) if self.kind == Some(FieldKind::Multi) => {
+                a.iter().map(one).collect::<Vec<_>>().join(", ")
+            }
+            v => one(v),
+        }
     }
 
     /// The setting it is bound to, if any.

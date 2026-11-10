@@ -30,6 +30,8 @@
 //!   `{"key": "<setting id>"}`, and `{"mode": "overlay" | "window"}`),
 //!   `admin.close`, `admin.popOut`, `admin.set` and `admin.reset` (a value
 //!   in a scope, for agents); `{"wizard": "<id>"}` opens a wizard. The `admin` collector shows the tree.
+//! - **Settings files**: `settings.export` and `settings.import` (with
+//!   `dryRun`), and their wizards in General › Advanced ([`transfer`]).
 //!
 //! - **Wizards**: multi-step flows declared in a manifest
 //!   ([`egui_pop_model::admin::wizard`]) fill the page while they run
@@ -42,6 +44,7 @@
 //! opens from General › Advanced.
 
 mod shell;
+pub mod transfer;
 pub mod wizard;
 
 use std::collections::BTreeMap;
@@ -138,6 +141,10 @@ pub struct Admin {
     wizard: Mutex<Option<wizard::Running>>,
     /// What the last wizard finished ran.
     finished: Mutex<Option<Json>>,
+    /// A path field's Browse waiting for its choice: the draft key.
+    browsing: Mutex<Option<(String, crate::host::Pending)>>,
+    /// Settings export and import: retired settings, the last import.
+    transfer: transfer::State,
 }
 
 /// The answers of the `read_only` commands statuses and records read:
@@ -343,6 +350,13 @@ impl Admin {
             }
             tree.merge(m);
         }
+        // Settings export and import: their wizards offer the places of
+        // the tree built so far.
+        let mut m = transfer::manifest(self, app, &tree);
+        for x in m.check(&scopes, &exists).all() {
+            d.push_quiet(x.clone());
+        }
+        tree.merge(m);
         *lock(&self.diagnostics) = d;
         tree
     }
@@ -680,6 +694,7 @@ impl Plugin for AdminPlugin {
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         let service = Admin::new();
         crate::settings_window::register_kinds(&service);
+        transfer::hooks(&service);
         ctx.service(&ADMIN, service)?;
         ctx.local_scope(
             SURFACE,
@@ -778,6 +793,7 @@ impl Plugin for AdminPlugin {
             },
         )?;
         wizard::commands(ctx)?;
+        transfer::commands(ctx)?;
         ctx.block(
             zones::OVERLAYS,
             Block::add(BlockId::from_static("egui_pop.admin"), 6, shell::show),

@@ -1161,7 +1161,7 @@ fn records(ui: &mut Ui, app: &AppHandle, admin: &Admin, r: &Records, values: &Va
             command,
             args,
             pointer,
-        } => match admin.read(app, command, args) {
+        } => match admin.read(app, command, &template::expand(args, values).0) {
             None => {
                 ui.weak("…");
                 return;
