@@ -4079,7 +4079,11 @@ impl FileBrowser {
                     .find(|t| &t.id == id)
                     .map_or_else(|| id.clone(), |t| t.label.clone()),
             };
-            strings::tr_args(&ctx, &crate::strings::FILES_DROP_INTO, &[("name", &name)])
+            // A name is a name: the catalogue would format "2026" as a
+            // number, so it goes in after the translation.
+            const MARK: &str = "\u{E000}";
+            strings::tr_args(&ctx, &crate::strings::FILES_DROP_INTO, &[("name", MARK)])
+                .replace(MARK, &name)
         } else {
             strings::tr(&ctx, &crate::strings::FILES_DROP_REFUSED)
         };
