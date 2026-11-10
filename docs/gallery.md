@@ -565,6 +565,9 @@ Settings, the Settings app (generated pages, a manifest's section, value scopes,
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/admin-wizard-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/admin-wizard-pop-dark.png" width="200" alt="admin-wizard-pop-dark"></a><br>admin-wizard-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/admin-wizard-summary-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/admin-wizard-summary-pop-dark.png" width="200" alt="admin-wizard-summary-pop-dark"></a><br>admin-wizard-summary-pop-dark</td>
   </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/admin-import-diff-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/admin-import-diff-pop-dark.png" width="200" alt="admin-import-diff-pop-dark"></a><br>admin-import-diff-pop-dark</td>
+  </tr>
 </table>
 
 ### Examples
