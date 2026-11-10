@@ -19,7 +19,7 @@ workspace = true
 ## A tile source for the image viewport (`viewport::TestSource`).
 viewport = ["dep:egui-pop-viewport"]
 ## Render with wgpu (snapshots).
-wgpu = ["egui_kittest/wgpu", "dep:egui-wgpu"]
+wgpu = ["egui_kittest/wgpu", "egui_kittest/snapshot", "dep:egui-wgpu"]
 
 [dependencies]
 egui-pop-viewport = { workspace = true, optional = true }
