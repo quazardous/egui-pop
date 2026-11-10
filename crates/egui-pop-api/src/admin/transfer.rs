@@ -781,17 +781,17 @@ pub(super) fn manifest(admin: &Admin, app: &AppHandle, tree: &Tree) -> Manifest 
         "general/advanced",
         "Advanced",
         |s| {
+            let open = |id: &str, title: &str, wizard: &str| {
+                let mut a = Action::command(super::CMD_OPEN.as_str())
+                    .title(title)
+                    .args(json!({ "wizard": wizard }));
+                // Two actions of one command: each its own id.
+                a.meta.id = id.into();
+                a
+            };
             s.group("transfer", "Settings file")
-                .action(
-                    Action::command(super::CMD_OPEN.as_str())
-                        .title("Export settings…")
-                        .args(json!({ "wizard": EXPORT_WIZARD })),
-                )
-                .action(
-                    Action::command(super::CMD_OPEN.as_str())
-                        .title("Import settings…")
-                        .args(json!({ "wizard": IMPORT_WIZARD })),
-                );
+                .action(open("export", "Export settings…", EXPORT_WIZARD))
+                .action(open("import", "Import settings…", IMPORT_WIZARD));
             if admin.can_undo_import() {
                 s.action(Action::command(CMD_UNDO_IMPORT.as_str()).title("Undo the last import"));
             }
