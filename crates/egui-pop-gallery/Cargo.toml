@@ -68,6 +68,6 @@ log.workspace = true
 
 [dev-dependencies]
 egui_kittest = { workspace = true, features = ["eframe", "wgpu", "snapshot"] }
-egui-pop-test = { workspace = true, features = ["wgpu"] }
+egui-pop-test = { workspace = true, features = ["wgpu", "snapshot"] }
 # The smoke test serves the protocol from a harness and asks for the tree.
 egui_inspection = { workspace = true, features = ["plugin"] }

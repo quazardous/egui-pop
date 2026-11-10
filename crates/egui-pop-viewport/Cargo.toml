@@ -72,7 +72,7 @@ egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
 # Path only: a dev-dependency without a version is left out when
 # publishing (the test kit depends on this crate).
-egui-pop-test = { path = "../egui-pop-test", features = ["viewport", "wgpu"] }
+egui-pop-test = { path = "../egui-pop-test", features = ["viewport", "wgpu", "snapshot"] }
 serde_json.workspace = true
 # MIT OR Apache-2.0, already in the tree through wgpu: the viewport's
 # WGSL parsed and validated in unit tests, without a GPU.
