@@ -86,6 +86,7 @@ pub mod input;
 pub mod inspect;
 pub mod keys;
 pub mod kit;
+pub mod knob;
 pub mod latest;
 pub mod motion;
 pub mod overlay;
