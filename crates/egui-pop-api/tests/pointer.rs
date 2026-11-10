@@ -312,3 +312,24 @@ fn the_profiles_navigation_keys_are_keymap_bindings_the_user_can_change() {
         [chord("K")]
     );
 }
+
+#[test]
+fn every_profiles_navigation_keys_leave_the_file_browsers_mode_keys_alone() {
+    let ctx = egui::Context::default();
+    for profile in ["photoshop", "lightroom", "darktable", "document", "blender"] {
+        let mut app = App::builder()
+            .plugins(DefaultPlugins)
+            .pointer_profile(profile)
+            .build(&ctx)
+            .unwrap();
+        passes(&mut app, &ctx, 2);
+        // Photoshop's Ctrl+1 (100 %) and the browser's Ctrl+1 (its first
+        // mode) never hold together: the browser has the keyboard, or a
+        // canvas does.
+        let problems: Vec<String> = egui_pop_test::keymap_problems(&app)
+            .into_iter()
+            .filter(|p| p.contains("file.view.mode"))
+            .collect();
+        assert!(problems.is_empty(), "{profile}: {problems:?}");
+    }
+}
