@@ -211,6 +211,10 @@ pub struct Descriptor {
     /// Who may write it besides its owner.
     #[serde(skip_serializing_if = "Writers::is_owner")]
     pub writers: Writers,
+    /// A secret (a token, a password): never written to a settings
+    /// export, never read from one.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub sensitive: bool,
 }
 
 /// Decimals enough to show one step.
@@ -241,6 +245,7 @@ impl Descriptor {
             capacity: None,
             path: None,
             writers: Writers::Owner,
+            sensitive: false,
         }
     }
 
@@ -368,6 +373,61 @@ impl Descriptor {
     pub fn any_writer(mut self) -> Self {
         self.writers = Writers::Any;
         self
+    }
+
+    /// A secret: left out of settings exports and refused from them.
+    pub fn sensitive(mut self) -> Self {
+        self.sensitive = true;
+        self
+    }
+
+    /// Checks a value read from outside (an imported file) against what
+    /// the value can be: its type, its hard range (refused, never
+    /// clamped), its choices, its count and its capacity. The value as
+    /// the store holds it, or why not.
+    pub fn accept(&self, json: &Json) -> Result<Value, String> {
+        let v = Value::from_json(self.ty, json)?;
+        let (lo, hi) = self.hard.unwrap_or((f64::NEG_INFINITY, f64::INFINITY));
+        let number = |x: f64| -> Result<(), String> {
+            if !x.is_finite() {
+                Err(format!("{x} is not a number"))
+            } else if x < lo {
+                Err(format!("{x} is below {lo}"))
+            } else if x > hi {
+                Err(format!("{x} is above {hi}"))
+            } else {
+                Ok(())
+            }
+        };
+        let count = |n: usize| match self.count {
+            Some(max) if n > max as usize => Err(format!("{n} values, at most {max}")),
+            _ => Ok(()),
+        };
+        match &v {
+            Value::Float(x) if self.ty == Type::Int => {
+                return Err(format!("{x} is not a whole number"));
+            }
+            Value::Float(x) => number(*x)?,
+            Value::Int(x) => number(*x as f64)?,
+            Value::Floats(xs) => {
+                count(xs.len())?;
+                xs.iter().try_for_each(|x| number(*x))?;
+            }
+            Value::Ints(xs) => {
+                count(xs.len())?;
+                xs.iter().try_for_each(|x| number(*x as f64))?;
+            }
+            Value::Choice(c) if !self.choices.contains(c) => {
+                return Err(format!("`{c}` is not one of {}", self.choices.join(", ")));
+            }
+            Value::Text(t) => {
+                if let Some(n) = self.capacity.filter(|n| t.len() > *n as usize) {
+                    return Err(format!("{} bytes, at most {n}", t.len()));
+                }
+            }
+            Value::Bool(_) | Value::Choice(_) => {}
+        }
+        Ok(v)
     }
 
     /// The range a write is held to: the soft one unless forced.

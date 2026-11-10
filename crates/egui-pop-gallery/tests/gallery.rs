@@ -1277,6 +1277,53 @@ fn the_settings_app_shows_generated_pages_value_scopes_and_search() {
     results.add(h.try_snapshot("admin-search-pop-dark"));
 }
 
+/// Settings import: the wizard's diff step lists each change with its
+/// value now and in the file, ticked, and what is left out with why.
+#[test]
+fn the_settings_import_shows_its_changes_before_applying_them() {
+    use egui::accesskit::Role;
+    use egui_pop::api::admin::{CMD_WIZARD_NEXT, CMD_WIZARD_OPEN};
+    let mut results = egui_kittest::SnapshotResults::new();
+    let mut h = harness(options("pop-dark", Density::Comfortable, "settings"));
+    h.run();
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("gallery-import-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("settings.json");
+    std::fs::write(
+        &file,
+        serde_json::json!({
+            "kind": "settings-export",
+            "version": 1,
+            "settings": { "version": 3, "values": {
+                "gallery.greeting": "Bonjour",
+                "gallery.size": 24,
+                "gallery.strong": "yes",
+                "gallery.retired": 1,
+            } },
+            "leftOut": ["sync.token"],
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let app = h.state().app.handle().clone();
+    app.run(
+        CMD_WIZARD_OPEN,
+        serde_json::json!({ "id": "settings-import", "values": { "file": file.display().to_string() } }),
+    );
+    h.run();
+    h.run();
+    app.run(CMD_WIZARD_NEXT, serde_json::json!({}));
+    for _ in 0..4 {
+        h.run();
+    }
+    h.get_by_role_and_label(Role::CheckBox, "Greeting: Hello → Bonjour");
+    h.get_by_role_and_label(Role::CheckBox, "Size: 18.0 → 24.0");
+    h.get_by_label("unknown: no such setting here");
+    egui_pop_test::assert_all_named(&h);
+    results.add(h.try_snapshot("admin-import-diff-pop-dark"));
+}
+
 /// The wizard kit: the greeting wizard checks its words before Next, adds
 /// its colour step for a bold greeting, shows a summary, and hands its
 /// draft to its command, which sets the greeting.

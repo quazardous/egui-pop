@@ -104,6 +104,28 @@ its job's progress and results, the draft kept per library and "Continue
 where you left", the `page` rendering, `done_when`, the `wizard-step`
 kit component, steps in the search.
 
+Slice 9 exports and imports settings (`egui_pop_model::admin::transfer`,
+`egui_pop_api::admin::transfer`). General › Advanced holds "Export
+settings…" and "Import settings…", two wizards of the kit. The file is a
+JSON document of kind `settings-export`, version 1: the values by setting
+id with the version of the `settings` document they were written at (an
+import migrates them as the settings file is), optionally the person's
+keymap layer with its version, and `leftOut`, the sensitive settings
+(`Descriptor::sensitive`) never written. An export takes the `app` values
+(those changed from their default) or a library's or workspace's layer,
+every setting or one scope or section, with or without the settings
+custom pages edit. An import's plan judges each value: a change, the same
+value, unknown, obsolete (`Admin::obsolete`), invalid (`Descriptor::accept`:
+type, hard range, choices, count, capacity; never clamped) or sensitive.
+Its wizard picks the file (a path field with Browse) and the value
+scope, then shows the changes as a multi field (each "Title: now → in
+the file", all ticked) over a table of what is left out and why. The
+changes chosen apply as one undo step of the settings' history;
+`settings.undoImport` also restores a layer and the shortcuts. The
+commands `settings.export`, `settings.import` (both with `dryRun`),
+`settings.importPreview` (read-only) and `settings.undoImport` drive it
+without the wizards.
+
 Slice 1 leaves for later: the kit components of section 4.4 (the shell draws
 with the existing selectable rows, buttons, combo boxes and indicators);
 icons on the scope tabs and their overflow; the scopes' order and the

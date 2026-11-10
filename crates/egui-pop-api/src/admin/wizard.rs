@@ -20,6 +20,12 @@
 //!   `admin.wizard.finish` and `admin.wizard.cancel` (`{"force"}`); each
 //!   answers the flow's state, which the `admin` collector shows too.
 //!
+//! Draft fields: a toggle, a number, a choice, a text, a path (with
+//! Browse when its input names a file to open or save: the files
+//! plugin's chooser, its choice written into the draft), and a multi (a
+//! tick box per choice; its value the choices ticked, `null` for every
+//! choice).
+//!
 //! Finishing runs the wizard's command with the draft as its arguments,
 //! then closes the wizard (and the Settings app, when the wizard opened
 //! it).
@@ -345,6 +351,7 @@ pub(super) fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) {
     let ctx = ui.ctx().clone();
     let t = Tokens::of(&ctx);
     let tree = admin.tree(app);
+    admin.browsed(app);
     let Some(run) = admin.running() else {
         return;
     };
@@ -640,7 +647,7 @@ fn step_page(
                         Item::Field(field) if field.draft_key().is_some() => {
                             let key = field.draft_key().unwrap_or_default();
                             let v = f.values.get(key).cloned().unwrap_or(Json::Null);
-                            if let Some(new) = draft_row(ui, w, field, &v) {
+                            if let Some(new) = draft_row(ui, app, admin, w, field, &v) {
                                 changed.insert(key.to_string(), new);
                             }
                             for p in problems.iter().filter(|p| p.field == key) {
@@ -677,11 +684,25 @@ fn problem(ui: &mut Ui, p: &Problem) {
 
 /// A draft field's row: its label and control (a toggle, a number, a
 /// choice, a text), its help under it. The new value when it changed.
-fn draft_row(ui: &mut Ui, w: &Wizard, f: &Field, value: &Json) -> Option<Json> {
+fn draft_row(
+    ui: &mut Ui,
+    app: &AppHandle,
+    admin: &Admin,
+    w: &Wizard,
+    f: &Field,
+    value: &Json,
+) -> Option<Json> {
     let title = f.meta.title.as_str();
     let id = egui::Id::unique(("egui_pop.admin.wizard.field", &w.meta.id, &f.meta.id));
     let kind = f.kind.unwrap_or(FieldKind::Text);
     let mut out = None;
+    if kind == FieldKind::Multi {
+        out = multi_row(ui, f, value);
+        if !f.help.is_empty() {
+            ui.weak(&f.help);
+        }
+        return out;
+    }
     ui.horizontal_wrapped(|ui| match kind {
         FieldKind::Toggle => {
             let mut on = value.as_bool().unwrap_or(false);
@@ -728,6 +749,25 @@ fn draft_row(ui: &mut Ui, w: &Wizard, f: &Field, value: &Json) -> Option<Json> {
             a11y::name(&r, Role::ComboBox, title);
             out = picked.filter(|p| p != value);
         }
+        FieldKind::Path => {
+            ui.label(title);
+            let mut text = cell_text(value);
+            let r = ui.add(
+                egui::TextEdit::singleline(&mut text)
+                    .id(id)
+                    .desired_width(320.0),
+            );
+            a11y::name(&r, Role::TextInput, title);
+            if r.changed() {
+                out = Some(Json::String(text.clone()));
+            }
+            if let Some(file) = &f.input.file {
+                let r = ui.button(strings::tr(ui.ctx(), &txt::DIALOG_BROWSE));
+                if r.clicked() {
+                    admin.browse(app, f, file, &text);
+                }
+            }
+        }
         _ => {
             ui.label(title);
             let mut text = cell_text(value);
@@ -747,6 +787,92 @@ fn draft_row(ui: &mut Ui, w: &Wizard, f: &Field, value: &Json) -> Option<Json> {
         ui.weak(&f.help);
     }
     out
+}
+
+/// A multi's row: its title, then a tick box per choice. Its value is the
+/// choices ticked; `null` is every choice (a list the draft does not know
+/// yet starts all ticked), and ticking or unticking one writes the list.
+fn multi_row(ui: &mut Ui, f: &Field, value: &Json) -> Option<Json> {
+    let mut out = None;
+    let all: Vec<&Json> = f.input.choices.iter().map(|c| &c.value).collect();
+    let ticked = |v: &Json| match value {
+        Json::Array(a) => a.contains(v),
+        _ => true,
+    };
+    ui.label(&f.meta.title);
+    if f.input.choices.is_empty() {
+        ui.weak(strings::tr(ui.ctx(), &txt::ADMIN_WIZARD_NO_CHOICES));
+    }
+    for c in &f.input.choices {
+        let mut on = ticked(&c.value);
+        if widgets::checkbox(ui, &mut on, &c.label).changed() {
+            let next = all
+                .iter()
+                .filter(|v| if ***v == c.value { on } else { ticked(v) })
+                .map(|v| (*v).clone())
+                .collect();
+            out = Some(Json::Array(next));
+        }
+    }
+    out
+}
+
+impl Admin {
+    /// A path field's Browse: the files plugin's chooser, its choice
+    /// written into the draft when it comes (see [`Admin::browsed`]).
+    fn browse(
+        &self,
+        app: &AppHandle,
+        f: &Field,
+        file: &egui_pop_model::admin::FileInput,
+        value: &str,
+    ) {
+        use crate::files::{FILES, FileRequest};
+        let Some(key) = f.draft_key() else {
+            return;
+        };
+        let Some(files) = app.service(&FILES) else {
+            return;
+        };
+        let title = f.meta.title.as_str();
+        let mut request = if file.save {
+            let name = std::path::Path::new(value)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(&file.name);
+            FileRequest::save(title, name)
+        } else {
+            FileRequest::open(title)
+        }
+        .purpose(&format!("egui_pop.admin.{key}"));
+        if let Some(dir) = std::path::Path::new(value).parent().filter(|d| d.is_dir()) {
+            request = request.directory(dir);
+        }
+        if !file.extensions.is_empty() {
+            let exts: Vec<&str> = file.extensions.iter().map(String::as_str).collect();
+            request = request.filter(&exts.join(", "), &exts);
+        }
+        let pending = files.choose(app, request);
+        *lock(&self.browsing) = Some((key.to_string(), pending));
+    }
+
+    /// Writes a finished Browse's choice into the draft.
+    fn browsed(&self, app: &AppHandle) {
+        let done = {
+            let b = lock(&self.browsing);
+            b.as_ref()
+                .and_then(|(k, p)| p.take().map(|r| (k.clone(), r)))
+        };
+        let Some((key, result)) = done else {
+            return;
+        };
+        lock(&self.browsing).take();
+        if let Ok(crate::files::Chosen::Paths(paths)) = crate::files::chosen(&result)
+            && let Some(p) = paths.first()
+        {
+            let _ = self.wizard_set(app, [(key, Json::String(p.display().to_string()))].into());
+        }
+    }
 }
 
 /// The summary: each step's fields with their values as shown, and
@@ -786,6 +912,12 @@ fn summary_page(
             }
             for (field, v) in rows {
                 let shown = match v {
+                    Json::Null if field.kind == Some(FieldKind::Multi) => {
+                        strings::tr(&ctx, &txt::ADMIN_WIZARD_ALL)
+                    }
+                    Json::Array(ref a) if a.is_empty() => {
+                        strings::tr(&ctx, &txt::ADMIN_WIZARD_NOT_SET)
+                    }
                     Json::Bool(true) => strings::tr(&ctx, &txt::ADMIN_WIZARD_YES),
                     Json::Bool(false) => strings::tr(&ctx, &txt::ADMIN_WIZARD_NO),
                     Json::Null => strings::tr(&ctx, &txt::ADMIN_WIZARD_NOT_SET),

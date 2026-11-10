@@ -175,6 +175,9 @@ pub const ADMIN_WIZARD_CHANGE_NAME: StrKey =
 pub const ADMIN_WIZARD_YES: StrKey = StrKey::new("egui-pop-admin-wizard-yes", "Yes");
 pub const ADMIN_WIZARD_NO: StrKey = StrKey::new("egui-pop-admin-wizard-no", "No");
 pub const ADMIN_WIZARD_NOT_SET: StrKey = StrKey::new("egui-pop-admin-wizard-not-set", "Not set");
+pub const ADMIN_WIZARD_ALL: StrKey = StrKey::new("egui-pop-admin-wizard-all", "All");
+pub const ADMIN_WIZARD_NO_CHOICES: StrKey =
+    StrKey::new("egui-pop-admin-wizard-no-choices", "Nothing to choose.");
 pub const ADMIN_WIZARD_REQUIRED: StrKey =
     StrKey::new("egui-pop-admin-wizard-required", "{ $field }: required.");
 pub const ADMIN_WIZARD_BELOW: StrKey = StrKey::new(
@@ -1485,6 +1488,8 @@ pub const ALL: &[StrKey] = &[
     ADMIN_WIZARD_YES,
     ADMIN_WIZARD_NO,
     ADMIN_WIZARD_NOT_SET,
+    ADMIN_WIZARD_ALL,
+    ADMIN_WIZARD_NO_CHOICES,
     ADMIN_WIZARD_REQUIRED,
     ADMIN_WIZARD_BELOW,
     ADMIN_WIZARD_ABOVE,
