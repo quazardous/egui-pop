@@ -46,7 +46,7 @@ use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::param::{self, Mode};
 use egui_pop_core::state::Slot;
-use egui_pop_core::strings::{self, RESET};
+use egui_pop_core::strings::{self, Arg, RESET};
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
@@ -1440,10 +1440,13 @@ fn pointer_header(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: bool) {
                 &[("profile", &profile.title)],
             )
         } else {
-            strings::tr_args(
+            strings::tr_with(
                 &ctx,
                 &txt::SHORTCUTS_POINTER_PROFILE_CHANGED,
-                &[("profile", &profile.title), ("count", &changed.to_string())],
+                &[
+                    ("profile", Arg::Str(&profile.title)),
+                    ("count", changed.into()),
+                ],
             )
         });
         if filter {

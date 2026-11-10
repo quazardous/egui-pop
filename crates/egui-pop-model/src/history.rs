@@ -86,7 +86,9 @@ impl Label {
     }
 
     /// A label from a message id, its English text and its arguments
-    /// (`{ $name }` in the text is filled from them).
+    /// (`{ $name }` in the text is filled from them). The arguments are
+    /// text, shown as they are written ("+0.30", a name like "2026"):
+    /// a number is written by the caller.
     pub fn message(key: &str, english: &str, args: &[(&str, &str)]) -> Self {
         let args: BTreeMap<String, String> = args
             .iter()

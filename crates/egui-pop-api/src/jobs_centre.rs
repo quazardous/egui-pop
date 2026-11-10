@@ -320,11 +320,8 @@ pub fn job_row(ui: &mut Ui, app: &AppHandle, jobs: &JobsService, job: &Job, dept
                 ui.label(RichText::new(e).small().color(t.status.danger));
             }
             if job.failed > 0 && !job.errors.is_empty() {
-                let failed = strings::tr_args(
-                    &ctx,
-                    &txt::JOBS_FAILED,
-                    &[("count", &job.failed.to_string())],
-                );
+                let failed =
+                    strings::tr_with(&ctx, &txt::JOBS_FAILED, &[("count", job.failed.into())]);
                 egui::CollapsingHeader::new(RichText::new(failed).small().color(t.status.warning))
                     .id_salt(("egui_pop_job_errors", &job.id))
                     .show(ui, |ui| {

@@ -14,7 +14,7 @@ use egui_pop_core::focus;
 use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{Kit, State};
 use egui_pop_core::state::Slot;
-use egui_pop_core::strings::{tr, tr_args};
+use egui_pop_core::strings::{tr, tr_with};
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::ui::UiPop as _;
 use egui_pop_model::ids::StepId;
@@ -169,12 +169,12 @@ fn publish_moves(state: &EditorState, app: Option<&AppHandle>) {
 /// "Line 3, column 5" under the text.
 fn status(ui: &mut Ui, state: &EditorState) {
     let head = state.selection().head;
-    let text = tr_args(
+    let text = tr_with(
         ui.ctx(),
         &s::POSITION,
         &[
-            ("line", &(head.line + 1).to_string()),
-            ("col", &(head.col + 1).to_string()),
+            ("line", (head.line + 1).into()),
+            ("col", (head.col + 1).into()),
         ],
     );
     let t = Tokens::of(ui.ctx());

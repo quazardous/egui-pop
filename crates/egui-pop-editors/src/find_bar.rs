@@ -5,7 +5,7 @@ use egui::{Id, Key, Ui};
 use egui_pop_api::AppHandle;
 use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{Glyph, Kit, KitCx, Part, State};
-use egui_pop_core::strings::{tr, tr_args};
+use egui_pop_core::strings::{tr, tr_with};
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::widgets::ToggleChip;
 
@@ -173,12 +173,12 @@ pub(crate) fn show(
                 let text = match (error, count) {
                     (Some(e), _) => e,
                     (None, 0) => tr(&ctx, &s::NO_RESULTS),
-                    (None, n) => tr_args(
+                    (None, n) => tr_with(
                         &ctx,
                         &s::COUNT,
                         &[
-                            ("current", &current.map_or(0, |c| c + 1).to_string()),
-                            ("total", &n.to_string()),
+                            ("current", current.map_or(0, |c| c + 1).into()),
+                            ("total", n.into()),
                         ],
                     ),
                 };

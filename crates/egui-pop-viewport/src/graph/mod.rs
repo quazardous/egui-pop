@@ -120,7 +120,7 @@ use egui_pop_core::pointer::DragKind;
 use egui_pop_core::pointer::claim::{self, Secondary};
 use egui_pop_core::slider::{self, Slider};
 use egui_pop_core::state::Slot;
-use egui_pop_core::strings::{self, tr, tr_args};
+use egui_pop_core::strings::{self, Arg, tr, tr_args};
 use egui_pop_core::tab;
 use egui_pop_core::theme::Tokens;
 use serde_json::{Value as Json, json};
@@ -898,11 +898,7 @@ impl<'a> GraphEditor<'a> {
             let count = self.state.selected_edges.len();
             a11y::announce(
                 &ctx,
-                tr_args(
-                    &ctx,
-                    &s::GRAPH_WIRES_SELECTED,
-                    &[("count", &count.to_string())],
-                ),
+                strings::tr_with(&ctx, &s::GRAPH_WIRES_SELECTED, &[("count", count.into())]),
                 Politeness::Polite,
             );
             events.push(GraphEvent::WireSelection(
@@ -1852,10 +1848,10 @@ impl Cx<'_, '_, '_> {
         );
         let sid = self.id.with(("stack", &self.groups[g].id));
         let resp = ui.interact(r, sid, Sense::click_and_drag());
-        let name = tr_args(
+        let name = strings::tr_with(
             &self.ctx,
             &s::GRAPH_UNFOLD,
-            &[("group", &label), ("count", &count)],
+            &[("group", Arg::Str(&label)), ("count", members.len().into())],
         );
         a11y::name(&resp, egui::Role::Button, &name);
         let role = tr(&self.ctx, &s::GRAPH_ROLE_STACK);
@@ -1943,13 +1939,13 @@ impl Cx<'_, '_, '_> {
         let nid = node_id(self.id, &n.id);
         let resp = ui.interact(r, nid, Sense::click_and_drag());
         let wires = base.edges.iter().filter(|e| e.touches(&n.id)).count();
-        let value = tr_args(
+        let value = strings::tr_with(
             &self.ctx,
             &s::GRAPH_NODE_VALUE,
             &[
-                ("inputs", &n.inputs.len().to_string()),
-                ("outputs", &n.outputs.len().to_string()),
-                ("wires", &wires.to_string()),
+                ("inputs", n.inputs.len().into()),
+                ("outputs", n.outputs.len().into()),
+                ("wires", wires.into()),
             ],
         );
         let enabled = ui.is_enabled();
@@ -2379,12 +2375,12 @@ impl Cx<'_, '_, '_> {
             let hit = Rect::from_center_size(at, Vec2::splat(PORT_HIT));
             let pr = ui.interact(hit, pid, Sense::click_and_drag());
             let name = port_label(&self.ctx, n, port, side);
-            let value = tr_args(
+            let value = strings::tr_with(
                 &self.ctx,
                 &s::GRAPH_PORT_VALUE,
                 &[
-                    ("type", &port.ty.name),
-                    ("wires", &base.wires_at(&pref, side).len().to_string()),
+                    ("type", Arg::Str(&port.ty.name)),
+                    ("wires", base.wires_at(&pref, side).len().into()),
                 ],
             );
             let enabled = ui.is_enabled();
@@ -2783,22 +2779,22 @@ impl Cx<'_, '_, '_> {
     /// its menu, and the keys on it or on a node.
     fn canvas(&mut self, response: &Response, label: &str) {
         let ctx = self.ctx.clone();
-        let value = tr_args(
+        let value = strings::tr_with(
             &ctx,
             &s::GRAPH_VALUE,
             &[
-                ("nodes", &self.base.nodes.len().to_string()),
-                ("wires", &self.base.edges.len().to_string()),
+                ("nodes", self.base.nodes.len().into()),
+                ("wires", self.base.edges.len().into()),
                 (
                     "level",
-                    &tr(
+                    Arg::Str(&tr(
                         &ctx,
                         match self.level {
                             Level::Overview => &s::GRAPH_LEVEL_OVERVIEW,
                             Level::Ports => &s::GRAPH_LEVEL_PORTS,
                             Level::Detail => &s::GRAPH_LEVEL_DETAIL,
                         },
-                    ),
+                    )),
                 ),
             ],
         );

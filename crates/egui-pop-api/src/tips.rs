@@ -1119,10 +1119,10 @@ pub fn tip_of_the_day(ui: &mut Ui, app: &AppHandle) -> bool {
             {
                 tips.turn(app, false);
             }
-            ui.weak(strings::tr_args(
+            ui.weak(strings::tr_with(
                 &ctx,
                 &txt::TIPS_AT,
-                &[("at", &at.to_string()), ("count", &left.to_string())],
+                &[("at", at.into()), ("count", left.into())],
             ));
             if ui.button(strings::tr(&ctx, &txt::TIPS_DONT_SHOW)).clicked()
                 && let Err(e) = tips.dismiss(app, &tip.id)

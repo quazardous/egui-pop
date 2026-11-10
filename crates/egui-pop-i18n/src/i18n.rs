@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 
+use egui_pop_core::strings::Arg;
 use fluent_bundle::{FluentArgs, FluentValue};
 use serde_json::{Map, Value as Json, json};
 
@@ -438,13 +439,15 @@ impl egui_pop_core::strings::Strings for Provider {
         self.i18n.get(key, &[])
     }
 
-    fn get_args(&self, key: &str, args: &[(&str, &str)]) -> Option<String> {
+    fn get_args(&self, key: &str, args: &[(&str, Arg<'_>)]) -> Option<String> {
+        // Text stays text, even "2026" or "1e3": only what the caller
+        // passed as a number is formatted (and selects plurals).
         let args: Vec<(&str, FluentValue<'_>)> = args
             .iter()
             .map(|(k, v)| {
-                let v = match v.parse::<f64>() {
-                    Ok(n) => crate::format::fluent_number(n),
-                    Err(_) => FluentValue::from(*v),
+                let v = match v {
+                    Arg::Num(n) => crate::format::fluent_number(*n),
+                    Arg::Str(s) => FluentValue::from(*s),
                 };
                 (*k, v)
             })
@@ -625,15 +628,56 @@ images-selected =
     }
 
     #[test]
-    fn the_provider_formats_numbers_given_as_text() {
+    fn the_provider_formats_numbers_and_keeps_text() {
         use egui_pop_core::strings::Strings as _;
         let i = I18n::new("fr");
-        i.add("fr", "n = { $n } éléments\n").unwrap();
+        i.add("fr", "n = { $n } éléments\nname = Ouvrir { $name }\n")
+            .unwrap();
         let p = Provider::new(i);
         assert_eq!(
-            p.get_args("n", &[("n", "1234")]).unwrap(),
+            p.get_args("n", &[("n", Arg::Num(1234.0))]).unwrap(),
             "1\u{202f}234 éléments"
         );
+        for name in ["2026", "007", "1e3", "3.14", "-1", "inf", "NaN"] {
+            assert_eq!(
+                p.get_args("name", &[("name", Arg::Str(name))]).unwrap(),
+                format!("Ouvrir {name}")
+            );
+        }
         assert_eq!(p.language(), "fr");
+    }
+
+    #[test]
+    fn tr_args_keeps_names_and_tr_with_formats_counts() {
+        use egui_pop_core::strings::{self, StrKey};
+        const OPEN: StrKey = StrKey::new("open-folder", "Open folder { $name }");
+        const COUNT: StrKey = StrKey::new("count", "{ $name }: { $count } items");
+        for locale in ["en", "fr"] {
+            let i = I18n::new(locale);
+            i.add(
+                "en",
+                "open-folder = Open folder { $name }\ncount = { $name }: { $count } items\n",
+            )
+            .unwrap();
+            i.add("fr", "open-folder = Ouvrir le dossier { $name }\ncount = { $name } : { $count } éléments\n")
+                .unwrap();
+            let ctx = egui::Context::default();
+            strings::install(&ctx, std::sync::Arc::new(Provider::new(i)));
+            for name in ["2026", "007", "1e3", "3.14"] {
+                let open = strings::tr_args(&ctx, &OPEN, &[("name", name)]);
+                assert!(open.ends_with(&format!(" {name}")), "{locale}: {open}");
+                let count = strings::tr_with(
+                    &ctx,
+                    &COUNT,
+                    &[("name", name.into()), ("count", 1234.into())],
+                );
+                let want = if locale == "fr" {
+                    format!("{name} : 1\u{202f}234 éléments")
+                } else {
+                    format!("{name}: 1,234 items")
+                };
+                assert_eq!(count, want);
+            }
+        }
     }
 }

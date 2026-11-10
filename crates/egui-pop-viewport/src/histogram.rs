@@ -48,7 +48,7 @@ use egui::{
     WidgetInfo, pos2, vec2,
 };
 use egui_pop_core::state::Slot;
-use egui_pop_core::strings;
+use egui_pop_core::strings::{self, Arg};
 use egui_pop_core::theme::Tokens;
 use serde_json::{Value as Json, json};
 
@@ -507,14 +507,17 @@ fn value_text(
     log: bool,
     clipping: Option<Clipping>,
 ) -> String {
-    let mut value = strings::tr_args(
+    let mut value = strings::tr_with(
         ctx,
         if log {
             &crate::strings::HISTOGRAM_VALUE_LOG
         } else {
             &crate::strings::HISTOGRAM_VALUE
         },
-        &[("channels", &names.join(", ")), ("bins", &bins.to_string())],
+        &[
+            ("channels", Arg::Str(&names.join(", "))),
+            ("bins", bins.into()),
+        ],
     );
     if let Some(clip) = clipping {
         for (fraction, key) in [

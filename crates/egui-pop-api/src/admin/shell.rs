@@ -691,10 +691,10 @@ fn section_page(
                 egui::Button::new(strings::tr(&ctx, &txt::ADMIN_RESET_SECTION)),
             );
             if n > 0 {
-                ui.weak(strings::tr_args(
+                ui.weak(strings::tr_with(
                     &ctx,
                     &txt::ADMIN_MODIFIED_COUNT,
-                    &[("count", &n.to_string())],
+                    &[("count", n.into())],
                 ));
             }
             if r.clicked() {

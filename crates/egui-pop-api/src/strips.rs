@@ -1458,11 +1458,7 @@ fn errors_since(ctx: &Context, ind: &Indicator, state: &IndicatorState) -> Optio
     let slot = ERRORS_SEEN.keyed(ind.id.as_str());
     let (before, since) = slot.get(ctx).unwrap_or((0, 0.0));
     let since = if state.errors > 0 && before == 0 {
-        let what = strings::tr_args(
-            ctx,
-            &txt::STATUS_ERRORS,
-            &[("count", &state.errors.to_string())],
-        );
+        let what = strings::tr_with(ctx, &txt::STATUS_ERRORS, &[("count", state.errors.into())]);
         let text = strings::tr_args(
             ctx,
             &txt::STATUS_ANNOUNCE,
@@ -1556,7 +1552,7 @@ fn item(
         parts.reverse();
     }
     let count = |ui: &mut Ui, icon: Icon, tone: Tone, n: u64, key, attention: Option<f64>| {
-        let name = strings::tr_args(ui.ctx(), key, &[("count", &n.to_string())]);
+        let name = strings::tr_with(ui.ctx(), key, &[("count", n.into())]);
         let mut mark = Mark::icon(icon).tone(tone).name(name);
         if let Some(s) = attention {
             mark = mark.attention(s);

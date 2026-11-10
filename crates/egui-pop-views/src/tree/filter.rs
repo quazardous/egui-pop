@@ -36,7 +36,7 @@ use egui::text::LayoutJob;
 use egui::{
     Color32, Context, FontId, Id, Key as EguiKey, Response, Role, Stroke, TextEdit, TextFormat, Ui,
 };
-use egui_pop_core::strings::{tr, tr_args};
+use egui_pop_core::strings::{tr, tr_with};
 use egui_pop_core::{a11y, focus, lock};
 use serde_json::{Value as Json, json};
 
@@ -175,10 +175,10 @@ impl FilterField {
                     ui.weak(tr(&ctx, &s::TREE_FILTER_NONE));
                 }
                 Some((n, total)) => {
-                    ui.weak(tr_args(
+                    ui.weak(tr_with(
                         &ctx,
                         &s::TREE_FILTER_COUNT,
-                        &[("count", &n.to_string()), ("total", &total.to_string())],
+                        &[("count", n.into()), ("total", total.into())],
                     ));
                 }
                 None => {}

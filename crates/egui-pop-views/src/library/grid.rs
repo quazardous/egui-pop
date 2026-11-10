@@ -69,7 +69,7 @@ use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{self, BoxStyle, Corners, Kit, KitCx, Part, Side, State};
 use egui_pop_core::placeholder::SkeletonTokens;
 use egui_pop_core::rating::RatingStars;
-use egui_pop_core::strings::{tr, tr_args};
+use egui_pop_core::strings::{tr, tr_with};
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::ui::UiPop as _;
 use egui_pop_model::ids::StepId;
@@ -918,15 +918,14 @@ impl<'a> ThumbGrid<'a> {
                             };
                             icon.paint(&painter, chevron, chip_text);
                             let cr = ui.interact(chip, id.with(("stack", &key)), Sense::CLICK);
-                            let count = st.count.to_string();
-                            let cname = tr_args(
+                            let cname = tr_with(
                                 ui.ctx(),
                                 if open {
                                     &s::COLLAPSE_STACK
                                 } else {
                                     &s::EXPAND_STACK
                                 },
-                                &[("count", &count)],
+                                &[("count", st.count.into())],
                             );
                             cr.widget_info(move || WidgetInfo::labeled(Role::Button, true, &cname));
                             if cr.clicked() {
