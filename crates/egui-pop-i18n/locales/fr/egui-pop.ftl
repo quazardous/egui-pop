@@ -812,6 +812,8 @@ egui-pop-about-version = Version { $version }
 
 egui-pop-about-website = Site web
 
+egui-pop-area-activity-bar = la barre d’activité
+
 egui-pop-area-bottom = le panneau du bas
 
 egui-pop-area-center = le centre
