@@ -158,14 +158,22 @@ impl NavKeys {
         let mut bindings = Vec::new();
         for c in NavCommand::ALL {
             for chord in map.view_keys(c.id()) {
-                if let Some(k) = egui_pop_core::keys::key_of(chord) {
-                    bindings.push((c, k));
+                if let Some((m, k)) = egui_pop_core::keys::key_of(chord) {
+                    // Ctrl is the command key (Cmd on macOS), as egui
+                    // matches it logically.
+                    let m = Modifiers {
+                        ctrl: false,
+                        command: m.ctrl,
+                        mac_cmd: false,
+                        ..m
+                    };
+                    bindings.push((c, (m, k)));
                 }
             }
         }
         // More modifiers first: Shift+2 is not read as a plain 2.
         bindings.sort_by_key(|(_, (m, _))| {
-            std::cmp::Reverse(u8::from(m.ctrl || m.command) + u8::from(m.shift) + u8::from(m.alt))
+            std::cmp::Reverse(u8::from(m.command) + u8::from(m.shift) + u8::from(m.alt))
         });
         NavKeys { bindings }
     }
