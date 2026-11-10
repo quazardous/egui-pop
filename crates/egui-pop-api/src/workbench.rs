@@ -142,8 +142,8 @@ use egui_pop_model::ids::{PanelId, StepId, ZoneId};
 use egui_pop_model::layout::{Auxiliary, FloatingGroup, Join, Layout, Node, Placement};
 use egui_pop_model::panels::{Area, PanelSpec, Panels, Place};
 use egui_stack::layout::{
-    Content, Dir, Drops, FlyoutPaint, Layout as ZoneLayout, LayoutArea, LayoutEvent, LayoutPainter,
-    LayoutStyle, SashPaint, Shown, Size, StripPaint, Zone, ZoneName, ZoneViewer,
+    Content, Dir, Drops, FlyoutPaint, Fold, Layout as ZoneLayout, LayoutArea, LayoutEvent,
+    LayoutPainter, LayoutStyle, SashPaint, Shown, Size, StripPaint, Zone, ZoneName, ZoneViewer,
 };
 use egui_stack::tab_viewer::DropVerdict;
 use egui_stack::{
@@ -2473,6 +2473,11 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             c.min = Some(Size::Points(min));
             c.max = max.is_finite().then_some(Size::Points(max));
             c.default = Some(Size::Points(default.clamp(min, max)));
+            // A side area's sash dragged past half its least size folds it
+            // to its strip, as in VS Code and JetBrains' IDEs.
+            if side {
+                c.fold = Fold::ToStrip;
+            }
         })
         .with_state(|s| {
             s.size = saved.get(name).copied();
@@ -2504,10 +2509,10 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     style.large_key_step = SASH_STEP * 4.0;
     style.sash_grab = 2.0 * ctx.global_style().interaction.resize_grab_radius_side;
     style.sash_width = ui.visuals().widgets.noninteractive.bg_stroke.width.max(1.0);
-    // The sashes do not snap, and a strip does not drag out, yet: the
-    // shell's drags stay as they were.
+    // As in VS Code and JetBrains' IDEs: a sash does not snap to sizes, a
+    // side area folds by drag and a folded one drags out of its strip.
     style.snap = 0.0;
-    style.strip_drag = false;
+    style.strip_drag = true;
     let painter = ShellPainter {
         kit: &kit,
         open: &open,
@@ -2605,10 +2610,38 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             LayoutEvent::Reset { zone } => {
                 resized |= saved.remove(&zone.0).is_some();
             }
-            LayoutEvent::Unfolded { zone } => {
-                if let Some(area) = area_from(&zone.0) {
-                    app.fold_area(area, open.contains(&area));
+            LayoutEvent::Folded { zone } => {
+                // Its sash dragged past its fold point: it keeps the size it
+                // had before the drag, not the least size the drag reached.
+                let Some(area) = area_from(&zone.0) else {
+                    continue;
+                };
+                if let Some(size) = layout.zone(&zone.0).and_then(|z| z.state.size) {
+                    saved.insert(zone.0.clone(), size);
+                    resized = true;
                 }
+                app.fold_area(area, true);
+            }
+            LayoutEvent::Unfolded { zone } => {
+                let Some(area) = area_from(&zone.0) else {
+                    continue;
+                };
+                let edge = shell_id().with(("strip_edge", &zone.0));
+                let dragged = ctx.read_response(edge).is_some_and(|r| r.drag_stopped());
+                if dragged {
+                    // Dragged out of its strip: an area lying over the
+                    // centre is already open; one beside opens at the size
+                    // it was dragged to.
+                    if open.contains(&area) {
+                        continue;
+                    }
+                    let size = layout.zone(&zone.0).and_then(|z| z.state.size);
+                    if let Some(size) = size.filter(|_| !over.contains(&area)) {
+                        saved.insert(zone.0.clone(), size);
+                        resized = true;
+                    }
+                }
+                app.fold_area(area, open.contains(&area));
             }
             _ => {}
         }

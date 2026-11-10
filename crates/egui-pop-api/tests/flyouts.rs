@@ -2,7 +2,8 @@
 //! panel alone as a flyout over the centre, a double click or the pin
 //! unfolding the area, the flyout's width kept per panel, and a panel's
 //! indicator on its icon while the panel is not shown; a bare strip,
-//! without icons.
+//! without icons; the area dragged out of its strip, and folded by
+//! dragging its sash away.
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
@@ -556,4 +557,68 @@ fn a_bare_strip_keeps_its_width_draws_no_icon_and_a_click_unfolds() {
     assert!(app.layout().folded.is_empty());
     assert!(app.flyout().is_none());
     assert!(h.query_by_label("files body").is_some());
+}
+
+/// Presses at `from`, moves to `to` a frame at a time and releases there.
+fn drag_release(h: &mut Harness<'static, App>, from: egui::Pos2, to: egui::Pos2) {
+    let mut send = |e: egui::Event| {
+        h.input_mut().events.push(e);
+        h.step();
+    };
+    send(egui::Event::PointerMoved(from));
+    send(egui::Event::PointerButton {
+        pos: from,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    for i in 1..=8 {
+        send(egui::Event::PointerMoved(
+            from + (to - from) * (i as f32 / 8.0),
+        ));
+    }
+    send(egui::Event::PointerButton {
+        pos: to,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run();
+    h.run();
+}
+
+#[test]
+fn a_side_area_drags_out_of_its_strip_and_folds_when_its_sash_is_dragged_away() {
+    let mut h = harness(builder());
+    let app = h.state().handle().clone();
+    // Folded: its strip's edge facing the centre drags the area out, at
+    // the size it is dragged to.
+    let grip = h.get_by_label("Unfold the start side bar").rect();
+    let breadth = grip.width();
+    let from = egui::pos2(grip.right(), 300.0);
+    drag_release(&mut h, from, from + egui::vec2(220.0, 0.0));
+    assert!(app.layout().folded.is_empty(), "{:?}", app.layout().folded);
+    let side = app.area_rect(Area::StartSide).unwrap();
+    assert!(
+        (side.width() - (breadth + 220.0)).abs() < 2.0,
+        "{side:?}, strip {breadth}"
+    );
+    assert!(h.query_by_label("files body").is_some());
+
+    // Its sash dragged past half its least size folds it, through the
+    // `workbench.fold` step.
+    let sash = h.get_by_label("Resize the start side bar").rect().center();
+    drag_release(&mut h, sash, egui::pos2(4.0, sash.y));
+    assert_eq!(app.layout().folded, [Area::StartSide]);
+    assert!(h.query_by_label("files body").is_none());
+
+    // Unfolded, it has the size it had before the drag.
+    h.get_by_label("Unfold the start side bar").click();
+    h.run();
+    h.run();
+    let back = app.area_rect(Area::StartSide).unwrap();
+    assert!(
+        (back.width() - side.width()).abs() < 1.0,
+        "{back:?} {side:?}"
+    );
 }
