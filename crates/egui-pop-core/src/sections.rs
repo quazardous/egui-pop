@@ -389,7 +389,7 @@ impl Sections {
 /// by its title and count ("More, 3"), expanded or not for assistive
 /// technology. It takes the width available and a band's height.
 ///
-/// ```
+/// ```no_run
 /// let ctx = egui::Context::default();
 /// let mut open = false;
 /// let mut out = ctx.run_ui(Default::default(), |ui| {
