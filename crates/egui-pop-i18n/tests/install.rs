@@ -33,3 +33,36 @@ fn installed_catalogues_answer_without_the_plugin() {
     assert_eq!(tr!("hello", name = "Ada"), "Hello, Ada!");
     assert_eq!(egui_pop_core::strings::lookup(&ctx, "title", ""), "Files");
 }
+
+/// Text placed in a string stays as written, even when it looks like a
+/// number (a folder named "2026" is not "2,026"); a count passed as a
+/// number is written as the locale writes numbers.
+#[test]
+fn names_stay_verbatim_and_counts_follow_the_locale() {
+    use egui_pop_api::strings::{FILES_CRUMB_OPEN, JOBS_ACTIVE};
+    use egui_pop_core::strings::{tr_args, tr_with};
+
+    let i18n = I18n::with_egui_pop("en");
+    let ctx = egui::Context::default();
+    install(&ctx, &i18n);
+    for (locale, open, count) in [
+        ("en", "Open folder ", "Jobs: 1,234"),
+        ("fr", "Ouvrir le dossier ", "Tâches : 1\u{202f}234"),
+    ] {
+        i18n.set_locale(locale);
+        for name in ["2026", "007", "1e3", "3.14"] {
+            assert_eq!(
+                tr_args(&ctx, &FILES_CRUMB_OPEN, &[("name", name)]),
+                format!("{open}{name}"),
+                "{locale}"
+            );
+            assert_eq!(
+                tr_with(&ctx, &FILES_CRUMB_OPEN, &[("name", name.into())]),
+                format!("{open}{name}"),
+                "{locale}"
+            );
+        }
+        let jobs = tr_with(&ctx, &JOBS_ACTIVE, &[("count", 1234.into())]);
+        assert_eq!(jobs, count, "{locale}");
+    }
+}

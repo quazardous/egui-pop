@@ -646,38 +646,4 @@ images-selected =
         }
         assert_eq!(p.language(), "fr");
     }
-
-    #[test]
-    fn tr_args_keeps_names_and_tr_with_formats_counts() {
-        use egui_pop_core::strings::{self, StrKey};
-        const OPEN: StrKey = StrKey::new("open-folder", "Open folder { $name }");
-        const COUNT: StrKey = StrKey::new("count", "{ $name }: { $count } items");
-        for locale in ["en", "fr"] {
-            let i = I18n::new(locale);
-            i.add(
-                "en",
-                "open-folder = Open folder { $name }\ncount = { $name }: { $count } items\n",
-            )
-            .unwrap();
-            i.add("fr", "open-folder = Ouvrir le dossier { $name }\ncount = { $name } : { $count } éléments\n")
-                .unwrap();
-            let ctx = egui::Context::default();
-            strings::install(&ctx, std::sync::Arc::new(Provider::new(i)));
-            for name in ["2026", "007", "1e3", "3.14"] {
-                let open = strings::tr_args(&ctx, &OPEN, &[("name", name)]);
-                assert!(open.ends_with(&format!(" {name}")), "{locale}: {open}");
-                let count = strings::tr_with(
-                    &ctx,
-                    &COUNT,
-                    &[("name", name.into()), ("count", 1234.into())],
-                );
-                let want = if locale == "fr" {
-                    format!("{name} : 1\u{202f}234 éléments")
-                } else {
-                    format!("{name}: 1,234 items")
-                };
-                assert_eq!(count, want);
-            }
-        }
-    }
 }
