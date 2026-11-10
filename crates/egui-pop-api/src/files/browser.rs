@@ -581,6 +581,32 @@ impl Default for ModeSettings {
     }
 }
 
+/// What an application says of an entry beyond its facts
+/// ([`FileBrowser::with_marks`]): short badges ("RAW+JPG", "in your
+/// Library") drawn on its cell and after its name, and said with its name
+/// to assistive technology; and whether it is dimmed (shown, but not what
+/// the person acts on).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct EntryMarks {
+    pub badges: Vec<String>,
+    pub dimmed: bool,
+}
+
+impl EntryMarks {
+    /// The entry's name with its badges, as a screen reader says it.
+    pub fn label(&self, name: &str) -> String {
+        let mut label = name.to_owned();
+        for b in &self.badges {
+            label.push_str(" · ");
+            label.push_str(b);
+        }
+        label
+    }
+}
+
+/// What gives an entry's marks ([`FileBrowser::with_marks`]).
+pub type MarkEntries = dyn Fn(&SourceEntry) -> EntryMarks + Send + Sync;
+
 /// What an agenda groups its entries by.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum AgendaLevel {
@@ -716,6 +742,8 @@ pub struct ModeContext<'a> {
     /// Changes whenever the entries do (a page arrived, a refresh): what a
     /// mode computes from the entries alone is kept until it changes.
     pub generation: u64,
+    /// The application's marks of each entry, drawn by [`PlainDrawer`].
+    pub marks: Option<&'a MarkEntries>,
 }
 
 /// What the person did in a mode; the browser decides what it means.
@@ -956,6 +984,8 @@ pub struct PlainDrawer<'a> {
     pub entries: &'a [SourceEntry],
     pub selection: &'a Selection,
     pub focus: Option<usize>,
+    /// The application's marks of each entry: badges and dimming.
+    pub marks: Option<&'a MarkEntries>,
 }
 
 impl PlainDrawer<'_> {
@@ -963,10 +993,18 @@ impl PlainDrawer<'_> {
     /// the date.
     pub const FACTS_WIDTH: f32 = 320.0;
 
-    fn back(&self, ui: &Ui, resp: &egui::Response, n: usize, radius: f32) {
+    /// The application's marks of entry `n`.
+    fn marks_of(&self, n: usize) -> EntryMarks {
+        self.marks.map(|m| m(&self.entries[n])).unwrap_or_default()
+    }
+
+    fn back(&self, ui: &Ui, resp: &egui::Response, n: usize, radius: f32, marks: &EntryMarks) {
         let e = &self.entries[n];
         let selected = self.selection.contains(&e.path);
-        entry_response(resp, e, selected);
+        let label = marks.label(&e.name);
+        resp.widget_info(|| {
+            egui::WidgetInfo::selected(egui::Role::ListBoxOption, true, selected, &label)
+        });
         let visuals = ui.visuals();
         let rect = resp.rect;
         if selected {
@@ -994,13 +1032,26 @@ impl EntryDrawer for PlainDrawer<'_> {
 
     fn row(&mut self, ui: &mut Ui, n: usize, size: egui::Vec2) -> egui::Response {
         let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
-        self.back(ui, &resp, n, 2.0);
+        let marks = self.marks_of(n);
+        self.back(ui, &resp, n, 2.0, &marks);
         let e = &self.entries[n];
         let visuals = ui.visuals();
         let text = if self.selection.contains(&e.path) {
             visuals.selection.stroke.color
+        } else if marks.dimmed {
+            visuals.weak_text_color()
         } else {
             visuals.text_color()
+        };
+        let badged;
+        let e = if marks.badges.is_empty() {
+            e
+        } else {
+            badged = SourceEntry {
+                name: marks.label(&e.name),
+                ..e.clone()
+            };
+            &badged
         };
         let font = egui::TextStyle::Body.resolve(ui.style());
         let w = rect.width();
@@ -1063,9 +1114,43 @@ impl EntryDrawer for PlainDrawer<'_> {
         thumbnail: ThumbState,
     ) -> egui::Response {
         let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
-        self.back(ui, &resp, n, 4.0);
+        let marks = self.marks_of(n);
+        self.back(ui, &resp, n, 4.0, &marks);
         paint_cell(ui, rect, &self.entries[n], thumbnail);
+        paint_marks(ui, rect, &marks);
         resp
+    }
+}
+
+/// A cell's marks over its thumbnail: dimmed, its badges stacked from the
+/// image's bottom left corner.
+pub fn paint_marks(ui: &Ui, rect: egui::Rect, marks: &EntryMarks) {
+    if !marks.dimmed && marks.badges.is_empty() {
+        return;
+    }
+    let visuals = ui.visuals();
+    let caption = ui.text_style_height(&egui::TextStyle::Small) + 4.0;
+    let side = (rect.width() - 8.0)
+        .min(rect.height() - caption - 8.0)
+        .max(1.0);
+    let image = egui::Rect::from_min_size(rect.min + egui::vec2(4.0, 4.0), egui::vec2(side, side));
+    let painter = ui.painter().with_clip_rect(rect);
+    if marks.dimmed {
+        painter.rect_filled(image, 4.0, visuals.extreme_bg_color.gamma_multiply(0.6));
+    }
+    let font = egui::TextStyle::Small.resolve(ui.style());
+    let mut bottom = image.bottom() - 4.0;
+    for badge in &marks.badges {
+        let galley =
+            painter.layout_no_wrap(badge.clone(), font.clone(), visuals.strong_text_color());
+        let at = egui::pos2(image.left() + 4.0, bottom - galley.size().y);
+        painter.rect_filled(
+            egui::Rect::from_min_size(at, galley.size()).expand(2.0),
+            2.0,
+            visuals.widgets.inactive.bg_fill,
+        );
+        bottom = at.y - 4.0;
+        painter.galley(at, galley, visuals.strong_text_color());
     }
 }
 
@@ -1229,6 +1314,7 @@ impl ViewMode for DetailsMode {
             entries: cx.entries,
             selection: cx.selection,
             focus: cx.focus,
+            marks: cx.marks,
         };
         let drawer: &mut dyn EntryDrawer = match cx.drawer {
             Some(d) => d,
@@ -1329,6 +1415,7 @@ impl ViewMode for ThumbnailsMode {
             entries: cx.entries,
             selection: cx.selection,
             focus: cx.focus,
+            marks: cx.marks,
         };
         let drawer: &mut dyn EntryDrawer = match cx.drawer {
             Some(d) => d,
@@ -1566,6 +1653,7 @@ impl ViewMode for ColumnsMode {
             entries: cx.entries,
             selection: cx.selection,
             focus: cx.focus,
+            marks: cx.marks,
         };
         let drawer: &mut dyn EntryDrawer = match cx.drawer {
             Some(d) => d,
@@ -1830,6 +1918,7 @@ impl ViewMode for FilmstripMode {
             entries: cx.entries,
             selection: cx.selection,
             focus: cx.focus,
+            marks: cx.marks,
         };
         let drawer: &mut dyn EntryDrawer = match cx.drawer {
             Some(d) => d,
@@ -1987,6 +2076,7 @@ impl ViewMode for CarouselMode {
             entries: cx.entries,
             selection: cx.selection,
             focus: cx.focus,
+            marks: cx.marks,
         };
         let drawer: &mut dyn EntryDrawer = match cx.drawer {
             Some(d) => d,
@@ -2424,6 +2514,7 @@ impl ViewMode for AgendaMode {
             entries: cx.entries,
             selection: cx.selection,
             focus: cx.focus,
+            marks: cx.marks,
         };
         let drawer: &mut dyn EntryDrawer = match cx.drawer {
             Some(d) => d,
@@ -2909,6 +3000,8 @@ pub struct FileBrowser {
     focus_first: bool,
     /// Quick look is open over the entries.
     quick_look: bool,
+    /// The application's marks of each entry.
+    marks: Option<Arc<MarkEntries>>,
 }
 
 /// The browser's order: folders first, then names as people read them.
@@ -3153,6 +3246,7 @@ impl FileBrowser {
             drop_hover: None,
             focus_first: false,
             quick_look: false,
+            marks: None,
         };
         b.reload();
         b
@@ -3174,6 +3268,41 @@ impl FileBrowser {
     pub fn with_select(mut self, select: SelectMode) -> Self {
         self.select = select;
         self
+    }
+
+    /// Marks entries as the application sees them: badges on their cells
+    /// and after their names, said to assistive technology with the name,
+    /// and dimmed entries (a photo already imported). Every mode that
+    /// draws through the browser's [`PlainDrawer`] shows them.
+    pub fn with_marks(
+        mut self,
+        marks: impl Fn(&SourceEntry) -> EntryMarks + Send + Sync + 'static,
+    ) -> Self {
+        self.marks = Some(Arc::new(marks));
+        self
+    }
+
+    /// Selects these entries alone (the first of them with
+    /// [`SelectMode::One`]); the paths not listed are dropped, the focus
+    /// stays. An application's own "select all of that day".
+    pub fn set_selection(&mut self, paths: impl IntoIterator<Item = PathBuf>) {
+        let listed: HashSet<&Path> = self.entries.iter().map(|e| e.path.as_path()).collect();
+        let mut chosen: BTreeSet<PathBuf> = paths
+            .into_iter()
+            .filter(|p| listed.contains(p.as_path()))
+            .collect();
+        if self.select == SelectMode::One {
+            chosen = chosen.into_iter().take(1).collect();
+        }
+        if self
+            .selection
+            .anchor
+            .as_ref()
+            .is_some_and(|a| !chosen.contains(a))
+        {
+            self.selection.anchor = chosen.iter().next().cloned();
+        }
+        self.selection.paths = chosen;
     }
 
     pub fn id(&self) -> egui::Id {
@@ -3877,6 +4006,7 @@ impl FileBrowser {
                     peek: self.columns.peek(),
                     loading: self.listing.is_some(),
                     generation: self.generation,
+                    marks: self.marks.as_deref(),
                 },
             )
         });
