@@ -381,6 +381,71 @@ impl Sections {
     }
 }
 
+/// One band standing alone, in the look of a section's: the disclosure
+/// mark, the title, the count, for a fold that is not a stack of
+/// sections (a card's "More (n)" row, a group in a form). A click, or
+/// Space or Enter while it has the keyboard, toggles it: the caller
+/// flips `open` when the response is `clicked()`. It is a button named
+/// by its title and count ("More, 3"), expanded or not for assistive
+/// technology. It takes the width available and a band's height.
+///
+/// ```
+/// let ctx = egui::Context::default();
+/// let mut open = false;
+/// let mut out = ctx.run_ui(Default::default(), |ui| {
+///     if egui_pop_core::sections::band(ui, "more", "More", Some(3), open).clicked() {
+///         open = !open;
+///     }
+/// });
+/// ```
+pub fn band(
+    ui: &mut Ui,
+    id_salt: impl std::hash::Hash + std::fmt::Debug,
+    title: &str,
+    count: Option<u64>,
+    open: bool,
+) -> egui::Response {
+    use egui_stack::PartState;
+    let kit = Kit::of(ui.ctx());
+    let height = if kit.section_band.data.height > 0.0 {
+        kit.section_band.data.height
+    } else {
+        row_height(ui)
+    };
+    let id = ui.make_persistent_id(id_salt);
+    let (rect, _) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width().max(height), height),
+        egui::Sense::hover(),
+    );
+    let response = ui.interact(rect, id, egui::Sense::click());
+    let name = match count {
+        Some(n) => format!("{title}, {n}"),
+        None => title.to_owned(),
+    };
+    let enabled = ui.is_enabled();
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, &name));
+    ui.ctx()
+        .accesskit_node_builder(id, |node| node.set_expanded(open));
+    if ui.is_rect_visible(rect) {
+        let state = PartState::NONE
+            .with(PartState::HOVERED, response.hovered())
+            .with(PartState::PRESSED, response.is_pointer_button_down_on())
+            .with(PartState::FOCUSED, response.has_focus());
+        kit.paint_section_band(
+            ui.painter(),
+            &crate::kit::dock::Band {
+                rect,
+                id,
+                title,
+                count,
+                open,
+                state,
+            },
+        );
+    }
+    response
+}
+
 /// The style a scroll bar is drawn in: the `Ui`'s, its widget visuals the
 /// kit's `ScrollBar` scope's (`UiPop::scroll_area`).
 fn bar_style(ui: &Ui, kit: &Kit) -> std::sync::Arc<egui::Style> {
