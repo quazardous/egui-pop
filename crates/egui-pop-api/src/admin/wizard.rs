@@ -492,8 +492,10 @@ pub(super) fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) {
     );
     ui.separator();
     // The footer: Cancel on the left; Next or Finish, Skip, Back on the
-    // right, the reason Next is greyed beside it.
-    ui.horizontal(|ui| {
+    // right, the reason Next is greyed beside it. Toasts keep off it:
+    // Finish sits in their default corner, and one over it takes its
+    // click.
+    let footer = ui.horizontal(|ui| {
         let r = ui.button(strings::tr(&ctx, &txt::ADMIN_WIZARD_CANCEL));
         if r.clicked() {
             app.run(CMD_WIZARD_CANCEL, json!({}));
@@ -538,6 +540,7 @@ pub(super) fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) {
             }
         });
     });
+    crate::toasts::keep_clear(&ctx, footer.response.rect);
 }
 
 /// A step in the stepper: its number and title, selected while shown,
