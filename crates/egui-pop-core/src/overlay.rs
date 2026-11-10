@@ -837,6 +837,15 @@ pub(crate) fn opened_by_top(ctx: &Context, layer: LayerId) -> bool {
     lock(&st).stack.top_popups().contains(&layer)
 }
 
+/// The overlay of the window being drawn that a press at `pos` lands in,
+/// `layer` being the egui layer on top there: the topmost one drawn or
+/// anchored there, or whose egui popup (a combo box's list, a context
+/// menu) is that layer. `None` for the interface below the overlays.
+pub fn hit_at(ctx: &Context, pos: egui::Pos2, layer: Option<LayerId>) -> Option<Id> {
+    let st = state(ctx);
+    lock(&st).stack.hit_on(pos, layer)
+}
+
 /// The window an overlay is open in, if it is open in any.
 pub fn window_of(ctx: &Context, id: Id) -> Option<ViewportId> {
     all(ctx)
