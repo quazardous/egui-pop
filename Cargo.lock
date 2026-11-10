@@ -1815,9 +1815,9 @@ dependencies = [
 
 [[package]]
 name = "egui_stack"
-version = "0.25.5"
+version = "0.25.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb011c7ac1f4560469658ac69477f4dabf484fff772813ee8c45596c2a31a3cd"
+checksum = "56762afeb940acaa0c5d601b7f10f7a7b041356e495055dffe0160be52dff08f"
 dependencies = [
  "duplicate",
  "egui",
