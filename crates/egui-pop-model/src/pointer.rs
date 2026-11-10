@@ -73,8 +73,12 @@ pub const VIEW_COMMANDS: [&str; 10] = [
 ];
 
 /// When a profile's navigation keys apply: a canvas is in use and no
-/// text input or modal has the keyboard.
-pub const VIEW_KEYS_WHEN: &str = "canvasActive && !textInputFocus && !modalOpen";
+/// text input, modal or file browser has the keyboard. A canvas is in use
+/// while the pointer is over it too, so a browser holding the keyboard
+/// keeps its own keys (its view modes' `Ctrl+1`, ...), which Photoshop's
+/// 100 % would take otherwise.
+pub const VIEW_KEYS_WHEN: &str =
+    "canvasActive && !textInputFocus && !modalOpen && !fileBrowserFocused";
 
 /// Gesture commands, by canvas kind.
 pub mod gesture {

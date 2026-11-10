@@ -312,3 +312,31 @@ fn the_profiles_navigation_keys_are_keymap_bindings_the_user_can_change() {
         [chord("K")]
     );
 }
+
+#[test]
+fn no_profile_s_navigation_keys_take_a_file_browser_s_keys() {
+    // Photoshop's Ctrl+1 (100 %) is also the file browser's first view
+    // mode: the pointer over a canvas while a browser holds the keyboard
+    // must not give the key to the canvas.
+    for id in egui_pop_model::pointer::ids() {
+        let ctx = egui::Context::default();
+        let mut app = App::builder()
+            .plugins(DefaultPlugins)
+            .pointer_profile(id)
+            .build(&ctx)
+            .unwrap();
+        passes(&mut app, &ctx, 2);
+        let clashes: Vec<String> = app
+            .handle()
+            .key_conflicts()
+            .iter()
+            .filter(|(lose, win)| {
+                [lose, win]
+                    .iter()
+                    .any(|b| b.action.to_string().starts_with("view."))
+            })
+            .map(|(lose, win)| format!("{}: {} loses to {}", lose.keys, lose.action, win.action))
+            .collect();
+        assert!(clashes.is_empty(), "{id}: {clashes:?}");
+    }
+}

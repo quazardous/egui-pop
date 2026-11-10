@@ -118,8 +118,11 @@ A profile also gives the keys of the canvas navigation commands
 Photoshop's Ctrl+1 for 100 % and Ctrl+0 to fit, darktable's Alt+1 and
 Alt+3, Figma's Shift+1 and Shift+2 in Document, Blender's `.`. They are
 the `view_keys` of the profile document, loaded with its gestures into
-the keymap's default layer, active while a canvas is in use
-(`canvasActive && !textInputFocus && !modalOpen`): the shortcuts editor
+the keymap's default layer, active while a canvas is in use and no text
+input, modal or file browser has the keyboard
+(`canvasActive && !textInputFocus && !modalOpen && !fileBrowserFocused`;
+the pointer over a canvas makes it in use, and a file browser holding the
+keyboard keeps its view modes' `Ctrl+1` to `Ctrl+9`): the shortcuts editor
 lists them under View and the user rebinds them there. The full table
 is in [the navigation study](design/navigation.md).
 
