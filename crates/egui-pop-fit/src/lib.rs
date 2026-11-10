@@ -19,6 +19,13 @@
 //!   down. Pinned elements are placed first, then the others in their order,
 //!   each at the first free position in reading order: a later element may
 //!   move up into an earlier gap (like CSS `grid-auto-flow: dense`).
+//! - **Groups.** [`layout_grouped`] takes [`Group`]s: runs of consecutive
+//!   elements, like a `fieldset`'s controls, each with an optional header
+//!   (its legend) on a band of its own. Packing stays dense within a group,
+//!   but order is strict across groups: each starts on a new band below
+//!   everything before it, and nothing later moves up into its gaps. Groups
+//!   nest; pins count from the top of their band. The result gives each
+//!   group's band ([`GroupPlacement`]), for a host to frame it.
 //! - **Growth.** Growable elements then take the leftover room one slot step
 //!   at a time, in rounds, up to their maximum.
 //! - **Hysteresis.** Pass the previous [`Layout`] to keep its column count,
@@ -54,11 +61,15 @@
 
 mod dump;
 mod element;
+mod group;
 mod layout;
 mod size;
 
 pub use element::{AspectRatio, Axis, Cell, Element, Grow, Orientation, Size2, SizePolicy};
-pub use layout::{layout, Container, GridRect, Layout, Placement, PointRect, Reason, Status};
+pub use group::{Group, GroupPlacement};
+pub use layout::{
+    layout, layout_grouped, Container, GridRect, Layout, Placement, PointRect, Reason, Status,
+};
 pub use size::{InvalidSize, Size, TWELFTHS_PER_UNIT};
 
 #[cfg(doctest)]

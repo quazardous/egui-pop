@@ -25,6 +25,12 @@ impl Layout {
     /// of twelfths that divides every edge, so a grid of whole rows prints
     /// one line per row. The list gives, in logical order, the form, the
     /// orientation, the slot in twelfths and the status.
+    ///
+    /// With groups, a gutter left of the picture draws each group's band,
+    /// one column per nesting depth (`/` its first line, `|` the middle
+    /// ones, `\\` its last, `[` a one-line group), and one line per group
+    /// precedes the elements' list: its key, its parent's, its band and
+    /// the row its members start at.
     pub fn dump(&self) -> String {
         let rects: Vec<_> = self
             .placements
@@ -60,9 +66,56 @@ impl Layout {
                 }
             }
         }
-        for line in grid {
+        let depth = |mut g: usize| {
+            let mut d = 0;
+            while let Some(p) = self.groups[g].parent {
+                (d, g) = (d + 1, p);
+            }
+            d
+        };
+        let framed: Vec<(usize, usize, u32, u32)> = self
+            .groups
+            .iter()
+            .enumerate()
+            .filter_map(|(g, gp)| gp.rect.map(|r| (g, depth(g), r.y / sy, r.bottom() / sy)))
+            .collect();
+        let gutter = framed.iter().map(|f| f.1 + 1).max().unwrap_or(0);
+        for (n, line) in grid.into_iter().enumerate() {
+            if gutter > 0 {
+                let n = n as u32;
+                for d in 0..gutter {
+                    let mark = framed
+                        .iter()
+                        .find(|f| f.1 == d && f.2 <= n && n < f.3)
+                        .map_or(' ', |&(_, _, first, end)| {
+                            match (n == first, n + 1 == end) {
+                                (true, true) => '[',
+                                (true, false) => '/',
+                                (false, true) => '\\',
+                                (false, false) => '|',
+                            }
+                        });
+                    out.push(mark);
+                }
+                out.push(' ');
+            }
             out.extend(line);
             out.push('\n');
+        }
+        for g in &self.groups {
+            let _ = write!(out, "group key={}", g.key);
+            if let Some(p) = g.parent {
+                let _ = write!(out, " in key={}", self.groups[p].key);
+            }
+            let _ = match (g.ignored, g.rect) {
+                (true, _) => writeln!(out, " ignored"),
+                (false, None) => writeln!(out, " empty"),
+                (false, Some(r)) => writeln!(
+                    out,
+                    " at {},{} size {}x{} body at row {}",
+                    r.x, r.y, r.w, r.h, g.body_top
+                ),
+            };
         }
         for p in &self.placements {
             let _ = write!(

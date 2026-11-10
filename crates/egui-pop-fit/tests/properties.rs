@@ -1,7 +1,8 @@
 //! Property tests over random elements and boxes.
 
 use egui_gridflow::{
-    layout, Axis, Container, Element, Grow, Layout, Orientation, Size, Size2, SizePolicy, Status,
+    layout, layout_grouped, Axis, Container, Element, Group, Grow, Layout, Orientation, Size,
+    Size2, SizePolicy, Status,
 };
 use proptest::prelude::*;
 
@@ -109,9 +110,9 @@ fn check(c: &Container, elements: &[Element], l: &Layout) -> Result<(), TestCase
             e.orientations.clone()
         };
         prop_assert!(supported.contains(&p.orientation));
-        // Pins respected.
+        // Pins respected, counted from the element's band.
         if let (Some(pin), Status::Placed) = (e.pin, p.status) {
-            prop_assert_eq!((r.x, r.y), (pin.col, pin.row));
+            prop_assert_eq!((r.x, r.y - p.band_top), (pin.col, pin.row));
         }
         if matches!(p.status, Status::Unpinned(_)) {
             prop_assert!(e.pin.is_some());
@@ -125,6 +126,85 @@ fn check(c: &Container, elements: &[Element], l: &Layout) -> Result<(), TestCase
     for (i, a) in rects.iter().enumerate() {
         for b in &rects[i + 1..] {
             prop_assert!(!a.overlaps(b), "{:?} overlaps {:?}", a, b);
+        }
+    }
+    Ok(())
+}
+
+/// Groups, some of them invalid: nested, crossing, empty, out of range.
+fn groups() -> impl Strategy<Value = Vec<Group>> {
+    prop::collection::vec((0usize..13, 0usize..6, any::<bool>()), 0..4).prop_map(|gs| {
+        gs.into_iter()
+            .enumerate()
+            .map(|(k, (start, len, header))| Group {
+                key: 100 + k as u64,
+                range: start..start + len,
+                header,
+            })
+            .collect()
+    })
+}
+
+/// Groups hold their elements: dense inside, strict order across.
+fn check_groups(groups: &[Group], l: &Layout) -> Result<(), TestCaseError> {
+    prop_assert_eq!(l.groups.len(), groups.len());
+    let placed: Vec<(usize, egui_gridflow::GridRect)> = l
+        .placements
+        .iter()
+        .filter_map(|p| p.rect.map(|r| (p.logical, r)))
+        .collect();
+    for (g, (group, gp)) in groups.iter().zip(&l.groups).enumerate() {
+        prop_assert_eq!(gp.key, group.key);
+        if gp.ignored {
+            prop_assert!(gp.rect.is_none());
+            continue;
+        }
+        let range = &group.range;
+        let mut inside = false;
+        for &(i, r) in &placed {
+            match gp.rect {
+                // Nothing of it placed: none of its elements is.
+                None => prop_assert!(!range.contains(&i), "{} placed in an empty group", i),
+                Some(band) => {
+                    if i < range.start {
+                        prop_assert!(r.bottom() <= band.y, "{} below group {}", i, g);
+                    } else if i >= range.end {
+                        prop_assert!(r.y >= band.bottom(), "{} above group {}'s end", i, g);
+                    } else {
+                        inside = true;
+                        prop_assert!(r.y >= band.y && r.bottom() <= band.bottom());
+                        // Members below the header, pins from the body.
+                        if group.header && i > range.start {
+                            prop_assert!(r.y >= gp.body_top);
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(band) = gp.rect {
+            prop_assert!(inside, "group {} has a band but no element", g);
+            prop_assert_eq!((band.x, band.w), (0, l.columns));
+            prop_assert!(band.bottom() <= l.rows);
+        }
+        // Inside its parent's band; in order with the groups before it.
+        if let (Some(p), Some(band)) = (gp.parent, gp.rect) {
+            let pr = l.groups[p].rect;
+            prop_assert!(pr.is_some_and(|pr| pr.y <= band.y && band.bottom() <= pr.bottom()));
+        }
+        for (other, op) in groups.iter().zip(&l.groups) {
+            if op.ignored || other.range.end > range.start || other.range.is_empty() {
+                continue;
+            }
+            if let (Some(a), Some(b)) = (op.rect, gp.rect) {
+                prop_assert!(a.bottom() <= b.y, "groups out of order");
+            }
+        }
+    }
+    // An element's group is the innermost valid one holding it.
+    for p in &l.placements {
+        if let Some(g) = p.group {
+            prop_assert!(!l.groups[g].ignored);
+            prop_assert!(groups[g].range.contains(&p.logical));
         }
     }
     Ok(())
@@ -170,6 +250,23 @@ proptest! {
         let resized = layout(&c2, &e, Some(&first));
         check(&c2, &e, &resized)?;
         prop_assert_eq!(&layout(&c2, &e, Some(&resized)), &resized);
+    }
+
+    #[test]
+    fn groups_hold_their_elements(c in container(), e in elements(), g in groups()) {
+        let l = layout_grouped(&c, &e, &g, None);
+        check(&c, &e, &l)?;
+        check_groups(&g, &l)?;
+        prop_assert_eq!(&layout_grouped(&c, &e, &g, Some(&l)), &l);
+    }
+
+    #[test]
+    fn groups_hold_after_a_resize(c in container(), c2 in container(), e in elements(), g in groups()) {
+        let first = layout_grouped(&c, &e, &g, None);
+        let resized = layout_grouped(&c2, &e, &g, Some(&first));
+        check(&c2, &e, &resized)?;
+        check_groups(&g, &resized)?;
+        prop_assert_eq!(&layout_grouped(&c2, &e, &g, Some(&resized)), &resized);
     }
 
     #[test]

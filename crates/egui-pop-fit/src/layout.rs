@@ -1,6 +1,7 @@
 //! The engine: choosing forms and orientations, dense packing, growth.
 
 use crate::element::{Axis, Element, Grow, Orientation, SizePolicy};
+use crate::group::{tree, Group, GroupPlacement, Node};
 use crate::size::{floor_step, is_allowed, next_step, prev_step, HALF_UNIT, TWELFTHS_PER_UNIT};
 use core::fmt;
 
@@ -166,6 +167,13 @@ pub struct Placement {
     pub points: Option<PointRect>,
     /// Placed or overflow, with a reason.
     pub status: Status,
+    /// The index, in the layout's groups, of the innermost group holding
+    /// it (its header included).
+    pub group: Option<usize>,
+    /// The row, in twelfths, its pin counts from: the top of its band
+    /// (its group's members, below the header, or its run of loose
+    /// elements). Subtract it from a position to store it as a pin.
+    pub band_top: u32,
 }
 
 /// A laid-out container.
@@ -180,6 +188,8 @@ pub struct Layout {
     pub unit: f32,
     /// One placement per element, in logical order.
     pub placements: Vec<Placement>,
+    /// One per group, in the order given.
+    pub groups: Vec<GroupPlacement>,
 }
 
 impl Layout {
@@ -197,6 +207,11 @@ impl Layout {
             .collect();
         placed.sort_by_key(|p| p.visual);
         placed
+    }
+
+    /// The placement of the group with this key.
+    pub fn group(&self, key: u64) -> Option<&GroupPlacement> {
+        self.groups.iter().find(|g| g.key == key)
     }
 
     /// The height used, in points.
@@ -229,6 +244,24 @@ struct Choice {
 /// placement, so the cost grows with the cube of the element count; the
 /// engine is meant for panels of tens of elements, not thousands.
 pub fn layout(container: &Container, elements: &[Element], previous: Option<&Layout>) -> Layout {
+    layout_grouped(container, elements, &[], previous)
+}
+
+/// Lays `elements` out in `container`, in `groups`.
+///
+/// As [`layout`], but packing is dense only within each [`Group`] and
+/// within each run of loose elements between groups: each starts on a
+/// new band of rows below everything before it. A group's header, if it
+/// has one, takes a band of its own at the group's top; pins count from
+/// the top of the element's band ([`Placement::band_top`]). Groups that
+/// reach past the elements or cross another group's boundary are ignored
+/// ([`GroupPlacement::ignored`]).
+pub fn layout_grouped(
+    container: &Container,
+    elements: &[Element],
+    groups: &[Group],
+    previous: Option<&Layout>,
+) -> Layout {
     let unit = container.unit;
     let natural = container.twelfths(container.width);
     let columns = columns(natural, container.unit, previous);
@@ -250,7 +283,15 @@ pub fn layout(container: &Container, elements: &[Element], previous: Option<&Lay
         .iter()
         .map(|c| c.as_ref().ok().map(|c| (c.w, c.h)))
         .collect();
-    let (mut rects, mut status) = place(elements, &sizes, columns, max_rows);
+    let (nodes, parents, ignored) = tree(elements.len(), groups);
+    let grid = Grid {
+        elements,
+        nodes: &nodes,
+        groups: groups.len(),
+        columns,
+        max_rows,
+    };
+    let mut placed = grid.place(&sizes);
 
     // 3. Grow into the leftover room, one step per element per round. A step
     // is kept when the dense placement at the new sizes changes no status and
@@ -264,14 +305,14 @@ pub fn layout(container: &Container, elements: &[Element], previous: Option<&Lay
             .max()
             .unwrap_or(0)
     };
-    let row_limit = max_rows.unwrap_or_else(|| rows_of(&rects));
+    let row_limit = max_rows.unwrap_or_else(|| rows_of(&placed.rects));
     loop {
         let mut grew = false;
         for i in 0..elements.len() {
             let (Ok(c), Some(size)) = (&choices[i], sizes[i]) else {
                 continue;
             };
-            if !status[i].is_placed() {
+            if !placed.status[i].is_placed() {
                 continue;
             }
             let Some(next) = grown(&c.policy, size, columns) else {
@@ -279,15 +320,23 @@ pub fn layout(container: &Container, elements: &[Element], previous: Option<&Lay
             };
             let mut tried = sizes.clone();
             tried[i] = Some(next);
-            let (r, s) = place(elements, &tried, columns, max_rows);
-            if s == status && rows_of(&r) <= row_limit {
-                (sizes, rects, grew) = (tried, r, true);
+            let p = grid.place(&tried);
+            if p.status == placed.status && rows_of(&p.rects) <= row_limit {
+                (sizes, placed, grew) = (tried, p, true);
             }
         }
         if !grew {
             break;
         }
     }
+    let Placed {
+        rects,
+        mut status,
+        member_of,
+        band_top,
+        group_rects,
+        body_top,
+    } = placed;
     for (i, c) in choices.iter().enumerate() {
         if let Err((reason, _, _)) = c {
             status[i] = Status::Overflow(*reason);
@@ -304,6 +353,12 @@ pub fn layout(container: &Container, elements: &[Element], previous: Option<&Lay
         visual[i] = Some(rank);
     }
     let to_points = |t: u32| t as f32 * unit / TWELFTHS_PER_UNIT as f32;
+    let to_rect = |r: GridRect| PointRect {
+        x: to_points(r.x),
+        y: to_points(r.y),
+        w: to_points(r.w),
+        h: to_points(r.h),
+    };
     let placements = elements
         .iter()
         .enumerate()
@@ -320,14 +375,23 @@ pub fn layout(container: &Container, elements: &[Element], previous: Option<&Lay
                 form,
                 orientation,
                 rect,
-                points: rect.map(|r| PointRect {
-                    x: to_points(r.x),
-                    y: to_points(r.y),
-                    w: to_points(r.w),
-                    h: to_points(r.h),
-                }),
+                points: rect.map(to_rect),
                 status: status[i],
+                group: member_of[i],
+                band_top: band_top[i],
             }
+        })
+        .collect();
+    let groups = groups
+        .iter()
+        .enumerate()
+        .map(|(g, group)| GroupPlacement {
+            key: group.key,
+            parent: parents[g],
+            rect: group_rects[g],
+            points: group_rects[g].map(to_rect),
+            body_top: body_top[g],
+            ignored: ignored[g],
         })
         .collect();
     Layout {
@@ -335,6 +399,7 @@ pub fn layout(container: &Container, elements: &[Element], previous: Option<&Lay
         rows: rows_of(&rects),
         unit,
         placements,
+        groups,
     }
 }
 
@@ -450,59 +515,158 @@ fn height_for(p: &SizePolicy, w: u32, max_rows: Option<u32>) -> Option<u32> {
     }
 }
 
-/// Places slots of the given sizes: pinned ones at their pins, in logical
-/// order, then the others at the first free position in reading order.
-/// Elements without a size are left out with a placeholder status, which
-/// the caller replaces.
-fn place(
-    elements: &[Element],
-    sizes: &[Option<(u32, u32)>],
+/// What one placement pass gives.
+#[derive(Clone)]
+struct Placed {
+    rects: Vec<Option<GridRect>>,
+    status: Vec<Status>,
+    /// Each element's innermost group.
+    member_of: Vec<Option<usize>>,
+    /// Each element's band top, its pin's origin.
+    band_top: Vec<u32>,
+    /// Each group's band, when something of it is placed.
+    group_rects: Vec<Option<GridRect>>,
+    /// Each group's members' top.
+    body_top: Vec<u32>,
+}
+
+/// The grid and the element tree a placement pass works on.
+struct Grid<'a> {
+    elements: &'a [Element],
+    nodes: &'a [Node],
+    groups: usize,
     columns: u32,
     max_rows: Option<u32>,
-) -> (Vec<Option<GridRect>>, Vec<Status>) {
-    let mut rects: Vec<Option<GridRect>> = vec![None; elements.len()];
-    let mut status = vec![Status::Placed; elements.len()];
-    let mut taken: Vec<GridRect> = Vec::new();
-    for (i, e) in elements.iter().enumerate() {
-        let (Some((w, h)), Some(pin)) = (sizes[i], e.pin) else {
-            continue;
+}
+
+impl Grid<'_> {
+    /// Places slots of the given sizes, band by band: each run of loose
+    /// elements and each group in turn, below the one before. Elements
+    /// without a size are left out with a placeholder status, which the
+    /// caller replaces.
+    fn place(&self, sizes: &[Option<(u32, u32)>]) -> Placed {
+        let n = self.elements.len();
+        let mut out = Placed {
+            rects: vec![None; n],
+            status: vec![Status::Placed; n],
+            member_of: vec![None; n],
+            band_top: vec![0; n],
+            group_rects: vec![None; self.groups],
+            body_top: vec![0; self.groups],
         };
-        let r = GridRect {
-            x: pin.col,
-            y: pin.row,
-            w,
-            h,
-        };
-        let inside = r.x.checked_add(w).is_some_and(|right| right <= columns)
-            && r.y
-                .checked_add(h)
-                .is_some_and(|b| max_rows.is_none_or(|m| b <= m));
-        if !inside {
-            status[i] = Status::Unpinned(Reason::PinOutOfBounds);
-        } else if taken.iter().any(|t| t.overlaps(&r)) {
-            status[i] = Status::Unpinned(Reason::PinOverlap);
-        } else {
-            rects[i] = Some(r);
-            taken.push(r);
-        }
+        self.block(self.nodes, None, 0, sizes, &mut out);
+        out
     }
-    for i in 0..elements.len() {
-        let Some((w, h)) = sizes[i] else {
-            status[i] = Status::Overflow(Reason::NoForms);
-            continue;
-        };
-        if rects[i].is_some() {
-            continue;
+
+    /// Places a block of nodes from row `top` down; returns its bottom.
+    fn block(
+        &self,
+        nodes: &[Node],
+        group: Option<usize>,
+        top: u32,
+        sizes: &[Option<(u32, u32)>],
+        out: &mut Placed,
+    ) -> u32 {
+        let mut y = top;
+        let mut run = Vec::new();
+        for node in nodes {
+            match node {
+                Node::Element(i) => run.push(*i),
+                Node::Group {
+                    index,
+                    header,
+                    children,
+                } => {
+                    y = self.run(&run, group, y, sizes, out);
+                    run.clear();
+                    let start = y;
+                    if let Some(h) = header {
+                        y = self.run(&[*h], Some(*index), y, sizes, out);
+                    }
+                    out.body_top[*index] = y;
+                    y = self.block(children, Some(*index), y, sizes, out);
+                    if y > start {
+                        out.group_rects[*index] = Some(GridRect {
+                            x: 0,
+                            y: start,
+                            w: self.columns,
+                            h: y - start,
+                        });
+                    }
+                }
+            }
         }
-        match first_fit(&taken, w, h, columns, max_rows) {
-            Some(r) => {
-                rects[i] = Some(r);
+        self.run(&run, group, y, sizes, out)
+    }
+
+    /// Places a run of elements densely in a band from row `top`: pinned
+    /// ones at their pins (counted from `top`), in logical order, then the
+    /// others at the first free position in reading order. Returns the
+    /// band's bottom.
+    fn run(
+        &self,
+        run: &[usize],
+        group: Option<usize>,
+        top: u32,
+        sizes: &[Option<(u32, u32)>],
+        out: &mut Placed,
+    ) -> u32 {
+        // The room left below `top`, in the band's own rows.
+        let max_rows = self.max_rows.map(|m| m.saturating_sub(top));
+        let mut taken: Vec<GridRect> = Vec::new();
+        for &i in run {
+            out.member_of[i] = group;
+            out.band_top[i] = top;
+            let (Some((w, h)), Some(pin)) = (sizes[i], self.elements[i].pin) else {
+                continue;
+            };
+            let r = GridRect {
+                x: pin.col,
+                y: pin.row,
+                w,
+                h,
+            };
+            let inside = r
+                .x
+                .checked_add(w)
+                .is_some_and(|right| right <= self.columns)
+                && r.y
+                    .checked_add(h)
+                    .and_then(|b| b.checked_add(top))
+                    .is_some_and(|b| b <= MAX_TWELFTHS && max_rows.is_none_or(|m| b - top <= m));
+            if !inside {
+                out.status[i] = Status::Unpinned(Reason::PinOutOfBounds);
+            } else if taken.iter().any(|t| t.overlaps(&r)) {
+                out.status[i] = Status::Unpinned(Reason::PinOverlap);
+            } else {
+                out.rects[i] = Some(r);
                 taken.push(r);
             }
-            None => status[i] = Status::Overflow(Reason::NoRoom),
         }
+        for &i in run {
+            let Some((w, h)) = sizes[i] else {
+                out.status[i] = Status::Overflow(Reason::NoForms);
+                continue;
+            };
+            if out.rects[i].is_some() {
+                continue;
+            }
+            match first_fit(&taken, w, h, self.columns, max_rows) {
+                Some(r) => {
+                    out.rects[i] = Some(r);
+                    taken.push(r);
+                }
+                None => out.status[i] = Status::Overflow(Reason::NoRoom),
+            }
+        }
+        // From the band's rows to the grid's.
+        for &i in run {
+            if let Some(r) = &mut out.rects[i] {
+                r.y = r.y.saturating_add(top);
+            }
+        }
+        top.saturating_add(taken.iter().map(GridRect::bottom).max().unwrap_or(0))
     }
-    (rects, status)
 }
 
 /// The size one growth step larger, if the policy allows it and it is no
