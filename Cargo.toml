@@ -104,8 +104,9 @@ image = { version = "0.25", default-features = false }
 # the `DockSpace` the workbench's areas share, one drag between them;
 # 0.25.3 floating windows that stop at their least size and take drops
 # over a dock; 0.25.4 the layout layer the shell is laid out with
-# (`layout::LayoutArea`, `DockSpace::bind`).
-egui_stack = { version = "0.25.4", default-features = false }
+# (`layout::LayoutArea`, `DockSpace::bind`); 0.25.5 pane titles, translated
+# sash and grip labels, snapping and folding by drag.
+egui_stack = { version = "0.25.5", default-features = false }
 egui-pop = { version = "0.7.0", path = "crates/egui-pop" }
 
 [workspace.lints.rust]

@@ -2525,6 +2525,10 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     style.large_key_step = SASH_STEP * 4.0;
     style.sash_grab = 2.0 * ctx.global_style().interaction.resize_grab_radius_side;
     style.sash_width = ui.visuals().widgets.noninteractive.bg_stroke.width.max(1.0);
+    // The sashes do not snap, and a strip does not drag out, yet: the
+    // shell's drags stay as they were.
+    style.snap = 0.0;
+    style.strip_drag = false;
     let painter = ShellPainter {
         kit: &kit,
         open: &open,
@@ -2532,6 +2536,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     };
     let mut viewer = ShellViewer {
         app,
+        ctx: &ctx,
         kit: &kit,
         open: &open,
         areas: &areas,
@@ -2545,6 +2550,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     );
     let laid = LayoutArea::new(&mut layout)
         .id(shell_id())
+        .labels(shell_labels(&ctx))
         .style(style)
         .painter(&painter)
         .show_inside(&mut inner, &mut viewer);
@@ -2571,11 +2577,6 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         if zone.shown == Shown::Open {
             app.workbench_mut().rects.insert(area, zone.rect);
             if area != Area::Center {
-                // The line resizing it, named after the area.
-                let name =
-                    strings::tr_args(&ctx, &txt::AREA_RESIZE, &[("area", &area_text(&ctx, area))]);
-                let sash = shell_id().with(("sash", &zone.name.0));
-                ctx.accesskit_node_builder(sash, |node| node.set_label(name));
                 grip(&ctx, &kit, area, zone.rect, flipped);
             }
         }
@@ -2792,9 +2793,22 @@ fn strip_width(app: &AppHandle, ctx: &egui::Context, kit: &Kit, area: Area) -> f
     grip.max(t.size.icon_inline + 2.0 * t.space.s)
 }
 
-/// Names a strip's grip after its area ("Unfold the start side bar",
-/// "Fold ..." while it lies over the centre), for assistive technology and
-/// as its tooltip.
+/// The layout's labels, translated: its sashes ("Resize the start side
+/// bar") and strip grips ("Unfold ...", "Fold ..."), `{zone}` being the
+/// area's text ([`ShellViewer`]'s `title`).
+fn shell_labels(ctx: &egui::Context) -> egui_stack::Labels {
+    let template = |key| strings::tr_args(ctx, key, &[("area", "{zone}")]);
+    let mut labels = egui_stack::Labels::default();
+    labels.resize_zone = template(&txt::AREA_RESIZE).into();
+    labels.unfold_zone = template(&txt::WORKBENCH_UNFOLD).into();
+    labels.fold_zone = template(&txt::WORKBENCH_FOLD).into();
+    labels
+}
+
+/// A strip's grip's tooltip: its name ("Unfold the start side bar",
+/// "Fold ..." while it lies over the centre), which the layout gives it
+/// for assistive technology ([`shell_labels`]), but for an area lying
+/// over the centre.
 fn name_grip(ctx: &egui::Context, area: Area, zone: &str, open: bool) {
     let name = strings::tr_args(
         ctx,
@@ -2806,8 +2820,12 @@ fn name_grip(ctx: &egui::Context, area: Area, zone: &str, open: bool) {
         &[("area", &area_text(ctx, area))],
     );
     let id = shell_id().with(("grip", zone));
-    let label = name.clone();
-    ctx.accesskit_node_builder(id, |node| node.set_label(label));
+    if open {
+        // The layout lays an area lying over the centre out folded, and
+        // names its grip "Unfold ...": it folds it.
+        let label = name.clone();
+        ctx.accesskit_node_builder(id, |node| node.set_label(label));
+    }
     if let Some(r) = ctx.read_response(id) {
         r.on_hover_text(name);
     }
@@ -2972,6 +2990,7 @@ fn inward(area: Area, flipped: bool) -> egui::Vec2 {
 /// Draws the shell's zones: each area in its frame, the strips' icons.
 struct ShellViewer<'a> {
     app: &'a AppHandle,
+    ctx: &'a egui::Context,
     kit: &'a Kit,
     open: &'a BTreeSet<Area>,
     areas: &'a [Area],
@@ -2979,6 +2998,13 @@ struct ShellViewer<'a> {
 }
 
 impl ZoneViewer for ShellViewer<'_> {
+    /// An area's zone is named after the area ("the centre"), not its key,
+    /// for screen readers and tests: its pane, and its sash and grip ("Resize
+    /// the start side bar"); a split keeps its name.
+    fn title(&mut self, zone: &ZoneName) -> String {
+        area_from(&zone.0).map_or_else(|| zone.0.clone(), |area| area_text(self.ctx, area))
+    }
+
     fn ui(&mut self, ui: &mut Ui, zone: &ZoneName) {
         let Some(area) = area_from(&zone.0) else {
             return;
