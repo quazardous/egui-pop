@@ -689,7 +689,7 @@ impl Run<'_> {
                 .map_err(|m| ("expectation".to_string(), m)),
             Step::Shot(name) => {
                 let name = format!("{}-{name}", self.scenario.name);
-                #[cfg(feature = "wgpu")]
+                #[cfg(all(feature = "wgpu", feature = "snapshot"))]
                 if self.runner.snapshots {
                     return h
                         .try_snapshot(&name)

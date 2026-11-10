@@ -2,7 +2,8 @@
 egui-pop-test: patch
 ---
 
-The `wgpu` feature also turns on `egui_kittest`'s `snapshot` feature, which
-`Scenario`'s shots need for `try_snapshot`. Before, a build with `wgpu` but
-without another crate enabling `snapshot` (for example `cargo doc
---all-features` without the gallery) failed to compile.
+A new `snapshot` feature compares a scenario's shots as images (with
+`wgpu`); without it a shot records the accessibility tree. `wgpu` alone no
+longer needs `egui_kittest`'s `snapshot`, so `cargo doc --all-features`
+without the gallery builds again, and the image-diffing tools stay out of
+the crate's normal dependencies.
