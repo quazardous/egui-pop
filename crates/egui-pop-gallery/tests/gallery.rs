@@ -704,6 +704,127 @@ fn sliders_run_their_step_and_a_plugin_snaps_one() {
     assert!(h.query_by_label("Picker clicked 1 times").is_some());
 }
 
+/// A drag on the gallery from `from` by `by`, in eight moves.
+fn drag_by(
+    h: &mut Harness<'_, Gallery>,
+    from: egui::Pos2,
+    by: egui::Vec2,
+    modifiers: egui::Modifiers,
+) {
+    let button = |pos, pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers,
+    };
+    // Held through the drag, as a hand holds them.
+    h.event(egui::Event::ModifiersChanged(modifiers));
+    h.event(egui::Event::PointerMoved(from));
+    h.step();
+    h.event(button(from, true));
+    h.step();
+    for i in 1..=8 {
+        h.event(egui::Event::PointerMoved(from + by * (i as f32 / 8.0)));
+        h.step();
+    }
+    h.event(button(from + by, false));
+    h.event(egui::Event::ModifiersChanged(egui::Modifiers::NONE));
+    h.run();
+}
+
+fn value_of(h: &Harness<'_, Gallery>, label: &str) -> f64 {
+    h.get_by_label(label)
+        .accesskit_node()
+        .numeric_value()
+        .unwrap()
+}
+
+#[test]
+fn faders_and_knobs_go_up_and_reset_and_narrow_sliders_keep_their_name() {
+    use egui::accesskit::{Orientation, Role};
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "faders"));
+        h.run();
+        egui_pop_test::assert_all_named(&h);
+        results.add(h.try_snapshot(format!("faders-{theme}")));
+    }
+    let mut h = harness(options("pop-dark", Density::Comfortable, "faders"));
+    h.run();
+    // A fader: vertical for assistive technologies, up is more.
+    let black = h.get_by_label("Black");
+    assert_eq!(black.accesskit_node().role(), Role::Slider);
+    assert_eq!(
+        black.accesskit_node().orientation(),
+        Some(Orientation::Vertical)
+    );
+    let at = black.rect().center();
+    drag_by(&mut h, at, egui::vec2(0.0, -40.0), egui::Modifiers::NONE);
+    assert!(value_of(&h, "Black") > -1.0, "a drag up raises it");
+    h.get_by_label("Black").focus();
+    h.run();
+    let before = value_of(&h, "Black");
+    h.key_press(egui::Key::ArrowUp);
+    h.run();
+    assert!(value_of(&h, "Black") > before, "Up steps it up");
+    egui_pop_test::double_click(&mut h, "Black");
+    assert_eq!(value_of(&h, "Black"), 0.0, "a double click resets it");
+
+    // A knob: a slider for assistive technologies; up from its centre,
+    // finer with Shift, the increment action, and back to its default.
+    let feather = h.get_by_label("Feather");
+    assert_eq!(feather.accesskit_node().role(), Role::Slider);
+    assert_eq!(value_of(&h, "Feather"), 48.0);
+    let dial = feather.rect().center();
+    drag_by(&mut h, dial, egui::vec2(0.0, -50.0), egui::Modifiers::NONE);
+    let coarse = value_of(&h, "Feather") - 48.0;
+    assert!(
+        coarse > 30.0,
+        "50 points up of 200 is a quarter of the range: {coarse}"
+    );
+    let from = value_of(&h, "Feather");
+    drag_by(&mut h, dial, egui::vec2(0.0, -50.0), egui::Modifiers::SHIFT);
+    let fine = value_of(&h, "Feather") - from;
+    assert!(
+        fine > 0.0 && fine < coarse / 5.0,
+        "Shift is finer: {fine} against {coarse}"
+    );
+    let from = value_of(&h, "Feather");
+    h.get_by_label("Feather").increment_accesskit();
+    h.run();
+    assert_eq!(value_of(&h, "Feather"), from + 1.0);
+    egui_pop_test::double_click(&mut h, "Feather");
+    assert_eq!(value_of(&h, "Feather"), 0.0, "a double click resets it");
+
+    // Narrow slots: the label goes to the tooltip, the name stays.
+    for width in [240, 110, 64, 40] {
+        let name = format!("Exposure at {width} pt");
+        let node = h.get_by_label(&name);
+        assert_eq!(node.accesskit_node().role(), Role::Slider, "{name}");
+        assert!(
+            (node.rect().width() - width as f32).abs() < 1.0,
+            "{name} shrinks to its slot"
+        );
+    }
+
+    // The standalone band: named with its count, expanded once clicked.
+    // At the page's foot: scrolled into view first.
+    h.get_by_label("More, 3").scroll_to_me();
+    h.run();
+    let band = h.get_by_label("More, 3");
+    assert_eq!(band.accesskit_node().data().is_expanded(), Some(false));
+    band.click();
+    h.run();
+    assert_eq!(
+        h.get_by_label("More, 3")
+            .accesskit_node()
+            .data()
+            .is_expanded(),
+        Some(true)
+    );
+    assert!(h.query_by_label("Contrast, Vibrance, Clarity").is_some());
+}
+
 #[test]
 fn the_inputs_page_shows_every_decorator_and_state() {
     let mut results = egui_kittest::SnapshotResults::new();
