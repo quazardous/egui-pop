@@ -2,7 +2,6 @@
 egui-pop-api: minor
 egui-pop-model: minor
 egui-pop-i18n: patch
-egui-pop-gallery: patch
 ---
 
 The Settings app gains the wizard kit: a multi-step flow declared in a
