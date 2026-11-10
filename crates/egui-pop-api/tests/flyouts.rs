@@ -3,7 +3,8 @@
 //! unfolding the area, the flyout's width kept per panel, and a panel's
 //! indicator on its icon while the panel is not shown; a bare strip,
 //! without icons; the area dragged out of its strip, and folded by
-//! dragging its sash away.
+//! dragging its sash away; an area lying over the centre, which only its
+//! grip folds.
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
@@ -14,6 +15,7 @@ use egui_pop_api::zones::{self, Block};
 use egui_pop_api::{App, AppBuilder, Ctx, Plugin, PluginError};
 use egui_pop_model::ids::{BlockId, CommandId, PanelId, PluginId};
 use egui_pop_model::keymap::Layer;
+use egui_pop_model::layout::Placement;
 use egui_pop_model::panels::{Area, PanelSpec};
 use serde_json::json;
 
@@ -621,4 +623,42 @@ fn a_side_area_drags_out_of_its_strip_and_folds_when_its_sash_is_dragged_away() 
         (back.width() - side.width()).abs() < 1.0,
         "{back:?} {side:?}"
     );
+}
+
+#[test]
+fn an_area_lying_over_the_centre_stays_until_its_grip_folds_it_and_resizes_from_its_edge() {
+    let mut h = harness(builder());
+    let app = h.state().handle().clone();
+    app.fold_area(Area::StartSide, false);
+    let out = app.place_area(Area::StartSide, Placement::Over).unwrap();
+    assert!(out.ok(), "{out:?}");
+    h.run();
+    h.run();
+    let over = app.area_rect(Area::StartSide).expect("drawn");
+    assert!(h.query_by_label("files body").is_some());
+
+    // A lasting placement: neither a click away nor Escape folds it.
+    click_at(&mut h, egui::pos2(850.0, 300.0));
+    h.key_press(egui::Key::Escape);
+    h.run();
+    h.run();
+    assert!(app.layout().folded.is_empty(), "{:?}", app.layout().folded);
+    assert!(h.query_by_label("files body").is_some());
+
+    // Its edge on the centre's side resizes it.
+    let edge = h.get_by_label("Resize the start side bar").rect().center();
+    drag_release(&mut h, edge, edge + egui::vec2(60.0, 0.0));
+    let wider = app.area_rect(Area::StartSide).expect("still drawn");
+    assert!(
+        (wider.width() - (over.width() + 60.0)).abs() < 2.0,
+        "{wider:?} {over:?}"
+    );
+    assert!(app.layout().folded.is_empty());
+
+    // Its grip folds it.
+    h.get_by_label("Fold the start side bar").click();
+    h.run();
+    h.run();
+    assert_eq!(app.layout().folded, [Area::StartSide]);
+    assert!(h.query_by_label("files body").is_none());
 }

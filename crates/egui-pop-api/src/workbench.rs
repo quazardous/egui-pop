@@ -93,7 +93,9 @@
 //! centre's room) or **over** it ([`Placement::Over`]): its folded strip
 //! keeps the room in the layout, so the centre keeps its width, and the
 //! area, unfolded, lies above the centre next to its strip with the kit's
-//! `side-area` shadow; a click on the strip folds or unfolds it.
+//! `side-area` shadow (egui_stack's `ZoneState::over`). It is a lasting
+//! placement: a click away or Escape leaves it, only a click on the strip
+//! folds or unfolds it; its edge on the centre's side resizes it.
 //! The centre never folds.
 //!
 //! **Strip icons.** A side area's strip shows one icon per panel, in tab
@@ -102,8 +104,10 @@
 //! letter; the tooltip gives the title and the panel's key, if it has
 //! one. On a folded area a click opens that panel alone as a
 //! **flyout** over the centre, next to the strip, without moving the
-//! layout (`workbench.flyout`); Escape or a click away closes it (it is
-//! an overlay of the stack, `egui_pop_core::overlay::hold`). A double
+//! layout (egui_stack's `LayoutArea::flyout`, `workbench.flyout`);
+//! Escape or a click away closes it (it is an overlay of the stack,
+//! `egui_pop_core::overlay::hold`: Escape closes the top overlay first,
+//! and a combo box or a context menu opened in it is part of it). A double
 //! click on the icon, or the flyout's pin button, unfolds the area with
 //! the panel shown. The flyout's free edge resizes it; its width is
 //! kept per panel in the layout (`flyouts`, `workbench.flyout_size`).
@@ -142,8 +146,9 @@ use egui_pop_model::ids::{PanelId, StepId, ZoneId};
 use egui_pop_model::layout::{Auxiliary, FloatingGroup, Join, Layout, Node, Placement};
 use egui_pop_model::panels::{Area, PanelSpec, Panels, Place};
 use egui_stack::layout::{
-    Content, Dir, Drops, FlyoutPaint, Fold, Layout as ZoneLayout, LayoutArea, LayoutEvent,
-    LayoutPainter, LayoutStyle, SashPaint, Shown, Size, StripPaint, Zone, ZoneName, ZoneViewer,
+    Content, Dir, Dismiss, Drops, Flyout, FlyoutPaint, Fold, Layout as ZoneLayout, LayoutArea,
+    LayoutEvent, LayoutPainter, LayoutStyle, SashPaint, Shown, Size, StripPaint, Zone, ZoneName,
+    ZoneViewer,
 };
 use egui_stack::tab_viewer::DropVerdict;
 use egui_stack::{
@@ -2442,8 +2447,8 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     let kit = Kit::of(&ctx);
     let mut saved = shell_sizes(app, &ctx, ui.scope_id());
     // Side areas lying over the centre, open next to their strip: the
-    // layout lays them out folded (their strip keeps the room) and the
-    // workbench draws them over the centre (`lie_over`).
+    // layout keeps their strip in the flow and draws them over the centre
+    // (`ZoneState::over`), until their grip folds them.
     let open: BTreeSet<Area> = over
         .iter()
         .copied()
@@ -2483,6 +2488,8 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             s.size = saved.get(name).copied();
             if !shown_now.contains(&area) {
                 s.hidden = true;
+            } else if strip && side && open.contains(&area) {
+                s.over = true;
             } else if strip && side {
                 s.folded = true;
             } else if strip {
@@ -2518,6 +2525,24 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         open: &open,
         flipped,
     };
+    // The flyout, while its panel is in a folded side area drawn with its
+    // strip (the layout closes it otherwise), at its width.
+    let flyout = app.workbench_mut().flyout.clone();
+    // Another panel's flyout held last pass leaves the overlay stack
+    // now: closed later, as no longer shown, it would close the new one
+    // opened above it.
+    let held = app.workbench_mut().flyout_held.take();
+    if let Some(old) = held
+        && flyout.as_ref() != Some(&old)
+    {
+        egui_pop_core::overlay::close(&ctx, Id::unique(flyout_overlay(&old)));
+    }
+    let flyout = flyout.and_then(|panel| {
+        let area = app.workbench_mut().layout.area_of(&panel)?;
+        let (width, ..) = flyout_width(app, &ctx, area, &panel, strip)?;
+        layout.flyouts.insert(panel.as_str().to_owned(), width);
+        Some((panel, area))
+    });
     let mut viewer = ShellViewer {
         app,
         ctx: &ctx,
@@ -2525,6 +2550,9 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         open: &open,
         areas: &areas,
         flipped,
+        strip,
+        flyout: flyout.as_ref().map(|(p, _)| p.clone()),
+        flyout_closed: false,
     };
     let rect = ui.available_rect_before_wrap();
     let mut inner = ui.new_child(
@@ -2532,33 +2560,41 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
             .id_salt("egui_pop.shell")
             .max_rect(rect),
     );
+    // A press on an overlay of the stack (a combo box's list or a context
+    // menu opened in the flyout, a dialog above it) is not a press away:
+    // the stack closes what it covers. Escape is the stack's too, the top
+    // overlay first.
+    let in_overlay = |pos: Pos2, layer: Option<egui::LayerId>| {
+        egui_pop_core::overlay::hit_at(&ctx, pos, layer).is_some()
+    };
     let laid = LayoutArea::new(&mut layout)
         .id(shell_id())
         .labels(shell_labels(&ctx))
         .style(style)
         .painter(&painter)
+        .flyout(
+            flyout
+                .as_ref()
+                .map(|(p, area)| Flyout::new(p.as_str(), area_name(*area))),
+        )
+        .flyout_dismiss(Dismiss::OUTSIDE_PRESS)
+        .over_dismiss(Dismiss::NEVER)
+        .inside(&in_overlay)
         .show_inside(&mut inner, &mut viewer);
+    let flyout_closed = viewer.flyout_closed;
     // The shell covers `ui` without moving its cursor past the window's
     // bottom: past it (plus the item spacing), what the pass still
     // allocates in `ui` (the live regions, the overlay zones) would grow
     // `ui` below the window, and a frame drawn around `ui` with it.
     ui.expand_to_include_rect(rect);
-    // Strips of folded side areas, where a flyout may open.
-    let mut lying = Vec::new();
-    let mut strips = Vec::new();
     for zone in &laid.zones {
         let Some(area) = area_from(&zone.name.0) else {
             continue;
         };
-        if let Some(strip) = zone.strip {
-            if open.contains(&area) {
-                lying.push((area, strip));
-            } else {
-                strips.push((area, strip));
-            }
+        if zone.strip.is_some() {
             name_grip(&ctx, area, &zone.name.0, open.contains(&area));
         }
-        if zone.shown == Shown::Open {
+        if matches!(zone.shown, Shown::Open | Shown::Over) {
             app.workbench_mut().rects.insert(area, zone.rect);
             if area != Area::Center {
                 grip(&ctx, &kit, area, zone.rect, flipped);
@@ -2604,7 +2640,27 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     for event in &laid.events {
         match event {
             LayoutEvent::Resized { zone, size } => {
-                saved.insert(zone.0.clone(), *size);
+                // An area lying over the centre, from where the pointer is on
+                // its edge rather than from the layout's sum of moves, which
+                // a pass egui discards and runs again would count twice.
+                let lying = laid
+                    .zones
+                    .iter()
+                    .find(|z| z.name == *zone && z.shown == Shown::Over);
+                let size = lying
+                    .and_then(|z| {
+                        let area = area_from(&zone.0)?;
+                        let edge = shell_id().with(("over", &zone.0)).with("edge");
+                        let at = ctx.read_response(edge)?.interact_pointer_pos()?;
+                        let width = if on_left(area, flipped) {
+                            at.x - z.rect.left()
+                        } else {
+                            z.rect.right() - at.x
+                        };
+                        Some(width.clamp(z.least, z.most.max(z.least)))
+                    })
+                    .unwrap_or(*size);
+                saved.insert(zone.0.clone(), size);
                 resized = true;
             }
             LayoutEvent::Reset { zone } => {
@@ -2643,8 +2699,64 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
                 }
                 app.fold_area(area, open.contains(&area));
             }
+            LayoutEvent::FlyoutResized { key, size } => {
+                // The width follows the edge for now, and is saved through
+                // its step once the edge is let go (below). From where the
+                // pointer is, not from the layout's sum of moves, which a
+                // pass egui discards and runs again would count twice.
+                let Some((panel, area)) = flyout.as_ref().filter(|(p, _)| p.as_str() == key) else {
+                    continue;
+                };
+                let edge = shell_id().with(("flyout", panel.as_str())).with("edge");
+                let at = ctx
+                    .read_response(edge)
+                    .and_then(|r| r.interact_pointer_pos());
+                let width = match (at, laid.flyout) {
+                    (Some(at), Some(rect)) if on_left(*area, flipped) => at.x - rect.left(),
+                    (Some(at), Some(rect)) => rect.right() - at.x,
+                    _ => *size,
+                };
+                if let Some((_, min, max)) = flyout_width(app, &ctx, *area, panel, strip) {
+                    let live = flyout_live_id(panel);
+                    ctx.data_mut(|d| d.insert_temp(live, width.clamp(min, max)));
+                }
+            }
+            LayoutEvent::FlyoutClosed { key } => {
+                let Some((panel, area)) = flyout.as_ref().filter(|(p, _)| p.as_str() == key) else {
+                    continue;
+                };
+                let open_now = app.workbench_mut().flyout.as_ref() == Some(panel);
+                if !open_now || flyout_closed {
+                    continue;
+                }
+                if laid.flyout.is_none() {
+                    // Its area is no longer folded with a strip: it is gone.
+                    app.workbench_mut().flyout = None;
+                    continue;
+                }
+                // A press away, or its strip's grip, which also unfolds the
+                // area (the panel then shows in it).
+                app.change_workbench(Change::Flyout(panel.clone(), false));
+                let grip = shell_id().with(("grip", area_name(*area)));
+                if ctx.read_response(grip).is_some_and(|r| r.clicked()) {
+                    app.fold_area(*area, false);
+                }
+            }
             _ => {}
         }
+    }
+    if let Some((panel, _)) = &flyout {
+        // The flyout's edge let go: its width is saved, through its step.
+        let live = flyout_live_id(panel);
+        let edge = shell_id().with(("flyout", panel.as_str())).with("edge");
+        let dragging = ctx.read_response(edge).is_some_and(|r| r.dragged());
+        if !dragging && let Some(width) = ctx.data_mut(|d| d.remove_temp::<f32>(live)) {
+            app.change_workbench(Change::FlyoutSize(panel.clone(), width));
+        }
+    }
+    if flyout_closed && let Some((panel, _)) = &flyout {
+        // Closed by the overlay stack: Escape, or a press away.
+        app.change_workbench(Change::Flyout(panel.clone(), false));
     }
     if resized {
         ctx.data_mut(|d| d.insert_persisted(sizes_id(), saved.clone()));
@@ -2654,37 +2766,9 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         // The zones holding no dock refuse a tab's drop on the next pass.
         space.bind(&laid);
     }
-    for (area, strip) in lying {
-        let size = saved.get(area_name(area)).copied();
-        lie_over(app, &ctx, &kit, area, strip, sizes[&area], size);
-    }
-    // The flyout, while its panel is still in a folded side area drawn
-    // with its strip; otherwise it is gone.
-    let flyout = app.workbench_mut().flyout.clone();
-    // Another panel's flyout held last pass leaves the overlay stack
-    // now: closed later, as no longer shown, it would close the new one
-    // opened above it.
-    let held = app.workbench_mut().flyout_held.take();
-    if let Some(old) = held
-        && flyout.as_ref() != Some(&old)
-    {
-        egui_pop_core::overlay::close(&ctx, Id::unique(flyout_overlay(&old)));
-    }
-    let mut drawn = None;
-    if let Some(panel) = flyout {
-        let area = app.workbench_mut().layout.area_of(&panel);
-        if let Some((area, strip)) = strips.iter().find(|(a, _)| Some(*a) == area) {
-            drawn = show_flyout(app, &ctx, &kit, *area, *strip, &panel);
-        }
-        if drawn.is_none() {
-            let mut wb = app.workbench_mut();
-            if wb.flyout.as_ref() == Some(&panel) {
-                wb.flyout = None;
-            }
-        }
-    }
     {
         let mut wb = app.workbench_mut();
+        let drawn = laid.flyout.filter(|_| wb.flyout.is_some());
         wb.flyout_rect = drawn;
         wb.flyout_held = drawn.and(wb.flyout.clone());
     }
@@ -2819,8 +2903,7 @@ fn shell_labels(ctx: &egui::Context) -> egui_stack::Labels {
 
 /// A strip's grip's tooltip: its name ("Unfold the start side bar",
 /// "Fold ..." while it lies over the centre), which the layout gives it
-/// for assistive technology ([`shell_labels`]), but for an area lying
-/// over the centre.
+/// for assistive technology ([`shell_labels`]).
 fn name_grip(ctx: &egui::Context, area: Area, zone: &str, open: bool) {
     let name = strings::tr_args(
         ctx,
@@ -2832,12 +2915,6 @@ fn name_grip(ctx: &egui::Context, area: Area, zone: &str, open: bool) {
         &[("area", &area_text(ctx, area))],
     );
     let id = shell_id().with(("grip", zone));
-    if open {
-        // The layout lays an area lying over the centre out folded, and
-        // names its grip "Unfold ...": it folds it.
-        let label = name.clone();
-        ctx.accesskit_node_builder(id, |node| node.set_label(label));
-    }
     if let Some(r) = ctx.read_response(id) {
         r.on_hover_text(name);
     }
@@ -3050,8 +3127,30 @@ impl LayoutPainter for ShellPainter<'_> {
         self.kit.paint_area_strip(painter, strip.rect, state, inner);
     }
 
+    /// A side area lying over the centre, or a flyout: the kit's
+    /// `side-area` box, its shadow cast towards the centre, and the line on
+    /// the centre's side, as a side panel's.
     fn flyout_frame(&self, painter: &egui::Painter, frame: &FlyoutPaint<'_>) {
-        LayoutPainter::flyout_frame(self.kit, painter, frame);
+        let Some(area) = area_from(&frame.zone.0) else {
+            LayoutPainter::flyout_frame(self.kit, painter, frame);
+            return;
+        };
+        let start = on_left(area, self.flipped);
+        let side = &self.kit.side_area;
+        let mut shadow = side.data.shadow;
+        if !start {
+            shadow.offset[0] = shadow.offset[0].saturating_neg();
+        }
+        let rect = frame.rect;
+        if shadow != egui::Shadow::NONE {
+            painter.add(shadow.as_shape(rect, egui::CornerRadius::ZERO));
+        }
+        let visuals = &painter.ctx().global_style().visuals;
+        painter.rect_filled(rect, 0.0, visuals.panel_fill);
+        if side.style(State::REST).border_width > 0.0 {
+            let x = if start { rect.right() } else { rect.left() };
+            painter.vline(x, rect.y_range(), visuals.widgets.noninteractive.bg_stroke);
+        }
     }
 }
 
@@ -3082,9 +3181,31 @@ struct ShellViewer<'a> {
     open: &'a BTreeSet<Area>,
     areas: &'a [Area],
     flipped: bool,
+    /// The strips' breadth.
+    strip: f32,
+    /// The panel shown as the flyout.
+    flyout: Option<PanelId>,
+    /// The overlay stack closed the flyout this pass.
+    flyout_closed: bool,
 }
 
 impl ZoneViewer for ShellViewer<'_> {
+    fn flyout_title(&mut self, flyout: &Flyout) -> String {
+        match &self.flyout {
+            Some(panel) => self.app.panel_title(self.ctx, panel),
+            None => flyout.key.clone(),
+        }
+    }
+
+    fn flyout(&mut self, ui: &mut Ui, flyout: &Flyout) {
+        let (Some(panel), Some(area)) = (self.flyout.clone(), area_from(&flyout.zone.0)) else {
+            return;
+        };
+        if !flyout_body(self.app, ui, self.kit, (area, self.strip), &panel) {
+            self.flyout_closed = true;
+        }
+    }
+
     /// An area's zone is named after the area ("the centre"), not its key,
     /// for screen readers and tests: its pane, and its sash and grip ("Resize
     /// the start side bar"); a split keeps its name.
@@ -3585,296 +3706,129 @@ fn flyout_overlay(panel: &PanelId) -> (&'static str, &str) {
     ("egui_pop.flyout", panel.as_str())
 }
 
-/// A folded side area's panel shown alone over the centre, next to the
-/// strip (as an area lying over it): a band with its title and a pin
-/// button unfolding the area, then the panel. An overlay of the stack
-/// (`overlay::hold`), so Escape or a click away closes it; its edge on
-/// the centre's side resizes it, the width kept per panel in the layout
-/// (`workbench.flyout_size`). Returns where it was drawn, if it is
-/// still open.
-fn show_flyout(
+/// Where a flyout's width follows its edge while it is dragged.
+fn flyout_live_id(panel: &PanelId) -> Id {
+    Id::unique(("egui_pop.flyout.live", panel.as_str()))
+}
+
+/// A panel's flyout's width, then its least and largest: as its edge is
+/// dragged, else as saved, else the panel's default, else its area's size,
+/// else 240; `None` when the panel is not known. The largest leaves the
+/// strips room (`strip` wide).
+fn flyout_width(
     app: &AppHandle,
     ctx: &egui::Context,
-    kit: &Kit,
     area: Area,
-    strip: Rect,
     panel: &PanelId,
-) -> Option<Rect> {
-    let spec = app.workbench_mut().spec(panel).cloned()?;
-    let title = app.panel_title(ctx, panel);
-    let id = dock_id(area).with(("egui_pop.flyout", panel.as_str()));
-    let live_id = id.with("live");
-    let content = app.workbench_mut().content;
+    strip: f32,
+) -> Option<(f32, f32, f32)> {
+    let wb = app.workbench_mut();
+    let spec = wb.spec(panel)?;
     let min = spec.min_size.max(48.0);
-    let max = (content.width() - 2.0 * strip.width()).max(min);
-    let saved = app.workbench_mut().layout.flyouts.get(panel).copied();
+    let max = (wb.content.width() - 2.0 * strip).max(min);
     let width = ctx
-        .data(|d| d.get_temp::<f32>(live_id))
-        .or(saved)
+        .data(|d| d.get_temp::<f32>(flyout_live_id(panel)))
+        .or_else(|| wb.layout.flyouts.get(panel).copied())
         .or(spec.default_size)
-        .or_else(|| {
-            let wb = app.workbench_mut();
-            wb.shell_sizes.as_ref()?.get(area_name(area)).copied()
-        })
+        .or_else(|| wb.shell_sizes.as_ref()?.get(area_name(area)).copied())
         .unwrap_or(240.0)
         .clamp(min, max);
-    let start = app.workbench_mut().on_left(area);
-    let rect = if start {
-        Rect::from_min_size(
-            egui::pos2(strip.right(), strip.top()),
-            egui::vec2(width, strip.height()),
-        )
-    } else {
-        Rect::from_min_size(
-            egui::pos2(strip.left() - width, strip.top()),
-            egui::vec2(width, strip.height()),
-        )
-    };
+    Some((width, min, max))
+}
+
+/// A folded side area's panel shown alone over the centre, next to the
+/// strip (the layout's flyout, `ui` its rect): a band with its title and a
+/// pin button unfolding the area, then the panel. An overlay of the stack
+/// (`overlay::hold`), so Escape (the top overlay first) or a click away
+/// closes it; a combo box or a context menu opened in it is part of it.
+/// Returns false once the stack closed it.
+fn flyout_body(
+    app: &AppHandle,
+    ui: &mut Ui,
+    kit: &Kit,
+    (area, strip): (Area, f32),
+    panel: &PanelId,
+) -> bool {
+    let ctx = ui.ctx().clone();
+    let title = app.panel_title(&ctx, panel);
+    let rect = ui.max_rect();
     // In the overlay stack: its rect takes in the resize edge, the strip
     // is its anchor (a click on another icon switches the flyout).
+    let anchor = if app.workbench_mut().on_left(area) {
+        Rect::from_x_y_ranges(rect.left() - strip..=rect.left(), rect.y_range())
+    } else {
+        Rect::from_x_y_ranges(rect.right()..=rect.right() + strip, rect.y_range())
+    };
     let reach = ctx.global_style().interaction.resize_grab_radius_side;
-    let spec_overlay = egui_pop_core::overlay::OverlaySpec::new(
+    let spec = egui_pop_core::overlay::OverlaySpec::new(
         flyout_overlay(panel),
         &title,
         egui_pop_core::overlay::Kind::Popover,
     );
     let mut open = true;
-    let shown = egui_pop_core::overlay::hold(
-        ctx,
-        &spec_overlay,
+    egui_pop_core::overlay::hold(
+        &ctx,
+        &spec,
         &mut open,
-        Some(strip),
+        Some(anchor),
         rect.expand2(egui::vec2(reach, 0.0)),
-        // A combo box or a context menu opened in the panel is part of
-        // the flyout: a click in it is not a click away.
-        || {
-            draw_flyout(
-                app,
-                ctx,
-                kit,
-                (id, area, rect),
-                (width, min, max),
-                panel,
-                &title,
-            )
-        },
+        || draw_flyout(app, ui, kit, panel, &title),
+    )
+    .is_some()
+}
+
+/// Draws an open flyout's content (`flyout_body`): its band, its panel.
+fn draw_flyout(app: &AppHandle, ui: &mut Ui, kit: &Kit, panel: &PanelId, title: &str) {
+    let side = &kit.side_area;
+    let pad = egui::vec2(side.data.padding_x, side.data.padding_y);
+    let t = egui_pop_core::theme::Tokens::of(ui.ctx());
+    let body = ui.max_rect().shrink2(pad);
+    let mut inner = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt("egui_pop.flyout.inner")
+            .max_rect(body),
     );
-    if shown.is_none() {
+    inner.set_clip_rect(body);
+    inner.set_min_size(inner.available_size());
+    let region = focus::Region::new("region.flyout", RANK_FLYOUT);
+    let pinned = focus::region(&mut inner, &region, |inner| {
+        // The band: the title, then the pin button at the end.
+        let pin = strings::tr_args(inner.ctx(), &txt::WORKBENCH_FLYOUT_PIN, &[("panel", title)]);
+        let button = t.size.control_height.max(24.0);
+        let header = kit.header_band.style(State::REST).text;
+        // The pin first, from the end: a truncated title laid out
+        // before it would take the whole row and push it out.
+        let pinned = inner
+            .horizontal(|ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let pinned = egui_pop_core::band::button(
+                        ui,
+                        button,
+                        egui_pop_core::icon::Icon::Unlock,
+                        &pin,
+                        false,
+                    )
+                    .clicked();
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        ui.add(
+                            egui::Label::new(egui::RichText::new(title).strong().color(header))
+                                .truncate()
+                                .selectable(false),
+                        );
+                    });
+                    pinned
+                })
+                .inner
+            })
+            .inner;
+        inner.separator();
+        app.show_panel(inner, panel);
+        pinned
+    });
+    if pinned {
         app.change_workbench(Change::Flyout(panel.clone(), false));
-        return None;
+        app.focus_panel(panel);
     }
-    Some(rect)
-}
-
-/// Draws an open flyout (`show_flyout`): its band, its panel, its
-/// resize edge.
-fn draw_flyout(
-    app: &AppHandle,
-    ctx: &egui::Context,
-    kit: &Kit,
-    (id, area, rect): (egui::Id, Area, Rect),
-    (width, min, max): (f32, f32, f32),
-    panel: &PanelId,
-    title: &str,
-) {
-    let live_id = id.with("live");
-    let reach = ctx.global_style().interaction.resize_grab_radius_side;
-    let start = app.workbench_mut().on_left(area);
-    let side = &kit.side_area;
-    let rest = *side.style(State::REST);
-    let mut shadow = side.data.shadow;
-    if !start {
-        shadow.offset[0] = shadow.offset[0].saturating_neg();
-    }
-    let pad = egui::vec2(side.data.padding_x, side.data.padding_y);
-    let t = egui_pop_core::theme::Tokens::of(ctx);
-    egui::Area::new(id)
-        .order(egui::Order::Middle)
-        .fixed_pos(rect.min)
-        .constrain(false)
-        .show(ctx, |ui| {
-            let (rect, _) = ui.allocate_exact_size(rect.size(), egui::Sense::hover());
-            let painter = ui.painter();
-            if shadow != egui::Shadow::NONE {
-                painter.add(shadow.as_shape(rect, egui::CornerRadius::ZERO));
-            }
-            painter.rect_filled(rect, 0.0, ui.visuals().panel_fill);
-            let body = rect.shrink2(pad);
-            let mut inner = ui.new_child(
-                egui::UiBuilder::new()
-                    .id_salt("egui_pop.flyout.inner")
-                    .max_rect(body),
-            );
-            inner.set_clip_rect(body);
-            inner.set_min_size(inner.available_size());
-            let region = focus::Region::new("region.flyout", RANK_FLYOUT);
-            let pinned = focus::region(&mut inner, &region, |inner| {
-                // The band: the title, then the pin button at the end.
-                let pin =
-                    strings::tr_args(inner.ctx(), &txt::WORKBENCH_FLYOUT_PIN, &[("panel", title)]);
-                let button = t.size.control_height.max(24.0);
-                let header = kit.header_band.style(State::REST).text;
-                // The pin first, from the end: a truncated title laid out
-                // before it would take the whole row and push it out.
-                let pinned = inner
-                    .horizontal(|ui| {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let pinned = egui_pop_core::band::button(
-                                ui,
-                                button,
-                                egui_pop_core::icon::Icon::Unlock,
-                                &pin,
-                                false,
-                            )
-                            .clicked();
-                            ui.with_layout(
-                                egui::Layout::left_to_right(egui::Align::Center),
-                                |ui| {
-                                    ui.add(
-                                        egui::Label::new(
-                                            egui::RichText::new(title).strong().color(header),
-                                        )
-                                        .truncate()
-                                        .selectable(false),
-                                    );
-                                },
-                            );
-                            pinned
-                        })
-                        .inner
-                    })
-                    .inner;
-                inner.separator();
-                app.show_panel(inner, panel);
-                pinned
-            });
-            if pinned {
-                app.change_workbench(Change::Flyout(panel.clone(), false));
-                app.focus_panel(panel);
-            }
-            // The line on the centre's side, as a side panel's.
-            let x = if start { rect.right() } else { rect.left() };
-            if rest.border_width > 0.0 {
-                ui.painter().vline(
-                    x,
-                    rect.y_range(),
-                    ui.visuals().widgets.noninteractive.bg_stroke,
-                );
-            }
-            // Resized from that edge; the width is saved once let go. The
-            // pointer's alone: no Tab stop, focused it would show nothing.
-            let edge = Rect::from_x_y_ranges(x - reach..=x + reach, rect.y_range());
-            let r = ui.interact(edge, id.with("resize"), egui::Sense::DRAG);
-            egui_pop_core::pointer::drag_cursor(&r, egui_pop_core::pointer::DragKind::SplitColumns);
-            // From where the pointer is, not from its moves: a drag-only
-            // target starts dragging on the press, whose move would count.
-            let dragged_to = r.interact_pointer_pos().map(|p| {
-                let w = if start {
-                    p.x - rect.left()
-                } else {
-                    rect.right() - p.x
-                };
-                w.clamp(min, max)
-            });
-            if r.dragged()
-                && let Some(w) = dragged_to
-            {
-                ui.ctx().data_mut(|d| d.insert_temp(live_id, w));
-            }
-            if r.drag_stopped() {
-                ui.ctx().data_mut(|d| d.remove::<f32>(live_id));
-                let w = dragged_to.unwrap_or(width);
-                app.change_workbench(Change::FlyoutSize(panel.clone(), w));
-            }
-        });
-}
-
-/// A side area lying over the centre, open: next to its strip (`strip`),
-/// as tall, above the centre (an egui area on the middle layer, as
-/// palettes), in the kit's `side-area` box with its shadow cast towards
-/// the centre. Its edge on the centre's side resizes it; its width is
-/// kept per area (from the size it had beside, `beside`).
-fn lie_over(
-    app: &AppHandle,
-    ctx: &egui::Context,
-    kit: &Kit,
-    area: Area,
-    strip: Rect,
-    (min, default, most): (f32, f32, f32),
-    beside: Option<f32>,
-) {
-    let id = dock_id(area).with("egui_pop.over");
-    let width_id = id.with("width");
-    let content = app.workbench_mut().content;
-    let min = min.max(48.0);
-    let max = (content.width() - 2.0 * strip.width()).min(most).max(min);
-    let width = ctx
-        .data_mut(|d| d.get_persisted::<f32>(width_id))
-        .or(beside)
-        .unwrap_or(if default > 0.0 { default } else { 240.0 })
-        .clamp(min, max);
-    let flipped = app.workbench_mut().flipped;
-    // On the left: next to its strip's right edge.
-    let start = on_left(area, flipped);
-    let rect = if start {
-        Rect::from_min_size(
-            egui::pos2(strip.right(), strip.top()),
-            egui::vec2(width, strip.height()),
-        )
-    } else {
-        Rect::from_min_size(
-            egui::pos2(strip.left() - width, strip.top()),
-            egui::vec2(width, strip.height()),
-        )
-    };
-    let side = &kit.side_area;
-    let rest = *side.style(State::REST);
-    let mut shadow = side.data.shadow;
-    if !start {
-        shadow.offset[0] = shadow.offset[0].saturating_neg();
-    }
-    let pad = egui::vec2(side.data.padding_x, side.data.padding_y);
-    egui::Area::new(id)
-        .order(egui::Order::Middle)
-        .fixed_pos(rect.min)
-        .constrain(false)
-        .show(ctx, |ui| {
-            let (rect, _) = ui.allocate_exact_size(rect.size(), egui::Sense::hover());
-            let painter = ui.painter();
-            if shadow != egui::Shadow::NONE {
-                painter.add(shadow.as_shape(rect, egui::CornerRadius::ZERO));
-            }
-            painter.rect_filled(rect, 0.0, ui.visuals().panel_fill);
-            let mut inner = ui.new_child(
-                egui::UiBuilder::new()
-                    .id_salt("egui_pop.over.inner")
-                    .max_rect(rect.shrink2(pad)),
-            );
-            inner.set_clip_rect(rect.shrink2(pad));
-            inner.set_min_size(inner.available_size());
-            draw_area(app, &mut inner, area);
-            // The line on the centre's side, as a side panel's.
-            let x = if start { rect.right() } else { rect.left() };
-            if rest.border_width > 0.0 {
-                ui.painter().vline(
-                    x,
-                    rect.y_range(),
-                    ui.visuals().widgets.noninteractive.bg_stroke,
-                );
-            }
-            // Resized from that edge, by the pointer alone, as a flyout's.
-            let reach = ui.style().interaction.resize_grab_radius_side;
-            let edge = Rect::from_x_y_ranges(x - reach..=x + reach, rect.y_range());
-            let r = ui.interact(edge, id.with("resize"), egui::Sense::DRAG);
-            egui_pop_core::pointer::drag_cursor(&r, egui_pop_core::pointer::DragKind::SplitColumns);
-            if r.dragged() {
-                let dx = r.drag_delta().x;
-                let w = (width + if start { dx } else { -dx }).clamp(min, max);
-                ui.ctx().data_mut(|d| d.insert_persisted(width_id, w));
-            }
-        });
-    app.workbench_mut().rects.insert(area, rect);
-    grip(ctx, kit, area, rect, flipped);
 }
 
 /// How far an arrow moves an area's line, in points; Shift moves it four
