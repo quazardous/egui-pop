@@ -61,7 +61,7 @@ use egui::{
 };
 use egui_pop_api::AppHandle;
 use egui_pop_core::a11y;
-use egui_pop_core::strings::{tr, tr_args};
+use egui_pop_core::strings::{tr, tr_args, tr_with};
 use egui_pop_core::theme::{LogPalette, Tokens};
 use egui_pop_core::widgets::ToggleChip;
 
@@ -747,12 +747,12 @@ fn toolbar_ui(ui: &mut Ui, state: &mut TextLogState, id: &str) {
         if ui.add(ToggleChip::new(&mut follow, name)).changed() {
             state.set_follow(follow);
         }
-        ui.weak(tr_args(
+        ui.weak(tr_with(
             &ctx,
             &s::TEXT_LOG_COUNT,
             &[
-                ("count", &state.rows.len().to_string()),
-                ("total", &state.scanned.to_string()),
+                ("count", (state.rows.len()).into()),
+                ("total", state.scanned.into()),
             ],
         ));
     });
@@ -869,10 +869,10 @@ impl TableRows<usize> for Rows<'_> {
                     let name = if open {
                         tr(ui.ctx(), &s::TEXT_LOG_COLLAPSE)
                     } else {
-                        tr_args(
+                        tr_with(
                             ui.ctx(),
                             &s::TEXT_LOG_EXPAND,
-                            &[("count", &(more + 1).to_string())],
+                            &[("count", (more + 1).into())],
                         )
                     };
                     let r = disclosure(ui, open, self.body_font.size);
@@ -894,10 +894,10 @@ impl TableRows<usize> for Rows<'_> {
                         ui.painter().galley(at, galley, color);
                     } else {
                         ui.label(
-                            RichText::new(tr_args(
+                            RichText::new(tr_with(
                                 ui.ctx(),
                                 &s::TEXT_LOG_MORE,
-                                &[("count", &more.to_string())],
+                                &[("count", more.into())],
                             ))
                             .color(muted),
                         );

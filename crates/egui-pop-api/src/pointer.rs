@@ -218,13 +218,16 @@ pub(crate) fn ask_about_overrides(app: &AppHandle, profile: &Profile) {
         return;
     };
     let ctx = app.egui();
-    let count = changed.len().to_string();
     let title = strings::tr_args(
         &ctx,
         &txt::POINTER_OVERRIDES_TITLE,
         &[("profile", &profile.title)],
     );
-    let detail = strings::tr_args(&ctx, &txt::POINTER_OVERRIDES_DETAIL, &[("count", &count)]);
+    let detail = strings::tr_with(
+        &ctx,
+        &txt::POINTER_OVERRIDES_DETAIL,
+        &[("count", changed.len().into())],
+    );
     dialogs.open(
         Choose::with_options(
             &title,

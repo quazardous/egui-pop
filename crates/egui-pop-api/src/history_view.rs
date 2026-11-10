@@ -301,11 +301,7 @@ fn next_name(app: &AppHandle, scope: Option<&ScopeId>) -> String {
         .cloned()
         .or_else(|| history::target(app, false).map(|t| t.scope()));
     let n = scope.map_or(0, |s| history::snapshots(app, &s).len()) + 1;
-    strings::tr_args(
-        &app.egui(),
-        &txt::HISTORY_SNAPSHOT_NAME,
-        &[("n", &n.to_string())],
-    )
+    strings::tr_with(&app.egui(), &txt::HISTORY_SNAPSHOT_NAME, &[("n", n.into())])
 }
 
 /// An undo, a redo, a jump, a restore or one step undone, asked by a

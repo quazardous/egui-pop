@@ -329,7 +329,8 @@ impl ClipItem {
 
     /// Its title as a catalogue message with its arguments (`{ $count }`
     /// nodes): the interface shows it in its language, the English
-    /// `title` where the catalogue has no translation.
+    /// `title` where the catalogue has no translation. The arguments are
+    /// text, shown as they are written: a count is written by the caller.
     pub fn title_key(mut self, key: &str, args: &[(&str, &str)]) -> Self {
         self.title_key = Some(TitleKey {
             key: key.into(),

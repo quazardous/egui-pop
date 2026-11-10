@@ -82,7 +82,7 @@ use egui_pop_api::AppHandle;
 use egui_pop_core::a11y::{self, Politeness};
 use egui_pop_core::lock;
 use egui_pop_core::pointer::{self, DragKind};
-use egui_pop_core::strings::{StrKey, tr, tr_args};
+use egui_pop_core::strings::{StrKey, tr, tr_args, tr_with};
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::OwnerId;
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
@@ -1999,11 +1999,7 @@ fn clip_moves(
 /// "Marker 3", the next one's default label.
 fn new_marker_label(ctx: &egui::Context, state: &TimelineState) -> String {
     let n = state.markers.len() + 1;
-    tr_args(
-        ctx,
-        &txt::TIMELINE_NEW_MARKER,
-        &[("number", &n.to_string())],
-    )
+    tr_with(ctx, &txt::TIMELINE_NEW_MARKER, &[("number", n.into())])
 }
 
 /// A clip's accessible name: "Clip Intro on V1, 00:00:00:00 to 00:00:04:00".

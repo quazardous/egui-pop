@@ -57,7 +57,7 @@ use egui::{
 };
 use egui_pop_core::pointer::claim::{self, SecondaryClaim};
 use egui_pop_core::state::Slot;
-use egui_pop_core::strings;
+use egui_pop_core::strings::{self, Arg};
 use egui_pop_core::theme::Tokens;
 
 use crate::change::{self, Cause, Change, Gesture, Hook, Verdict};
@@ -1019,22 +1019,22 @@ fn paint(
 
 /// What the editor shows, for screen readers.
 fn value_text(ctx: &egui::Context, points: &[[f32; 2]], selected: Option<usize>) -> String {
-    let n = points.len().to_string();
+    let n = Arg::from(points.len());
     match selected.and_then(|i| points.get(i).map(|p| (i, p))) {
         Some((i, p)) => {
             let pc = |v: f32| strings::number(ctx, f64::from(v) * 100.0, 0);
-            strings::tr_args(
+            strings::tr_with(
                 ctx,
                 &crate::strings::CURVE_VALUE_SELECTED,
                 &[
-                    ("point", &(i + 1).to_string()),
-                    ("points", &n),
-                    ("input", &pc(p[0])),
-                    ("output", &pc(p[1])),
+                    ("point", (i + 1).into()),
+                    ("points", n),
+                    ("input", Arg::Str(&pc(p[0]))),
+                    ("output", Arg::Str(&pc(p[1]))),
                 ],
             )
         }
-        None => strings::tr_args(ctx, &crate::strings::CURVE_VALUE, &[("points", &n)]),
+        None => strings::tr_with(ctx, &crate::strings::CURVE_VALUE, &[("points", n)]),
     }
 }
 

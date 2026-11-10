@@ -26,7 +26,7 @@
 
 use egui::{Key as EKey, Modifiers, Response, Role, TextEdit, Ui};
 use egui_pop_api::AppHandle;
-use egui_pop_core::strings::{tr, tr_args};
+use egui_pop_core::strings::{tr, tr_args, tr_with};
 use egui_pop_core::theme::Tokens;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
@@ -284,7 +284,7 @@ impl FilterChip {
     /// What the chip shows (translated).
     pub fn title(&self, ctx: &egui::Context) -> String {
         match self {
-            FilterChip::Rating(r) => tr_args(ctx, &s::FILTER_RATING, &[("rating", &r.to_string())]),
+            FilterChip::Rating(r) => tr_with(ctx, &s::FILTER_RATING, &[("rating", (*r).into())]),
             FilterChip::Label(l) => tr_args(ctx, &s::FILTER_LABEL, &[("label", &l.title(ctx))]),
             FilterChip::Flag(f) => tr_args(ctx, &s::FILTER_FLAG, &[("flag", &f.title(ctx))]),
             FilterChip::Tag(t) => tr_args(ctx, &s::FILTER_TAG, &[("tag", t)]),

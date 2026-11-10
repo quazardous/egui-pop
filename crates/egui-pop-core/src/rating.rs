@@ -38,7 +38,7 @@
 use egui::{Id, Key as EKey, Rect, Response, Role, Sense, Ui, WidgetInfo, vec2};
 
 use crate::kit::{Kit, KitCx, Part, State, Tone};
-use crate::strings::{self, tr, tr_args};
+use crate::strings::{self, tr};
 use crate::theme::Tokens;
 
 /// The highest rating.
@@ -252,11 +252,7 @@ impl RatingStars {
                 let name = if gives == 0 {
                     tr(ui.ctx(), &strings::RATING_CLEAR)
                 } else {
-                    tr_args(
-                        ui.ctx(),
-                        &strings::RATING_SET,
-                        &[("stars", &star.to_string())],
-                    )
+                    strings::tr_with(ui.ctx(), &strings::RATING_SET, &[("stars", star.into())])
                 };
                 let tip = name.clone();
                 r.widget_info(move || WidgetInfo::labeled(Role::Button, true, &name));
@@ -341,11 +337,8 @@ impl RatingStars {
                 n.set_numeric_value_step(1.0);
             });
         } else if !editable {
-            let said = tr_args(
-                ui.ctx(),
-                &strings::RATING_VALUE,
-                &[("stars", &value.to_string())],
-            );
+            let said =
+                strings::tr_with(ui.ctx(), &strings::RATING_VALUE, &[("stars", value.into())]);
             response.widget_info(move || WidgetInfo::labeled(Role::Label, true, &said));
         }
         RatingResponse {

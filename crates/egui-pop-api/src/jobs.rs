@@ -53,7 +53,7 @@ use egui::Ui;
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::lock;
 use egui_pop_core::progress::{Tone, paint_ring};
-use egui_pop_core::strings;
+use egui_pop_core::strings::{self, Arg};
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::ui::UiPop as _;
 use egui_pop_model::clock::SharedClock;
@@ -372,25 +372,23 @@ fn spec(request: Request) -> CommandSpec {
 /// What the status bar's jobs item says: how many go on (with their
 /// overall estimate), and how many failed.
 pub fn status_text(ctx: &egui::Context, summary: &Summary) -> (String, Option<String>) {
-    let count = summary.active.to_string();
+    let count = Arg::from(summary.active);
     let active = match summary.fraction {
-        Some(f) => strings::tr_args(
+        Some(f) => strings::tr_with(
             ctx,
             &txt::JOBS_ACTIVE_PERCENT,
             &[
-                ("count", &count),
-                ("percent", &strings::number(ctx, (f * 100.0).round(), 0)),
+                ("count", count),
+                (
+                    "percent",
+                    Arg::Str(&strings::number(ctx, (f * 100.0).round(), 0)),
+                ),
             ],
         ),
-        None => strings::tr_args(ctx, &txt::JOBS_ACTIVE, &[("count", &count)]),
+        None => strings::tr_with(ctx, &txt::JOBS_ACTIVE, &[("count", count)]),
     };
-    let failed = (summary.failed > 0).then(|| {
-        strings::tr_args(
-            ctx,
-            &txt::JOBS_FAILED,
-            &[("count", &summary.failed.to_string())],
-        )
-    });
+    let failed = (summary.failed > 0)
+        .then(|| strings::tr_with(ctx, &txt::JOBS_FAILED, &[("count", summary.failed.into())]));
     (active, failed)
 }
 

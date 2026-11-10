@@ -3,6 +3,7 @@
 use egui_pop::api::AppHandle;
 use egui_pop::core::a11y;
 use egui_pop::core::icon::Icon;
+use egui_pop::core::strings::Arg;
 use egui_pop::egui::{self, Align2, Response, Role, Sense, Stroke, StrokeKind, Ui};
 
 use crate::strings;
@@ -34,8 +35,7 @@ impl<'a> Tally<'a> {
         let count = tallies.get(self.name);
         let t = TallyTokens::of(ui.ctx());
         let ctx = ui.ctx().clone();
-        let count_text = count.to_string();
-        let args = [("name", self.label), ("count", count_text.as_str())];
+        let args = [("name", Arg::Str(self.label)), ("count", count.into())];
         ui.push_id(("tally", self.name), |ui| {
             ui.horizontal(|ui| {
                 let less = strings::tr(&ctx, &strings::DECREASE, &args);

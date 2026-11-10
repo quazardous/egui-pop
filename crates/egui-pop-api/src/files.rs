@@ -125,7 +125,7 @@ use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::placeholder::SkeletonTokens;
 use egui_pop_core::slider::Slider;
-use egui_pop_core::strings::{self, CANCEL};
+use egui_pop_core::strings::{self, Arg, CANCEL};
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::thumbnail::{self, Thumbnail};
 use egui_pop_core::ui::UiPop as _;
@@ -3462,6 +3462,14 @@ impl FilePicker {
         }
     }
 
+    /// [`Self::say`] with typed arguments (counts as numbers).
+    fn say_with(&self, key: &strings::StrKey, args: &[(&str, Arg<'_>)]) -> String {
+        match &self.ctx {
+            Some(ctx) => strings::tr_with(ctx, key, args),
+            None => strings::fill_with(key.fallback, args),
+        }
+    }
+
     /// Asks the new folder's name, in a row under the folder: Enter makes
     /// it, Escape closes the row. Without a file system that can make one,
     /// the reason is the picker's error, and the result.
@@ -3734,12 +3742,11 @@ impl FilePicker {
                 let total = self.selected.len();
                 let paths: HashSet<&PathBuf> = shown.iter().map(|e| &e.path).collect();
                 let hidden = self.selected.iter().filter(|p| !paths.contains(p)).count();
-                let (count, not_shown) = (total.to_string(), hidden.to_string());
-                let args = [("count", count.as_str()), ("hidden", not_shown.as_str())];
+                let args = [("count", total.into()), ("hidden", hidden.into())];
                 Some(match (total, hidden) {
                     (0, _) => self.say(&txt::FILES_SELECTED_NONE, &[]),
-                    (_, 0) => self.say(&txt::FILES_SELECTED, &args),
-                    _ => self.say(&txt::FILES_SELECTED_NOT_SHOWN, &args),
+                    (_, 0) => self.say_with(&txt::FILES_SELECTED, &args),
+                    _ => self.say_with(&txt::FILES_SELECTED_NOT_SHOWN, &args),
                 })
             }
             ChooseKind::Folder => {
@@ -4289,11 +4296,13 @@ impl FilePicker {
         // A folder shown anew is said, with how many entries it shows.
         if self.said_dir.as_ref() != Some(&self.dir) {
             if self.said_dir.is_some() {
-                let count = self.visible().len().to_string();
-                let said = strings::tr_args(
+                let said = strings::tr_with(
                     ui.ctx(),
                     &txt::FILES_FOLDER_OPENED,
-                    &[("folder", &folder_name(&self.dir)), ("count", &count)],
+                    &[
+                        ("folder", Arg::Str(&folder_name(&self.dir))),
+                        ("count", self.visible().len().into()),
+                    ],
                 );
                 a11y::announce(ui.ctx(), said, Politeness::Polite);
             }

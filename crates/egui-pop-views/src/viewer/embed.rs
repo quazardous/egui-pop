@@ -44,7 +44,7 @@ use egui_pop_api::links::{self, How, Request, Source};
 use egui_pop_api::strings as api_txt;
 use egui_pop_core::icon::{Icon, Size, Tone};
 use egui_pop_core::lock;
-use egui_pop_core::strings::{tr, tr_args};
+use egui_pop_core::strings::{tr, tr_args, tr_with};
 use egui_pop_core::theme::Tokens;
 use serde_json::{Value as Json, json};
 
@@ -502,20 +502,19 @@ fn too_small(ui: &mut Ui, place: &Placement, native: f32) -> bool {
     let ctx = ui.ctx().clone();
     let t = Tokens::of(&ctx);
     let size = place.rect.size() / native.max(1.0);
-    let min = format!("{MIN_PLAYER:.0}");
-    let (w, h) = (
-        format!("{:.0}", size.x.max(0.0)),
-        format!("{:.0}", size.y.max(0.0)),
-    );
     ui.add_space(t.space.m);
     ui.horizontal(|ui| {
         ui.add(Icon::Info.size(Size::Inline).tone(Tone::Info));
         ui.strong(tr(&ctx, &txt::VIEWER_EMBED_TOO_SMALL));
     });
-    ui.weak(tr_args(
+    ui.weak(tr_with(
         &ctx,
         &txt::VIEWER_EMBED_TOO_SMALL_DETAIL,
-        &[("min", &min), ("width", &w), ("height", &h)],
+        &[
+            ("min", MIN_PLAYER.round().into()),
+            ("width", size.x.max(0.0).round().into()),
+            ("height", size.y.max(0.0).round().into()),
+        ],
     ));
     ui.add_space(t.space.s);
     ui.button(tr(&ctx, &api_txt::LINKS_OPEN_OUTSIDE)).clicked()

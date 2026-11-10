@@ -35,7 +35,7 @@ use egui::{Align, Key, Modifiers, Ui};
 use egui_pop_core::a11y;
 use egui_pop_core::indicator::Indicator;
 use egui_pop_core::lock;
-use egui_pop_core::strings;
+use egui_pop_core::strings::{self, Arg};
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
@@ -85,15 +85,15 @@ fn check_text(ctx: &egui::Context, f: &Field, c: Check) -> String {
     let field = [("field", f.meta.title.as_str())];
     match c {
         Check::Required => strings::tr_args(ctx, &txt::ADMIN_WIZARD_REQUIRED, &field),
-        Check::Below(min) => strings::tr_args(
+        Check::Below(min) => strings::tr_with(
             ctx,
             &txt::ADMIN_WIZARD_BELOW,
-            &[field[0], ("min", &min.to_string())],
+            &[("field", Arg::Str(field[0].1)), ("min", min.into())],
         ),
-        Check::Above(max) => strings::tr_args(
+        Check::Above(max) => strings::tr_with(
             ctx,
             &txt::ADMIN_WIZARD_ABOVE,
-            &[field[0], ("max", &max.to_string())],
+            &[("field", Arg::Str(field[0].1)), ("max", max.into())],
         ),
         Check::NotAChoice => strings::tr_args(ctx, &txt::ADMIN_WIZARD_NOT_A_CHOICE, &field),
     }
@@ -425,13 +425,13 @@ pub(super) fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) {
     } else {
         step.map_or_else(String::new, |s| s.meta.title.clone())
     };
-    let position = strings::tr_args(
+    let position = strings::tr_with(
         &ctx,
         &txt::ADMIN_WIZARD_STEP_OF,
         &[
-            ("n", &(index + 1).to_string()),
-            ("count", &count.to_string()),
-            ("title", &here),
+            ("n", (index + 1).into()),
+            ("count", count.into()),
+            ("title", Arg::Str(&here)),
         ],
     );
     ui.horizontal(|ui| {
@@ -573,13 +573,13 @@ fn stepper_row(
         state != "later",
         widgets::SelectableRow::new(state == "current", rich),
     );
-    let mut name = strings::tr_args(
+    let mut name = strings::tr_with(
         &ctx,
         &txt::ADMIN_WIZARD_STEP_OF,
         &[
-            ("n", &(i + 1).to_string()),
-            ("count", &count.to_string()),
-            ("title", title),
+            ("n", (i + 1).into()),
+            ("count", count.into()),
+            ("title", Arg::Str(title)),
         ],
     );
     match state {

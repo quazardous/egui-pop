@@ -38,7 +38,7 @@ use egui_pop_core::icon::{Icon, IconRef};
 use egui_pop_core::kit::{Component, Kit, Part, State as KitState, Tone};
 use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
-use egui_pop_core::strings;
+use egui_pop_core::strings::{self, Arg};
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::ui::UiPop as _;
 use egui_pop_model::commands::CommandSpec;
@@ -595,13 +595,13 @@ fn ask(ui: &mut Ui, prompt: &mut Prompt) -> Option<Option<Json>> {
         .labelled_by(title.id);
     edit.request_focus();
     egui_pop_core::focus::escape_passes(ui.ctx(), edit.id);
-    ui.weak(strings::tr_args(
+    ui.weak(strings::tr_with(
         &ctx,
         &txt::PALETTE_ARGUMENT_HELP,
         &[
-            ("at", &(prompt.at + 1).to_string()),
-            ("count", &prompt.args.len().to_string()),
-            ("example", &example.to_string()),
+            ("at", (prompt.at + 1).into()),
+            ("count", prompt.args.len().into()),
+            ("example", Arg::Str(&example.to_string())),
         ],
     ));
     if let Some(e) = &prompt.error {

@@ -85,7 +85,7 @@ use egui_pop_core::debug::FnCollector;
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::lock;
 use egui_pop_core::state::Slot;
-use egui_pop_core::strings::{tr, tr_args};
+use egui_pop_core::strings::{Arg, tr, tr_args, tr_with};
 use egui_pop_core::theme::{DataPalette, Tokens};
 use egui_pop_core::tokens::Value;
 use egui_pop_model::ids::PluginId;
@@ -1468,17 +1468,17 @@ fn summary_with(
         .map(|(s, ranges)| {
             let kind = s.kind.word(ctx);
             match *ranges {
-                Some((x, y)) => tr_args(
+                Some((x, y)) => tr_with(
                     ctx,
                     &s::PLOT_SERIES,
                     &[
-                        ("name", &s.name),
-                        ("kind", &kind),
-                        ("count", &s.points.len().to_string()),
-                        ("x_min", &number(x[0])),
-                        ("x_max", &number(x[1])),
-                        ("y_min", &number(y[0])),
-                        ("y_max", &number(y[1])),
+                        ("name", Arg::Str(&s.name)),
+                        ("kind", Arg::Str(&kind)),
+                        ("count", (s.points.len()).into()),
+                        ("x_min", Arg::Str(&number(x[0]))),
+                        ("x_max", Arg::Str(&number(x[1]))),
+                        ("y_min", Arg::Str(&number(y[0]))),
+                        ("y_max", Arg::Str(&number(y[1]))),
                     ],
                 ),
                 None => tr_args(

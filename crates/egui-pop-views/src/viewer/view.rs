@@ -197,13 +197,10 @@ fn find_bar(ui: &mut Ui, v: &Viewer, actions: &mut Vec<Action>) {
         } else if n == 0 {
             ui.weak(tr(&ctx, &txt::VIEWER_FIND_NONE));
         } else {
-            ui.weak(tr_args(
+            ui.weak(strings::tr_with(
                 &ctx,
                 &txt::VIEWER_FIND_COUNT,
-                &[
-                    ("at", &(i.find.at + 1).to_string()),
-                    ("count", &n.to_string()),
-                ],
+                &[("at", (i.find.at + 1).into()), ("count", n.into())],
             ));
         }
         if icon_button(

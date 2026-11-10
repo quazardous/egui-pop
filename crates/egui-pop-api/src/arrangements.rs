@@ -300,11 +300,7 @@ pub fn ask_name(app: &AppHandle) -> bool {
     let taken = names(app);
     let suggested = (saved(app).len() + 1..)
         .map(|n| {
-            egui_pop_core::strings::tr_args(
-                &ctx,
-                &txt::ARRANGEMENT_SUGGESTED,
-                &[("n", &n.to_string())],
-            )
+            egui_pop_core::strings::tr_with(&ctx, &txt::ARRANGEMENT_SUGGESTED, &[("n", n.into())])
         })
         .find(|n| !taken.contains(n))
         .unwrap_or_default();

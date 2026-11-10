@@ -7,7 +7,10 @@
 //! Keys are Fluent message ids, with an optional attribute
 //! (`egui-pop-retry`, `command-app-quit.title`), so a provider can read
 //! them from `.ftl` catalogues as they are. Placeholders are written as
-//! Fluent writes them, `{ $name }`, and filled by [`tr_args`].
+//! Fluent writes them, `{ $name }`, and filled by [`tr_args`] with text
+//! kept as given (a folder named "2026" stays "2026"), or by [`tr_with`]
+//! with typed [`Arg`]s, where a number ([`Arg::Num`]) is written as the
+//! language writes numbers ("1,234", "1 234").
 //!
 //! What plugins declare (commands, panels, menus, settings, plugins,
 //! the context stack's frames) is
@@ -193,6 +196,60 @@ pub const ALL: &[StrKey] = &[
     RATING_CLEAR,
 ];
 
+/// A value placed in a `{ $name }` placeholder.
+///
+/// Text is placed as it is, even when it looks like a number (a folder
+/// named "2026", a file named "1e3"); a number is written as the
+/// language writes numbers, its thousands grouped, and selects a plural
+/// form in a catalogue. Built with `into()` from text or a number.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Arg<'a> {
+    /// Text, placed verbatim.
+    Str(&'a str),
+    /// A number, formatted for the language.
+    Num(f64),
+}
+
+impl<'a> From<&'a str> for Arg<'a> {
+    fn from(s: &'a str) -> Self {
+        Arg::Str(s)
+    }
+}
+
+impl<'a> From<&'a String> for Arg<'a> {
+    fn from(s: &'a String) -> Self {
+        Arg::Str(s)
+    }
+}
+
+macro_rules! arg_from_number {
+    ($($t:ty),*) => {$(
+        impl From<$t> for Arg<'_> {
+            #[allow(clippy::cast_precision_loss, clippy::cast_lossless)]
+            fn from(n: $t) -> Self {
+                Arg::Num(n as f64)
+            }
+        }
+    )*};
+}
+arg_from_number!(f64, f32, usize, isize, u8, u16, u32, u64, i8, i16, i32, i64);
+
+impl Arg<'_> {
+    /// The value as plain text: text as it is, a number as Rust writes
+    /// it (`1234`, `0.5`), for a provider with no number formatting.
+    pub fn plain(&self) -> String {
+        match self {
+            Arg::Str(s) => (*s).to_string(),
+            Arg::Num(n) => n.to_string(),
+        }
+    }
+}
+
+/// Text arguments as [`Arg::Str`].
+fn text_args<'a>(args: &[(&'a str, &'a str)]) -> Vec<(&'a str, Arg<'a>)> {
+    args.iter().map(|(k, v)| (*k, Arg::Str(v))).collect()
+}
+
 /// Gives the text of a key in the current language, if it has one.
 pub trait Strings: Send + Sync {
     /// The text for a key; `None` falls back to English.
@@ -202,8 +259,11 @@ pub trait Strings: Send + Sync {
     /// to English. By default [`Strings::get`] with its `{ $name }`
     /// placeholders filled; a provider formatting its own (plurals,
     /// numbers) overrides it.
-    fn get_args(&self, key: &str, args: &[(&str, &str)]) -> Option<String> {
-        self.get(key).map(|t| fill(&t, args))
+    ///
+    /// Text arguments ([`Arg::Str`]) are placed verbatim; only numbers
+    /// ([`Arg::Num`]) may be formatted.
+    fn get_args(&self, key: &str, args: &[(&str, Arg<'_>)]) -> Option<String> {
+        self.get(key).map(|t| fill_with(&t, args))
     }
 
     /// The language, as a BCP 47 tag.
@@ -339,9 +399,27 @@ pub fn tr(ctx: &Context, key: &StrKey) -> String {
     lookup(ctx, key.key, key.fallback)
 }
 
-/// The text of a key with its `{ $name }` placeholders filled.
+/// The text of a key with its `{ $name }` placeholders filled with
+/// text, placed verbatim even when it looks like a number. A count or a
+/// size to write as the language writes numbers goes through
+/// [`tr_with`].
 pub fn tr_args(ctx: &Context, key: &StrKey, args: &[(&str, &str)]) -> String {
     lookup_args(ctx, key.key, key.fallback, args)
+}
+
+/// The text of a key with its `{ $name }` placeholders filled with typed
+/// arguments: text verbatim, numbers formatted for the language.
+///
+/// ```
+/// use egui_pop_core::strings::{self, StrKey};
+///
+/// const OPENED: StrKey = StrKey::new("opened", "{ $folder }: { $count } items");
+/// let ctx = egui::Context::default();
+/// let text = strings::tr_with(&ctx, &OPENED, &[("folder", "2026".into()), ("count", 3.into())]);
+/// assert_eq!(text, "2026: 3 items");
+/// ```
+pub fn tr_with(ctx: &Context, key: &StrKey, args: &[(&str, Arg<'_>)]) -> String {
+    lookup_with(ctx, key.key, key.fallback, args)
 }
 
 /// The text of any key, with the English to show without a translation
@@ -352,20 +430,32 @@ pub fn lookup(ctx: &Context, key: &str, fallback: &str) -> String {
         .unwrap_or_else(|| english(key, fallback))
 }
 
-/// [`lookup`] with arguments.
+/// [`lookup`] with text arguments, placed verbatim.
 pub fn lookup_args(ctx: &Context, key: &str, fallback: &str, args: &[(&str, &str)]) -> String {
-    provider(ctx)
-        .get_args(key, args)
-        .unwrap_or_else(|| fill(&english(key, fallback), args))
+    lookup_with(ctx, key, fallback, &text_args(args))
 }
 
-/// Fills `{ $name }` (and `{$name}`) placeholders.
+/// [`lookup`] with typed arguments (see [`tr_with`]).
+pub fn lookup_with(ctx: &Context, key: &str, fallback: &str, args: &[(&str, Arg<'_>)]) -> String {
+    provider(ctx)
+        .get_args(key, args)
+        .unwrap_or_else(|| fill_with(&english(key, fallback), args))
+}
+
+/// Fills `{ $name }` (and `{$name}`) placeholders with text.
 pub fn fill(text: &str, args: &[(&str, &str)]) -> String {
+    fill_with(text, &text_args(args))
+}
+
+/// Fills `{ $name }` (and `{$name}`) placeholders with typed arguments,
+/// numbers written plain ([`Arg::plain`]).
+pub fn fill_with(text: &str, args: &[(&str, Arg<'_>)]) -> String {
     let mut text = text.to_string();
     for (name, value) in args {
+        let value = value.plain();
         text = text
-            .replace(&format!("{{ ${name} }}"), value)
-            .replace(&format!("{{${name}}}"), value);
+            .replace(&format!("{{ ${name} }}"), &value)
+            .replace(&format!("{{${name}}}"), &value);
     }
     text
 }
@@ -461,10 +551,10 @@ fn panel_command_text(
     p: &PanelCommand,
 ) -> String {
     let panel = panel_title(ctx, &p.panel, &p.panel_title);
-    let args = [("panel", panel.as_str())];
+    let args = [("panel", Arg::Str(&panel))];
     provider(ctx)
         .get_args(&declared_key(kind::COMMAND, id, Some(attr)), &args)
-        .unwrap_or_else(|| tr_args(ctx, shared, &args))
+        .unwrap_or_else(|| tr_with(ctx, shared, &args))
 }
 
 const APPLICATION: Slot<String> = Slot::new("core.strings.application");

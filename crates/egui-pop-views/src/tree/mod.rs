@@ -951,10 +951,10 @@ impl<'a, K: Key> TreeView<'a, K> {
         {
             egui_pop_core::a11y::announce(
                 ui.ctx(),
-                tr_args(
+                strings::tr_with(
                     ui.ctx(),
                     &s::TREE_FILTER_ANNOUNCE,
-                    &[("count", &n.to_string()), ("total", &total.to_string())],
+                    &[("count", n.into()), ("total", total.into())],
                 ),
                 egui_pop_core::a11y::Politeness::Polite,
             );

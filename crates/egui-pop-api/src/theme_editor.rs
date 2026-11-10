@@ -78,7 +78,7 @@ use std::sync::{Arc, Mutex};
 use egui::{Id, RichText, Ui, WidgetInfo};
 use egui_pop_core::fonts::{Face, FontFile, Role, Weight};
 use egui_pop_core::state::Slot;
-use egui_pop_core::strings;
+use egui_pop_core::strings::{self, Arg};
 use egui_pop_core::theme::{ScopedTheme, Tokens, color32};
 use egui_pop_core::tokens::apca;
 use egui_pop_core::tokens::contract::{self, Tier};
@@ -2109,10 +2109,10 @@ fn toolbar(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
             }
         }
         let changed = draft.overrides().len();
-        ui.weak(strings::tr_args(
+        ui.weak(strings::tr_with(
             &ctx,
             &txt::THEME_EDITOR_CHANGED_COUNT,
-            &[("count", &changed.to_string())],
+            &[("count", changed.into())],
         ));
     });
     if draft_paired(editor) {
@@ -2286,10 +2286,10 @@ fn pair_bar(ui: &mut Ui, app: &AppHandle, editor: &ThemeEditor) {
                     .clicked()
                 {
                     let out = editor.apply_counterpart(app, Cause::Edit).map(|n| {
-                        Some(strings::tr_args(
+                        Some(strings::tr_with(
                             &ctx,
                             &txt::THEME_EDITOR_OTHER_WRITTEN,
-                            &[("count", &n.to_string()), ("theme", &other)],
+                            &[("count", n.into()), ("theme", Arg::Str(&other))],
                         ))
                     });
                     say(editor, out);
@@ -2560,10 +2560,10 @@ fn generator(
         let label = strings::tr_args(&ctx, &txt::THEME_EDITOR_GENERATE, &[("scale", scale)]);
         if ui.button(&label).clicked() {
             let out = editor.generate(app, scale, seed, Cause::Edit).map(|n| {
-                Some(strings::tr_args(
+                Some(strings::tr_with(
                     &ctx,
                     &txt::THEME_EDITOR_GENERATED,
-                    &[("count", &n.to_string()), ("scale", scale)],
+                    &[("count", n.into()), ("scale", Arg::Str(scale))],
                 ))
             });
             say(editor, out);
