@@ -40,16 +40,16 @@
       "Ctrl+0"
     ],
     "view.pan_left": [
-      "Ctrl+ArrowLeft"
+      "Ctrl+Left"
     ],
     "view.pan_right": [
-      "Ctrl+ArrowRight"
+      "Ctrl+Right"
     ],
     "view.pan_up": [
-      "Ctrl+ArrowUp"
+      "Ctrl+Up"
     ],
     "view.pan_down": [
-      "Ctrl+ArrowDown"
+      "Ctrl+Down"
     ],
     "view.hand": [
       "H"
