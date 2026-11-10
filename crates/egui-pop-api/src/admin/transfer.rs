@@ -14,7 +14,7 @@
 //! - **Import** (`settings.import`): reads a file (`file`, or the
 //!   document itself as `document`), judges each value against the
 //!   setting declared here (a change, the same value, unknown, obsolete,
-//!   invalid, sensitive; [`transfer::plan`](egui_pop_model::admin::transfer::plan)),
+//!   invalid, sensitive; [`transfer::plan`]),
 //!   and applies the changes chosen (`keys`; `null`: every change) into a
 //!   value scope (`scope`, `app` by default) as **one undo step** of the
 //!   settings' history (`Ctrl+Z` in the Settings app). A value of the
