@@ -15,6 +15,10 @@
 //! They cast the shadow of what lies over the interface
 //! (`toast.shadow-*`, aliases of `shadow.popup.*`).
 //!
+//! They keep off what an interface asks them to ([`keep_clear`]): the
+//! Settings app's wizard footer, whose Finish sits in the default corner,
+//! is never under a toast that would take its click.
+//!
 //! They show in the window the user works in
 //! ([`AppHandle::active_window`]): a detached panel's window while it
 //! has the focus, the main window again when that one closes.
@@ -471,6 +475,60 @@ impl Plugin for ToastsPlugin {
     }
 }
 
+/// Rects the toasts keep off: the window's, the pass each was asked in,
+/// the rect.
+type Clear = Vec<(egui::ViewportId, u64, Rect)>;
+
+fn clear_id() -> Id {
+    area_id().with("keep_clear")
+}
+
+/// Keeps the toasts off `rect` (in the window's points) for this frame:
+/// a row of buttons a toast would cover and take the clicks of, as a
+/// wizard's footer. Toasts whose column meets it move past it: above it
+/// under a bottom corner, below it under a top one. Called each frame
+/// the rect is shown; it lapses the frame after it is not.
+pub fn keep_clear(ctx: &egui::Context, rect: Rect) {
+    let viewport = ctx.viewport_id();
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data_mut(|d| {
+        let kept = d.get_temp_mut_or_default::<Clear>(clear_id());
+        kept.retain(|(v, p, _)| *v != viewport || *p + 1 >= pass);
+        kept.push((viewport, pass, rect));
+    });
+}
+
+/// How far the toasts move from the corner's edge to stay off the rects
+/// asked this frame or the last one ([`keep_clear`]): those their column
+/// (`width` wide, `margin` from the edge) meets.
+fn clearance(ctx: &egui::Context, corner: Corner, width: f32, margin: f32) -> f32 {
+    let viewport = ctx.viewport_id();
+    let pass = ctx.cumulative_pass_nr();
+    let screen = ctx.content_rect();
+    let (left, right) = match corner.side() {
+        s if s < 0.0 => (screen.left() + margin, screen.left() + margin + width),
+        s if s > 0.0 => (screen.right() - margin - width, screen.right() - margin),
+        _ => (
+            screen.center().x - width / 2.0,
+            screen.center().x + width / 2.0,
+        ),
+    };
+    ctx.data_mut(|d| {
+        let kept = d.get_temp_mut_or_default::<Clear>(clear_id());
+        kept.retain(|(v, p, _)| *v != viewport || *p + 1 >= pass);
+        kept.iter()
+            .filter(|(v, _, r)| *v == viewport && r.left() < right && r.right() > left)
+            .map(|(_, _, r)| {
+                if corner.top() {
+                    r.bottom() - screen.top()
+                } else {
+                    screen.bottom() - r.top()
+                }
+            })
+            .fold(0.0_f32, f32::max)
+    })
+}
+
 /// The area the toasts are drawn in.
 pub(crate) fn area_id() -> Id {
     Id::unique("egui_pop.toasts")
@@ -628,9 +686,12 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let mut drawn: Vec<(u64, Phase, Option<f32>)> = Vec::new();
     let mut moving = false;
     let mut running = false;
+    // Off the rects asked clear: past the farthest one, then the margin.
+    let clear = clearance(&ctx, corner, Kit::of(&ctx).toast.data.width, margin);
+    let offset = corner.offset(margin) + vec2(0.0, if corner.top() { clear } else { -clear });
     egui::Area::new(area_id())
         .order(Order::Foreground)
-        .anchor(corner.align(), corner.offset(margin))
+        .anchor(corner.align(), offset)
         .interactable(true)
         .show(&ctx, |ui| {
             let width = Kit::of(ui.ctx()).toast.data.width;

@@ -317,3 +317,41 @@ fn cancelling_with_nothing_entered_closes_at_once_and_back_to_the_page_left() {
         "no wizard open"
     );
 }
+
+/// A toast that stays (an error) sits in the corner the footer's Finish
+/// is in: the toasts keep off the footer, so the click reaches Finish.
+#[test]
+fn finish_is_clicked_with_a_toast_shown() {
+    use egui_pop_api::toasts::{TOASTS, Toast};
+    let booked = Booked::default();
+    let mut h = harness(&booked);
+    run(
+        &mut h,
+        &CMD_WIZARD_OPEN,
+        json!({ "id": "trip", "values": { "city": "Lyon" } }),
+    )
+    .unwrap();
+    run(&mut h, &CMD_WIZARD_GO, json!({ "step": "summary" })).unwrap();
+    let toasts = h.state().handle().service(&TOASTS).unwrap();
+    toasts.notify(Toast::error("Something failed elsewhere"));
+    for _ in 0..4 {
+        h.run();
+    }
+    let finish = h.get_by_label("Book the trip");
+    let b = finish.accesskit_node().bounding_box().unwrap();
+    let centre = egui::pos2(
+        f64::midpoint(b.x0, b.x1) as f32,
+        f64::midpoint(b.y0, b.y1) as f32,
+    );
+    assert_ne!(
+        h.ctx.layer_id_at(centre).map(|l| l.id),
+        Some(egui::Id::unique("egui_pop.toasts")),
+        "a toast covers Finish"
+    );
+    finish.click();
+    h.run();
+    h.run();
+    let booked = booked.lock().unwrap();
+    assert_eq!(booked.len(), 1, "the click booked the trip");
+    assert_eq!(booked[0]["to"], "Lyon");
+}

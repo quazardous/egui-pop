@@ -93,7 +93,8 @@ fills the Settings app's page: the stepper on the left (a list whose
 items say "Step 2 of 4, Destination, done"), the step's form with each
 problem under its field, and a footer with Cancel, Back, Skip and Next
 (the summary's Finish carries the wizard's verb), Next greyed with its
-reason beside it and in its tooltip. Cancel and Escape ask first once
+reason beside it and in its tooltip; toasts keep off the footer
+(`toasts::keep_clear`), as Finish sits in their default corner. Cancel and Escape ask first once
 something was entered. Enter (nothing focused) and `Alt+N` go next or
 finish, `Alt+B` back. Every gesture is a command (`admin.wizard.open`,
 `set`, `next`, `back`, `skip`, `go`, `finish`, `cancel`; `admin.open
