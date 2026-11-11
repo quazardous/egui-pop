@@ -791,7 +791,8 @@ fn faders_and_knobs_go_up_and_reset_and_narrow_sliders_keep_their_name() {
     assert_eq!(value_of(&h, "Black"), 0.0, "a double click resets it");
 
     // A knob: a slider for assistive technologies; up from its centre,
-    // finer with Shift, the increment action, and back to its default.
+    // finer with the profile's fine modifier (Ctrl by default), the
+    // increment action, and back to its default.
     let feather = h.get_by_label("Feather");
     assert_eq!(feather.accesskit_node().role(), Role::Slider);
     assert_eq!(value_of(&h, "Feather"), 48.0);
@@ -803,11 +804,16 @@ fn faders_and_knobs_go_up_and_reset_and_narrow_sliders_keep_their_name() {
         "50 points up of 200 is a quarter of the range: {coarse}"
     );
     let from = value_of(&h, "Feather");
-    drag_by(&mut h, dial, egui::vec2(0.0, -50.0), egui::Modifiers::SHIFT);
+    drag_by(
+        &mut h,
+        dial,
+        egui::vec2(0.0, -50.0),
+        egui::Modifiers::COMMAND,
+    );
     let fine = value_of(&h, "Feather") - from;
     assert!(
         fine > 0.0 && fine < coarse / 5.0,
-        "Shift is finer: {fine} against {coarse}"
+        "Ctrl is finer: {fine} against {coarse}"
     );
     let from = value_of(&h, "Feather");
     h.get_by_label("Feather").increment_accesskit();
