@@ -107,8 +107,9 @@ image = { version = "0.25", default-features = false }
 # (`layout::LayoutArea`, `DockSpace::bind`); 0.25.5 pane titles, translated
 # sash and grip labels, snapping and folding by drag; 0.25.6 the dismissal
 # the host decides (`LayoutArea::flyout_dismiss`, `over_dismiss`, `inside`)
-# and the resize edge of a zone lying over.
-egui_stack = { version = "0.25.6", default-features = false }
+# and the resize edge of a zone lying over; 0.25.7 title drags in sections
+# sized by their content (`Sections::fill(false)`).
+egui_stack = { version = "0.25.7", default-features = false }
 egui-pop = { version = "0.8.0", path = "crates/egui-pop" }
 
 [workspace.lints.rust]
