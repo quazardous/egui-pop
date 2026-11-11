@@ -18,9 +18,9 @@
 //!
 //! | Method | Params | Result |
 //! |---|---|---|
-//! | `describe` | none | `bridge.describe`: the capabilities, protocol 1 |
-//! | `snapshot` | `{ "collector"? }` | every collector's snapshot, or one |
-//! | `call` | `{ "collector", "action", "args"? }` | the bridge's feedback block (`ok`, `message`, `data`...) |
+//! | `describe` | none | `bridge.describe`: the capabilities, protocol 1, and the open `windows` (`id`, `title`, `main`, `active`) |
+//! | `snapshot` | `{ "collector"?, "window"? }` | every collector's snapshot, or one |
+//! | `call` | `{ "collector", "action", "args"?, "window"? }` | the bridge's feedback block (`ok`, `message`, `data`...) |
 //! | `wait` | `bridge.wait`'s arguments and `deadline_ms` | `{ "met", "by", "event", "last" }` |
 //! | `ui` | `{ "action", "label"?, "role"?, "text"?, "key"?, "up"? }` | the accessibility tree, or the node acted on |
 //!
@@ -30,6 +30,12 @@
 //! wheel) into the next frames' input, through an egui plugin, so they
 //! work headless as in a window. Reading needs the bridge on or
 //! read-only, acting needs it on.
+//!
+//! `window` names an application window (its id, `main` for the main
+//! window; ADR 0025), the active window without one: a command runs in
+//! that window's context (`appWindow`, `modalOpen`), what it opens shows
+//! there, and `dialogs.answer` answers the dialog shown there. An unknown
+//! window is refused.
 //!
 //! Every call is made as `Origin::Agent("agent-socket")`, so the bridge's
 //! mode, the `agent` flags and the `debug.call` step apply as to any
@@ -449,12 +455,17 @@ pub(crate) enum Job {
     },
     Snapshot {
         collector: Option<String>,
+        /// The application window seen from (the active one without).
+        window: Option<String>,
         reply: Reply,
     },
     Call {
         collector: String,
         action: String,
         args: Json,
+        /// The application window the call is for (the active one
+        /// without).
+        window: Option<String>,
         reply: Reply,
     },
     Wait {
@@ -561,14 +572,24 @@ impl UiSide {
                     Err(RpcError::refused(&f))
                 });
             }
-            Job::Snapshot { collector, reply } => {
+            Job::Snapshot {
+                collector,
+                window,
+                reply,
+            } => {
                 // Snapshots are the bridge's too: refused when it is off,
                 // as its calls are.
                 if app.debug_bridge_mode() == BridgeMode::Off {
                     let _ = reply.send(Err(RpcError::off()));
                     return;
                 }
-                let all = app.debug_snapshot();
+                let all = match app.debug_snapshot_in(window.as_deref()) {
+                    Ok(all) => all,
+                    Err(e) => {
+                        let _ = reply.send(Err(RpcError::params(e)));
+                        return;
+                    }
+                };
                 let _ = reply.send(match collector {
                     None => Ok(all),
                     Some(c) => all
@@ -581,9 +602,10 @@ impl UiSide {
                 collector,
                 action,
                 args,
+                window,
                 reply,
             } => {
-                let f = app.debug_call_as(&collector, &action, &args, origin());
+                let f = app.debug_call_in(window.as_deref(), &collector, &action, &args, origin());
                 let _ = reply.send(Ok(serde_json::to_value(&f).unwrap_or(Json::Null)));
             }
             Job::Wait {
