@@ -268,27 +268,22 @@ fn the_debug_page_shows_key_traces_and_a_caught_panic() {
 #[test]
 fn quit_after_closes_the_window() {
     let mut h = harness(Options {
-        quit_after: Some(3),
+        // Past the frames the harness draws as it is built.
+        quit_after: Some(20),
         ..Options::default()
     });
-    for _ in 0..3 {
-        h.step();
-    }
-    let commands = &h.output().viewport_output[&egui::ViewportId::ROOT].commands;
-    assert!(
-        commands.contains(&egui::ViewportCommand::Close),
-        "{commands:?}"
-    );
-    // The frames drawn while the window closes ask nothing again: the
-    // close, and its `quit` line, come once.
-    for _ in 0..2 {
+    // The close is asked once: the frames drawn while the window closes
+    // ask nothing again, and its `quit` line comes once.
+    let mut closes = 0;
+    for _ in 0..30 {
         h.step();
         let commands = &h.output().viewport_output[&egui::ViewportId::ROOT].commands;
-        assert!(
-            !commands.contains(&egui::ViewportCommand::Close),
-            "{commands:?}"
-        );
+        closes += commands
+            .iter()
+            .filter(|c| **c == egui::ViewportCommand::Close)
+            .count();
     }
+    assert_eq!(closes, 1);
 }
 
 #[test]
