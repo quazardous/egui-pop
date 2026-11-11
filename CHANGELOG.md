@@ -107,6 +107,19 @@ Published: egui-pop-tokens 0.2.5, egui-pop-model 0.7.0, egui-pop-core 0.9.0, egu
   window…) is a quick pick of the open windows by title. A window moved
   into the main window keeps the geometry saved under its own id; the main
   window's stays under `main`.
+- egui-pop, egui-pop-api, egui-pop-core: A letter a font specimen lacks is drawn as a box, never a panic.
+  `fonts::sample_label` draws text in a font with the letters no face of its
+  family covers drawn as boxes, whatever egui's `MissingGlyphPolicy` (under
+  kittest's default, `Panic`, laying them out panicked), and
+  `fonts::uncovered` lists those letters. The settings window's font picker
+  draws a family's name in its own face only when the face covers it, in the
+  interface's font otherwise.
+- egui-pop, egui-pop-core, egui-pop-tokens: Tooltips at the pointer (`tooltip.placement: pointer`) take a horizontal
+  offset, `tooltip.offset-x` (0 when not given, so today's themes keep
+  their look): their corner sits `offset-x` right of and `offset` below the
+  pointer (13 and 13 for GPUI's). Where the window lacks room on the right
+  or below, the tooltip goes to the pointer's other side, the same distance
+  away, instead of being pushed back under the pointer.
 - egui-pop, egui-pop-core, egui-pop-tokens, egui-pop-viewport: Labels over images, and the axes' colours. A new kit component,
   `viewport-label`, draws a label over an image: a pill whose fill is
   translucent so the image shows through, with its text colour, radius
@@ -123,6 +136,10 @@ Published: egui-pop-tokens 0.2.5, egui-pop-model 0.7.0, egui-pop-core 0.9.0, egu
 ### Fixes
 
 - egui-pop-viewport: A canvas's navigation hint, its hand mode indicator and the node graph's overview are drawn just above their canvas (a sublayer of its layer) instead of in the foreground order: a window, a dialog or a popup over the canvas now lies over them, where they were drawn on top of it.
+- egui-pop, egui-pop-api: A menu entry's ↗ link mark (`CommandSpec::opens_link`) follows
+  `menu-item.key-font-size` when a theme sets it: three quarters of the
+  keys' font size across, in the keys' colour, as a glyph among them,
+  instead of keeping an inline icon's size.
 - egui-pop-api: The in-app file picker on Windows: a folder given with a verbatim prefix
   (`\\?\C:\…`, as `std::fs::canonicalize` returns) shows its root on the
   breadcrumbs as the drive or the share (`C:\`, `\\server\share`) rather
