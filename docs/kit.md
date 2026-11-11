@@ -579,11 +579,16 @@ compiled at install.
   again over the image; the best star is that ring's colour. Flags
   and colour labels are content and keep their `library.*` colours. The
   `library-kit` snapshot restyles them with data only.
-- **The viewport's widgets** (`thumbnail`, `readout`, `viewport-focus`):
-  a thumbnail is `selected`, `hover` and `focus` (its ring, clipped away
-  before, now shows); the pixel readout is a `card` with its text as
-  label; the viewport's focus outline is `viewport-focus`'s ring, inside
-  its edges (`ring-offset` -3).
+- **The viewport's widgets** (`thumbnail`, `readout`, `viewport-focus`,
+  `viewport-label`): a thumbnail is `selected`, `hover` and `focus` (its
+  ring, clipped away before, now shows); the pixel readout is a `card`
+  with its text as label; the viewport's focus outline is
+  `viewport-focus`'s ring, inside its edges (`ring-offset` -3). A label
+  over an image (an overlay's name, a HUD's readout:
+  `overlay::paint_label`) is a `viewport-label`, a `pill` by default
+  whose fill is translucent so the image shows through; its text must
+  read on that fill over black and over white alike
+  (`contrast::OVER_IMAGES`).
 - **Glyphs by role** (`kit::Glyph`, `glyph.<role>` tokens): the small
   marks widgets draw, named by what they mean and mapped by the kit to
   an icon of its set, compiled into a table read by index. The vocabulary

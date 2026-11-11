@@ -109,7 +109,8 @@ without it.
    `palette.category.0` to `palette.category.9` (the categorical palette,
    [below](#the-categorical-palette)),
    `palette.log.{trace, debug, info, warn, error, critical}` (the log levels'
-   colours, [below](#log-levels)), `radius.{widget, window}`,
+   colours, [below](#log-levels)), `palette.axis.{x, y, z}` (the axes'
+   colours, [below](#axes)), `radius.{widget, window}`,
    `shadow.{popup, window, side}.{offset-x, offset-y, blur, spread, color}`
    (egui's popup and window shadows, and a side area lying over the
    centre; their colours alias the `shade.10` and `shade.38` palette
@@ -285,6 +286,17 @@ canvas (`gruvbox-light` darkens info's green).
 Each level is used as text: it reads at 4.5:1 (7:1 in high contrast) on
 `surface.canvas` and `surface.panel`, pairs of `contrast::PAIRS`
 checked like the status colours.
+
+## Axes
+
+A view's X, Y and Z axes (a gizmo, an axis line, a transform's arrows)
+take `palette.axis.x`, `palette.axis.y` and `palette.axis.z`: red, green
+and blue, as most 3D and image tools draw them. Code reads them through
+`Tokens::of(ctx).palette.axis` (`AxisPalette`). `pop-dark` aliases them to
+the categorical palette's hues, `{chart.red}`, `{chart.green}` and
+`{chart.blue}`, which each built-in theme fits to its surfaces. Each is a
+graphical object: it must be seen at 3:1 on `viewport.background`, pairs
+of `contrast::PAIRS`.
 
 ## A scale from one colour
 
@@ -476,7 +488,10 @@ must be seen (strong borders, the focus ring, slider fill and thumb on the
 track). The tests check every built-in theme in every density against WCAG
 2.x: 4.5:1 for text, 3:1 for interface parts, 7:1 for text in high
 contrast; and every accent in every theme at 4.5:1 and 3:1. Decorative
-borders (`border.default`) are not checked. The gallery's overview page
+borders (`border.default`) are not checked. A pair drawn over an image
+(`OVER_IMAGES`: a label's text on its translucent fill) is checked with
+its background painted over black and over white, the poorer ratio
+counting. The gallery's overview page
 shows the same table live.
 
 ## YAML or JSON

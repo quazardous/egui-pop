@@ -67,6 +67,8 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("table-row", "box", Arc::new(cell::BoxCell));
     shapes.insert("tag-chip", "box", Arc::new(cell::BoxCell));
     shapes.insert("tag-chip", "pill", Arc::new(pill::Pill));
+    shapes.insert("viewport-label", "pill", Arc::new(pill::Pill));
+    shapes.insert("viewport-label", "box", Arc::new(cell::BoxCell));
     shapes.insert("thumb-cell", "box", Arc::new(cell::BoxCell));
     shapes.insert("thumb-layer", "box", Arc::new(cell::BoxCell));
     shapes.insert("thumb-overlay-badge", "box", Arc::new(cell::BoxCell));

@@ -111,6 +111,8 @@ What was taken from `re_ui` (`dark_theme.ron`, `light_theme.ron`,
 | `palette.log.trace`, `.debug`, `.info` | Gray.700, Blue.700, Green.700 | Gray.300, Blue.500, Green.475 | `trace_log_text_color`, `debug_log_text_color`, `info_log_text_color` (light: Green.500 reads at 4.48:1 on white, a step darker at 4.5:1) |
 | `palette.log.warn`, `.error` | `warning`, `danger` | `warning`, `#ab0116` | `warn_fg_color`, `error_fg_color` (lifted or darkened where they fail the contrast checks, as `warning` and `danger` are) |
 | `palette.log.critical` | Red.900 | Red.200 | `strong_fg_color` on `error_fg_color`: a level's token is a text colour, so the kit takes the red nearest the strong text |
+| `palette.axis.x`, `.y`, `.z` | Red.600, Green.600, Blue.600 | Red.550, Green.550, Blue.550 | `axis_color_x`, `axis_color_y`, `axis_color_z` |
+| `viewport-label`: `shape` `box`, `padding-x` 6, `padding-y` 4, `font-size` Body, `rest.radius` 4, `rest.text` `text.strong` | `rest.fill` Gray.250 at 0.65 | `rest.fill` Gray.850 at 0.55 | `create_labels`: `widgets.inactive.bg_fill` at `spatial_label_bg_opacity` (0.5), raised until the text reads at 4.5:1 over black and over white (0.5 gives 3.1:1 in dark, 4.43:1 in light) |
 | `plot`: `shape` `plain`, no border, no radius, `rest.fill` | Gray.100 | Gray.1000 | no frame around a time series; `viewport_background`, `PlotBackground`'s default colour |
 | `plot`: `grid-color`, `grid-fade` | Gray.200, 0.3 | Gray.850, 0.3 | `plot_grid_color`, `plot_grid_fade` |
 | `plot-cursor`: `width`, `rest.fill`, `hover.fill` | 1.5, `text.default`, `text.strong` | the same | `paint_time_cursor`: 1.5 times the widgets' stroke, in their foreground colour, strong under the pointer |

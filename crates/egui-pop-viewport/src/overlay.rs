@@ -17,7 +17,7 @@
 //! and a dashed line; shapes are points, lines, boxes, circles, ellipses
 //! and paths.
 
-use egui::{Color32, Painter, Pos2, Stroke, StrokeKind, pos2, vec2};
+use egui::{Color32, Painter, Pos2, Stroke, StrokeKind, vec2};
 
 use crate::tokens::ViewportTokens;
 use crate::view::Mapping;
@@ -587,15 +587,58 @@ pub fn paint_shape(painter: &Painter, m: &Mapping, o: &Overlay, t: &ViewportToke
             .handles
             .first()
             .map_or_else(|| first_point(&o.shape), |h| h.at);
-        let p = s(at) + vec2(8.0, -8.0);
-        painter.text(
-            pos2(p.x, p.y),
+        let mut painter = painter.clone();
+        painter.multiply_opacity(alpha);
+        paint_label(
+            &painter,
+            s(at) + vec2(8.0, -8.0),
             egui::Align2::LEFT_BOTTOM,
             label,
-            egui::FontId::proportional(12.0),
-            line_color.gamma_multiply(alpha),
         );
     }
+}
+
+/// Draws `text` as a label over an image, through the kit's
+/// `viewport-label` component: a translucent pill (its `fill`, `radius`,
+/// `padding-x` and `padding-y`) holding the text in its `text` colour, at
+/// its `font-size` (the `Small` text style's when the kit gives none).
+/// `anchor` says which point of the label sits at `at` (points):
+/// `LEFT_BOTTOM` puts it above and right of `at`. An overlay's label
+/// ([`Overlay::label`]) is drawn this way; so is a HUD's readout over an
+/// image. Returns the rectangle the label covers.
+pub fn paint_label(
+    painter: &Painter,
+    at: Pos2,
+    anchor: egui::Align2,
+    text: impl Into<String>,
+) -> egui::Rect {
+    let ctx = painter.ctx();
+    let kit = egui_pop_core::kit::Kit::of(ctx);
+    let c = &kit.viewport_label;
+    let size = if c.data.font_size > 0.0 {
+        c.data.font_size
+    } else {
+        egui_pop_core::theme::Tokens::of(ctx).font.small
+    };
+    let galley = painter.layout_no_wrap(
+        text.into(),
+        egui::FontId::proportional(size),
+        Color32::PLACEHOLDER,
+    );
+    let rect = anchor.anchor_size(at, c.measure(galley.size()));
+    c.paint_part(
+        &egui_pop_core::kit::KitCx {
+            painter,
+            ppp: ctx.pixels_per_point(),
+        },
+        &egui_pop_core::kit::Part {
+            rect,
+            room: rect,
+            state: egui_pop_core::kit::State::REST,
+            label: Some(&galley),
+        },
+    );
+    rect
 }
 
 fn first_point(shape: &Shape) -> [f64; 2] {

@@ -73,6 +73,7 @@ pub mod tree;
 pub mod values;
 pub mod viewer;
 pub mod viewport;
+pub mod viewport_labels;
 pub mod workbench;
 pub mod zones;
 

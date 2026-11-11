@@ -237,6 +237,21 @@ const CORE: &[Required] = &[
         "color",
         "a log line at the critical level, past error (readable as text)",
     ),
+    sys(
+        "palette.axis.x",
+        "color",
+        "the X axis of a view or a gizmo (a red)",
+    ),
+    sys(
+        "palette.axis.y",
+        "color",
+        "the Y axis of a view or a gizmo (a green)",
+    ),
+    sys(
+        "palette.axis.z",
+        "color",
+        "the Z axis of a view or a gizmo (a blue)",
+    ),
     sys("radius.widget", "dimension", "corner radius of controls"),
     sys(
         "radius.window",

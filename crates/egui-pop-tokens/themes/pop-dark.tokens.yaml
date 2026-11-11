@@ -524,7 +524,7 @@ motion:
       $value: {value: 200, unit: "ms"}
       $description: "A toast sliding in from its corner's side, and out again (none under reduced motion)."
 palette:
-  $description: "Palettes and toolboxes floating over the interface, never modal; `category`, the colours of a chart's series; and `log`, the colours of log levels."
+  $description: "Palettes and toolboxes floating over the interface, never modal; `category`, the colours of a chart's series; `log`, the colours of log levels; and `axis`, the colours of the X, Y and Z axes."
   category:
     $description: "The categorical palette: one colour per series, in this order, for what is told apart by identity (docs/tokens.md). Each reads at 3:1 on the canvas, the panel and the raised surface; neighbours are 15 apart (OKLab ΔE) and 8 for protanopia and deuteranopia, any two 10 apart (contrast::check_category)."
     $type: "color"
@@ -547,6 +547,12 @@ palette:
     warn: {$value: "{warning}"}
     error: {$value: "{danger}"}
     critical: {$value: "{red.12}", $description: "Past error: danger's red at the scale's high-contrast text step, bolder than danger (step 11)."}
+  axis:
+    $description: "The axes' colours, X red, Y green and Z blue, as most 3D and image tools draw them (docs/tokens.md): a gizmo, an axis line or a transform's arrows over a view. Each is seen at 3:1 on the viewport's background; the built-in themes alias the categorical palette's hues, which reach it on their canvases."
+    $type: "color"
+    x: {$value: "{chart.red}"}
+    y: {$value: "{chart.green}"}
+    z: {$value: "{chart.blue}"}
   magnet:
     $type: "dimension"
     $value: "{size.magnet}"

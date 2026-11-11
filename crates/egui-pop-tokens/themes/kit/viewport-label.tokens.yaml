@@ -1,0 +1,31 @@
+$description: "The `viewport-label` component of the default kit (docs/kit.md), layered into pop-dark."
+viewport-label:
+  $description: "A label over an image (a kit component): an overlay's name, a readout on a HUD (egui-pop-viewport's `paint_label`). Its fill is translucent, so the image shows through; its text reads on that fill over black and over white alike (contrast::OVER_IMAGES). The `pill` handler rounds its ends: its radius is at most half its height."
+  shape:
+    $type: "string"
+    $value: "pill"
+    $description: "The handler that draws it: pill (box with round ends), box or plain."
+  padding-x:
+    $type: "dimension"
+    $value: "{space.s}"
+  padding-y:
+    $type: "dimension"
+    $value: {value: 1, unit: "px"}
+  rest:
+    fill:
+      $type: "color"
+      $value: "{surface.overlay}"
+      $extensions: {org.egui-pop.alpha: 0.8}
+      $description: "Translucent, so the image shows through: at 80 % the text reads at 4.5:1 (7:1 in high contrast) over black and over white in every built-in theme; at half, a dark fill's light text would not over white."
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+    border-width:
+      $type: "dimension"
+      $value: {value: 0, unit: "px"}
+    radius:
+      $type: "dimension"
+      $value: {value: 999, unit: "px"}
+    text:
+      $type: "color"
+      $value: "{text.strong}"

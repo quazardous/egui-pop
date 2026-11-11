@@ -1724,6 +1724,25 @@ fn the_curves_and_wheels_page_runs_their_steps_and_caps_the_gain() {
 }
 
 #[test]
+fn the_labels_page_draws_labels_over_a_bright_and_a_dark_image() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "viewport-labels"));
+        h.run();
+        egui_pop_test::assert_all_named(&h);
+        h.get_by_label("Bright image");
+        h.get_by_label("Dark image");
+        let kit = egui_pop::core::kit::Kit::of(&h.ctx);
+        let fill = kit
+            .viewport_label
+            .style(egui_pop::core::kit::State::REST)
+            .fill;
+        assert!(fill.a() > 0 && fill.a() < 255, "translucent: {fill:?}");
+        results.add(h.try_snapshot(format!("viewport-labels-{theme}")));
+    }
+}
+
+#[test]
 fn the_cursors_page_shows_a_brush_outline_and_the_loupe() {
     let mut results = egui_kittest::SnapshotResults::new();
     for theme in ["pop-dark", "pop-light"] {

@@ -40,7 +40,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 69] = [
+pub const PAGES: [&str; 70] = [
     "overview",
     "tokens",
     "builtins",
@@ -67,6 +67,7 @@ pub const PAGES: [&str; 69] = [
     "progress",
     "placeholders",
     "viewport",
+    "viewport-labels",
     "navigator",
     "images",
     "grading",
@@ -311,6 +312,16 @@ pub fn builder(options: &Options) -> AppBuilder {
             group: "Components",
             weight: 77,
             show: pages::display::show,
+            playground: None,
+        })
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.viewport-labels"),
+            story: StoryId::from_static("viewport-labels"),
+            title: "Labels over images",
+            description: "Labels over a bright and a dark image: a translucent pill the image shows through (the kit's viewport-label), and an axis gizmo in the theme's axis colours.",
+            group: "Components",
+            weight: 76,
+            show: pages::viewport_labels::show,
             playground: None,
         })
         .plugin(pages::preview::PreviewPage)
