@@ -45,6 +45,7 @@ jobs:
       # `--all-features` below includes the viewer's video page, whose bindings
       # ask for GStreamer's development packages, and its web view, WebKitGTK's.
       - name: Install GStreamer's and WebKitGTK's development packages
+        if: vars.UBUNTU_ARCHIVE_DOWN != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
@@ -53,11 +54,31 @@ jobs:
       # optional modules are documented; Windows-only crates document
       # their stubs. The tools and the gallery, unpublished, are left out.
       - name: Build the API documentation
+        if: vars.UBUNTU_ARCHIVE_DOWN != 'true'
         run: >-
           cargo doc --workspace --no-deps --all-features --locked
           --exclude xtask --exclude consumer-smoke
           --exclude egui-pop-gallery --exclude egui-pop-extension-template
           --exclude egui-pop-app-template
+      # Ubuntu's archive down (UBUNTU_ARCHIVE_DOWN, docs/testing.md): every
+      # feature but the video and webview ones, which need its packages.
+      - name: Build the API documentation without the video and webview features
+        if: vars.UBUNTU_ARCHIVE_DOWN == 'true'
+        run: |
+          msg="UBUNTU_ARCHIVE_DOWN is set: the API documentation leaves out the video and webview features"
+          echo "::warning::$msg"
+          echo "- $msg" >> "$GITHUB_STEP_SUMMARY"
+          features="$(cargo metadata --no-deps --format-version 1 | jq -r '
+            .packages[]
+            | select(.name | IN("xtask", "consumer-smoke", "egui-pop-gallery", "egui-pop-extension-template", "egui-pop-app-template") | not)
+            | .name as $p | .features | keys[]
+            | select(test("^(video|webview|views-video|views-webview)$") | not)
+            | "\($p)/\(.)"
+          ' | paste -sd, -)"
+          cargo doc --workspace --no-deps --locked --features "$features" \
+            --exclude xtask --exclude consumer-smoke \
+            --exclude egui-pop-gallery --exclude egui-pop-extension-template \
+            --exclude egui-pop-app-template
       - name: Build the gallery
         working-directory: crates/egui-pop-gallery
         run: trunk build --release --public-url /${{ github.event.repository.name }}/gallery/

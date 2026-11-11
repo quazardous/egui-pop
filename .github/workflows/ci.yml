@@ -27,6 +27,25 @@ env:
   KNOPE_VERSION: "0.23.2"
 
 jobs:
+  # The repository variable UBUNTU_ARCHIVE_DOWN set to `true` says Ubuntu's
+  # archive cannot be reached from the runners (docs/testing.md, "When
+  # Ubuntu's archive is down"): the jobs needing apt are skipped or take a
+  # fallback, and this job says which in the run.
+  ubuntu-archive-down:
+    name: Ubuntu's archive down
+    if: vars.UBUNTU_ARCHIVE_DOWN == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          for msg in \
+            "UBUNTU_ARCHIVE_DOWN is set: Ubuntu's archive is not used" \
+            "Viewer's video (GStreamer) and Viewer's web view (WebKitGTK) are skipped; run egui-pop-gate on the bench box" \
+            "Tests (lavapipe) take lavapipe from the pinned gfx-rs/ci-build Mesa, on ubuntu-26.04" \
+            "Semver checks leave out the video and webview features"; do
+            echo "::warning::$msg"
+            echo "- $msg" >> "$GITHUB_STEP_SUMMARY"
+          done
+
   # What the change needs (docs/testing.md, "Selection"): every other job
   # runs only when a file it checks changed. Pushes to main and pull
   # requests labelled ci:full run everything.
@@ -146,7 +165,8 @@ jobs:
     name: Tests (lavapipe ${{ matrix.shard }}/3)
     needs: changes
     if: needs.changes.outputs.test == 'true'
-    runs-on: ubuntu-24.04
+    # Ubuntu's archive down: 26.04, whose LLVM the fallback Mesa build links.
+    runs-on: ${{ vars.UBUNTU_ARCHIVE_DOWN == 'true' && 'ubuntu-26.04' || 'ubuntu-24.04' }}
     # The tests split in three by nextest (`--partition hash:N/3`), run side
     # by side: about 16 minutes of tests become about 6 per shard. Each
     # shard builds the tests (about 3 minutes, from the shared cache) and
@@ -173,9 +193,16 @@ jobs:
             /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost
           df -h /
       - name: Install lavapipe
+        if: vars.UBUNTU_ARCHIVE_DOWN != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y mesa-vulkan-drivers
+      # Ubuntu's archive down: a Mesa build hosted on GitHub instead.
+      - name: Install lavapipe without Ubuntu's archive
+        if: vars.UBUNTU_ARCHIVE_DOWN == 'true'
+        uses: ./.github/actions/software-vulkan
+        with:
+          apt: "false"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
@@ -183,6 +210,10 @@ jobs:
         with:
           tool: cargo-nextest
       - uses: Swatinem/rust-cache@v2
+        with:
+          # Another image, another cache: build scripts linked on 26.04's
+          # glibc would not run on 24.04.
+          key: ${{ vars.UBUNTU_ARCHIVE_DOWN == 'true' && 'ubuntu-26.04' || '' }}
       # The tests the change needs, critical tests included; everything
       # on main (docs/testing.md).
       - name: Tests
@@ -219,7 +250,8 @@ jobs:
   video:
     name: Viewer's video (GStreamer)
     needs: changes
-    if: needs.changes.outputs.test == 'true'
+    # Skipped while Ubuntu's archive is down (UBUNTU_ARCHIVE_DOWN).
+    if: needs.changes.outputs.test == 'true' && vars.UBUNTU_ARCHIVE_DOWN != 'true'
     runs-on: ubuntu-24.04
     env:
       WGPU_BACKEND: vulkan
@@ -259,7 +291,8 @@ jobs:
   webview:
     name: Viewer's web view (WebKitGTK)
     needs: changes
-    if: needs.changes.outputs.test == 'true'
+    # Skipped while Ubuntu's archive is down (UBUNTU_ARCHIVE_DOWN).
+    if: needs.changes.outputs.test == 'true' && vars.UBUNTU_ARCHIVE_DOWN != 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -379,6 +412,7 @@ jobs:
       # bindings ask for GStreamer's development packages, and `views-webview`,
       # WebKitGTK's.
       - name: Install GStreamer's and WebKitGTK's development packages
+        if: vars.UBUNTU_ARCHIVE_DOWN != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
@@ -398,7 +432,27 @@ jobs:
           knope pending-versions
           git status --short
       # A crate not yet on crates.io has no baseline to compare with.
-      - run: cargo semver-checks check-release --workspace --exclude egui-pop-agent
+      - if: vars.UBUNTU_ARCHIVE_DOWN != 'true'
+        run: cargo semver-checks check-release --workspace --exclude egui-pop-agent
+      # Ubuntu's archive down, so no GStreamer or WebKitGTK: every crate
+      # whose features need neither as usual, then egui-pop and
+      # egui-pop-views with the features cargo-semver-checks would pick
+      # (all but unstable ones), less video and webview.
+      - name: Semver checks without the video and webview features
+        if: vars.UBUNTU_ARCHIVE_DOWN == 'true'
+        run: |
+          echo "::warning::UBUNTU_ARCHIVE_DOWN is set: semver checks leave out the video and webview features"
+          echo "- Semver checks left out the video and webview features (UBUNTU_ARCHIVE_DOWN)" >> "$GITHUB_STEP_SUMMARY"
+          cargo semver-checks check-release --workspace --exclude egui-pop-agent \
+            --exclude egui-pop --exclude egui-pop-views
+          for crate in egui-pop egui-pop-views; do
+            features="$(cargo metadata --no-deps --format-version 1 | jq -r --arg p "$crate" '
+              .packages[] | select(.name == $p) | .features | keys[]
+              | select(test("^(default|video|webview|views-video|views-webview|unstable|nightly|bench|no_std)$|^(_|unstable_|unstable-)") | not)
+            ' | paste -sd, -)"
+            echo "$crate: $features"
+            cargo semver-checks check-release --package "$crate" --default-features --features "$features"
+          done
 
   # The one required check: every job above passed or was skipped. A
   # skipped job reports nothing, so branch protection names this one.
