@@ -48,8 +48,10 @@ def main() -> int:
             line = json.loads(line)
         except ValueError:
             continue
+        # The first line of each event counts: a frame drawn while the
+        # window closes must not stand for the run.
         if isinstance(line, dict) and "event" in line:
-            events[line["event"]] = line
+            events.setdefault(line["event"], line)
     errors = []
     if run.returncode != 0:
         errors.append(f"exit code {run.returncode}")

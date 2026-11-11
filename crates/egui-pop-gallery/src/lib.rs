@@ -465,6 +465,9 @@ pub struct Gallery {
     pub app: App,
     frames: u64,
     quit_after: Option<u64>,
+    /// The close was asked: the frames the window still draws while it
+    /// closes neither count nor say `quit` again.
+    quitting: bool,
     resize_to: Option<[f32; 2]>,
     announce: bool,
     dump_debug: bool,
@@ -600,6 +603,7 @@ impl Gallery {
             app,
             frames: 0,
             quit_after: options.quit_after,
+            quitting: false,
             resize_to: options.resize_to,
             announce: options.announce,
             dump_debug: options.dump_debug,
@@ -624,6 +628,9 @@ impl Gallery {
     /// Between frames: the app's logic, the frame count, quitting.
     pub fn logic(&mut self, ctx: &egui::Context) {
         self.app.logic(ctx);
+        if self.quitting {
+            return;
+        }
         self.frames += 1;
         if let Some(limit) = self.quit_after {
             if let Some([w, h]) = self.resize_to
@@ -637,6 +644,7 @@ impl Gallery {
                 }
             }
             if self.frames >= limit {
+                self.quitting = true;
                 if self.dump_debug {
                     announce(&serde_json::json!({
                         "event": "debug",
