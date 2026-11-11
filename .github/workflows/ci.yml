@@ -174,11 +174,8 @@ jobs:
           df -h /
       - name: Install lavapipe
         run: |
-          # The runners' Azure mirror of the Ubuntu archive may not resolve:
-          # the main archive instead, and retries.
-          sudo sed -i 's|http://azure.archive.ubuntu.com|http://archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources
-          sudo apt-get -o Acquire::Retries=5 update
-          sudo apt-get -o Acquire::Retries=5 install -y mesa-vulkan-drivers
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
@@ -230,11 +227,8 @@ jobs:
       - uses: actions/checkout@v5
       - name: Install GStreamer and lavapipe
         run: |
-          # The runners' Azure mirror of the Ubuntu archive may not resolve:
-          # the main archive instead, and retries.
-          sudo sed -i 's|http://azure.archive.ubuntu.com|http://archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources
-          sudo apt-get -o Acquire::Retries=5 update
-          sudo apt-get -o Acquire::Retries=5 install -y mesa-vulkan-drivers \
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers \
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             gstreamer1.0-plugins-base gstreamer1.0-plugins-good
       - uses: dtolnay/rust-toolchain@master
@@ -271,11 +265,8 @@ jobs:
       - uses: actions/checkout@v5
       - name: Install WebKitGTK's development packages
         run: |
-          # The runners' Azure mirror of the Ubuntu archive may not resolve:
-          # the main archive instead, and retries.
-          sudo sed -i 's|http://azure.archive.ubuntu.com|http://archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources
-          sudo apt-get -o Acquire::Retries=5 update
-          sudo apt-get -o Acquire::Retries=5 install -y libwebkit2gtk-4.1-dev
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
@@ -389,11 +380,8 @@ jobs:
       # WebKitGTK's.
       - name: Install GStreamer's and WebKitGTK's development packages
         run: |
-          # The runners' Azure mirror of the Ubuntu archive may not resolve:
-          # the main archive instead, and retries.
-          sudo sed -i 's|http://azure.archive.ubuntu.com|http://archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources
-          sudo apt-get -o Acquire::Retries=5 update
-          sudo apt-get -o Acquire::Retries=5 install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+          sudo apt-get update
+          sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             libwebkit2gtk-4.1-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@v2
