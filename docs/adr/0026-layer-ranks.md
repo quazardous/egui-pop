@@ -1,6 +1,6 @@
 # 0026: Layers have ranks, pinned under base layers at the bottom of the foreground
 
-Date: 2026-11-11. Status: proposed.
+Date: 2026-11-11. Status: accepted (2026-11-11), implemented (issue #352).
 
 ## Context
 
@@ -123,3 +123,17 @@ What egui 0.37 offers, read in its source:
    application overlay at `Foreground` and a lying-over panel clicked.
 3. egui-pop's overlays take `Rank::Overlay`; the facade re-exports
    `layers`; the guide shows the application call.
+
+## Implementation notes
+
+- `layers::install`, called by the application on each pass before it
+  shows anything, adds an egui plugin running `begin_pass` and
+  `end_pass` in every pass of every window, and starts the current one.
+- `layers::rank_from(ctx, layer, rank, opener)` ranks a layer only when
+  the layer it opens from is at that rank or below it: a hover card or
+  the file browser's quick look opened from a dialog or a menu stays
+  unranked, above it. A popover is ranked unless a modal or a menu is
+  open under it in the overlay stack; a menu (`Kind::Menu`) is never
+  ranked.
+- `layers::rank_of` tells the rank a layer had this pass or the
+  previous one, the lying-over zones egui_stack pinned included.

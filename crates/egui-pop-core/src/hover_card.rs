@@ -413,6 +413,14 @@ impl HoverCard {
             let size = card_rect.map_or(egui::vec2(ui.spacing().tooltip_width, 80.0), |r| r.size());
             let placed = place(&Placement::new(anchor.rect, size, screen).side(self.side));
             let focus = std::mem::take(&mut s.focus);
+            // An overlay (ADR 0026): over a lying-over panel it opens
+            // from, above a dialog or a menu it opens from.
+            crate::layers::rank_from(
+                &ctx,
+                egui::LayerId::new(egui::Order::Foreground, id),
+                crate::layers::Rank::Overlay,
+                anchor.layer_id,
+            );
             egui::Area::new(id)
                 .order(egui::Order::Foreground)
                 .fixed_pos(placed.rect.min)

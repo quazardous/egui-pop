@@ -6086,6 +6086,8 @@ impl App {
         }
         strings::set_application(ctx, &self.handle.0.name.borrow());
         focus::install(ctx);
+        // The foreground's ranks, before this pass shows any layer.
+        egui_pop_core::layers::install(ctx);
         // egui-pop's interface zoom replaces egui's keys (`zoom`).
         egui_pop_core::scale::disable_keyboard_zoom(ctx);
         let zoom = crate::zoom::current(&self.handle);

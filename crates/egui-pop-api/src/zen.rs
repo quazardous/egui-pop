@@ -71,7 +71,14 @@ pub(crate) fn show(app: &AppHandle, ctx: &Context) {
     if !held && strength <= 0.0 {
         return;
     }
-    let r = egui::Area::new(Id::unique("egui_pop.zen.way_out"))
+    let id = Id::unique("egui_pop.zen.way_out");
+    // Over the lying-over panels, under menus and dialogs (ADR 0026).
+    egui_pop_core::layers::rank(
+        ctx,
+        egui::LayerId::new(Order::Foreground, id),
+        egui_pop_core::layers::Rank::Overlay,
+    );
+    let r = egui::Area::new(id)
         .order(Order::Foreground)
         .anchor(Align2::CENTER_TOP, Vec2::ZERO)
         .show(ctx, |ui| {

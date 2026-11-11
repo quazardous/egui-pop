@@ -11,6 +11,8 @@
 //! - [`keys`]: the key dispatcher (chords, consumption, traces);
 //! - [`motion`]: the motion clock (frozen in tests, still under reduced
 //!   motion) and the delayed busy indicator;
+//! - [`layers`]: ranks fixing the order of the foreground layers (lying-over
+//!   zones, then overlays, then menus and popups);
 //! - [`overlay`]: the overlay stack (top-layer dismissal, modality,
 //!   focus restore);
 //! - [`band`]: the header band a movable dialog or a palette is dragged
@@ -88,6 +90,7 @@ pub mod keys;
 pub mod kit;
 pub mod knob;
 pub mod latest;
+pub mod layers;
 pub mod motion;
 pub mod overlay;
 pub mod param;
