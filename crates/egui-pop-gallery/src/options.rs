@@ -40,6 +40,8 @@ Options:
                          the layout of earlier runs, nor the window's place
   --quit-after <frames>  exit by itself after this many frames (implies
                          --no-persistence)
+  --resize-to <W>x<H>    with --quit-after: ask for this inner size
+                         halfway through the run (a scripted resize)
   --dump-debug           with --quit-after: print the debug bridge's
                          snapshot (event \"debug\") before quitting
   --help                 this text
@@ -66,6 +68,9 @@ pub struct Options {
     pub detach: Option<String>,
     /// Close the window after this many frames.
     pub quit_after: Option<u64>,
+    /// With `quit_after`: the inner size, in points, asked for halfway
+    /// through the run.
+    pub resize_to: Option<[f32; 2]>,
     /// `--no-persistence`: nothing read from earlier runs, nothing kept.
     pub no_persistence: bool,
     /// Print the JSON start and quit lines on stdout.
@@ -97,6 +102,7 @@ impl Default for Options {
             size: DEFAULT_SIZE,
             detach: None,
             quit_after: None,
+            resize_to: None,
             no_persistence: false,
             announce: false,
             dump_debug: false,
@@ -140,6 +146,7 @@ impl Options {
                 }
                 "--lang" => o.lang = value("--lang")?,
                 "--size" => o.size = parse_size(&value("--size")?)?,
+                "--resize-to" => o.resize_to = Some(parse_size(&value("--resize-to")?)?),
                 "--dump-debug" => o.dump_debug = true,
                 "--detach" => o.detach = Some(value("--detach")?),
                 "--platform" => o.platform = true,
@@ -164,7 +171,7 @@ impl Options {
 
 /// `<W>x<H>`, both positive, in points.
 fn parse_size(v: &str) -> Result<[f32; 2], String> {
-    let bad = || format!("--size: `{v}` is not <width>x<height>");
+    let bad = || format!("`{v}` is not <width>x<height>");
     let (w, h) = v.split_once('x').ok_or_else(bad)?;
     let w: u32 = w.parse().map_err(|_| bad())?;
     let h: u32 = h.parse().map_err(|_| bad())?;
@@ -202,8 +209,11 @@ mod tests {
             "--detach",
             "gallery.notes",
             "--no-persistence",
+            "--resize-to",
+            "640x480",
         ])
         .unwrap();
+        assert_eq!(o.resize_to, Some([640.0, 480.0]));
         assert!(o.no_persistence && !o.persists());
         assert_eq!(o.theme, "pop-light");
         assert_eq!(o.density, Density::Compact);
@@ -238,6 +248,7 @@ mod tests {
                 .contains("needs a value")
         );
         assert!(Options::parse(["--quit-after", "x"]).is_err());
+        assert!(Options::parse(["--resize-to", "0x10"]).is_err());
         for size in ["1280", "0x800", "1280x", "wide"] {
             assert!(Options::parse(["--size", size]).unwrap_err().contains(size));
         }

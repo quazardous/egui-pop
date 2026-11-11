@@ -1,0 +1,104 @@
+name: Platforms
+
+# The workspace on Windows and macOS: it builds, its tests run, and the
+# gallery opens a real window (tools/window-smoke.py). Not required: the
+# jobs run only on pushes to `next` (and by hand), apart from CI, so
+# `main`'s promotion (promote.yml, which waits on CI) never waits on them.
+# What runs where and the known failures: docs/testing.md, "Other
+# platforms".
+on:
+  push:
+    branches: [next]
+  workflow_dispatch:
+
+# One run per branch: a newer push to `next` cancels the running one.
+concurrency:
+  group: platforms-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_TOOLCHAIN: "1.95"
+  # No system file chooser in any test (`files::TEST_ENV`).
+  EGUI_POP_TEST: "1"
+
+jobs:
+  platform:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # No GPU on the runner: wgpu renders on WARP, DirectX 12's
+          # software adapter.
+          - name: Windows (WARP)
+            os: windows-latest
+            backend: dx12
+          # Apple silicon virtual machines: Metal, paravirtualised.
+          - name: macOS (Metal)
+            os: macos-latest
+            backend: metal
+    runs-on: ${{ matrix.os }}
+    # Non-blocking for now: a red job shows, nothing waits on it.
+    continue-on-error: true
+    timeout-minutes: 120
+    env:
+      WGPU_BACKEND: ${{ matrix.backend }}
+    steps:
+      # Fixtures and snapshots' text files are compared byte for byte:
+      # check them out as committed, with LF.
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: platform
+          # A failing test must not cost the next run a full build.
+          cache-on-failure: true
+      - name: Build
+        run: cargo build --workspace --all-targets --locked
+      # Every test; the known failures are listed in docs/testing.md. The
+      # step shows red without stopping the window's smoke run.
+      - name: Tests
+        id: tests
+        continue-on-error: true
+        run: cargo nextest run --workspace --locked --profile ci --no-fail-fast
+      # `python` on both runners (Windows has no `python3`).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Window smoke run
+        id: smoke
+        continue-on-error: true
+        run: python tools/window-smoke.py target/debug/egui-pop-gallery
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### ${{ matrix.name }}"
+            echo "- tests: ${{ steps.tests.outcome }}"
+            echo "- window smoke run: ${{ steps.smoke.outcome }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "${{ steps.tests.outcome }}" = success ] && [ "${{ steps.smoke.outcome }}" = success ]
+      - name: Upload the test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ matrix.os }}
+          path: target/nextest/ci/junit*.xml
+          if-no-files-found: ignore
+      - name: Upload snapshot differences
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-diffs-${{ matrix.os }}
+          path: |
+            **/tests/snapshots/*.diff.png
+            **/tests/snapshots/*.new.png
+          if-no-files-found: ignore
