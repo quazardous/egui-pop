@@ -8,6 +8,128 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.9.0 (2026-11-11)
+
+Published: egui-pop-tokens 0.2.5, egui-pop-model 0.7.0, egui-pop-core 0.9.0, egui-pop-api 0.9.0, egui-pop-test 0.9.0, egui-pop-viewport 0.9.0, egui-pop-i18n 0.9.0, egui-pop-agent 0.3.0, egui-pop-editors 0.9.0, egui-pop-platform 0.9.0, egui-pop-views 0.9.0, egui-pop-imaging 0.9.0, egui-pop 0.9.0.
+
+### Breaking changes
+
+- egui-pop-core: An endless knob: `Knob::endless(Endless::Wrap)` for a value that wraps
+  around its soft range (an angle, a hue), `Endless::Unbounded` for one
+  with no bounds. Its face has no arc and no ends, twelve ticks turning
+  with the value, one turn over the soft range; it takes the same drag
+  modes, travel, wheel and keys (Home and End do nothing on it). Every
+  slider and knob change now says how far the value moved in
+  `Change::delta`: `to - from`, except on a wrapping knob, where it is the
+  motion unwrapped, for a host that maps changes to nudges. To move: a
+  struct literal of `slider::Change` gives `delta` too.
+- egui-pop, egui-pop-agent, egui-pop-api, egui-pop-core, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-model, egui-pop-platform, egui-pop-test, egui-pop-viewport, egui-pop-views: A knob turns in one drag mode, chosen by the application, never by where
+  the press lands: `KnobDrag` (`Vertical`, the default: up is more;
+  `Horizontal`: right is more; `Both`: right and up both add; `Circular`:
+  around the centre, relative to the press, so the value never jumps, and
+  still near the centre). `Knob::drag` sets it for one knob; the pointer
+  profile's new `options.knob_drag` (`vertical` in every shipped profile)
+  for the others, carried in the sliders' `Gestures::knob_drag`. The
+  centre and rim zones are gone: a press on the rim drags vertically like
+  one in the middle. `Knob::travel` is the points of drag over the soft
+  range in every linear mode, whatever the knob's size (200 by default).
+  To move: a struct literal of `pointer::Options` or `slider::Gestures`
+  gives `knob_drag` too (or uses `..Default::default()`); a knob that
+  relied on its rim to turn around takes `.drag(KnobDrag::Circular)`.
+- egui-pop-core: A knob's drag can hide the pointer and put it back where the press was
+  when it ends, so a long drag is not stopped by the edge of the screen:
+  `Knob::hide_pointer(true)` for one knob, the sliders' new
+  `Gestures::knob_hide_pointer` for all (off by default). Only the linear
+  drag modes hide it. Windows, macOS and X11 hide and move it back;
+  Wayland hides it but refuses to move it, so it reappears where the drag
+  ended; on the web it stays visible. To move: a struct literal of
+  `slider::Gestures` gives `knob_hide_pointer` too (or uses
+  `..Default::default()`).
+- egui-pop-core, egui-pop-i18n, egui-pop-model: A slider's and a knob's right click (or the context menu key) opens a
+  menu: "Type a value" opens the typed entry from the pointer, and
+  "Reset" puts back the default when there is one. `Slider::menu(false)`
+  and `Knob::menu(false)` turn it off for a host that gives the widget a
+  menu of its own; that menu's item calls
+  `slider::request_typed_entry(ctx, response.id)`. A click with the
+  modifiers bound to the new `gesture.value.reset` gesture
+  (`Ctrl+PrimaryClick`, as in Reason or Kontakt) resets a slider or a
+  knob too; no shipped profile binds it, so a double click stays the
+  reset everywhere. To move: a struct literal of `slider::Gestures` gives
+  `reset_click` too (or uses `..Default::default()`).
+
+### Features
+
+- egui-pop, egui-pop-api, egui-pop-core, egui-pop-model, egui-pop-test: Application windows: several OS windows in one process, each almost an
+  application of its own. `AppHandle::open_window(WindowSpec, content)`
+  opens a window drawn by its own pass (an egui deferred viewport: an idle
+  window sleeps while another animates); its content may hold `Rc` state,
+  reached through a thread-local registry. The content names its window
+  (`WindowUi::set_title`, sent to the system at once) and may keep it open
+  on a close request. Closing the main window while others are open moves
+  the one worked in last into it; closing the last quits. Each window's
+  size (and position, where the platform tells it) is kept per window id
+  in `windows.json`. Keys are dispatched in the window's own pass, with
+  `appWindow` naming it in `when` clauses; a modal open in an application
+  window blocks only that window (`overlay::block_window_among`).
+  `close_window`, `raise_window`, `windows`, `window_at`,
+  `active_app_window` and `window_geometry` complete the API, the
+  `windows` collector lists them (`app_windows`), an opt-in
+  `WindowsPlugin` adds a Window menu listing the open windows by title
+  (`window.switch`, `window.close`, offered to agents), and
+  `AppBuilder::multi_window` sets wgpu's present mode for several windows
+  (`AutoNoVsync` on Wayland, where a FIFO present can stall them all).
+  `egui_pop_test::windows::MultiWindow` drives such an application
+  headless, each window's pass on its own. `Keymap` is `Clone`.
+- egui-pop-core: `Knob::wheel(KnobWheel::Hover)` makes the wheel turn a knob whenever the
+  pointer is over it, focused or not, for knobs in places that do not
+  scroll (a strip of controls, a HUD over an image); `KnobWheel::Profile`,
+  the default, follows the pointer profile as before. A touchpad's scroll
+  over a slider, a range or a knob is now summed into steps, one a line's
+  length, instead of one step a frame whatever its length; a mouse wheel
+  still steps once a notch.
+- egui-pop-core: A knob's drag takes the pointer profile's fine and coarse modifiers, as
+  its wheel and arrows and a slider's drag do: Shift no longer makes a knob
+  drag finer under every profile. Under the default and darktable profiles,
+  Ctrl makes a drag ten times finer and Shift ten times coarser; under
+  Lightroom Classic's, Shift makes it finer.
+- egui-pop, egui-pop-agent, egui-pop-api, egui-pop-core: Each application window's shell is its own (ADR 0025). Toasts, dialogs
+  and the command palette belong to the window they were opened from (the
+  window being drawn, the one whose command opened them, the one an agent
+  names, else the active one): each window stacks its own toasts
+  (`Toasts::notify_in`), queues its own dialogs (one shown at a time in
+  each, blocking only that window) and opens its own palette, offering and
+  running that window's commands with the global ones. `modalOpen` is per
+  window group (`overlay::modal_open`, `overlay::set_separate_windows`,
+  `AppHandle::window_group`): a modal in an application window no longer
+  makes `!modalOpen` commands refuse in the main window. The agent socket's
+  `call` and `snapshot` take `window` (the active window without one), and
+  `describe` lists the open windows. `window.pick` (Window > Switch to
+  window…) is a quick pick of the open windows by title. A window moved
+  into the main window keeps the geometry saved under its own id; the main
+  window's stays under `main`.
+- egui-pop, egui-pop-core, egui-pop-tokens, egui-pop-viewport: Labels over images, and the axes' colours. A new kit component,
+  `viewport-label`, draws a label over an image: a pill whose fill is
+  translucent so the image shows through, with its text colour, radius
+  and padding from the theme. An overlay's label (`Overlay::label`), until
+  now bare text in the line's colour, is drawn through it, and
+  `egui_pop::viewport::overlay::paint_label` draws one anywhere, for a
+  HUD's readout on an image. Its text is checked to read on its fill over
+  black and over white alike (`contrast::OVER_IMAGES`, part of
+  `contrast::check`). New system tokens `palette.axis.x`, `.y` and `.z`
+  (red, green and blue, `Tokens::of(ctx).palette.axis`) colour a view's
+  axes; every built-in theme gives them, seen at 3:1 on the viewport's
+  background. The Rerun-like kit gives both Rerun's values.
+
+### Fixes
+
+- egui-pop-viewport: A canvas's navigation hint, its hand mode indicator and the node graph's overview are drawn just above their canvas (a sublayer of its layer) instead of in the foreground order: a window, a dialog or a popup over the canvas now lies over them, where they were drawn on top of it.
+- egui-pop-api: The in-app file picker on Windows: a folder given with a verbatim prefix
+  (`\\?\C:\…`, as `std::fs::canonicalize` returns) shows its root on the
+  breadcrumbs as the drive or the share (`C:\`, `\\server\share`) rather
+  than the prefix, and a path typed with `/` in such a folder is read with
+  Windows' own separator, which a verbatim path requires.
+- egui-pop-core: In sections sized by their content (`Sections::fill(false)`), a title or boundary drag moves the bands again when the open sections above are at their content's height: down, the section above grows past its rows, into the room under the last band; up, it shrinks to its least height. Content sizing only places the sections until a drag.
+
 ## 0.8.0 (2026-11-11)
 
 Published: egui-pop-tokens 0.2.4, egui-pop-model 0.6.0, egui-pop-core 0.8.0, egui-pop-api 0.8.0, egui-pop-test 0.8.0, egui-pop-viewport 0.8.0, egui-pop-i18n 0.8.0, egui-pop-agent 0.2.0, egui-pop-editors 0.8.0, egui-pop-platform 0.8.0, egui-pop-views 0.8.0, egui-pop-imaging 0.8.0, egui-pop 0.8.0.
