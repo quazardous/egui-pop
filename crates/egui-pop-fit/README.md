@@ -1,6 +1,8 @@
 # egui_fit
 
 [<img alt="github" src="https://img.shields.io/badge/github-quazardous/egui__fit-8da0cb?logo=github" height="20">](https://github.com/quazardous/egui_fit)
+[![Latest version](https://img.shields.io/crates/v/egui_fit.svg)](https://crates.io/crates/egui_fit)
+[![Documentation](https://docs.rs/egui_fit/badge.svg)](https://docs.rs/egui_fit)
 [![CI](https://github.com/quazardous/egui_fit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/quazardous/egui_fit/actions/workflows/ci.yml)
 [![Demo](https://github.com/quazardous/egui_fit/actions/workflows/pages.yml/badge.svg?branch=main)](https://quazardous.github.io/egui_fit/)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
