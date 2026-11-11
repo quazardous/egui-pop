@@ -103,6 +103,7 @@ mod toolbar_button;
 mod tooltip;
 mod tree_drop_marker;
 mod viewport_focus;
+mod viewport_label;
 mod window;
 mod window_button;
 mod window_close;
@@ -208,6 +209,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     tooltip::CONTRACT,
     tree_drop_marker::CONTRACT,
     viewport_focus::CONTRACT,
+    viewport_label::CONTRACT,
     window::CONTRACT,
     window_button::CONTRACT,
     window_close::CONTRACT,

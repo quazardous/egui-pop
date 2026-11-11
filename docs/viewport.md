@@ -103,6 +103,23 @@ moves the application applies. Two paint hooks extend the drawing:
 `under_overlays` between the image and the overlays (a mask's tint),
 `after_paint` above the handles.
 
+An overlay's label (`Overlay::label`) is drawn as a label over an
+image: the kit's `viewport-label` component, a translucent pill the
+image shows through, whose text reads over the image's brightest and
+darkest pixels alike. `overlay::paint_label` draws one anywhere, for a
+HUD's readout or a name on an image:
+
+```rust,ignore
+use egui_pop::viewport::overlay::paint_label;
+
+// Above and right of the point, as an overlay's label sits.
+paint_label(&painter, point + egui::vec2(8.0, -8.0), egui::Align2::LEFT_BOTTOM, "Crop");
+```
+
+The X, Y and Z axes take the theme's `palette.axis.x`, `.y` and `.z`
+(`Tokens::of(ctx).palette.axis`), red, green and blue, each seen at 3:1
+on `viewport.background`.
+
 ```rust
 use egui_pop::viewport::overlay::{Overlay, Shape};
 

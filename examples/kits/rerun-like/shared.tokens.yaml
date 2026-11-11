@@ -101,3 +101,12 @@ graph:
     glow: {$type: "color", $value: "{blue.9}"}
     glow-width: {$type: "dimension", $value: {value: 10, unit: "px"}}
     glow-opacity: {$type: "number", $value: 0.3}
+viewport-label:
+  $description: "A spatial view's label (re_view_spatial's create_labels): a box rounded by 4 points, 6 points around the text across and 4 above and below, the body text in the strong text colour."
+  shape: {$type: "string", $value: "box"}
+  padding-x: {$type: "dimension", $value: {value: 6, unit: "px"}}
+  padding-y: {$type: "dimension", $value: {value: 4, unit: "px"}}
+  font-size: {$type: "dimension", $value: "{font.size.m}", $description: "Typography Body"}
+  rest:
+    radius: {$type: "dimension", $value: "{radius.widget}", $description: "small_corner_radius (4)"}
+    text: {$type: "color", $value: "{text.strong}"}

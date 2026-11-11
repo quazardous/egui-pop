@@ -88,7 +88,7 @@ built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (l
 hints), `about` (Help > About: what the gallery says about itself, its
 version info to copy), `progress`,
 `placeholders` (skeletons and empty states), `viewport` (the image
-viewport), `navigator` (the zoom control and the navigator), `images`,
+viewport), `viewport-labels` (labels over a bright and a dark image), `navigator` (the zoom control and the navigator), `images`,
 `grading` (curves and colour wheels), `cursors` (tool cursors, brush
 outlines and the loupe), `node-graph` (the node graph editor), `graph-file` (the node graph editor over a YAML file), `display` (wide gamut and HDR surfaces),
 `preview` (a custom dialog previewing an export in a viewport), `tree`
@@ -432,7 +432,8 @@ The text editor, the code editor and the terminal.
 
 The tiled image viewport, its zoom control and navigator, images,
 curves and colour wheels, cursors and the loupe, the node graph editor,
-the display, and a preview dialog (a custom dialog holding a viewport).
+the display, a preview dialog (a custom dialog holding a viewport), and
+labels over a bright and a dark image.
 
 <table>
   <tr>
@@ -457,6 +458,10 @@ the display, and a preview dialog (a custom dialog holding a viewport).
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/node-graph-wire-selected-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/node-graph-wire-selected-pop-dark.png" width="200" alt="node-graph-wire-selected-pop-dark"></a><br>node-graph-wire-selected-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/node-graph-zoom-menu-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/node-graph-zoom-menu-pop-dark.png" width="200" alt="node-graph-zoom-menu-pop-dark"></a><br>node-graph-zoom-menu-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/preview-dialog-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/preview-dialog-pop-dark.png" width="200" alt="preview-dialog-pop-dark"></a><br>preview-dialog-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/viewport-labels-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/viewport-labels-pop-dark.png" width="200" alt="viewport-labels-pop-dark"></a><br>viewport-labels-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/viewport-labels-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/viewport-labels-pop-light.png" width="200" alt="viewport-labels-pop-light"></a><br>viewport-labels-pop-light</td>
   </tr>
 </table>
 

@@ -306,7 +306,35 @@ pub const PAIRS: &[Pair] = &[
     ui("palette.category.9", "surface.canvas"),
     ui("palette.category.9", "surface.panel"),
     ui("palette.category.9", "surface.raised"),
+    // The axes' colours, seen on the viewport's background around an
+    // image or behind a 3D view.
+    ui("palette.axis.x", "viewport.background"),
+    ui("palette.axis.y", "viewport.background"),
+    ui("palette.axis.z", "viewport.background"),
 ];
+
+/// The pairs drawn over an image, whose background is translucent: the
+/// background is painted over black and over white (an image's darkest
+/// and brightest pixels) and the foreground must read on both. [`check`]
+/// checks them with [`PAIRS`], reporting the poorer of the two ratios.
+pub const OVER_IMAGES: &[Pair] = &[
+    // A label over an image: an overlay's name, a HUD's readout.
+    text("viewport-label.rest.text", "viewport-label.rest.fill"),
+];
+
+/// The ratio of a pair of [`OVER_IMAGES`] in a theme, if both tokens are
+/// colours: its background painted over black and over white, the
+/// poorer of the two.
+pub fn over_image_ratio(tokens: &ResolvedTokens, pair: &Pair) -> Option<f32> {
+    let fg = tokens.color(pair.foreground)?;
+    let bg = tokens.color(pair.background)?;
+    Some(
+        [Color::BLACK, Color::WHITE]
+            .into_iter()
+            .map(|image| contrast_ratio(fg, bg.over(image)))
+            .fold(f32::INFINITY, f32::min),
+    )
+}
 
 /// A pair under its required ratio, or with a token missing.
 #[derive(Clone, Debug, PartialEq)]
@@ -343,13 +371,17 @@ pub fn pair_ratio(tokens: &ResolvedTokens, pair: &Pair) -> Option<f32> {
     ))
 }
 
-/// Checks every pair of [`PAIRS`] at a level; empty when all pass.
+/// Checks every pair of [`PAIRS`] and [`OVER_IMAGES`] at a level; empty
+/// when all pass.
 pub fn check(tokens: &ResolvedTokens, level: Level) -> Vec<Failure> {
-    PAIRS
+    let plain = PAIRS.iter().map(|pair| (pair, pair_ratio(tokens, pair)));
+    let over = OVER_IMAGES
         .iter()
-        .filter_map(|pair| {
+        .map(|pair| (pair, over_image_ratio(tokens, pair)));
+    plain
+        .chain(over)
+        .filter_map(|(pair, ratio)| {
             let required = level.required(pair.kind);
-            let ratio = pair_ratio(tokens, pair);
             ratio.is_none_or(|r| r < required).then_some(Failure {
                 pair: *pair,
                 ratio,

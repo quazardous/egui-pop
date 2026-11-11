@@ -314,6 +314,22 @@ pub struct DataPalette {
     pub category: [Color32; egui_pop_tokens::CATEGORY.len()],
     /// The log levels' colours, `palette.log.*`.
     pub log: LogPalette,
+    /// The axes' colours, `palette.axis.*`.
+    pub axis: AxisPalette,
+}
+
+/// The axes' colours (`palette.axis.*`): X red, Y green and Z blue, as
+/// most 3D and image tools draw them. Each is seen at 3:1 on the
+/// viewport's background.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct AxisPalette {
+    /// `palette.axis.x`.
+    pub x: Color32,
+    /// `palette.axis.y`.
+    pub y: Color32,
+    /// `palette.axis.z`.
+    pub z: Color32,
 }
 
 /// The log levels' colours (`palette.log.*`), from the least to the most
@@ -569,6 +585,11 @@ impl Tokens {
                     warn: c("palette.log.warn"),
                     error: c("palette.log.error"),
                     critical: c("palette.log.critical"),
+                },
+                axis: AxisPalette {
+                    x: c("palette.axis.x"),
+                    y: c("palette.axis.y"),
+                    z: c("palette.axis.z"),
                 },
             },
             motion_duration: r.duration_ms("motion.duration").unwrap_or(0.0).max(0.0) / 1000.0,

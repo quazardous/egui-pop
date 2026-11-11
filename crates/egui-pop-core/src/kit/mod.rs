@@ -989,6 +989,10 @@ components! {
     toolbar_button: "toolbar-button" => "box",
     /// An image viewport's outline while it has the keyboard focus.
     viewport_focus: "viewport-focus" => "plain",
+    /// A label over an image (an overlay's name, a HUD's readout), its
+    /// fill translucent so the image shows through; its label is the
+    /// text, drawn at rest.
+    viewport_label: "viewport-label" => "pill",
     /// Minimize and maximize (the glyph is drawn in the box's `text`),
     /// in the tones `warning` and `success`; `traffic-light` draws
     /// circles.
