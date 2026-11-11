@@ -29,6 +29,13 @@
 //! - **Keys** (arrows, Page Up and Page Down, Home and End),
 //!   **typed entry** (Enter) and **assistive actions**: as the slider's,
 //!   from the same pointer profile.
+//! - **Hidden pointer** (opt-in, [`Knob::hide_pointer`] or
+//!   `Gestures::knob_hide_pointer`): a linear drag hides the pointer and
+//!   puts it back where the press was at its end
+//!   (`ViewportCommand::CursorVisible` and `CursorPosition`). Windows,
+//!   macOS and X11 do both; Wayland hides it but refuses to move an
+//!   unlocked pointer, so it reappears where the drag ended; on the web
+//!   neither command applies and the pointer stays visible.
 //! - **Double click**: back to the default; so does a click with the
 //!   profile's `gesture.value.reset` modifiers (`Ctrl+PrimaryClick` for
 //!   one), which no shipped profile binds.
@@ -124,6 +131,7 @@ pub struct Knob<'a> {
     drag: Option<KnobDrag>,
     wheel: KnobWheel,
     menu: bool,
+    hide_pointer: Option<bool>,
 }
 
 impl<'a> Knob<'a> {
@@ -140,6 +148,7 @@ impl<'a> Knob<'a> {
             drag: None,
             wheel: KnobWheel::Profile,
             menu: true,
+            hide_pointer: None,
         }
     }
 
@@ -187,6 +196,20 @@ impl<'a> Knob<'a> {
         self
     }
 
+    /// Whether a drag hides the pointer and, at its end, puts it back
+    /// where the press was, so a long drag is not stopped by the edge of
+    /// the screen and the pointer does not wander off the knob; by
+    /// default the pointer profile's sliders' gestures say
+    /// (`Gestures::knob_hide_pointer`, off). Only in the linear modes:
+    /// a circular drag follows the pointer around the dial, which stays
+    /// in view. Where the platform refuses (module docs, "Hidden
+    /// pointer"), the pointer stays visible or reappears where the drag
+    /// ended.
+    pub fn hide_pointer(mut self, on: bool) -> Self {
+        self.hide_pointer = Some(on);
+        self
+    }
+
     /// Points of drag over the soft range, in the linear modes
     /// (`Vertical`, `Horizontal`, `Both`), whatever the knob's size.
     pub fn travel(mut self, points: f32) -> Self {
@@ -220,6 +243,7 @@ impl<'a> Knob<'a> {
             drag,
             wheel,
             menu,
+            hide_pointer,
         } = self;
         let row = ui.spacing().interact_size.y;
         let wanted = size.unwrap_or(vec2(row * 2.0 * 3.0, row * 2.0));
@@ -270,7 +294,10 @@ impl<'a> Knob<'a> {
             // `gesture.value.coarse`).
             let scale = modifier_scale(ui, &g);
             let mode = drag.unwrap_or(g.knob_drag);
-            match turn(ui, &response, &layout, &spec, *value, scale, travel, mode) {
+            let hide = hide_pointer.unwrap_or(g.knob_hide_pointer) && mode != KnobDrag::Circular;
+            match turn(
+                ui, &response, &layout, &spec, *value, scale, travel, mode, hide,
+            ) {
                 Drag::None => {}
                 Drag::Moved(v) => {
                     let to = spec.settle(v, spec.hard);
@@ -435,6 +462,7 @@ fn turn(
     scale: f64,
     travel: f32,
     mode: KnobDrag,
+    hide: bool,
 ) -> Drag {
     let slot = TURN.keyed(response.id);
     let centre = layout.dial.center();
@@ -460,8 +488,12 @@ fn turn(
                 at,
             },
         );
+        if hide {
+            hide_pointer_from(ui.ctx(), at);
+        }
     }
     if response.drag_stopped() {
+        show_pointer(ui.ctx());
         let start = slot.get(ui.ctx()).map_or(value, |t| t.start);
         slot.remove(ui.ctx());
         let cancel = gestures(ui.ctx()).cancel;
@@ -516,6 +548,45 @@ fn turn(
         slot.set(ui.ctx(), t);
     }
     Drag::None
+}
+
+/// A hidden pointer: the viewport it was hidden in, and where to put it
+/// back.
+const HIDDEN: Slot<(egui::ViewportId, Pos2)> = Slot::new("core.knob.hidden");
+/// The guard showing a hidden pointer again is in place.
+const GUARD: Slot<bool> = Slot::new("core.knob.hidden_guard");
+
+/// Hides the pointer until the drag ends, to come back at `origin`.
+fn hide_pointer_from(ctx: &egui::Context, origin: Pos2) {
+    let viewport = ctx.viewport_id();
+    HIDDEN.set(ctx, (viewport, origin));
+    ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::CursorVisible(false));
+    if GUARD.get(ctx).is_none() {
+        GUARD.set(ctx, true);
+        // A knob that is no longer drawn never sees its drag end: once
+        // no button is down, the pointer comes back all the same.
+        ctx.on_begin_pass(
+            "egui_pop_knob_pointer",
+            Arc::new(|ui: &mut Ui| {
+                let ctx = ui.ctx();
+                if let Some((viewport, _)) = HIDDEN.get(ctx)
+                    && viewport == ctx.viewport_id()
+                    && !ctx.input(|i| i.pointer.any_down())
+                {
+                    show_pointer(ctx);
+                }
+            }),
+        );
+    }
+}
+
+/// Puts a hidden pointer back where its drag started, and shows it.
+fn show_pointer(ctx: &egui::Context) {
+    if let Some((viewport, origin)) = HIDDEN.get(ctx) {
+        HIDDEN.remove(ctx);
+        ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::CursorPosition(origin));
+        ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::CursorVisible(true));
+    }
 }
 
 /// The dial: the track's arc, the value's arc (from zero when the soft

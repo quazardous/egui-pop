@@ -140,6 +140,11 @@ pub struct Gestures {
     /// How a drag turns a knob that does not say
     /// ([`Knob::drag`](crate::knob::Knob::drag)).
     pub knob_drag: KnobDrag,
+    /// A knob's drag hides the pointer and puts it back where the drag
+    /// started, for a knob that does not say
+    /// ([`Knob::hide_pointer`](crate::knob::Knob::hide_pointer)); off
+    /// in every shipped profile.
+    pub knob_hide_pointer: bool,
 }
 
 impl Default for Gestures {
@@ -200,6 +205,7 @@ impl Gestures {
             ))
             .unwrap_or(Modifiers::NONE),
             knob_drag: map.options.knob_drag,
+            knob_hide_pointer: false,
         }
     }
 }

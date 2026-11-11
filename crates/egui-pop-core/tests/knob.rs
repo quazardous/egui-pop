@@ -441,3 +441,116 @@ fn the_reset_click_is_read_from_the_profiles_binding() {
     let map = PointerMap::from_keymap(&k, profile);
     assert!(Gestures::from_map(&map).reset_click.any());
 }
+
+/// The viewport commands of the last pass.
+fn commands(h: &Harness<'_, f64>) -> Vec<egui::ViewportCommand> {
+    h.output()
+        .viewport_output
+        .get(&egui::ViewportId::ROOT)
+        .map(|v| v.commands.clone())
+        .unwrap_or_default()
+}
+
+/// A drag up, a pass a move, gathering the viewport commands.
+fn drag_gathering(h: &mut Harness<'_, f64>, from: Pos2) -> Vec<egui::ViewportCommand> {
+    let mut all = Vec::new();
+    h.event(Event::PointerMoved(from));
+    h.event(Event::PointerButton {
+        pos: from,
+        button: PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    });
+    h.step();
+    all.extend(commands(h));
+    for i in 1..=4 {
+        h.event(Event::PointerMoved(from + vec2(0.0, -10.0 * i as f32)));
+        h.step();
+        all.extend(commands(h));
+    }
+    h.event(Event::PointerButton {
+        pos: from + vec2(0.0, -40.0),
+        button: PointerButton::Primary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    });
+    for _ in 0..3 {
+        h.step();
+        all.extend(commands(h));
+    }
+    all
+}
+
+fn hiding_knob(hide: Option<bool>) -> Harness<'static, f64> {
+    let mut h = Harness::builder()
+        .with_size(vec2(200.0, 200.0))
+        .build_ui_state(
+            move |ui, v: &mut f64| {
+                let mut k = Knob::new(v, "Gain", 0.0..=100.0).size(Vec2::splat(120.0));
+                if let Some(hide) = hide {
+                    k = k.hide_pointer(hide);
+                }
+                k.show(ui);
+            },
+            50.0,
+        );
+    h.run();
+    h
+}
+
+#[test]
+fn a_hiding_knob_hides_the_pointer_and_puts_it_back_where_the_drag_started() {
+    use egui::ViewportCommand as C;
+    let mut h = hiding_knob(Some(true));
+    let c = centre(&h);
+    let all = drag_gathering(&mut h, c);
+    near(*h.state(), 70.0, "the drag still turns");
+    let hide = all.iter().position(|c| *c == C::CursorVisible(false));
+    let back = all.iter().position(|p| *p == C::CursorPosition(c));
+    let show = all.iter().position(|c| *c == C::CursorVisible(true));
+    assert!(
+        hide.is_some() && back.is_some() && show.is_some(),
+        "{all:?}"
+    );
+    assert!(hide < back && back < show, "{all:?}");
+    // Once only.
+    assert_eq!(
+        all.iter().filter(|c| **c == C::CursorVisible(true)).count(),
+        1
+    );
+}
+
+#[test]
+fn the_pointer_stays_unless_the_knob_or_the_gestures_ask() {
+    let mut h = hiding_knob(None);
+    let c = centre(&h);
+    let all = drag_gathering(&mut h, c);
+    assert!(
+        !all.iter()
+            .any(|c| matches!(c, egui::ViewportCommand::CursorVisible(_))),
+        "{all:?}"
+    );
+    let mut g = egui_pop_core::slider::gestures(&h.ctx);
+    g.knob_hide_pointer = true;
+    egui_pop_core::slider::set_gestures(&h.ctx, g);
+    h.run();
+    let all = drag_gathering(&mut h, c);
+    assert!(all.contains(&egui::ViewportCommand::CursorVisible(false)));
+    // A circular drag never hides it.
+    let mut h = Harness::builder()
+        .with_size(vec2(200.0, 200.0))
+        .build_ui_state(
+            |ui, v: &mut f64| {
+                Knob::new(v, "Gain", 0.0..=100.0)
+                    .size(Vec2::splat(120.0))
+                    .drag(KnobDrag::Circular)
+                    .hide_pointer(true)
+                    .show(ui);
+            },
+            50.0,
+        );
+    h.run();
+    let c = centre(&h) + vec2(40.0, 0.0);
+    let all = drag_gathering(&mut h, c);
+    assert!(!all.contains(&egui::ViewportCommand::CursorVisible(false)));
+}
