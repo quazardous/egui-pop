@@ -3,7 +3,7 @@
 use egui::{Event, Modifiers, PointerButton, Pos2, Vec2, vec2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
-use egui_pop_core::knob::{Knob, KnobDrag};
+use egui_pop_core::knob::{Knob, KnobDrag, KnobWheel};
 
 /// A 120-point knob over 0 to 100, at 50, in `mode` (the profile's when
 /// `None`).
@@ -221,4 +221,88 @@ fn the_profiles_fine_and_coarse_modifiers_scale_a_drag() {
     let c = centre(&h);
     drag_held(&mut h, &line(c, vec2(0.0, -40.0)), Modifiers::SHIFT);
     near(*h.state(), 52.0, "Shift: finer under Lightroom's profile");
+}
+
+struct Strip {
+    values: Vec<f64>,
+}
+
+/// Twelve knobs in a scrolling panel; the odd ones turn under the wheel
+/// on hover.
+fn strip() -> Harness<'static, Strip> {
+    let mut h = Harness::builder()
+        .with_size(vec2(240.0, 160.0))
+        // A touchpad's stream comes at the display's pace: a pause drops
+        // what is left of a step.
+        .with_step_dt(1.0 / 60.0)
+        .with_max_steps(120)
+        .build_ui_state(
+            |ui, s: &mut Strip| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    for (i, v) in s.values.iter_mut().enumerate() {
+                        let wheel = if i % 2 == 1 {
+                            KnobWheel::Hover
+                        } else {
+                            KnobWheel::Profile
+                        };
+                        Knob::new(v, &format!("Knob {i}"), 0.0..=10.0)
+                            .step(1.0)
+                            .wheel(wheel)
+                            .show(ui);
+                    }
+                });
+            },
+            Strip {
+                values: vec![5.0; 12],
+            },
+        );
+    h.run();
+    h
+}
+
+fn wheel_event(h: &mut Harness<'_, Strip>, at: Pos2, unit: egui::MouseWheelUnit, dy: f32) {
+    h.event(Event::PointerMoved(at));
+    h.event(Event::MouseWheel {
+        unit,
+        phase: egui::TouchPhase::Move,
+        delta: vec2(0.0, dy),
+        modifiers: Modifiers::NONE,
+        source: egui::MouseWheelSource::Wheel,
+    });
+    h.run();
+}
+
+#[test]
+fn a_hover_wheel_knob_turns_where_the_others_let_the_panel_scroll() {
+    let mut h = strip();
+    // The default profile is guarded: over knob 0, the panel scrolls.
+    let at = h.get_by_label("Knob 0").rect().center();
+    wheel_event(&mut h, at, egui::MouseWheelUnit::Line, -1.0);
+    assert!(h.state().values.iter().all(|v| *v == 5.0));
+    assert!(
+        h.get_by_label("Knob 0").rect().center().y < at.y,
+        "scrolled"
+    );
+    // Over a hover knob, a notch is a step, and the panel stays.
+    let at = h.get_by_label("Knob 3").rect().center();
+    wheel_event(&mut h, at, egui::MouseWheelUnit::Line, 1.0);
+    assert_eq!(h.state().values[3], 6.0);
+    assert_eq!(h.get_by_label("Knob 3").rect().center(), at, "stayed");
+}
+
+#[test]
+fn a_touchpads_scroll_is_summed_into_steps() {
+    let mut h = strip();
+    let at = h.get_by_label("Knob 1").rect().center();
+    let line = h.ctx.options(|o| o.input_options.line_scroll_speed);
+    // A quarter of a line a frame: one step every four frames, not one a
+    // frame.
+    for _ in 0..8 {
+        wheel_event(&mut h, at, egui::MouseWheelUnit::Point, line / 4.0);
+    }
+    assert_eq!(h.state().values[1], 7.0, "two lines, two steps");
+    for _ in 0..3 {
+        wheel_event(&mut h, at, egui::MouseWheelUnit::Point, -line / 4.0);
+    }
+    assert_eq!(h.state().values[1], 7.0, "under a line back: no step yet");
 }
