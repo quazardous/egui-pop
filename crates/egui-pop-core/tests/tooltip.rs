@@ -18,12 +18,17 @@ tooltip:
 "#;
 
 fn harness(theme: Option<&str>) -> Harness<'static> {
+    harness_at(theme, 100.0, 40.0)
+}
+
+/// The button `left` points across the window and `top` down.
+fn harness_at(theme: Option<&str>, left: f32, top: f32) -> Harness<'static> {
     let mut h = Harness::builder()
         .with_size(egui::vec2(500.0, 300.0))
-        .build_ui(|ui| {
-            ui.add_space(40.0);
+        .build_ui(move |ui| {
+            ui.add_space(top);
             ui.horizontal(|ui| {
-                ui.add_space(100.0);
+                ui.add_space(left);
                 let _ = ui
                     .button("A rather wide new ticket button")
                     .tip("Create a ticket");
@@ -108,5 +113,94 @@ fn a_theme_draws_tips_smaller_and_under_the_pointer() {
     assert!(
         text.top() < pointer.y + 6.0 + 4.0 + 6.0,
         "{text:?} from {pointer:?}"
+    );
+}
+
+/// GPUI's tooltips at the pointer: their corner 13 across and 13 down
+/// from it, on its other side where the window ends.
+const GPUI: &str = r#"
+$extends: "pop-dark"
+tooltip:
+  placement: {$type: "string", $value: "pointer"}
+  offset: {$type: "dimension", $value: {value: 13, unit: "px"}}
+  offset-x: {$type: "dimension", $value: {value: 13, unit: "px"}}
+  padding-x: {$type: "dimension", $value: {value: 8, unit: "px"}}
+  padding-y: {$type: "dimension", $value: {value: 4, unit: "px"}}
+  rest:
+    border-width: {$type: "dimension", $value: {value: 0, unit: "px"}}
+"#;
+
+/// The tooltip's frame: the smallest rectangle painted around its text.
+fn frame(h: &Harness<'_>) -> egui::Rect {
+    fn rects(shape: &egui::Shape, out: &mut Vec<egui::Rect>) {
+        match shape {
+            egui::Shape::Rect(r) => out.push(r.rect),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| rects(s, out)),
+            _ => {}
+        }
+    }
+    let text = tip(h).0;
+    let mut all = Vec::new();
+    for c in &h.output().shapes {
+        rects(&c.shape, &mut all);
+    }
+    all.into_iter()
+        .filter(|r| r.contains_rect(text))
+        .min_by(|a, b| a.area().total_cmp(&b.area()))
+        .unwrap_or_else(|| panic!("the tooltip's frame is painted around {text:?}"))
+}
+
+#[test]
+fn a_pointer_tip_starts_its_offsets_across_and_down_from_the_pointer() {
+    let mut h = harness(Some(GPUI));
+    let rect = h.get_by_label("A rather wide new ticket button").rect();
+    let pointer = egui::pos2(rect.center().x, rect.center().y);
+    hover_at(&mut h, pointer);
+    let f = frame(&h);
+    assert!(
+        (f.left() - (pointer.x + 13.0)).abs() < 2.0,
+        "{f:?} from {pointer:?}"
+    );
+    assert!(
+        (f.top() - (pointer.y + 13.0)).abs() < 2.0,
+        "{f:?} from {pointer:?}"
+    );
+}
+
+#[test]
+fn a_pointer_tip_flips_to_the_pointer_s_start_side_at_the_window_s_end_edge() {
+    // The button at the window's right edge: no room for the tip on the
+    // pointer's right.
+    let mut h = harness_at(Some(GPUI), 270.0, 40.0);
+    let rect = h.get_by_label("A rather wide new ticket button").rect();
+    let pointer = egui::pos2(rect.right() - 4.0, rect.center().y);
+    assert!(pointer.x + 13.0 + 80.0 > 500.0, "{pointer:?}");
+    hover_at(&mut h, pointer);
+    let f = frame(&h);
+    assert!(
+        (f.right() - (pointer.x - 13.0)).abs() < 2.0,
+        "{f:?} ends before {pointer:?}"
+    );
+    assert!(
+        (f.top() - (pointer.y + 13.0)).abs() < 2.0,
+        "{f:?} from {pointer:?}"
+    );
+}
+
+#[test]
+fn a_pointer_tip_flips_above_the_pointer_at_the_window_s_bottom_edge() {
+    // The button low in the window: no room for the tip under it.
+    let mut h = harness_at(Some(GPUI), 100.0, 270.0);
+    let rect = h.get_by_label("A rather wide new ticket button").rect();
+    let pointer = rect.center();
+    hover_at(&mut h, pointer);
+    let f = frame(&h);
+    assert!(
+        (f.bottom() - (pointer.y - 13.0)).abs() < 2.0,
+        "{f:?} ends above {pointer:?}"
+    );
+    assert!(
+        (f.left() - (pointer.x + 13.0)).abs() < 2.0,
+        "{f:?} from {pointer:?}"
     );
 }

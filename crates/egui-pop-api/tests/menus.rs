@@ -554,6 +554,23 @@ fn font_size(h: &Harness<'_, App>, t: &str) -> f32 {
         .unwrap_or_else(|| panic!("`{t}` painted"))
 }
 
+/// The ↗ link mark's shaft (from its bottom left to its top right) and
+/// colour, in the `Board` row.
+fn link_mark(h: &Harness<'_, App>) -> Option<(egui::Rect, egui::Color32)> {
+    let row = h.get_by_label_contains("Board").rect();
+    h.output().shapes.iter().find_map(|c| match &c.shape {
+        egui::Shape::LineSegment { points, stroke }
+            if points[0].x < points[1].x
+                && points[0].y > points[1].y
+                && row.contains(points[0])
+                && row.contains(points[1]) =>
+        {
+            Some((egui::Rect::from_two_pos(points[0], points[1]), stroke.color))
+        }
+        _ => None,
+    })
+}
+
 /// The menu opened in a theme; the rows' rects by label, the separator's
 /// span, what the rows say.
 fn tv_menu(theme: Option<&str>) -> (Harness<'static, App>, egui::Rect, Vec<menus::RowTrace>) {
@@ -642,6 +659,29 @@ menu-item-gutter:
     assert!(font_size(&h, "About") > 12.0);
     let about_row = rows.iter().find(|r| r.label == "About").expect("drawn");
     assert!((about_row.label_x - 12.0).abs() < 0.5, "{about_row:?}");
+    // The link mark the keys' size and colour, as a glyph among them,
+    // not an icon's.
+    let colour = h
+        .output()
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(s) if s.galley.job.text == "aiball" => {
+                Some(s.galley.job.sections[0].format.color)
+            }
+            _ => None,
+        })
+        .expect("the note is painted");
+    let mark = link_mark(&h).expect("the link mark is painted");
+    assert!(
+        mark.0.height() <= 12.0 * 0.6,
+        "mark {mark:?} taller than a 12 point glyph's"
+    );
+    assert!(
+        mark.0.height() >= 12.0 * 0.4,
+        "mark {mark:?} against a 12 point glyph"
+    );
+    assert_eq!(mark.1, colour);
     // The separator across the whole menu.
     let line = h
         .output()

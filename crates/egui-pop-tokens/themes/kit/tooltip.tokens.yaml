@@ -7,11 +7,15 @@ tooltip:
   placement:
     $type: "string"
     $value: "widget"
-    $description: "widget: under the hovered widget, from its start edge (egui's); pointer: under the pointer, from its position."
+    $description: "widget: under the hovered widget, from its start edge (egui's); pointer: under the pointer, from its position (offset-x across, offset down)."
   offset:
     $type: "dimension"
     $value: {value: 4, unit: "px"}
     $description: "The gap between the tooltip and the widget's bottom edge, or the pointer."
+  offset-x:
+    $type: "dimension"
+    $value: {value: 0, unit: "px"}
+    $description: "pointer placement only: how far right of the pointer the tooltip starts (its corner offset-x across and offset down); where the window lacks room, it goes to the pointer's other side, the same distance away."
   padding-x:
     $type: "dimension"
     $value: "{space.m}"

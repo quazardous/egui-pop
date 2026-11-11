@@ -60,11 +60,12 @@ does not change with the state.
 | `buttons-hover` | | on `title-bar`: `own` or `group`, whether the three buttons are hovered together |
 | `corners` | | on `window`: `round`, `small` or `square`, the corners asked of the system (Windows 11 only) |
 | `offset` | | how far the part sits from the edge it is drawn on, towards the outside (a side area's grip) |
+| `offset-x` | | on `tooltip` at the pointer: how far right of the pointer it starts, `offset` being how far below |
 | `align` | | where the label goes: `start`, `centre` (on the part's centre, moved into its room when it does not fit) or `end` |
 | `width` | | the component's width, when it has a fixed one |
 | `font-size` | | the size of its text, in points (an alias of a `font.*` size); the widget's own size when not given |
 | `margin` | | on `scroll-bar`: between the bar and its scroll area's edge |
-| `placement` | | on `scroll-bar`: `over` the content (floating, the content runs under it) or `beside` it (taking room) |
+| `placement` | | on `tooltip`: `widget` or `pointer`; on `scroll-bar`: `over` the content (floating, the content runs under it) or `beside` it (taking room) |
 | `visibility` | | on `scroll-bar`: `always` (at rest too, at full width), at `rest` too but thin and quiet, on `hover` of the scroll area, or while it `scroll`s |
 | `width-rest`, `opacity-rest`, `room`, `min-length` | | on `scroll-bar`: the bar at rest under `rest`, the room kept for it, the thumb at its shortest |
 | `track-fill` | | on `scroll-bar`: the track behind the thumb (transparent: none) |
@@ -457,7 +458,9 @@ compiled at install.
   keeps no gutter at all: no icons and no marks, whatever the
   `menus.icons` setting (a checked item still says so to assistive
   technology). A command's `CommandSpec::menu_note` ends its entries,
-  muted, in the keys' column after its keys, and `opens_link` adds a ↗.
+  muted, in the keys' column after its keys, and `opens_link` adds a ↗
+  in the keys' colour, three quarters of `key-font-size` across when it
+  is set (a glyph among the keys), else of an inline icon.
 - **Frames** (`card`, `dialog`, `backdrop`, `popover`, `fault-card`, `toast`,
   `palette-window`, `tip-card`, `job-log`, `fullscreen-exit` (the
   strip at the top of a full screen window showing no title bar),
@@ -475,7 +478,12 @@ compiled at install.
   `padding-x` and `padding-y`, shadow) with its `text` colour and its
   `font-size` (else the `Body` style's). `placement` is `widget`, under
   the widget from its start edge as egui's, or `pointer`, under the
-  pointer from its position; `offset` is the gap between them. The
+  pointer from its position; `offset` is the gap between them. At the
+  pointer, `offset-x` (0 when not given) moves the tooltip right too,
+  its corner `offset-x` across and `offset` down from the pointer (13
+  and 13 for GPUI's), and where the window lacks room on the right or
+  below, it goes to the pointer's other side, the same distance away,
+  rather than under the pointer. The
   defaults are egui's popup look, so a theme changes nothing until it
   sets them; egui's own `on_hover_text` keeps the popup's look.
 - **The application's chrome** (`header-band`, `dialog-header`,

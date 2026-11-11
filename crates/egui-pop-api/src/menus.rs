@@ -19,7 +19,8 @@
 //! or not, so they align; shortcuts keep a right-aligned column, before
 //! the submenu arrows' column. Labels, keys and notes are in egui's `Body`
 //! text style (as egui's own menus, not `Button`); a theme's
-//! `menu-item.key-font-size` draws the keys and notes smaller. The [`SETTING_ICONS`] setting turns the
+//! `menu-item.key-font-size` draws the keys and notes smaller, and the ↗
+//! of an entry opening a link with them. The [`SETTING_ICONS`] setting turns the
 //! icons off (the gutter is then kept only in a menu with a check or radio
 //! item) or follows the platform. The gutter is decorative: AccessKit
 //! reads the title, and a check or radio item as checked or not.
@@ -1392,7 +1393,9 @@ fn command_row(
                 atoms.push(meta(n).into());
             }
             if link {
-                let s = side * 0.75;
+                // Three quarters of the keys' font size when the theme
+                // sizes them, as a glyph among them; else of an icon's.
+                let s = key_size.unwrap_or(side) * 0.75;
                 atoms.push(Atom::custom(egui::IdSalt::new(link_id), vec2(s, s)));
             }
             if columns.arrow {
@@ -1511,7 +1514,9 @@ fn command_row(
 }
 
 /// The ↗ ending an entry that opens a page outside the application: an
-/// arrow up and to the right, drawn rather than a glyph a font may lack.
+/// arrow up and to the right, drawn rather than a glyph a font may lack,
+/// in the keys' colour; three quarters of `menu-item.key-font-size`
+/// across when the theme sets it, else of an inline icon.
 fn paint_link(painter: &egui::Painter, rect: Rect, color: Color32) {
     let r = rect.shrink(rect.width() * 0.15);
     let stroke = Stroke::new((r.width() / 8.0).max(1.0), color);

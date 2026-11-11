@@ -128,6 +128,7 @@ pub const COMPONENT_TERMS: &[(&str, &str)] = &[
     ("width", "dimension"),
     ("font-size", "dimension"),
     ("offset", "dimension"),
+    ("offset-x", "dimension"),
     ("indicator-side", "string"),
     ("align", "string"),
     ("opacity", "number"),

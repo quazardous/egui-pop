@@ -974,7 +974,7 @@ components! {
     toast: "toast" => "card",
     /// A tooltip's frame (`tooltip::TooltipExt`): its `text`, its
     /// `font-size` (else the `Body` style's), its `placement` (`widget`
-    /// or `pointer`) and its `offset`.
+    /// or `pointer`), its `offset` and, at the pointer, its `offset-x`.
     tooltip: "tooltip" => "card",
     /// egui's button shown on or off (`Button::selected`), which egui
     /// draws (handler `scoped`): its states become egui's in a scope,
