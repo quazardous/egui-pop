@@ -128,15 +128,30 @@ fn a_client_connected_when_it_turns_off_is_refused() {
     let path = dir.join("app.sock");
     let mut h = harness(App::builder().agent_socket_on_setting(AgentSocket::at(&path)));
     set(&mut h, true);
-    let write = UnixStream::connect(&path).expect("the socket answers");
-    write
+    let mut stream = UnixStream::connect(&path).expect("the socket answers");
+    stream
         .set_read_timeout(Some(Duration::from_secs(20)))
         .unwrap();
+    // Answered while on: the application holds the connection (a
+    // connection still waiting to be taken when the socket closes is
+    // reset, a broken pipe on macOS).
+    let r = ask(&mut h, &mut stream);
+    assert_eq!(r["result"]["protocol"], 1, "{r}");
     set(&mut h, false);
-    let mut read = BufReader::new(write.try_clone().unwrap());
-    let mut write = write;
+    let r = ask(&mut h, &mut stream);
+    assert_eq!(r["error"]["code"], -32001, "{r}");
+    assert!(
+        r["error"]["message"].as_str().unwrap().contains("off"),
+        "{r}"
+    );
+}
+
+/// `describe` over a connection already open, the application stepped
+/// until it answers.
+fn ask(h: &mut Harness<'static, App>, stream: &mut UnixStream) -> Json {
+    let mut read = BufReader::new(stream.try_clone().unwrap());
     let req = json!({ "jsonrpc": "2.0", "id": 1, "method": "describe" });
-    writeln!(write, "{req}").unwrap();
+    writeln!(stream, "{req}").unwrap();
     // The request reaches the application at its next pass.
     let thread = std::thread::spawn(move || {
         let mut line = String::new();
@@ -149,12 +164,7 @@ fn a_client_connected_when_it_turns_off_is_refused() {
         h.step();
         std::thread::sleep(Duration::from_millis(2));
     }
-    let r = thread.join().unwrap();
-    assert_eq!(r["error"]["code"], -32001, "{r}");
-    assert!(
-        r["error"]["message"].as_str().unwrap().contains("off"),
-        "{r}"
-    );
+    thread.join().unwrap()
 }
 
 /// The child's side of [`the_env_var_turns_it_on_whatever_the_setting`]:
