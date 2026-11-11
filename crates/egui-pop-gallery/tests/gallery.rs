@@ -279,6 +279,16 @@ fn quit_after_closes_the_window() {
         commands.contains(&egui::ViewportCommand::Close),
         "{commands:?}"
     );
+    // The frames drawn while the window closes ask nothing again: the
+    // close, and its `quit` line, come once.
+    for _ in 0..2 {
+        h.step();
+        let commands = &h.output().viewport_output[&egui::ViewportId::ROOT].commands;
+        assert!(
+            !commands.contains(&egui::ViewportCommand::Close),
+            "{commands:?}"
+        );
+    }
 }
 
 #[test]
@@ -3761,6 +3771,22 @@ fn the_display_page_says_why_a_wide_gamut_falls_back() {
     h.snapshot("display-pop-dark");
 }
 
+/// The files page's last choice, a file in a demo folder, written with
+/// the platform's separator.
+fn last_choice(folder: &str, file: &str) -> String {
+    let path = std::path::Path::new(folder).join(file);
+    format!("Last choice: {}", path.display())
+}
+
+/// A snapshot showing the demo folder's path: it lies in the temporary
+/// folder, `/tmp` where the pictures are made (Linux), elsewhere on
+/// Windows and macOS (docs/testing.md, "Known failures").
+fn demo_path_snapshot(h: &mut Harness<'static, Gallery>, name: &str) {
+    if cfg!(target_os = "linux") {
+        h.snapshot(name);
+    }
+}
+
 #[test]
 fn the_files_page_chooses_with_the_in_app_picker() {
     let root = egui_pop_gallery::pages::files::demo_folder();
@@ -3779,7 +3805,7 @@ fn the_files_page_chooses_with_the_in_app_picker() {
         settle_picker(&mut h);
     }
     assert!(
-        h.query_by_label("Last choice: Photos/lighthouse.jpg")
+        h.query_by_label(&last_choice("Photos", "lighthouse.jpg"))
             .is_some(),
         "{:?}",
         h.state().app.handle().debug_snapshot()["files"]
@@ -3852,7 +3878,7 @@ fn the_files_page_saves_with_a_question_before_replacing() {
         h.query_all_by_role_and_label(Role::Button, "Cancel")
             .any(|b| b.is_focused())
     );
-    h.snapshot("files-replace-pop-dark");
+    demo_path_snapshot(&mut h, "files-replace-pop-dark");
     h.key_press(egui::Key::Escape);
     settle_picker(&mut h);
     assert!(h.query_by_label("Replace harbour-edit.png?").is_none());
@@ -3864,7 +3890,8 @@ fn the_files_page_saves_with_a_question_before_replacing() {
         settle_picker(&mut h);
     }
     assert!(
-        h.query_by_label("Last choice: Exports/dawn.png").is_some(),
+        h.query_by_label(&last_choice("Exports", "dawn.png"))
+            .is_some(),
         "{:?}",
         h.state().app.handle().debug_snapshot()["files"]
     );
@@ -3979,7 +4006,7 @@ fn the_files_page_shows_the_folder_as_breadcrumbs() {
     settle_picker(&mut h);
     assert!(h.query_by_label("Photos").is_some());
     egui_pop_test::assert_all_named(&h);
-    h.snapshot("files-breadcrumbs-pop-dark");
+    demo_path_snapshot(&mut h, "files-breadcrumbs-pop-dark");
 }
 
 #[test]

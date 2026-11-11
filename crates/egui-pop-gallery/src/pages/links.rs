@@ -73,7 +73,13 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     ui.horizontal_wrapped(|ui| {
         let tmp = egui_pop::platform::dirs::temp_dir();
         links::link(ui, app, "The temporary folder", &tmp.display().to_string());
-        Link::content("A program", "/opt/tools/install.sh").show(ui, app);
+        // A path the platform reads as one: `/opt` is no path on Windows.
+        let program = if cfg!(windows) {
+            r"C:\Tools\install.bat"
+        } else {
+            "/opt/tools/install.sh"
+        };
+        Link::content("A program", program).show(ui, app);
     });
     section(ui, "Blocked");
     Link::content("A script", "javascript:alert(1)").show(ui, app);
