@@ -352,10 +352,12 @@ fn sample(ui: &mut Ui, c: &Candidate, regular: &FontFamily, mono: &FontFamily) {
 
     ui.add_space(t.space.s);
     ui.label(RichText::new("Scripts").strong());
+    // A letter the face lacks is drawn as a box: the pair's coverage.
+    let body = egui::FontId::new(t.font.body, regular.clone());
     for (name, text) in SCRIPTS {
         ui.horizontal(|ui| {
             ui.weak(name);
-            ui.label(text);
+            fonts::sample_label(ui, text, body.clone());
         });
     }
 }
