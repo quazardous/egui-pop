@@ -554,3 +554,121 @@ fn the_pointer_stays_unless_the_knob_or_the_gestures_ask() {
     let all = drag_gathering(&mut h, c);
     assert!(!all.contains(&egui::ViewportCommand::CursorVisible(false)));
 }
+
+/// A value and every change written to it.
+struct Logged {
+    value: f64,
+    log: Vec<egui_pop_core::slider::Change>,
+}
+
+fn endless(
+    ends: egui_pop_core::knob::Endless,
+    range: std::ops::RangeInclusive<f64>,
+    at: f64,
+    mode: KnobDrag,
+) -> Harness<'static, Logged> {
+    let mut h = Harness::builder()
+        .with_size(vec2(200.0, 200.0))
+        .build_ui_state(
+            move |ui, s: &mut Logged| {
+                let out = Knob::new(&mut s.value, "Hue", range.clone())
+                    .step(1.0)
+                    .size(Vec2::splat(120.0))
+                    .drag(mode)
+                    .endless(ends)
+                    .show(ui);
+                s.log.extend(out.changes);
+            },
+            Logged {
+                value: at,
+                log: Vec::new(),
+            },
+        );
+    h.run();
+    h
+}
+
+fn drag_logged(h: &mut Harness<'_, Logged>, path: &[Pos2]) {
+    let from = path[0];
+    h.event(Event::PointerMoved(from));
+    h.event(Event::PointerButton {
+        pos: from,
+        button: PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    });
+    h.step();
+    for at in &path[1..] {
+        h.event(Event::PointerMoved(*at));
+        h.step();
+    }
+    h.event(Event::PointerButton {
+        pos: *path.last().unwrap(),
+        button: PointerButton::Primary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    });
+    h.run();
+}
+
+#[test]
+fn an_endless_knob_wraps_and_reports_the_motion_unwrapped() {
+    use egui_pop_core::knob::Endless;
+    let mut h = endless(Endless::Wrap, 0.0..=360.0, 350.0, KnobDrag::Vertical);
+    let c = h.get_by_label("Hue").rect().center();
+    // 20 points up: a tenth of the 200-point travel, 36°.
+    drag_logged(&mut h, &line(c, vec2(0.0, -20.0)));
+    let s = h.state();
+    assert!((s.value - 26.0).abs() < 0.5, "wrapped: {}", s.value);
+    let frames: f64 = s.log.iter().filter(|c| !c.done).map(|c| c.delta).sum();
+    assert!((frames - 36.0).abs() < 0.5, "the frames' deltas: {frames}");
+    let end = s.log.iter().find(|c| c.done).expect("the drag's end");
+    assert_eq!(end.from, 350.0);
+    assert!(
+        (end.delta - 36.0).abs() < 0.5,
+        "the whole drag: {}",
+        end.delta
+    );
+    assert!(s.log.iter().all(|c| c.delta > 0.0), "{:?}", s.log);
+    // The arrows step across the end too.
+    h.state_mut().value = 359.0;
+    h.state_mut().log.clear();
+    click_at(&mut h, c, Modifiers::NONE);
+    h.key_press(egui::Key::ArrowUp);
+    h.run();
+    assert_eq!(h.state().value, 0.0);
+    assert_eq!(h.state().log.last().unwrap().delta, 1.0);
+    // Home goes nowhere.
+    h.key_press(egui::Key::Home);
+    h.run();
+    assert_eq!(h.state().value, 0.0);
+}
+
+#[test]
+fn an_unbounded_knob_goes_past_its_soft_range() {
+    use egui_pop_core::knob::Endless;
+    let mut h = endless(Endless::Unbounded, 0.0..=100.0, 50.0, KnobDrag::Horizontal);
+    let c = h.get_by_label("Hue").rect().center();
+    drag_logged(&mut h, &line(c, vec2(-90.0, 0.0)));
+    drag_logged(&mut h, &line(c, vec2(-90.0, 0.0)));
+    assert!((h.state().value + 40.0).abs() < 0.5, "{}", h.state().value);
+    let total: f64 = h
+        .state()
+        .log
+        .iter()
+        .filter(|c| c.done)
+        .map(|c| c.delta)
+        .sum();
+    assert!((total + 90.0).abs() < 0.5, "{total}");
+}
+
+#[test]
+fn an_endless_circular_drag_turns_once_over_the_soft_range() {
+    use egui_pop_core::knob::Endless;
+    use std::f32::consts::PI;
+    let mut h = endless(Endless::Wrap, 0.0..=360.0, 0.0, KnobDrag::Circular);
+    let c = h.get_by_label("Hue").rect().center();
+    // A quarter turn clockwise (screen y down), from 3 o'clock.
+    drag_logged(&mut h, &arc(c, 40.0, 0.0, PI / 2.0));
+    assert!((h.state().value - 90.0).abs() < 1.0, "{}", h.state().value);
+}

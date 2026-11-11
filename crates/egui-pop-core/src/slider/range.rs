@@ -117,6 +117,7 @@ impl<'a> RangeSlider<'a> {
                 to,
                 cause,
                 done,
+                delta: to - from,
             };
             // A typed value stays on its side of the other thumb.
             let hard = match thumb {
@@ -194,6 +195,7 @@ impl<'a> RangeSlider<'a> {
                         to,
                         cause: Cause::Reset,
                         done: true,
+                        delta: to - *value,
                     };
                     apply(c, value);
                 }

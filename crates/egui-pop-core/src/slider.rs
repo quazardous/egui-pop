@@ -304,6 +304,12 @@ pub struct Change {
     /// The gesture is over: every change but a drag's frames. A drag's
     /// end comes as one done change from the value before it.
     pub done: bool,
+    /// How far the value moved: `to - from`, except on an endless knob
+    /// that wraps ([`Knob::endless`](crate::knob::Knob::endless)), where a
+    /// drag, a step or the wheel give the motion unwrapped (a turn past
+    /// the end counts in full, `to` being wrapped), for a host that maps
+    /// changes to nudges. A drag's end gives the whole drag's.
+    pub delta: f64,
 }
 
 /// What an [`on_change`](Slider::on_change) hook decides.
@@ -335,10 +341,14 @@ pub(crate) fn decide(hook: &mut Option<Hook<'_>>, change: Change, spec: &Spec) -
     match hook.as_mut().map_or(Verdict::Go, |h| (h.0)(&change)) {
         Verdict::Go => Some(change),
         Verdict::Veto => None,
-        Verdict::Redirect(v) => Some(Change {
-            to: spec.settle(v, spec.hard),
-            ..change
-        }),
+        Verdict::Redirect(v) => {
+            let to = spec.settle(v, spec.hard);
+            Some(Change {
+                to,
+                delta: to - change.from,
+                ..change
+            })
+        }
     }
 }
 
@@ -795,6 +805,7 @@ impl<'a> Slider<'a> {
             to,
             cause,
             done,
+            delta: to - from,
         };
         let typing_id = typing_id(id);
         if take_typed_request(ui.ctx(), id) && spec.state.is_editable() {

@@ -1,14 +1,15 @@
 //! The faders and knobs page: the slider's other forms. A strip of
 //! vertical sliders (a mixer's faders: the value at the top, the label at
 //! the bottom, up is more), knobs in the three layouts their room gives
-//! them, horizontal sliders shrinking to narrow slots (the label goes to
+//! them, an endless knob whose value wraps and whose changes come as
+//! nudges, horizontal sliders shrinking to narrow slots (the label goes to
 //! the tooltip, then the unit), and a standalone section band, the fold
 //! a card's "More (n)" row is drawn with.
 
 use egui::{Ui, vec2};
-use egui_pop::core::knob::{Knob, KnobDrag};
+use egui_pop::core::knob::{Endless, Knob, KnobDrag};
 use egui_pop::core::sections;
-use egui_pop::core::slider::{Gradient, Slider};
+use egui_pop::core::slider::{Cause, Gradient, Slider};
 
 use super::section;
 
@@ -18,6 +19,9 @@ pub struct State {
     faders: [f64; 4],
     hue: f64,
     knobs: [f64; 3],
+    /// The endless knob's value, and the sum of its changes' deltas.
+    rotation: f64,
+    nudged: f64,
     narrow: [f64; 4],
     more_open: bool,
 }
@@ -28,6 +32,8 @@ impl Default for State {
             faders: [0.67, -1.0, 0.25, 0.8],
             hue: 210.0,
             knobs: [0.67, 48.0, 30.0],
+            rotation: 350.0,
+            nudged: 0.0,
             narrow: [0.67, 0.67, 0.67, 0.67],
             more_open: false,
         }
@@ -35,7 +41,7 @@ impl Default for State {
 }
 
 pub fn show(ui: &mut Ui, s: &mut State) {
-    ui.label("The slider's gestures and history along the other axis, on a dial, and in narrow slots. Drag up for more on a fader and a knob (from a knob's rim, drag around); Shift makes a knob's drag finer; double click resets.");
+    ui.label("The slider's gestures and history along the other axis, on a dial, and in narrow slots. Drag up for more on a fader and a knob (the Angle knob turns around); Ctrl makes a drag finer and Shift coarser; double click resets; a right click opens “Type a value” and “Reset”. The endless knob wraps past 360° and reports each change as a nudge.");
     section(ui, "Faders");
     ui.horizontal(|ui| {
         let size = vec2(52.0, 180.0);
@@ -104,6 +110,23 @@ pub fn show(ui: &mut Ui, s: &mut State) {
             .default(0.0)
             .size(vec2(56.0, 56.0))
             .show(ui);
+        // An endless knob: no ends, ticks turning with the value; a
+        // host reads the changes' deltas as nudges.
+        let out = Knob::new(&mut s.rotation, "Rotation", 0.0..=360.0)
+            .endless(Endless::Wrap)
+            .step(1.0)
+            .unit("°")
+            .default(0.0)
+            .size(vec2(150.0, 48.0))
+            .show(ui);
+        s.nudged += out
+            .changes
+            .iter()
+            // A drag's end repeats its frames' motion.
+            .filter(|c| !(c.done && c.cause == Cause::Drag))
+            .map(|c| c.delta)
+            .sum::<f64>();
+        ui.label(format!("Nudged by {:+.0}°", s.nudged));
     });
     section(ui, "Narrow slots");
     for (i, width) in [240.0_f32, 110.0, 64.0, 40.0].into_iter().enumerate() {

@@ -821,6 +821,22 @@ fn faders_and_knobs_go_up_and_reset_and_narrow_sliders_keep_their_name() {
     assert_eq!(value_of(&h, "Feather"), from + 1.0);
     egui_pop_test::double_click(&mut h, "Feather");
     assert_eq!(value_of(&h, "Feather"), 0.0, "a double click resets it");
+    // Its right-click menu types a value.
+    h.get_by_label("Feather").click_secondary();
+    h.run();
+    h.get_by_label("Type a value").click();
+    h.run();
+    assert!(h.query_by_label("Feather, typed value").is_some());
+    h.key_press(egui::Key::Escape);
+    h.run();
+
+    // The endless knob wraps past 360°, and says it moved forward.
+    assert_eq!(value_of(&h, "Rotation"), 350.0);
+    for _ in 0..15 {
+        h.get_by_label("Rotation").increment_accesskit();
+        h.run();
+    }
+    assert_eq!(value_of(&h, "Rotation"), 5.0, "wrapped");
 
     // Narrow slots: the label goes to the tooltip, the name stays.
     for width in [240, 110, 64, 40] {
