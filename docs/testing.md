@@ -101,10 +101,10 @@ counts as passed, for the `CI` job and for the run's result, so a green
 run on `next` still promotes `main`. The Platforms workflow (Windows,
 macOS) uses no apt and is not affected.
 
-Meanwhile the bench box covers Linux without Ubuntu's archive:
-`egui-pop-gate` runs the workspace's tests, doctests and docs on lavapipe.
-The video and webview builds have no stand-in there: they wait until the
-switch is off, or run where GStreamer's and WebKitGTK's development
+The Linux tests still run on GitHub (lavapipe from the fallback Mesa);
+no full gate is run on the bench box in their place. The video and
+webview builds wait until the switch is off, or run where GStreamer's
+and WebKitGTK's development
 packages are installed. Delete the variable once `apt-get update` works
 on the runners again.
 
