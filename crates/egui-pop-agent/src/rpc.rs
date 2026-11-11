@@ -148,6 +148,12 @@ fn dispatch(method: &str, params: Json, tx: &Sender<Job>, wake: &Waker) -> Resul
             .map(String::from)
             .ok_or_else(|| RpcError::params(format!("`{name}` is missing or not a string")))
     };
+    // The application window a call or a snapshot is for: the active
+    // one without.
+    let window = match params.get("window") {
+        None | Some(Json::Null) => None,
+        Some(_) => Some(str_param("window")?),
+    };
     let mut within = ANSWER_WITHIN;
     let job = match method {
         "describe" => Job::Describe { reply },
@@ -156,12 +162,14 @@ fn dispatch(method: &str, params: Json, tx: &Sender<Job>, wake: &Waker) -> Resul
                 None | Some(Json::Null) => None,
                 Some(_) => Some(str_param("collector")?),
             },
+            window,
             reply,
         },
         "call" => Job::Call {
             collector: str_param("collector")?,
             action: str_param("action")?,
             args: params.get("args").cloned().unwrap_or(Json::Null),
+            window,
             reply,
         },
         "wait" => {
