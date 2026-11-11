@@ -8,6 +8,685 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.8.0 (2026-11-11)
+
+Published: egui-pop-tokens 0.2.4, egui-pop-model 0.6.0, egui-pop-core 0.8.0, egui-pop-api 0.8.0, egui-pop-test 0.8.0, egui-pop-viewport 0.8.0, egui-pop-i18n 0.8.0, egui-pop-agent 0.2.0, egui-pop-editors 0.8.0, egui-pop-platform 0.8.0, egui-pop-views 0.8.0, egui-pop-imaging 0.8.0, egui-pop 0.8.0.
+
+### Breaking changes
+
+- egui-pop-agent, egui-pop-api: A new opt-in crate, `egui-pop-agent`, serves the debug bridge out of the
+  process, for agents that drive a running application:
+
+  - JSON-RPC 2.0, one message per line, with the methods `describe`,
+    `snapshot`, `call` and `wait`, every call made as
+    `Origin::Agent("agent-socket")`;
+  - over a Unix socket in the user's runtime directory, mode 0600, in a
+    directory no one else may write to (refused otherwise), or a named pipe
+    on Windows;
+  - off unless the application turns it on, with
+    `AppBuilder::agent_socket(AgentSocket::new())` or, when the user sets
+    `EGUI_POP_AGENT_SOCKET=1` (or a path), `agent_socket_from_env()`; the
+    bridge is then read-only unless the application chose a mode;
+  - requests are answered on the UI thread at each pass of the logic, and
+    a `wait` is held by the transport until its condition holds or its
+    deadline passes: the UI thread never blocks.
+
+  `AppBuilder::chosen_debug_bridge` says which bridge mode the application
+  chose, if any. See `docs/agent-socket.md`.
+- egui-pop, egui-pop-api, egui-pop-core, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-model, egui-pop-platform, egui-pop-test, egui-pop-viewport, egui-pop-views: A detached panel's window takes other panels as tabs, dropped on it or moved there from the tab menu.
+
+  - **Drops on a detached window.** While a tab is dragged, a detached window under the pointer shows the drop zone the areas show (the kit's `dock-preview`, picked with egui_stack's `DropZone::at`), disabled with its reason for a panel that may not leave the main window; let go there, the tab joins the window's tabs. The window sees the pointer through the main one: always when it is embedded in it, when both windows know their place on the screen otherwise (not on Wayland).
+  - **Move to window.** The tab menu lists the detached windows ("Move to window", in English and French), which works everywhere; an agent runs the new `workbench.move_to_window` command (`panel`, the focused one by default; `window`, a panel of that window), and code `AppHandle::move_to_window`. Each way is one new `workbench.join_window` step. `AppHandle::window_drop` (and the debug snapshot's `window_drop`) says which window a drag is over.
+  - **Tabs in a window.** The window shows one tab bar (no splits) and is titled after the tab shown; closing it docks every panel it holds, Attach one of them docks that one, Detach gives it a window of its own.
+  - **The layout document** keeps a window's first panel under `panel` and the others under `tabs`, the shown one as `shown` (`layout::Auxiliary::tabs`, `shown`, `Auxiliary::window`, `Layout::window_of`, `Layout::join_window`). Layouts saved before read as they did; an application that predates this opens the first panel in the window and docks the others.
+
+  Migration: build an `egui_pop::model::layout::Auxiliary` with `Auxiliary::window(panel, screen, rect)` rather than a struct literal. `workbench::Change` has a new variant, `Change::JoinWindow`.
+- egui-pop, egui-pop-api, egui-pop-core, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-platform, egui-pop-test, egui-pop-tokens, egui-pop-viewport, egui-pop-views: egui-pop moves to egui_stack 0.25, and the kit draws the lines between panels: a kit can leave at most one line where two panels meet.
+
+  - **`dock-body`.** The border of a panel's body in a dock is a kit component, painted through egui_stack's new `DockPainter::tab_body`: its `border-width`, `border-color` and `radius`, and a glow (`ring-color`, `ring-width`, `ring-offset`), at `rest`, under the pointer (`hover`) and for the dock's focused panel (`focus`). The default kit outlines every body in `border.default`, one point wide, with the widgets' radius, as before; a frameless area still draws none.
+  - **`dock-separator`.** The line between two panels of a dock is a kit component of its own, no longer the `splitter` of `widgets::Splitter`: its `width`, and its `fill` at `rest`, `hover` and `active` (pressed or dragged), its ring at `focus`. The default kit draws it as the splitter, so the look is unchanged.
+  - **The Rerun-like kit** (`examples/kits/rerun-like`) outlines no body, hides the dock's separator at rest (it shows under the pointer and while dragged) and shows the scroll bars only while the pointer is over their area. Where two areas meet, the side area's separator is the one line left; between two panels of one area, none at rest.
+
+  Migration: egui_stack types re-exported by egui-pop, and the `DockPainter` the kit implements, are those of 0.25: see its changelog (no body border nor separator line at rest in `Style::from_egui`; `DockPainter::tab_body`). A kit that restyled the dock's separators through `splitter` sets the same terms on `dock-separator`.
+- egui-pop, egui-pop-api, egui-pop-core, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-model, egui-pop-platform, egui-pop-test, egui-pop-viewport, egui-pop-views: Every draggable shows a cursor for its kind of drag, hovered and for the whole drag, even once the pointer has left it, and the pointer profile can change them.
+
+  - **Drag kinds.** `model::pointer::DragKind` names what a drag means, whatever the widget: `pan` and `scrub` (an open hand, closed while dragging), `move`, `carry` (a closed hand once it moves), `value` (a horizontal resize once it moves), `point` and `select` (a crosshair once they move), `text` (an I-beam), and the four resizes. `DragKind::cursors` gives each one's hover and drag cursors, as CSS cursor names.
+  - **The helper.** `core::pointer::drag_cursor(&response, kind)`, also `UiPop::drag_cursor`, shows the hover cursor while the response is hovered and nothing else is dragged, and the drag cursor every pass it is dragged, wherever the pointer is; `hold_drag_cursor` and `hover_drag_cursor` serve a widget that follows its drag itself, and `drag_cursor_icons` reads a kind's cursors.
+  - **The widgets.** The timeline's lanes had none: a fixed playhead's content (a DJ deck) now shows an open hand, closed while scrubbed or nudged; a scrub, a range and a middle-drag pan keep their cursor to the end; clips show move. Graph nodes and groups show move, a port's wire a closed hand, the canvas's pan, rubber band and wire ends keep theirs. Sliders, range sliders and the video's scrub bar, the curve editor, the colour wheels, the navigator, the graph's minimap, the thumbnail grid's rubber band, the compare view's panes, a tree's drag and drop, a palette's tabs and the code editor (an I-beam over its text) gained theirs; splitters, dock and palette edges, dialog grips, bands, item handles (now move), timeline markers and trim handles and the histogram go through the helper.
+  - **Profiles.** A `pointer-profile` document may give `drag_cursors`, by kind (`{"move": {"hover": "default"}}`); `PointerMap::drag_cursor` resolves them. Blender / node editors keeps the arrow over what can be panned or moved, as Blender does.
+
+  Migration: `Profile` and `PointerMap` gain a `drag_cursors` field; a struct literal of either needs it (`Default::default()`, an empty map).
+- egui-pop, egui-pop-api: The in-app folder chooser offers Finder's column view: its mode switcher
+  has `details` and `columns` (and `thumbnails` with previews). The path's
+  folders stand side by side, the highlighted folder's subfolders after
+  them; Right goes into a folder, Left back to the parent, a click in
+  another column goes there, and the folder selected (else the folder
+  shown) is the answer. `PickerView` gets `Columns` and is now
+  `#[non_exhaustive]`; `FilePicker::views` lists the views a picker offers.
+- egui-pop, egui-pop-i18n, egui-pop-imaging, egui-pop-test, egui-pop-viewport: The node graph editor's wires are targets of their own. Hovered (within
+  6 points, 12 on a touch screen), a wire is drawn thicker with its ports
+  ringed and a tooltip naming its ends; a click selects it, Ctrl or Shift
+  adds it; Delete removes the wires selected as one `Edit::Disconnect`;
+  its menu disconnects it or selects the node at either end; a drag on it
+  moves its nearer end, one `Edit::Connect` whose `replaces` holds the old
+  wire (dropped nowhere: a disconnect). From the keyboard, Tab past a
+  connected input reaches each of its wires (Delete, Enter and Shift+Enter
+  pick its input or output end up, Escape), each an AccessKit button
+  described as "wire". `GraphState::selected_edges` holds the wires
+  selected; `graph.select` takes `edges`, `graph.read` gives
+  `selected_edges`, and `graph.edit`'s `connect` honours `replaces`.
+
+  To move: `Request` gains `SelectWires` and `GraphEvent` gains
+  `WireSelection` (`graph.wire_selection_changed` on the journal), and
+  `Request`, `GraphEvent` and `Edit` are now `#[non_exhaustive]`, so later
+  edits and requests will no longer be breaking: a `match` on any of them
+  outside the crate needs a wildcard arm (`_ => {}`; an edit the
+  application does not know is best ignored). `graph.select` with `nodes`
+  alone now also clears the wires selected.
+- egui-pop-api, egui-pop-core, egui-pop-editors, egui-pop-i18n, egui-pop-viewport, egui-pop-views: Text placed in a translated string stays as it is written: a folder
+  named "2026" no longer shows as "2,026", nor "007", "1e3" or "3.14" as
+  numbers. `strings::tr_args` and `lookup_args` now place their text
+  arguments verbatim; a count or a size to write as the language writes
+  numbers goes through the new `strings::tr_with` (`lookup_with`,
+  `fill_with`), whose arguments are typed `strings::Arg` values,
+  `Arg::Str` or `Arg::Num`, built with `into()` from text or a number.
+  `Strings::get_args` takes `Arg`s: a provider formats `Arg::Num` only.
+  Every count egui-pop shows (jobs, errors, selections, tree and log
+  filters, graph and curve values, wizard steps and the rest) is passed as
+  a number and still formatted per locale.
+- egui-pop, egui-pop-api, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-platform, egui-pop-test, egui-pop-views: The workbench's areas share one egui_stack dock space (egui_stack 0.25.1): a tab dragged from one area to another gets the drop zones it gets inside one.
+
+  - **Any zone between areas.** Over another area, the middle of a group joins its tabs, an edge splits the group on that side, a tab bar takes the tab between two tabs, with the same preview as inside an area. Before, a tab dropped on another area could only join the end of its first tabs.
+  - **Refusals with their reason.** An area a panel stays out of shows the zone disabled, with the reason ("Log stays out of the start side bar"); a drop there changes nothing.
+  - **Closed and bare areas.** A closed side or bottom area is still offered along the areas' edge, and an area drawn bare (a zone alone) over its whole rect: a tab dropped there joins its tabs.
+  - **Still a step.** A tab dropped in another area is moved through `workbench.move`, run after the drop: a plugin's veto puts it back where it was, a redirect sends it where the step says. `workbench.move` for a panel already in the area now keeps it where it is.
+  - **The drop hint** (`AppHandle::drop_hint`, the debug bridge's `workbench` collector) says what the dock resolved: `DropHint::zone` (an egui_stack `DropZone`: `Center` joins tabs, an edge splits) and `index` among the tabs it would join, its rect where the zone is drawn; `preview`, the ghost tab, is now a palette's only. `DropHint` is `#[non_exhaustive]`.
+  - **Saved layouts** keep their shape: each area's tree becomes its dock, so a layout saved before reads as it did.
+
+### Features
+
+- egui-pop-model: `egui_pop_model::admin`: the administration app's declarative form tree
+  (`docs/design/admin-forms.md`). A `Manifest` (versioned, `FORMAT` 1)
+  holds scopes, sections, groups and their items: fields of the ten kinds
+  (bound to `settings/<id>` or a task's draft), actions (a command and an
+  argument template, `${field}`), statuses, callouts and registered widget
+  kinds. Rust builders write it, it round-trips through JSON, a newer
+  format is refused, and `Manifest::check` leaves out what does not resolve
+  with a diagnostic. `Tree` merges manifests and resolves deep links
+  (`scope/section/key`, or a setting id alone). `admin::hooks` registers
+  the hooks a manifest names (validate, choices, preview, transform,
+  confirm, status), which compute and never draw; `admin::layers` keeps
+  the value scopes (app, library, workspace, and the run's overrides, read
+  only) with the origin of each value; `admin::generate` builds the pages
+  of the declared settings.
+- egui-pop-api, egui-pop-model: Administration app: a setting a manifest places is no longer also
+  generated on its prefix's page (`Manifest::bound_settings`), so it shows
+  once, where the manifest puts it.
+
+  The default scopes leave room between their orders (General 0, Interface
+  10, Input 20, Developer 110) and `Manifest::scope_at` places an
+  application's scope among them, so Developer stays last.
+- egui-pop-api, egui-pop-model: Administration app, slice 2. Record lists and tables (`Item::List`,
+  `Item::Table`, `Records`): rows read from a `read_only` command or a
+  `records` hook, with columns, a tone per row, row actions (`${row.<key>}`)
+  and an empty state. Statuses read `read_only` commands, once, and again
+  after a command that changes something or an event they name. `when`
+  hides a node and `enabled` greys it with its reason (`Clauses`), read
+  against the context keys and the section's values (`form.<id>`). Rows
+  keep their controls inside the page and wrap their help, in search too.
+- egui-pop-api, egui-pop-model: Administration app, slice 5. Row fields (`RowField`): a record's value
+  as a toggle, a text or a choice in a list or table, written through a
+  command naming the row and the value (`${value}`). Actions may declare a
+  confirmation (`Confirmation`), asked with the dialogs' Confirm before
+  their command runs; a `confirm` hook is asked too. Meter columns
+  (`CellKind::Meter`). Row clauses read the record (`row.<key>`), an object
+  answer is one record, and a deep link marks and scrolls to a record.
+- egui-pop-api, egui-pop-i18n, egui-pop-model: `Ctrl+,`, File > Settings and `app.settings` open the Settings app,
+  now in `DefaultPlugins`. The settings window's own pages are its pages,
+  as registered widget kinds: Input › Keyboard shortcuts (`shortcuts`),
+  Input › Pointer gestures (`gestures`), Interface › Fonts (`fonts`) and a
+  page per custom settings page (`settings-page`; `app.settings.page`
+  opens it there). A widget names the settings it edits in its options'
+  `settings`, so they are not generated again. The window opens from
+  General › Advanced (`app.settings.window`). A plugin added on its own
+  takes the place of a group's with the same id. A refresh also forgets the reads still in flight, so a page sees a change made right after it asked.
+- egui-pop-api, egui-pop-i18n: The Settings app (`egui_pop_api::admin`, `AdminPlugin`): every declared
+  setting as full pages generated from the declarations, with no
+  hand-written page. The scopes (General, Interface, Input, Developer, and
+  those manifests add) are tabs on top, their sections a left panel, and a
+  search at the end of the tab row finds settings in every scope, editable
+  in place under their breadcrumb. It opens as an overlay of the whole main
+  window or, with "Pop out", in a window of its own; the mode used last is
+  the `admin.window` setting. Each row has a modified bar, an origin tag
+  (`library`, `workspace`, `command line`), its reset of the layer shown and
+  a "Set for" menu when the application opens a library or a workspace
+  layer (`Admin::offer`, `Admin::load_layer`, `Admin::export_layer`); values
+  apply live and are undone with the settings' history, and the user's
+  settings file keeps the user's own value under a layer's. A command line
+  override (`Admin::set_run`) is shown, never edited. Manifests
+  (`Admin::manifest`) add scopes and sections rendered from data (fields,
+  actions running their command with the argument template, statuses from
+  hooks, callouts), hooks are registered by name (`Admin::hook`) and widget
+  kinds have a stub registry (`Admin::widget_kind`). Commands: `admin.open`
+  (`{"path": "scope/section/key"}`, `{"key": "<setting id>"}`, `{"mode":
+  "overlay" | "window"}`), `admin.close`, `admin.popOut`, `admin.set` and
+  `admin.reset` (a value in a scope); the `admin` collector shows the
+  resolved tree. Every row is a named node for assistive technology. The
+  settings window stays, with `Ctrl+,`, until the migration replaces it.
+  Its strings are in English and French.
+- egui-pop-api, egui-pop-i18n, egui-pop-model: The Settings app's search reaches inside its pages: it finds the
+  commands of the shortcuts and gestures editors by name and by key, the
+  settings a custom page edits, and the sections by their title and
+  keywords. The left panel lists each section found with the items found in
+  it; choosing one (or "Show" on the page of results) lands on its page,
+  the item marked and scrolled to, and said selected to assistive
+  technology. A widget kind registers its search with
+  `Admin::widget_search`, and reads the item landed on with
+  `Admin::marked` and `Admin::take_key`. A custom page claims the settings
+  it edits, so they no longer show a second time on a generated page; drawn
+  with `settings_window::setting_row` in the Settings app, they take the
+  app's rows (value scopes, origin, modified bar). A deep link to such a
+  setting (`admin.open {"key": …}`) lands on its page.
+- egui-pop-api, egui-pop-i18n, egui-pop-model: The Settings app gains the wizard kit: a multi-step flow declared in a
+  manifest (`Manifest::wizard`, `Wizard::step`), each step built as a page
+  is, its draft fields (`Field::draft`) with their own default, choices,
+  range and `required`. Next is greyed with the step's first blocking
+  problem (the field's own checks, its `validate` hook, the step's), shown
+  under its field and beside Next; a step may be conditional (`when`) or
+  optional (Skip); a summary lists every value with "Change"; Finish runs
+  the wizard's command with the draft. Cancel and Escape ask first once
+  something was entered. The stepper says "Step 2 of 4, …" to assistive
+  technology; Enter (nothing focused) and Alt+N go next, Alt+B back. Agents
+  drive it with `admin.wizard.open`, `set`, `next`, `back`, `skip`, `go`,
+  `finish` and `cancel`, and `admin.open {"wizard"}`; the `admin`
+  collector shows the flow. The gallery's settings page has a greeting
+  wizard.
+- egui-pop, egui-pop-api, egui-pop-core, egui-pop-test: Agents can discover every capability with its schemas and wait on the
+  application:
+
+  - a collector action may carry JSON Schemas of its arguments and its
+    result (`FnCollector::schema`, `FnCollector::result_schema`,
+    `Collector::schemas`); `debug_describe` lists them;
+  - `AppHandle::debug_capabilities()`, and the new `bridge.describe`
+    action, list every collector action and every command as one list,
+    under protocol 1 (`DebugBridge::capabilities`, `PROTOCOL`);
+  - `bridge.wait` checks a journal event (`event`, `cause`), whether the
+    application is settled, or the first of several; in Rust,
+    `AppHandle::wait_met` and `AppHandle::settled` (`egui_pop_api::wait`);
+  - `egui_pop_test::wait::wait_until` and `settle` step a harness's
+    frames until the condition holds, or until a deadline.
+- egui-pop-test: Scenarios run live, against a running application over its agent
+  socket: `egui_pop_test::scenario::live::LiveRunner` and the
+  `egui-pop-scenario` command line (Unix). Calls, waits, value and journal
+  expectations and shots work as in-process; `$name` variables fill the
+  arguments; a shot keeps every collector's snapshot as JSON and, given
+  the application's screenshot capability, a picture. The invariants
+  `NoErrorToast`, `NoFailedCommand`, `NoUnknownCommand`, `NoMissingText`
+  and `NoPanic` (the application is gone) are checked after every step.
+  `Ui` steps stay in-process for now.
+- egui-pop-agent, egui-pop-api: `egui-pop-agent` serves the agent socket as an MCP server, behind the
+  new `mcp` feature (on `rmcp`):
+
+  - the binary `egui-pop-agent-mcp <socket>` speaks MCP over stdio and the
+    socket's JSON-RPC to the running application;
+  - its tools are generated at run time from the application's `describe`:
+    one per capability offered to agents (name sanitised for MCP, its
+    description, its args schema or an object schema made from the
+    example, its result schema as the output schema), plus `snapshot` and
+    `wait`; a command's tool runs it and answers its result;
+  - `egui_pop_agent::mcp::McpBridge` implements rmcp's `ServerHandler`
+    over a `Backend`, and `mcp::tools` makes the tools from a `describe`
+    reply.
+
+  The socket's `snapshot` is now refused when the debug bridge is `Off`,
+  as its calls are. `AppHandle::debug_bridge_mode` says the bridge's mode
+  now. See `docs/agent-socket.md`.
+- egui-pop-test: Scenarios: tests written as RON data and replayed headless
+  (`egui_pop_test::scenario`, `docs/scenarios.md`). A scenario calls the
+  capabilities `bridge.describe` lists, waits on the journal or for the
+  application to settle, clicks, types, presses keys and scrolls through
+  egui_kittest, checks the tree, a collector's value or the journal, and
+  keeps shots; `test.*` fixtures set up its world. After every step the
+  runner checks invariants (`NoErrorToast`, `NoFailedCommand`,
+  `NoUnknownCommand`, `NoPanic`, `StableWindows`, `FrameBudget`,
+  `NoMissingText`, and the application's own), which a scenario lifts by
+  name. A failure names the step, what broke, the journal's last events
+  and the accessibility tree. `scenario::run_dir(build, "tests/scenarios")`
+  runs a folder.
+- egui-pop-agent, egui-pop-i18n: The agent socket can follow a setting: `developer.agentSocket` (off by
+  default, "Lets local programs drive this app (read-only unless the app
+  allows more)", in English and French) starts the socket when turned on
+  and stops it, its file removed, when turned off, live.
+  `AgentSocketExt::agent_socket_on_setting` declares it;
+  `AgentSocketExt::agent_socket_from_env_or_setting` turns the socket on
+  with `EGUI_POP_AGENT_SOCKET` whatever the setting says, and follows the
+  setting otherwise. A client still connected when the setting turns off
+  is refused.
+- egui-pop-agent, egui-pop-test: Agents read and drive the interface of a running application through
+  its agent socket:
+
+  - the socket's `ui` method: `tree` lists the accessibility tree of the
+    frame just drawn, `click`, `type`, `key` and `scroll` act on a node
+    found by label and role, as raw egui events queued into the next
+    frames (headless or on a desktop); acting needs the bridge on;
+  - the MCP server offers it as the `ui` tool;
+  - live scenarios run `Ui` steps and `Expect(Tree)` over it.
+  - a scenario's node may be picked among several with `nth`, in
+    reading order (`Ui(Click(label: "Import", nth: 0))`).
+- egui-pop, egui-pop-api, egui-pop-core, egui-pop-model, egui-pop-platform, egui-pop-test: Shorter ways to write an application, found while building a real one:
+
+  - `Ctx::value(path, descriptor)` declares a value of the application's
+    state, owned by the plugin, in one line, as `Ctx::setting` does for a
+    setting.
+  - `SettingId::path()` gives a setting's store path (`settings/<id>`);
+    `AppHandle::setting::<T>(&id)` and `AppHandle::value::<T>(path)` read
+    a setting or a value.
+  - `AppHandle::group(origin, label, |g| ...)` and, in a command,
+    `Call::group(label, |g| ...)` make the writes of one action one undo
+    step: the group is ended when the closure returns `Ok`, cancelled
+    (every write put back) on `Err` or a panic. It goes through the host
+    (`Host::begin_group`), so a host keeping its own history sees it;
+    inside a command, while the host dispatches, it goes through the new
+    `Host::groups` (`host::Groups`), which a host keeping its own history
+    gives (the default `begin_group` and `end_group` use it too). A
+    refusal turns into a `String` with `?` (`From<Refused> for String`).
+  - `param::bound(ui, store, path)` draws the editor of a store's path
+    with the descriptor it was declared with.
+  - `Origin` implements `Display` (`user`, `agent:<session>`...), the
+    names `host::source_of` gives.
+  - `AppHandle::palette_search(query)` ranks the palette's entries as the
+    palette does.
+  - `egui_pop::api::dirs::config_dir(app)` (also in
+    `egui_pop_platform::dirs`) is the user's configuration folder, and
+    `AppBuilder::persist_in_config(app)` keeps the settings, the layout
+    and the window's place there.
+  - `egui_pop_test::app_snapshot` builds a snapshot harness, or skips with
+    its reason where pictures are not compared (no adapter, or a GPU
+    rather than lavapipe; `EGUI_POP_SNAPSHOT_ANY_GPU=1` compares on any
+    GPU); `try_shared_setup` and `snapshot_skip_reason` say why.
+- egui-pop, egui-pop-platform: Several apps in one process (tests, a simulated desktop) keep their logs and crash reports apart.
+
+  - **`LogsPlugin::install(false)`** keeps the logs the app's own: they are not made the `log` facade's logger, so they hold only what is written to them (`Logs::write`) and no line logged by another app of the process. On by default, as before.
+  - **Crash reports** quote the app's own logs (its `LOGS` service: their path, and their tail in a panic), no longer the logs the process installed last. A `CrashPlugin` with `hook(false)` no longer receives the panics the process's hook catches for another app.
+- egui-pop, egui-pop-api: `AppBuilder::bare_strips(&[Area])` keeps a side area's folded strip to
+  its grip glyph: no icon (or title's first letter) per panel, the strip
+  `area-strip.width` wide, a click unfolding the area as before.
+  `AppHandle::bare_strip(area)` says which areas are bare, and
+  `workbench::strip` lists no icon for them.
+- egui-pop, egui-pop-core, egui-pop-tokens: A theme sets where text sits in its row: `font.baseline-offset.ui` and
+  `font.baseline-offset.mono` (numbers, 0 in every built-in theme) draw a
+  family's glyphs that share of the size lower (negative: higher),
+  through egui's `FontTweak::y_offset_factor` on each face of the family;
+  the row keeps its height. A theme matching another toolkit's text sets
+  one value. `Tokens::font.baseline_offsets` holds them;
+  `fonts::BaselineOffsets` and `fonts::install_with_offsets` install the
+  families with them, and `fonts::install` keeps the offsets installed
+  last.
+- egui-pop-api, egui-pop-core, egui-pop-i18n, egui-pop-model, egui-pop-viewport, egui-pop-views: The image viewport and plots move like the node graph: the image
+  viewport takes the canvas navigation commands (`view.fit`,
+  `view.zoom_in`, `view.zoom_100`, `view.pan_*`, `view.hand`...) and
+  their keys, is the canvas in use (`canvasActive`) under the pointer or
+  with the keyboard, and pans in hand mode from anywhere, a handle
+  included; plots take the same commands as the canvas in use. Two
+  fingers on a touch screen pan every canvas, and a pinch zooms it.
+
+  A zoom control for any canvas, `navigation::CanvasZoom`: zoom out, the
+  zoom in percent with a menu (fit, frame the selection, 100 %, steps),
+  zoom in and hand mode, sending the canvas commands (a step is
+  `view.zoom_to:<percent>`); `GraphOutput::canvas` and
+  `ViewportOutput::canvas` name the canvas it drives, and each canvas
+  publishes its zoom (`egui_pop_core::canvas::zoom`). Hand mode now lives
+  in `egui_pop_core::canvas`.
+
+  The navigation keys are the pointer profile's: a profile document's
+  `view_keys` (Photoshop's Ctrl+1 and Ctrl+0, darktable's Alt+1 and
+  Alt+3, Document's Shift+1 and Shift+2, Blender's `.`), loaded into the
+  keymap with its gestures, so the shortcuts editor shows them and the
+  user rebinds them. `PointerMap::view_keys` gives those in force;
+  `NavKeys` is now a list of bindings read from it, and a canvas leaves
+  the keys to an application's keymap (`PointerMap::keys_dispatched`).
+- egui-pop, egui-pop-api, egui-pop-core, egui-pop-i18n, egui-pop-viewport: One navigation model for canvases larger than their view
+  (`egui_pop::viewport::navigation`), on the node graph first:
+
+  - **Hand mode**: H toggles it (Space held does the same for a moment);
+    a primary drag then pans from anywhere on the graph, for a pen, a
+    touch screen or a mouse without a middle button. The grab cursor and
+    an indicator in the corner show it.
+  - **Navigation commands** in the palette, with keys, agent-callable:
+    `view.fit` (Shift+1; Home on the canvas), `view.frame_selection` (F
+    everywhere; Blender `.`, Document Shift+2), `view.zoom_in`,
+    `view.zoom_out`, `view.zoom_100` (Ctrl and `+`, `-`, `0`),
+    `view.pan_left`, `_right`, `_up`, `_down` (Ctrl and the arrows) and
+    `view.hand` (H). They go to the canvas under the pointer or with the
+    keyboard (`egui_pop::core::canvas`; the `canvasActive` context key);
+    on a widget alone, the canvas reads the same keys itself.
+  - **The overview**: the graph's minimap shows in the bottom-right corner
+    when the graph is much larger than the view (`GraphEditor::overview`).
+  - **The view kept** across sessions: `GraphEditor::keep_view(id)`.
+  - **A one-time hint** on a canvas's first use ("Middle-drag, Space+drag
+    or H to pan · Ctrl+wheel to zoom · F to frame"), dismissed by the
+    first pan or a click, remembered (`GraphEditor::hint(false)` turns it
+    off).
+- egui-pop, egui-pop-api, egui-pop-core: A dialog's footer stays whole in the window. The in-app file chooser
+  laid its toolbar, list and footer one after the other in a room of a
+  set size, so a short window (or an empty folder's "nothing matches"
+  line) pushed its buttons below the dialog's edge; its footer now keeps
+  its whole height at the bottom and what is above it scrolls when the
+  room runs short. A custom dialog's body is held to what the window
+  leaves under its header and above its buttons, and the settings form to
+  the modal's room. `overlay::dialog_chrome` is what a dialog's frame
+  takes around its content (its padding and its widest border of any
+  state, which a resizable modal did not count), and
+  `overlay::DialogLayout` lays a dialog's content out footer first, for
+  an application's own dialogs.
+- egui-pop, egui-pop-core: The slider's other forms. `Slider::vertical` turns a slider into a
+  fader (up is more, the value at the top, the label at the bottom, the
+  same gestures and history). `knob::Knob` is a rotary knob with the
+  slider's terms and history: drag up or around, Shift finer, the wheel,
+  keys, typed entry, double click to reset. A slider now shrinks to its
+  room (at least `slider::MIN_WIDTH`, 24 points): the label goes to the
+  tooltip, then the unit (`Slider::compact`); `Slider::size` sets it.
+- egui-pop-api, egui-pop-i18n: The file browser gets two modes. `carousel` shows the focused entry large
+  in the middle and its neighbours smaller on each side; Left and Right, or a
+  click on a neighbour, bring an entry to the middle. `agenda` files the
+  entries by day, the newest first, one heading per day (when the entry was
+  taken, else when it last changed) and the entries without a time last; the
+  arrows move across the days. `ViewModes::built_in()` now has details,
+  thumbnails, filmstrip, columns, carousel and agenda, so its switcher is a
+  menu; the strings are in English and French.
+- egui-pop-api, egui-pop-i18n: The file browser gets Finder's column view, `columns`: one column per
+  folder of the path, from the browser's root (`FileBrowser::with_root`)
+  down to the place, then the focused folder's entries or the focused
+  file's thumbnail. Up and Down move in a column, Right enters the focused
+  folder, Left goes back to the parent, a click in another column goes to
+  that folder. `ViewModes::folders()` gives the folder chooser's modes,
+  details and columns; `ViewModes::built_in()` every built-in mode.
+
+  A mode that needs the path sets `ModeNeeds::hierarchy`: the browser lists
+  the place's ancestors and the focused folder, hands them over in
+  `ModeContext::ancestors` and `ModeContext::peek` (with `ModeContext::place`),
+  and follows the mode's `ModeOutput::reach` and `ViewMode::travel`.
+  `BrowserOutput::place_changed` says the place changed. The mode's name is
+  translated (`egui-pop-files-mode-columns`, in English and French).
+- egui-pop, egui-pop-api: A file browser with pluggable view modes (`files::browser`), the first step
+  of one browser for every file dialog and an import window:
+
+  - `FileSource`, paged and streamed entries with errors (`FsSource` over a
+    `FileSystem`);
+  - `ViewMode` and its registry `ViewModes`, with the built-in `details` and
+    `thumbnails` modes;
+  - `ThumbnailProvider`, requests with a size and a priority, cancelled when
+    not renewed (`PreviewThumbnails` over the preview providers);
+  - `FileBrowser`: selection, focus, keyboard per mode, type-ahead, and a
+    mode switcher remembered under the browser's id.
+- egui-pop-api, egui-pop-i18n: The file browser takes drops (`FileBrowser::with_drops`): files dragged
+  inside the app (`DraggedPaths`) or from the system go to a folder entry,
+  the folder shown or an app's own target, lit while hovering, refused or
+  accepted by the app, out as `BrowserOutput::dropped`. The columns mode
+  lists each column off the interface thread (`ColumnListings`, also the
+  picker's), streams entries with a busy row, and cancels listings the
+  focus left. The agenda groups by day, month or year (toolbar,
+  Ctrl+Up/Down), collapses groups (click, Ctrl+Left/Right), and computes
+  its dates once per listing.
+- egui-pop-api, egui-pop-i18n: The file browser gets a filmstrip, `filmstrip`: one virtualised row of
+  thumbnails under a large view of the focused entry, Left and Right along
+  the strip, the large view's thumbnail asked first. Quick look opens a
+  large view of the focused entry over the entries with Ctrl+Y, or Space
+  when an entry has the focus; the arrows move behind it, and Escape, Space
+  or Ctrl+Y close it. `ViewModes::built_in()` now has details, thumbnails,
+  filmstrip and columns; the strings are in English and French.
+- egui-pop-api: The file browser marks entries as the application sees them
+  (`FileBrowser::with_marks`): `EntryMarks` gives badges, drawn on a
+  cell's thumbnail and after a row's name and said with the name to
+  assistive technology, and dims an entry (a photo already imported).
+  `FileBrowser::set_selection` sets the selection from the application
+  (an import's "select this day"). `ModeContext` and `PlainDrawer` take
+  the marks (`marks`).
+- egui-pop, egui-pop-api, egui-pop-i18n, egui-pop-model: The file choosers use the file browser's modes: the in-app picker's list and
+  grid are its `details` and `thumbnails` modes, picked with the browser's
+  switcher (a segmented control up to four modes, a menu beyond, translated
+  labels, icons from the registry) or `Ctrl+1` to `Ctrl+9` (`file.view.mode<n>`
+  commands). Each dialog reopens in the mode it last used, kept in the host's
+  store (`files::view_for`); `settings/files.view` reads `list` and `grid` as
+  `details` and `thumbnails`. A gallery page shows a `FileBrowser`.
+- egui-pop, egui-pop-tokens, egui-pop-viewport: The node graph's hovered and selected wires are easy to see, even short
+  ones between close nodes. A selected wire is drawn thicker in the accent
+  colour over a soft glow, with larger handles near its ends and its two
+  ports ringed; a hovered wire is drawn thicker and lighter and the pointer
+  becomes a hand. New tokens, given by every built-in theme and
+  contrast-checked against the canvas: `graph.wire-hover.color` and
+  `.width`, `graph.wire-selected.color`, `.width`, `.glow`, `.glow-width`
+  and `.glow-opacity`.
+- egui-pop, egui-pop-api, egui-pop-core, egui-pop-model, egui-pop-tokens, egui-pop-viewport, egui-pop-views: A draggable shows its drag cursor hovered only when dragging is its only action; where a click does something, the arrow stays until the drag starts. The widget, the pointer profile and the kit can each change the cursors and that rule.
+
+  - **The rule.** `model::pointer::HoverPolicy` says when a kind's hover cursor shows: `only-action` (every kind's default but `text`'s: only when nothing happens on a click or a double click), `always` (text's I-beam) or `never`. Whether an element clicks is read from its response's sense; `DragCursorFor::clicks` says it otherwise. Splitters, side area, flyout and palette edges, dialog grips, item handles, the histogram and a view frame keep their hover cursor; timeline lanes and DJ decks (a click seeks), clips, markers, trim handles, graph nodes and bands (a click selects), and the compare view's panes (a double click fits) show the arrow until dragged.
+  - **Split kinds.** `DragKind::SplitColumns` and `SplitRows` (a column and a row resize) are the splitters' and the side areas' and flyouts' edges. The navigator's and the graph minimap's view frame show move, the arrow elsewhere on them (a click jumps there).
+  - **Three levels**, the most specific winning: `core::pointer::drag_cursor` returns a `DragCursorFor`, applied when dropped, with `.hover(cursor)`, `.dragging(cursor)` and `.hover_policy(policy)`; a pointer profile's `drag_cursors` take a `policy` beside `hover` and `drag` (`PointerMap::drag_cursor_over`); a kit gives `drag-cursor.<kind>.hover`, `.drag` and `.policy` (`kit::DragCursorKit`, the default kit giving every kind's own). `core::pointer::resolve_drag_cursor` gives the result; `hover_drag_cursor` takes whether the element clicks.
+- egui-pop, egui-pop-api, egui-pop-core: A kit part's content no longer moves when its state changes: a state
+  restyles a part by paint alone (fill, border colour and width, radius,
+  ring, shadow), and the layout keeps room for the widest border any state
+  gives, the border at rest then present but invisible. A selectable row
+  or a toggle chip whose border appears under the pointer (the default
+  kit's `selectable-row`) kept its text in place only at rest; it now
+  keeps the same size and text position in every state (#236).
+  `Component::show` lays its content out the same way in every state, and
+  `Component::border_room` gives the room a widget keeps for the border.
+  `Kit::components` walks every component of a kit.
+  `SelectableRow::steady` is deprecated: every row is steady now; drop
+  the call.
+- egui-pop, egui-pop-core, egui-pop-tokens: A sixth log level, past error: `palette.log.critical`, the critical level
+  some loggers add (Python's `logging`, Rerun's text log), last in
+  `egui_pop_tokens::LOG_LEVELS` and `LogPalette` (`critical`, and in
+  `levels()`). `pop-dark` aliases it to `{red.12}`, danger's red at its
+  scale's high-contrast text step, so every built-in theme gives it; it is
+  checked as text on `surface.canvas` and `surface.panel`. The Rerun-like
+  kit gives it Rerun's critical red.
+- egui-pop, egui-pop-api: A theme draws a menu's keys and notes smaller than its labels with
+  `menu-item.key-font-size` (a dimension); without it they keep the
+  labels' size. The docs say which text style menu labels follow: egui's
+  `Body`, as egui's own menus.
+- egui-pop, egui-pop-api, egui-pop-model, egui-pop-tokens: A theme sets a menu's metrics: `menu-item.height` (a row's least
+  height), `menu-item.padding-x` and `padding-y` (the room around a
+  label), `menu-item.width` (the menu's least width, instead of the
+  popup's 200 points) and `menu-item.separator-inset` (0: separators
+  across the whole menu). A `menu-item-gutter.width` of 0 now keeps no
+  gutter (it fell back to the default width). `CommandSpec::menu_note`
+  ends a command's menu entries with a muted note in the keys' column,
+  and `CommandSpec::opens_link` with a ↗. Nothing set, menus look as
+  before.
+- egui-pop, egui-pop-api: The in-app picker draws its list and grid through the file browser's
+  `details` and `thumbnails` modes: one rendering path. A mode lays the
+  entries out (virtualised, the focus kept in view, the keys' moves, the
+  thumbnails asked in reading order) and an `EntryDrawer` draws each entry:
+  the browser's `PlainDrawer`, or the picker's own, with its sortable column
+  headers, its groups' badges and the highlight its field drives.
+  `ModeContext` gains `drawer`, `max_height`, `name` and `many`;
+  `ModeOutput` gains `focused` and `columns`.
+- egui-pop, egui-pop-views: Plots draw series of millions of points: decimation per pixel column.
+
+  - **Decimated by default.** A line, a stepped line or an error band with more than `DECIMATION_THRESHOLD` points in view (1000) is drawn from at most four points a pixel column (its first, lowest, highest and last, in order), which cover the same pixels as the full series at the current zoom; a band keeps each column's lowest minimum and highest maximum, over the same columns. `Plot::decimation(None)` draws every point, `Plot::decimation(Some(n))` sets the threshold. The approach follows Rerun's time series view.
+  - **The points in view only.** A series sorted by x (a time series) is read in the x range in view, found by binary search, so a pass costs the points in view rather than the series' length; a series not sorted by x is drawn whole, as before.
+  - **The true sample under the pointer.** `PlotOutput::hovered` and the values at the pointer are read in the full series, never in the points drawn, by binary search on a sorted series; `values_at` no longer copies a series.
+  - **The collector** says each series' `drawn`, the points handed to the drawing this pass.
+- egui-pop, egui-pop-i18n, egui-pop-tokens, egui-pop-views: Plots over a timeline's time, and two new parts for the plot's look.
+
+  - **Time on the x axis.** `Plot::time_scale(TimeScale)` puts the x axis in a timeline's scale (seconds, timecode, bars and beats): x values are seconds, the ticks and labels the timeline ruler's for the span in view and the plot's width.
+  - **A time cursor dragged both ways.** `Plot::timeline(&mut TimelineState)` takes the timeline's scale, shows its playhead as the time cursor, moves the playhead when the cursor is dragged, and shades its range (in the `timeline.range.*` colours, the edges by whether it loops). Without a timeline, `Plot::drag_cursor(true)` makes the cursor draggable and `PlotOutput::cursor_dragged` says where it went; `PlotOutput::cursor_hovered` says the pointer is on it; `Plot::highlight_range` shades a range. A draggable cursor is a slider named "Time cursor".
+  - **Stepped lines and error bands.** `Kind::Steps` (`Series::steps`) holds each value until the next point; `Band::new(series, [[x, min, max], ...])` with `Plot::bands` fills between a minimum and a maximum in its series' colour.
+  - **Entity colours.** `Series::entity(path)` takes the categorical palette's slot a stable hash of the path gives (`entity_slot`, FNV-1a), the same in every plot, run and platform.
+  - **Values at the pointer.** `PlotOutput::values` (`ValuesAt`, `values_at`) is every line's value at the pointer's x, else at the cursor; `Plot::values_tooltip` lists them beside the pointer (on by default with a time scale or a timeline). `Plot::emphasize` draws one series thicker. The `plots` collector adds the time scale, the x axis' labels, the range and the values.
+  - **The plot's grid** is a part of the `plot` component: `plot.grid-color` and `plot.grid-fade` (`GridLook`), by default the muted text at egui_plot's fade (0.5), as before; a decoration, not contrast-checked.
+  - **The time cursor's head and hover colour**: `plot-cursor.head` (`none` or `triangle`), `plot-cursor.head-size` and `plot-cursor.hover.fill` (`CursorLook`); by default no head and the same accent, as before. The hover colour is checked as a user-interface part over the plot. The Rerun-like kit gives the grid Rerun's colour and fade and the cursor its triangle, strong under the pointer.
+- egui-pop, egui-pop-api, egui-pop-core, egui-pop-i18n, egui-pop-tokens, egui-pop-views: One rating widget everywhere, `egui_pop::core::rating::RatingStars`,
+  behaving as photo applications do (`docs/rating.md`):
+
+  - An unrated item shows faint outline stars, always or while it is
+    hovered (`EmptyStars`; `ThumbGrid::empty_stars` for the grid, under
+    the pointer by default), so it says it can be rated. The outlines no
+    longer vanish when the pointer moves onto a thumbnail's stars.
+  - Under the pointer, the stars up to it preview the value a click gives;
+    over a lower star the current value stays as a ghost. A click on the
+    current star clears the rating; each star's tooltip and accessible
+    name say what a click does ("Set 3 of 5", "Clear rating").
+  - `read_only(true)` shows a rating without editing it, read as
+    "3 of 5": the file dialog's preview uses it.
+  - The library grid's stars, the library's `marks::RatingStars` (now a
+    wrapper of the shared widget, with `read_only` and `empty`) and the
+    file dialog's preview draw the same stars.
+  - The stars are kit components: `rating-star` (`rest` an empty outline,
+    `selected` given, `hover` the preview, `selected` in the `muted` tone
+    the ghost) and `rating-star-display`, based on it, drawn by the new
+    `star` handler. A kit restyles them with data; the given star and the
+    empty outline are contrast pairs. `library.star` no longer colours
+    the stars.
+- egui-pop, egui-pop-views: A row label too long for its row is elided with "…" and shown whole on hover, instead of being cut.
+
+  - **Rows.** A list item, a tree row and a list's default row draw their label on one line, elided with "…" before the row's trailing text, buttons and widgets, which stay whole. Hovering the row then shows the full label as its tooltip; the row's accessible name stays the full label.
+  - **Table cells.** A data table's cell `Ui` truncates text, so an egui label too long for its column is elided with "…" and shows the full text on hover, instead of being cut at the column's edge.
+- egui-pop, egui-pop-api, egui-pop-core, egui-pop-editors, egui-pop-views: Every scroll area of egui-pop's own goes through `UiPop::scroll_area`, a sideways strip takes the plain wheel, and reduced motion stills egui's kinetic scrolling.
+
+  - **Keys and colours everywhere.** The panels, dialogs and lists (settings, file picker, palette, jobs, history, theme editor, tips, about, developer tools, completion), the views (list, tree, library grid and filmstrip, thumbnail grid, editor, viewer) and the gallery's pages answer Page Up, Page Down, Home, End and the arrows, and draw their bars in the kit's `scroll-bar` colours. With nothing focused, the pointer over a list or a grid pages it.
+  - **Forms for views.** `UiPop::scroll_area_viewport` (egui's `show_viewport`) and `UiPop::scroll_area_rows` (`show_rows`). A view whose focusable widget lies around its own area calls `focus::takes_keys` inside it, and the area then makes no second Tab stop.
+  - **A strip that scrolls only sideways takes the plain wheel**: the themes turn on egui's `always_scroll_the_only_direction`, so a strip of tabs or the filmstrip no longer needs Shift. At its end the wheel goes on to the area around it.
+  - **Reduced motion stills kinetic scrolling.** Under `ThemeSpec::reduced_motion`, a touch drag no longer coasts after the release and a trackpad no longer stretches an area past its end (egui 0.37's `KineticScrollStyle`); egui's own comes back with motion. A mouse wheel had neither.
+- egui-pop, egui-pop-core, egui-pop-tokens: `scroll-bar.margin-track` keeps a scroll bar's thumb that many points
+  from both ends of its track (0 by default, as before), in every area
+  shown through `UiPop::scroll_area` and its variants: egui's
+  `ScrollStyle` has no such field, so the area is given the bar's
+  rectangle (`ScrollBarKit::margin_track`, `ScrollBarKit::track_rect`).
+- egui-pop, egui-pop-core: `sections::band` draws a section band standing alone (the disclosure
+  mark, the title, the count), for a fold outside a stack of sections: a
+  button named by its title and count, expanded or not.
+- egui-pop, egui-pop-core, egui-pop-tokens: `section-count.placement` puts a section's count at the band's end
+  (`end`, the default, as before) or right after its title
+  (`after-title`, `space.inline` from it, the title still clipped to the
+  band's room). `Kit::sections` (`SectionsKit`, `CountPlacement`) holds it.
+- egui-pop, egui-pop-core: `Sections::fill(false)` sizes a stack of sections by its content: an
+  open section sized by the list is never taller than what its body lays
+  out, the long ones share what is left, the folded bands follow right
+  under the last open section and the room left stays empty under the
+  last band. A section's scroll bar is now drawn as `UiPop::scroll_area`
+  draws one: the theme's thumb colours and track (it kept the default
+  kit's colours), and `scroll-bar.margin-track`. Needs egui_stack 0.25.2.
+- egui-pop, egui-pop-api, egui-pop-model: Settings can be exported to a file and imported back, from Settings › General › Advanced or by command.
+
+  - **Export** (`settings.export`, a wizard): the settings you changed, or a library's or workspace's values, all of them or one family or section, with your shortcuts and the settings of custom pages if you like. The file is a versioned JSON document (`settings-export`, `egui_pop_model::admin::transfer`). A setting marked `Descriptor::sensitive` is never written: it is listed as left out.
+  - **Import** (`settings.import`, a wizard): picks the file, shows each change (its value now and in the file) as a tick box, and what is left out and why: unknown settings, settings an application retired (`Admin::obsolete`), values of the wrong type or out of range (`Descriptor::accept`, never clamped), secrets. The changes chosen apply into a value scope as one undo step; `settings.undoImport` takes them back. `dryRun` (and the read-only `settings.importPreview`) says what it would do.
+  - **The wizard kit** gains a path field with Browse (`Field::open_file`, `Field::save_file`) and a multi field (a tick box per choice, `null` for all); a record source's command arguments are a template over the form's values.
+- egui-pop, egui-pop-api, egui-pop-core: The shell's side and bottom areas are laid out by egui_stack's layout
+  layer (egui_stack 0.25.4) instead of egui panels: each area is a zone
+  with its `AppBuilder` sizes, the centre grows and keeps its least width,
+  a folded side area is a strip whose grip unfolds it. The lines between
+  areas take the pointer, keys and assistive technology; a zone holding no
+  dock refuses a dragged tab. Sizes, old sessions' included, are kept. The
+  kit paints the layout: `impl LayoutPainter for Kit`,
+  `Kit::paint_area_strip`, `Kit::paint_area_line`.
+- egui-pop, egui-pop-api: An application sets how narrow and how wide the shell's panels get:
+  `AppBuilder::shell_panel_min_size(panel, size)` replaces egui-pop's
+  least width (120 points for the side bar, 160 for the inspector),
+  `shell_panel_max_size(panel, size)` sets a largest one, in points or as
+  a share of the window (`workbench::ShellSize`), and
+  `AppBuilder::centre_min_size(size)` keeps the centre at least that wide,
+  the side areas giving way to it down to their own least. Nothing set,
+  the panels size as before.
+- egui-pop, egui-pop-api: A shell panel's least and largest sizes change while the application
+  runs: `AppHandle::set_shell_panel_min_size(panel, Some(size))` and
+  `set_shell_panel_max_size` (`None` puts back the default), read back with
+  `shell_panel_min_size` and `shell_panel_max_size`. A least width
+  measured from the panel's content (a header's buttons, which depend on
+  the fonts and the text size) is set there, and the area widens to it on
+  the next pass.
+- egui-pop-api: A side area folds to its strip when its sash is dragged past half its least size, and a folded side area drags out of its strip's edge at the size it is dragged to, as in VS Code and JetBrains' IDEs. Unfolded, an area folded by drag has the size it had before. Sashes still do not snap to sizes, as in those applications.
+- egui-pop, egui-pop-core, egui-pop-tokens, egui-pop-views: A data table's rows have a kit component of their own, and the table grows what a log needs.
+
+  - **`table-row`**: the rows of `DataTable` are drawn by a new kit component (`Kit::table_row`): `selected`, `hover` (never while selected), `focus` for the cursor of a focused table. It is based on `list-row`, so every theme and kit looks as before until it gives `table-row` tokens of its own; a column's tint follows it too. The first cell keeps the room of the row's widest border, so a state's border never moves the content. The Rerun-like kits give Rerun's quiet selection (a faint fill, the strong text, a 2-point marker on the left in the accent) and an outline under the pointer.
+  - **Rows of several heights**: `TableRows::row_top(row, row_h)` says where each row starts (by default `row * row_h`).
+  - **The tail**: `DataTable::stick_to_bottom(true)` keeps the last row in view as rows come in, until the user scrolls up, and again once back at the end.
+  - `TableOutput::visible_rows` gives the rows in view.
+- egui-pop, egui-pop-i18n, egui-pop-views: A text log view on the data table, after the Rerun viewer's text log view (its design, none of its code): `egui_pop::views::text_log`.
+
+  - **Columns**: the time in a timeline's scale (`TextLog::time_scale`, or a bound timeline's), else a plain number; the entity path, tinted where it is highlighted elsewhere (`TextLog::highlight_entity`); the level as a chip in its `palette.log.*` colour (`Level`, six levels from trace to critical); the body, its first line, a multi-line body unfolding to all its lines.
+  - **Filters**: a toggle chip per level with its count, and a text filter over the bodies and entity paths, case aside; `TextLog::keep` adds the application's own.
+  - **Follow**: the last line stays in view as lines come in, until the user scrolls up; back at the end it follows again (`TextLogOutput::following`).
+  - **The time cursor**: the rows at the latest time not after the cursor (`TextLog::time_cursor`, or a timeline's playhead with `TextLog::timeline`) are the table's selection, drawn by the kit's `table-row`, and come into view when the cursor moves; a click or the arrow keys move the cursor to a row's time (`TextLogOutput::cursor_moved`, `picked`).
+  - **Large logs**: only the rows in view are built, and the filter scans only the entries added since the last pass (`TextLogState::refilter` starts it over).
+  - Its texts are translated (English and French).
+- egui-pop-i18n, egui-pop-views: The timeline splits clips and ripple deletes: `TimelineState::split_clip`
+  cuts a clip in two at a time (the new part reads its source on), and
+  `ripple_remove_clips` removes clips and closes the gaps they leave on
+  their tracks. With the timeline focused, Ctrl+K splits the selected clips
+  at the playhead (none selected: every clip there) and Shift+Delete ripple
+  deletes the selection, each one step of the history; agents have
+  `timeline.split_clip` and `timeline.ripple_delete`. The output reports a
+  split as `Edit::ClipSplit`. English and French strings for both.
+- egui-pop-i18n, egui-pop-views: The timeline keeps its playhead in place and gets a transport row.
+  `Timeline::follow_mode(Follow::Fixed(at))` (`Follow::CENTRE` for the
+  middle) keeps the playhead at a fixed place, playing or not, and scrolls
+  the content under it: a drag moves the content with the playhead, a click
+  moves the playhead, the wheel steps it by a unit (a beat, a frame) while
+  paused. `scrub_on_drag` locks the clips to the pointer (a drag on a clip
+  scrubs), and `nudge_on_drag` makes a drag nudge a playing timeline by a
+  quarter of the drag's speed, as a jog wheel's edge does. The new
+  `Transport` widget is a row of buttons over a `TimelineState` (go to
+  start, step back, play backward, stop, play or pause, step forward, go to
+  end, loop) and the playhead's text, each button running its key's
+  command; the transport keys have their commands: `timeline.toggle_play`,
+  `shuttle_forward`, `shuttle_backward`, `step_forward`, `step_backward`,
+  `go_to_start`, `go_to_end` and `toggle_loop`. English and French strings
+  for the buttons and the commands.
+- egui-pop, egui-pop-core, egui-pop-tokens: Tooltips have a kit component, `tooltip`: its fill, border, radius,
+  padding, shadow, text colour and `font-size`, its `placement` (`widget`,
+  under the widget from its start edge as egui's, or `pointer`, under the
+  pointer from its position) and its `offset`. `egui_pop_core::tooltip`'s
+  `TooltipExt::tip`, `disabled_tip` and `tip_ui` draw them, with egui's
+  timing and accessibility, where `on_hover_text` keeps egui's popup look.
+  The defaults are the popup's: nothing changes until a theme sets them.
+
+### Fixes
+
+- egui-pop-api: The activity bar is a zone of the shell's layout instead of an egui side panel: a pane named "the activity bar" for screen readers and tests, of a fixed breadth with no sash, refusing a dragged tab. It looks the same.
+- egui-pop-core: `sections::band`'s example is compiled but not run: a bare context has
+  no fonts loaded, so running it panicked in the doctest.
+- egui-pop, egui-pop-api: The shell's zones that hold no dock (the title, top and status bars, the
+  activity bar) refuse a dragged tab: released there, it goes back where it
+  was, with no drop preview, instead of landing where the last area it
+  crossed would have put it.
+- egui-pop-api: The file browser's mode switcher no longer panics in a context without
+  the icon font (a test harness, the first pass): its buttons show their
+  labels alone until the font is in use.
+- egui-pop, egui-pop-core: A window drawn with its own title bar keeps answering clicks after the
+  compositor moved or resized it on Wayland (labwc, GNOME), which never
+  hands back the release of the press that started the move: egui held the
+  button down, nothing hovered, and the window buttons or a section's
+  title answered only after another click. The window's next pass now starts
+  with the button released (`frame::compositor_grab`, called after
+  `StartDrag` and `BeginResize`).
+- egui-pop, egui-pop-api, egui-pop-core: egui-pop moves to egui_stack 0.25.3, and a palette no longer gets narrower than its content. egui_stack's floating windows now stop at their least size and take drops over a dock, a folded one keeps the height of its band, and it adds `Section::max_height` and `max_share`, `DockSpace::no_drop_zone(s)` and `DockRules::accept_drops`. A palette whose content does not shrink (a row of tools that does not wrap) wider than its panels' least width could be resized below that content's width: its frame stopped shrinking while the buttons of its band kept moving left, away from its right edge. The palette now stops at the width its content takes, and its band's buttons stay at its right edge, while it is resized, once it is dropped and when it opens at its content's size.
+- egui-pop-api: A file browser's entry clicked at the edge of its view, partly scrolled
+  away (the filmstrip's next thumbnail, a grid's last row), scrolls whole
+  into view.
+- egui-pop-viewport: The node graph pans with a middle drag, or a drag with Space held,
+  wherever the drag starts on it: over a node, a folded stack, a group's
+  title, a port or a wire too. Before, those took the drag (a Space drag
+  moved the node), so on a dense graph the drags seemed not to pan at all.
+- egui-pop-core: `overlay::hit_at` says which overlay of the stack a press at a point lands in, given the egui layer on top there (an overlay's own popups count), or none, for code that dismisses on a press away while sharing the stack's notion of inside.
+- egui-pop-api: The workbench's flyout and its side areas lying over the centre are drawn by the shell's egui_stack layout (0.25.6): the flyout through `LayoutArea::flyout`, its width still kept per panel, and lying over through `ZoneState::over`. The flyout stays an overlay of the stack, so Escape closes the top overlay first and a combo box or context menu opened in it counts as inside. Lying over is a lasting placement: a click away or Escape leaves it, and only its strip's grip folds it. Its edge on the centre's side resizes it, and it now keeps the same width as the area beside the centre.
+- egui-pop-api: The workbench's areas are named after what the interface calls them, for screen readers and tests ("the centre") instead of their keys ("center"), which could clash with an application's own labels; their sashes and strip grips take their translated names from egui_stack 0.25.5's labels.
+- egui-pop, egui-pop-views: `DataTable`'s cells draw their labels unselectable: a click on a cell's
+  text selects its row instead of starting a text selection.
+- egui-pop-test: A new `snapshot` feature compares a scenario's shots as images (with
+  `wgpu`); without it a shot records the accessibility tree. `wgpu` alone no
+  longer needs `egui_kittest`'s `snapshot`, so `cargo doc --all-features`
+  without the gallery builds again, and the image-diffing tools stay out of
+  the crate's normal dependencies.
+- egui-pop-api: Toasts keep off what an interface asks them to (`toasts::keep_clear`):
+  the Settings app's wizard footer does, so a toast in the default corner
+  no longer covers the wizard's Finish button and takes its click.
+- egui-pop-model: A pointer profile's navigation keys apply while no file browser holds
+  the keyboard (`VIEW_KEYS_WHEN` adds `!fileBrowserFocused`): Photoshop's
+  `Ctrl+1` (100 %) no longer clashes with a file browser's `Ctrl+1` (its
+  first view mode) in the keymap's conflicts.
+
 ## 0.7.0 (2026-11-05)
 
 Published: egui-pop-tokens 0.2.3, egui-pop-model 0.5.0, egui-pop-core 0.7.0, egui-pop-api 0.7.0, egui-pop-test 0.7.0, egui-pop-viewport 0.7.0, egui-pop-i18n 0.7.0, egui-pop-editors 0.7.0, egui-pop-platform 0.7.0, egui-pop-views 0.7.0, egui-pop-imaging 0.7.0, egui-pop 0.7.0.
