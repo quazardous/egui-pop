@@ -21,6 +21,9 @@
 //! `ready`, `counts` (frames per window, every 30 frames of A), `focus`,
 //! `closed` (with the geometry saved), `opened` (with the geometry seen) and
 //! `quit`. `SPIKE_STATE` names the file the geometry is saved to.
+//! `SPIKE_AUTOPILOT=1` drives it without a window driver (a CI runner's
+//! desktop): B is closed at A's 120th frame, A at its 300th, and the
+//! process exits 0 by itself, 2 past a deadline.
 //!
 //! Never run it on a desktop in use by someone else; the driver runs it in a
 //! headless compositor.
@@ -215,8 +218,22 @@ fn window_ui(id: ViewportId, ui: &mut egui::Ui, class: ViewportClass) {
                 "t": s.start.elapsed().as_secs_f64(),
                 "root": s.root_frames,
                 "windows": counts,
+                "root_visible": ui.input(|i| i.raw.viewports.get(&ViewportId::ROOT).and_then(|v| v.visible())),
                 "cpu_ms": cpu_ms(),
             }));
+        }
+        // Autopilot (CI runners without a window driver): the application
+        // closes B, then A, as the OS would; a deadline ends a stuck run.
+        if std::env::var_os("SPIKE_AUTOPILOT").is_some() {
+            match w.frames {
+                120 => ctx.send_viewport_cmd_to(viewport_id("b"), ViewportCommand::Close),
+                300 => ctx.send_viewport_cmd(ViewportCommand::Close),
+                3000.. => {
+                    emit(serde_json::json!({"event": "error", "error": "autopilot deadline"}));
+                    std::process::exit(2);
+                }
+                _ => {}
+            }
         }
         if ui.input(|i| i.key_pressed(egui::Key::F)) {
             emit(serde_json::json!({"event": "raise", "window": "b"}));
