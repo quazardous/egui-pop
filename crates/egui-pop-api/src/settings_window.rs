@@ -875,9 +875,17 @@ fn family_row(ui: &mut Ui, app: &AppHandle, e: &SettingEntry, role: Role) {
                         .filter(|f| role == Role::Ui || f.monospace);
                     for f in families {
                         let mut text = egui::RichText::new(&f.name);
+                        // In its own face, unless the face cannot draw
+                        // its name: then in the interface's.
                         if f.origin != FaceOrigin::System
                             && let Some(family) =
                                 fonts::specimen(&ctx, &f.name, fonts::Weight::REGULAR)
+                            && fonts::uncovered(
+                                &ctx,
+                                &egui::FontId::new(t.font.body, family.clone()),
+                                &f.name,
+                            )
+                            .is_empty()
                         {
                             text = text.family(family);
                         }

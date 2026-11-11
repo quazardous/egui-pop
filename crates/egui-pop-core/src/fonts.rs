@@ -308,14 +308,10 @@ pub fn collector() -> crate::debug::FnCollector {
                 return Err("egui has no fonts before its first frame".into());
             }
             let id = FontId::new(13.0, family);
-            let mut missing: Vec<String> = Vec::new();
-            ctx.fonts_mut(|f| {
-                for c in text.chars().filter(|c| !c.is_whitespace() && !c.is_control()) {
-                    if !f.has_glyph(&id, c) && !missing.contains(&c.to_string()) {
-                        missing.push(c.to_string());
-                    }
-                }
-            });
+            let missing: Vec<String> = uncovered(ctx, &id, text)
+                .into_iter()
+                .map(String::from)
+                .collect();
             Ok(json!({ "family": asked, "missing": missing }))
         },
     )
@@ -591,6 +587,91 @@ pub fn number_galley(ctx: &Context, text: &str, size: f32, color: Color32) -> Ar
     ctx.fonts_mut(|f| f.layout_job(job))
 }
 
+/// The chars of `text` no face of `font`'s family covers, each once, in
+/// order (whitespace and control chars aside): what egui draws as a box,
+/// or panics on under `MissingGlyphPolicy::Panic` (kittest's default).
+/// Empty before egui's first pass (no fonts yet).
+pub fn uncovered(ctx: &Context, font: &FontId, text: &str) -> Vec<char> {
+    if ctx.cumulative_pass_nr() == 0 {
+        return Vec::new();
+    }
+    let mut missing: Vec<char> = Vec::new();
+    ctx.fonts_mut(|f| {
+        for c in text
+            .chars()
+            .filter(|c| !c.is_whitespace() && !c.is_control())
+        {
+            if !missing.contains(&c) && !f.has_glyph(font, c) {
+                missing.push(c);
+            }
+        }
+    });
+    missing
+}
+
+/// A label drawing `text` in `font`, the chars no face of its family
+/// covers ([`uncovered`]) drawn as boxes in the text's colour.
+///
+/// For a sample showing what a face covers, such as a [`specimen`]: its
+/// family is the face then egui's bundled fonts, never the theme's, so a
+/// letter the face lacks is shown missing rather than borrowed. egui draws
+/// the same box (the `.notdef` glyph) but panics instead under
+/// `MissingGlyphPolicy::Panic`; here a missing letter is drawn, never a
+/// panic, whatever the policy.
+pub fn sample_label(ui: &mut egui::Ui, text: &str, font: FontId) -> egui::Response {
+    let missing = uncovered(ui.ctx(), &font, text);
+    let color = ui.visuals().text_color();
+    if missing.is_empty() {
+        return ui.label(egui::RichText::new(text).font(font).color(color));
+    }
+    // Each missing char becomes a space, widened to a box's width, where
+    // the box is then drawn.
+    let size = font.size;
+    let plain = TextFormat::simple(font, color);
+    let gap = TextFormat {
+        extra_letter_spacing: size * 0.3,
+        ..plain.clone()
+    };
+    let mut job = LayoutJob::default();
+    let mut boxes: Vec<usize> = Vec::new();
+    for (i, c) in text.chars().enumerate() {
+        if missing.contains(&c) {
+            boxes.push(i);
+            job.append(" ", 0.0, gap.clone());
+        } else {
+            let mut s = [0u8; 4];
+            job.append(c.encode_utf8(&mut s), 0.0, plain.clone());
+        }
+    }
+    job.wrap.max_width = ui.available_width();
+    let galley = ui.fonts_mut(|f| f.layout_job(job));
+    let (rect, response) = ui.allocate_exact_size(galley.size(), egui::Sense::hover());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, ui.is_enabled(), text));
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter();
+        painter.galley(rect.min, galley.clone(), color);
+        let stroke = egui::Stroke::new((size / 14.0).max(1.0), color);
+        for i in boxes {
+            let at = galley.pos_from_cursor(egui::text::CCursor::new(i));
+            let next = galley.pos_from_cursor(egui::text::CCursor::new(i + 1));
+            // The next char's left edge, unless the row wraps there.
+            let right = if (next.min.y - at.min.y).abs() < 0.5 {
+                next.min.x
+            } else {
+                at.min.x + size * 0.55
+            };
+            let (w, h) = ((right - at.min.x - size * 0.15).max(size * 0.3), size * 0.7);
+            let top = at.min.y + (at.height() - h) * 0.5;
+            let r = egui::Rect::from_min_size(
+                rect.min + egui::vec2(at.min.x + size * 0.08, top),
+                egui::vec2(w, h),
+            );
+            painter.rect_stroke(r, 0.0, stroke, egui::StrokeKind::Inside);
+        }
+    }
+    response
+}
+
 /// A font face the application gives: its family name (as a theme names
 /// it), its weight and the bytes of a `.ttf` or `.otf` file.
 #[derive(Clone)]
@@ -779,6 +860,13 @@ pub fn reinstall(ctx: &Context) -> Option<Arc<Report>> {
 /// installs the fonts again (one slow frame, from the next pass) and
 /// asks for a repaint; draw with another font meanwhile. A name found
 /// nowhere draws egui's bundled fonts, and is said in the [`Report`].
+///
+/// Only the face and egui's bundled fonts draw it, never the theme's: a
+/// sample shows what the face covers. Text it may not cover (other
+/// scripts, a name read from a file) goes through [`sample_label`], which
+/// draws the missing letters as boxes, or is checked with [`uncovered`]
+/// first: laid out as is, a letter no face has panics under kittest's
+/// `MissingGlyphPolicy::Panic`.
 pub fn specimen(ctx: &Context, name: &str, weight: Weight) -> Option<FontFamily> {
     let installed = INSTALLED
         .get(ctx)
@@ -2221,6 +2309,32 @@ mod tests {
                 .iter()
                 .any(|p| p == "specimen: no font named Nowhere Sans")
         );
+    }
+
+    #[test]
+    fn a_letter_a_specimen_lacks_is_drawn_as_a_box_never_a_panic() {
+        // kittest's default harness panics on a missing glyph
+        // (`MissingGlyphPolicy::Panic`): the sample must not.
+        use egui_kittest::kittest::Queryable as _;
+        let text = "Tiếng Việt 日本";
+        let mut h = egui_kittest::Harness::new_ui(move |ui| {
+            let ctx = ui.ctx().clone();
+            if installed_families(&ctx).is_none() {
+                install(&ctx, &names(&["Ubuntu"]), &names(&["Hack"]));
+            }
+            if let Some(family) = specimen(&ctx, "Ubuntu", Weight::REGULAR) {
+                sample_label(ui, text, FontId::new(13.0, family));
+            }
+        });
+        h.run();
+        let family = specimen(&h.ctx, "Ubuntu", Weight::REGULAR).expect("installed");
+        // egui's Ubuntu Light has no Vietnamese nor CJK: laid out as is,
+        // these would panic.
+        assert_eq!(
+            uncovered(&h.ctx, &FontId::new(13.0, family), text),
+            ['ế', 'ệ', '日', '本']
+        );
+        assert!(h.query_by_label(text).is_some());
     }
 
     #[test]
