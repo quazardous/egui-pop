@@ -298,7 +298,10 @@ impl Sections {
     /// than what its body lays out, the long ones share what is left, the
     /// folded bands follow right under the last open section, and the
     /// room left stays empty under the last band. A section set by hand
-    /// keeps its height ([`egui_stack::sections::Sections::fill`]).
+    /// keeps its height, the last open one too: a drag down grows the
+    /// section above past its content, into that room, and a drag up
+    /// shrinks it to its least height; the content only places the
+    /// sections until a drag ([`egui_stack::sections::Sections::fill`]).
     pub fn fill(mut self, fill: bool) -> Self {
         self.fill = fill;
         self
