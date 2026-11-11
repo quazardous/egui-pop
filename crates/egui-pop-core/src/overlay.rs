@@ -505,6 +505,16 @@ impl OverlayStack {
         self.entries.last().map(|e| &e.spec)
     }
 
+    /// Whether a modal or a menu is open under `id` (or anywhere, when
+    /// `id` is not open): what opens above one stays unranked, above it
+    /// ([`crate::layers`]).
+    fn over_unranked(&self, id: Id) -> bool {
+        let end = self.position(id).unwrap_or(self.entries.len());
+        self.entries[..end]
+            .iter()
+            .any(|e| matches!(e.spec.kind, Kind::Modal | Kind::Menu))
+    }
+
     pub fn contains(&self, id: Id) -> bool {
         self.position(id).is_some()
     }
@@ -1243,6 +1253,15 @@ pub fn show<R>(
                 }
             });
             let placed = place(&Placement::new(anchor.rect, size, screen).side(anchor.side));
+            // A popover is an overlay (ADR 0026), unless it opens above a
+            // dialog or a menu; a menu stays unranked, above the overlays.
+            if spec.kind == Kind::Popover && !lock(&st).stack.over_unranked(spec.id) {
+                crate::layers::rank(
+                    ctx,
+                    LayerId::new(egui::Order::Foreground, spec.id),
+                    crate::layers::Rank::Overlay,
+                );
+            }
             let r = egui::Area::new(spec.id)
                 .order(egui::Order::Foreground)
                 .fixed_pos(placed.rect.min)
