@@ -1927,3 +1927,104 @@ fn a_section_s_scroll_bar_takes_the_theme_s_thumb_and_track_inset() {
     assert_eq!(thumbs.len(), 1, "the theme's thumb: {thumbs:?}");
     assert_eq!(thumbs[0].top(), body.top() + 4.0, "{thumbs:?} {body:?}");
 }
+
+/// The stack of quazardous/egui-pop#332: four sections of 1, 1, 6 and 4
+/// rows of 56 points, those named in `folded` folded, titles that drag,
+/// filling the panel or sized by the content.
+fn tickets(fill: bool, folded: &'static [&'static str]) -> Harness<'static> {
+    Harness::builder()
+        .with_size(egui::vec2(300.0, 900.0))
+        .build_ui(move |ui| {
+            Sections::new(NAME)
+                .fill(fill)
+                .grab_titles(true)
+                .show(ui, |stack| {
+                    for (key, rows) in [("mod", 1), ("new", 1), ("wait", 6), ("open", 4)] {
+                        let section = Section::new(key, key)
+                            .row_height(56.0)
+                            .open(!folded.contains(&key));
+                        stack.rows(section, rows, move |ui, range| {
+                            for i in range {
+                                ui.label(format!("{key} {i}"));
+                            }
+                        });
+                    }
+                });
+        })
+}
+
+/// Drags the title of `key` by `by`, with `modifiers` held, and lets it go.
+fn drag_title(h: &mut Harness<'_>, key: &str, by: f32, modifiers: egui::Modifiers) {
+    hold(h, modifiers);
+    let from = band(h, key).center();
+    drag_from(h, from, by);
+    h.drop_at(from + egui::vec2(0.0, by));
+    h.run();
+    hold(h, egui::Modifiers::NONE);
+    settle(h);
+}
+
+#[test]
+fn sized_by_its_content_a_title_drag_down_grows_the_section_above_past_its_rows() {
+    // Two folded right under the open ones, each at its content's height.
+    for (key, above, from) in [("wait", "new", 2), ("new", "mod", 1)] {
+        for modifiers in [egui::Modifiers::NONE, PULL] {
+            let mut h = tickets(false, &["wait", "open"]);
+            settle(&mut h);
+            let start = laid_out(&h.ctx, NAME);
+            assert!((laid(&h, "new").height - 56.0).abs() < 1.0, "{start:?}");
+            drag_title(&mut h, key, 160.0, modifiers);
+            let now = laid_out(&h.ctx, NAME);
+            assert!(
+                (laid(&h, above).height - 216.0).abs() < 1.0,
+                "{key} {modifiers:?} {now:?}"
+            );
+            // The dragged title and those under it follow the pointer.
+            for (was, is) in start.iter().zip(&now).skip(from) {
+                assert!(
+                    (is.band.top() - was.band.top() - 160.0).abs() < 1.0,
+                    "{key} {modifiers:?} {now:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn sized_by_its_content_a_title_drag_up_shrinks_the_section_above_and_back_down_grows_it() {
+    // One folded under six rows sized by their content.
+    let mut h = tickets(false, &["open"]);
+    settle(&mut h);
+    assert!((laid(&h, "wait").height - 336.0).abs() < 1.0);
+    let top = band(&h, "open").top();
+    drag_title(&mut h, "open", -170.0, egui::Modifiers::NONE);
+    let now = laid_out(&h.ctx, NAME);
+    assert!((laid(&h, "wait").height - 166.0).abs() < 1.0, "{now:?}");
+    assert!((band(&h, "open").top() - (top - 170.0)).abs() < 1.0);
+    // Down past its rows: the room shows in its body.
+    drag_title(&mut h, "open", 250.0, egui::Modifiers::NONE);
+    let now = laid_out(&h.ctx, NAME);
+    assert!((laid(&h, "wait").height - 416.0).abs() < 1.0, "{now:?}");
+    assert!((band(&h, "open").top() - (top + 80.0)).abs() < 1.0);
+    // Up no further than its least height.
+    drag_title(&mut h, "open", -400.0, egui::Modifiers::NONE);
+    let now = laid_out(&h.ctx, NAME);
+    assert!((laid(&h, "wait").height - 112.0).abs() < 1.0, "{now:?}");
+}
+
+#[test]
+fn filling_the_panel_a_title_drag_moves_the_bands_as_ever() {
+    let mut h = tickets(true, &["wait", "open"]);
+    settle(&mut h);
+    let start = laid_out(&h.ctx, NAME);
+    drag_title(&mut h, "wait", -200.0, egui::Modifiers::NONE);
+    let now = laid_out(&h.ctx, NAME);
+    let shrunk = now[1].height - (start[1].height - 200.0);
+    assert!(shrunk.abs() < 1.0, "{now:?}");
+    for (was, is) in start.iter().zip(&now).skip(2) {
+        assert!(
+            (is.band.top() - was.band.top() + 200.0).abs() < 1.0,
+            "{now:?}"
+        );
+    }
+}
