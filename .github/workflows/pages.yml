@@ -46,8 +46,11 @@ jobs:
       # ask for GStreamer's development packages, and its web view, WebKitGTK's.
       - name: Install GStreamer's and WebKitGTK's development packages
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+          # The runners' Azure mirror of the Ubuntu archive may not resolve:
+          # the main archive instead, and retries.
+          sudo sed -i 's|http://azure.archive.ubuntu.com|http://archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Acquire::Retries=5 update
+          sudo apt-get -o Acquire::Retries=5 install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             libwebkit2gtk-4.1-dev
       # Every feature, so the facade's optional crates and each crate's
       # optional modules are documented; Windows-only crates document
