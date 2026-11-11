@@ -52,15 +52,17 @@ from backend import build_compositor, compositor_name  # noqa: E402
 TITLES = {"root": "Spike root", "a": "Spike A", "b": "Spike B"}
 
 # The variants run on mutter: (tag, environment). B opens on top of A at
-# the same size by default; `SPIKE_A_SIZE` makes A larger, so B covers
-# only part of it.
+# the same size by default, and both over the small root; `SPIKE_A_SIZE`
+# makes A larger, so B covers only part of it; `SPIKE_ROOT_SIZE` makes the
+# root larger, so A and B cover only part of it. Immediate is not offered
+# by lavapipe on Wayland (wgpu panics), AutoNoVsync picks Mailbox there.
 VARIANTS = [
     ("default", {}),
     ("autonovsync", {"SPIKE_PRESENT_MODE": "autonovsync"}),
     ("mailbox", {"SPIKE_PRESENT_MODE": "mailbox"}),
-    ("immediate", {"SPIKE_PRESENT_MODE": "immediate"}),
     ("a-larger", {"SPIKE_A_SIZE": "720x480"}),
     ("a-larger-autonovsync", {"SPIKE_A_SIZE": "720x480", "SPIKE_PRESENT_MODE": "autonovsync"}),
+    ("root-larger", {"SPIKE_ROOT_SIZE": "1200x760"}),
 ]
 
 
