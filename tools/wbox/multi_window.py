@@ -16,7 +16,9 @@ nested compositor and records, per backend, what the platform does:
 
 `labwc` runs two backends: Wayland, then X11 through Xwayland
 (`WAYLAND_DISPLAY` unset). `WBOX_COMPOSITOR=mutter` runs Wayland on a
-headless mutter.
+headless mutter, once per variant of `VARIANTS` (wgpu present mode,
+A's size), each driving itself (`SPIKE_AUTOPILOT`): which variants
+keep both windows painting there.
 
     cargo build --release -p egui-pop-gallery --example multi_window_spike
     python tools/wbox/multi_window.py [--out DIR] [--backends wayland,x11]
@@ -48,6 +50,18 @@ sys.path.insert(0, str(HERE))
 from backend import build_compositor, compositor_name  # noqa: E402
 
 TITLES = {"root": "Spike root", "a": "Spike A", "b": "Spike B"}
+
+# The variants run on mutter: (tag, environment). B opens on top of A at
+# the same size by default; `SPIKE_A_SIZE` makes A larger, so B covers
+# only part of it.
+VARIANTS = [
+    ("default", {}),
+    ("autonovsync", {"SPIKE_PRESENT_MODE": "autonovsync"}),
+    ("mailbox", {"SPIKE_PRESENT_MODE": "mailbox"}),
+    ("immediate", {"SPIKE_PRESENT_MODE": "immediate"}),
+    ("a-larger", {"SPIKE_A_SIZE": "720x480"}),
+    ("a-larger-autonovsync", {"SPIKE_A_SIZE": "720x480", "SPIKE_PRESENT_MODE": "autonovsync"}),
+]
 
 
 def binary() -> Path:
@@ -104,7 +118,7 @@ def close_window(comp, comp_name: str, title: str) -> dict:
     return {"how": "alt+F4", "result": comp.key("alt+F4")}
 
 
-def launch(cfg: dict, backend: str, out: Path, tag: str, autopilot: bool = False):
+def launch(cfg: dict, backend: str, out: Path, tag: str, autopilot: bool = False, extra: dict | None = None):
     jsonl = out / f"spike-{tag}.jsonl"
     log = out / f"spike-{tag}.log"
     for f in (jsonl, log):
@@ -122,6 +136,7 @@ def launch(cfg: dict, backend: str, out: Path, tag: str, autopilot: bool = False
     env = {"SPIKE_STATE": str(out / "spike-state.json"), "RUST_LOG": "eframe=debug,egui_winit=debug"}
     if autopilot:
         env["SPIKE_AUTOPILOT"] = "1"
+    env.update(extra or {})
     started = comp.launch(["sh", "-c", command], env)
     return comp, jsonl, started
 
@@ -137,19 +152,30 @@ def last_counts(jsonl: Path) -> dict | None:
     return counts[-1] if counts else None
 
 
-def run_autopilot(cfg: dict, comp_name: str, backend: str, out: Path) -> dict:
+def run_autopilot(
+    cfg: dict, comp_name: str, backend: str, out: Path, variant: str = "default", extra: dict | None = None
+) -> dict:
     """Bare mutter lists no windows and focuses none: the example drives
     itself (`SPIKE_AUTOPILOT`), closing B then A, and its lines are kept."""
-    result: dict = {"compositor": comp_name, "backend": backend, "mode": "autopilot"}
-    comp, jsonl, started = launch(cfg, backend, out, f"{comp_name}-{backend}-auto", autopilot=True)
+    result: dict = {"compositor": comp_name, "backend": backend, "mode": "autopilot", "variant": variant}
+    tag = f"{comp_name}-{backend}-{variant}"
+    comp, jsonl, started = launch(cfg, backend, out, tag, autopilot=True, extra=extra)
     try:
         if "error" in started:
             return {**result, "error": f"launch: {started['error']}"}
         time.sleep(2.0)
-        shot(comp, out, f"spike-{comp_name}-{backend}-auto.png")
-        quit_line = wait_for(lambda: events(jsonl, "quit"), 60)
+        shot(comp, out, f"spike-{tag}.png")
+        quit_line = wait_for(lambda: events(jsonl, "quit"), 25)
         result["quit"] = quit_line[0] if quit_line else None
-        result["counts"] = events(jsonl, "counts")
+        result["ready"] = events(jsonl, "ready")
+        counts = events(jsonl, "counts")
+        result["counts_seen"] = len(counts)
+        result["counts"] = counts[-3:]
+        log = jsonl.with_suffix(".log")
+        try:
+            result["log_tail"] = [l for l in log.read_text().splitlines() if "WARN" in l or "ERROR" in l][-8:]
+        except OSError:
+            pass
         result["closed"] = events(jsonl, "closed")
         result["opened"] = events(jsonl, "opened")
         result["focus_events"] = events(jsonl, "focus")
@@ -163,7 +189,17 @@ def run_autopilot(cfg: dict, comp_name: str, backend: str, out: Path) -> dict:
 
 def run_backend(cfg: dict, comp_name: str, backend: str, out: Path) -> dict:
     if comp_name == "mutter":
-        return run_autopilot(cfg, comp_name, backend, out)
+        variants = []
+        for name, extra in VARIANTS:
+            try:
+                variants.append(run_autopilot(cfg, comp_name, backend, out, name, extra))
+            except Exception as exc:  # report and go on with the next variant
+                variants.append({"variant": name, "error": repr(exc)})
+            print(json.dumps(variants[-1]), flush=True)
+        result = {"compositor": comp_name, "backend": backend, "variants": variants}
+        if all("error" in v for v in variants):
+            result["error"] = "no variant quit by itself"
+        return result
     result: dict = {"compositor": comp_name, "backend": backend}
     state = out / "spike-state.json"
     if state.exists():
