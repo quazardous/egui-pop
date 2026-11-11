@@ -151,8 +151,8 @@ cargo xtask affected --full --run         # what main runs
 ## Other platforms
 
 `.github/workflows/platforms.yml` runs the workspace on Windows and macOS,
-on every push to `next` (a newer push cancels the running run) and by
-hand (`workflow_dispatch`, on `next` only). It is **not required**: it is
+on every push to `next` and by hand (`workflow_dispatch`). A run is never
+cancelled: a newer push waits for the running one. It is **not required**: it is
 a workflow of its own, so `main`'s promotion, which waits on CI, does not
 wait on it, and its jobs are `continue-on-error`. A red job there is a
 platform bug to look at, not a broken `next`.
@@ -169,7 +169,7 @@ The window's smoke run starts the debug gallery with a scripted run:
 gallery opens its window, detaches the notes panel into a second one,
 asks for a new size halfway, and closes by itself; the script checks its
 JSON lines (`ready` with the panel detached, `resize`, `quit` after every
-frame) and its exit code, within four minutes. The size the window had
+frame; the first line of each counts) and its exit code, within four minutes. The size the window had
 when it closed is printed, not checked: a window manager may refuse it.
 
 Each job's summary says whether the tests and the smoke run passed; the
