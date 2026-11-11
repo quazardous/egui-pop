@@ -3504,6 +3504,14 @@ impl FileBrowser {
             &crate::strings::FILES_QUICK_LOOK,
             &[("name", &e.name)],
         );
+        // An overlay over the browser (ADR 0026); above it still when the
+        // browser is in a dialog.
+        egui_pop_core::layers::rank_from(
+            &ctx,
+            egui::LayerId::new(egui::Order::Foreground, self.id.with("quick_look")),
+            egui_pop_core::layers::Rank::Overlay,
+            ui.layer_id(),
+        );
         egui::Area::new(self.id.with("quick_look"))
             .order(egui::Order::Foreground)
             .fixed_pos(rect.min)

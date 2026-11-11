@@ -378,6 +378,45 @@ that declared it (its `OwnerId`), so a host that checks layouts or
 templates against its own panels can accept those of the plugins it
 connected, and a template may place the jobs centre.
 
+### Layers: what lies over what
+
+The areas lying over the centre and the flyouts are foreground layers,
+as overlays are. egui puts the one clicked last on top; egui-pop fixes
+the order instead, in each window, bottom to top
+([ADR 0026](adr/0026-layer-ranks.md)): the docked panels, the areas
+lying over and the flyouts (`Rank::Over`), the overlays (`Rank::Overlay`:
+toasts, the tips card, hover cards, popovers, the zen way out, an
+application's own), then the menus, combo lists and dialogs, and the
+tooltips last. A click on a panel lying over no longer puts it over a
+card.
+
+An application's own overlay, a card in a corner say, is shown through
+`layers::area` at `Rank::Overlay`, instead of an `egui::Area` raised
+with `ctx.move_to_top` each pass:
+
+```rust
+use egui_pop::egui;
+use egui_pop::layers::{self, Rank};
+
+fn did_you_know(ctx: &egui::Context) {
+    let card = egui::Area::new(egui::Id::unique("app.did_you_know"))
+        .anchor(egui::Align2::LEFT_BOTTOM, [12.0, -12.0])
+        .interactable(true);
+    layers::area(ctx, card, Rank::Overlay, |ui| {
+        ui.label("Did you know?");
+    });
+}
+# let _ = did_you_know;
+```
+
+A layer drawn some other way (a `layer_painter`) calls
+`layers::rank(ctx, layer, Rank::Overlay)` each pass it is shown, and
+`layers::rank_from` ranks it only when the layer it opens from is not
+above that rank, so a card opened from a dialog stays above the dialog.
+A foreground layer nobody ranked stays above every ranked one; a host
+drawing its own surface lying over the centre makes it a sublayer of
+`layers::base(ctx, Rank::Over)`.
+
 ## Auxiliary windows
 
 A detachable panel moves to an OS window of its own, with its own scale

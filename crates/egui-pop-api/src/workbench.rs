@@ -2584,6 +2584,12 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         .flyout_dismiss(Dismiss::OUTSIDE_PRESS)
         .over_dismiss(Dismiss::NEVER)
         .inside(&in_overlay)
+        // The zones lying over and the flyout at their rank: under the
+        // overlays (cards, toasts) and the menus, whatever was clicked.
+        .sublayer_of(egui_pop_core::layers::base(
+            &ctx,
+            egui_pop_core::layers::Rank::Over,
+        ))
         .show_inside(&mut inner, &mut viewer);
     let flyout_closed = viewer.flyout_closed;
     // The shell covers `ui` without moving its cursor past the window's

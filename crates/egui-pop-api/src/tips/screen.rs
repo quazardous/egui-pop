@@ -76,10 +76,10 @@ pub fn halo_color(t: &Tokens) -> Color32 {
 /// Draws a halo around a target, over the interface and under the card.
 fn halo(ctx: &Context, t: &Tokens, rect: Rect) {
     let color = halo_color(t);
-    let painter = ctx.layer_painter(LayerId::new(
-        Order::Foreground,
-        Id::unique("egui_pop.tips.halo"),
-    ));
+    let layer = LayerId::new(Order::Foreground, Id::unique("egui_pop.tips.halo"));
+    // At the card's rank, drawn before it: under it.
+    egui_pop_core::layers::rank(ctx, layer, egui_pop_core::layers::Rank::Overlay);
+    let painter = ctx.layer_painter(layer);
     let r = rect.expand(t.space.s);
     let radius = t.radius.widget + t.space.s;
     painter.rect_stroke(
@@ -169,6 +169,12 @@ fn show_card(ctx: &Context, app: &AppHandle, tips: &Tips, tip: &Tip) {
     let heading = strings::tr(ctx, &txt::TIPS_DID_YOU_KNOW);
     let title = tip.title_in(ctx);
     let text = tip.text_shown(ctx, app);
+    // Over the lying-over panels, under menus and dialogs (ADR 0026).
+    egui_pop_core::layers::rank(
+        ctx,
+        LayerId::new(Order::Foreground, card_id()),
+        egui_pop_core::layers::Rank::Overlay,
+    );
     egui::Area::new(card_id())
         .order(Order::Foreground)
         .fixed_pos(at.min)

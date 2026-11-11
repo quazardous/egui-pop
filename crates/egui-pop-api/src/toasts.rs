@@ -755,6 +755,12 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     // Off the rects asked clear: past the farthest one, then the margin.
     let clear = clearance(&ctx, corner, Kit::of(&ctx).toast.data.width, margin);
     let offset = corner.offset(margin) + vec2(0.0, if corner.top() { clear } else { -clear });
+    // Over the lying-over panels, under menus and dialogs (ADR 0026).
+    egui_pop_core::layers::rank(
+        &ctx,
+        egui::LayerId::new(Order::Foreground, area_id()),
+        egui_pop_core::layers::Rank::Overlay,
+    );
     egui::Area::new(area_id())
         .order(Order::Foreground)
         .anchor(corner.align(), offset)

@@ -107,6 +107,10 @@ pub use egui_pop_platform as platform;
 /// Themes: tokens into egui's style (from `egui-pop-core`).
 pub use egui_pop_core::theme;
 
+/// Layer ranks: what lies over what in a window's foreground (from
+/// `egui-pop-core`, ADR 0026).
+pub use egui_pop_core::layers;
+
 pub mod mounts;
 
 /// What most applications use.
