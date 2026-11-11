@@ -23,8 +23,10 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 /// A workspace package that may be published, and the publishable
-/// workspace packages it needs at build time (dev-dependencies are
-/// stripped from published manifests, so they do not order anything).
+/// workspace packages it needs first: those it builds with, and those
+/// its dev-dependencies name with a version. Cargo strips a
+/// dev-dependency that has a path only, but keeps one with a version, and
+/// refuses to upload until that version is on crates.io.
 #[derive(Debug, PartialEq)]
 pub(crate) struct Package {
     pub(crate) name: String,
@@ -182,17 +184,29 @@ pub(crate) fn packages() -> Result<Vec<Package>, String> {
                 .and_then(|d| d.strip_prefix(&root).ok())
                 .map(|d| d.to_string_lossy().into_owned())
                 .unwrap_or_default(),
-            needs: p["dependencies"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter(|d| d["kind"].is_null() || d["kind"] == "build")
-                .filter_map(|d| d["name"].as_str())
-                .filter(|n| names.contains(*n))
-                .map(String::from)
-                .collect(),
+            needs: needs_of(p, &names),
         })
         .collect())
+}
+
+/// The publishable workspace packages `p` needs on crates.io before it
+/// can be uploaded: its build and normal dependencies, and the
+/// dev-dependencies it names with a version (not itself).
+fn needs_of(p: &serde_json::Value, names: &BTreeSet<String>) -> BTreeSet<String> {
+    let me = p["name"].as_str().unwrap_or_default();
+    p["dependencies"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|d| {
+            d["kind"].is_null()
+                || d["kind"] == "build"
+                || (d["kind"] == "dev" && d["req"].as_str().is_some_and(|r| r != "*"))
+        })
+        .filter_map(|d| d["name"].as_str())
+        .filter(|n| *n != me && names.contains(*n))
+        .map(String::from)
+        .collect()
 }
 
 /// Every package after the ones it needs; among those ready at the same
@@ -330,5 +344,25 @@ mod tests {
             "the remote server responded with an error (status 429 Too Many Requests)"
         ));
         assert!(!rate_limited("error: failed to verify package tarball"));
+    }
+
+    #[test]
+    fn a_versioned_dev_dependency_is_published_first() {
+        let names: BTreeSet<String> = ["agent", "test", "api", "macros"]
+            .iter()
+            .map(|n| n.to_string())
+            .collect();
+        let p = serde_json::json!({
+            "name": "agent",
+            "dependencies": [
+                {"name": "api", "kind": null, "req": "^0.8.0"},
+                {"name": "test", "kind": "dev", "req": "^0.8.0"},
+                {"name": "macros", "kind": "dev", "req": "*"},
+                {"name": "agent", "kind": "dev", "req": "^0.2.0"},
+                {"name": "serde", "kind": null, "req": "^1"}
+            ]
+        });
+        let needs: Vec<String> = needs_of(&p, &names).into_iter().collect();
+        assert_eq!(needs, ["api", "test"]);
     }
 }
