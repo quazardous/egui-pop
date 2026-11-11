@@ -69,6 +69,45 @@ Pull requests target `next`, a buffer branch between them and `main`:
 Releases, publishing and tags happen from `main`. A release pull request
 goes through `next` like any other.
 
+## When Ubuntu's archive is down
+
+GitHub's Ubuntu runners install packages from Ubuntu's archive
+(`archive.ubuntu.com`, its Azure mirror, `security.ubuntu.com`). When
+Canonical has an outage, every `apt-get` step fails ("Temporary failure
+resolving", "Unable to fetch some archives") through no fault of the
+code, `next` stays red and `main` is not promoted. One repository
+variable, `UBUNTU_ARCHIVE_DOWN`, tells the workflows:
+
+```sh
+gh variable set UBUNTU_ARCHIVE_DOWN --body true -R quazardous/egui-pop   # on
+gh variable delete UBUNTU_ARCHIVE_DOWN -R quazardous/egui-pop            # off
+```
+
+While it is `true`, what can only work with the archive is skipped, not
+failed, what has a fallback without it takes the fallback, and every run
+says so: a warning and a line in the summary, from the job "Ubuntu's
+archive down" and from the steps that changed.
+
+| Workflow | Job or step | With the switch on |
+|---|---|---|
+| CI | Tests (lavapipe 1/3 to 3/3) | lavapipe from a pinned Mesa build of gfx-rs/ci-build (checked by SHA-256, `.github/actions/software-vulkan`), on `ubuntu-26.04`, whose LLVM it links; a cache of its own |
+| CI | Viewer's video (GStreamer) | skipped |
+| CI | Viewer's web view (WebKitGTK) | skipped |
+| CI | Semver checks | no GStreamer or WebKitGTK packages: every crate as usual but `egui-pop` and `egui-pop-views`, checked with all their features but the video and webview ones |
+| Gallery and docs on the web | Build the API documentation | every feature but the video and webview ones |
+
+Unset or `false`, the workflows behave as they always did. A skipped job
+counts as passed, for the `CI` job and for the run's result, so a green
+run on `next` still promotes `main`. The Platforms workflow (Windows,
+macOS) uses no apt and is not affected.
+
+Meanwhile the bench box covers Linux without Ubuntu's archive:
+`egui-pop-gate` runs the workspace's tests, doctests and docs on lavapipe.
+The video and webview builds have no stand-in there: they wait until the
+switch is off, or run where GStreamer's and WebKitGTK's development
+packages are installed. Delete the variable once `apt-get update` works
+on the runners again.
+
 ## Selection
 
 `cargo xtask affected` reads the files a change touches (against the

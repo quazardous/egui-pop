@@ -1,0 +1,73 @@
+name: software Vulkan
+description: >
+  lavapipe, Mesa's software Vulkan, for runners without a GPU. Ubuntu's
+  archive first, with a short deadline; when it cannot be reached, a Mesa
+  build hosted on GitHub (gfx-rs/ci-build, the build wgpu's own CI runs on).
+inputs:
+  mesa-version:
+    description: Mesa version of the fallback build.
+    default: "26.2.6"
+  ci-build:
+    description: gfx-rs/ci-build release holding that Mesa build.
+    default: "build31"
+  sha256:
+    description: SHA-256 of the fallback archive, so a moved release is refused.
+    default: "334ebc6c9ca5c5659f36536e987fe64d741cef750b64a17080a27b4646257460"
+  apt:
+    description: >
+      "false" goes straight to the fallback, without trying Ubuntu's archive
+      (callers pass the repository variable UBUNTU_ARCHIVE_DOWN, docs/testing.md).
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - name: apt, then the GitHub-hosted Mesa
+      shell: bash
+      env:
+        MESA_VERSION: ${{ inputs.mesa-version }}
+        CI_BUILD: ${{ inputs.ci-build }}
+        MESA_SHA256: ${{ inputs.sha256 }}
+        USE_APT: ${{ inputs.apt }}
+      run: |
+        set -euo pipefail
+        # Ubuntu's archive has gone unreachable from the runners for hours
+        # (DNS outages): give it three minutes, few retries, then move on.
+        apt_opts=(-o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15)
+        if [ "$USE_APT" != true ]; then
+          msg="UBUNTU_ARCHIVE_DOWN is set: apt skipped, lavapipe from gfx-rs/ci-build $CI_BUILD (Mesa $MESA_VERSION)"
+          echo "::warning::$msg"
+          echo "- $msg" >> "$GITHUB_STEP_SUMMARY"
+        elif timeout 180 sudo apt-get "${apt_opts[@]}" -o APT::Update::Error-Mode=any update -q &&
+          timeout 180 sudo apt-get "${apt_opts[@]}" install -yq mesa-vulkan-drivers; then
+          echo "lavapipe from Ubuntu's archive"
+          exit 0
+        else
+          echo "::warning::Ubuntu's archive unreachable: lavapipe from gfx-rs/ci-build $CI_BUILD (Mesa $MESA_VERSION)"
+        fi
+        dir="$RUNNER_TEMP/mesa"
+        mkdir -p "$dir"
+        curl -fL --retry 5 -o "$dir/mesa.tar.xz" \
+          "https://github.com/gfx-rs/ci-build/releases/download/$CI_BUILD/mesa-$MESA_VERSION-linux-x86_64.tar.xz"
+        echo "$MESA_SHA256  $dir/mesa.tar.xz" | sha256sum -c -
+        tar xf "$dir/mesa.tar.xz" -C "$dir"
+        lvp="$dir/lib/x86_64-linux-gnu/libvulkan_lvp.so"
+        # The build links the system's LLVM (the image's clang 22) and needs
+        # the Vulkan loader: say plainly when the image lacks either.
+        if ldd "$lvp" | grep 'not found'; then
+          echo "::error::lavapipe's libraries are missing on this image"
+          exit 1
+        fi
+        # (No grep -q: it would cut the pipe and pipefail would fail it.)
+        if ! ldconfig -p | grep 'libvulkan\.so\.1 ' >/dev/null; then
+          echo "::error::no Vulkan loader (libvulkan.so.1) on this image"
+          exit 1
+        fi
+        # The build's own ICD file names its build machine's paths.
+        cat > "$dir/lvp_icd.json" <<JSON
+        {
+          "file_format_version": "1.0.1",
+          "ICD": { "library_path": "$lvp", "library_arch": "64", "api_version": "1.4.354" }
+        }
+        JSON
+        echo "VK_DRIVER_FILES=$dir/lvp_icd.json" >> "$GITHUB_ENV"
+        echo "VK_ICD_FILENAMES=$dir/lvp_icd.json" >> "$GITHUB_ENV"
