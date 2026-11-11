@@ -21,7 +21,12 @@
 //!   Shift by default) make a drag, the wheel and the arrows ten times
 //!   finer or coarser, as on a slider; pressed mid-drag, from where the
 //!   value is (no jump).
-//! - **Wheel**, **keys** (arrows, Page Up and Page Down, Home and End),
+//! - **Wheel**: as the slider's, by the pointer profile (in the guarded
+//!   profiles the panel scrolls unless the knob has the focus or the step
+//!   modifier is held), or over the knob whenever the pointer is, with
+//!   [`KnobWheel::Hover`], for places that do not scroll. A notch is a
+//!   step; a touchpad's scroll steps once a line's length.
+//! - **Keys** (arrows, Page Up and Page Down, Home and End),
 //!   **typed entry** (Enter) and **assistive actions**: as the slider's,
 //!   from the same pointer profile.
 //! - **Double click**: back to the default.
@@ -63,6 +68,21 @@ use crate::state::Slot;
 
 pub use egui_pop_model::pointer::KnobDrag;
 
+/// When the wheel turns a knob.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum KnobWheel {
+    /// As the pointer profile says for sliders (`options.slider_wheel`):
+    /// in the guarded profiles the wheel scrolls the panel unless the
+    /// knob has the focus or the step modifier is held.
+    #[default]
+    Profile,
+    /// Whenever the pointer is over the knob, focused or not: for knobs
+    /// in places that do not scroll (a strip of controls, a HUD over an
+    /// image). The panel modifiers (`gesture.value.panel`) still give the
+    /// wheel to what is under the knob.
+    Hover,
+}
+
 /// The dial's sweep, in radians: from 7:30 to 4:30 through 12.
 pub const SWEEP: f32 = 1.5 * PI;
 
@@ -97,6 +117,7 @@ pub struct Knob<'a> {
     size: Option<Vec2>,
     travel: f32,
     drag: Option<KnobDrag>,
+    wheel: KnobWheel,
 }
 
 impl<'a> Knob<'a> {
@@ -111,6 +132,7 @@ impl<'a> Knob<'a> {
             size: None,
             travel: TRAVEL,
             drag: None,
+            wheel: KnobWheel::Profile,
         }
     }
 
@@ -139,6 +161,13 @@ impl<'a> Knob<'a> {
     /// (`options.knob_drag`).
     pub fn drag(mut self, mode: KnobDrag) -> Self {
         self.drag = Some(mode);
+        self
+    }
+
+    /// When the wheel turns this knob; by default as the pointer profile
+    /// says.
+    pub fn wheel(mut self, wheel: KnobWheel) -> Self {
+        self.wheel = wheel;
         self
     }
 
@@ -173,6 +202,7 @@ impl<'a> Knob<'a> {
             size,
             travel,
             drag,
+            wheel,
         } = self;
         let row = ui.spacing().interact_size.y;
         let wanted = size.unwrap_or(vec2(row * 2.0 * 3.0, row * 2.0));
@@ -249,8 +279,12 @@ impl<'a> Knob<'a> {
             if response.clicked() {
                 response.request_focus();
             }
+            let mut wheel_g = g;
+            if wheel == KnobWheel::Hover {
+                wheel_g.wheel_steps = true;
+            }
             if let Some((v, cause)) =
-                keys_wheel_access(ui, &response, &spec, *value, spec.soft, scale, &g)
+                keys_wheel_access(ui, &response, &spec, *value, spec.soft, scale, &wheel_g)
             {
                 let to = spec.settle(v, spec.hard);
                 if to != *value {

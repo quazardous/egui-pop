@@ -1102,24 +1102,16 @@ pub(crate) fn keys_wheel_access(
     }
     // The wheel: the panel scrolls, unless the slider has the focus,
     // the wheel modifier is held over it or the profile has the wheel
-    // step values; then each notch (a touchpad's stream as one per
-    // frame) steps it and the panel does not scroll. The panel
-    // modifiers always leave the wheel to the panel.
+    // step values; then each notch steps it, a touchpad's stream steps
+    // it once a line's length ([`wheel_steps`]), and the panel does not
+    // scroll. The panel modifiers always leave the wheel to the panel.
     let mods = ui.input(|i| i.modifiers);
     let wheel_held = g.wheel.any() && mods.matches_logically(g.wheel);
     let panel_held = g.panel.any() && mods.matches_logically(g.panel);
     if response.hovered() && !panel_held && (response.has_focus() || wheel_held || g.wheel_steps) {
-        let wheel: f32 = ui.input(|i| {
-            i.events
-                .iter()
-                .filter_map(|e| match e {
-                    egui::Event::MouseWheel { delta, .. } => Some(delta.y + delta.x),
-                    _ => None,
-                })
-                .sum()
-        });
-        if wheel != 0.0 {
-            v = spec.stepped(v, f64::from(wheel.signum()), scale);
+        let steps = wheel_steps(ui, response.id);
+        if steps != 0.0 {
+            v = spec.stepped(v, steps, scale);
             cause = Some(Cause::Wheel);
         }
         // egui spreads a notch's scroll over the next frames: what is
@@ -1162,6 +1154,60 @@ pub(crate) fn keys_wheel_access(
         cause = Some(Cause::Access);
     }
     cause.map(|c| (v, c))
+}
+
+/// A touchpad's scroll not yet a whole step, per widget, and when it
+/// last came.
+const WHEEL_REST: Slot<(f64, f64)> = Slot::new("core.slider.wheel_rest");
+
+/// A pause in a touchpad's stream longer than this, in seconds, drops
+/// what was left of a step.
+const WHEEL_REST_PAUSE: f64 = 0.4;
+
+/// This pass's wheel input over the widget `id`, in steps: one a notch
+/// of a mouse wheel, and a touchpad's points (as the wheel device
+/// setting tells them apart) summed over the frames, a step a line's
+/// length (`line_scroll_speed`), what is left kept for the next pass.
+pub(crate) fn wheel_steps(ui: &Ui, id: Id) -> f64 {
+    use egui_pop_model::keymap::Pointer;
+    let device = crate::pointer::map(ui.ctx()).wheel_device;
+    let line = f64::from(
+        ui.ctx()
+            .options(|o| o.input_options.line_scroll_speed)
+            .max(1.0),
+    );
+    let (notches, points, now) = ui.input(|i| {
+        let mut notches = 0.0;
+        let mut points = 0.0;
+        for e in &i.events {
+            if let egui::Event::MouseWheel { unit, delta, .. } = e {
+                let d = delta.y + delta.x;
+                match crate::pointer::wheel_pointer(*unit, device) {
+                    Pointer::Scroll => {
+                        points += f64::from(match unit {
+                            egui::MouseWheelUnit::Point => d,
+                            egui::MouseWheelUnit::Line => d * line as f32,
+                            egui::MouseWheelUnit::Page => d * i.content_rect().height(),
+                        });
+                    }
+                    _ => notches += f64::from(d.signum()),
+                }
+            }
+        }
+        (notches, points, i.time)
+    });
+    if points == 0.0 {
+        return notches;
+    }
+    let slot = WHEEL_REST.keyed(id);
+    let rest = match slot.get(ui.ctx()) {
+        Some((rest, at)) if now - at <= WHEEL_REST_PAUSE => rest,
+        _ => 0.0,
+    };
+    let total = rest + points / line;
+    let whole = total.trunc();
+    slot.set(ui.ctx(), (total - whole, now));
+    notches + whole
 }
 
 /// Opens the typed entry with `text`. The entry takes the keyboard on
