@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "Serves egui-pop's debug bridge out of the process, opt-in: JSON-RPC 2.0 over a private local socket (describe, snapshot, call, wait), for agents that drive a running application"
 readme = "README.md"
 keywords = ["egui", "agent", "json-rpc", "automation", "testing"]
