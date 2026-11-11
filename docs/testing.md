@@ -321,6 +321,46 @@ rerun with `--test-threads=1` before concluding anything. Under nextest
 every test is a process of its own, so the parallel threads that trigger
 the crash are rarer, and a test that crashes anyway is retried.
 
+## Performance
+
+The gallery's `perf` example measures its heavy pages headless:
+`node-graph`, `viewport`, `file-browser`, `table`, `text-log` and
+`sections`. Each page runs on a fresh context for 60 frames of warm-up and
+300 measured frames, with a fixed clock (1/60 s a frame) and fixed input:
+the pointer sweeps the window on a set path and the wheel scrolls down
+then up every four seconds. Per page, one JSON line:
+
+- `build_p50_ms`, `build_p95_ms`, `build_max_ms`: the frame's build
+  (`run_ui`, egui-pop's logic and drawing); `tessellate_p50_ms`,
+  `tessellate_p95_ms`: its tessellation;
+- `shapes`, `vertices`: what the last frame draws;
+- `rss_start_mb`, `rss_peak_mb`, `rss_end_mb`, `rss_growth_mb`: the
+  process's resident memory after the warm-up, its peak while the page
+  runs, after the last frame, and what the measured frames added (Linux,
+  `/proc/self/status`; none elsewhere).
+
+The counts (shapes, vertices) are the same on every run; the times and,
+less so, the memory vary with the machine and its load. Rendering is not measured: there
+is no GPU, only what the interface thread does before egui-wgpu.
+
+```sh
+cargo run --release -p egui-pop-gallery --example perf
+cargo run --release -p egui-pop-gallery --example perf -- node-graph table
+cargo run --release -p egui-pop-gallery --example perf -- --baseline last.jsonl
+```
+
+With `--baseline` (the JSON lines of an earlier run), a figure that grew
+beyond its threshold is reported as a `warning:` line; the exit code stays
+0. The thresholds, in percent: build p50 25, build p95 40, tessellation
+p50 25, vertices 10, resident peak 15, resident growth 50 (a figure under
+a tenth of a millisecond or a megabyte is noise, and is not compared).
+
+The gate runs on the maintainers' bench box, the machine alone (a timing
+job, `egui-pop-perf`): every full run is kept per branch, and compared
+with the last run of `next`, which is the baseline. It is run on `next`
+after merges that may move the figures, and on a branch before merging
+one that may. It warns; it never blocks a merge.
+
 ## Critical tests
 
 Selective runs (below) skip what a change cannot affect. Some tests
