@@ -1,8 +1,10 @@
-"""Several OS windows in one process, through wbox: the multi-window spike.
+"""Several OS windows in one process, through wbox.
 
-Runs the gallery's `multi_window_spike` example (a hidden coordinator root
-and two deferred windows, "Spike A" animating and "Spike B" idle) in a
-nested compositor and records, per backend, what the platform does:
+Runs the gallery's `multi_window` example (egui-pop's window API, ADR
+0025: the main window, "Spike root", and two application windows, "Spike
+A" animating and "Spike B" idle), or with `--example multi_window_spike`
+the plain-eframe spike (a hidden coordinator root), in a nested compositor
+and records, per backend, what the platform does:
 
 - whether the root really hides (it should not be listed);
 - frames per window over a few seconds: A advances, B and the root stay
@@ -10,7 +12,9 @@ nested compositor and records, per backend, what the platform does:
 - focus: A focused by the compositor, then `F` pressed in A asks the OS to
   raise B (`ViewportCommand::Focus`); which window ends up activated;
 - close B through the compositor: B goes, A and the process stay;
-- close A: the process quits by itself;
+- close A: the process quits by itself (the spike); with the API, close
+  the main window instead: A moves into it (a `moved` line, A still
+  counting), then close it, the last window: the process quits;
 - geometry: a second start with B's size and position edited in the state
   file the first run saved; what B reports.
 
@@ -20,8 +24,9 @@ headless mutter, once per variant of `VARIANTS` (wgpu present mode,
 A's size), each driving itself (`SPIKE_AUTOPILOT`): which variants
 keep both windows painting there.
 
-    cargo build --release -p egui-pop-gallery --example multi_window_spike
-    python tools/wbox/multi_window.py [--out DIR] [--backends wayland,x11]
+    cargo build --release -p egui-pop-gallery --example multi_window
+    python tools/wbox/multi_window.py [--out DIR] [--backends wayland,x11] \
+        [--example multi_window|multi_window_spike]
 
 The script builds the example itself when `--build` is given (a bench box
 job). One JSON line per backend on stdout and `multi_window.json` in the
@@ -56,7 +61,7 @@ TITLES = {"root": "Spike root", "a": "Spike A", "b": "Spike B"}
 # makes A larger, so B covers only part of it; `SPIKE_ROOT_SIZE` makes the
 # root larger, so A and B cover only part of it. Immediate is not offered
 # by lavapipe on Wayland (wgpu panics), AutoNoVsync picks Mailbox there.
-VARIANTS = [
+SPIKE_VARIANTS = [
     ("default", {}),
     ("autonovsync", {"SPIKE_PRESENT_MODE": "autonovsync"}),
     ("mailbox", {"SPIKE_PRESENT_MODE": "mailbox"}),
@@ -66,9 +71,35 @@ VARIANTS = [
 ]
 
 
+# The API example's variants: its default (`AppBuilder::multi_window`:
+# AutoNoVsync on Wayland), and FIFO forced, the mode that stalls.
+API_VARIANTS = [
+    ("default", {}),
+    ("fifo", {"MW_PRESENT_MODE": "fifo"}),
+]
+
+# The example run: `multi_window` (the API) or `multi_window_spike`.
+EXAMPLE = os.environ.get("MW_EXAMPLE", "multi_window")
+
+
+def api() -> bool:
+    return EXAMPLE == "multi_window"
+
+
+def env_name(name: str) -> str:
+    """An environment variable of the example run (`SPIKE_*` or `MW_*`)."""
+    return name if not api() else name.replace("SPIKE_", "MW_")
+
+
+def state_path(out: Path) -> Path:
+    """Where the example keeps the windows' geometry: the spike's file, or
+    the API's `windows.json` in its persistence directory."""
+    return out / "spike-state.json" if not api() else out / "mw-state" / "windows.json"
+
+
 def binary() -> Path:
     target = Path(os.environ.get("CARGO_TARGET_DIR") or ROOT / "target")
-    return target / "release" / "examples" / "multi_window_spike"
+    return target / "release" / "examples" / EXAMPLE
 
 
 def lines(jsonl: Path) -> list[dict]:
@@ -135,9 +166,13 @@ def launch(cfg: dict, backend: str, out: Path, tag: str, autopilot: bool = False
     comp.state.screenshot_dir = resolve_dir(cfg, "screenshot_dir", "./screenshots")
     if hasattr(comp, "set_log_dir"):
         comp.set_log_dir(resolve_dir(cfg, "log.dir", "./log"))
-    env = {"SPIKE_STATE": str(out / "spike-state.json"), "RUST_LOG": "eframe=debug,egui_winit=debug"}
+    state = state_path(out)
+    env = {
+        env_name("SPIKE_STATE"): str(state if not api() else state.parent),
+        "RUST_LOG": "eframe=debug,egui_winit=debug",
+    }
     if autopilot:
-        env["SPIKE_AUTOPILOT"] = "1"
+        env[env_name("SPIKE_AUTOPILOT")] = "1"
     env.update(extra or {})
     started = comp.launch(["sh", "-c", command], env)
     return comp, jsonl, started
@@ -179,6 +214,7 @@ def run_autopilot(
         except OSError:
             pass
         result["closed"] = events(jsonl, "closed")
+        result["moved"] = events(jsonl, "moved")
         result["opened"] = events(jsonl, "opened")
         result["focus_events"] = events(jsonl, "focus")
         result["errors"] = events(jsonl, "error")
@@ -192,7 +228,7 @@ def run_autopilot(
 def run_backend(cfg: dict, comp_name: str, backend: str, out: Path) -> dict:
     if comp_name == "mutter":
         variants = []
-        for name, extra in VARIANTS:
+        for name, extra in (API_VARIANTS if api() else SPIKE_VARIANTS):
             try:
                 variants.append(run_autopilot(cfg, comp_name, backend, out, name, extra))
             except Exception as exc:  # report and go on with the next variant
@@ -203,7 +239,7 @@ def run_backend(cfg: dict, comp_name: str, backend: str, out: Path) -> dict:
             result["error"] = "no variant quit by itself"
         return result
     result: dict = {"compositor": comp_name, "backend": backend}
-    state = out / "spike-state.json"
+    state = state_path(out)
     if state.exists():
         state.unlink()
     comp, jsonl, started = launch(cfg, backend, out, f"{comp_name}-{backend}-1")
@@ -266,6 +302,17 @@ def run_backend(cfg: dict, comp_name: str, backend: str, out: Path) -> dict:
         result["opened"] = events(jsonl, "opened")
         shot(comp, out, f"spike-{comp_name}-{backend}-after-close-b.png")
 
+        if api():
+            # Close the main window while A is open: A moves into it.
+            result["close_root"] = close_window(comp, comp_name, TITLES["root"])
+            moved = wait_for(lambda: events(jsonl, "moved"), 5)
+            result["moved"] = moved[0] if moved else None
+            time.sleep(1.5)
+            result["after_close_root"] = titles(comp)
+            in_root = last_counts(jsonl)
+            result["a_in_root"] = bool(in_root and in_root.get("in_root"))
+            shot(comp, out, f"spike-{comp_name}-{backend}-after-close-root.png")
+
         # Close A, the last: the process quits.
         result["close_a"] = close_window(comp, comp_name, TITLES["a"])
         quit_line = wait_for(lambda: events(jsonl, "quit"), 8)
@@ -282,8 +329,9 @@ def run_backend(cfg: dict, comp_name: str, backend: str, out: Path) -> dict:
     except (OSError, ValueError):
         saved = {}
     result["saved_state"] = dict(saved)
-    want = {"size": [500.0, 330.0], "pos": [300.0, 200.0]}
+    want = {"size": [500.0, 330.0], ("position" if api() else "pos"): [300.0, 200.0]}
     saved["b"] = want
+    state.parent.mkdir(parents=True, exist_ok=True)
     state.write_text(json.dumps(saved))
     comp, jsonl, started = launch(cfg, backend, out, f"{comp_name}-{backend}-2")
     try:
@@ -305,7 +353,11 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=HERE / "out")
     parser.add_argument("--backends", default=None, help="wayland,x11 (labwc default) or wayland")
     parser.add_argument("--build", action="store_true", help="build the example first")
+    parser.add_argument("--example", default=None, help="multi_window (default) or multi_window_spike")
     args = parser.parse_args()
+    global EXAMPLE
+    if args.example:
+        EXAMPLE = args.example
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     # A bench box job (CARGO_TARGET_DIR set) builds every time: its target is a
@@ -313,7 +365,7 @@ def main() -> int:
     if args.build or os.environ.get("CARGO_TARGET_DIR") or not binary().exists():
         subprocess.run(
             ["cargo", "build", "--release", "--locked", "-p", "egui-pop-gallery",
-             "--example", "multi_window_spike"],
+             "--example", EXAMPLE],
             cwd=ROOT,
             check=True,
         )
