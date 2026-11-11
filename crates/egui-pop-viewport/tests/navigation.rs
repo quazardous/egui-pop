@@ -340,3 +340,83 @@ fn the_overview_shows_only_when_the_graph_is_much_larger_than_the_view() {
     h.run();
     assert!(h.query_by_label("Graph overview").is_none(), "fitted again");
 }
+
+/// The graph with its overview always on and, once `window` is set, a
+/// window over the whole canvas.
+struct Covered {
+    graph: Graph,
+    view: GraphState,
+    window: bool,
+}
+
+#[test]
+fn a_window_over_the_canvas_lies_over_its_hint_indicator_and_overview() {
+    let mut h = Harness::builder()
+        .with_size(vec2(720.0, 420.0))
+        .build_ui_state(
+            |ui, s: &mut Covered| {
+                GraphEditor::new(&s.graph, &mut s.view)
+                    .size(vec2(700.0, 400.0))
+                    .hint(true)
+                    .overview(Overview::Always)
+                    .show(ui);
+                if s.window {
+                    egui::Window::new("Over")
+                        .fixed_pos(pos2(0.0, 0.0))
+                        .fixed_size(vec2(700.0, 380.0))
+                        .show(ui.ctx(), |ui| {
+                            ui.set_min_size(vec2(680.0, 340.0));
+                            ui.label("over the canvas")
+                        });
+                }
+            },
+            Covered {
+                graph: Graph {
+                    nodes: vec![Node::new("a", "a", "A", [0.0, 0.0])],
+                },
+                view: GraphState::new(),
+                window: false,
+            },
+        );
+    h.run();
+    let canvas = h.get_by_label("Node graph").rect();
+    let at = canvas.left_bottom() + vec2(20.0, -20.0);
+    h.hover_at(at);
+    h.run();
+    h.key_press_modifiers(Modifiers::NONE, Key::H);
+    h.run();
+    let overlays = [HINT, HAND, "Graph overview"].map(|label| {
+        let r = h
+            .query_by_label(label)
+            .unwrap_or_else(|| panic!("{label} shows"))
+            .rect();
+        (label, r.center())
+    });
+    for (label, c) in overlays {
+        let layer = h.ctx.layer_id_at(c).unwrap();
+        assert_ne!(
+            layer.order,
+            egui::Order::Foreground,
+            "{label}: above windows"
+        );
+    }
+    h.state_mut().window = true;
+    h.run();
+    h.run();
+    let window = h
+        .query_by_role_and_label(egui::accesskit::Role::Window, "Over")
+        .expect("the window shows")
+        .rect();
+    for (label, c) in overlays {
+        assert!(
+            window.contains(c),
+            "{label} lies under the window: {window:?}"
+        );
+        let layer = h.ctx.layer_id_at(c).unwrap();
+        assert_eq!(
+            layer.order,
+            egui::Order::Middle,
+            "{label} is drawn over the window"
+        );
+    }
+}

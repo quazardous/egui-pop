@@ -459,29 +459,48 @@ fn overlay_label(
         _ => at,
     };
     let r = Rect::from_min_size(min, size).intersect(clip);
-    // In an area above the canvas (and above the scene's own layer, where
-    // a graph's nodes are), so it takes no room in the canvas's `Ui`.
-    egui::Area::new(ui.scope_id().with(("egui_pop.navigation.overlay", text)))
-        .order(egui::Order::Foreground)
-        .fixed_pos(r.min)
+    // In an area just above the canvas (and above the scene's own layer,
+    // where a graph's nodes are), so it takes no room in the canvas's
+    // `Ui`, and a window over the canvas stays over it.
+    let id = ui.scope_id().with(("egui_pop.navigation.overlay", text));
+    canvas_overlay(ui, id, r.min, |ui| {
+        ui.set_clip_rect(clip);
+        let (r, resp) = ui.allocate_exact_size(r.size(), sense);
+        let fill = ui.visuals().window_fill.gamma_multiply(0.92);
+        let stroke = ui.visuals().window_stroke;
+        ui.painter()
+            .rect(r, 4.0, fill, stroke, egui::StrokeKind::Inside);
+        let label = text.to_string();
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &label));
+        ui.painter().galley(
+            r.center() - galley.size() / 2.0,
+            galley,
+            ui.visuals().strong_text_color(),
+        );
+        resp
+    })
+    .inner
+}
+
+/// An overlay over a canvas drawn in `ui`, at `at`: an area in the
+/// canvas layer's order, drawn just above that layer (a sublayer of it),
+/// not in the foreground order, where it would lie over every window,
+/// popup or dialog that covers the canvas.
+pub(crate) fn canvas_overlay<R>(
+    ui: &Ui,
+    id: Id,
+    at: egui::Pos2,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> egui::InnerResponse<R> {
+    let parent = ui.layer_id();
+    let shown = egui::Area::new(id)
+        .order(parent.order)
+        .fixed_pos(at)
         .constrain(false)
-        .show(ui.ctx(), |ui| {
-            ui.set_clip_rect(clip);
-            let (r, resp) = ui.allocate_exact_size(r.size(), sense);
-            let fill = ui.visuals().window_fill.gamma_multiply(0.92);
-            let stroke = ui.visuals().window_stroke;
-            ui.painter()
-                .rect(r, 4.0, fill, stroke, egui::StrokeKind::Inside);
-            let label = text.to_string();
-            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &label));
-            ui.painter().galley(
-                r.center() - galley.size() / 2.0,
-                galley,
-                ui.visuals().strong_text_color(),
-            );
-            resp
-        })
-        .inner
+        .show(ui.ctx(), add);
+    let layer = shown.response.layer_id;
+    ui.ctx().set_sublayer(parent, layer);
+    shown
 }
 
 /// The zoom steps a [`CanvasZoom`]'s menu offers by default, in percent
