@@ -89,7 +89,10 @@ An application picks its profile with `AppBuilder::pointer_profile`
 `input.slider_wheel` (`guarded`: the wheel scrolls the panel and steps a
 slider with the focus or the step modifiers; `value`: it changes the
 slider under the pointer) and `input.image_double_click` (`fit`,
-`leave`, `nothing`). `input.wheel_device` settles what sends wheel
+`leave`, `nothing`). A third, `knob_drag`, is in each profile's
+`options` (`vertical`, `horizontal`, `both`, `circular`; `vertical` in
+every shipped profile): how a drag turns a knob that does not say
+(`Knob::drag`), carried to the widgets in the sliders' `Gestures`. `input.wheel_device` settles what sends wheel
 events: `auto` takes lines for a mouse wheel and points for a
 trackpad, `mouse` and `trackpad` say it outright (some mice send
 points). `input.wheel_speed` multiplies how far a notch goes, in scroll areas

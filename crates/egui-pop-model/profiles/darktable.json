@@ -6,7 +6,8 @@
   "description": "The wheel zooms the image at the pointer (Ctrl: without stops), a middle click cycles 100 %, 200 % and fit, the wheel changes the slider under the pointer, as in darktable.",
   "options": {
     "slider_wheel": "value",
-    "image_double_click": "leave"
+    "image_double_click": "leave",
+    "knob_drag": "vertical"
   },
   "input": {
     "zoom": "Ctrl",

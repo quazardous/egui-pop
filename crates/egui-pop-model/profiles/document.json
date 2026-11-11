@@ -6,7 +6,8 @@
   "description": "Everything scrolls like a page and Ctrl with the wheel zooms, as in GIMP, Inkscape, Figma and the web.",
   "options": {
     "slider_wheel": "guarded",
-    "image_double_click": "fit"
+    "image_double_click": "fit",
+    "knob_drag": "vertical"
   },
   "input": {
     "zoom": "Ctrl",

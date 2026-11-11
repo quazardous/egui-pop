@@ -6,7 +6,7 @@
 //! a card's "More (n)" row is drawn with.
 
 use egui::{Ui, vec2};
-use egui_pop::core::knob::Knob;
+use egui_pop::core::knob::{Knob, KnobDrag};
 use egui_pop::core::sections;
 use egui_pop::core::slider::{Gradient, Slider};
 
@@ -96,7 +96,9 @@ pub fn show(ui: &mut Ui, s: &mut State) {
             .default(0.0)
             .size(vec2(64.0, 110.0))
             .show(ui);
+        // An angle turns around: the circular drag, for this knob only.
         Knob::new(&mut s.knobs[2], "Angle", -180.0..=180.0)
+            .drag(KnobDrag::Circular)
             .step(1.0)
             .unit("°")
             .default(0.0)
