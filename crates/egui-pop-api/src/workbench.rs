@@ -1984,13 +1984,15 @@ const WINDOW_EDGE_COVERAGE: f32 = 0.25;
 /// they showed is gone with them (a dialog shown there comes to the main
 /// window).
 pub(crate) fn forget_closed_windows(app: &AppHandle, ctx: &egui::Context) {
-    let open: Vec<ViewportId> = app
+    let mut open: Vec<ViewportId> = app
         .workbench_mut()
         .layout
         .auxiliary
         .iter()
         .map(|a| window_id(&a.panel))
         .collect();
+    // The application's own windows keep theirs too (ADR 0025).
+    open.extend(app.windows().iter().skip(1).map(|w| w.viewport));
     egui_pop_core::overlay::retain_windows(ctx, &open);
 }
 

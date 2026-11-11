@@ -45,6 +45,34 @@ wbox on labwc, headless mutter and Xwayland) measured eframe 0.37:
 - Per window: keys are dispatched in its own pass (`appWindow` names it in
   `when` clauses); a modal open in an application window blocks that
   window only.
+- **Each window's shell is its own** (2026-11-11). A *window group* is
+  an application window, or the main window with its detached panels
+  (`AppHandle::window_group`). What opens belongs to the group it was
+  opened from: the window being drawn, the window whose command opened
+  it (its `appWindow`), the window an agent's call names, else the
+  active one.
+  - **Toasts:** each group stacks its own (`Toasts::notify_in` names
+    one); a closed window's go to the main window.
+  - **Dialogs:** one queue per group, one dialog shown in each at a
+    time; a dialog blocks its group only. `modalOpen` is per group
+    (`overlay::modal_open`, with `overlay::set_separate_windows`): a
+    modal in an application window no longer makes `!modalOpen`
+    commands refuse in the main window. A closed (or moved) window's
+    dialogs go to the main window's queue.
+  - **The palette:** one per group, opened where it is asked, offering
+    and running in that window's context (its commands and the global
+    ones), Escape closing that one only.
+  - **Agents:** `call` and `snapshot` take `window` (a window id, `main`
+    for the main window; the active window without one), and
+    `describe` lists the open windows (`id`, `title`, `main`,
+    `active`).
+  - **Quick pick:** `window.pick` (Window > Switch to window…) lists the
+    open windows by title in a choice with a filter, in the window it is
+    asked in.
+- **Geometry when a window moves into the main window:** the main
+  window keeps its own geometry under its own id (`main`), and the
+  moved content keeps the one saved under its id; the main window's size
+  is never written under the content's id.
 - `AppBuilder::multi_window(true)` makes `run_native` use `AutoNoVsync`
   on Wayland (`WAYLAND_DISPLAY` set) and `AutoVsync` elsewhere, unless the
   application chose a mode.
@@ -60,3 +88,12 @@ wbox on labwc, headless mutter and Xwayland) measured eframe 0.37:
   existing window in winit 0.30).
 - `egui_pop_test::windows::MultiWindow` drives such an application
   headless, each window's pass on its own.
+- A `when` context asked for another group than the window being drawn
+  (an agent naming a window from the main window's pass) has that
+  group's `appWindow`, `window` and `modalOpen`; its focus-chain keys
+  stay those of the window being drawn.
+- Not yet per window: the workbench layout. An application window's
+  content is a closure, not a workbench; when it moves into the main
+  window it replaces the shell there (the shell's detached panels are
+  not drawn meanwhile). A workbench per window (its own layout, its
+  detached panels following it) is left for a later slice.

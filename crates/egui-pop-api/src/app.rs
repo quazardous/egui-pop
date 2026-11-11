@@ -996,7 +996,14 @@ impl AppHandle {
                 "call": { "collector": "commands", "action": "run", "id": s.id },
             }));
         }
-        json!({ "protocol": PROTOCOL, "capabilities": caps })
+        // The windows an agent may name (`window` on `call` and
+        // `snapshot`), the main one first.
+        let windows: Vec<Json> = self
+            .windows()
+            .into_iter()
+            .map(|w| json!({ "id": w.id, "title": w.title, "main": w.main, "active": w.active }))
+            .collect();
+        json!({ "protocol": PROTOCOL, "capabilities": caps, "windows": windows })
     }
 
     /// A bridge call, outside any step. `bridge.describe` lists the
@@ -1049,6 +1056,65 @@ impl AppHandle {
     /// Every collector's snapshot.
     pub fn debug_snapshot(&self) -> Json {
         self.0.bridge.borrow().snapshot(&self.egui())
+    }
+
+    /// The window group an agent's call names (an application window's
+    /// id, `main` for the main window), or the active window's without
+    /// one (ADR 0025).
+    pub fn window_group_named(&self, window: Option<&str>) -> Result<egui::ViewportId, String> {
+        match window {
+            None => Ok(self.window_group(self.active_window())),
+            Some(w) => {
+                let id = crate::windows::WindowId::new(w);
+                let viewport = if w == crate::windows::WindowId::MAIN {
+                    Some(egui::ViewportId::ROOT)
+                } else {
+                    self.window_viewport(&id)
+                };
+                viewport
+                    .map(|v| self.window_group(v))
+                    .ok_or_else(|| format!("no open window `{w}`"))
+            }
+        }
+    }
+
+    /// Every collector's snapshot, seen from a window (an application
+    /// window's id; the active window without one): the dialog shown
+    /// there, the context its commands run in.
+    pub fn debug_snapshot_in(&self, window: Option<&str>) -> Result<Json, String> {
+        let group = self.window_group_named(window)?;
+        let _group = crate::windows::enter_group(Some(group));
+        Ok(self.debug_snapshot())
+    }
+
+    /// Calls a collector's action for `origin` in a window (an
+    /// application window's id; the active window without one): a
+    /// command runs in that window's context (`appWindow`, `modalOpen`),
+    /// and what it opens (a dialog, a toast, the palette) shows there;
+    /// `dialogs.answer` answers the dialog shown there.
+    pub fn debug_call_in(
+        &self,
+        window: Option<&str>,
+        collector: &str,
+        action: &str,
+        args: &Json,
+        origin: Origin,
+    ) -> Feedback {
+        let group = match self.window_group_named(window) {
+            Ok(g) => g,
+            Err(e) => {
+                return Feedback {
+                    ok: false,
+                    collector: collector.into(),
+                    action: action.into(),
+                    mutates: false,
+                    message: e,
+                    data: Json::Null,
+                };
+            }
+        };
+        let _group = crate::windows::enter_group(Some(group));
+        self.debug_call_as(collector, action, args, origin)
     }
 
     /// Calls a collector's action as the agent
@@ -1452,7 +1518,7 @@ impl AppHandle {
         let ctx = self.egui();
         let dialog = self
             .service(&crate::dialogs::DIALOGS)
-            .and_then(|d| d.current())
+            .and_then(|d| d.current_in(self.window_group(ctx.viewport_id())))
             .map(|(id, _)| id);
         let mut known: Vec<Id> = Vec::new();
         let mut out: Vec<OverlayRect> = overlay::rects(&ctx)
@@ -1748,6 +1814,19 @@ impl AppHandle {
             );
             return;
         }
+        // Asked from an application window (its content, a command run
+        // there): it runs in that window's context.
+        let group = crate::windows::current_group().map(|g| self.window_group(g));
+        if group.is_some_and(|g| g != egui::ViewportId::ROOT) {
+            let context = self.when_context();
+            self.push_request(Request::RunIn {
+                command,
+                args,
+                origin,
+                context,
+            });
+            return;
+        }
         self.push_request(Request::Run {
             command,
             args,
@@ -1852,7 +1931,15 @@ impl AppHandle {
     /// chain's, the overlays'. They are the window's being drawn: in a
     /// detached panel's window, its focus chain and its overlays, and
     /// `window` holds the panel's id (empty in the main window);
-    /// `modalOpen` says whether a modal is open in any window;
+    /// `appWindow` names the application window (ADR 0025);
+    /// `modalOpen` says whether a modal is open in the window's group
+    /// (an application window's own, or the main window's with its
+    /// detached panels: a modal in one application window does not make
+    /// `!modalOpen` refuse in another). Asked for another window group
+    /// than the one being drawn (a command a window's content asked for,
+    /// an agent's call naming a window), `appWindow`, `window` and
+    /// `modalOpen` are that group's; the focus chain's keys stay the
+    /// window being drawn's;
     /// `overlayOpen`, whether egui-pop's overlay stack holds anything or
     /// an egui popup (a menu, a combo box's list) is open.
     pub fn when_context(&self) -> WhenContext {
@@ -1861,7 +1948,16 @@ impl AppHandle {
         let flag = |on: bool| if on { "true" } else { "false" };
         let overlay_open = !overlay::stack(ctx).is_empty() || egui::Popup::is_any_open(ctx);
         base.set("overlayOpen", flag(overlay_open));
-        base.set("modalOpen", flag(overlay::modal_open(ctx)));
+        let here = ctx.viewport_id();
+        let group = self.current_window_group_or(here);
+        // The window the keys are for: the one drawn, or the one of the
+        // group asked for.
+        let view = if group == self.window_group(here) {
+            here
+        } else {
+            self.shown_in(group)
+        };
+        base.set("modalOpen", flag(overlay::modal_open_in(ctx, group)));
         base.set("canUndo", flag(self.can_undo()));
         base.set("canRedo", flag(self.can_redo()));
         if let Some(wb) = self.try_workbench() {
@@ -1870,10 +1966,10 @@ impl AppHandle {
                 wb.focused.as_ref().map_or("", PanelId::as_str),
             );
         }
-        if let Some(panel) = self.window_panel(ctx.viewport_id()) {
+        if let Some(panel) = self.window_panel(view) {
             base.set(CONTEXT_WINDOW, panel.as_str());
         }
-        let app_window = match self.window_at(ctx.viewport_id()) {
+        let app_window = match self.window_at(view) {
             Some(id) => id,
             // A detached panel's window belongs to the main window.
             None => self.windows_ref().root.id.clone(),
@@ -1921,10 +2017,21 @@ impl AppHandle {
         }
         windows.extend(self.windows().iter().skip(1).map(|w| w.viewport));
         let stacks = overlay::stacks(&ctx);
-        let palette = self
+        // Each window group has its own palette: the active one's first.
+        let palettes: Vec<String> = self
             .service(&crate::palette::PALETTE)
-            .and_then(|p| p.window())
-            .map(|w| self.window_name(self.still_open(w)));
+            .map(|p| {
+                let active = self.window_group(self.active_window());
+                let mut groups = p.open_groups();
+                groups.sort_by_key(|g| *g != active);
+                groups
+                    .into_iter()
+                    .filter_map(|g| p.window_in(g))
+                    .map(|w| self.window_name(self.still_open(w)))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let palette = palettes.first().cloned();
         json!({
             "active": self.window_name(self.active_window()),
             "windows": windows.iter().map(|v| json!({
@@ -1937,6 +2044,7 @@ impl AppHandle {
                 "modal": modal.contains(v),
             })).collect::<Vec<_>>(),
             "palette": palette,
+            "palettes": palettes,
             "popup_menu": crate::menus::popup_window(self).map(|w| self.window_name(w)),
             "app_windows": crate::windows::describe(self),
         })
@@ -4967,13 +5075,17 @@ impl App {
             && feedback.ok
             && feedback.data == json!({ "queued": true })
         {
-            self.handle.0.requests.borrow_mut().pop();
+            let queued = self.handle.0.requests.borrow_mut().pop();
             let id = args
                 .get("id")
                 .and_then(Json::as_str)
                 .and_then(|i| CommandId::new(i).ok());
             if let Some(id) = id {
-                let reply = self.run(&id, args.get("args").cloned().unwrap_or(Json::Null), origin);
+                let a = args.get("args").cloned().unwrap_or(Json::Null);
+                let reply = match queued {
+                    Some(Request::RunIn { context, .. }) => self.run_in(&id, a, origin, &context),
+                    _ => self.run(&id, a, origin),
+                };
                 let Some(result) = reply.now() else {
                     return Feedback {
                         message: format!("`{id}` is running; its result goes to the journal"),
@@ -6013,6 +6125,16 @@ impl App {
         origin: Origin,
         cx: &WhenContext,
     ) -> Reply {
+        // What it opens (a dialog, a toast, the palette) belongs to the
+        // window it was asked in.
+        let window = cx.get(crate::windows::CONTEXT_APP_WINDOW);
+        let group = (!window.is_empty())
+            .then(|| {
+                self.handle
+                    .window_viewport(&crate::windows::WindowId::new(window))
+            })
+            .flatten();
+        let _group = crate::windows::enter_group(group);
         // A command kept from agents does not run for one, whoever asks.
         if matches!(origin, Origin::Agent(_))
             && self.reg.commands.spec(command).is_some_and(|s| !s.agent)
@@ -6427,6 +6549,8 @@ impl App {
     pub fn show(&mut self, ui: &mut Ui) {
         profiling::scope!("pop.app.show");
         let ctx = ui.ctx().clone();
+        // What opens while the main window draws belongs to its group.
+        let _group = crate::windows::enter_group(Some(egui::ViewportId::ROOT));
         // The style `ui` was made with: a theme installed or a light or
         // dark switch below comes after it.
         let before = ctx.global_style();

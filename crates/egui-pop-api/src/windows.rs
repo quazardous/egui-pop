@@ -259,6 +259,9 @@ pub(crate) struct Entry {
 /// window moved into it.
 pub(crate) struct Root {
     pub(crate) id: WindowId,
+    /// The main window's own id (`main`): its geometry is saved under it,
+    /// whatever content moved in.
+    pub(crate) home: WindowId,
     /// Set by the application or by the content moved in.
     pub(crate) title: Option<String>,
     sent_title: Option<String>,
@@ -281,6 +284,7 @@ impl Default for Windows {
         Self {
             root: Root {
                 id: WindowId::main(),
+                home: WindowId::main(),
                 title: None,
                 sent_title: None,
                 content: None,
@@ -335,6 +339,38 @@ thread_local! {
     /// A deferred window's viewport to its application and window.
     static REGISTRY: RefCell<BTreeMap<ViewportId, (WeakApp, WindowId)>> =
         const { RefCell::new(BTreeMap::new()) };
+}
+
+thread_local! {
+    /// The window group being drawn, or the one a command runs for (its
+    /// `appWindow`), or the one an agent's call names: where a dialog, a
+    /// toast or the palette opened now belongs.
+    static CURRENT: Cell<Option<ViewportId>> = const { Cell::new(None) };
+}
+
+/// The window group being drawn or commanded now, if one is (see
+/// [`AppHandle::window_group`]).
+pub(crate) fn current_group() -> Option<ViewportId> {
+    CURRENT.with(Cell::get)
+}
+
+/// Puts back the group in force before [`enter_group`].
+pub(crate) struct GroupGuard(Option<ViewportId>);
+
+impl Drop for GroupGuard {
+    fn drop(&mut self) {
+        CURRENT.with(|c| c.set(self.0));
+    }
+}
+
+/// Makes `group` the current window group until the guard drops (`None`
+/// leaves the current one).
+pub(crate) fn enter_group(group: Option<ViewportId>) -> GroupGuard {
+    let before = current_group();
+    if group.is_some() {
+        CURRENT.with(|c| c.set(group));
+    }
+    GroupGuard(before)
 }
 
 fn on_main_thread() -> bool {
@@ -528,6 +564,73 @@ impl AppHandle {
         self.windows_ref().viewport_of(id)
     }
 
+    /// The window group a viewport belongs to: an application window is
+    /// a group of its own; the main window and its detached panels are
+    /// the main window's (`ViewportId::ROOT`), and so is a window no
+    /// longer open. A group's dialogs, toasts and palette are its own,
+    /// and a modal open in it blocks it alone (`modalOpen` is per group).
+    ///
+    /// Where the windows are embedded in the main one (the web, kittest),
+    /// they are all the main window's group.
+    pub fn window_group(&self, viewport: ViewportId) -> ViewportId {
+        if is_app_window(self, viewport) && !self.egui().embed_viewports() {
+            viewport
+        } else {
+            ViewportId::ROOT
+        }
+    }
+
+    /// The window a group's dialogs, toasts and palette show in: an
+    /// application window itself; in the main window's group, the window
+    /// of it worked in last (the main window, or a detached panel's).
+    pub fn shown_in(&self, group: ViewportId) -> ViewportId {
+        let group = self.window_group(group);
+        if group != ViewportId::ROOT {
+            return group;
+        }
+        let active = self.active_window();
+        if self.window_group(active) == ViewportId::ROOT {
+            active
+        } else {
+            ViewportId::ROOT
+        }
+    }
+
+    /// The window group what opens now belongs to: the window being drawn,
+    /// the one the running command was asked in (its `appWindow`), the
+    /// one an agent's call names; else the active window's.
+    pub fn current_window_group(&self) -> ViewportId {
+        match current_group() {
+            Some(g) => self.window_group(g),
+            None => self.window_group(self.active_window()),
+        }
+    }
+
+    /// The group asked for now ([`AppHandle::current_window_group`]), or,
+    /// when none is, the one of the window being drawn.
+    pub(crate) fn current_window_group_or(&self, drawn: ViewportId) -> ViewportId {
+        self.window_group(current_group().unwrap_or(drawn))
+    }
+
+    /// The application window of a group (see [`AppHandle::window_group`]).
+    pub fn window_of_group(&self, group: ViewportId) -> WindowId {
+        self.window_at(self.window_group(group))
+            .unwrap_or_else(|| self.windows_ref().root.id.clone())
+    }
+
+    /// Tells the overlays which windows are groups of their own.
+    pub(crate) fn sync_separate_windows(&self) {
+        let embedded = self.egui().embed_viewports();
+        let open: Vec<ViewportId> = self
+            .windows_ref()
+            .entries
+            .iter()
+            .filter(|e| !e.closed && !embedded)
+            .map(|e| e.id.deferred_viewport())
+            .collect();
+        egui_pop_core::overlay::set_separate_windows(&self.egui(), open);
+    }
+
     /// The application window the user worked in last (a detached
     /// panel's window counts as the main window's).
     pub fn active_app_window(&self) -> WindowId {
@@ -557,7 +660,7 @@ impl AppHandle {
     /// A window's geometry kept from an earlier run or seen in this one.
     pub fn window_geometry(&self, id: &WindowId) -> Option<Geometry> {
         let mut w = self.windows_mut();
-        if w.root.id == *id {
+        if w.root.home == *id {
             return w.root.geometry;
         }
         if let Some(e) = w.entry(id) {
@@ -604,6 +707,7 @@ impl AppHandle {
 
     fn window_closed(&self, id: &WindowId) {
         REGISTRY.with(|r| r.borrow_mut().remove(&id.deferred_viewport()));
+        self.sync_separate_windows();
         self.publish("egui_pop", None, "window.closed", json!({ "window": id }));
         let ctx = self.egui();
         ctx.request_repaint_of(ViewportId::ROOT);
@@ -622,15 +726,28 @@ impl AppHandle {
                 return false;
             };
             let e = w.entries.remove(at);
+            // Each keeps its own geometry: the main window's under its own
+            // id, the content moving in under its id (the main window's
+            // size is not the content's).
+            let kept = [
+                (w.root.home.clone(), w.root.geometry),
+                (e.id.clone(), e.geometry),
+            ];
             let left = std::mem::replace(&mut w.root.id, e.id.clone());
             w.root.title = Some(e.title.clone());
             w.root.sent_title = None;
             w.root.content = e.content;
             w.root.last_active = e.last_active;
-            (left, e.id)
+            (left, e.id, kept)
         };
-        let (left, id) = moved;
+        let (left, id, kept) = moved;
+        for (at, g) in kept {
+            if let Some(g) = g {
+                self.keep_geometry(&at, g);
+            }
+        }
         REGISTRY.with(|r| r.borrow_mut().remove(&id.deferred_viewport()));
+        self.sync_separate_windows();
         self.publish("egui_pop", None, "window.closed", json!({ "window": left }));
         self.publish(
             "egui_pop",
@@ -657,7 +774,7 @@ impl AppHandle {
             let id = {
                 let mut w = self.windows_mut();
                 w.root.geometry = Some(g);
-                w.root.id.clone()
+                w.root.home.clone()
             };
             if ctx.input(|i| i.viewport().close_requested()) {
                 self.keep_geometry(&id, g);
@@ -746,6 +863,7 @@ impl AppHandle {
                 })
                 .collect()
         };
+        self.sync_separate_windows();
         for (viewport, builder) in builders {
             ctx.show_viewport_deferred(viewport, builder, move |ui, class| {
                 window_pass(viewport, ui, class)
@@ -813,6 +931,9 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
         return;
     };
     let Ok(app) = weak.get() else { return };
+    // What opens while it draws (a dialog, a toast, a command asked from
+    // its content) belongs to it.
+    let _group = enter_group(Some(viewport));
     let ctx = ui.ctx().clone();
     let own_window = class != ViewportClass::EmbeddedWindow;
     let (content, title, raise) = {
@@ -916,6 +1037,10 @@ pub const CMD_SWITCH: egui_pop_model::ids::CommandId =
 /// Closes a window: `{ "window": id }`, or the active one.
 pub const CMD_CLOSE: egui_pop_model::ids::CommandId =
     egui_pop_model::ids::CommandId::from_static("window.close");
+/// A quick pick of the open windows by title, as the palette lists
+/// commands: the one chosen comes to the front ([`CMD_SWITCH`]).
+pub const CMD_PICK: egui_pop_model::ids::CommandId =
+    egui_pop_model::ids::CommandId::from_static("window.pick");
 /// The Window menu.
 pub const MENU_WINDOW: egui_pop_model::ids::MenuId =
     egui_pop_model::ids::MenuId::from_static("app.menu.window");
@@ -925,7 +1050,9 @@ pub const LIST_WINDOWS: &str = "app.windows";
 /// The window menu and its commands, for an application opening windows
 /// of its own: Window lists the open windows by title (the active one
 /// ticked) and switches to one; `window.switch` and `window.close` are
-/// offered to agents and the palette.
+/// offered to agents and the palette; `window.pick` (Switch to Window…)
+/// lists the open windows in a choice with a filter field, opened in the
+/// window it is asked in (with the dialogs plugin).
 #[derive(Debug, Default)]
 pub struct WindowsPlugin;
 
@@ -983,7 +1110,31 @@ impl crate::Plugin for WindowsPlugin {
                 Ok(json!({ "window": id }))
             },
         )?;
+        ctx.command(
+            CommandSpec::new(CMD_PICK, "Switch to window…", "Window")
+                .description("Lists the open windows by title; the one chosen comes to the front."),
+            |call| {
+                let app = call.app;
+                let dialogs = app
+                    .service(&crate::dialogs::DIALOGS)
+                    .ok_or("no dialogs plugin")?;
+                // The others first, in their order: Enter goes to
+                // another window; the active one last.
+                let mut open = app.windows();
+                open.sort_by_key(|w| w.active);
+                let options = open
+                    .iter()
+                    .map(|w| crate::dialogs::ChooseOption::new(&w.title, json!(w.id)))
+                    .collect();
+                let id = dialogs.open(
+                    crate::dialogs::Choose::with_options("Switch to window", options, CMD_SWITCH)
+                        .value_key("window"),
+                );
+                Ok(json!({ "dialog": id, "windows": open.len() }))
+            },
+        )?;
         ctx.submenu(crate::app::MENU_MAIN, "2_window", 0, MENU_WINDOW, "Window")?;
+        ctx.menu_item(MenuItem::command(MENU_WINDOW, "0_pick", 0, CMD_PICK))?;
         ctx.menu_item(MenuItem::command(MENU_WINDOW, "1_close", 0, CMD_CLOSE))?;
         ctx.menu_item(MenuItem::list(MENU_WINDOW, "2_windows", 0, LIST_WINDOWS))?;
         ctx.list_provider(LIST_WINDOWS, |app, _| {
