@@ -104,7 +104,7 @@ def close_window(comp, comp_name: str, title: str) -> dict:
     return {"how": "alt+F4", "result": comp.key("alt+F4")}
 
 
-def launch(cfg: dict, backend: str, out: Path, tag: str):
+def launch(cfg: dict, backend: str, out: Path, tag: str, autopilot: bool = False):
     jsonl = out / f"spike-{tag}.jsonl"
     log = out / f"spike-{tag}.log"
     for f in (jsonl, log):
@@ -120,6 +120,8 @@ def launch(cfg: dict, backend: str, out: Path, tag: str):
     if hasattr(comp, "set_log_dir"):
         comp.set_log_dir(resolve_dir(cfg, "log.dir", "./log"))
     env = {"SPIKE_STATE": str(out / "spike-state.json"), "RUST_LOG": "eframe=debug,egui_winit=debug"}
+    if autopilot:
+        env["SPIKE_AUTOPILOT"] = "1"
     started = comp.launch(["sh", "-c", command], env)
     return comp, jsonl, started
 
@@ -135,7 +137,33 @@ def last_counts(jsonl: Path) -> dict | None:
     return counts[-1] if counts else None
 
 
+def run_autopilot(cfg: dict, comp_name: str, backend: str, out: Path) -> dict:
+    """Bare mutter lists no windows and focuses none: the example drives
+    itself (`SPIKE_AUTOPILOT`), closing B then A, and its lines are kept."""
+    result: dict = {"compositor": comp_name, "backend": backend, "mode": "autopilot"}
+    comp, jsonl, started = launch(cfg, backend, out, f"{comp_name}-{backend}-auto", autopilot=True)
+    try:
+        if "error" in started:
+            return {**result, "error": f"launch: {started['error']}"}
+        time.sleep(2.0)
+        shot(comp, out, f"spike-{comp_name}-{backend}-auto.png")
+        quit_line = wait_for(lambda: events(jsonl, "quit"), 60)
+        result["quit"] = quit_line[0] if quit_line else None
+        result["counts"] = events(jsonl, "counts")
+        result["closed"] = events(jsonl, "closed")
+        result["opened"] = events(jsonl, "opened")
+        result["focus_events"] = events(jsonl, "focus")
+        result["errors"] = events(jsonl, "error")
+        if not quit_line:
+            result["error"] = "the example never quit by itself"
+    finally:
+        comp.stop()
+    return result
+
+
 def run_backend(cfg: dict, comp_name: str, backend: str, out: Path) -> dict:
+    if comp_name == "mutter":
+        return run_autopilot(cfg, comp_name, backend, out)
     result: dict = {"compositor": comp_name, "backend": backend}
     state = out / "spike-state.json"
     if state.exists():
