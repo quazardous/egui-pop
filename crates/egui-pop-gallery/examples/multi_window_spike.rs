@@ -211,7 +211,13 @@ fn window_ui(id: ViewportId, ui: &mut egui::Ui, class: ViewportClass) {
             let s = shared.borrow();
             let mut counts = serde_json::Map::new();
             for (name, other) in &s.windows {
-                counts.insert((*name).to_owned(), other.borrow().frames.into());
+                // This window's state is already borrowed, mutably, above.
+                let frames = if *name == w.name {
+                    w.frames
+                } else {
+                    other.borrow().frames
+                };
+                counts.insert((*name).to_owned(), frames.into());
             }
             emit(serde_json::json!({
                 "event": "counts",

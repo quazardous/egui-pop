@@ -146,6 +146,10 @@ def run_backend(cfg: dict, comp_name: str, backend: str, out: Path) -> dict:
             return {**result, "error": f"launch: {started['error']}"}
         ready = wait_for(lambda: events(jsonl, "ready"), 20)
         if not ready:
+            log = jsonl.with_suffix(".log")
+            text = log.read_text() if log.exists() else ""
+            if "libxkbcommon-x11" in text:
+                return {**result, "blocked": "libxkbcommon-x11 is not installed in this image"}
             return {**result, "error": "no ready line"}
         result["ready"] = ready[0]
         shown = wait_for(lambda: len([w for w in titles(comp) if w["title"] in (TITLES["a"], TITLES["b"])]) == 2, 20)
