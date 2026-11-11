@@ -12,9 +12,12 @@ on:
   workflow_dispatch:
 
 # One run per branch: a newer push to `next` cancels the running one.
+# A run is never cancelled: next moves often and a cancelled run tells
+# nothing. A newer push waits for the running one; GitHub keeps only the
+# newest waiting run, so at most one run goes and one waits.
 concurrency:
   group: platforms-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
