@@ -40,7 +40,13 @@
 //!   redrawn), which does not commit it. While open it owns Escape and
 //!   Enter ([`crate::focus::text_input_owns_keyboard`]): key dispatchers
 //!   leave them to it.
-//! - **Double click**: back to the default.
+//! - **Double click**: back to the default; so does a click with the
+//!   profile's `gesture.value.reset` modifiers (`Ctrl+PrimaryClick` for
+//!   one), which no shipped profile binds.
+//! - **Right click** (or the context menu key): a menu, "Type a value"
+//!   (the typed entry) and "Reset" when there is a default
+//!   ([`Slider::menu`] turns it off; [`request_typed_entry`] opens the
+//!   entry from a host's own menu).
 //!
 //! The keys are [`Gestures`], data a profile may remap. The value text
 //! is written in the interface's language ([`crate::strings::number`]),
@@ -127,6 +133,10 @@ pub struct Gestures {
     pub cancel: Key,
     /// A double click resets to the default.
     pub reset_on_double_click: bool,
+    /// Held with a primary click: back to the default
+    /// (`gesture.value.reset`, `Ctrl+PrimaryClick` for one); none: a
+    /// click never resets, as in every shipped profile.
+    pub reset_click: Modifiers,
     /// How a drag turns a knob that does not say
     /// ([`Knob::drag`](crate::knob::Knob::drag)).
     pub knob_drag: KnobDrag,
@@ -183,6 +193,12 @@ impl Gestures {
             typed_entry: Key::Enter,
             cancel: Key::Escape,
             reset_on_double_click: true,
+            reset_click: first(on(
+                map,
+                &gesture::VALUE_RESET,
+                Pointer::Click(Button::Primary),
+            ))
+            .unwrap_or(Modifiers::NONE),
             knob_drag: map.options.knob_drag,
         }
     }
@@ -596,6 +612,7 @@ pub struct Slider<'a> {
     vertical: bool,
     size: Option<Vec2>,
     compact: bool,
+    menu: bool,
 }
 
 /// The least width a horizontal slider takes, whatever its room: below
@@ -625,6 +642,7 @@ impl<'a> Slider<'a> {
             vertical: false,
             size: None,
             compact: false,
+            menu: true,
         }
     }
 
@@ -640,6 +658,7 @@ impl<'a> Slider<'a> {
             vertical: false,
             size: None,
             compact: false,
+            menu: true,
         }
     }
 
@@ -676,6 +695,15 @@ impl<'a> Slider<'a> {
     /// itself, and drops the unit when even the value does not fit.
     pub fn compact(mut self) -> Self {
         self.compact = true;
+        self
+    }
+
+    /// Whether a right click (or the context menu key) opens the value's
+    /// menu: "Type a value", and "Reset" with a default. On by default;
+    /// off for a host that gives the slider a menu of its own (its
+    /// "Type a value" item calls [`request_typed_entry`]).
+    pub fn menu(mut self, on: bool) -> Self {
+        self.menu = on;
         self
     }
 
@@ -729,6 +757,7 @@ impl<'a> Slider<'a> {
             vertical,
             size,
             compact,
+            menu,
         } = self;
         let row_height = ui.spacing().interact_size.y;
         let wanted = match (size, vertical) {
@@ -762,6 +791,9 @@ impl<'a> Slider<'a> {
             done,
         };
         let typing_id = typing_id(id);
+        if take_typed_request(ui.ctx(), id) && spec.state.is_editable() {
+            open_typed_entry(ui, typing_id, spec.number(ui.ctx(), *value));
+        }
         let mut label_shown = true;
         if let Some(text) = typing_text(ui.ctx(), typing_id) {
             if let Some(end) = typed_entry(ui, bar, typing_id, text, &spec, *value) {
@@ -810,9 +842,21 @@ impl<'a> Slider<'a> {
             {
                 apply(change(*value, d, Cause::Reset, true), value);
             }
+            if reset_clicked(ui, &response, &g)
+                && let Some(d) = default
+                && d != *value
+            {
+                apply(change(*value, d, Cause::Reset, true), value);
+            }
             if response.clicked() {
                 // A click focuses; it never makes the value jump.
                 response.request_focus();
+            }
+            if menu
+                && value_menu(&response, &spec, default.filter(|d| *d != *value).is_some())
+                && let Some(d) = default
+            {
+                apply(change(*value, d, Cause::Reset, true), value);
             }
             if let Some((v, cause)) =
                 keys_wheel_access(ui, &response, &spec, *value, spec.soft, scale, &g)
@@ -878,6 +922,69 @@ impl Widget for Slider<'_> {
     fn ui(self, ui: &mut Ui) -> Response {
         self.show(ui).response
     }
+}
+
+/// Asks the slider or knob whose response is `widget` to open its
+/// typed entry, with its value, in its next pass: what the "Type a
+/// value" item of its menu does, for a host that gives it a menu of its
+/// own ([`Slider::menu`]).
+pub fn request_typed_entry(ctx: &egui::Context, widget: Id) {
+    TYPE_REQUEST.keyed(widget).set(ctx, true);
+    ctx.request_repaint();
+}
+
+/// A typed entry asked for, per widget ([`request_typed_entry`]).
+const TYPE_REQUEST: Slot<bool> = Slot::new("core.slider.type_request");
+
+/// Whether a typed entry was asked for `widget`; the request is taken.
+pub(crate) fn take_typed_request(ctx: &egui::Context, widget: Id) -> bool {
+    let slot = TYPE_REQUEST.keyed(widget);
+    let asked = slot.get(ctx).unwrap_or(false);
+    if asked {
+        slot.remove(ctx);
+    }
+    asked
+}
+
+/// Whether this pass's click is the profile's reset click
+/// ([`Gestures::reset_click`]).
+pub(crate) fn reset_clicked(ui: &Ui, response: &Response, g: &Gestures) -> bool {
+    g.reset_click.any()
+        && response.clicked()
+        && ui.input(|i| i.modifiers.matches_logically(g.reset_click))
+}
+
+/// A value's menu, opened by a right click or the context menu key:
+/// "Type a value" (asks the typed entry, [`request_typed_entry`]) and,
+/// with `reset`, "Reset". Whether "Reset" was chosen.
+pub(crate) fn value_menu(response: &Response, spec: &Spec, reset: bool) -> bool {
+    let editable = spec.state.is_editable();
+    let mut chosen = false;
+    crate::pointer::claim::context_menu(response, |ui| {
+        let ctx = ui.ctx().clone();
+        if ui
+            .add_enabled(
+                editable,
+                egui::Button::new(crate::strings::tr(&ctx, &crate::strings::SLIDER_TYPE_VALUE)),
+            )
+            .clicked()
+        {
+            request_typed_entry(&ctx, response.id);
+            ui.close();
+        }
+        if reset
+            && ui
+                .add_enabled(
+                    editable,
+                    egui::Button::new(crate::strings::tr(&ctx, &crate::strings::RESET)),
+                )
+                .clicked()
+        {
+            chosen = true;
+            ui.close();
+        }
+    });
+    chosen
 }
 
 /// The text of a slider's open typed entry (`typing_id`'s).

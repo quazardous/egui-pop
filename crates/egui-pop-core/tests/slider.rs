@@ -1097,3 +1097,27 @@ fn under_darktables_profile_the_wheel_steps_the_slider_under_the_pointer() {
         h.state().values
     );
 }
+
+#[test]
+fn the_right_click_menu_types_a_value_and_resets() {
+    let mut h = slider();
+    h.get_by_label("Exposure").click_secondary();
+    h.run();
+    h.get_by_label("Type a value").click();
+    h.run();
+    assert!(h.query_by_label("Exposure, typed value").is_some());
+    for _ in 0..12 {
+        h.key_press(Key::Backspace);
+    }
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text("1.5");
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+    assert!((ev(&h) - 1.5).abs() < 1e-9, "{}", ev(&h));
+    h.get_by_label("Exposure").click_secondary();
+    h.run();
+    h.get_by_label("Reset").click();
+    h.run();
+    assert_eq!(ev(&h), 0.0, "back to the default");
+}

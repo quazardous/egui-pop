@@ -29,7 +29,12 @@
 //! - **Keys** (arrows, Page Up and Page Down, Home and End),
 //!   **typed entry** (Enter) and **assistive actions**: as the slider's,
 //!   from the same pointer profile.
-//! - **Double click**: back to the default.
+//! - **Double click**: back to the default; so does a click with the
+//!   profile's `gesture.value.reset` modifiers (`Ctrl+PrimaryClick` for
+//!   one), which no shipped profile binds.
+//! - **Right click** (or the context menu key): a menu, "Type a value"
+//!   (the typed entry) and "Reset" when there is a default
+//!   ([`Knob::menu`] turns it off).
 //!
 //! **Layout.** The dial takes the largest square of its room. In a room
 //! at least twice as wide as high, the label and the value stand beside
@@ -61,8 +66,8 @@ use egui::{
 use crate::kit::{Kit, State, Tone};
 use crate::slider::{
     Cause, Change, Drag, Hook, Spec, Thumb, Verdict, access, decide, gestures, keep_auto_ids,
-    keys_wheel_access, modifier_scale, open_typed_entry, spec_builders, state_of, typed_entry,
-    typing_id, typing_text,
+    keys_wheel_access, modifier_scale, open_typed_entry, reset_clicked, spec_builders, state_of,
+    take_typed_request, typed_entry, typing_id, typing_text, value_menu,
 };
 use crate::state::Slot;
 
@@ -118,6 +123,7 @@ pub struct Knob<'a> {
     travel: f32,
     drag: Option<KnobDrag>,
     wheel: KnobWheel,
+    menu: bool,
 }
 
 impl<'a> Knob<'a> {
@@ -133,6 +139,7 @@ impl<'a> Knob<'a> {
             travel: TRAVEL,
             drag: None,
             wheel: KnobWheel::Profile,
+            menu: true,
         }
     }
 
@@ -171,6 +178,15 @@ impl<'a> Knob<'a> {
         self
     }
 
+    /// Whether a right click (or the context menu key) opens the value's
+    /// menu: "Type a value", and "Reset" with a default. On by default;
+    /// off for a host that gives the knob a menu of its own (its "Type a
+    /// value" item calls [`request_typed_entry`](crate::slider::request_typed_entry)).
+    pub fn menu(mut self, on: bool) -> Self {
+        self.menu = on;
+        self
+    }
+
     /// Points of drag over the soft range, in the linear modes
     /// (`Vertical`, `Horizontal`, `Both`), whatever the knob's size.
     pub fn travel(mut self, points: f32) -> Self {
@@ -203,6 +219,7 @@ impl<'a> Knob<'a> {
             travel,
             drag,
             wheel,
+            menu,
         } = self;
         let row = ui.spacing().interact_size.y;
         let wanted = size.unwrap_or(vec2(row * 2.0 * 3.0, row * 2.0));
@@ -229,6 +246,9 @@ impl<'a> Knob<'a> {
             done,
         };
         let typing = typing_id(id);
+        if take_typed_request(ui.ctx(), id) && spec.state.is_editable() {
+            open_typed_entry(ui, typing, spec.number(ui.ctx(), *value));
+        }
         if let Some(text) = typing_text(ui.ctx(), typing) {
             let entry = Rect::from_center_size(rect.center(), vec2(rect.width(), row));
             if let Some(end) = typed_entry(ui, entry, typing, text, &spec, *value) {
@@ -276,8 +296,20 @@ impl<'a> Knob<'a> {
             {
                 apply(change(*value, d, Cause::Reset, true), value);
             }
+            if reset_clicked(ui, &response, &g)
+                && let Some(d) = default
+                && d != *value
+            {
+                apply(change(*value, d, Cause::Reset, true), value);
+            }
             if response.clicked() {
                 response.request_focus();
+            }
+            if menu
+                && value_menu(&response, &spec, default.filter(|d| *d != *value).is_some())
+                && let Some(d) = default
+            {
+                apply(change(*value, d, Cause::Reset, true), value);
             }
             let mut wheel_g = g;
             if wheel == KnobWheel::Hover {
