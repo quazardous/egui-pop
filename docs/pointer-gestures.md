@@ -32,7 +32,7 @@ scope of a canvas kind:
 |---|---|
 | `surface:canvas.image` (the image viewport) | `gesture.image.zoom` (holding at fit and 100 %), `zoom_free`, `pan`, `pan_x`, `pan_y`, `zoom_cycle` (100 %, 200 %, fit), `fit`, `zoom_toggle` (fit or 100 %) |
 | `surface:canvas.graph` (the node graph) | `gesture.graph.zoom`, `pan`, `pan_x`, `pan_y`, `fit` |
-| `surface:widget.value` (sliders) | `gesture.value.step` (its wheel's modifiers step a slider without the focus), `fine` and `coarse` (their drag's modifiers: ten times finer or coarser, for drags, arrows and the wheel), `panel` (its wheel's modifiers leave the wheel to the panel) |
+| `surface:widget.value` (sliders) | `gesture.value.step` (its wheel's modifiers step a slider without the focus), `fine` and `coarse` (their drag's modifiers: ten times finer or coarser, for drags, arrows and the wheel), `panel` (its wheel's modifiers leave the wheel to the panel), `reset` (a primary click with its modifiers, `Ctrl+PrimaryClick` for one, puts the value back to its default; bound by no shipped profile) |
 | `surface:widget.sections` (stacked sections) | `gesture.sections.pull` (a drag on a boundary or a title moves the sections below as a block; its keys also make the arrows on a boundary do so, [sections.md](sections.md)) |
 
 The keymap's layers, removals, conflicts and resolution trace apply

@@ -115,6 +115,10 @@ pub mod gesture {
     pub const VALUE_COARSE: CommandId = CommandId::from_static("gesture.value.coarse");
     /// The wheel scrolls the panel, even over a value.
     pub const VALUE_PANEL: CommandId = CommandId::from_static("gesture.value.panel");
+    /// A primary click with its modifiers puts a value back to its
+    /// default (`Ctrl+PrimaryClick`, as in Reason or Kontakt). No shipped
+    /// profile binds it: a double click resets in all of them.
+    pub const VALUE_RESET: CommandId = CommandId::from_static("gesture.value.reset");
     /// A drag on a boundary or a title moves the sections below as a block.
     pub const SECTIONS_PULL: CommandId = CommandId::from_static("gesture.sections.pull");
 }
@@ -232,6 +236,12 @@ pub const GESTURES: &[GestureSpec] = &[
         scope: SCOPE_VALUE,
         title: "Values: scroll the panel",
         description: "The wheel with these keys scrolls the panel, even over a slider.",
+    },
+    GestureSpec {
+        id: gesture::VALUE_RESET,
+        scope: SCOPE_VALUE,
+        title: "Values: reset with a click",
+        description: "A click with these keys puts a slider or a knob back to its default.",
     },
     GestureSpec {
         id: gesture::SECTIONS_PULL,

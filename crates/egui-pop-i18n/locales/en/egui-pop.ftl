@@ -460,6 +460,10 @@ command-gesture-value-panel =
     .description = The wheel with these keys scrolls the panel, even over a slider.
     .title = Values: scroll the panel
 
+command-gesture-value-reset =
+    .description = A click with these keys puts a slider or a knob back to its default.
+    .title = Values: reset with a click
+
 command-gesture-value-step =
     .description = The wheel with these keys steps the slider under the pointer, focused or not.
     .title = Values: step with the wheel
@@ -2021,6 +2025,8 @@ egui-pop-slider-entry = { $label }, typed value
 egui-pop-slider-maximum = { $label }, maximum
 
 egui-pop-slider-minimum = { $label }, minimum
+
+egui-pop-slider-type-value = Type a value
 
 egui-pop-status-announce = { $item }: { $state }
 

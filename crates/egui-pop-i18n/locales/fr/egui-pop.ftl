@@ -1544,6 +1544,8 @@ egui-pop-slider-maximum = { $label }, maximum
 
 egui-pop-slider-minimum = { $label }, minimum
 
+egui-pop-slider-type-value = Saisir une valeur
+
 egui-pop-status-announce = { $item } : { $state }
 
 egui-pop-status-errors = Erreurs : { $count }
@@ -2563,6 +2565,10 @@ command-gesture-value-coarse =
 command-gesture-value-panel =
     .description = La molette avec ces touches fait défiler le panneau, même au-dessus d’un curseur.
     .title = Valeurs : faire défiler le panneau
+
+command-gesture-value-reset =
+    .description = Un clic avec ces touches remet un curseur ou un bouton rotatif à sa valeur par défaut.
+    .title = Valeurs : réinitialiser d’un clic
 
 command-pointer-overrides =
     .description = Garde les gestes du pointeur que l’utilisateur a changés sur le profil en cours, ou les abandonne (`value` : keep ou drop).

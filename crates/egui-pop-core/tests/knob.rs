@@ -306,3 +306,122 @@ fn a_touchpads_scroll_is_summed_into_steps() {
     }
     assert_eq!(h.state().values[1], 7.0, "under a line back: no step yet");
 }
+
+/// Types `text` into the open typed entry, then Enter.
+fn type_in(h: &mut Harness<'_, f64>, text: &str) {
+    for _ in 0..8 {
+        h.key_press(egui::Key::Backspace);
+    }
+    h.get_by_role(egui::accesskit::Role::TextInput)
+        .type_text(text);
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+}
+
+#[test]
+fn the_right_click_menu_types_a_value_and_resets() {
+    let mut h = knob(None);
+    h.get_by_label("Gain").click_secondary();
+    h.run();
+    h.get_by_label("Type a value").click();
+    h.run();
+    assert!(
+        h.query_by_label("Gain, typed value").is_some(),
+        "the typed entry opens"
+    );
+    type_in(&mut h, "30");
+    near(*h.state(), 30.0, "typed");
+    h.get_by_label("Gain").click_secondary();
+    h.run();
+    h.get_by_label("Reset").click();
+    h.run();
+    near(*h.state(), 50.0, "reset");
+    // At its default, the menu has no "Reset".
+    h.get_by_label("Gain").click_secondary();
+    h.run();
+    assert!(h.query_by_label("Type a value").is_some());
+    assert!(h.query_by_label("Reset").is_none());
+}
+
+#[test]
+fn a_knob_without_a_menu_opens_its_entry_on_request() {
+    // (value, the host asks for the entry this pass)
+    let mut h = Harness::builder()
+        .with_size(vec2(200.0, 200.0))
+        .build_ui_state(
+            |ui, s: &mut (f64, bool)| {
+                let out = Knob::new(&mut s.0, "Gain", 0.0..=100.0)
+                    .size(Vec2::splat(120.0))
+                    .menu(false)
+                    .show(ui);
+                if std::mem::take(&mut s.1) {
+                    egui_pop_core::slider::request_typed_entry(ui.ctx(), out.response.id);
+                }
+            },
+            (50.0, false),
+        );
+    h.run();
+    h.get_by_label("Gain").click_secondary();
+    h.run();
+    assert!(h.query_by_label("Type a value").is_none(), "no menu");
+    h.state_mut().1 = true;
+    h.run();
+    assert!(h.query_by_label("Gain, typed value").is_some());
+}
+
+#[test]
+fn a_ctrl_click_resets_only_where_the_profile_binds_it() {
+    let mut h = knob(None);
+    let c = centre(&h);
+    drag(&mut h, &line(c, vec2(0.0, -40.0)), Modifiers::NONE);
+    near(*h.state(), 70.0, "moved");
+    // No shipped profile binds it.
+    assert_eq!(
+        egui_pop_core::slider::gestures(&h.ctx).reset_click,
+        Modifiers::NONE
+    );
+    h.get_by_label("Gain").click_modifiers(Modifiers::COMMAND);
+    h.run();
+    near(*h.state(), 70.0, "a Ctrl-click does nothing by default");
+    // A profile binding `Ctrl+PrimaryClick` to `gesture.value.reset`
+    // (on Linux the profile's Ctrl is egui's command).
+    let mut g = egui_pop_core::slider::gestures(&h.ctx);
+    g.reset_click = Modifiers::COMMAND;
+    egui_pop_core::slider::set_gestures(&h.ctx, g);
+    h.run();
+    h.get_by_label("Gain").click_modifiers(Modifiers::COMMAND);
+    h.run();
+    near(*h.state(), 50.0, "a Ctrl-click resets");
+}
+
+#[test]
+fn the_reset_click_is_read_from_the_profiles_binding() {
+    use egui_pop_core::slider::Gestures;
+    use egui_pop_model::ids::OwnerId;
+    use egui_pop_model::keymap::{Action, BindOptions, Keymap, Layer};
+    use egui_pop_model::pointer::{self, PROFILE_OWNER, PointerMap, gesture};
+    let profile = pointer::default_profile();
+    let mut k = Keymap::new();
+    assert!(
+        k.load(
+            &PROFILE_OWNER,
+            Layer::Default,
+            &pointer::profile_doc(profile)
+        )
+        .is_empty()
+    );
+    let map = PointerMap::from_keymap(&k, profile);
+    assert_eq!(Gestures::from_map(&map).reset_click, Modifiers::NONE);
+    k.bind_with(
+        &OwnerId::USER,
+        Layer::User,
+        "Ctrl+PrimaryClick",
+        Action::Run(gesture::VALUE_RESET),
+        "",
+        BindOptions::surface(pointer::SCOPE_VALUE),
+    )
+    .unwrap();
+    let map = PointerMap::from_keymap(&k, profile);
+    assert!(Gestures::from_map(&map).reset_click.any());
+}

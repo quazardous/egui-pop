@@ -92,6 +92,8 @@ pub const SLIDER_ENTRY: StrKey = StrKey::new("egui-pop-slider-entry", "{ $label 
 /// A range slider's thumbs, as assistive technologies name them.
 pub const SLIDER_MINIMUM: StrKey = StrKey::new("egui-pop-slider-minimum", "{ $label }, minimum");
 pub const SLIDER_MAXIMUM: StrKey = StrKey::new("egui-pop-slider-maximum", "{ $label }, maximum");
+/// A slider's or a knob's menu item opening its typed entry.
+pub const SLIDER_TYPE_VALUE: StrKey = StrKey::new("egui-pop-slider-type-value", "Type a value");
 
 /// A busy indicator without a label of its own.
 pub const BUSY: StrKey = StrKey::new("egui-pop-busy", "Busy");
@@ -164,6 +166,7 @@ pub const ALL: &[StrKey] = &[
     SLIDER_ENTRY,
     SLIDER_MINIMUM,
     SLIDER_MAXIMUM,
+    SLIDER_TYPE_VALUE,
     BUSY,
     LOADING,
     INDICATOR_OFF,

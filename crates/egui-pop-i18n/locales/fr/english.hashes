@@ -223,6 +223,8 @@ command-gesture-value-fine.description 014fe9bb1fb841fd
 command-gesture-value-fine.title 483996718dc0bf59
 command-gesture-value-panel.description 2604dc7ad8cb0477
 command-gesture-value-panel.title c7e38b72093dbe31
+command-gesture-value-reset.description e3ba6e8525cca652
+command-gesture-value-reset.title 541b6d2d007eaa37
 command-gesture-value-step.description 28dd8dd569518e78
 command-gesture-value-step.title 547562cb851b7b85
 command-help-report.description 5efdd9aa299ac6f8
@@ -1003,6 +1005,7 @@ egui-pop-shortcuts-widget-uses-note b4dc796d915b0be7
 egui-pop-slider-entry 28f7ba41d2252176
 egui-pop-slider-maximum c0721adb004bac87
 egui-pop-slider-minimum acae05dcb02987f1
+egui-pop-slider-type-value f5a17a5a64966b4f
 egui-pop-status-announce d09126c76706e2d1
 egui-pop-status-errors 18defe0eecaee157
 egui-pop-status-hide a107a37c2e3dfa5e
