@@ -192,3 +192,33 @@ fn the_travel_is_in_points_whatever_the_size() {
     drag(&mut h, &line(c, vec2(0.0, -50.0)), Modifiers::NONE);
     near(*h.state(), 50.0, "half the travel");
 }
+
+/// A drag with `modifiers` held from the press to the end.
+fn drag_held(h: &mut Harness<'_, f64>, path: &[Pos2], modifiers: Modifiers) {
+    h.event(Event::ModifiersChanged(modifiers));
+    drag(h, path, modifiers);
+    h.event(Event::ModifiersChanged(Modifiers::NONE));
+    h.run();
+}
+
+#[test]
+fn the_profiles_fine_and_coarse_modifiers_scale_a_drag() {
+    // The default profile: Ctrl finer, Shift coarser.
+    let mut h = knob(None);
+    let c = centre(&h);
+    drag_held(&mut h, &line(c, vec2(0.0, -40.0)), Modifiers::COMMAND);
+    near(*h.state(), 52.0, "Ctrl: ten times finer");
+    drag_held(&mut h, &line(c, vec2(0.0, 8.0)), Modifiers::SHIFT);
+    near(*h.state(), 12.0, "Shift: ten times coarser");
+    // Lightroom Classic's: Shift finer.
+    let mut h = knob(None);
+    let lr = egui_pop_model::pointer::profile("lightroom").unwrap();
+    egui_pop_core::pointer::set_map(
+        &h.ctx,
+        egui_pop_model::pointer::PointerMap::from_profile(lr),
+    );
+    h.run();
+    let c = centre(&h);
+    drag_held(&mut h, &line(c, vec2(0.0, -40.0)), Modifiers::SHIFT);
+    near(*h.state(), 52.0, "Shift: finer under Lightroom's profile");
+}

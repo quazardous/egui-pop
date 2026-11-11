@@ -16,8 +16,11 @@
 //!   over the soft range in [`Knob::travel`] points (200 by default),
 //!   whatever the knob's size; the circular one over the dial's 270°
 //!   sweep, still near the centre.
-//! - **Fine**: Shift, or the pointer profile's fine modifier, makes a
-//!   drag ten times finer, from where it is (no jump).
+//! - **Fine and coarse**: the pointer profile's modifiers
+//!   (`gesture.value.fine`, Ctrl by default; `gesture.value.coarse`,
+//!   Shift by default) make a drag, the wheel and the arrows ten times
+//!   finer or coarser, as on a slider; pressed mid-drag, from where the
+//!   value is (no jump).
 //! - **Wheel**, **keys** (arrows, Page Up and Page Down, Home and End),
 //!   **typed entry** (Enter) and **assistive actions**: as the slider's,
 //!   from the same pointer profile.
@@ -212,14 +215,12 @@ impl<'a> Knob<'a> {
         } else {
             keep_auto_ids(ui);
             let g = gestures(ui.ctx());
-            let shift = ui.input(|i| i.modifiers.shift);
-            let fine = if shift {
-                0.1
-            } else {
-                modifier_scale(ui, &g).min(1.0)
-            };
+            // One fine and one coarse modifier for the drag, the wheel
+            // and the keys: the profile's (`gesture.value.fine` and
+            // `gesture.value.coarse`).
+            let scale = modifier_scale(ui, &g);
             let mode = drag.unwrap_or(g.knob_drag);
-            match turn(ui, &response, &layout, &spec, *value, fine, travel, mode) {
+            match turn(ui, &response, &layout, &spec, *value, scale, travel, mode) {
                 Drag::None => {}
                 Drag::Moved(v) => {
                     let to = spec.settle(v, spec.hard);
@@ -248,7 +249,6 @@ impl<'a> Knob<'a> {
             if response.clicked() {
                 response.request_focus();
             }
-            let scale = modifier_scale(ui, &g);
             if let Some((v, cause)) =
                 keys_wheel_access(ui, &response, &spec, *value, spec.soft, scale, &g)
             {
@@ -358,7 +358,7 @@ fn pointer_angle(centre: Pos2, at: Pos2) -> f32 {
 }
 
 /// A drag's effect in a frame, in `mode` (taken at the press, kept to
-/// the end); `fine` scales the motion.
+/// the end); `scale` (the modifiers') scales the motion.
 #[allow(clippy::too_many_arguments)]
 fn turn(
     ui: &Ui,
@@ -366,7 +366,7 @@ fn turn(
     layout: &Layout,
     spec: &Spec,
     value: f64,
-    fine: f64,
+    scale: f64,
     travel: f32,
     mode: KnobDrag,
 ) -> Drag {
@@ -440,7 +440,7 @@ fn turn(
                     f64::from(a / SWEEP)
                 }
             }
-        } * fine;
+        } * scale;
         if delta != 0.0 {
             let (lo, hi) = (spec.frac(spec.soft.0), spec.frac(spec.soft.1));
             t.frac = (t.frac + delta).clamp(lo.min(t.frac), hi.max(t.frac));
