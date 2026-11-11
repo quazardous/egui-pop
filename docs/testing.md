@@ -175,9 +175,21 @@ when it closed is printed, not checked: a window manager may refuse it.
 Each job's summary says whether the tests and the smoke run passed; the
 JUnit report and any snapshot differences are kept as artifacts.
 
-Known failures, from the first runs:
+Known failures and differences (2026-11-11): none fail. What is left
+out, by platform:
 
-- none recorded yet.
+- **Windows and macOS**: the gallery's `files-breadcrumbs-pop-dark` and
+  `files-replace-pop-dark` snapshots are compared on Linux only. They
+  show the demo folder's path, in the temporary folder: `/tmp` where the
+  pictures are made, `C:\Users\…\Temp` on Windows, `/var/folders/…` on
+  macOS. The tests' other checks run everywhere.
+- **Windows**: the viewer test of an image address no parser can join
+  (`//[bad…`) checks a drive's path written as is instead: `//[bad`
+  before a drive makes no path at all, and the image fails unread.
+- **Windows**: paths built by the file picker carry `\`, the tests'
+  paths `/`; the tests compare paths, not text (`assert_path` in
+  `egui-pop-api`'s `tests/files.rs`), and the root of `/top` is named
+  `\`.
 
 ## Time budget
 
