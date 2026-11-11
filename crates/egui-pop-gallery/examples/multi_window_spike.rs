@@ -25,6 +25,12 @@
 //! desktop): B is closed at A's 120th frame, A at its 300th, and the
 //! process exits 0 by itself, 2 past a deadline.
 //!
+//! Variants, for the compositors where a window stops painting (headless
+//! mutter): `SPIKE_PRESENT_MODE` for wgpu (`autovsync`, the default, `autonovsync`,
+//! `fifo`, `mailbox`, `immediate`), and `SPIKE_A_SIZE` (`WxH`, A's size,
+//! so that B opened on top of it does not cover it whole). The `ready`
+//! line repeats them.
+//!
 //! Never run it on a desktop in use by someone else; the driver runs it in a
 //! headless compositor.
 
@@ -304,6 +310,8 @@ impl Spike {
             "wayland": std::env::var_os("WAYLAND_DISPLAY").is_some(),
             "x11": std::env::var_os("DISPLAY").is_some(),
             "restored": saved.keys().collect::<Vec<_>>(),
+            "present_mode": std::env::var("SPIKE_PRESENT_MODE").ok(),
+            "a_size": std::env::var("SPIKE_A_SIZE").ok(),
         }));
         Self {
             shared,
@@ -355,10 +363,15 @@ impl eframe::App for Spike {
         for win in self.open() {
             let w = win.borrow();
             let id = viewport_id(w.name);
+            let size = if w.name == "a" {
+                a_size().unwrap_or([360.0, 240.0])
+            } else {
+                [360.0, 240.0]
+            };
             let mut builder = ViewportBuilder::default()
                 .with_title(w.title)
                 .with_app_id("egui-pop-spike")
-                .with_inner_size([360.0, 240.0]);
+                .with_inner_size(size);
             if let Some(g) = w.restored {
                 if let Some(size) = g.size {
                     builder = builder.with_inner_size(size);
@@ -374,8 +387,15 @@ impl eframe::App for Spike {
     }
 }
 
+/// `SPIKE_A_SIZE=WxH`: A's inner size.
+fn a_size() -> Option<[f32; 2]> {
+    let text = std::env::var("SPIKE_A_SIZE").ok()?;
+    let (w, h) = text.split_once('x')?;
+    Some([w.parse().ok()?, h.parse().ok()?])
+}
+
 fn main() -> eframe::Result {
-    let options = eframe::NativeOptions {
+    let mut options = eframe::NativeOptions {
         viewport: ViewportBuilder::default()
             .with_title("Spike root")
             .with_app_id("egui-pop-spike")
@@ -383,6 +403,16 @@ fn main() -> eframe::Result {
         persist_window: false,
         ..Default::default()
     };
+    let present_mode = match std::env::var("SPIKE_PRESENT_MODE").as_deref() {
+        Ok("autonovsync") => Some(eframe::wgpu::PresentMode::AutoNoVsync),
+        Ok("fifo") => Some(eframe::wgpu::PresentMode::Fifo),
+        Ok("mailbox") => Some(eframe::wgpu::PresentMode::Mailbox),
+        Ok("immediate") => Some(eframe::wgpu::PresentMode::Immediate),
+        _ => None,
+    };
+    if let Some(mode) = present_mode {
+        options.wgpu_options.surface.present_mode = mode;
+    }
     eframe::run_native(
         "egui-pop multi-window spike",
         options,
