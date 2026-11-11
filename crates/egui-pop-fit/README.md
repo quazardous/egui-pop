@@ -1,8 +1,11 @@
-# egui_gridflow
+# egui_fit
 
-**[Live demo](https://quazardous.github.io/egui_gridflow/)**: real egui-pop
+**[Live demo](https://quazardous.github.io/egui_fit/)**: real egui-pop
 widgets laid out in a box you resize, with the engine's choices drawn over
 them.
+
+Formerly named `egui_gridflow`: the repository and the crate were renamed
+`egui_fit`, and the old GitHub URL redirects here.
 
 A slot layout engine over plain boxes. It packs ordered elements into a
 container in standard slot sizes and says where each one goes. It knows
@@ -50,7 +53,7 @@ of a unit and in points, and any toolkit can use its results.
 ## Example
 
 ```rust
-use egui_gridflow::{layout, Axis, Container, Element, Size, Size2, SizePolicy};
+use egui_fit::{layout, Axis, Container, Element, Size, Size2, SizePolicy};
 
 let half = Size2::new(Size::HALF, Size::ONE);
 let row = Size2::new(Size::units(2), Size::ONE);
@@ -85,7 +88,7 @@ unit stays empty.
 ### Groups
 
 ```rust
-use egui_gridflow::{layout_grouped, Container, Element, Group, Size, Size2, SizePolicy};
+use egui_fit::{layout_grouped, Container, Element, Group, Size, Size2, SizePolicy};
 
 let slot = |key, w, h| Element::new(key, SizePolicy::fixed(Size2::new(w, h)));
 let one = Size::ONE;
@@ -153,7 +156,7 @@ cd demo
 trunk serve    # then open http://127.0.0.1:8080
 ```
 
-or on the desktop with `cargo run -p egui_gridflow_demo`.
+or on the desktop with `cargo run -p egui_fit_demo`.
 
 ## Features
 

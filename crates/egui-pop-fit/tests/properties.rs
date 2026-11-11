@@ -1,6 +1,6 @@
 //! Property tests over random elements and boxes.
 
-use egui_gridflow::{
+use egui_fit::{
     layout, layout_grouped, Axis, Container, Element, Group, Grow, Layout, Orientation, Size,
     Size2, SizePolicy, Status,
 };
@@ -28,7 +28,7 @@ fn policy() -> impl Strategy<Value = SizePolicy> {
         min_size: a,
         size: b,
         max_size: c,
-        aspect_ratio: ratio.map(|(w, h)| egui_gridflow::AspectRatio {
+        aspect_ratio: ratio.map(|(w, h)| egui_fit::AspectRatio {
             width: w,
             height: h,
         }),
@@ -58,7 +58,7 @@ fn element(key: u64) -> impl Strategy<Value = Element> {
             forms,
             orientations: o.to_vec(),
             pinned_orientation: pinned,
-            pin: pin.map(|(col, row)| egui_gridflow::Cell { col, row }),
+            pin: pin.map(|(col, row)| egui_fit::Cell { col, row }),
         })
 }
 
@@ -148,7 +148,7 @@ fn groups() -> impl Strategy<Value = Vec<Group>> {
 /// Groups hold their elements: dense inside, strict order across.
 fn check_groups(groups: &[Group], l: &Layout) -> Result<(), TestCaseError> {
     prop_assert_eq!(l.groups.len(), groups.len());
-    let placed: Vec<(usize, egui_gridflow::GridRect)> = l
+    let placed: Vec<(usize, egui_fit::GridRect)> = l
         .placements
         .iter()
         .filter_map(|p| p.rect.map(|r| (p.logical, r)))

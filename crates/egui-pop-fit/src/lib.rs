@@ -1,4 +1,4 @@
-//! # egui_gridflow
+//! # egui_fit
 //!
 //! A slot layout engine over plain boxes. It knows nothing of widgets,
 //! values or drawing: it packs ordered elements into a container in
@@ -33,7 +33,7 @@
 //!   threshold.
 //!
 //! ```
-//! use egui_gridflow::{layout, Axis, Container, Element, Size, Size2, SizePolicy};
+//! use egui_fit::{layout, Axis, Container, Element, Size, Size2, SizePolicy};
 //!
 //! let half = Size2::new(Size::HALF, Size::ONE);
 //! let row = Size2::new(Size::units(2), Size::ONE);

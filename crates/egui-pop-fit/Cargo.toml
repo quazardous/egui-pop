@@ -1,10 +1,10 @@
-# The root is the `egui_gridflow` crate; `demo/` is its web demo, never
+# The root is the `egui_fit` crate; `demo/` is its web demo, never
 # published. `cargo test` here tests the core only.
 [workspace]
 members = ["demo"]
 
 [package]
-name = "egui_gridflow"
+name = "egui_fit"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.95"
@@ -13,11 +13,11 @@ description = "A slot layout engine with no egui dependency: dense grid packing 
 keywords = ["layout", "grid", "packing", "gui"]
 categories = ["gui", "algorithms"]
 readme = "README.md"
-repository = "https://github.com/quazardous/egui_gridflow"
+repository = "https://github.com/quazardous/egui_fit"
 publish = false
 
 [lib]
-name = "egui_gridflow"
+name = "egui_fit"
 
 [features]
 default = []
