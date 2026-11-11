@@ -812,6 +812,11 @@ pub(crate) struct Shared {
     stack_writing: std::cell::Cell<bool>,
     /// The commands running now, innermost last, with their owners.
     running_commands: RefCell<Vec<(CommandId, Option<OwnerId>)>>,
+    /// The application windows (`AppHandle::open_window`).
+    pub(crate) windows: RefCell<crate::windows::Windows>,
+    /// The keymap as last rebuilt, for the windows dispatching their keys
+    /// in their own pass.
+    keymap: RefCell<Rc<Keymap>>,
 }
 
 /// Marks a command as running while it lives (what reports name, as
@@ -838,7 +843,7 @@ impl Drop for RunningCommand {
 /// and command handlers reach services, the store and the command runner
 /// through it.
 #[derive(Clone)]
-pub struct AppHandle(Rc<Shared>);
+pub struct AppHandle(pub(crate) Rc<Shared>);
 
 impl fmt::Debug for AppHandle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -923,6 +928,8 @@ impl AppHandle {
             locals: RefCell::new(BTreeMap::new()),
             stack_writing: std::cell::Cell::new(false),
             running_commands: RefCell::new(Vec::new()),
+            windows: RefCell::default(),
+            keymap: RefCell::default(),
         }))
     }
 
@@ -1771,6 +1778,33 @@ impl AppHandle {
         self.egui().request_repaint();
     }
 
+    /// Asks for a command from the user, run before the main window's
+    /// next pass in a given context (a window's keys).
+    pub(crate) fn run_in_context(&self, command: CommandId, args: Json, context: WhenContext) {
+        self.push_request(Request::RunIn {
+            command,
+            args,
+            origin: Origin::User,
+            context,
+        });
+        self.egui().request_repaint_of(egui::ViewportId::ROOT);
+    }
+
+    /// Whether requests wait for the main window's next pass.
+    pub(crate) fn has_requests(&self) -> bool {
+        !self.0.requests.borrow().is_empty()
+    }
+
+    /// The keymap as last rebuilt.
+    pub(crate) fn shared_keymap(&self) -> Rc<Keymap> {
+        self.0.keymap.borrow().clone()
+    }
+
+    /// A shortcuts editor waits for keys.
+    pub(crate) fn capturing_keys(&self) -> bool {
+        self.0.capturing.get()
+    }
+
     /// Sets an application-wide context key (depth 0), for `when`
     /// clauses. The context stack's own keys (`place`, `placeDepth`,
     /// `modePushed`, `mode.*`) are its projection's: a plugin setting one
@@ -1839,6 +1873,12 @@ impl AppHandle {
         if let Some(panel) = self.window_panel(ctx.viewport_id()) {
             base.set(CONTEXT_WINDOW, panel.as_str());
         }
+        let app_window = match self.window_at(ctx.viewport_id()) {
+            Some(id) => id,
+            // A detached panel's window belongs to the main window.
+            None => self.windows_ref().root.id.clone(),
+        };
+        base.set(crate::windows::CONTEXT_APP_WINDOW, app_window.as_str());
         for (key, on) in crate::clipboard::keys(self).into_iter().flatten() {
             base.set(key, flag(on));
         }
@@ -1854,8 +1894,15 @@ impl AppHandle {
 
     /// A window's name for agents: `main`, or its detached panel's id.
     pub fn window_name(&self, window: egui::ViewportId) -> String {
-        self.window_panel(window)
-            .map_or_else(|| "main".to_string(), |p| p.to_string())
+        if let Some(p) = self.window_panel(window) {
+            return p.to_string();
+        }
+        if window != egui::ViewportId::ROOT
+            && let Some(id) = self.window_at(window)
+        {
+            return id.to_string();
+        }
+        "main".to_string()
     }
 
     /// What the `windows` collector shows: the active window, each
@@ -1872,11 +1919,12 @@ impl AppHandle {
                     .map(|a| crate::workbench::window_id(&a.panel)),
             );
         }
+        windows.extend(self.windows().iter().skip(1).map(|w| w.viewport));
         let stacks = overlay::stacks(&ctx);
         let palette = self
             .service(&crate::palette::PALETTE)
             .and_then(|p| p.window())
-            .map(|w| self.window_name(self.open_window(w)));
+            .map(|w| self.window_name(self.still_open(w)));
         json!({
             "active": self.window_name(self.active_window()),
             "windows": windows.iter().map(|v| json!({
@@ -1890,6 +1938,7 @@ impl AppHandle {
             })).collect::<Vec<_>>(),
             "palette": palette,
             "popup_menu": crate::menus::popup_window(self).map(|w| self.window_name(w)),
+            "app_windows": crate::windows::describe(self),
         })
     }
 
@@ -1912,12 +1961,12 @@ impl AppHandle {
     /// in), still open: the main window (`ViewportId::ROOT`) or a
     /// detached panel's. A dialog opens over it.
     pub fn active_window(&self) -> egui::ViewportId {
-        self.open_window(self.0.active_window.get())
+        self.still_open(self.0.active_window.get())
     }
 
     /// A window if it is still open, else the main window.
-    pub(crate) fn open_window(&self, window: egui::ViewportId) -> egui::ViewportId {
-        if self.window_panel(window).is_some() {
+    pub(crate) fn still_open(&self, window: egui::ViewportId) -> egui::ViewportId {
+        if self.window_panel(window).is_some() || crate::windows::is_app_window(self, window) {
             window
         } else {
             egui::ViewportId::ROOT
@@ -2979,6 +3028,8 @@ pub struct AppBuilder {
     store: Option<SharedStore>,
     host: Option<Box<dyn Host>>,
     system_focus: Option<SystemFocus>,
+    /// The application opens windows of its own (`AppBuilder::multi_window`).
+    multi_window: bool,
     system_text_scale: crate::text::SystemTextScale,
     system_scroll_bars: bool,
     system_wheel_lines: u32,
@@ -3081,6 +3132,7 @@ impl AppBuilder {
             bridge_mode: None,
             host: None,
             system_focus: None,
+            multi_window: false,
             system_text_scale: crate::text::SystemTextScale::default(),
             system_scroll_bars: false,
             system_wheel_lines: crate::pointer::SYSTEM_WHEEL_LINES,
@@ -3570,6 +3622,16 @@ impl AppBuilder {
         self
     }
 
+    /// The application opens windows of its own
+    /// ([`AppHandle::open_window`]): `run_native` then sets wgpu's present
+    /// mode for several windows (`windows::present_mode`: `AutoNoVsync`
+    /// on Wayland, where a FIFO present can stall every window), unless
+    /// the options chose a mode other than eframe's default.
+    pub fn multi_window(mut self, on: bool) -> Self {
+        self.multi_window = on;
+        self
+    }
+
     /// The window manager's focus mode (`focus_mode::read_system()`
     /// reads it). Not given, it is read by `run_native` and taken as
     /// click elsewhere (tests stay the same on every desktop).
@@ -3819,6 +3881,9 @@ impl AppBuilder {
         if let Some(p) = &self.persist {
             crate::window::restore(p.dir(), &mut options);
         }
+        if self.multi_window {
+            crate::windows::present_mode(&mut options);
+        }
         eframe::run_native(
             title,
             options,
@@ -3855,6 +3920,9 @@ impl AppBuilder {
         }
         if let Some(p) = &self.persist {
             crate::window::restore(p.dir(), &mut options);
+        }
+        if self.multi_window {
+            crate::windows::present_mode(&mut options);
         }
         eframe::run_native(
             title,
@@ -5390,6 +5458,7 @@ impl App {
         drop(all);
         self.dirty = false;
         self.rebuilds += 1;
+        *self.handle.0.keymap.borrow_mut() = Rc::new(self.reg.keymap.clone());
         if self.started {
             self.emit(&Lifecycle::Rebuilt);
         }
@@ -6383,12 +6452,25 @@ impl App {
         }
         self.handle.note_window(&ctx);
         crate::workbench::forget_closed_windows(&self.handle, &ctx);
-        // A dialog open in a detached panel's window blocks this one.
-        overlay::block_window(&ctx);
+        // Closing the main window while application windows are open
+        // moves the one worked in last into it, and quits nothing.
+        if ctx.viewport_id() == egui::ViewportId::ROOT
+            && ctx.input(|i| i.viewport().close_requested())
+            && self.handle.move_into_root()
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
+        // A dialog open in a detached panel's window blocks this one; one
+        // in an application window does not.
+        let app = self.handle.clone();
+        overlay::block_window_among(&ctx, &|v| !crate::windows::is_app_window(&app, v));
         overlay::begin_pass(&ctx);
         self.dispatch_keys(&ctx);
         self.process_requests();
-        self.outlined(ui);
+        self.handle.declare_windows(&ctx);
+        if !self.handle.root_pass(ui) {
+            self.outlined(ui);
+        }
         let name = self.handle.name();
         let name = if name.is_empty() {
             ctx.input(|i| i.viewport().title.clone())
@@ -6397,7 +6479,11 @@ impl App {
             name
         };
         let handle = self.handle.clone();
-        crate::workbench::windows(&handle, &ctx, &name, &mut |c| self.dispatch_keys(c));
+        // The detached panels belong to the shell: not drawn while a
+        // window's content moved into the main window.
+        if !handle.root_has_content() {
+            crate::workbench::windows(&handle, &ctx, &name, &mut |c| self.dispatch_keys(c));
+        }
         handle.show_zone(ui, &zones::OVERLAYS);
         handle.show_zone(ui, &zones::WINDOW_OVERLAYS);
         crate::menus::draw_popup(&ctx, &self.handle);

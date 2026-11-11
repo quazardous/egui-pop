@@ -171,6 +171,7 @@ pub mod toasts;
 pub mod toolbars;
 pub mod wait;
 pub mod window;
+pub mod windows;
 pub mod workbench;
 mod zen;
 pub mod zones;
