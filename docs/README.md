@@ -225,6 +225,10 @@ of every crate with every feature on.
 - [Scrolling survey](scrolling-survey.md): how desktops and applications show
   scroll bars and treat the wheel, a recommended default (bars visible at
   rest) and the changes ranked for egui-pop.
+- [Knob interaction study](knob-interaction.md): how DAWs, plug-ins,
+  photo tools and web libraries drive knobs (drag mode, travel, fine,
+  wheel, reset, typing), why egui-pop's knob is hard to control, and the
+  recommended drag-mode API.
 - [Web survey](web-survey.md): what breaks or differs in the web build
   (keys the browser keeps, platform services, storage, rendering,
   accessibility, every gallery page), ranked by how much it gets in the
