@@ -43,6 +43,7 @@ fn finished_changes_run_the_step_and_frames_go_through() {
         to: 1.3,
         cause: Cause::Drag,
         done: true,
+        delta: 1.3,
     };
     let mut gain = sliders::hook(h, "gain");
     assert_eq!(gain(&change), Verdict::Redirect(1.5));

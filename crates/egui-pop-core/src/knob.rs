@@ -29,6 +29,11 @@
 //! - **Keys** (arrows, Page Up and Page Down, Home and End),
 //!   **typed entry** (Enter) and **assistive actions**: as the slider's,
 //!   from the same pointer profile.
+//! - **Endless** ([`Knob::endless`]): no arc and no ends, ticks
+//!   turning with the value; the value wraps around the soft range
+//!   ([`Endless::Wrap`], an angle, a hue) or has no bounds
+//!   ([`Endless::Unbounded`]), and each change says how far it moved
+//!   (`Change::delta`, unwrapped), for a host that maps it to nudges.
 //! - **Hidden pointer** (opt-in, [`Knob::hide_pointer`] or
 //!   `Gestures::knob_hide_pointer`): a linear drag hides the pointer and
 //!   puts it back where the press was at its end
@@ -95,6 +100,19 @@ pub enum KnobWheel {
     Hover,
 }
 
+/// How an endless knob's value goes past its soft range
+/// ([`Knob::endless`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Endless {
+    /// Around the soft range, as an angle or a hue: past the end is the
+    /// start again (`to` wrapped into `[start, end)`, the change's
+    /// `delta` unwrapped).
+    Wrap,
+    /// No bounds at all: the soft range is one turn of the face and the
+    /// span the drag's travel covers.
+    Unbounded,
+}
+
 /// The dial's sweep, in radians: from 7:30 to 4:30 through 12.
 pub const SWEEP: f32 = 1.5 * PI;
 
@@ -118,6 +136,8 @@ struct Turn {
 }
 
 const TURN: Slot<Turn> = Slot::new("core.knob.turn");
+/// An endless knob's drag: its place unwrapped, as last written.
+const UNWRAPPED: Slot<f64> = Slot::new("core.knob.unwrapped");
 
 /// A rotary knob over an `f64`.
 #[derive(Debug)]
@@ -132,6 +152,7 @@ pub struct Knob<'a> {
     wheel: KnobWheel,
     menu: bool,
     hide_pointer: Option<bool>,
+    endless: Option<Endless>,
 }
 
 impl<'a> Knob<'a> {
@@ -149,6 +170,7 @@ impl<'a> Knob<'a> {
             wheel: KnobWheel::Profile,
             menu: true,
             hide_pointer: None,
+            endless: None,
         }
     }
 
@@ -193,6 +215,21 @@ impl<'a> Knob<'a> {
     /// value" item calls [`request_typed_entry`](crate::slider::request_typed_entry)).
     pub fn menu(mut self, on: bool) -> Self {
         self.menu = on;
+        self
+    }
+
+    /// An endless knob: a face with no arc and no ends, ticks turning
+    /// with the value (one turn over the soft range), driven by the same
+    /// drag modes, travel, wheel and keys; its value wraps or has no
+    /// bounds ([`Endless`]), and each [`Change`] carries the motion in
+    /// `delta`, for a host that maps it to nudges (an encoder's
+    /// increments). Home and End do nothing on it; a circular drag's full
+    /// turn is the soft range. Its bar is always linear.
+    pub fn endless(mut self, ends: Endless) -> Self {
+        self.endless = Some(ends);
+        if ends == Endless::Unbounded {
+            self.spec.hard = (f64::NEG_INFINITY, f64::INFINITY);
+        }
         self
     }
 
@@ -244,7 +281,28 @@ impl<'a> Knob<'a> {
             wheel,
             menu,
             hide_pointer,
+            endless,
         } = self;
+        let mut spec = spec;
+        if endless.is_some() {
+            spec.curve = crate::slider::Curve::Linear;
+        }
+        // Where a value lands: kept to the hard range, or wrapped.
+        let fit = |v: f64| -> f64 {
+            match endless {
+                Some(Endless::Wrap) => {
+                    let (lo, hi) = spec.soft;
+                    let v = spec.settle(v, (f64::NEG_INFINITY, f64::INFINITY));
+                    if hi > lo {
+                        lo + (v - lo).rem_euclid(hi - lo)
+                    } else {
+                        v
+                    }
+                }
+                Some(Endless::Unbounded) => spec.settle(v, (f64::NEG_INFINITY, f64::INFINITY)),
+                None => spec.settle(v, spec.hard),
+            }
+        };
         let row = ui.spacing().interact_size.y;
         let wanted = size.unwrap_or(vec2(row * 2.0 * 3.0, row * 2.0));
         let (id, rect) = ui.allocate_space(vec2(wanted.x.max(row), wanted.y.max(row)));
@@ -262,13 +320,16 @@ impl<'a> Knob<'a> {
                 None => false,
             }
         };
-        let change = |from: f64, to: f64, cause: Cause, done: bool| Change {
+        let moved = |from: f64, to: f64, delta: f64, cause: Cause, done: bool| Change {
             thumb: Thumb::Value,
             from,
             to,
             cause,
             done,
+            delta,
         };
+        let change =
+            |from: f64, to: f64, cause: Cause, done: bool| moved(from, to, to - from, cause, done);
         let typing = typing_id(id);
         if take_typed_request(ui.ctx(), id) && spec.state.is_editable() {
             open_typed_entry(ui, typing, spec.number(ui.ctx(), *value));
@@ -277,7 +338,7 @@ impl<'a> Knob<'a> {
             let entry = Rect::from_center_size(rect.center(), vec2(rect.width(), row));
             if let Some(end) = typed_entry(ui, entry, typing, text, &spec, *value) {
                 if let Some(v) = end.value {
-                    let to = spec.settle(v, spec.hard);
+                    let to = fit(v);
                     if to != *value {
                         apply(change(*value, to, Cause::Typed, true), value);
                     }
@@ -295,10 +356,32 @@ impl<'a> Knob<'a> {
             let scale = modifier_scale(ui, &g);
             let mode = drag.unwrap_or(g.knob_drag);
             let hide = hide_pointer.unwrap_or(g.knob_hide_pointer) && mode != KnobDrag::Circular;
+            let unwrapped = UNWRAPPED.keyed(response.id);
             match turn(
-                ui, &response, &layout, &spec, *value, scale, travel, mode, hide,
+                ui,
+                &response,
+                &layout,
+                &spec,
+                *value,
+                scale,
+                travel,
+                mode,
+                hide,
+                endless.is_some(),
             ) {
                 Drag::None => {}
+                Drag::Moved(v) if endless.is_some() => {
+                    // The drag's place unwrapped, from the value at its
+                    // start: each frame's delta is the motion since the
+                    // last one written.
+                    let u = spec.settle(v, (f64::NEG_INFINITY, f64::INFINITY));
+                    let last = unwrapped.get(ui.ctx()).unwrap_or(*value);
+                    if u != last
+                        && apply(moved(*value, fit(u), u - last, Cause::Drag, false), value)
+                    {
+                        unwrapped.set(ui.ctx(), u);
+                    }
+                }
                 Drag::Moved(v) => {
                     let to = spec.settle(v, spec.hard);
                     if to != *value {
@@ -306,12 +389,19 @@ impl<'a> Knob<'a> {
                     }
                 }
                 Drag::Ended(start) => {
-                    if start != *value && !apply(change(start, *value, Cause::Drag, true), value) {
+                    let total = unwrapped
+                        .get(ui.ctx())
+                        .map_or(*value - start, |u| u - start);
+                    unwrapped.remove(ui.ctx());
+                    if (start != *value || total != 0.0)
+                        && !apply(moved(start, *value, total, Cause::Drag, true), value)
+                    {
                         *value = start;
                         crate::binding::cancel_gesture(ui.ctx(), response.id);
                     }
                 }
                 Drag::Cancelled(start) => {
+                    unwrapped.remove(ui.ctx());
                     *value = start;
                     crate::binding::cancel_gesture(ui.ctx(), response.id);
                 }
@@ -342,12 +432,21 @@ impl<'a> Knob<'a> {
             if wheel == KnobWheel::Hover {
                 wheel_g.wheel_steps = true;
             }
+            let bounds = if endless.is_some() {
+                (f64::NEG_INFINITY, f64::INFINITY)
+            } else {
+                spec.soft
+            };
             if let Some((v, cause)) =
-                keys_wheel_access(ui, &response, &spec, *value, spec.soft, scale, &wheel_g)
+                keys_wheel_access(ui, &response, &spec, *value, bounds, scale, &wheel_g)
             {
-                let to = spec.settle(v, spec.hard);
-                if to != *value {
-                    apply(change(*value, to, cause, true), value);
+                // Home and End lead nowhere on an endless knob.
+                if v.is_finite() {
+                    let to = fit(v);
+                    let delta = spec.settle(v, (f64::NEG_INFINITY, f64::INFINITY)) - *value;
+                    if to != *value || delta != 0.0 {
+                        apply(moved(*value, to, delta, cause, true), value);
+                    }
                 }
             }
             if response.has_focus()
@@ -356,7 +455,7 @@ impl<'a> Knob<'a> {
             {
                 open_typed_entry(ui, typing, spec.number(ui.ctx(), *value));
             }
-            paint(ui, &layout, &response, &spec, *value);
+            paint(ui, &layout, &response, &spec, *value, endless.is_some());
         }
         if *value != before {
             response.mark_changed();
@@ -463,6 +562,7 @@ fn turn(
     travel: f32,
     mode: KnobDrag,
     hide: bool,
+    endless: bool,
 ) -> Drag {
     let slot = TURN.keyed(response.id);
     let centre = layout.dial.center();
@@ -535,13 +635,18 @@ fn turn(
                         a += 2.0 * PI;
                     }
                     t.angle = now;
-                    f64::from(a / SWEEP)
+                    // An endless face turns once over the soft range.
+                    f64::from(a / if endless { 2.0 * PI } else { SWEEP })
                 }
             }
         } * scale;
         if delta != 0.0 {
             let (lo, hi) = (spec.frac(spec.soft.0), spec.frac(spec.soft.1));
-            t.frac = (t.frac + delta).clamp(lo.min(t.frac), hi.max(t.frac));
+            t.frac = if endless {
+                t.frac + delta
+            } else {
+                (t.frac + delta).clamp(lo.min(t.frac), hi.max(t.frac))
+            };
             slot.set(ui.ctx(), t);
             return Drag::Moved(spec.value_at(t.frac));
         }
@@ -595,7 +700,9 @@ fn show_pointer(ctx: &egui::Context) {
 /// the slider's kit parts: `slider` (the dial), `slider-fill` (the
 /// value's arc), `slider-thumb` (the pointer), `slider-value` (the
 /// text).
-fn paint(ui: &Ui, layout: &Layout, response: &Response, spec: &Spec, v: f64) {
+/// An endless knob's face has no arcs: twelve ticks turn with the value,
+/// one turn over the soft range, the pointer the longest.
+fn paint(ui: &Ui, layout: &Layout, response: &Response, spec: &Spec, v: f64, endless: bool) {
     let room = layout
         .dial
         .union(layout.value.unwrap_or(layout.dial))
@@ -604,7 +711,7 @@ fn paint(ui: &Ui, layout: &Layout, response: &Response, spec: &Spec, v: f64) {
         return;
     }
     let kit = Kit::of(ui.ctx());
-    let past = v < spec.soft.0 || v > spec.soft.1;
+    let past = !endless && (v < spec.soft.0 || v > spec.soft.1);
     let tone = if past { Tone::Warning } else { Tone::Neutral };
     let state = State::from_response(response).toned(tone);
     let dial = kit.slider.style(state);
@@ -614,15 +721,6 @@ fn paint(ui: &Ui, layout: &Layout, response: &Response, spec: &Spec, v: f64) {
     let centre = layout.dial.center();
     let r = layout.radius();
     let width = (r * 0.18).clamp(2.0, 5.0);
-    let arc = |from: f32, to: f32, radius: f32| -> Vec<Pos2> {
-        let n = (((to - from).abs() / SWEEP) * 48.0).ceil().max(2.0) as usize;
-        (0..=n)
-            .map(|i| {
-                let a = from + (to - from) * i as f32 / n as f32;
-                centre + radius * vec2(a.cos(), a.sin())
-            })
-            .collect()
-    };
     // The body, then the track's arc.
     painter.circle(
         centre,
@@ -635,40 +733,38 @@ fn paint(ui: &Ui, layout: &Layout, response: &Response, spec: &Spec, v: f64) {
     } else {
         dial.border_color
     };
-    painter.add(Shape::line(
-        arc(angle_of(0.0), angle_of(1.0), r - width / 2.0),
-        Stroke::new(width, track),
-    ));
-    let at = spec.frac(v) as f32;
-    let zero = if spec.soft.0 < 0.0 && spec.soft.1 > 0.0 {
-        spec.frac(0.0) as f32
-    } else {
-        0.0
-    };
-    let fill_color = if fill.fill == Color32::TRANSPARENT {
-        dial.text
-    } else {
-        fill.fill
-    };
-    if (at - zero).abs() > f32::EPSILON {
-        painter.add(Shape::line(
-            arc(angle_of(zero), angle_of(at), r - width / 2.0),
-            Stroke::new(width, fill_color),
-        ));
-    }
-    let a = angle_of(at);
     let pointer = if thumb.fill == Color32::TRANSPARENT {
         dial.text
     } else {
         thumb.fill
     };
-    painter.line_segment(
-        [
-            centre + (r - width) * 0.25 * vec2(a.cos(), a.sin()),
-            centre + (r - width) * 0.9 * vec2(a.cos(), a.sin()),
-        ],
-        Stroke::new(width.max(2.0), pointer),
-    );
+    if endless {
+        // 12 o'clock at the soft range's start, clockwise for more.
+        let turn = -PI / 2.0 + (spec.frac(v).rem_euclid(1.0) as f32) * 2.0 * PI;
+        for k in 1..12 {
+            let a = turn + k as f32 * PI / 6.0;
+            let dir = vec2(a.cos(), a.sin());
+            painter.line_segment(
+                [
+                    centre + (r - width) * 0.72 * dir,
+                    centre + (r - width) * 0.9 * dir,
+                ],
+                Stroke::new((width * 0.5).max(1.0), track),
+            );
+        }
+        let dir = vec2(turn.cos(), turn.sin());
+        painter.line_segment(
+            [
+                centre + (r - width) * 0.25 * dir,
+                centre + (r - width) * 0.9 * dir,
+            ],
+            Stroke::new(width.max(2.0), pointer),
+        );
+    } else {
+        paint_arcs(
+            &painter, centre, r, width, track, fill.fill, dial.text, pointer, spec, v,
+        );
+    }
     if response.has_focus() {
         let ring = kit.slider.style(state.with(State::FOCUS, true));
         let color = if ring.ring_width > 0.0 {
@@ -682,6 +778,75 @@ fn paint(ui: &Ui, layout: &Layout, response: &Response, spec: &Spec, v: f64) {
             Stroke::new(ring.ring_width.max(1.5), color),
         );
     }
+    paint_text(ui, &painter, layout, spec, v, dial.text, r);
+}
+
+/// The track's arc, the value's arc (from zero when the soft range holds
+/// it, else from the start) and the pointer.
+#[allow(clippy::too_many_arguments)]
+fn paint_arcs(
+    painter: &egui::Painter,
+    centre: Pos2,
+    r: f32,
+    width: f32,
+    track: Color32,
+    fill: Color32,
+    text: Color32,
+    pointer: Color32,
+    spec: &Spec,
+    v: f64,
+) {
+    let arc = |from: f32, to: f32, radius: f32| -> Vec<Pos2> {
+        let n = (((to - from).abs() / SWEEP) * 48.0).ceil().max(2.0) as usize;
+        (0..=n)
+            .map(|i| {
+                let a = from + (to - from) * i as f32 / n as f32;
+                centre + radius * vec2(a.cos(), a.sin())
+            })
+            .collect()
+    };
+    painter.add(Shape::line(
+        arc(angle_of(0.0), angle_of(1.0), r - width / 2.0),
+        Stroke::new(width, track),
+    ));
+    let at = spec.frac(v) as f32;
+    let zero = if spec.soft.0 < 0.0 && spec.soft.1 > 0.0 {
+        spec.frac(0.0) as f32
+    } else {
+        0.0
+    };
+    let fill_color = if fill == Color32::TRANSPARENT {
+        text
+    } else {
+        fill
+    };
+    if (at - zero).abs() > f32::EPSILON {
+        painter.add(Shape::line(
+            arc(angle_of(zero), angle_of(at), r - width / 2.0),
+            Stroke::new(width, fill_color),
+        ));
+    }
+    let a = angle_of(at);
+    painter.line_segment(
+        [
+            centre + (r - width) * 0.25 * vec2(a.cos(), a.sin()),
+            centre + (r - width) * 0.9 * vec2(a.cos(), a.sin()),
+        ],
+        Stroke::new(width.max(2.0), pointer),
+    );
+}
+
+/// The label and the value, where the layout puts them.
+fn paint_text(
+    ui: &Ui,
+    painter: &egui::Painter,
+    layout: &Layout,
+    spec: &Spec,
+    v: f64,
+    color: Color32,
+    r: f32,
+) {
+    let centre = layout.dial.center();
     let font = egui::TextStyle::Button.resolve(ui.style());
     let fit = |text: String, room: Rect, color: Color32| -> Arc<Galley> {
         let mut job = egui::text::LayoutJob::simple_singleline(text, font.clone(), color);
@@ -697,7 +862,7 @@ fn paint(ui: &Ui, layout: &Layout, response: &Response, spec: &Spec, v: f64) {
         painter.galley(
             pos2(x, room.center().y - g.size().y / 2.0),
             g.clone(),
-            dial.text,
+            color,
         );
     };
     let text = spec.text(ui.ctx(), v);
@@ -705,19 +870,19 @@ fn paint(ui: &Ui, layout: &Layout, response: &Response, spec: &Spec, v: f64) {
         .value
         .is_some_and(|r| r.width() < 2.0 * layout.dial.width());
     if let Some(room) = layout.value {
-        let mut g = fit(text, room, dial.text);
+        let mut g = fit(text, room, color);
         if g.elided {
-            g = fit(spec.number(ui.ctx(), v), room, dial.text);
+            g = fit(spec.number(ui.ctx(), v), room, color);
         }
         place(&g, room, centred);
     } else if r > font.size * 1.2 {
         // Inside the dial: the number only.
         let inner = Rect::from_center_size(centre, Vec2::splat(r * 1.3));
-        let g = fit(spec.number(ui.ctx(), v), inner, dial.text);
+        let g = fit(spec.number(ui.ctx(), v), inner, color);
         place(&g, inner, true);
     }
     if let Some(room) = layout.label {
-        let g = fit(spec.label.clone(), room, dial.text.gamma_multiply(0.75));
+        let g = fit(spec.label.clone(), room, color.gamma_multiply(0.75));
         place(&g, room, centred);
     }
 }
