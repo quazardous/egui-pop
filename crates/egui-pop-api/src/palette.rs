@@ -404,7 +404,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     // Shown in the window it opened in (the active one then), or the main
     // window once that one is closed; drawn in that window's pass only.
     let window = *lock(&p.0).window.get_or_insert_with(|| app.active_window());
-    if app.open_window(window) != ctx.viewport_id() {
+    if app.still_open(window) != ctx.viewport_id() {
         return;
     }
     // The palette handles Escape itself: back from a prompt, else close.

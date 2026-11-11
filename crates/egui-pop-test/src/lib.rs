@@ -72,6 +72,7 @@ pub mod jobs;
 pub mod scenario;
 pub mod wait;
 pub mod walk;
+pub mod windows;
 
 pub use egui_pop_test_macros::critical;
 #[cfg(feature = "viewport")]

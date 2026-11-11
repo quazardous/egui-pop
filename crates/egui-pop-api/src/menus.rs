@@ -854,7 +854,7 @@ pub fn popup_open(app: &AppHandle) -> Option<MenuId> {
 /// The window the popup menu shows in, if one is open: the one it was
 /// opened in, or the main window once that one is closed.
 pub fn popup_window(app: &AppHandle) -> Option<egui::ViewportId> {
-    app.popup().map(|p| app.open_window(p.window))
+    app.popup().map(|p| app.still_open(p.window))
 }
 
 /// Closes the popup menu, if one is open.
@@ -866,7 +866,7 @@ pub fn close_popup(app: &AppHandle) {
 /// (the shell calls it in each window's pass).
 pub(crate) fn draw_popup(ctx: &Context, app: &AppHandle) {
     let Some(p) = app.popup() else { return };
-    if app.open_window(p.window) != ctx.viewport_id() {
+    if app.still_open(p.window) != ctx.viewport_id() {
         return;
     }
     let draw = || {

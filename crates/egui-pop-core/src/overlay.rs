@@ -666,8 +666,18 @@ pub fn stacks(ctx: &Context) -> Vec<(ViewportId, Vec<OverlaySpec>)> {
 /// and blocks every other one, the main window included, and the other
 /// way round: every window of the application waits for the answer.
 pub fn block_window(ctx: &Context) -> Option<ViewportId> {
+    block_window_among(ctx, &|_| true)
+}
+
+/// As [`block_window`], blocked only by a modal open in a window of the
+/// same group (`same` says which windows are): an application window
+/// almost a separate application blocks only itself, and is blocked by
+/// none of the others.
+pub fn block_window_among(ctx: &Context, same: &dyn Fn(ViewportId) -> bool) -> Option<ViewportId> {
     let here = ctx.viewport_id();
-    let owner = modal_windows(ctx).into_iter().find(|v| *v != here)?;
+    let owner = modal_windows(ctx)
+        .into_iter()
+        .find(|v| *v != here && same(*v))?;
     ctx.input_mut(|i| {
         i.events.retain(|e| {
             !matches!(

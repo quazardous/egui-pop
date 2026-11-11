@@ -1333,7 +1333,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     else {
         return;
     };
-    if app.open_window(window) != ctx.viewport_id() {
+    if app.still_open(window) != ctx.viewport_id() {
         return;
     }
     let Some(mut open_dialog) = lock(&d.0).queue.front().cloned() else {

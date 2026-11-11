@@ -690,7 +690,7 @@ fn is_auto(t: &Typing) -> bool {
 }
 
 /// The bindings, by layer.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Keymap {
     rules: OwnedList<Rule>,
 }

@@ -30,5 +30,6 @@ after the fact except to mark it superseded by a later one.
 | [0022](0022-sections-and-toolbars-in-egui-stack.md) | Sections and a toolbar row move into egui_stack as plain-egui cores; egui-pop wraps them (accepted, [analysis](../egui-stack-directions.md)) | 2026-11-03 |
 | [0023](0023-every-command-through-the-host.md) | Every command goes through the host's dispatch; history walks are held to the writers | 2026-11-03 |
 | [0024](0024-bridge-modes-and-read-only-commands.md) | The debug bridge has a mode; commands say when they only read | 2026-11-03 |
+| [0025](0025-application-windows.md) | Application windows are deferred viewports with an `Rc` shim; the main window is always the first | 2026-11-11 |
 
 Template: copy any of them; keep it to half a page.

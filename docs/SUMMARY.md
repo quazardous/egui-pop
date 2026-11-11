@@ -115,6 +115,7 @@
   - [0022: Sections and toolbars in egui_stack](adr/0022-sections-and-toolbars-in-egui-stack.md)
   - [0023: Every command through the host](adr/0023-every-command-through-the-host.md)
   - [0024: Bridge modes and read-only commands](adr/0024-bridge-modes-and-read-only-commands.md)
+  - [0025: Application windows](adr/0025-application-windows.md)
 - [Micro-indicators, the design](design/indicators.md)
 - [Agent control, the design](design/agent-control.md)
 - [Icons: an inventory](icons.md)
