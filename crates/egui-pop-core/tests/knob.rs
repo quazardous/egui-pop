@@ -370,6 +370,24 @@ fn a_knob_without_a_menu_opens_its_entry_on_request() {
     assert!(h.query_by_label("Gain, typed value").is_some());
 }
 
+/// A primary click at `at` with `modifiers` (the knob's tooltip, once
+/// hovered, shares its name: no query).
+fn click_at<T>(h: &mut Harness<'_, T>, at: Pos2, modifiers: Modifiers) {
+    h.event(Event::ModifiersChanged(modifiers));
+    h.event(Event::PointerMoved(at));
+    for pressed in [true, false] {
+        h.event(Event::PointerButton {
+            pos: at,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers,
+        });
+    }
+    h.run();
+    h.event(Event::ModifiersChanged(Modifiers::NONE));
+    h.run();
+}
+
 #[test]
 fn a_ctrl_click_resets_only_where_the_profile_binds_it() {
     let mut h = knob(None);
@@ -381,8 +399,7 @@ fn a_ctrl_click_resets_only_where_the_profile_binds_it() {
         egui_pop_core::slider::gestures(&h.ctx).reset_click,
         Modifiers::NONE
     );
-    h.get_by_label("Gain").click_modifiers(Modifiers::COMMAND);
-    h.run();
+    click_at(&mut h, c, Modifiers::COMMAND);
     near(*h.state(), 70.0, "a Ctrl-click does nothing by default");
     // A profile binding `Ctrl+PrimaryClick` to `gesture.value.reset`
     // (on Linux the profile's Ctrl is egui's command).
@@ -390,8 +407,7 @@ fn a_ctrl_click_resets_only_where_the_profile_binds_it() {
     g.reset_click = Modifiers::COMMAND;
     egui_pop_core::slider::set_gestures(&h.ctx, g);
     h.run();
-    h.get_by_label("Gain").click_modifiers(Modifiers::COMMAND);
-    h.run();
+    click_at(&mut h, c, Modifiers::COMMAND);
     near(*h.state(), 50.0, "a Ctrl-click resets");
 }
 
