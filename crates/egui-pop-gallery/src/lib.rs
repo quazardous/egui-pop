@@ -454,6 +454,7 @@ pub struct Gallery {
     pub app: App,
     frames: u64,
     quit_after: Option<u64>,
+    resize_to: Option<[f32; 2]>,
     announce: bool,
     dump_debug: bool,
     persists: bool,
@@ -588,6 +589,7 @@ impl Gallery {
             app,
             frames: 0,
             quit_after: options.quit_after,
+            resize_to: options.resize_to,
             announce: options.announce,
             dump_debug: options.dump_debug,
             persists,
@@ -613,6 +615,16 @@ impl Gallery {
         self.app.logic(ctx);
         self.frames += 1;
         if let Some(limit) = self.quit_after {
+            if let Some([w, h]) = self.resize_to
+                && self.frames == limit / 2
+            {
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(w, h)));
+                if self.announce {
+                    announce(
+                        &serde_json::json!({ "event": "resize", "frames": self.frames, "size": [w, h] }),
+                    );
+                }
+            }
             if self.frames >= limit {
                 if self.dump_debug {
                     announce(&serde_json::json!({
@@ -621,7 +633,13 @@ impl Gallery {
                     }));
                 }
                 if self.announce {
-                    announce(&serde_json::json!({ "event": "quit", "frames": self.frames }));
+                    let size =
+                        ctx.input(|i| i.viewport().inner_rect.map(|r| [r.width(), r.height()]));
+                    announce(&serde_json::json!({
+                        "event": "quit",
+                        "frames": self.frames,
+                        "size": size,
+                    }));
                 }
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             } else {

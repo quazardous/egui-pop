@@ -281,6 +281,26 @@ fn quit_after_closes_the_window() {
     );
 }
 
+#[test]
+fn resize_to_asks_for_the_size_halfway() {
+    let mut h = harness(Options {
+        quit_after: Some(40),
+        resize_to: Some([640.0, 480.0]),
+        ..Options::default()
+    });
+    let resize = egui::ViewportCommand::InnerSize(egui::vec2(640.0, 480.0));
+    let mut asked = 0;
+    for _ in 0..40 {
+        h.step();
+        let commands = &h.output().viewport_output[&egui::ViewportId::ROOT].commands;
+        asked += commands.iter().filter(|c| **c == resize).count();
+        if commands.contains(&egui::ViewportCommand::Close) {
+            break;
+        }
+    }
+    assert_eq!(asked, 1, "the resize is asked for once, before closing");
+}
+
 /// Of the nodes named `label`, the highest on screen: on the menus page,
 /// the open menu's item rather than the menu drawn in place below it
 /// (egui orders popups in the tree as it likes, and changed it in 0.37).

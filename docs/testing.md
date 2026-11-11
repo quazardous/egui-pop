@@ -148,6 +148,37 @@ cargo xtask affected --run                # the selection against origin/main
 cargo xtask affected --full --run         # what main runs
 ```
 
+## Other platforms
+
+`.github/workflows/platforms.yml` runs the workspace on Windows and macOS,
+on every push to `next` (a newer push cancels the running run) and by
+hand (`workflow_dispatch`, on `next` only). It is **not required**: it is
+a workflow of its own, so `main`'s promotion, which waits on CI, does not
+wait on it, and its jobs are `continue-on-error`. A red job there is a
+platform bug to look at, not a broken `next`.
+
+| | Windows (`windows-latest`) | macOS (`macos-latest`, Apple silicon) |
+|---|---|---|
+| Build (`cargo build --workspace --all-targets`) | yes | yes |
+| Tests (`cargo nextest run --workspace`) | yes, rendering on WARP (DirectX 12 in software, `WGPU_BACKEND=dx12`) | yes, rendering on Metal (the virtual machine's paravirtualised GPU, `WGPU_BACKEND=metal`) |
+| Snapshots | compared with the thresholds of `kittest.toml`'s `[windows]` | compared with `[mac]` |
+| Real window | `tools/window-smoke.py` | `tools/window-smoke.py` |
+
+The window's smoke run starts the debug gallery with a scripted run:
+`--quit-after 240 --detach gallery.notes --resize-to 800x600`. The
+gallery opens its window, detaches the notes panel into a second one,
+asks for a new size halfway, and closes by itself; the script checks its
+JSON lines (`ready` with the panel detached, `resize`, `quit` after every
+frame) and its exit code, within four minutes. The size the window had
+when it closed is printed, not checked: a window manager may refuse it.
+
+Each job's summary says whether the tests and the smoke run passed; the
+JUnit report and any snapshot differences are kept as artifacts.
+
+Known failures, from the first runs:
+
+- none recorded yet.
+
 ## Time budget
 
 The budget (decided 2026-10-20): a pull request's CI under 10 minutes on
