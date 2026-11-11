@@ -6,7 +6,8 @@
   "description": "The wheel zooms at the pointer, Shift and Ctrl with the wheel pan, the middle button pans, as in Blender and node editors.",
   "options": {
     "slider_wheel": "guarded",
-    "image_double_click": "fit"
+    "image_double_click": "fit",
+    "knob_drag": "vertical"
   },
   "input": {
     "zoom": "Ctrl",

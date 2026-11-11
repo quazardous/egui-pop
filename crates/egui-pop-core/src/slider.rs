@@ -86,6 +86,7 @@ use egui::{
     Color32, Id, Key, Modifiers, Rect, Response, Role, Sense, TextEdit, Ui, Vec2, Widget,
     WidgetInfo, pos2, vec2,
 };
+use egui_pop_model::pointer::KnobDrag;
 use egui_pop_model::values::{Descriptor, Type};
 
 use crate::field::FieldState;
@@ -126,6 +127,9 @@ pub struct Gestures {
     pub cancel: Key,
     /// A double click resets to the default.
     pub reset_on_double_click: bool,
+    /// How a drag turns a knob that does not say
+    /// ([`Knob::drag`](crate::knob::Knob::drag)).
+    pub knob_drag: KnobDrag,
 }
 
 impl Default for Gestures {
@@ -179,6 +183,7 @@ impl Gestures {
             typed_entry: Key::Enter,
             cancel: Key::Escape,
             reset_on_double_click: true,
+            knob_drag: map.options.knob_drag,
         }
     }
 }

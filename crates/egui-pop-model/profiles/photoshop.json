@@ -6,7 +6,8 @@
   "description": "The wheel scrolls, Ctrl with the wheel scrolls sideways and Alt with it zooms, a drag pans like the Hand tool, Shift steps a value coarser and Alt finer, as in Photoshop.",
   "options": {
     "slider_wheel": "guarded",
-    "image_double_click": "nothing"
+    "image_double_click": "nothing",
+    "knob_drag": "vertical"
   },
   "input": {
     "zoom": "Ctrl",

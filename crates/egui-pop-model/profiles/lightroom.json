@@ -6,7 +6,8 @@
   "description": "A click toggles fit and 100 %, a drag pans, Ctrl with the wheel zooms, a double click leaves the view, a Shift drag is finer and Shift with the arrows coarser, as in Lightroom Classic.",
   "options": {
     "slider_wheel": "guarded",
-    "image_double_click": "leave"
+    "image_double_click": "leave",
+    "knob_drag": "vertical"
   },
   "input": {
     "zoom": "Ctrl",

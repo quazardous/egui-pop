@@ -278,6 +278,46 @@ impl SliderWheel {
     }
 }
 
+/// How a drag turns a knob. The same travel, in points, covers the soft
+/// range in every mode; where the press lands never changes the mode.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum KnobDrag {
+    /// Up is more (the audio convention).
+    #[default]
+    Vertical,
+    /// Right is more.
+    Horizontal,
+    /// Right and up both add.
+    Both,
+    /// Around the dial's centre, relative to the press: the value never
+    /// jumps to where the pointer is.
+    Circular,
+}
+
+impl KnobDrag {
+    pub const CHOICES: [&'static str; 4] = ["vertical", "horizontal", "both", "circular"];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            KnobDrag::Vertical => "vertical",
+            KnobDrag::Horizontal => "horizontal",
+            KnobDrag::Both => "both",
+            KnobDrag::Circular => "circular",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<KnobDrag> {
+        match text {
+            "vertical" => Some(KnobDrag::Vertical),
+            "horizontal" => Some(KnobDrag::Horizontal),
+            "both" => Some(KnobDrag::Both),
+            "circular" => Some(KnobDrag::Circular),
+            _ => None,
+        }
+    }
+}
+
 /// What a primary double click on the image (not on a handle) does.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -356,6 +396,9 @@ impl WheelDevice {
 pub struct Options {
     pub slider_wheel: SliderWheel,
     pub image_double_click: ImageDoubleClick,
+    /// How a drag turns a knob, unless the knob says
+    /// (`Knob::drag`).
+    pub knob_drag: KnobDrag,
 }
 
 /// The modifiers egui's own scrolling follows (`egui::InputOptions`),

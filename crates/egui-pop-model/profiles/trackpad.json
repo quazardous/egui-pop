@@ -6,7 +6,8 @@
   "description": "Two fingers pan, a pinch zooms, nothing needs a middle button and scrolling never changes a value.",
   "options": {
     "slider_wheel": "guarded",
-    "image_double_click": "fit"
+    "image_double_click": "fit",
+    "knob_drag": "vertical"
   },
   "input": {
     "zoom": "Ctrl",

@@ -7,12 +7,15 @@
 //!
 //! Gestures:
 //!
-//! - **Drag up or down** from the dial's centre: up is more, the soft
-//!   range over [`Knob::travel`] points (200 by default). A click never
-//!   makes the value jump.
-//! - **Drag around** from the dial's rim: the value follows the
-//!   pointer's turn, relative to where the press was (the soft range over
-//!   the dial's 270° sweep).
+//! - **Drag**, in one mode per knob ([`KnobDrag`]): up is more
+//!   (`Vertical`, the default), right is more (`Horizontal`), both add
+//!   (`Both`), or around the centre (`Circular`, relative to the press).
+//!   The knob's own mode ([`Knob::drag`]), else the pointer profile's
+//!   (`options.knob_drag`). Where the press lands never changes the
+//!   mode, and a click never makes the value jump. The linear modes move
+//!   over the soft range in [`Knob::travel`] points (200 by default),
+//!   whatever the knob's size; the circular one over the dial's 270°
+//!   sweep, still near the centre.
 //! - **Fine**: Shift, or the pointer profile's fine modifier, makes a
 //!   drag ten times finer, from where it is (no jump).
 //! - **Wheel**, **keys** (arrows, Page Up and Page Down, Home and End),
@@ -55,10 +58,12 @@ use crate::slider::{
 };
 use crate::state::Slot;
 
+pub use egui_pop_model::pointer::KnobDrag;
+
 /// The dial's sweep, in radians: from 7:30 to 4:30 through 12.
 pub const SWEEP: f32 = 1.5 * PI;
 
-/// Points of vertical drag over the soft range, by default.
+/// Points of drag over the soft range, by default.
 pub const TRAVEL: f32 = 200.0;
 
 /// A drag's state, from its press to its end.
@@ -69,10 +74,12 @@ struct Turn {
     /// Where the drag has led, as a place on the soft range (0 to 1),
     /// accumulated exactly.
     frac: f64,
-    /// Pressed on the rim: the drag goes around.
-    around: bool,
-    /// The pointer's last angle, for a drag around.
+    /// The mode, from the press to the end.
+    mode: KnobDrag,
+    /// The pointer's last angle, for a drag around; NaN near the centre.
     angle: f32,
+    /// The pointer's last place.
+    at: Pos2,
 }
 
 const TURN: Slot<Turn> = Slot::new("core.knob.turn");
@@ -86,6 +93,7 @@ pub struct Knob<'a> {
     hook: Option<Hook<'a>>,
     size: Option<Vec2>,
     travel: f32,
+    drag: Option<KnobDrag>,
 }
 
 impl<'a> Knob<'a> {
@@ -99,6 +107,7 @@ impl<'a> Knob<'a> {
             hook: None,
             size: None,
             travel: TRAVEL,
+            drag: None,
         }
     }
 
@@ -123,7 +132,15 @@ impl<'a> Knob<'a> {
         self
     }
 
-    /// Points of vertical drag over the soft range.
+    /// How a drag turns this knob, over the pointer profile's
+    /// (`options.knob_drag`).
+    pub fn drag(mut self, mode: KnobDrag) -> Self {
+        self.drag = Some(mode);
+        self
+    }
+
+    /// Points of drag over the soft range, in the linear modes
+    /// (`Vertical`, `Horizontal`, `Both`), whatever the knob's size.
     pub fn travel(mut self, points: f32) -> Self {
         if points > 0.0 {
             self.travel = points;
@@ -152,6 +169,7 @@ impl<'a> Knob<'a> {
             mut hook,
             size,
             travel,
+            drag,
         } = self;
         let row = ui.spacing().interact_size.y;
         let wanted = size.unwrap_or(vec2(row * 2.0 * 3.0, row * 2.0));
@@ -200,7 +218,8 @@ impl<'a> Knob<'a> {
             } else {
                 modifier_scale(ui, &g).min(1.0)
             };
-            match turn(ui, &response, &layout, &spec, *value, fine, travel) {
+            let mode = drag.unwrap_or(g.knob_drag);
+            match turn(ui, &response, &layout, &spec, *value, fine, travel, mode) {
                 Drag::None => {}
                 Drag::Moved(v) => {
                     let to = spec.settle(v, spec.hard);
@@ -321,6 +340,11 @@ impl Layout {
     }
 }
 
+/// Within this distance of the centre, a circular drag does not turn.
+fn still_radius(layout: &Layout) -> f32 {
+    (layout.radius() * 0.25).max(4.0)
+}
+
 /// The angle of a place on the soft range (0 to 1), in screen radians
 /// (y down): 0 at 7:30, 1 at 4:30, through 12.
 fn angle_of(frac: f32) -> f32 {
@@ -333,8 +357,9 @@ fn pointer_angle(centre: Pos2, at: Pos2) -> f32 {
     (at.y - centre.y).atan2(at.x - centre.x)
 }
 
-/// A drag's effect in a frame: up and down from the centre, around from
-/// the rim; `fine` scales the motion.
+/// A drag's effect in a frame, in `mode` (taken at the press, kept to
+/// the end); `fine` scales the motion.
+#[allow(clippy::too_many_arguments)]
 fn turn(
     ui: &Ui,
     response: &Response,
@@ -343,20 +368,30 @@ fn turn(
     value: f64,
     fine: f64,
     travel: f32,
+    mode: KnobDrag,
 ) -> Drag {
     let slot = TURN.keyed(response.id);
     let centre = layout.dial.center();
     crate::pointer::drag_cursor(response, crate::pointer::DragKind::Value);
     if response.drag_started() {
-        let at = response.interact_pointer_pos().unwrap_or(centre);
-        let around = at.distance(centre) > layout.radius() * 0.6;
+        // From the press, not from where the drag is first seen: the
+        // motion up to then counts.
+        let at = ui
+            .input(|i| i.pointer.press_origin())
+            .or(response.interact_pointer_pos())
+            .unwrap_or(centre);
         slot.set(
             ui.ctx(),
             Turn {
                 start: value,
                 frac: spec.frac(value),
-                around,
-                angle: pointer_angle(centre, at),
+                mode,
+                angle: if at.distance(centre) < still_radius(layout) {
+                    f32::NAN
+                } else {
+                    pointer_angle(centre, at)
+                },
+                at,
             },
         );
     }
@@ -373,22 +408,38 @@ fn turn(
     if response.dragged()
         && let Some(mut t) = slot.get(ui.ctx())
     {
-        let delta = if t.around {
-            let Some(at) = response.interact_pointer_pos() else {
-                return Drag::None;
-            };
-            let now = pointer_angle(centre, at);
-            let mut d = now - t.angle;
-            // The short way round.
-            if d > PI {
-                d -= 2.0 * PI;
-            } else if d < -PI {
-                d += 2.0 * PI;
+        let Some(at) = response.interact_pointer_pos() else {
+            return Drag::None;
+        };
+        // From the last place, the press's at first: the motion before
+        // egui calls it a drag counts.
+        let d = at - t.at;
+        t.at = at;
+        let along = |points: f32| f64::from(points / travel.max(1.0));
+        let delta = match t.mode {
+            KnobDrag::Vertical => along(-d.y),
+            KnobDrag::Horizontal => along(d.x),
+            KnobDrag::Both => along(d.x - d.y),
+            KnobDrag::Circular => {
+                // Near the centre a point of motion sweeps a wide angle:
+                // the turn waits there, and goes on from the angle it
+                // finds on the way out.
+                if at.distance(centre) < still_radius(layout) {
+                    t.angle = f32::NAN;
+                    0.0
+                } else {
+                    let now = pointer_angle(centre, at);
+                    let mut a = if t.angle.is_nan() { 0.0 } else { now - t.angle };
+                    // The short way round.
+                    if a > PI {
+                        a -= 2.0 * PI;
+                    } else if a < -PI {
+                        a += 2.0 * PI;
+                    }
+                    t.angle = now;
+                    f64::from(a / SWEEP)
+                }
             }
-            t.angle = now;
-            f64::from(d / SWEEP)
-        } else {
-            f64::from(-response.drag_delta().y / travel.max(1.0))
         } * fine;
         if delta != 0.0 {
             let (lo, hi) = (spec.frac(spec.soft.0), spec.frac(spec.soft.1));

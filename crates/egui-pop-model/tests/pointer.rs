@@ -5,8 +5,8 @@ use egui_pop_model::keymap::{
     Action, BindOptions, Button, Chord, Keymap, KeymapDoc, Keys, Layer, Pointer,
 };
 use egui_pop_model::pointer::{
-    self, GESTURES, ImageDoubleClick, PROFILE_OWNER, PointerMap, SCOPE_GRAPH, SCOPE_IMAGE,
-    SCOPE_SECTIONS, SCOPE_VALUE, SCOPES, SliderWheel, ValueKeys, gesture,
+    self, GESTURES, ImageDoubleClick, KnobDrag, PROFILE_OWNER, PointerMap, SCOPE_GRAPH,
+    SCOPE_IMAGE, SCOPE_SECTIONS, SCOPE_VALUE, SCOPES, SliderWheel, ValueKeys, gesture,
 };
 use egui_pop_model::values::{SettingsDoc, settings_schema};
 
@@ -383,4 +383,20 @@ fn a_profile_changes_when_the_hover_cursor_shows() {
         ("all-scroll", "crosshair", Some(HoverPolicy::Never))
     );
     assert_eq!(eager.drag_cursor_over(DragKind::Scrub, kit.clone()), kit);
+}
+
+#[test]
+fn every_shipped_profile_drags_knobs_vertically() {
+    for id in pointer::ids() {
+        let p = pointer::profile(id).unwrap();
+        assert_eq!(p.options.knob_drag, KnobDrag::Vertical, "{id}");
+    }
+    for choice in KnobDrag::CHOICES {
+        assert_eq!(KnobDrag::parse(choice).unwrap().as_str(), choice);
+    }
+    // A profile that does not say drags vertically.
+    let options: pointer::Options = serde_json::from_str("{}").unwrap();
+    assert_eq!(options.knob_drag, KnobDrag::Vertical);
+    let options: pointer::Options = serde_json::from_str(r#"{"knob_drag": "circular"}"#).unwrap();
+    assert_eq!(options.knob_drag, KnobDrag::Circular);
 }
