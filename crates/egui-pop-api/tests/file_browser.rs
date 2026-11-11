@@ -744,7 +744,7 @@ fn the_agenda_selects_a_clicked_entry_and_asks_for_its_thumbnails() {
         .last()
         .unwrap()
         .iter()
-        .map(|(p, _)| p.to_string_lossy().into_owned())
+        .map(|(p, _)| p.clone())
         .collect();
     assert_eq!(
         paths,
@@ -755,6 +755,7 @@ fn the_agenda_selects_a_clicked_entry_and_asks_for_its_thumbnails() {
             "/d/a_old.png",
             "/d/sub"
         ]
+        .map(PathBuf::from)
     );
 }
 

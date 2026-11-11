@@ -32,6 +32,55 @@ use egui_pop_model::values::{Change, Set, Value};
 use egui_pop_test::walk::{self, Press};
 use serde_json::json;
 
+/// The root as the picker names it: a test's `/top` is `\top` on Windows,
+/// rebuilt with its own separator.
+const ROOT: &str = std::path::MAIN_SEPARATOR_STR;
+
+/// A path's text as a test writes it, `/` between its parts, is the one
+/// the picker reports: Windows puts its own separator where it builds a
+/// path, and both name the same file. A trailing separator (a folder in
+/// the field) must be there in both.
+#[track_caller]
+fn assert_path(actual: impl PathText, expected: impl PathText) {
+    let (a, e) = (actual.text(), expected.text());
+    let ends = |t: &str| t.ends_with(['/', std::path::MAIN_SEPARATOR]);
+    assert!(
+        Path::new(&a) == Path::new(&e) && ends(&a) == ends(&e),
+        "{a:?} is not {e:?}"
+    );
+}
+
+/// What [`assert_path`] reads a path from.
+trait PathText {
+    fn text(&self) -> String;
+}
+
+impl PathText for &str {
+    fn text(&self) -> String {
+        (*self).to_string()
+    }
+}
+
+impl PathText for String {
+    fn text(&self) -> String {
+        self.clone()
+    }
+}
+
+impl PathText for serde_json::Value {
+    fn text(&self) -> String {
+        self.as_str()
+            .unwrap_or_else(|| panic!("{self} is not a path"))
+            .to_string()
+    }
+}
+
+impl PathText for PathBuf {
+    fn text(&self) -> String {
+        self.display().to_string()
+    }
+}
+
 /// A folder tree of its own per test.
 fn tree(name: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!("egui-pop-files-{name}-{}", std::process::id()));
@@ -1605,10 +1654,7 @@ fn the_arrows_move_the_highlight_shift_extends_and_the_preview_follows() {
     assert_eq!(selected(&h), ["a.png", "b.jpg"]);
     assert!(line(&h, "Selected: 2"));
     let preview = picker_state(&h, "preview");
-    assert_eq!(
-        preview["path"],
-        root.join("photos/b.jpg").display().to_string()
-    );
+    assert_path(preview["path"].clone(), root.join("photos/b.jpg"));
     // Plain arrows keep the selection, for Ctrl+Space further on.
     press(&mut h, Key::ArrowDown, Modifiers::NONE);
     assert_eq!(highlighted(&h), "c.txt");
@@ -1672,10 +1718,7 @@ fn ctrl_a_selects_what_is_shown_a_typed_path_keeps_the_key() {
     press(&mut h, Key::Enter, Modifiers::NONE);
     press(&mut h, Key::Enter, Modifiers::NONE);
     assert_eq!(selected(&h), Vec::<String>::new());
-    assert_eq!(
-        picker_state(&h, "dir"),
-        root.join("photos/2026").display().to_string()
-    );
+    assert_path(picker_state(&h, "dir").clone(), root.join("photos/2026"));
     press(&mut h, Key::A, Modifiers::COMMAND);
     assert!(line(&h, "No file is shown to select"));
     assert!(picker_state(&h, "error").is_string());
@@ -1727,10 +1770,7 @@ fn choosing_a_folder_says_what_selecting_means() {
     // Enter goes in: the selection stays behind, and this folder is the choice.
     press(&mut h, Key::Enter, Modifiers::NONE);
     assert_eq!(selected(&h), Vec::<String>::new());
-    assert_eq!(
-        picker_state(&h, "dir"),
-        root.join("photos").display().to_string()
-    );
+    assert_path(picker_state(&h, "dir").clone(), root.join("photos"));
     press(&mut h, Key::ArrowDown, Modifiers::NONE);
     assert_eq!(selected(&h), ["2026"]);
     press(&mut h, Key::Enter, Modifiers::COMMAND);
@@ -1755,19 +1795,13 @@ fn saving_a_selected_folder_goes_in_and_the_name_stays() {
     assert_eq!(field(&h), "new.png");
     h.get_by_role_and_label(Role::Button, "Open").click();
     settle(&mut h);
-    assert_eq!(
-        picker_state(&h, "dir"),
-        root.join("photos").display().to_string()
-    );
+    assert_path(picker_state(&h, "dir").clone(), root.join("photos"));
     assert_eq!(field(&h), "new.png");
     assert!(h.query_by_role_and_label(Role::Button, "Save").is_some());
     // The stem is selected again: typing replaces it.
     click(&mut h, "2026/", Modifiers::NONE);
     press(&mut h, Key::Enter, Modifiers::NONE);
-    assert_eq!(
-        picker_state(&h, "dir"),
-        root.join("photos/2026").display().to_string()
-    );
+    assert_path(picker_state(&h, "dir").clone(), root.join("photos/2026"));
     h.get_by_label("File name, or a path").type_text("dawn");
     settle(&mut h);
     assert_eq!(field(&h), "dawn.png");
@@ -1816,10 +1850,7 @@ fn tab_through_the_rows_moves_the_highlight_and_the_keys_answer_there() {
     settle(&mut h);
     assert_eq!(highlighted(&h), "2026/");
     press(&mut h, Key::Enter, Modifiers::NONE);
-    assert_eq!(
-        picker_state(&h, "dir"),
-        root.join("photos/2026").display().to_string()
-    );
+    assert_path(picker_state(&h, "dir").clone(), root.join("photos/2026"));
     let _ = std::fs::remove_dir_all(root);
 }
 
@@ -2029,7 +2060,7 @@ fn the_arrows_move_in_two_dimensions_home_and_end_and_enter_as_in_the_list() {
     // Enter goes into a folder...
     assert_eq!(highlighted(&h), "Selects/");
     press(&mut h, Key::Enter, Modifiers::NONE);
-    assert_eq!(state(&h, "dir"), "/raws/Selects");
+    assert_path(state(&h, "dir"), "/raws/Selects");
     press(&mut h, Key::Backspace, Modifiers::NONE);
     settle_thumbnails(&mut h);
     // ...and chooses a file.
@@ -2097,7 +2128,7 @@ fn tab_reaches_a_cell_and_the_focus_follows_the_arrows_through_a_long_grid() {
     assert_eq!(highlighted(&h), "Selects/");
     assert_eq!(walk::focused(&h).unwrap().name, "Selects/");
     press(&mut h, Key::Enter, Modifiers::NONE);
-    assert_eq!(state(&h, "dir"), "/raws/Selects");
+    assert_path(state(&h, "dir"), "/raws/Selects");
     assert!(h.get_by_label("Filter, or type a path").is_focused());
 }
 
@@ -2614,7 +2645,7 @@ fn a_press_on_up_gives_the_keyboard_back_to_the_field() {
     let (mut h, _) = grid_harness(3, PickerView::List);
     let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
     click(&mut h, "Up", Modifiers::NONE);
-    assert_eq!(picker_state(&h, "dir"), "/");
+    assert_path(picker_state(&h, "dir"), "/");
     assert!(h.get_by_label(FIELD).is_focused());
 }
 
@@ -2650,7 +2681,7 @@ fn a_segment_opens_its_folder_and_the_field_keeps_the_keyboard() {
         FileRequest::open("Open").directory("/top/sub/empty"),
     );
     click(&mut h, "Open folder top", Modifiers::NONE);
-    assert_eq!(picker_state(&h, "dir"), "/top");
+    assert_path(picker_state(&h, "dir"), "/top");
     assert!(h.get_by_label(FIELD).is_focused());
     // The folder shown is a segment too: it says so, and it stays where it is.
     let current = row(&h, "Open folder top");
@@ -2659,10 +2690,10 @@ fn a_segment_opens_its_folder_and_the_field_keeps_the_keyboard() {
         Some("The folder shown".to_string())
     );
     click(&mut h, "Open folder top", Modifiers::NONE);
-    assert_eq!(picker_state(&h, "dir"), "/top");
+    assert_path(picker_state(&h, "dir"), "/top");
     assert!(h.query_by_label("Open folder sub").is_none());
-    click(&mut h, "Open folder /", Modifiers::NONE);
-    assert_eq!(picker_state(&h, "dir"), "/");
+    click(&mut h, &format!("Open folder {ROOT}"), Modifiers::NONE);
+    assert_path(picker_state(&h, "dir"), "/");
 }
 
 #[test]
@@ -2679,12 +2710,12 @@ fn a_segment_s_menu_lists_its_subfolders_by_name() {
     // The menu is as wide as its names, not as wide as it may get.
     assert!(row(&h, "IMG_10").rect().width() < 160.0);
     click(&mut h, "IMG_10", Modifiers::NONE);
-    assert_eq!(picker_state(&h, "dir"), "/top/IMG_10");
+    assert_path(picker_state(&h, "dir"), "/top/IMG_10");
     assert!(h.get_by_label(FIELD).is_focused());
     // Closed by the pointer, nothing chosen: the keyboard is the field's again.
-    click(&mut h, "Subfolders of /", Modifiers::NONE);
+    click(&mut h, &format!("Subfolders of {ROOT}"), Modifiers::NONE);
     assert!(h.query_by_label("top").is_some());
-    click(&mut h, "Subfolders of /", Modifiers::NONE);
+    click(&mut h, &format!("Subfolders of {ROOT}"), Modifiers::NONE);
     assert!(h.query_by_label("top").is_none());
     assert!(h.get_by_label(FIELD).is_focused());
     // A folder with none says so.
@@ -2699,8 +2730,8 @@ fn the_keyboard_reaches_every_segment_and_walks_its_menu() {
     let tour = walk::walk(&mut h, walk::SHIFT_TAB, 60);
     let names = tour.names();
     for name in [
-        "Open folder /",
-        "Subfolders of /",
+        &format!("Open folder {ROOT}"),
+        &format!("Subfolders of {ROOT}"),
         "Open folder top",
         "Subfolders of top",
         "Open folder sub",
@@ -2725,7 +2756,7 @@ fn the_keyboard_reaches_every_segment_and_walks_its_menu() {
     press(&mut h, Key::Escape, Modifiers::NONE);
     assert!(h.query_by_label("IMG_9").is_none());
     assert_eq!(focused_name(&h), "Subfolders of top");
-    assert_eq!(picker_state(&h, "dir"), "/top/sub");
+    assert_path(picker_state(&h, "dir"), "/top/sub");
     // Tab closes it too, rather than walking on under it.
     press(&mut h, Key::Enter, Modifiers::NONE);
     press(&mut h, Key::Tab, Modifiers::NONE);
@@ -2735,12 +2766,12 @@ fn the_keyboard_reaches_every_segment_and_walks_its_menu() {
     press(&mut h, Key::Enter, Modifiers::NONE);
     press(&mut h, Key::ArrowDown, Modifiers::NONE);
     press(&mut h, Key::Enter, Modifiers::NONE);
-    assert_eq!(picker_state(&h, "dir"), "/top/IMG_9");
+    assert_path(picker_state(&h, "dir"), "/top/IMG_9");
     assert!(h.get_by_label(FIELD).is_focused());
     // Enter on a segment goes there the same.
     walk::reach(&mut h, walk::SHIFT_TAB, "Open folder top", 60).expect("Shift+Tab reaches it");
     press(&mut h, Key::Enter, Modifiers::NONE);
-    assert_eq!(picker_state(&h, "dir"), "/top");
+    assert_path(picker_state(&h, "dir"), "/top");
     assert!(h.get_by_label(FIELD).is_focused());
 }
 
@@ -2750,35 +2781,35 @@ fn ctrl_l_puts_the_folder_into_the_field() {
     let _p = choose(&mut h, FileRequest::open("Open").directory("/top/sub"));
     walk::reach(&mut h, walk::TAB, "a.png", 60).expect("Tab reaches the rows");
     press(&mut h, Key::L, Modifiers::COMMAND);
-    assert_eq!(field(&h), "/top/sub/");
+    assert_path(field(&h), "/top/sub/");
     assert!(h.get_by_label(FIELD).is_focused());
     // The cursor is at the end: typing goes on from the folder, and Enter goes.
     h.event(egui::Event::Text("empty".into()));
     settle(&mut h);
-    assert_eq!(field(&h), "/top/sub/empty");
+    assert_path(field(&h), "/top/sub/empty");
     press(&mut h, Key::Enter, Modifiers::NONE);
-    assert_eq!(picker_state(&h, "dir"), "/top/sub/empty");
+    assert_path(picker_state(&h, "dir"), "/top/sub/empty");
     assert_eq!(field(&h), "");
     // A path being typed is not replaced, a filter is.
     type_in(&mut h, "../..");
     press(&mut h, Key::L, Modifiers::COMMAND);
     assert_eq!(field(&h), "../..");
     press(&mut h, Key::Enter, Modifiers::NONE);
-    assert_eq!(picker_state(&h, "dir"), "/top");
+    assert_path(picker_state(&h, "dir"), "/top");
     type_in(&mut h, "img");
     press(&mut h, Key::L, Modifiers::COMMAND);
-    assert_eq!(field(&h), "/top/");
+    assert_path(field(&h), "/top/");
     // It is a command: rebindable, and an agent's too.
     let app = h.state().handle().clone();
     assert_eq!(app.keys_for(&CMD_EDIT_PATH), ["Ctrl+L"]);
-    click(&mut h, "Open folder /", Modifiers::NONE);
+    click(&mut h, &format!("Open folder {ROOT}"), Modifiers::NONE);
     h.state_mut()
         .run(&CMD_EDIT_PATH, json!({}), Origin::Agent("test".into()))
         .now()
         .unwrap()
         .unwrap();
     settle(&mut h);
-    assert_eq!(field(&h), "/");
+    assert_path(field(&h), "/");
 }
 
 #[test]
@@ -2835,7 +2866,7 @@ fn the_picker_on_its_own_reads_ctrl_l_itself() {
         },
     );
     h.run();
-    assert_eq!(h.state().text, "/top/sub/");
+    assert_path(h.state().text.clone(), "/top/sub/");
 }
 
 #[test]
@@ -2847,7 +2878,7 @@ fn saving_ctrl_l_keeps_the_name_and_a_path_brings_it_back() {
         FileRequest::save("Save", "name.png").directory("/d"),
     );
     press(&mut h, Key::L, Modifiers::COMMAND);
-    assert_eq!(field(&h), "/d/name.png");
+    assert_path(field(&h), "/d/name.png");
     // The stem is selected, as it is on opening: typing replaces it.
     save_as(&mut h, "other");
     let got = result(&mut h, &p).unwrap();
@@ -2863,11 +2894,11 @@ fn saving_ctrl_l_keeps_the_name_and_a_path_brings_it_back() {
     walk::reach(&mut h, walk::TAB, "sub/", 60).expect("Tab reaches the rows");
     h.event(egui::Event::Text("/".into()));
     settle(&mut h);
-    assert_eq!(field(&h), "/");
+    assert_path(field(&h), "/");
     h.event(egui::Event::Text("d/sub".into()));
     settle(&mut h);
     press(&mut h, Key::Enter, Modifiers::NONE);
-    assert_eq!(picker_state(&h, "dir"), "/d/sub");
+    assert_path(picker_state(&h, "dir"), "/d/sub");
     assert_eq!(field(&h), "edited.png");
 }
 
@@ -2894,7 +2925,7 @@ fn a_long_path_in_a_narrow_dialog_keeps_its_end_and_collapses_its_start() {
         assert!(r.right() <= at.right(), "{name} {r:?} out of {at:?}");
     }
     // The start is behind a button, in the same row and order.
-    assert!(h.query_by_label("Open folder /").is_none());
+    assert!(h.query_by_label(&format!("Open folder {ROOT}")).is_none());
     assert!(
         h.query_by_label("Open folder one-long-folder-name")
             .is_none()
@@ -2906,14 +2937,14 @@ fn a_long_path_in_a_narrow_dialog_keeps_its_end_and_collapses_its_start() {
     let names: Vec<String> = h
         .get_all_by_role(Role::Button)
         .filter_map(|n| n.accesskit_node().label())
-        .filter(|l| l == "/" || l == "one-long-folder-name")
+        .filter(|l| l == ROOT || l == "one-long-folder-name")
         .collect();
-    assert_eq!(names, ["one-long-folder-name", "/"]);
-    click(&mut h, "/", Modifiers::NONE);
-    assert_eq!(picker_state(&h, "dir"), "/");
+    assert_eq!(names, ["one-long-folder-name", ROOT]);
+    click(&mut h, ROOT, Modifiers::NONE);
+    assert_path(picker_state(&h, "dir"), "/");
     // Now short: nothing collapses.
     assert!(h.query_by_label("Folders above").is_none());
-    assert!(h.query_by_label("Open folder /").is_some());
+    assert!(h.query_by_label(&format!("Open folder {ROOT}")).is_some());
 }
 
 #[test]
@@ -3232,7 +3263,8 @@ fn the_switch_shows_every_file_is_kept_and_ends_groups() {
 
     row(&h, "IMG_1.xmp").click();
     settle(&mut h);
-    assert_eq!(state(&h, "selected"), json!(["/s/IMG_1.xmp"]));
+    assert_path(state(&h, "selected")[0].clone(), "/s/IMG_1.xmp");
+    assert_eq!(state(&h, "selected").as_array().map(Vec::len), Some(1));
     assert_eq!(state(&h, "highlight"), 4);
     // The highlight on a member follows it into its group, and the member
     // leaves the selection.
@@ -3307,7 +3339,11 @@ fn whoever_answers_a_choice_gives_its_groups() {
     assert_eq!(groups.len(), 1, "a member is that file, not its group");
     assert_eq!(groups[0].main, Path::new("/s/IMG_2.cr3"));
     let last = &h.state().handle().debug_snapshot()["files"]["last"][0]["outcome"];
-    assert_eq!(last["groups"][0]["members"], json!(["/s/IMG_2.cr3.xmp"]));
+    assert_path(last["groups"][0]["members"][0].clone(), "/s/IMG_2.cr3.xmp");
+    assert_eq!(
+        last["groups"][0]["members"].as_array().map(Vec::len),
+        Some(1)
+    );
     assert_eq!(
         h.state().handle().debug_snapshot()["files"]["groupings"],
         json!(["test.photos"])
@@ -3360,7 +3396,7 @@ fn a_hook_sees_the_groups_and_a_redirect_gives_those_of_where_it_leads() {
     let (paths, groups) = group_result(&mut h, &p);
     assert_eq!(paths, [PathBuf::from("/s/IMG_2.cr3")]);
     assert_eq!(groups[0].main, Path::new("/s/IMG_2.cr3"));
-    assert_eq!(seen.lock().unwrap()[0][0]["main"], "/s/IMG_1.cr3");
+    assert_path(seen.lock().unwrap()[0][0]["main"].clone(), "/s/IMG_1.cr3");
 }
 
 /// Previews one extension, as an image, and says what it was asked.
@@ -3497,8 +3533,8 @@ fn the_pane_shows_a_member_s_image_for_a_main_file_without_one_and_its_own_facts
         settle(&mut h);
     }
     let preview = state(&h, "preview");
-    assert_eq!(preview["path"], "/s/IMG_1.cr3");
-    assert_eq!(preview["stand_in"], "/s/IMG_1.jpg", "{preview}");
+    assert_path(preview["path"].clone(), "/s/IMG_1.cr3");
+    assert_path(preview["stand_in"].clone(), "/s/IMG_1.jpg");
     assert_eq!(preview["state"], "ready", "{preview}");
     assert!(h.query_by_label("Preview from IMG_1.jpg").is_some());
     // The raw's size, not the JPEG's.
@@ -3512,7 +3548,7 @@ fn the_pane_shows_a_member_s_image_for_a_main_file_without_one_and_its_own_facts
         settle(&mut h);
     }
     let preview = state(&h, "preview");
-    assert_eq!(preview["path"], "/s/IMG_2.cr3");
+    assert_path(preview["path"].clone(), "/s/IMG_2.cr3");
     assert_eq!(preview["state"], "none", "{preview}");
     assert!(preview.get("stand_in").is_none());
 }
@@ -4322,17 +4358,17 @@ fn choosing_a_folder_in_the_columns_the_selected_folder_is_the_answer() {
     );
     // Right goes in: the folder entered is the choice.
     press(&mut h, Key::ArrowRight, Modifiers::NONE);
-    assert_eq!(picker_state(&h, "dir"), "/r/a/sub");
+    assert_path(picker_state(&h, "dir"), "/r/a/sub");
     assert_eq!(selected(&h), Vec::<String>::new());
     // Left comes back, the folder left selected.
     press(&mut h, Key::ArrowLeft, Modifiers::NONE);
-    assert_eq!(picker_state(&h, "dir"), "/r/a");
+    assert_path(picker_state(&h, "dir"), "/r/a");
     assert_eq!(selected(&h), ["sub"]);
     // A click in `/r`'s column goes there, the folder clicked selected.
     h.get_by_role_and_label(Role::ListBoxOption, "b")
         .click_accesskit();
     settle(&mut h);
-    assert_eq!(picker_state(&h, "dir"), "/r");
+    assert_path(picker_state(&h, "dir"), "/r");
     assert_eq!(selected(&h), ["b"]);
     press(&mut h, Key::Enter, Modifiers::COMMAND);
     assert_eq!(

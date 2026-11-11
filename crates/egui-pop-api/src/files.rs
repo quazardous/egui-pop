@@ -2602,15 +2602,33 @@ fn crumbs_of(dir: &Path) -> Vec<Crumb> {
         .ancestors()
         .filter(|p| !p.as_os_str().is_empty())
         .map(|p| Crumb {
-            name: p.file_name().map_or_else(
-                || p.display().to_string(),
-                |n| n.to_string_lossy().into_owned(),
-            ),
+            name: p
+                .file_name()
+                .map_or_else(|| root_name(p), |n| n.to_string_lossy().into_owned()),
             path: p.to_path_buf(),
         })
         .collect();
     out.reverse();
     out
+}
+
+/// A root as a person reads it: Windows' verbatim prefixes (`\\?\C:\`, which
+/// `canonicalize` gives) are written as the drive or share they stand for.
+fn root_name(root: &Path) -> String {
+    use std::path::{Component, Prefix};
+    let sep = std::path::MAIN_SEPARATOR;
+    match root.components().next() {
+        Some(Component::Prefix(prefix)) => match prefix.kind() {
+            Prefix::VerbatimDisk(drive) => format!("{}:{sep}", char::from(drive)),
+            Prefix::VerbatimUNC(server, share) => format!(
+                "{sep}{sep}{}{sep}{}",
+                server.to_string_lossy(),
+                share.to_string_lossy()
+            ),
+            _ => root.display().to_string(),
+        },
+        _ => root.display().to_string(),
+    }
 }
 
 /// The first crumb shown, given each one's width: all of them when they fit,
@@ -3240,6 +3258,11 @@ impl FilePicker {
     /// folder.
     pub fn typed_path(&self) -> PathBuf {
         let t = self.text.trim();
+        // Windows takes `/` for its separator, but not after a verbatim
+        // prefix (`\\?\C:\`, as `canonicalize` gives): typed paths get
+        // its own.
+        #[cfg(windows)]
+        let t = &t.replace('/', std::path::MAIN_SEPARATOR_STR);
         let expanded = match t.strip_prefix('~') {
             Some(rest) => {
                 let rest = rest.trim_start_matches(['/', std::path::MAIN_SEPARATOR]);
@@ -5952,10 +5975,18 @@ mod tests {
                 .map(|c| c.name)
                 .collect()
         };
-        assert_eq!(names("/home/me/photos"), ["/", "home", "me", "photos"]);
-        assert_eq!(names("/"), ["/"]);
-        assert_eq!(names("/home/me/../you/./a/"), ["/", "home", "you", "a"]);
-        assert_eq!(names("/../a"), ["/", "a"]);
+        // Rebuilt with the platform's separator: `\` on Windows.
+        let root = std::path::MAIN_SEPARATOR_STR;
+        assert_eq!(names("/home/me/photos"), [root, "home", "me", "photos"]);
+        assert_eq!(names("/"), [root]);
+        assert_eq!(names("/home/me/../you/./a/"), [root, "home", "you", "a"]);
+        assert_eq!(names("/../a"), [root, "a"]);
+        #[cfg(windows)]
+        {
+            assert_eq!(names(r"C:\Users\me"), [r"C:\", "Users", "me"]);
+            assert_eq!(names(r"\\?\C:\Users"), [r"C:\", "Users"]);
+            assert_eq!(names(r"\\?\UNC\nas\photos\2026"), [r"\\nas\photos", "2026"]);
+        }
         let crumbs = crumbs_of(Path::new("/home/me"));
         assert_eq!(crumbs[1].path, Path::new("/home"));
         assert_eq!(without_dots(Path::new("../a/./b/..")), Path::new("../a"));
@@ -6191,7 +6222,10 @@ mod tests {
         p.highlight = 1;
         let d = p.describe();
         assert_eq!(d["preview"]["state"], "ready", "{d}");
-        assert_eq!(d["preview"]["path"], "/demo/a.fake");
+        assert_eq!(
+            d["preview"]["path"],
+            root.join("a.fake").display().to_string()
+        );
         p.show_preview = false;
         assert!(p.describe()["preview"].is_null());
     }
