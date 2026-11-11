@@ -85,7 +85,9 @@ impl Temp {
     fn file(&self, name: &str) -> (String, PathBuf) {
         let path = self.0.join(name);
         std::fs::write(&path, b"not an image, only bytes").unwrap();
-        (format!("file://{}", path.display()), path)
+        // `file:///C:/…` on Windows: its drive is not a host.
+        let uri = url::Url::from_file_path(&path).expect("an absolute path");
+        (uri.to_string(), path)
     }
 }
 
@@ -158,9 +160,17 @@ fn a_remote_page_reaches_no_local_image_however_it_is_spelled() {
         format!("![![inner](x.png)]({file})"),
         format!("- item ![a]({file})"),
         format!("| h |\n|---|\n| ![a]({file}) |"),
+    ]
+    .into_iter()
+    .chain(std::iter::once(if cfg!(windows) {
+        // A drive's path as it is written (`C:` reads as a scheme).
+        format!("![a](<{}>)", path.display())
+    } else {
         // Not an address the web can join: read as a path by the parser.
-        format!("![a](<//[bad{}>)", path.display()),
-    ] {
+        // On Windows `//[bad` before a drive makes no path at all, and the
+        // image fails without being read.
+        format!("![a](<//[bad{}>)", path.display())
+    })) {
         let page = format!("{HOST}/page.md");
         let net = Net::default().with(&page, markdown.as_bytes());
         let app = app(Docs::new(), &net);
@@ -191,10 +201,10 @@ fn a_local_page_keeps_its_images() {
     assert_eq!(image_state(&s, &file).as_deref(), Some("ready"), "{s}");
 
     // A local page on disk loads the files beside it too.
-    let (md, _) = tmp.file("page.md");
+    let (md, md_path) = tmp.file("page.md");
     let (beside, path) = tmp.file("beside.png");
     let name = path.file_name().unwrap().to_str().unwrap();
-    std::fs::write(md.strip_prefix("file://").unwrap(), format!("![b]({name})")).unwrap();
+    std::fs::write(md_path, format!("![b]({name})")).unwrap();
     viewer(app.handle()).navigate(app.handle(), &md, true);
     let s = viewer(app.handle()).state();
     assert_eq!(s["dropped"], json!([]));
