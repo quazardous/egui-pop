@@ -458,7 +458,9 @@ compiled at install.
   keeps no gutter at all: no icons and no marks, whatever the
   `menus.icons` setting (a checked item still says so to assistive
   technology). A command's `CommandSpec::menu_note` ends its entries,
-  muted, in the keys' column after its keys, and `opens_link` adds a ↗.
+  muted, in the keys' column after its keys, and `opens_link` adds a ↗
+  in the keys' colour, three quarters of `key-font-size` across when it
+  is set (a glyph among the keys), else of an inline icon.
 - **Frames** (`card`, `dialog`, `backdrop`, `popover`, `fault-card`, `toast`,
   `palette-window`, `tip-card`, `job-log`, `fullscreen-exit` (the
   strip at the top of a full screen window showing no title bar),
