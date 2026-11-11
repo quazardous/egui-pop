@@ -2,7 +2,11 @@
 //! radius, padding, shadow, text colour and size, and its placement
 //! (`tooltip.placement`: `widget`, under the hovered widget from its
 //! start edge as egui's; `pointer`, under the pointer from its position)
-//! with `tooltip.offset` between them.
+//! with `tooltip.offset` between them. At the pointer, `tooltip.offset-x`
+//! moves it towards the end side too (its corner `offset-x` across and
+//! `offset` down from the pointer), and where the window lacks room on
+//! the end side or below, it goes to the pointer's other side, the same
+//! distance away, rather than being pushed back under the pointer.
 //!
 //! egui's own [`egui::Response::on_hover_text`] keeps the popup's look:
 //! [`TooltipExt::tip`] is its kit counterpart, with egui's timing (the
@@ -17,7 +21,10 @@
 //! }
 //! ```
 
-use egui::{Context, InnerResponse, Response, Style, Ui, WidgetText};
+use egui::{
+    Align, Align2, Context, InnerResponse, Pos2, Rect, RectAlign, Response, Style, Ui, Vec2,
+    WidgetText, pos2, vec2,
+};
 
 use crate::kit::{Kit, State};
 use crate::theme::Tokens;
@@ -99,7 +106,23 @@ pub fn show<R>(
     let data = &kit.tooltip.data;
     let mut tooltip = tooltip.gap(data.offset);
     if TooltipPlacement::of(ctx) == TooltipPlacement::Pointer {
-        tooltip = tooltip.at_pointer();
+        let pointer = ctx.pointer_hover_pos()?;
+        let offset = vec2(offset_x(ctx), data.offset);
+        // The size it had last pass (egui sizes it on its first).
+        let size =
+            egui::AreaState::load(ctx, egui::containers::Tooltip::tooltip_id(response.id, 0))
+                .and_then(|s| s.size)
+                .unwrap_or(Vec2::ZERO);
+        let (pos, corner) = at_pointer(ctx.content_rect(), pointer, offset, size);
+        tooltip.popup = tooltip
+            .popup
+            .anchor(egui::PopupAnchor::Position(pos))
+            .align(RectAlign {
+                parent: corner,
+                child: corner,
+            })
+            .align_alternatives(&[])
+            .gap(0.0);
     }
     // egui frames a tooltip with its popup's look, read from the style
     // its layer starts with: the kit's for the time it is laid out.
@@ -117,6 +140,42 @@ pub fn show<R>(
     });
     ctx.set_global_style(before);
     shown
+}
+
+/// The theme's `tooltip.offset-x`: how far right of the pointer a
+/// tooltip at the pointer starts; 0 when not given.
+fn offset_x(ctx: &Context) -> f32 {
+    Tokens::of(ctx)
+        .resolved()
+        .dimension("tooltip.offset-x")
+        .unwrap_or(0.0)
+}
+
+/// Where a tooltip of `size` at `pointer` goes in `window`: the point
+/// and which of its corners sits there. Its top left corner `offset`
+/// right of and below the pointer; on the pointer's left (its right
+/// edge `offset.x` before it) when it would pass the window's right
+/// edge and fits on the left, above it likewise.
+fn at_pointer(window: Rect, pointer: Pos2, offset: Vec2, size: Vec2) -> (Pos2, Align2) {
+    let left = pointer.x + offset.x + size.x > window.right()
+        && pointer.x - offset.x - size.x >= window.left();
+    let up = pointer.y + offset.y + size.y > window.bottom()
+        && pointer.y - offset.y - size.y >= window.top();
+    let x = if left {
+        pointer.x - offset.x
+    } else {
+        pointer.x + offset.x
+    };
+    let y = if up {
+        pointer.y - offset.y
+    } else {
+        pointer.y + offset.y
+    };
+    let corner = Align2([
+        if left { Align::Max } else { Align::Min },
+        if up { Align::Max } else { Align::Min },
+    ]);
+    (pos2(x, y), corner)
 }
 
 /// The style a tooltip's layer starts with: `base`, its popup's look the
