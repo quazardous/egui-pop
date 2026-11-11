@@ -28,7 +28,9 @@
 //! Variants, for the compositors where a window stops painting (headless
 //! mutter): `SPIKE_PRESENT_MODE` for wgpu (`autovsync`, the default, `autonovsync`,
 //! `fifo`, `mailbox`, `immediate`), and `SPIKE_A_SIZE` (`WxH`, A's size,
-//! so that B opened on top of it does not cover it whole). The `ready`
+//! so that B opened on top of it does not cover it whole) and
+//! `SPIKE_ROOT_SIZE` (`WxH`, the root's size, so that A and B do not cover
+//! the root whole). The `ready`
 //! line repeats them.
 //!
 //! Never run it on a desktop in use by someone else; the driver runs it in a
@@ -312,6 +314,7 @@ impl Spike {
             "restored": saved.keys().collect::<Vec<_>>(),
             "present_mode": std::env::var("SPIKE_PRESENT_MODE").ok(),
             "a_size": std::env::var("SPIKE_A_SIZE").ok(),
+            "root_size": std::env::var("SPIKE_ROOT_SIZE").ok(),
         }));
         Self {
             shared,
@@ -364,7 +367,7 @@ impl eframe::App for Spike {
             let w = win.borrow();
             let id = viewport_id(w.name);
             let size = if w.name == "a" {
-                a_size().unwrap_or([360.0, 240.0])
+                env_size("SPIKE_A_SIZE").unwrap_or([360.0, 240.0])
             } else {
                 [360.0, 240.0]
             };
@@ -387,9 +390,9 @@ impl eframe::App for Spike {
     }
 }
 
-/// `SPIKE_A_SIZE=WxH`: A's inner size.
-fn a_size() -> Option<[f32; 2]> {
-    let text = std::env::var("SPIKE_A_SIZE").ok()?;
+/// A size given as `WxH` in the environment variable `name`.
+fn env_size(name: &str) -> Option<[f32; 2]> {
+    let text = std::env::var(name).ok()?;
     let (w, h) = text.split_once('x')?;
     Some([w.parse().ok()?, h.parse().ok()?])
 }
@@ -399,7 +402,7 @@ fn main() -> eframe::Result {
         viewport: ViewportBuilder::default()
             .with_title("Spike root")
             .with_app_id("egui-pop-spike")
-            .with_inner_size([240.0, 120.0]),
+            .with_inner_size(env_size("SPIKE_ROOT_SIZE").unwrap_or([240.0, 120.0])),
         persist_window: false,
         ..Default::default()
     };
