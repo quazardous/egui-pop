@@ -6,14 +6,26 @@
 //! ([`Custom`], opened with [`Dialogs::open_custom`]). They queue, one
 //! shown at a time, modal, drawn from the theme's tokens.
 //!
-//! A dialog comes up over the window the user worked in last
+//! A dialog belongs to the window it was opened from (ADR 0025): the
+//! application window being drawn, or the one whose command opened it
+//! (its `appWindow`), else the active one. Each application window has
+//! its own queue, one dialog shown at a time in each, and a dialog blocks
+//! its own window only: the main window and an application window each
+//! answer their own. In the main window's group, a dialog comes up over
+//! the window of it the user worked in last
 //! ([`AppHandle::active_window`]): a detached panel's window when the
-//! dialog was opened from there (its keys, a click in it), the main
-//! window otherwise, or once that window is closed. While it is open,
-//! every other window of the application is blocked (its keys dropped, a
-//! backdrop over it; a click there brings the dialog's window to the
-//! front). The dialogs' block is in the `WINDOW_OVERLAYS` zone, drawn in
+//! dialog was opened from there, the main window otherwise, or once that
+//! window is closed; it blocks the main window and its detached panels
+//! (their keys dropped, a backdrop over them; a click there brings the
+//! dialog's window to the front). A dialog whose application window
+//! closes (or moves into the main window) goes to the main window's
+//! queue. The dialogs' block is in the `WINDOW_OVERLAYS` zone, drawn in
 //! every window.
+//!
+//! [`Dialogs::current`], [`Dialogs::answer`] and the `dialogs` collector
+//! address the dialog shown in the current window group (the one being
+//! drawn, or commanded, or an agent's call names), else the first one
+//! queued.
 //!
 //! A custom dialog is a host of the mount contract (ADR 0013): its body
 //! is drawn by a closure kept on the application's side (the queue
@@ -837,8 +849,13 @@ struct Open {
     drag_from: Option<Vec2>,
     /// Focus placed on its first pass.
     focused: bool,
-    /// The window it is shown over: the active one when it came up.
+    /// The window it is shown over: the active one of its group when it
+    /// came up.
     window: Option<egui::ViewportId>,
+    /// The window group it belongs to (`AppHandle::window_group`): the one
+    /// current when it was opened, else the active one's when it first
+    /// shows.
+    group: Option<egui::ViewportId>,
     /// The in-app picker open inside the dialog for a field (without the
     /// files plugin): its key and picker.
     picking: Option<(String, FilePicker)>,
@@ -891,6 +908,7 @@ impl Dialogs {
             drag_from: None,
             focused: false,
             window: None,
+            group: crate::windows::current_group(),
             picking: None,
             browse: None,
             choosing: None,
@@ -946,18 +964,26 @@ impl Dialogs {
         Ok(id)
     }
 
-    /// The dialog shown, with its id.
+    /// The dialog shown in the current window group (see the module's
+    /// documentation), with its id.
     pub fn current(&self) -> Option<(u64, Dialog)> {
-        lock(&self.0)
-            .queue
-            .front()
-            .map(|o| (o.id, o.dialog.clone()))
+        let s = lock(&self.0);
+        shown_at(&s, crate::windows::current_group())
+            .map(|i| (s.queue[i].id, s.queue[i].dialog.clone()))
+    }
+
+    /// The dialog shown in a window group (`AppHandle::window_group`), with
+    /// its id.
+    pub fn current_in(&self, group: egui::ViewportId) -> Option<(u64, Dialog)> {
+        let s = lock(&self.0);
+        shown_at(&s, Some(group)).map(|i| (s.queue[i].id, s.queue[i].dialog.clone()))
     }
 
     /// Where the dialog shown is: its offset from the window's centre, in
     /// points (zero: centred).
     pub fn offset(&self) -> Option<Vec2> {
-        lock(&self.0).queue.front().map(|o| o.offset)
+        let s = lock(&self.0);
+        shown_at(&s, crate::windows::current_group()).map(|i| s.queue[i].offset)
     }
 
     /// Whether a dialog is still open (shown or waiting).
@@ -977,15 +1003,52 @@ impl Dialogs {
     /// Answers the shown dialog (applied on the next frame), as `origin`.
     pub fn answer(&self, answer: Answer, origin: Origin) -> Result<(), String> {
         let mut s = lock(&self.0);
-        let id = s.queue.front().map(|o| o.id).ok_or("no dialog is open")?;
+        let at = shown_at(&s, crate::windows::current_group()).ok_or("no dialog is open")?;
+        let id = s.queue[at].id;
         s.given.push((id, answer, origin));
         Ok(())
     }
 
-    /// The shown dialog and the queue, as the bridge shows them.
+    /// The dialog shown in the current window group and how many wait
+    /// behind it, as the bridge shows them.
     pub fn describe(&self) -> Json {
+        let id = {
+            let s = lock(&self.0);
+            shown_at(&s, crate::windows::current_group()).map(|i| s.queue[i].id)
+        };
+        id.map_or(Json::Null, |id| self.describe_one(id))
+    }
+
+    /// Each window group's dialog shown, by window name, with how many
+    /// wait behind it: `[{ "window", "id", "title", "waiting" }]`.
+    pub fn windows(&self, app: &AppHandle) -> Vec<Json> {
         let s = lock(&self.0);
-        match s.queue.front() {
+        let mut groups: Vec<egui::ViewportId> = Vec::new();
+        for o in &s.queue {
+            let g = o.group.unwrap_or(egui::ViewportId::ROOT);
+            if !groups.contains(&g) {
+                groups.push(g);
+            }
+        }
+        groups
+            .into_iter()
+            .filter_map(|g| {
+                let i = shown_at(&s, Some(g))?;
+                let o = &s.queue[i];
+                Some(json!({
+                    "window": app.window_of_group(g),
+                    "id": o.id,
+                    "title": o.dialog.title(),
+                    "waiting": s.queue.iter().filter(|q| q.group == o.group).count() - 1,
+                }))
+            })
+            .collect()
+    }
+
+    /// One open dialog, as the bridge shows it.
+    fn describe_one(&self, id: u64) -> Json {
+        let s = lock(&self.0);
+        match s.queue.iter().find(|o| o.id == id) {
             Some(o) => {
                 let mut d = serde_json::to_value(&o.dialog).unwrap_or(Json::Null);
                 d["id"] = json!(o.id);
@@ -997,7 +1060,7 @@ impl Dialogs {
                 if let Some(key) = &o.remember {
                     d["remember"] = json!(key);
                 }
-                d["waiting"] = json!(s.queue.len() - 1);
+                d["waiting"] = json!(s.queue.iter().filter(|q| q.group == o.group).count() - 1);
                 match &o.dialog {
                     // The typed values as they are, and plainly by key.
                     Dialog::Form(f) => d["values"] = Json::Object(values_of(&f.fields)),
@@ -1021,6 +1084,19 @@ impl Dialogs {
     /// The last answers, oldest first: title, answer, origin.
     pub fn answered(&self) -> Vec<(String, Answer, Origin)> {
         lock(&self.0).answered.iter().cloned().collect()
+    }
+}
+
+/// The dialog shown in a window group: the first queued in it. Without a
+/// group, the first queued at all. A dialog whose group is not known yet
+/// counts in the main window's.
+fn shown_at(s: &State, group: Option<egui::ViewportId>) -> Option<usize> {
+    match group {
+        None => (!s.queue.is_empty()).then_some(0),
+        Some(g) => s
+            .queue
+            .iter()
+            .position(|o| o.group.unwrap_or(egui::ViewportId::ROOT) == g),
     }
 }
 
@@ -1061,7 +1137,8 @@ impl Plugin for DialogsPlugin {
             move |call| {
                 let all = setting(call.app, SETTING_MOVABLE);
                 let mut s = lock(&moved.0);
-                let o = s.queue.front_mut().ok_or("no dialog is open")?;
+                let at = shown_at(&s, crate::windows::current_group()).ok_or("no dialog is open")?;
+                let o = &mut s.queue[at];
                 if !(o.movable || all) {
                     return Err("the dialog shown is not movable".into());
                 }
@@ -1091,16 +1168,24 @@ impl Plugin for DialogsPlugin {
         )?;
         let (a, b) = (dialogs.clone(), dialogs);
         let weak = ctx.app().downgrade();
+        let weak_a = ctx.app().downgrade();
         ctx.collector(
             FnCollector::new(
                 "dialogs",
                 "The dialog shown (kind, title, fields, verb, command) and how many wait; `answer` answers it as its caller.",
             )
-            .snapshot(move |_| json!({ "current": a.describe(), "answered": a.answered() }))
+            .snapshot(move |_| {
+                let windows = weak_a.get().map(|app| a.windows(&app)).unwrap_or_default();
+                json!({ "current": a.describe(), "windows": windows, "answered": a.answered() })
+            })
             .action_as("answer", "Answers the dialog shown as its caller: accept (with `values`), choose (`value` or `index`) or cancel. An answer that would run a command not offered to agents is the user's only.", true, move |_, args, origin| {
                 let answer = Answer::from_json(args)?;
                 let app = weak.get()?;
-                let open = lock(&b.0).queue.front().cloned().ok_or("no dialog is open")?;
+                let open = {
+                    let s = lock(&b.0);
+                    let at = shown_at(&s, crate::windows::current_group()).ok_or("no dialog is open")?;
+                    s.queue[at].clone()
+                };
                 refuse_unoffered(&app, &open, &answer, origin)?;
                 b.answer(answer, origin.clone())?;
                 Ok(json!({ "queued": true }))
@@ -1230,10 +1315,17 @@ fn refuse_unoffered(
 /// Applies an answer to the shown dialog: runs its command if accepted,
 /// as `origin`; refused when that command is not offered to agents and
 /// `origin` is not the user.
-fn apply(app: &AppHandle, d: &Dialogs, answer: Answer, origin: Origin) -> Result<(), String> {
+fn apply(
+    app: &AppHandle,
+    d: &Dialogs,
+    id: u64,
+    answer: Answer,
+    origin: Origin,
+) -> Result<(), String> {
     let open = lock(&d.0)
         .queue
-        .front()
+        .iter()
+        .find(|o| o.id == id)
         .cloned()
         .ok_or("no dialog is open")?;
     refuse_unoffered(app, &open, &answer, &origin)?;
@@ -1246,7 +1338,7 @@ fn apply(app: &AppHandle, d: &Dialogs, answer: Answer, origin: Origin) -> Result
     }
     {
         let mut s = lock(&d.0);
-        s.queue.pop_front();
+        s.queue.retain(|o| o.id != id);
         if s.answered.len() == ANSWERED {
             s.answered.pop_front();
         }
@@ -1292,15 +1384,21 @@ fn apply(app: &AppHandle, d: &Dialogs, answer: Answer, origin: Origin) -> Result
 
 /// Answers the shown dialog through the [`STEP_ANSWER`] step: hooks may
 /// stop the answer (the reason is the error) or change it.
-fn answer_step(app: &AppHandle, d: &Dialogs, answer: Answer, origin: Origin) -> Result<(), String> {
+fn answer_step(
+    app: &AppHandle,
+    d: &Dialogs,
+    id: u64,
+    answer: Answer,
+    origin: Origin,
+) -> Result<(), String> {
     let args = json!({
-        "dialog": d.describe(),
+        "dialog": d.describe_one(id),
         "answer": answer,
         "origin": source_of(&origin),
     });
     let out = app.step(&STEP_ANSWER, args, |app, args| {
         let answer = Answer::from_json(&args["answer"])?;
-        apply(app, d, answer, origin.clone()).map(|()| Json::Null)
+        apply(app, d, id, answer, origin.clone()).map(|()| Json::Null)
     });
     match out {
         Outcome::Done(r) => r.map(|_| ()),
@@ -1313,30 +1411,48 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let Some(d) = app.service(&DIALOGS) else {
         return;
     };
+    let ctx = ui.ctx().clone();
+    let here = ctx.viewport_id();
+    let group = app.window_group(here);
+    // Each dialog's group: the one it was opened in, while that window is
+    // open (the main window's otherwise); the active one's when unknown.
+    {
+        let active = app.window_group(app.active_window());
+        let mut s = lock(&d.0);
+        for o in s.queue.iter_mut() {
+            let g = app.window_group(o.group.unwrap_or(active));
+            if o.group != Some(g) {
+                o.group = Some(g);
+                o.window = None;
+            }
+        }
+    }
     let given: Vec<(u64, Answer, Origin)> = std::mem::take(&mut lock(&d.0).given);
     for (id, answer, origin) in given {
-        if d.current().is_some_and(|(c, _)| c == id)
-            && let Err(e) = answer_step(app, &d, answer, origin)
-            && let Some(o) = lock(&d.0).queue.front_mut()
+        if d.is_open(id)
+            && let Err(e) = answer_step(app, &d, id, answer, origin)
+            && let Some(o) = lock(&d.0).queue.iter_mut().find(|o| o.id == id)
         {
             o.error = Some(e);
         }
     }
-    let ctx = ui.ctx().clone();
-    // Shown over the window it was opened from (the active one when it
-    // came up), or the main window once that one is closed; drawn in
-    // that window's pass only, the others blocked meanwhile.
-    let Some(window) = lock(&d.0)
-        .queue
-        .front_mut()
-        .map(|o| *o.window.get_or_insert_with(|| app.active_window()))
-    else {
+    // Shown over the window of its group it was opened from (the active
+    // one when it came up), or the main window once that one is closed;
+    // drawn in that window's pass only, the others of the group blocked
+    // meanwhile.
+    let Some((window, shown_id)) = ({
+        let mut s = lock(&d.0);
+        shown_at(&s, Some(group)).map(|i| {
+            let o = &mut s.queue[i];
+            (*o.window.get_or_insert_with(|| app.shown_in(group)), o.id)
+        })
+    }) else {
         return;
     };
-    if app.still_open(window) != ctx.viewport_id() {
+    if app.still_open(window) != here {
         return;
     }
-    let Some(mut open_dialog) = lock(&d.0).queue.front().cloned() else {
+    let Some(mut open_dialog) = lock(&d.0).queue.iter().find(|o| o.id == shown_id).cloned() else {
         return;
     };
     // A dialog a question was put in front of leaves the stack before the
@@ -1345,7 +1461,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     for under in lock(&d.0)
         .queue
         .iter()
-        .skip(1)
+        .filter(|o| o.group == Some(group) && o.id != shown_id)
         .map(|o| o.id)
         .collect::<Vec<_>>()
     {
@@ -1353,9 +1469,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     }
     if !open_dialog.focused {
         // It comes up: hooks may stop it (it is cancelled).
-        let out = app.step(&STEP_SHOW, d.describe(), |_, _| Ok(Json::Null));
+        let out = app.step(&STEP_SHOW, d.describe_one(shown_id), |_, _| Ok(Json::Null));
         if out.vetoed().is_some() {
-            if let Err(e) = apply(app, &d, Answer::Cancel, Origin::User) {
+            if let Err(e) = apply(app, &d, shown_id, Answer::Cancel, Origin::User) {
                 log::warn!(target: "egui_pop", "dialog: {e}");
             }
             return;
@@ -1457,9 +1573,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     browse(app, &mut open_dialog);
     match answer {
         Some(a) => {
-            if let Err(e) = answer_step(app, &d, a, Origin::User) {
+            if let Err(e) = answer_step(app, &d, shown_id, a, Origin::User) {
                 open_dialog.error = Some(e);
-                if let Some(o) = lock(&d.0).queue.front_mut() {
+                if let Some(o) = lock(&d.0).queue.iter_mut().find(|o| o.id == shown_id) {
                     *o = open_dialog;
                 }
             } else {
@@ -1467,9 +1583,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             }
         }
         None => {
-            if let Some(o) = lock(&d.0).queue.front_mut()
-                && o.id == open_dialog.id
-            {
+            if let Some(o) = lock(&d.0).queue.iter_mut().find(|o| o.id == shown_id) {
                 *o = open_dialog;
             }
         }

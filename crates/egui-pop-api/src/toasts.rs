@@ -19,9 +19,15 @@
 //! Settings app's wizard footer, whose Finish sits in the default corner,
 //! is never under a toast that would take its click.
 //!
-//! They show in the window the user works in
-//! ([`AppHandle::active_window`]): a detached panel's window while it
-//! has the focus, the main window again when that one closes.
+//! Each application window has its own toasts (ADR 0025): a toast
+//! belongs to the window it was raised from (the application window being
+//! drawn, or the one whose command raised it, else the active one;
+//! [`Toasts::notify_in`] names one), and each window stacks its own, up
+//! to [`SHOWN`] at a time. In the main window's group they show in the
+//! window of it the user works in ([`AppHandle::active_window`]): a
+//! detached panel's window while it has the focus, the main window again
+//! when that one closes. A closed application window's toasts go to the
+//! main window.
 //!
 //! The queue is data: [`Toasts::shown`] and [`Toasts::history`], the
 //! debug bridge's `toasts` collector (with `dismiss`), and a
@@ -340,6 +346,12 @@ pub struct Shown {
     pub left: Option<f32>,
     /// Since when the pointer holds it: its time stops meanwhile.
     pub held: Option<f64>,
+    /// The application window it shows in (`main` or a window's id),
+    /// once it was first drawn.
+    pub window: Option<String>,
+    /// Its window group (`AppHandle::window_group`).
+    #[serde(skip)]
+    group: Option<egui::ViewportId>,
 }
 
 /// A toast sliding out, and since when (stamped when next drawn).
@@ -368,6 +380,17 @@ impl Toasts {
     /// Shows a toast (it waits while [`SHOWN`] are on screen); returns
     /// its id.
     pub fn notify(&self, toast: Toast) -> u64 {
+        self.notify_to(crate::windows::current_group(), toast)
+    }
+
+    /// Shows a toast in a window group (`AppHandle::window_group`: an
+    /// application window's viewport, or `ViewportId::ROOT` for the main
+    /// window); returns its id.
+    pub fn notify_in(&self, group: egui::ViewportId, toast: Toast) -> u64 {
+        self.notify_to(Some(group), toast)
+    }
+
+    fn notify_to(&self, group: Option<egui::ViewportId>, toast: Toast) -> u64 {
         let mut s = lock(&self.0);
         s.next += 1;
         let shown = Shown {
@@ -379,6 +402,8 @@ impl Toasts {
             phase: Phase::Appear,
             left: None,
             held: None,
+            window: None,
+            group,
         };
         s.fresh.push(shown.clone());
         s.queue.push_back(shown);
@@ -569,11 +594,42 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         return;
     };
     let ctx = ui.ctx().clone();
-    if app.active_window() != ctx.viewport_id() {
+    let here = ctx.viewport_id();
+    let group = app.window_group(here);
+    // Each toast's group: the one it was raised in while that window is
+    // open (the main window's otherwise); the active one's when unknown.
+    {
+        let active = app.window_group(app.active_window());
+        let mut s = lock(&toasts.0);
+        let State {
+            queue,
+            fresh,
+            leaving,
+            ..
+        } = &mut *s;
+        for t in queue
+            .iter_mut()
+            .chain(fresh.iter_mut())
+            .chain(leaving.iter_mut().map(|l| &mut l.shown))
+        {
+            let g = app.window_group(t.group.unwrap_or(active));
+            if t.group != Some(g) || t.window.is_none() {
+                t.group = Some(g);
+                t.window = Some(app.window_of_group(g).to_string());
+            }
+        }
+    }
+    if app.shown_in(group) != here {
         return;
     }
+    let mine = |t: &Shown| t.group == Some(group);
     let now = motion::now(&ctx);
-    let fresh = std::mem::take(&mut lock(&toasts.0).fresh);
+    let fresh: Vec<Shown> = {
+        let mut s = lock(&toasts.0);
+        let (here_now, later) = std::mem::take(&mut s.fresh).into_iter().partition(mine);
+        s.fresh = later;
+        here_now
+    };
     for t in fresh {
         let politeness = if t.toast.level == Level::Error {
             Politeness::Assertive
@@ -609,7 +665,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     };
     let on_screen: Vec<Shown> = {
         let mut s = lock(&toasts.0);
-        for t in s.queue.iter_mut().take(SHOWN) {
+        for t in s.queue.iter_mut().filter(|t| mine(t)).take(SHOWN) {
             if job_goes_on(&t.toast) {
                 t.until = None;
             } else if t.until.is_none() {
@@ -617,7 +673,12 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             }
             t.since.get_or_insert(now);
         }
-        s.queue.iter().take(SHOWN).cloned().collect()
+        s.queue
+            .iter()
+            .filter(|t| mine(t))
+            .take(SHOWN)
+            .cloned()
+            .collect()
     };
     let mut expired = Vec::new();
     let mut next_deadline: Option<f64> = None;
@@ -641,10 +702,13 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let mut gone = Vec::new();
     let leaving: Vec<(Shown, f64)> = {
         let mut s = lock(&toasts.0);
-        for l in &mut s.leaving {
+        for l in s.leaving.iter_mut().filter(|l| mine(&l.shown)) {
             l.at.get_or_insert(now);
         }
         s.leaving.retain(|l| {
+            if !mine(&l.shown) {
+                return true;
+            }
             let stays = slide > 0.0 && l.at.is_some_and(|at| now - at < slide);
             if !stays {
                 gone.push(l.shown.id);
@@ -653,6 +717,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         });
         s.leaving
             .iter()
+            .filter(|l| mine(&l.shown))
             .filter_map(|l| Some((l.shown.clone(), l.at?)))
             .collect()
     };
@@ -666,6 +731,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let mut items: Vec<Item> = toasts
         .shown()
         .into_iter()
+        .filter(|t| mine(t))
         .take(SHOWN)
         .map(Item::Live)
         .chain(leaving.into_iter().map(|(s, at)| Item::Leaving(s, at)))
@@ -777,7 +843,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     // lib.rs).
     {
         let mut s = lock(&toasts.0);
-        for t in s.queue.iter_mut() {
+        for t in s.queue.iter_mut().filter(|t| mine(t)) {
             if let Some((_, phase, left)) = drawn.iter().find(|d| d.0 == t.id) {
                 t.phase = *phase;
                 t.left = *left;

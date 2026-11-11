@@ -15,10 +15,14 @@
 //! arrows move the selection, Enter runs, Escape closes (or leaves an
 //! argument prompt).
 //!
-//! It opens in the window the user works in
-//! ([`AppHandle::active_window`]), a detached panel's included, as VS
-//! Code's auxiliary windows do, and goes to the main window if that one
-//! closes. A modal overlay, it blocks the other windows while it is open.
+//! Each application window has its own palette (ADR 0025): it opens in
+//! the window it is asked in, offers what applies there (that window's
+//! commands, `when: "appWindow == 'import'"`, and the global ones), runs
+//! there, and blocks that window only. In the main window's group it
+//! opens in the window the user works in ([`AppHandle::active_window`]),
+//! a detached panel's included, as VS Code's auxiliary windows do, goes
+//! to the main window if that one closes, and blocks the main window and
+//! its detached panels while it is open.
 //!
 //! ```
 //! use egui_pop_api::{App, palette};
@@ -30,6 +34,7 @@
 //! assert!(!palette::is_open(app.handle()));
 //! ```
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use egui::text::LayoutJob;
@@ -90,12 +95,14 @@ impl Plugin for PalettePlugin {
                 .hidden(),
             |call| {
                 let p = call.app.service(&PALETTE).ok_or("no palette")?;
-                if p.is_open() {
-                    p.close();
+                // In the window it is asked in.
+                let group = call.app.current_window_group();
+                if p.is_open_in(group) {
+                    p.close_in(group);
                 } else {
-                    p.open(call.app.when_context());
+                    p.open_in(group, call.app.when_context());
                 }
-                Ok(json!({ "open": p.is_open() }))
+                Ok(json!({ "open": p.is_open_in(group), "window": call.app.window_of_group(group) }))
             },
         )?;
         // Drawn in every window, shown in its own.
@@ -133,45 +140,105 @@ struct State {
     window: Option<egui::ViewportId>,
 }
 
-/// The palette's state: open or not, the query.
+/// The palettes' state, one per window group
+/// (`AppHandle::window_group`): open or not, the query.
 #[derive(Debug, Default)]
-pub struct Palette(Arc<Mutex<State>>);
+pub struct Palette(Arc<Mutex<BTreeMap<egui::ViewportId, State>>>);
+
+/// The group meant when none is named: the current one (the window being
+/// drawn or commanded), else the main window's.
+fn group_now() -> egui::ViewportId {
+    crate::windows::current_group().unwrap_or(egui::ViewportId::ROOT)
+}
 
 impl Palette {
+    /// Whether it is open in the current window group (the main window's
+    /// outside a pass or a command).
     pub fn is_open(&self) -> bool {
-        lock(&self.0).open
+        self.is_open_in(group_now())
     }
 
-    /// Opens it, offering what applies in `context`.
+    /// Whether it is open in a window group.
+    pub fn is_open_in(&self, group: egui::ViewportId) -> bool {
+        lock(&self.0).get(&group).is_some_and(|s| s.open)
+    }
+
+    /// The window groups it is open in.
+    pub fn open_groups(&self) -> Vec<egui::ViewportId> {
+        lock(&self.0)
+            .iter()
+            .filter(|(_, s)| s.open)
+            .map(|(g, _)| *g)
+            .collect()
+    }
+
+    /// Opens it in the current window group, offering what applies in
+    /// `context`.
     pub fn open(&self, context: WhenContext) {
-        let mut s = lock(&self.0);
-        *s = State {
-            open: true,
-            context,
-            ..State::default()
-        };
+        self.open_in(group_now(), context);
     }
 
+    /// Opens it in a window group, offering what applies in `context`.
+    pub fn open_in(&self, group: egui::ViewportId, context: WhenContext) {
+        lock(&self.0).insert(
+            group,
+            State {
+                open: true,
+                context,
+                ..State::default()
+            },
+        );
+    }
+
+    /// Closes it in the current window group.
     pub fn close(&self) {
-        *lock(&self.0) = State::default();
+        self.close_in(group_now());
     }
 
-    /// The window it is shown in, once open and drawn: the one the user
-    /// worked in when it opened (`AppHandle::active_window`).
+    /// Closes it in a window group.
+    pub fn close_in(&self, group: egui::ViewportId) {
+        lock(&self.0).remove(&group);
+    }
+
+    /// The window it is shown in, in the current window group, once open
+    /// and drawn: in the main window's group, the one the user worked in
+    /// when it opened (`AppHandle::active_window`).
     pub fn window(&self) -> Option<egui::ViewportId> {
+        self.window_in(group_now())
+    }
+
+    /// The window it is shown in, in a window group, once open and drawn.
+    pub fn window_in(&self, group: egui::ViewportId) -> Option<egui::ViewportId> {
         let s = lock(&self.0);
+        let s = s.get(&group)?;
         s.open.then_some(s.window).flatten()
     }
 
-    /// The query typed.
+    /// The query typed, in the current window group.
     pub fn query(&self) -> String {
-        lock(&self.0).query.clone()
+        lock(&self.0)
+            .get(&group_now())
+            .map(|s| s.query.clone())
+            .unwrap_or_default()
+    }
+
+    /// The context it was opened in, in a window group: what it offers
+    /// and runs in.
+    pub fn context_in(&self, group: egui::ViewportId) -> Option<WhenContext> {
+        lock(&self.0).get(&group).map(|s| s.context.clone())
     }
 }
 
-/// Whether the application's palette is open.
+/// Whether the application's palette is open in the current window group
+/// (the main window's outside a pass or a command).
 pub fn is_open(app: &AppHandle) -> bool {
     app.service(&PALETTE).is_some_and(|p| p.is_open())
+}
+
+/// Whether the palette is open in a window group
+/// (`AppHandle::window_group`).
+pub fn is_open_in(app: &AppHandle, group: egui::ViewportId) -> bool {
+    app.service(&PALETTE).is_some_and(|p| p.is_open_in(group))
 }
 
 /// The commands run lately, most recent first, each once.
@@ -396,14 +463,22 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let Some(p) = app.service(&PALETTE) else {
         return;
     };
-    let mut open = p.is_open();
+    let ctx = ui.ctx().clone();
+    let group = app.window_group(ctx.viewport_id());
+    // A closed window's palette goes with it.
+    lock(&p.0).retain(|g, _| app.window_group(*g) == *g);
+    let mut open = p.is_open_in(group);
     if !open {
         return;
     }
-    let ctx = ui.ctx().clone();
-    // Shown in the window it opened in (the active one then), or the main
-    // window once that one is closed; drawn in that window's pass only.
-    let window = *lock(&p.0).window.get_or_insert_with(|| app.active_window());
+    // Shown in the window of its group it opened in (the active one
+    // then), or the main window once that one is closed; drawn in that
+    // window's pass only.
+    let window = {
+        let mut all = lock(&p.0);
+        let Some(s) = all.get_mut(&group) else { return };
+        *s.window.get_or_insert_with(|| app.shown_in(group))
+    };
     if app.still_open(window) != ctx.viewport_id() {
         return;
     }
@@ -414,7 +489,8 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let mut run: Option<(CommandId, Json, WhenContext)> = None;
     let mut close = false;
     overlay::show(&ctx, &spec, &mut open, None, |ui| {
-        let mut s = lock(&p.0);
+        let mut all = lock(&p.0);
+        let Some(s) = all.get_mut(&group) else { return };
         let cx = s.context.clone();
         if let Some(prompt) = &mut s.prompt {
             if let Some(done) = ask(ui, prompt) {
@@ -564,14 +640,14 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         }
     });
     if let Some((command, args, context)) = run {
-        p.close();
+        p.close_in(group);
         overlay::close(&ctx, spec.id);
         app.request_run_in(command, args, context);
     } else if close {
-        p.close();
+        p.close_in(group);
         overlay::close(&ctx, spec.id);
     } else if !open {
-        p.close();
+        p.close_in(group);
     }
 }
 

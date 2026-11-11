@@ -950,9 +950,52 @@ fn modal_bounds(ctx: &Context) -> Rect {
         .shrink2(egui::vec2(data.padding_x, data.padding_y))
 }
 
-/// Whether a modal overlay is open, in any window of the application
-/// (every window waits for it, see [`block_window`]).
+/// The windows that are almost separate applications (an application's
+/// own windows, ADR 0025): each is a group of its own, whose modals
+/// block only it. Every other window (the main one, its detached
+/// panels) is in the main window's group.
+#[derive(Debug, Default)]
+struct Separate(BTreeSet<ViewportId>);
+
+fn separate(ctx: &Context) -> std::sync::Arc<std::sync::Mutex<Separate>> {
+    shared::<Separate>(ctx, "core.overlay.separate")
+}
+
+/// Says which windows are groups of their own (an application's own
+/// windows): a modal open in one blocks it alone, and counts for
+/// [`modal_open`] there only. Replaces the earlier list.
+pub fn set_separate_windows(ctx: &Context, windows: impl IntoIterator<Item = ViewportId>) {
+    lock(&separate(ctx)).0 = windows.into_iter().collect();
+}
+
+/// The group a window belongs to: itself for a separate window, the
+/// main window (`ViewportId::ROOT`) for every other.
+pub fn group_of(ctx: &Context, window: ViewportId) -> ViewportId {
+    if window != ViewportId::ROOT && lock(&separate(ctx)).0.contains(&window) {
+        window
+    } else {
+        ViewportId::ROOT
+    }
+}
+
+/// Whether a modal overlay is open in the group of the window being
+/// drawn: the main window and its detached panels wait for one another's
+/// modals (see [`block_window`]); an application's own window waits only
+/// for its own ([`set_separate_windows`]).
 pub fn modal_open(ctx: &Context) -> bool {
+    modal_open_in(ctx, group_of(ctx, ctx.viewport_id()))
+}
+
+/// Whether a modal overlay is open in a group of windows (see
+/// [`group_of`]).
+pub fn modal_open_in(ctx: &Context, group: ViewportId) -> bool {
+    modal_windows(ctx)
+        .into_iter()
+        .any(|v| group_of(ctx, v) == group)
+}
+
+/// Whether a modal overlay is open in any window.
+pub fn modal_open_anywhere(ctx: &Context) -> bool {
     !modal_windows(ctx).is_empty()
 }
 
