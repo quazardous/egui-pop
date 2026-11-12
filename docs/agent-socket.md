@@ -73,9 +73,9 @@ journal apply as to any agent.
 | `snapshot` | `{ "collector"? }` | every collector's snapshot by name, or one collector's |
 | `call` | `{ "collector", "action", "args"? }` | the bridge's feedback block: `{ "ok", "collector", "action", "mutates", "message", "data" }`, a refusal included (`ok: false`) |
 | `wait` | `bridge.wait`'s arguments (`event` and `cause`, `settled: true`, or `any`; `since`) and `deadline_ms` (5 s by default, 120 s at most) | `{ "met", "by", "event", "last" }`; `met: false` at the deadline |
-| `ui` | `{ "action": "tree", "label"?, "role"? }` | `{ "count", "nodes" }`: the accessibility tree's nodes (`id`, `parent`, `role`, `label`, `value`, `rect` in points, `disabled`), every one or those matching |
-| `ui` | `{ "action": "click" \| "type" \| "scroll", "label"?, "role"?, "nth"?, "text"?, "up"? }` | `{ "node" }`, once the input went in |
-| `ui` | `{ "action": "key", "key": "Ctrl+K" }` | `{ "key" }` |
+| `ui` | `{ "action": "tree", "label"?, "role"?, "window"? }` | `{ "count", "nodes" }`: the accessibility tree's nodes (`id`, `parent`, `role`, `label`, `value`, `rect` in points, `disabled`), every one or those matching |
+| `ui` | `{ "action": "click" \| "type" \| "scroll", "label"?, "role"?, "nth"?, "text"?, "up"?, "window"? }` | `{ "node" }`, once the input went in |
+| `ui` | `{ "action": "key", "key": "Ctrl+K", "window"? }` | `{ "key" }` |
 
 **The interface.** `ui` reads the AccessKit tree of the frame just
 drawn (AccessKit is turned on at the first `ui` request) and acts on it
@@ -92,6 +92,15 @@ a nested compositor and in a window on a desktop. `tree` needs the
 bridge on or read-only; the actions change the application, so they
 need it on, and are refused when it is read-only. A node not found, or
 found twice, is error `-32003`, with the reason.
+
+`window` names the application window `ui` reads and acts in (its id,
+`main` for the main window; [ADR 0025](adr/0025-application-windows.md)):
+an OS window of its own has its own tree and its own input. Without
+it, the main window, with what egui embeds in it. Where egui embeds the
+application windows in the main one (the web, a kittest harness), a
+window is the subtree of its embedded `Window` node (found by its
+title), and `main` is the main window without them. A window that is
+not open is error `-32602`, naming the open ones.
 
 `commands.run` through `call` is queued for the next frame, as
 `AppHandle::debug_call` does: its result comes on the journal. Wait for

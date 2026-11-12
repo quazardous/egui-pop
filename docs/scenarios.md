@@ -81,6 +81,32 @@ they forbid.
 | `Expect(Value("collector.key.0", v))` | a collector's snapshot value (`AppHandle::debug_snapshot`); the collector's name may hold dots |
 | `Expect(Journal(has: "name", data: {..}))` | an event since the start, its data holding the keys given |
 | `Shot(name)` | a snapshot image `<scenario>-<name>` when the runner renders, else the accessibility tree, kept in `Passed::trees` |
+| `Window("import")` | the `Ui` steps and `Expect(Tree)` that follow read and act in that application window (its id; `main` for the main window); see below |
+
+### Windows
+
+An application with several windows (`AppHandle::open_window`,
+[ADR 0025](adr/0025-application-windows.md)) names the one its steps
+look at with `Window`, which holds until the next `Window`:
+
+```ron
+Ui(Click(role: "Button", label: "Import photos…")),
+Wait(Settled),
+Window("import"),
+Expect(Tree(has: (role: "Button", label: "Import"))),
+Ui(Click(role: "Button", label: "Import")),
+Window("main"),
+Expect(Tree(lacks: (label: "Import photos"))),
+```
+
+Before the first `Window`, the steps read the main window with what is
+embedded in it, as they always did. Live, a window of its own has its
+own tree and input. In-process, kittest embeds every window in the main
+one as an egui window titled as it: a window is that embedded window's
+subtree, and `main` the rest. A window that is not open breaks the step
+that reads it, naming the open ones. `Call`, `Wait` and `Expect(Value)`
+are not affected: a call goes where the agent's calls go without a
+window (the active one).
 
 ## Invariants
 
@@ -136,8 +162,9 @@ $ egui-pop-scenario --socket "$XDG_RUNTIME_DIR/egui-pop-agent-my-app.sock" \
 - **Steps.** Every step works as in-process. `Ui` and `Expect(Tree)`
   go through the socket's `ui` method: the accessibility tree of the
   frame just drawn, and input queued into egui's next frames (a click
-  is a hover, a press and a release); a `Ui` step ends once its input
-  went in, so follow it with a `Wait`. `$name` variables fill labels
+  is a hover, a press and a release), in the window the last `Window`
+  step named; a `Ui` step ends once its input went in, so follow it
+  with a `Wait`. `$name` variables fill labels
   and typed text too.
 - **Variables.** `--var name=value` (`LiveRunner::var`) replaces `$name`
   in every string argument of the steps and fixtures: a folder the run

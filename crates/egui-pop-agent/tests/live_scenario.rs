@@ -12,11 +12,14 @@ use egui_kittest::Harness;
 use egui_pop_agent::{AgentSocket, AgentSocketExt as _};
 use egui_pop_api::about::{AboutPlugin, AppInfo};
 use egui_pop_api::core::debug::BridgeMode;
+use egui_pop_api::windows::WindowSpec;
 use egui_pop_api::zones::{self, Block};
 use egui_pop_api::{App, AppBuilder, Ctx, DefaultPlugins, Plugin, PluginError};
-use egui_pop_model::ids::{BlockId, PluginId};
+use egui_pop_model::commands::CommandSpec;
+use egui_pop_model::ids::{BlockId, CommandId, PluginId};
 use egui_pop_test::scenario::live::LiveRunner;
 use egui_pop_test::scenario::parse;
+use egui_pop_test::windows::MultiWindow;
 
 fn private_dir(name: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("egui-pop-live-{name}-{}", std::process::id()));
@@ -249,4 +252,154 @@ fn a_variable_fills_the_arguments_and_a_gone_application_breaks_no_panic() {
         f.broken == "connect" || f.broken == "invariant NoPanic",
         "{f}"
     );
+}
+
+/// A "Press" button in the main window, and `test.second`, which opens a
+/// second application window with a "Press" button of its own; each
+/// says on screen how often it was pressed.
+#[derive(Default)]
+struct TwoWindows {
+    pressed: Arc<Mutex<[u32; 2]>>,
+}
+
+impl Plugin for TwoWindows {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("test.windows")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        let main = self.pressed.clone();
+        let second = self.pressed.clone();
+        ctx.block(
+            zones::MAIN,
+            Block::add(
+                BlockId::from_static("test.windows.main"),
+                0,
+                move |ui, _| {
+                    // Below where egui embeds the second window (top left).
+                    ui.add_space(320.0);
+                    let mut p = main.lock().unwrap();
+                    if ui.button("Press").clicked() {
+                        p[0] += 1;
+                    }
+                    ui.label(format!("main pressed {}", p[0]));
+                },
+            ),
+        );
+        ctx.command(
+            CommandSpec::new(
+                CommandId::from_static("test.second"),
+                "Second window",
+                "Test",
+            ),
+            move |c| {
+                let pressed = second.clone();
+                c.app.open_window(
+                    WindowSpec::new("second", "Second").size([260.0, 140.0]),
+                    move |ui, _| {
+                        let mut p = pressed.lock().unwrap();
+                        if ui.button("Press").clicked() {
+                            p[1] += 1;
+                        }
+                        ui.label(format!("second pressed {}", p[1]));
+                    },
+                );
+                Ok(serde_json::Value::Null)
+            },
+        )?;
+        Ok(())
+    }
+}
+
+fn two_windows() -> (AppBuilder, Arc<Mutex<[u32; 2]>>) {
+    let plugin = TwoWindows::default();
+    let pressed = plugin.pressed.clone();
+    let builder = App::builder().debug_bridge(BridgeMode::On).plugin(plugin);
+    (builder, pressed)
+}
+
+/// Clicks the second window's "Press", then the main window's: the same
+/// name in each, told apart by the `Window` step.
+const TWO_WINDOWS: &str = r#"Scenario(
+    name: "two-windows-live",
+    fixtures: [Fixture("test.second", ())],
+    steps: [
+        Wait(Settled),
+        Window("second"),
+        Ui(Click(role: "Button", label: "Press")),
+        Wait(Settled),
+        Expect(Tree(has: (label: "second pressed 1"), lacks: (label: "main pressed 0"))),
+        Window("main"),
+        Expect(Tree(has: (label: "main pressed 0"), lacks: (label: "second pressed 1"))),
+        Ui(Click(role: "Button", label: "Press")),
+        Wait(Settled),
+        Expect(Tree(has: (label: "main pressed 1"))),
+        Window("third"),
+        Expect(Tree(has: (label: "main pressed 1"))),
+    ],
+)"#;
+
+/// The scenario's last step names a window that is not open.
+fn assert_two_windows(
+    r: Result<egui_pop_test::scenario::live::LivePassed, Box<egui_pop_test::scenario::Failure>>,
+    pressed: &Mutex<[u32; 2]>,
+) {
+    let f = r.expect_err("no window `third`");
+    assert_eq!(f.step, Some(12), "{f}");
+    assert!(f.message.contains("no window `third`"), "{f}");
+    assert_eq!(*pressed.lock().unwrap(), [1, 1]);
+}
+
+#[test]
+fn a_window_step_acts_in_an_embedded_window_live() {
+    let dir = private_dir("embedded");
+    let path = dir.join("app.sock");
+    let (builder, pressed) = two_windows();
+    let mut h = app_with(builder, &path);
+    let scenario = parse(TWO_WINDOWS).unwrap();
+    let p = path.clone();
+    let r = with_client(&mut h, move || {
+        LiveRunner::new(p)
+            .connect_within(Duration::from_secs(10))
+            .run(&scenario)
+    });
+    assert_two_windows(r, &pressed);
+}
+
+#[test]
+fn a_window_step_acts_in_a_window_of_its_own_live() {
+    let dir = private_dir("own");
+    let path = dir.join("app.sock");
+    let (builder, pressed) = two_windows();
+    let builder = builder
+        .plugins(DefaultPlugins)
+        .app_id("org.example.LiveTest")
+        .agent_socket(AgentSocket::at(&path));
+    // Real viewports, each window's pass on its own, as eframe runs them.
+    let mut m = MultiWindow::new(|ctx| builder.build(ctx).unwrap());
+    let scenario = parse(TWO_WINDOWS).unwrap();
+    let p = path.clone();
+    let thread = std::thread::spawn(move || {
+        LiveRunner::new(p)
+            .connect_within(Duration::from_secs(10))
+            .run(&scenario)
+    });
+    let start = Instant::now();
+    while !thread.is_finished() {
+        assert!(
+            start.elapsed() < Duration::from_secs(60),
+            "the runner did not finish"
+        );
+        m.root_pass();
+        for v in m.declared() {
+            m.window_pass(v);
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    let r = thread.join().expect("the runner thread ends");
+    assert!(
+        m.declared().len() == 1,
+        "the second window is its own viewport"
+    );
+    assert_two_windows(r, &pressed);
 }

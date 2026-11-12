@@ -19,6 +19,13 @@
 //! | `key` | `key` (`Escape`, `Ctrl+K`) | `{ "key" }` |
 //! | `scroll` | `label`?, `role`?, `up`? | `{ "node" }`, down unless `up` |
 //!
+//! Every action takes `window`: an application window's id (`main` for
+//! the main window; ADR 0025), whose tree is read and whose input the
+//! events go to. Without it, the main window's (its own viewport, with
+//! what egui embeds in it). Where egui embeds the application windows in
+//! the main one (the web, kittest), a window is the subtree of its
+//! embedded `Window` node, and `main` is the main window without them.
+//!
 //! A node is found by its label (exactly) and its role (`Button`,
 //! `Window`, `TextInput`, any case); an action needs exactly one, or
 //! `nth`, which of several in reading order (top to bottom, then left to
@@ -26,7 +33,7 @@
 //! `tree` needs the bridge on or read-only; the others change the
 //! application, so they need it on (`BridgeMode::On`).
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use egui::{
@@ -79,12 +86,80 @@ impl UiNode {
 /// data so a plugin added once serves every agent side.
 #[derive(Debug, Default)]
 pub(crate) struct Shared {
-    /// Keep the tree at the end of the coming passes.
+    /// Keep each window's tree at the end of its coming passes.
     pub want_tree: bool,
-    /// The last tree kept, and the pass it is from.
-    pub tree: Option<(u64, Vec<UiNode>)>,
-    /// Batches of events, one per frame.
-    pub queue: VecDeque<Batch>,
+    /// Each window's last tree kept, and the pass it is from.
+    pub trees: HashMap<ViewportId, (u64, Vec<UiNode>)>,
+    /// Each window's batches of events, one per frame of that window.
+    pub queues: HashMap<ViewportId, VecDeque<Batch>>,
+}
+
+impl Shared {
+    /// Whether events are still waiting to go in, in any window.
+    pub(crate) fn queued(&self) -> bool {
+        self.queues.values().any(|q| !q.is_empty())
+    }
+}
+
+/// Where a `ui` request reads and acts: a viewport, and in it, where
+/// egui embeds application windows, one of them or none of them.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Scope {
+    pub viewport: ViewportId,
+    /// Only the subtree of the embedded window of this title.
+    pub within: Option<String>,
+    /// Without the subtrees of the embedded windows of these titles.
+    pub without: Vec<String>,
+}
+
+impl Scope {
+    /// A whole viewport's tree.
+    pub(crate) fn viewport(viewport: ViewportId) -> Self {
+        Self {
+            viewport,
+            within: None,
+            without: Vec::new(),
+        }
+    }
+
+    /// The nodes of `tree` in scope.
+    pub(crate) fn nodes<'t>(&self, tree: &'t [UiNode]) -> Result<Vec<&'t UiNode>, String> {
+        if self.within.is_none() && self.without.is_empty() {
+            return Ok(tree.iter().collect());
+        }
+        let window = |title: &str| -> Vec<u64> {
+            tree.iter()
+                .filter(|n| n.role == "Window" && n.label.as_deref() == Some(title))
+                .map(|n| n.id)
+                .collect()
+        };
+        let parents: HashMap<u64, u64> = tree
+            .iter()
+            .filter_map(|n| n.parent.map(|p| (n.id, p)))
+            .collect();
+        let under = |node: u64, roots: &[u64]| {
+            let mut at = parents.get(&node).copied();
+            while let Some(p) = at {
+                if roots.contains(&p) {
+                    return true;
+                }
+                at = parents.get(&p).copied();
+            }
+            false
+        };
+        if let Some(title) = &self.within {
+            let roots = window(title);
+            if roots.is_empty() {
+                return Err(format!("the window \"{title}\" is not in the tree"));
+            }
+            return Ok(tree.iter().filter(|n| under(n.id, &roots)).collect());
+        }
+        let roots: Vec<u64> = self.without.iter().flat_map(|t| window(t)).collect();
+        Ok(tree
+            .iter()
+            .filter(|n| !roots.contains(&n.id) && !under(n.id, &roots))
+            .collect())
+    }
 }
 
 /// The events of one frame, and the modifiers held during it.
@@ -131,29 +206,32 @@ impl egui::Plugin for UiInput {
     }
 
     fn input_hook(&mut self, ctx: &Context, input: &mut RawInput) {
-        if input.viewport_id != ViewportId::ROOT {
-            return;
-        }
+        let viewport = input.viewport_id;
         let s = shared(ctx);
         let Ok(mut s) = s.lock() else {
             return;
         };
-        if let Some(b) = s.queue.pop_front() {
-            if let Some(m) = b.modifiers {
-                input.events.push(Event::ModifiersChanged(m));
+        let queue = s.queues.get_mut(&viewport);
+        let more = match queue {
+            Some(q) => {
+                if let Some(b) = q.pop_front() {
+                    if let Some(m) = b.modifiers {
+                        input.events.push(Event::ModifiersChanged(m));
+                    }
+                    input.events.extend(b.events);
+                }
+                !q.is_empty()
             }
-            input.events.extend(b.events);
-        }
-        if !s.queue.is_empty() || s.want_tree {
-            ctx.request_repaint();
+            None => false,
+        };
+        if more || s.want_tree {
+            ctx.request_repaint_of(viewport);
         }
     }
 
     fn on_end_pass(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
-        if ctx.viewport_id() != ViewportId::ROOT {
-            return;
-        }
+        let viewport = ctx.viewport_id();
         let s = shared(&ctx);
         let Ok(mut s) = s.lock() else {
             return;
@@ -196,7 +274,7 @@ impl egui::Plugin for UiInput {
             })
         });
         if let Some(nodes) = nodes {
-            s.tree = Some((pass, nodes));
+            s.trees.insert(viewport, (pass, nodes));
         }
     }
 }
@@ -219,6 +297,8 @@ pub(crate) struct Request {
     pub role: Option<String>,
     /// Which of several matching nodes, in reading order, from 0.
     pub nth: Option<usize>,
+    /// The application window it is for (the main window without).
+    pub window: Option<String>,
 }
 
 impl Request {
@@ -251,6 +331,7 @@ impl Request {
                 .get("nth")
                 .and_then(Json::as_u64)
                 .and_then(|n| usize::try_from(n).ok()),
+            window: s("window"),
         };
         if r.needs_node() && r.label.is_none() && r.role.is_none() {
             return Err("name the node: `label`, `role` or both".into());
@@ -279,19 +360,25 @@ impl Request {
         }
     }
 
-    /// Answers on `tree`: the result of `tree`, or the batches an action
-    /// queues and the result to give once they went in.
-    pub(crate) fn on_tree(&self, tree: &[UiNode]) -> Result<(Vec<Batch>, Json), String> {
-        let hits: Vec<&UiNode> = tree
-            .iter()
+    /// Answers on `tree`, read within `scope`: the result of `tree`, or
+    /// the batches an action queues and the result to give once they
+    /// went in.
+    pub(crate) fn on_tree(
+        &self,
+        tree: &[UiNode],
+        scope: &Scope,
+    ) -> Result<(Vec<Batch>, Json), String> {
+        if let Action::Key(m, k) = &self.action {
+            return Ok((key_batches(*m, *k), json!({ "key": format!("{k:?}") })));
+        }
+        let hits: Vec<&UiNode> = scope
+            .nodes(tree)?
+            .into_iter()
             .filter(|n| n.matches(self.label.as_deref(), self.role.as_deref()))
             .collect();
         if self.action == Action::Tree {
             let nodes: Vec<Json> = hits.iter().map(|n| n.to_json()).collect();
             return Ok((Vec::new(), json!({ "count": nodes.len(), "nodes": nodes })));
-        }
-        if let Action::Key(m, k) = &self.action {
-            return Ok((key_batches(*m, *k), json!({ "key": format!("{k:?}") })));
         }
         let node = match (hits.as_slice(), self.nth) {
             (_, Some(i)) => {
@@ -450,28 +537,78 @@ mod tests {
             label: label.map(String::from),
             role: role.map(String::from),
             nth: None,
+            window: None,
         };
-        let (b, r) = click(Some("OK"), None).on_tree(&tree).unwrap();
+        let root = Scope::viewport(ViewportId::ROOT);
+        let (b, r) = click(Some("OK"), None).on_tree(&tree, &root).unwrap();
         assert_eq!(b.len(), 3);
         assert_eq!(r["node"]["id"], 1);
         assert!(
             click(None, Some("button"))
-                .on_tree(&tree)
+                .on_tree(&tree, &root)
                 .unwrap_err()
                 .contains("2 nodes")
         );
-        assert!(click(Some("Nope"), None).on_tree(&tree).is_err());
+        assert!(click(Some("Nope"), None).on_tree(&tree, &root).is_err());
         let tree_req = Request {
             action: Action::Tree,
             label: None,
             role: Some("BUTTON".into()),
             nth: None,
+            window: None,
         };
         let mut second = click(None, Some("Button"));
         second.nth = Some(1);
-        assert!(second.on_tree(&tree).is_ok());
+        assert!(second.on_tree(&tree, &root).is_ok());
         second.nth = Some(2);
-        assert!(second.on_tree(&tree).unwrap_err().contains("2 match"));
-        assert_eq!(tree_req.on_tree(&tree).unwrap().1["count"], 2);
+        assert!(
+            second
+                .on_tree(&tree, &root)
+                .unwrap_err()
+                .contains("2 match")
+        );
+        assert_eq!(tree_req.on_tree(&tree, &root).unwrap().1["count"], 2);
+    }
+
+    #[test]
+    fn a_scope_reads_one_embedded_window_or_the_main_one_without_them() {
+        let child = |id, parent, role: &str, label: &str| UiNode {
+            parent: Some(parent),
+            ..node(id, role, label)
+        };
+        let tree = vec![
+            node(1, "Window", "Main"),
+            child(2, 1, "Button", "OK"),
+            child(3, 1, "Window", "Second"),
+            child(4, 3, "GenericContainer", ""),
+            child(5, 4, "Button", "OK"),
+        ];
+        let ids =
+            |s: &Scope| -> Vec<u64> { s.nodes(&tree).unwrap().iter().map(|n| n.id).collect() };
+        let second = Scope {
+            within: Some("Second".into()),
+            ..Scope::viewport(ViewportId::ROOT)
+        };
+        assert_eq!(ids(&second), [4, 5]);
+        let main = Scope {
+            without: vec!["Second".into()],
+            ..Scope::viewport(ViewportId::ROOT)
+        };
+        assert_eq!(ids(&main), [1, 2]);
+        let click = Request::from_params(&json!({ "action": "click", "label": "OK" })).unwrap();
+        assert!(
+            click
+                .on_tree(&tree, &Scope::viewport(ViewportId::ROOT))
+                .is_err()
+        );
+        assert_eq!(click.on_tree(&tree, &second).unwrap().1["node"]["id"], 5);
+        assert_eq!(click.on_tree(&tree, &main).unwrap().1["node"]["id"], 2);
+        let gone = Scope {
+            within: Some("Third".into()),
+            ..Scope::viewport(ViewportId::ROOT)
+        };
+        assert!(click.on_tree(&tree, &gone).unwrap_err().contains("Third"));
+        let w = Request::from_params(&json!({ "action": "tree", "window": "second" })).unwrap();
+        assert_eq!(w.window.as_deref(), Some("second"));
     }
 }
