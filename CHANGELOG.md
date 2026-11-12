@@ -8,6 +8,49 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.10.1 (2026-11-12)
+
+Published: egui-pop-api 0.9.2, egui-pop-i18n 0.9.1, egui-pop 0.10.1.
+
+### Features
+
+- egui-pop, egui-pop-api, egui-pop-i18n: The Settings app has two panes. On the left, a tree lists the scopes
+  (General, Interface, Input, and those plugins add) with their sections
+  nested under each; it replaces the tabs on top, which ran off a narrow
+  window and pushed the page past its right edge. On the right, the
+  section's page wraps to the width it gets. The divider between them is
+  dragged, or moved with its arrow keys (Enter or a double click gives
+  the default back), and its width is kept across reopens and runs
+  (`admin::NAV_WIDTH`, `admin::nav_width`, `admin::want_nav_width`). The
+  search sits above the tree; the arrow keys moving through the tree show
+  the page they land on.
+- egui-pop, egui-pop-api: A window moved into the main window can go back. When the main window
+  is closed while another window is open, that window's content moves into
+  it, as before; now raising the main window (`AppHandle::raise_window`
+  with `WindowId::main()`, or `window.switch { "window": "main" }`, which
+  accepts `main` meanwhile) sends that content back to a window of its own
+  (its id, title, saved geometry and keys) and draws the application's
+  shell in the main window again, with its title. The journal says
+  `window.moved` (`to` the window's own id) and `window.opened` (`main`).
+  `AppHandle::main_window` names the main window's own id whatever it
+  shows.
+
+  `AppHandle::quit` quits the application: the main window closes and the
+  other windows with it, none moving into the main window. `app.quit`
+  (File > Quit, Ctrl+Q) uses it, so quitting from another window ends the
+  application instead of moving that window into the main one.
+  `AppHandle::quitting` tells whether a quit is under way.
+
+### Fixes
+
+- egui-pop-api: The file browser's carousel follows the thumbnail size control: the
+  entry in the middle takes that size, made smaller only when its cell
+  would not fit the room. Its neighbours are spaced by the width each
+  cell really takes at its own size (`EntryDrawer::cell_size`), so a
+  drawer whose cells are wider than their thumbnails (a frame, a least
+  width for a long name) no longer draws the middle cell over them.
+- egui-pop, egui-pop-api: A click anywhere on a folded side bar's strip unfolds it, not only on its grip, and the resize cursor shows only on the band at its edge (egui_stack 0.25.9 is required).
+
 ## 0.10.0 (2026-11-12)
 
 Published: egui-pop-core 0.9.1, egui-pop-api 0.9.1, egui-pop-test 0.10.0, egui-pop-agent 0.4.0, egui-pop 0.10.0.
