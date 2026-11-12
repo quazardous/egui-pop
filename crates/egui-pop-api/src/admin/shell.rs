@@ -1,6 +1,8 @@
 //! The administration app's shell: the full page (an overlay of the main
-//! window, or a window of its own), the scope tabs and search on top, the
-//! sections on the left, the page generated from the section's nodes.
+//! window, or a window of its own), the search on top, a tree of the
+//! scopes and their sections on the left, a divider the user drags, and
+//! the page generated from the section's nodes on the right, wrapping to
+//! the width it gets.
 //! Every brick is one of egui-pop's widgets: selectable rows, the
 //! settings' editors (`param`), combo boxes, indicators, buttons.
 
@@ -21,8 +23,8 @@ use egui_pop_model::admin::hooks::Values;
 use egui_pop_model::admin::layers::ValueScope;
 use egui_pop_model::admin::{
     Action, ActionStyle, CellKind, Column, Field, FieldKind, Item, RecordSource, Records, RowField,
-    Section, StatusSource, Tone, Tree, cell_text, form_context, holds, meter_share, row_context,
-    template, tone_named,
+    Scope, Section, StatusSource, Tone, Tree, cell_text, form_context, holds, meter_share,
+    row_context, template, tone_named,
 };
 use egui_pop_model::fuzzy;
 use egui_pop_model::ids::{CommandId, SettingId};
@@ -107,7 +109,7 @@ pub(super) fn show(ui: &mut Ui, app: &AppHandle) {
     }
 }
 
-/// The page: tabs and search, the sections, the section's page. `true`
+/// The page: the search, the tree, the divider, the section's page. `true`
 /// to close.
 fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
     let _history = values::enter_history(&egui_pop_model::history::SETTINGS);
@@ -161,26 +163,30 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
                 .clone();
             section = None;
         }
-        // The tab row: the scopes, then the search, pop out and close.
+        // The tree's width: the kept one, or the one being dragged, held
+        // to the room there is (the page keeps its minimum).
+        let gap = t.space.m;
+        let room = ui.available_width();
+        let max_nav = (room - gap - PAGE_MIN_WIDTH).max(NAV_MIN_WIDTH);
+        let live = egui::Id::unique("egui_pop.admin.nav_width");
+        let kept = ctx
+            .data(|d| d.get_temp::<f32>(live))
+            .unwrap_or_else(|| super::nav_width(app));
+        let mut nav_width = kept.clamp(NAV_MIN_WIDTH, max_nav);
+        // The top row: the search, above the tree and as wide, then pop out
+        // and close.
         let mut window = in_window(app);
         ui.horizontal(|ui| {
-            let tabs = ui
-                .horizontal(|ui| {
-                    for s in &scopes {
-                        let selected = filter.is_empty() && s.meta.id == scope;
-                        let r = ui.add(widgets::SelectableRow::new(
-                            selected,
-                            scope_title(&ctx, &s.meta.id, &s.meta.title),
-                        ));
-                        if r.clicked() {
-                            scope = s.meta.id.clone();
-                            section = None;
-                            filter.clear();
-                        }
-                    }
-                })
-                .response;
-            a11y::name(&tabs, Role::TabList, &strings::tr(&ctx, &txt::ADMIN_SCOPES));
+            let hint = strings::tr(&ctx, &txt::ADMIN_SEARCH_HINT);
+            let r = ui.add(
+                egui::TextEdit::singleline(&mut filter)
+                    .hint_text(&hint)
+                    .desired_width((nav_width - ui.spacing().button_padding.x * 2.0).max(0.0)),
+            );
+            a11y::name(&r, Role::SearchInput, &hint);
+            if ui.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::F)) {
+                r.request_focus();
+            }
             ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                 let r = ui.button(strings::tr(&ctx, &txt::ADMIN_CLOSE));
                 if r.clicked() {
@@ -203,16 +209,6 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
                         &super::WINDOW,
                         serde_json::json!(window),
                     );
-                }
-                let hint = strings::tr(&ctx, &txt::ADMIN_SEARCH_HINT);
-                let r = ui.add(
-                    egui::TextEdit::singleline(&mut filter)
-                        .hint_text(&hint)
-                        .desired_width(240.0),
-                );
-                a11y::name(&r, Role::SearchInput, &hint);
-                if ui.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::F)) {
-                    r.request_focus();
                 }
             });
         });
@@ -242,70 +238,74 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
         admin.watch(app, &patterns);
         let height = ui.available_height();
         ui.horizontal_top(|ui| {
-            // The left panel: the scope's sections, or the hits.
-            let nav = ui
-                .vertical(|ui| {
-                    ui.set_width(220.0);
+            // The left pane: the scopes with their sections nested, or the
+            // hits; it scrolls on its own.
+            let nav_name = strings::tr(&ctx, &txt::ADMIN_SECTIONS);
+            ui.allocate_ui_with_layout(
+                egui::vec2(nav_width, height),
+                egui::Layout::top_down(Align::Min),
+                |ui| {
+                    ui.set_width(nav_width);
                     ui.set_min_height(height);
-                    if query.is_empty() {
-                        for s in &sections {
-                            let cx = form_context(app.when_context(), &values_of(app, &entries, s));
-                            if !holds(s.meta.when.as_deref(), &cx) {
-                                continue;
-                            }
-                            let n = modified(app, admin, &entries, s);
-                            let mut title = section_title(&ctx, app, &entries, s);
-                            if n > 0 {
-                                title = format!("{title}  ({n})");
-                            }
-                            let selected = current.as_deref() == Some(s.meta.id.as_str());
-                            let r = ui.add(widgets::SelectableRow::new(selected, title));
-                            if r.clicked() {
-                                section = Some(s.meta.id.clone());
-                            }
-                        }
-                    } else {
-                        // Each section found, then the items found in it:
-                        // choosing one lands on it.
-                        for (s, list) in &found {
-                            let mut title = format!(
-                                "{} › {}",
-                                scope_title_of(&ctx, &tree, &s.scope),
-                                section_title(&ctx, app, &entries, s)
-                            );
-                            if !list.is_empty() {
-                                title = format!("{title}  ({})", list.len());
-                            }
-                            let mut chosen = ui
-                                .add(widgets::SelectableRow::new(false, title))
-                                .clicked()
-                                .then_some(None);
-                            for h in list.iter().take(NAV_HITS) {
-                                let r = ui
-                                    .horizontal(|ui| {
-                                        ui.add_space(t.space.l);
-                                        ui.add(widgets::SelectableRow::new(
-                                            false,
-                                            h.title(&ctx, &entries),
-                                        ))
-                                    })
-                                    .inner;
-                                if r.clicked() {
-                                    chosen = Some(Some(h.key().to_string()));
-                                }
-                            }
-                            if let Some(key) = chosen {
-                                scope = s.scope.clone();
-                                section = Some(s.meta.id.clone());
-                                filter.clear();
-                                landed = key;
-                            }
-                        }
-                    }
-                })
-                .response;
-            a11y::name(&nav, Role::Tree, &strings::tr(&ctx, &txt::ADMIN_SECTIONS));
-            ui.separator();
+                    ui.scope_builder(
+                        egui::UiBuilder::new()
+                            .accessibility_role(Role::Tree)
+                            .accessibility_label(nav_name),
+                        |ui| {
+                            egui::ScrollArea::vertical()
+                                .id_salt("egui_pop.admin.nav")
+                                .auto_shrink([false, false])
+                                .max_height(height)
+                                .show(ui, |ui| {
+                                    let width = (nav_width - ui.spacing().scroll.allocated_width())
+                                        .max(0.0);
+                                    ui.set_max_width(width);
+                                    if query.is_empty() {
+                                        nav_tree(
+                                            ui,
+                                            app,
+                                            admin,
+                                            &entries,
+                                            &tree,
+                                            &scopes,
+                                            &mut scope,
+                                            &mut section,
+                                            current.as_deref(),
+                                        );
+                                    } else {
+                                        nav_hits(
+                                            ui,
+                                            app,
+                                            &entries,
+                                            &tree,
+                                            &found,
+                                            &mut scope,
+                                            &mut section,
+                                            &mut filter,
+                                            &mut landed,
+                                        );
+                                    }
+                                });
+                        },
+                    );
+                },
+            );
+            // The divider: dragged, or moved by its arrow keys; double
+            // click or Enter gives the default back. Kept once let go.
+            let (rect, _) = ui.allocate_exact_size(egui::vec2(gap, height), egui::Sense::hover());
+            let id = egui::Id::unique("egui_pop.admin.splitter");
+            let name = strings::tr(&ctx, &txt::ADMIN_NAV_RESIZE);
+            let r =
+                widgets::Splitter::new(id, &name, NAV_MIN_WIDTH, max_nav, super::NAV_WIDTH_DEFAULT)
+                    .show(ui, rect, &mut nav_width);
+            if r.dragged() {
+                ctx.data_mut(|d| d.insert_temp(live, nav_width));
+            } else if r.changed() || r.drag_stopped() {
+                ctx.data_mut(|d| d.remove::<f32>(live));
+                if nav_width != super::nav_width(app) {
+                    super::want_nav_width(app, nav_width);
+                }
+            }
             // The page's width, kept: nothing in it pushes its right edge
             // out (rows wrap, their controls stay inside).
             let width = ui.available_width();
@@ -404,6 +404,122 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
         }
     });
     close
+}
+
+/// The narrowest the tree of sections gets.
+const NAV_MIN_WIDTH: f32 = 140.0;
+
+/// The room the divider leaves the page at least, when there is room.
+const PAGE_MIN_WIDTH: f32 = 240.0;
+
+/// The tree: each scope, its sections nested under it (those whose
+/// `when` holds). Choosing a scope shows its first section; the arrow
+/// keys moving the focus along the tree show the page they land on.
+#[allow(clippy::too_many_arguments)]
+fn nav_tree(
+    ui: &mut Ui,
+    app: &AppHandle,
+    admin: &Admin,
+    entries: &[SettingEntry],
+    tree: &Tree,
+    scopes: &[&Scope],
+    scope: &mut String,
+    section: &mut Option<String>,
+    current: Option<&str>,
+) {
+    let ctx = ui.ctx().clone();
+    let t = Tokens::of(&ctx);
+    let shown_scope = scope.clone();
+    let arrow = ui.input(|i| i.key_pressed(Key::ArrowDown) || i.key_pressed(Key::ArrowUp));
+    let mut chosen: Option<(String, Option<String>)> = None;
+    for sc in scopes {
+        let id = &sc.meta.id;
+        let sections: Vec<&Section> = tree
+            .sections_of(id)
+            .into_iter()
+            .filter(|s| {
+                let cx = form_context(app.when_context(), &values_of(app, entries, s));
+                holds(s.meta.when.as_deref(), &cx)
+            })
+            .collect();
+        let selected = *id == shown_scope && sections.is_empty();
+        let r = ui.add(
+            widgets::SelectableRow::new(selected, scope_title(&ctx, id, &sc.meta.title)).wrap(),
+        );
+        if r.clicked() || (arrow && r.gained_focus()) {
+            chosen = Some((id.clone(), None));
+        }
+        for s in sections {
+            let n = modified(app, admin, entries, s);
+            let mut title = section_title(&ctx, app, entries, s);
+            if n > 0 {
+                title = format!("{title}  ({n})");
+            }
+            let selected = *id == shown_scope && current == Some(s.meta.id.as_str());
+            let r = ui
+                .horizontal(|ui| {
+                    ui.add_space(t.space.l);
+                    ui.add(widgets::SelectableRow::new(selected, title).wrap())
+                })
+                .inner;
+            if r.clicked() || (arrow && r.gained_focus()) {
+                chosen = Some((id.clone(), Some(s.meta.id.clone())));
+            }
+        }
+    }
+    if let Some((sc, sec)) = chosen {
+        *scope = sc;
+        *section = sec;
+    }
+}
+
+/// The search's hits in the left pane: each section found, then the
+/// items found in it; choosing one lands on it.
+#[allow(clippy::too_many_arguments)]
+fn nav_hits(
+    ui: &mut Ui,
+    app: &AppHandle,
+    entries: &[SettingEntry],
+    tree: &Tree,
+    found: &[(&Section, Vec<Hit>)],
+    scope: &mut String,
+    section: &mut Option<String>,
+    filter: &mut String,
+    landed: &mut Option<String>,
+) {
+    let ctx = ui.ctx().clone();
+    let t = Tokens::of(&ctx);
+    for (s, list) in found {
+        let mut title = format!(
+            "{} › {}",
+            scope_title_of(&ctx, tree, &s.scope),
+            section_title(&ctx, app, entries, s)
+        );
+        if !list.is_empty() {
+            title = format!("{title}  ({})", list.len());
+        }
+        let mut chosen = ui
+            .add(widgets::SelectableRow::new(false, title).wrap())
+            .clicked()
+            .then_some(None);
+        for h in list.iter().take(NAV_HITS) {
+            let r = ui
+                .horizontal(|ui| {
+                    ui.add_space(t.space.l);
+                    ui.add(widgets::SelectableRow::new(false, h.title(&ctx, entries)).wrap())
+                })
+                .inner;
+            if r.clicked() {
+                chosen = Some(Some(h.key().to_string()));
+            }
+        }
+        if let Some(key) = chosen {
+            *scope = s.scope.clone();
+            *section = Some(s.meta.id.clone());
+            filter.clear();
+            *landed = key;
+        }
+    }
 }
 
 /// A scope's title as shown: the generated ones translated.

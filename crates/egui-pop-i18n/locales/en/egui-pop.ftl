@@ -59,7 +59,7 @@ command-admin-close =
     .title = Close settings
 
 command-admin-open =
-    .description = Every setting as full pages: families on top, sections on the side, one search.
+    .description = Every setting as full pages: families and their sections in a tree on the side, one search.
     .title = Settings
 
 command-admin-popOut =
@@ -1165,6 +1165,7 @@ egui-pop-admin-section-advanced = Advanced
 egui-pop-admin-section-gestures = Pointer gestures
 
 egui-pop-admin-sections = Sections
+egui-pop-admin-nav-resize = Resize the sections
 
 egui-pop-admin-set-for = Set for
 

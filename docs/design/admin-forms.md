@@ -4,7 +4,7 @@ Status: **accepted** (2026-11-08), with the recommendations of section 8
 (Q1 to Q10). Slice 1 is built: the model (`egui_pop_model::admin`:
 manifests, value scopes, hooks, argument templates, the settings'
 generated pages) and the shell (`egui_pop_api::admin`, `AdminPlugin`:
-overlay and pop out, scope tabs, sections, search, rows with a modified
+overlay and pop out, scopes and sections in a resizable tree, search, rows with a modified
 bar, an origin tag, reset and "Set for", deep links, commands `admin.*`,
 the `admin` collector), shown in the gallery's Settings page.
 
@@ -149,6 +149,10 @@ The owner's rules, all binding:
 1. One administration app for every non-photo surface.
 2. Two navigation axes: **horizontal** for the scope or family (tabs with
    icons), **vertical** for the sections and names (a left panel).
+   Changed by the owner on 2026-11-12: the tabs ran off a narrow window
+   and pushed the page past its right edge, so the scopes moved into the
+   left panel, a tree with each scope's sections nested under it, and a
+   divider the user drags sets its width (kept across runs).
 3. **Full page**: an overlay of the main window, or a separate system
    window that can go full screen.
 4. **Components never draw their own widgets.** They declare a contract,
@@ -332,7 +336,7 @@ with its reason otherwise). A node's **path** is its ids joined by `/`.
 | Kind | Holds | Renders as | Notes |
 |---|---|---|---|
 | **app** | scopes | the administration shell (section 5.1) | One per application; plugins add to it. |
-| **scope** | sections | a tab with an icon on the horizontal axis | Settings, Storage, Backup… (section 6). |
+| **scope** | sections | a top-level entry of the left tree (a tab on top until 2026-11-12) | Settings, Storage, Backup… (section 6). |
 | **section** | groups and nodes | an entry of the left panel, and the page shown | One level of nesting below (sub-sections), no deeper. |
 | **group** | nodes | a heading and a block on the page, collapsible | Listed under the active section in the left panel as anchors. |
 | **field** | a value | a row: label, control, help, modified marker, reset | Its kind is one of the bricks (section 4.1). Bound to the store or to a task's draft. |

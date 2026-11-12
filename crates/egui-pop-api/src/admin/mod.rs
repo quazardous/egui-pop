@@ -7,8 +7,11 @@
 //! - **Full page**: an overlay of the whole main window, or "Pop out" to
 //!   a window of its own; the mode used last is remembered (the
 //!   `admin.window` setting).
-//! - **Two axes**: the scopes as tabs on top, the scope's sections in a
-//!   left panel; a search at the end of the tab row searches every scope.
+//! - **Two panes**: on the left, a tree of the scopes with their
+//!   sections nested under them; on the right, the section's page, which
+//!   wraps to the width it gets. The divider between them is dragged (or
+//!   moved by its arrow keys) and its width kept ([`NAV_WIDTH`]). The
+//!   search above the tree searches every scope.
 //! - **Rows**: each setting's editor, a modified bar, an origin tag
 //!   (`library`, `workspace`, `command line`), its reset (of the layer
 //!   shown), and a "Set for" menu when it may be set in several value
@@ -649,6 +652,36 @@ pub fn is_open(app: &AppHandle) -> bool {
     app.service(&ADMIN).is_some_and(|a| a.is_open())
 }
 
+/// Where the width of the tree of sections is kept, in points (dragged,
+/// not typed: no setting of its own in the settings).
+pub const NAV_WIDTH: &str = "settings/admin.nav_width";
+
+/// The tree's width when none is kept.
+pub const NAV_WIDTH_DEFAULT: f32 = 220.0;
+
+/// The width of the tree of sections, as kept (the room in the page may
+/// hold it smaller).
+pub fn nav_width(app: &AppHandle) -> f32 {
+    lock(&app.store())
+        .get(NAV_WIDTH)
+        .and_then(|e| e.value.as_f64())
+        .map_or(NAV_WIDTH_DEFAULT, |w| w as f32)
+}
+
+/// Keeps the width of the tree of sections.
+pub fn want_nav_width(app: &AppHandle, width: f32) {
+    let set = Set::new(
+        NAV_WIDTH,
+        Change::To(Value::Float(f64::from(width))),
+        Origin::User,
+    )
+    .by(&OwnerId::FRAMEWORK)
+    .untracked();
+    if let Err(e) = lock(&app.store()).set(set) {
+        log::warn!(target: "egui_pop", "{NAV_WIDTH}: {e:?}");
+    }
+}
+
 /// Whether it opens in a window of its own.
 pub fn in_window(app: &AppHandle) -> bool {
     app.setting::<bool>(&WINDOW).unwrap_or(false)
@@ -706,11 +739,23 @@ impl Plugin for AdminPlugin {
                 "Opens the settings in a window of their own rather than over the main window.",
             ),
         )?;
+        lock(&ctx.app().store())
+            .declare(
+                ctx.owner(),
+                NAV_WIDTH,
+                Descriptor::float(
+                    "Settings sections width",
+                    0.0,
+                    4096.0,
+                    f64::from(NAV_WIDTH_DEFAULT),
+                ),
+            )
+            .map_err(|e| PluginError::Failed(format!("{NAV_WIDTH}: {e:?}")))?;
         ctx.command(
             CommandSpec::new(CMD_OPEN, "Settings", "File")
                 .icon("settings")
                 .description(
-                    "Every setting as full pages: families on top, sections on the side, one search.",
+                    "Every setting as full pages: families and their sections in a tree on the side, one search.",
                 )
                 .args(json!({ "path": "", "key": "", "mode": "", "wizard": "" })),
             |call| {
