@@ -17,7 +17,9 @@ use egui::{
     Color32, CornerRadius, FontFamily, FontId, Painter, Rect, Shadow, Stroke, StrokeKind, Vec2,
     pos2, vec2,
 };
-use egui_stack::layout::{FlyoutPaint, LayoutPainter, SashPaint, Shown, StripPaint};
+use egui_stack::layout::{
+    FlyoutPaint, LayoutPainter, SashPaint, Shown, SnapGuidePaint, SnapKind, StripPaint,
+};
 use egui_stack::toolbar::ToolKind;
 use egui_stack::{
     DockPainter, DropButtonPaint, DropPaint, DropTargetPaint, PartState, SectionBandPaint,
@@ -38,11 +40,39 @@ use crate::theme::{TextRole, Tokens};
 /// while dragged (`active`), from `side-area.hover.border-width`,
 /// `side-area.hover.border-color` and their `active` twins. A state whose
 /// tokens say nothing is drawn with egui's widget stroke, as before the
-/// tokens existed ([`Kit::area_line_stroke`]).
+/// tokens existed ([`Kit::area_line_stroke`]). The guide shown while a
+/// side area's line is dragged far enough to fold the area on release
+/// (`fold`) takes `side-area.fold.border-width` and `border-color`
+/// ([`Kit::fold_guide_stroke`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct AreaLineKit {
     pub hover: AreaLineState,
     pub active: AreaLineState,
+    pub fold: FoldGuide,
+}
+
+/// The fold guide's terms, from `side-area.fold.border-width` and
+/// `side-area.fold.border-color`: each one the theme leaves out keeps
+/// egui_stack's guide stroke (`LayoutStyle::snap_guide`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FoldGuide {
+    /// The guide's width in points; 0: no guide.
+    pub width: Option<f32>,
+    /// The guide's colour.
+    pub color: Option<Color32>,
+}
+
+impl FoldGuide {
+    /// The guide's stroke, `default`'s terms where the theme says nothing;
+    /// none when it is 0 wide or transparent.
+    fn stroke(self, default: Stroke, ppp: f32) -> Option<Stroke> {
+        let stroke = Stroke::new(
+            self.width
+                .map_or(default.width, |w| crate::scale::snap(w.max(0.0), ppp)),
+            self.color.unwrap_or(default.color),
+        );
+        (stroke.width > 0.0 && stroke.color.a() > 0).then_some(stroke)
+    }
 }
 
 /// The line between two areas in one state.
@@ -90,6 +120,10 @@ impl AreaLineKit {
         AreaLineKit {
             hover: read(State::HOVER, "hover"),
             active: read(State::ACTIVE, "active"),
+            fold: FoldGuide {
+                width: t.resolved().dimension("side-area.fold.border-width"),
+                color: t.color("side-area.fold.border-color"),
+            },
         }
     }
 }
@@ -259,6 +293,50 @@ impl Kit {
         (stroke.width > 0.0 && stroke.color.a() > 0).then_some(stroke)
     }
 
+    /// The free edge of an area lying over the centre, the edge that
+    /// resizes it, while hovered, focused or dragged: the line between two
+    /// areas in that state ([`Kit::paint_area_line`]), only when the kit
+    /// gives the state's tokens (`side-area.hover.border-*`,
+    /// `side-area.active.border-*`). Without them, and at rest, nothing:
+    /// the area's frame is its border, as before the tokens existed.
+    /// `inward` points from the edge into the area lying over.
+    pub fn paint_over_edge(&self, painter: &Painter, edge: &SashPaint<'_>, inward: Vec2) {
+        let flags = edge.state;
+        let line = if flags.contains(PartState::DRAGGED) {
+            self.area_line.active
+        } else if flags.contains(PartState::HOVERED) || flags.contains(PartState::FOCUSED) {
+            self.area_line.hover
+        } else {
+            return;
+        };
+        if matches!(line, AreaLineState::Line { .. }) {
+            self.paint_area_line(painter, edge, inward);
+        }
+    }
+
+    /// The stroke of the guide shown while a line between two areas is
+    /// dragged far enough to fold its area on release (`SnapKind::Fold`):
+    /// `side-area.fold.border-width` and `border-color`, each one the kit
+    /// leaves out taken from `default` (egui_stack's
+    /// `LayoutStyle::snap_guide`). None when the width is 0.
+    pub fn fold_guide_stroke(&self, default: Stroke, ppp: f32) -> Option<Stroke> {
+        self.area_line.fold.stroke(default, ppp)
+    }
+
+    /// A guide line while a line between two areas is dragged: the fold
+    /// guide from the kit ([`Kit::fold_guide_stroke`]), the others as
+    /// egui_stack draws them (`LayoutStyle::snap_guide`).
+    pub fn paint_snap_guide(&self, painter: &Painter, guide: &SnapGuidePaint<'_>) {
+        let default = guide.style.snap_guide;
+        let stroke = match guide.kind {
+            SnapKind::Fold => self.fold_guide_stroke(default, painter.pixels_per_point()),
+            _ => Some(default),
+        };
+        if let Some(stroke) = stroke {
+            painter.line_segment(guide.line, stroke);
+        }
+    }
+
     /// A folded area's strip (`area-strip`): its box, the line on the side
     /// facing the centre (`inner`), and the drag-handle glyph near its top.
     pub fn paint_area_strip(&self, painter: &Painter, rect: Rect, state: State, inner: Side) {
@@ -297,6 +375,14 @@ impl Kit {
 impl LayoutPainter for Kit {
     fn sash(&self, painter: &Painter, sash: &SashPaint<'_>) {
         self.paint_area_line(painter, sash, Vec2::ZERO);
+    }
+
+    fn snap_guide(&self, painter: &Painter, guide: &SnapGuidePaint<'_>) {
+        self.paint_snap_guide(painter, guide);
+    }
+
+    fn over_edge(&self, painter: &Painter, edge: &SashPaint<'_>) {
+        self.paint_over_edge(painter, edge, Vec2::ZERO);
     }
 
     fn strip(&self, painter: &Painter, strip: &StripPaint<'_>) {

@@ -48,7 +48,7 @@ mod source;
 mod tone;
 mod window;
 
-pub use dock::{AreaLineKit, AreaLineState};
+pub use dock::{AreaLineKit, AreaLineState, FoldGuide};
 pub use drag::DragCursorKit;
 pub use glyph::{Glyph, Glyphs};
 
@@ -1426,6 +1426,42 @@ mod tests {
         assert_eq!(
             s(&kit, drag),
             Some(Stroke::new(3.0, w.active.fg_stroke.color))
+        );
+    }
+
+    #[test]
+    fn the_fold_guide_comes_from_tokens_else_from_egui_stack() {
+        let default = Stroke::new(1.0, Color32::BLUE);
+        let kit = Kit::compile(&Tokens::default(), &Shapes::default());
+        assert_eq!(kit.fold_guide_stroke(default, 1.0), Some(default));
+        let fold = |body: &str| {
+            let t = tokens_with(&format!(
+                r##"{{"$extends": "pop-dark", "side-area": {{"fold": {{{body}}}}}}}"##
+            ));
+            let kit = Kit::compile(&t, &Shapes::default());
+            assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+            kit.fold_guide_stroke(default, 1.0)
+        };
+        let width = |w: u32| {
+            format!(
+                r#""border-width": {{"$type": "dimension", "$value": {{"value": {w}, "unit": "px"}}}}"#
+            )
+        };
+        let red = r##""border-color": {"$type": "color", "$value": "#ff0000"}"##;
+        assert_eq!(fold(&width(0)), None, "width 0: no guide");
+        assert_eq!(
+            fold(red),
+            Some(Stroke::new(1.0, Color32::RED)),
+            "a colour alone keeps the width"
+        );
+        assert_eq!(
+            fold(&width(3)),
+            Some(Stroke::new(3.0, Color32::BLUE)),
+            "a width alone keeps the colour"
+        );
+        assert_eq!(
+            fold(&format!("{}, {red}", width(2))),
+            Some(Stroke::new(2.0, Color32::RED))
         );
     }
 
