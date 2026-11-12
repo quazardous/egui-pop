@@ -6,7 +6,11 @@
 //!
 //! - **Full page**: an overlay of the whole main window, or "Pop out" to
 //!   a window of its own; the mode used last is remembered (the
-//!   `admin.window` setting).
+//!   `admin.window` setting). The window is an application window
+//!   ([`crate::windows`], id [`APP_WINDOW`]): it repaints on its own, gets
+//!   the application's title bar, keeps its size and place, and closing
+//!   the main window while it is open moves it into the main window.
+//!   Where the backend has no windows of its own, the overlay.
 //! - **Two panes**: on the left, a tree of the scopes with their
 //!   sections nested under them; on the right, the section's page, which
 //!   wraps to the width it gets. The divider between them is dragged (or
@@ -91,6 +95,11 @@ pub const CMD_RESET: CommandId = CommandId::from_static("admin.reset");
 /// Whether it opens in a window of its own: the mode used last.
 pub const WINDOW: SettingId = SettingId::from_static("admin.window");
 
+/// The id of its application window ([`crate::windows`]), in the window
+/// mode: `appWindow == 'settings'` in `when` clauses, `window: "settings"`
+/// for agents, its size and place kept under it.
+pub const APP_WINDOW: &str = "settings";
+
 /// The service.
 pub const ADMIN: ServiceToken<Admin> = ServiceToken::new("admin");
 
@@ -126,6 +135,8 @@ struct State {
     filter: String,
     /// The value scope a row writes to, when its "Set for" menu chose.
     target: BTreeMap<String, ValueScope>,
+    /// Its application window opened, not seen closed since.
+    window_shown: bool,
 }
 
 /// The administration app's state, manifests, hooks, widget kinds and
@@ -217,6 +228,16 @@ impl Admin {
         s.open = false;
         s.filter.clear();
         s.mark = None;
+    }
+
+    /// Whether its application window was opened and not seen closed
+    /// since.
+    fn window_shown(&self) -> bool {
+        lock(&self.state).window_shown
+    }
+
+    fn set_window_shown(&self, shown: bool) {
+        lock(&self.state).window_shown = shown;
     }
 
     /// The scope, section and search shown.
