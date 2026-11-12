@@ -296,12 +296,16 @@ impl Plugin for TwoWindows {
                 let pressed = second.clone();
                 c.app.open_window(
                     WindowSpec::new("second", "Second").size([260.0, 140.0]),
-                    move |ui, _| {
+                    move |ui, w| {
                         let mut p = pressed.lock().unwrap();
                         if ui.button("Press").clicked() {
                             p[1] += 1;
                         }
                         ui.label(format!("second pressed {}", p[1]));
+                        // Closes on Escape, as a dialog-like window does.
+                        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                            w.close();
+                        }
                     },
                 );
                 Ok(serde_json::Value::Null)
@@ -343,10 +347,7 @@ const TWO_WINDOWS: &str = r#"Scenario(
 )"#;
 
 /// The scenario's last step names a window that is not open.
-fn assert_two_windows(
-    r: Result<egui_pop_test::scenario::live::LivePassed, Box<egui_pop_test::scenario::Failure>>,
-    pressed: &Mutex<[u32; 2]>,
-) {
+fn assert_two_windows(r: LiveResult, pressed: &Mutex<[u32; 2]>) {
     let f = r.expect_err("no window `third`");
     assert_eq!(f.step, Some(14), "{f}");
     assert!(f.message.contains("no window `third`"), "{f}");
@@ -371,16 +372,78 @@ fn a_window_step_acts_in_an_embedded_window_live() {
 
 #[test]
 fn a_window_step_acts_in_a_window_of_its_own_live() {
-    let dir = private_dir("own");
+    let (r, pressed, m) = run_in_own_windows("own", TWO_WINDOWS);
+    assert!(
+        m.declared().len() == 1,
+        "the second window is its own viewport"
+    );
+    assert_two_windows(r, &pressed);
+}
+
+/// Escape closes the second window: the key's step is answered (the
+/// window closed, the application still running), and the next steps go
+/// to the main window without a `Window` step.
+const CLOSING_KEY: &str = r#"Scenario(
+    name: "closing-key-live",
+    fixtures: [Fixture("test.second", ())],
+    steps: [
+        Wait(Settled),
+        Window("second"),
+        Expect(Tree(has: (role: "Window", label: "Second"))),
+        Ui(Key("Escape")),
+        Wait(Settled),
+        Expect(Journal(has: "window.closed", data: { "window": "second" })),
+        Ui(Click(role: "Button", label: "Press")),
+        Wait(Settled),
+        Expect(Tree(has: (label: "main pressed 1"))),
+    ],
+)"#;
+
+#[test]
+fn a_key_that_closes_its_window_answers_its_step_live() {
+    let (r, pressed, m) = run_in_own_windows("closing", CLOSING_KEY);
+    let passed = r.expect("the scenario passes");
+    assert_eq!(passed.steps, 9);
+    assert!(m.declared().is_empty(), "the second window closed");
+    assert_eq!(*pressed.lock().unwrap(), [1, 0]);
+}
+
+#[test]
+fn a_key_that_closes_an_embedded_window_answers_its_step_live() {
+    let dir = private_dir("closing-embedded");
+    let path = dir.join("app.sock");
+    let (builder, pressed) = two_windows();
+    let mut h = app_with(builder, &path);
+    let scenario = parse(CLOSING_KEY).unwrap();
+    let p = path.clone();
+    let r = with_client(&mut h, move || {
+        LiveRunner::new(p)
+            .connect_within(Duration::from_secs(10))
+            .run(&scenario)
+    });
+    r.expect("the scenario passes");
+    assert_eq!(*pressed.lock().unwrap(), [1, 0]);
+}
+
+type LiveResult =
+    Result<egui_pop_test::scenario::live::LivePassed, Box<egui_pop_test::scenario::Failure>>;
+
+/// Runs `scenario` live against the two windows, each application
+/// window a viewport of its own, each window's pass on its own, as
+/// eframe runs them.
+fn run_in_own_windows(
+    name: &str,
+    scenario: &str,
+) -> (LiveResult, Arc<Mutex<[u32; 2]>>, MultiWindow) {
+    let dir = private_dir(name);
     let path = dir.join("app.sock");
     let (builder, pressed) = two_windows();
     let builder = builder
         .plugins(DefaultPlugins)
         .app_id("org.example.LiveTest")
         .agent_socket(AgentSocket::at(&path));
-    // Real viewports, each window's pass on its own, as eframe runs them.
     let mut m = MultiWindow::new(|ctx| builder.build(ctx).unwrap());
-    let scenario = parse(TWO_WINDOWS).unwrap();
+    let scenario = parse(scenario).unwrap();
     let p = path.clone();
     let thread = std::thread::spawn(move || {
         LiveRunner::new(p)
@@ -400,9 +463,5 @@ fn a_window_step_acts_in_a_window_of_its_own_live() {
         std::thread::sleep(Duration::from_millis(2));
     }
     let r = thread.join().expect("the runner thread ends");
-    assert!(
-        m.declared().len() == 1,
-        "the second window is its own viewport"
-    );
-    assert_two_windows(r, &pressed);
+    (r, pressed, m)
 }

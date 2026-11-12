@@ -558,7 +558,7 @@ impl UiSide {
             }
             true
         });
-        self.ui_pass(&ctx, now);
+        self.ui_pass(app, &ctx, now);
         // After the checks: a repaint asked for now is not one the
         // application asked for.
         if !self.waits.is_empty() || !self.ui_jobs.is_empty() {
@@ -699,7 +699,7 @@ impl UiSide {
 
     /// The `ui` requests: answered from the tree kept at the end of a
     /// pass, then once their events went in.
-    fn ui_pass(&mut self, ctx: &egui::Context, now: Instant) {
+    fn ui_pass(&mut self, app: &AppHandle, ctx: &egui::Context, now: Instant) {
         if self.ui_jobs.is_empty() {
             return;
         }
@@ -707,19 +707,44 @@ impl UiSide {
         let Ok(mut s) = shared.lock() else {
             return;
         };
+        // A window an action closed (a key, a click) runs no more frames:
+        // the events left for it never go in, and its jobs end here.
+        let windows = app.windows();
+        let live = |v: &egui::ViewportId| {
+            *v == egui::ViewportId::ROOT || windows.iter().any(|w| w.viewport == *v)
+        };
+        s.queues.retain(|v, _| live(v));
+        let closed = |j: &UiJob| {
+            j.request
+                .window
+                .as_deref()
+                .is_some_and(|name| !windows.iter().any(|w| w.id.as_str() == name))
+        };
         let mut left = Vec::new();
         // One action at a time: a second one's node is found once the
         // first one's events went in.
         let mut busy = s.queued();
         for mut j in self.ui_jobs.drain(..) {
-            if let Some(answer) = j.answer.take() {
+            if let Some(mut answer) = j.answer.take() {
                 if !s.queued() {
+                    // The action closed its window: that answers it.
+                    if closed(&j) {
+                        answer["window_closed"] = json!(true);
+                    }
                     let _ = j.reply.send(Ok(answer));
                     busy = false;
                     continue;
                 }
                 j.answer = Some(answer);
                 left.push(j);
+                continue;
+            }
+            if !live(&j.scope.viewport) {
+                let name = j.request.window.as_deref().unwrap_or_default();
+                let _ = j.reply.send(Err(RpcError::new(
+                    RpcError::UI,
+                    format!("the window `{name}` closed"),
+                )));
                 continue;
             }
             let fresh = s
