@@ -6,7 +6,8 @@
 //! bridge (`Call`, `Wait`, `Expect(NoError)`, `Expect(Value)`,
 //! `Expect(Journal)`, `Shot`) work as in-process; the ones that need the
 //! accessibility tree (`Ui`, `Expect(Tree)`) go through the socket's `ui`
-//! method, its input queued into egui's next frames. After every step the
+//! method, its input queued into egui's next frames, in the window the
+//! last `Window` step named (its own OS window). After every step the
 //! runner checks `NoErrorToast`, `NoFailedCommand`, `NoUnknownCommand`,
 //! `NoMissingText`, and `NoPanic` (the application is gone: it crashed or
 //! exited); `StableWindows` and `FrameBudget` need the frames, so they
@@ -292,6 +293,7 @@ impl LiveRunner {
             mark: 0,
             missing_before: Vec::new(),
             shots: Vec::new(),
+            window: None,
         };
         let setup = (|| -> Result<(), ClientError> {
             run.caps = run.client.request("describe", Json::Null)?;
@@ -400,6 +402,8 @@ struct LiveRun<'r> {
     mark: u64,
     missing_before: Vec<String>,
     shots: Vec<PathBuf>,
+    /// The window named by the last `Window` step.
+    window: Option<String>,
 }
 
 impl LiveRun<'_> {
@@ -502,6 +506,10 @@ impl LiveRun<'_> {
             }
             Step::Expect(e) => self.expect(e),
             Step::Shot(name) => self.shoot(name),
+            Step::Window(name) => {
+                self.window = Some(name.clone());
+                Ok(())
+            }
         }
     }
 
@@ -571,8 +579,16 @@ impl LiveRun<'_> {
         }
     }
 
-    /// A `Ui` step as the socket's `ui` params.
+    /// A `Ui` step as the socket's `ui` params, in the window named last.
     fn ui_params(&self, ui: &Ui) -> Json {
+        let mut p = self.ui_action(ui);
+        if let Some(w) = &self.window {
+            p["window"] = json!(w);
+        }
+        p
+    }
+
+    fn ui_action(&self, ui: &Ui) -> Json {
         let node = |label: &Option<String>, role: &Option<String>, nth: &Option<usize>| {
             let mut p = json!({});
             if let Some(n) = nth {
@@ -626,6 +642,9 @@ impl LiveRun<'_> {
         }
         if let Some(r) = &n.role {
             p["role"] = json!(r);
+        }
+        if let Some(w) = &self.window {
+            p["window"] = json!(w);
         }
         let r = self.client.request("ui", p).map_err(|e| gone(&e))?;
         Ok(r["count"].as_u64().unwrap_or(0))

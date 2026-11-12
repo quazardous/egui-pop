@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 
 use egui::{Key, Modifiers, Vec2};
 use egui_kittest::Harness;
-use egui_kittest::kittest::{By, Queryable as _};
+use egui_kittest::kittest::{By, NodeT as _, Queryable as _};
 use egui_pop_api::host::{Event, Seq};
 use egui_pop_api::wait::WaitFor;
 use egui_pop_api::{App, AppBuilder};
@@ -79,6 +79,15 @@ pub enum Step {
     /// (`Runner::snapshots`, feature `wgpu`), the accessibility tree in the report
     /// otherwise.
     Shot(String),
+    /// The window the `Ui` steps and `Expect(Tree)` that follow read and
+    /// act in: an application window's id (ADR 0025), `main` for the
+    /// main window. Before the first, they read the main window with what
+    /// is embedded in it. Live, the window's own tree and input; headless
+    /// (kittest embeds the windows in the main one), its embedded window
+    /// and what is in it, and `main` without the embedded ones. Either
+    /// way, an application window's tree has a `Window` node named by its
+    /// title.
+    Window(String),
 }
 
 /// What a `Wait` step waits for.
@@ -471,6 +480,7 @@ impl Runner {
             trees: Vec::new(),
             missing_before: Vec::new(),
             stable: None,
+            window: None,
         };
         run.mark = run.start;
         if !unknown.is_empty() {
@@ -574,6 +584,8 @@ struct Run<'r> {
     stable: Option<Vec<String>>,
     /// The keys untranslated before the first step, `locale: key`.
     missing_before: Vec<String>,
+    /// The window named by the last `Window` step.
+    window: Option<String>,
 }
 
 type StepError = (String, String);
@@ -698,10 +710,15 @@ impl Run<'_> {
                 self.trees.push((name, crate::a11y_tree(h)));
                 Ok(())
             }
+            Step::Window(name) => {
+                self.window = Some(name.clone());
+                Ok(())
+            }
         }
     }
 
     fn ui(&mut self, h: &mut Harness<'static, App>, ui: &Ui) -> Result<(), String> {
+        let window = self.window.as_deref();
         match ui {
             Ui::Click { label, role, nth } => {
                 let node = Node {
@@ -709,7 +726,7 @@ impl Run<'_> {
                     role: role.clone(),
                     nth: *nth,
                 };
-                find(h, &node)?.click();
+                find(h, window, &node)?.click();
             }
             Ui::Type {
                 label,
@@ -722,9 +739,9 @@ impl Run<'_> {
                     role: role.clone(),
                     nth: *nth,
                 };
-                find(h, &node)?.focus();
+                find(h, window, &node)?.focus();
                 h.run_ok();
-                find(h, &node)?.type_text(text);
+                find(h, window, &node)?.type_text(text);
             }
             Ui::Key(chord) => {
                 let (mods, key) = parse_chord(chord)?;
@@ -741,7 +758,7 @@ impl Run<'_> {
                     role: role.clone(),
                     nth: *nth,
                 };
-                let n = find(h, &node)?;
+                let n = find(h, window, &node)?;
                 if *up {
                     n.scroll_up();
                 } else {
@@ -772,13 +789,14 @@ impl Run<'_> {
                 Ok(())
             }
             Expect::Tree { has, lacks } => {
+                let window = self.window.as_deref();
                 if let Some(n) = has
-                    && count(h, n) == 0
+                    && count(h, window, n)? == 0
                 {
                     return Err(format!("the tree has no {n}"));
                 }
                 if let Some(n) = lacks
-                    && count(h, n) > 0
+                    && count(h, window, n)? > 0
                 {
                     return Err(format!("the tree has {n}"));
                 }
@@ -947,13 +965,90 @@ fn by_node(n: &Node) -> By<'_> {
     by
 }
 
-fn count(h: &Harness<'static, App>, n: &Node) -> usize {
-    h.query_all(by_node(n)).count()
+/// The windows titled `title` in the tree: kittest embeds each application
+/// window in the main one as an egui window titled as it.
+fn embedded<'h>(h: &'h Harness<'static, App>, title: &str) -> Vec<egui_kittest::Node<'h>> {
+    let title = title.to_string();
+    h.query_all(By::new().predicate(move |node| {
+        node.role() == egui::accesskit::Role::Window
+            && node.label().as_deref() == Some(title.as_str())
+    }))
+    .collect()
 }
 
-fn find<'h>(h: &'h Harness<'static, App>, n: &'h Node) -> Result<egui_kittest::Node<'h>, String> {
+/// The nodes matching `n` in `window` (see [`Step::Window`]), or in the
+/// whole tree without one.
+fn matching<'h>(
+    h: &'h Harness<'static, App>,
+    window: Option<&str>,
+    n: &'h Node,
+) -> Result<Vec<egui_kittest::Node<'h>>, String> {
+    let Some(name) = window else {
+        return Ok(h.query_all(by_node(n)).collect());
+    };
+    let windows = h.state().handle().windows();
+    let Some(w) = windows.iter().find(|w| w.id.as_str() == name) else {
+        let open: Vec<&str> = windows.iter().map(|w| w.id.as_str()).collect();
+        return Err(format!("no window `{name}`: the open ones are {open:?}"));
+    };
+    if !w.main {
+        let mut at = embedded(h, &w.title);
+        let (Some(root), None) = (at.pop(), at.pop()) else {
+            return Err(format!(
+                "the window `{name}` (\"{}\") is not in the tree once",
+                w.title
+            ));
+        };
+        // The window itself, then what is in it.
+        let itself = is(n, &root.accesskit_node());
+        let inside = root.query_all(by_node(n));
+        return Ok(itself
+            .then(|| root.clone())
+            .into_iter()
+            .chain(inside)
+            .collect());
+    }
+    let others: Vec<_> = windows
+        .iter()
+        .filter(|o| !o.main)
+        .flat_map(|o| embedded(h, &o.title))
+        .map(|e| e.accesskit_node().id())
+        .collect();
+    Ok(h.query_all(by_node(n))
+        .filter(|node| {
+            let mut at = Some(node.clone());
+            while let Some(a) = at {
+                if others.contains(&a.accesskit_node().id()) {
+                    return false;
+                }
+                at = a.parent();
+            }
+            true
+        })
+        .collect())
+}
+
+/// Whether an AccessKit node is `n` (its label and role; `nth` aside).
+fn is(n: &Node, node: &egui_kittest::kittest::AccessKitNode<'_>) -> bool {
+    n.label
+        .as_ref()
+        .is_none_or(|l| node.label().as_deref() == Some(l.as_str()))
+        && n.role
+            .as_ref()
+            .is_none_or(|r| format!("{:?}", node.role()).eq_ignore_ascii_case(r))
+}
+
+fn count(h: &Harness<'static, App>, window: Option<&str>, n: &Node) -> Result<usize, String> {
+    matching(h, window, n).map(|m| m.len())
+}
+
+fn find<'h>(
+    h: &'h Harness<'static, App>,
+    window: Option<&'h str>,
+    n: &'h Node,
+) -> Result<egui_kittest::Node<'h>, String> {
+    let mut all = matching(h, window, n)?;
     if let Some(i) = n.nth {
-        let mut all: Vec<_> = h.query_all(by_node(n)).collect();
         all.sort_by(|a, b| {
             let (a, b) = (a.rect().min, b.rect().min);
             a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x))
@@ -964,7 +1059,7 @@ fn find<'h>(h: &'h Harness<'static, App>, n: &'h Node) -> Result<egui_kittest::N
             .nth(i)
             .ok_or_else(|| format!("no {n}: {count} match"));
     }
-    let mut all = h.query_all(by_node(n));
+    let mut all = all.into_iter();
     let first = all.next().ok_or_else(|| format!("no {n} in the tree"))?;
     if all.next().is_some() {
         return Err(format!(
@@ -1112,11 +1207,13 @@ mod tests {
                     Expect(Value("journal.last", 3)),
                     Expect(Journal(has: "command.done", data: { "command": "about.read" })),
                     Shot("after"),
+                    Window("import"),
                 ],
             )"#,
         )
         .unwrap();
-        assert_eq!(s.steps.len(), 12);
+        assert_eq!(s.steps.len(), 13);
+        assert!(matches!(&s.steps[12], Step::Window(w) if w == "import"));
         assert_eq!(s.fixtures[0].1, json!({ "jpeg": 3 }));
         assert!(matches!(&s.steps[0], Step::Call(n, Json::Null) if n == "about.read"));
         assert!(

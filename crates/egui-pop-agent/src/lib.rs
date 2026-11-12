@@ -22,14 +22,16 @@
 //! | `snapshot` | `{ "collector"?, "window"? }` | every collector's snapshot, or one |
 //! | `call` | `{ "collector", "action", "args"?, "window"? }` | the bridge's feedback block (`ok`, `message`, `data`...) |
 //! | `wait` | `bridge.wait`'s arguments and `deadline_ms` | `{ "met", "by", "event", "last" }` |
-//! | `ui` | `{ "action", "label"?, "role"?, "text"?, "key"?, "up"? }` | the accessibility tree, or the node acted on |
+//! | `ui` | `{ "action", "label"?, "role"?, "nth"?, "text"?, "key"?, "up"?, "window"? }` | the accessibility tree, or the node acted on |
 //!
 //! `ui` reads the interface as a person sees it and drives it: `tree`
 //! lists the AccessKit nodes of the frame just drawn; `click`, `type`,
 //! `key` and `scroll` queue raw egui events (hover, press, release, text,
 //! wheel) into the next frames' input, through an egui plugin, so they
 //! work headless as in a window. Reading needs the bridge on or
-//! read-only, acting needs it on.
+//! read-only, acting needs it on. With `window`, it reads and acts in
+//! that application window (its own OS window, or, where egui embeds it
+//! in the main one, its embedded window); without, in the main window.
 //!
 //! `window` names an application window (its id, `main` for the main
 //! window; ADR 0025), the active window without one: a command runs in
@@ -483,6 +485,8 @@ pub(crate) enum Job {
 /// A `ui` request in progress.
 struct UiJob {
     request: ui::Request,
+    /// Where it reads and acts.
+    scope: ui::Scope,
     /// Answered from a tree kept at this pass or later.
     from_pass: u64,
     /// Once its events went in, this answer.
@@ -668,15 +672,23 @@ impl UiSide {
                     )));
                     return;
                 }
+                let scope = match ui_scope(app, request.window.as_deref()) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        let _ = reply.send(Err(RpcError::params(e)));
+                        return;
+                    }
+                };
                 let ctx = app.egui();
                 let shared = ui::install(&ctx);
                 if let Ok(mut s) = shared.lock() {
                     s.want_tree = true;
                 }
-                ctx.request_repaint();
+                ctx.request_repaint_of(scope.viewport);
                 self.ui_jobs.push(UiJob {
+                    from_pass: ctx.cumulative_pass_nr_for(scope.viewport),
                     request,
-                    from_pass: ctx.cumulative_pass_nr(),
+                    scope,
                     answer: None,
                     deadline,
                     reply,
@@ -698,10 +710,10 @@ impl UiSide {
         let mut left = Vec::new();
         // One action at a time: a second one's node is found once the
         // first one's events went in.
-        let mut busy = !s.queue.is_empty();
+        let mut busy = s.queued();
         for mut j in self.ui_jobs.drain(..) {
             if let Some(answer) = j.answer.take() {
-                if s.queue.is_empty() {
+                if !s.queued() {
                     let _ = j.reply.send(Ok(answer));
                     busy = false;
                     continue;
@@ -710,14 +722,20 @@ impl UiSide {
                 left.push(j);
                 continue;
             }
-            let fresh = s.tree.as_ref().filter(|(pass, _)| *pass >= j.from_pass);
+            let fresh = s
+                .trees
+                .get(&j.scope.viewport)
+                .filter(|(pass, _)| *pass >= j.from_pass);
             match fresh {
-                Some((_, tree)) if !busy => match j.request.on_tree(tree) {
+                Some((_, tree)) if !busy => match j.request.on_tree(tree, &j.scope) {
                     Ok((batches, answer)) if batches.is_empty() => {
                         let _ = j.reply.send(Ok(answer));
                     }
                     Ok((batches, answer)) => {
-                        s.queue.extend(batches);
+                        s.queues
+                            .entry(j.scope.viewport)
+                            .or_default()
+                            .extend(batches);
                         busy = true;
                         j.answer = Some(answer);
                         left.push(j);
@@ -737,10 +755,58 @@ impl UiSide {
         }
         self.ui_jobs = left;
         s.want_tree = self.ui_jobs.iter().any(|j| j.answer.is_none());
-        if !s.queue.is_empty() || s.want_tree {
-            ctx.request_repaint();
+        let queued: Vec<egui::ViewportId> = s
+            .queues
+            .iter()
+            .filter(|(_, q)| !q.is_empty())
+            .map(|(v, _)| *v)
+            .collect();
+        drop(s);
+        for v in queued
+            .into_iter()
+            .chain(self.ui_jobs.iter().map(|j| j.scope.viewport))
+        {
+            ctx.request_repaint_of(v);
         }
     }
+}
+
+/// Where a `ui` request for `window` reads and acts (ADR 0025): the main
+/// window's viewport without one; an application window's own viewport
+/// (its root named by its title), or, where egui embeds the windows in the
+/// main one, the main viewport within (or, for the main window, without)
+/// the embedded windows.
+fn ui_scope(app: &AppHandle, window: Option<&str>) -> Result<ui::Scope, String> {
+    let root = ui::Scope::viewport(egui::ViewportId::ROOT);
+    let Some(name) = window else {
+        return Ok(root);
+    };
+    let windows = app.windows();
+    let Some(w) = windows.iter().find(|w| w.id.as_str() == name) else {
+        let open: Vec<&str> = windows.iter().map(|w| w.id.as_str()).collect();
+        return Err(format!("no window `{name}`: the open ones are {open:?}"));
+    };
+    if !app.egui().embed_viewports() {
+        return Ok(ui::Scope {
+            title: (!w.main).then(|| w.title.clone()),
+            ..ui::Scope::viewport(w.viewport)
+        });
+    }
+    Ok(if w.main {
+        ui::Scope {
+            without: windows
+                .iter()
+                .filter(|o| !o.main)
+                .map(|o| o.title.clone())
+                .collect(),
+            ..root
+        }
+    } else {
+        ui::Scope {
+            within: Some(w.title.clone()),
+            ..root
+        }
+    })
 }
 
 /// `bridge.wait`'s answer when `until` holds now.

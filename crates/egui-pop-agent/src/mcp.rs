@@ -265,6 +265,7 @@ fn builtins() -> Vec<GeneratedTool> {
                 "text": { "type": "string" },
                 "key": { "type": "string" },
                 "up": { "type": "boolean" },
+                "window": { "type": "string", "description": "The application window to read and act in: its id, `main` for the main window (the default)." },
             },
             "required": ["action"],
         })),
