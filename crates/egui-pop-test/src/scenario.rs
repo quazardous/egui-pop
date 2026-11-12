@@ -1002,11 +1002,7 @@ fn matching<'h>(
         // The window itself, then what is in it.
         let itself = is(n, &root.accesskit_node());
         let inside = root.query_all(by_node(n));
-        return Ok(itself
-            .then(|| root.clone())
-            .into_iter()
-            .chain(inside)
-            .collect());
+        return Ok(itself.then_some(root).into_iter().chain(inside).collect());
     }
     let others: Vec<_> = windows
         .iter()
@@ -1016,7 +1012,7 @@ fn matching<'h>(
         .collect();
     Ok(h.query_all(by_node(n))
         .filter(|node| {
-            let mut at = Some(node.clone());
+            let mut at = Some(*node);
             while let Some(a) = at {
                 if others.contains(&a.accesskit_node().id()) {
                     return false;
