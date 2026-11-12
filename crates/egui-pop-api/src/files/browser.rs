@@ -2026,8 +2026,9 @@ impl ViewMode for FilmstripMode {
     }
 }
 
-/// The focused entry large in the middle, its neighbours smaller and
-/// smaller on each side (Finder's Gallery). Left and Right bring the
+/// The focused entry large in the middle, at the thumbnail size (smaller
+/// when the room is short), its neighbours smaller and smaller on each
+/// side (Finder's Gallery), spaced by their cells' own widths. Left and Right bring the
 /// previous or next entry to the middle; a click on a neighbour does too.
 /// The middle one asks for its thumbnail first, then the neighbours
 /// outwards, then the next one on each side (`Near`).
@@ -2044,6 +2045,24 @@ impl CarouselMode {
     /// The middle one's most width, against the room: what leaves room
     /// for neighbours.
     pub const MIDDLE: f32 = 0.3;
+
+    /// The middle one's side: `wanted` (the thumbnail size), made smaller
+    /// until the drawer's cell for it fits in `room`, and never under
+    /// [`Self::MIN_SIDE`].
+    fn fit(drawer: &dyn EntryDrawer, ui: &Ui, wanted: f32, room: egui::Vec2) -> f32 {
+        let mut side = wanted.max(Self::MIN_SIDE);
+        // A cell grows with its side, though not always in proportion: a
+        // few passes settle it.
+        for _ in 0..8 {
+            let cell = drawer.cell_size(ui, side);
+            let over = (cell.x - room.x).max(cell.y - room.y);
+            if over <= 0.5 || side <= Self::MIN_SIDE {
+                break;
+            }
+            side = (side - over).max(Self::MIN_SIDE);
+        }
+        side
+    }
 }
 
 impl ViewMode for CarouselMode {
@@ -2088,12 +2107,32 @@ impl ViewMode for CarouselMode {
             .max_height
             .unwrap_or_else(|| ui.available_height())
             .max(4.0 * Self::MIN_SIDE);
-        // What a cell adds around its thumbnail: the margins and the name.
-        let extra = drawer.cell_size(ui, 0.0);
-        let middle = (height - extra.y)
-            .min(width * Self::MIDDLE)
-            .max(Self::MIN_SIDE);
+        // The middle one at the thumbnail size, made smaller until its cell
+        // fits the room.
+        let middle = Self::fit(
+            drawer,
+            ui,
+            cx.settings.thumbnail_size,
+            egui::vec2(width * Self::MIDDLE, height),
+        );
         let gap = ui.spacing().item_spacing.x;
+        // Outwards, a step smaller each time, while there is room: each
+        // neighbour's side and its centre's distance from the middle, spaced
+        // by the cells' own widths.
+        let mut steps = Vec::new();
+        let mut side = middle;
+        let mut reach = drawer.cell_size(ui, middle).x / 2.0;
+        loop {
+            let next = side * Self::SHRINK;
+            let w = drawer.cell_size(ui, next).x;
+            if next < Self::MIN_SIDE || reach + gap + w > width / 2.0 {
+                break;
+            }
+            steps.push((next, reach + gap + w / 2.0));
+            side = next;
+            reach += gap + w;
+        }
+        let beyond = side;
         let ctx = ui.ctx().clone();
         let thumbnails = cx.thumbnails;
         let entries = cx.entries;
@@ -2131,17 +2170,7 @@ impl ViewMode for CarouselMode {
                 end = end.max(i + 1);
             };
             place(ui, at, middle, area.center().x, Priority::Visible);
-            // Outwards, a step smaller each time, while there is room.
-            let mut side = middle;
-            let mut reach = (middle + extra.x) / 2.0;
-            let mut k = 1;
-            loop {
-                let next = side * Self::SHRINK;
-                let w = next + extra.x;
-                if next < Self::MIN_SIDE || reach + gap + w > width / 2.0 {
-                    break;
-                }
-                let offset = reach + gap + w / 2.0;
+            for (k, &(next, offset)) in (1..).zip(&steps) {
                 if at + k < n {
                     place(
                         ui,
@@ -2154,17 +2183,15 @@ impl ViewMode for CarouselMode {
                 if let Some(i) = at.checked_sub(k) {
                     place(ui, i, next, area.center().x - offset, Priority::Visible);
                 }
-                side = next;
-                reach += gap + w;
                 per_side = k;
-                k += 1;
             }
             // The next one beyond each side.
+            let k = steps.len() + 1;
             if at + k < n {
-                ask(at + k, side, Priority::Near);
+                ask(at + k, beyond, Priority::Near);
             }
             if let Some(i) = at.checked_sub(k) {
-                ask(i, side, Priority::Near);
+                ask(i, beyond, Priority::Near);
             }
         };
         in_container(
