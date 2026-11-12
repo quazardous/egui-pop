@@ -1126,6 +1126,8 @@ egui-pop-admin-modified = modified
 
 egui-pop-admin-modified-count = Changed: { $count }
 
+egui-pop-admin-nav-resize = Resize the sections
+
 egui-pop-admin-no-records = Nothing here yet.
 
 egui-pop-admin-no-widget = No widget kind `{ $kind }` is registered
@@ -1165,7 +1167,6 @@ egui-pop-admin-section-advanced = Advanced
 egui-pop-admin-section-gestures = Pointer gestures
 
 egui-pop-admin-sections = Sections
-egui-pop-admin-nav-resize = Resize the sections
 
 egui-pop-admin-set-for = Set for
 
