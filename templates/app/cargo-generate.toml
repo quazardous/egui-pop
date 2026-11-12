@@ -10,7 +10,7 @@ exclude = ["src/**", "tests/**", "kit/**"]
 [placeholders.egui_pop_version]
 type = "string"
 prompt = "Which egui-pop version?"
-default = "0.9"
+default = "0.10"
 
 [placeholders.egui_version]
 type = "string"
