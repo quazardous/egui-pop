@@ -37,6 +37,12 @@ wbox on labwc, headless mutter and Xwayland) measured eframe 0.37:
   it while other windows are open cancels the close and moves the window
   worked in last into it (content, title, id); closing the last window
   quits.
+  Raising the main window (`raise_window(&WindowId::main())`,
+  `window.switch { window: "main" }`) while a moved content holds it
+  sends that content back to a window of its own (its id, title, saved
+  geometry and keys) and draws the shell again (2026-11-12).
+  `AppHandle::quit` (used by `app.quit`) closes everything instead of
+  moving a window into the main one.
 - **Titles come from the content** (`WindowUi::set_title`), sent to the
   system as soon as they change; there is no generic word.
 - **Geometry** is read from each window's own pass and kept per window id

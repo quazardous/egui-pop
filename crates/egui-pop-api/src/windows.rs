@@ -24,6 +24,9 @@
 //!   windows are open does not quit: the close is cancelled and the window
 //!   worked in last moves into the main window (its content, title and
 //!   id), its own window closing. Closing the last window quits.
+//!   Raising the main window ([`WindowId::main`]) then sends that content
+//!   back to a window of its own and draws the shell again;
+//!   [`AppHandle::quit`] closes everything, moving nothing.
 //! - **Geometry** is read from each window's own pass (egui's
 //!   `ViewportInfo` rects stay empty for deferred windows on Wayland) and
 //!   saved per window id in the persistence directory (`windows.json`),
@@ -268,6 +271,11 @@ pub(crate) struct Root {
     content: Option<Content>,
     pub(crate) last_active: u64,
     pub(crate) geometry: Option<Geometry>,
+    /// The main window's own title, kept while a window's content holds
+    /// it, given back when the shell comes back.
+    home_title: Option<String>,
+    /// The minimum size of the content moved in, for its own window again.
+    min_size: Option<Vec2>,
 }
 
 /// The application's windows.
@@ -277,6 +285,13 @@ pub(crate) struct Windows {
     pub(crate) entries: Vec<Entry>,
     saved: Option<BTreeMap<String, Geometry>>,
     tick: u64,
+    /// The main window was asked to its front while a window's content
+    /// holds it: that content goes back to a window of its own at the
+    /// main window's next pass.
+    going_home: bool,
+    /// The application quits ([`AppHandle::quit`]): the main window's
+    /// next close quits instead of moving a window into it.
+    quitting: bool,
 }
 
 impl Default for Windows {
@@ -290,10 +305,14 @@ impl Default for Windows {
                 content: None,
                 last_active: 0,
                 geometry: None,
+                home_title: None,
+                min_size: None,
             },
             entries: Vec::new(),
             saved: None,
             tick: 0,
+            going_home: false,
+            quitting: false,
         }
     }
 }
@@ -496,10 +515,19 @@ impl AppHandle {
     /// Brings a window to the front and gives it the keyboard focus. The
     /// system may refuse: on Wayland a window cannot take the focus from
     /// another application's, and may only be marked as wanting it.
+    ///
+    /// The main window's own id ([`WindowId::main`]) while another
+    /// window's content holds it (moved in when the main window was
+    /// closed): that content goes back to a window of its own (its id,
+    /// title and saved geometry), and the main window draws the
+    /// application's shell again, at its next pass.
     pub fn raise_window(&self, id: &WindowId) {
         let viewport = {
             let mut w = self.windows_mut();
             if w.root.id == *id {
+                Some(ViewportId::ROOT)
+            } else if w.root.home == *id {
+                w.going_home = true;
                 Some(ViewportId::ROOT)
             } else if let Some(e) = w.entry_mut(id) {
                 e.raise = true;
@@ -734,7 +762,12 @@ impl AppHandle {
                 (e.id.clone(), e.geometry),
             ];
             let left = std::mem::replace(&mut w.root.id, e.id.clone());
-            w.root.title = Some(e.title.clone());
+            let shell_title = w.root.title.replace(e.title.clone());
+            if w.root.content.is_none() {
+                // The shell leaves: its title comes back with it.
+                w.root.home_title = shell_title;
+            }
+            w.root.min_size = e.min_size;
             w.root.sent_title = None;
             w.root.content = e.content;
             w.root.last_active = e.last_active;
@@ -755,6 +788,100 @@ impl AppHandle {
             "window.moved",
             json!({ "window": id, "to": "main" }),
         );
+        self.egui().request_repaint_of(ViewportId::ROOT);
+        true
+    }
+
+    /// The main window's own id, whatever content it shows now: `main`.
+    pub fn main_window(&self) -> WindowId {
+        self.windows_ref().root.home.clone()
+    }
+
+    /// Quits the application: the main window closes, and the other
+    /// windows with it, none moving into the main window as closing it
+    /// does otherwise. A close the host cancels (unsaved work) leaves the
+    /// application as it was.
+    pub fn quit(&self) {
+        self.windows_mut().quitting = true;
+        let ctx = self.egui();
+        ctx.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Close);
+        ctx.request_repaint_of(ViewportId::ROOT);
+    }
+
+    /// Whether [`AppHandle::quit`] was asked and its close not yet seen.
+    pub fn quitting(&self) -> bool {
+        self.windows_ref().quitting
+    }
+
+    /// The main window's close is seen: whether it quits
+    /// ([`AppHandle::quit`] asked it), the flag being spent.
+    pub(crate) fn take_quitting(&self) -> bool {
+        std::mem::take(&mut self.windows_mut().quitting)
+    }
+
+    /// The inverse of [`AppHandle::move_into_root`], when
+    /// [`AppHandle::raise_window`] asked for the main window while a
+    /// window's content holds it: that content goes back to a window of
+    /// its own, and the main window draws the shell again. Returns whether
+    /// one went back.
+    pub(crate) fn move_out_of_root(&self) -> bool {
+        let back = {
+            let mut w = self.windows_mut();
+            if !std::mem::take(&mut w.going_home) || w.root.id == w.root.home {
+                return false;
+            }
+            let Some(content) = w.root.content.take() else {
+                return false;
+            };
+            self.load_geometry(&mut w);
+            let home = w.root.home.clone();
+            let id = std::mem::replace(&mut w.root.id, home.clone());
+            let title = w.root.title.take().unwrap_or_default();
+            let home_title = w.root.home_title.take();
+            w.root.title = home_title.or_else(|| Some(self.name()).filter(|n| !n.is_empty()));
+            w.root.sent_title = None;
+            let min_size = w.root.min_size.take();
+            // The content's geometry was saved under its id when it moved
+            // in: its window opens again with it.
+            let saved = w.saved.as_ref().and_then(|s| s.get(id.as_str()).copied());
+            let first = match saved {
+                Some(g) => (Some(Vec2::from(g.size)), g.position, g.maximized),
+                None => (None, None, false),
+            };
+            let tick = w.next_tick();
+            w.entries.retain(|e| e.id != id);
+            w.entries.push(Entry {
+                id: id.clone(),
+                title: title.clone(),
+                sent_title: Some(title.clone()),
+                content: Some(content),
+                first,
+                min_size,
+                geometry: saved,
+                focused: None,
+                last_active: tick,
+                dispatcher: Some(KeyDispatcher::new()),
+                raise: false,
+                closed: false,
+            });
+            // The main window, asked to the front, is the one worked in.
+            w.root.last_active = w.next_tick();
+            (home, id, title)
+        };
+        let (home, id, title) = back;
+        REGISTRY.with(|r| {
+            r.borrow_mut()
+                .insert(id.deferred_viewport(), (self.downgrade(), id.clone()))
+        });
+        self.sync_separate_windows();
+        self.set_active_window(ViewportId::ROOT);
+        self.publish(
+            "egui_pop",
+            None,
+            "window.moved",
+            json!({ "window": id, "from": home, "to": id, "title": title }),
+        );
+        self.publish("egui_pop", None, "window.opened", json!({ "window": home }));
         self.egui().request_repaint_of(ViewportId::ROOT);
         true
     }
@@ -1061,7 +1188,9 @@ fn window_arg(app: &AppHandle, args: &serde_json::Value) -> Result<Option<Window
         None => Ok(None),
         Some(w) => {
             let id = WindowId::new(w);
-            if app.window_viewport(&id).is_none() {
+            // The main window's own id stays valid while another window's
+            // content holds it: raising it brings the shell back.
+            if app.window_viewport(&id).is_none() && id != app.main_window() {
                 return Err(format!("no open window `{w}`"));
             }
             Ok(Some(id))

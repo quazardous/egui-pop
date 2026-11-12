@@ -2081,6 +2081,11 @@ impl AppHandle {
         }
     }
 
+    /// Makes a window the active one (a window asked to the front).
+    pub(crate) fn set_active_window(&self, window: egui::ViewportId) {
+        self.0.active_window.set(window);
+    }
+
     /// Notes the window being drawn as the active one when it has the
     /// focus or got a press or a key this pass.
     pub(crate) fn note_window(&self, ctx: &Context) {
@@ -4640,9 +4645,7 @@ impl App {
                 .menu(MENU_FILE, "9_quit", 0)
                 .no_agent(),
             |call| {
-                call.app
-                    .egui()
-                    .send_viewport_cmd(egui::ViewportCommand::Close);
+                call.app.quit();
                 Ok(Json::Null)
             },
         )?;
@@ -6579,9 +6582,11 @@ impl App {
         self.handle.note_window(&ctx);
         crate::workbench::forget_closed_windows(&self.handle, &ctx);
         // Closing the main window while application windows are open
-        // moves the one worked in last into it, and quits nothing.
+        // moves the one worked in last into it, and quits nothing; unless
+        // the application quits (`AppHandle::quit`).
         if ctx.viewport_id() == egui::ViewportId::ROOT
             && ctx.input(|i| i.viewport().close_requested())
+            && !self.handle.take_quitting()
             && self.handle.move_into_root()
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -6593,6 +6598,9 @@ impl App {
         overlay::begin_pass(&ctx);
         self.dispatch_keys(&ctx);
         self.process_requests();
+        // The main window asked to the front while a window's content
+        // holds it: that content goes back to a window of its own.
+        self.handle.move_out_of_root();
         self.handle.declare_windows(&ctx);
         if !self.handle.root_pass(ui) {
             self.outlined(ui);
