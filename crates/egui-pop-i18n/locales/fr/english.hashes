@@ -664,6 +664,9 @@ egui-pop-devtools-tab-scale 8b885195b8523059
 egui-pop-devtools-tab-steps 76c10e303d614862
 egui-pop-devtools-waiting 1228f01e2ee7f98f
 egui-pop-dialog-browse 29d69453eb3f2c19
+egui-pop-dialog-copied 6a1af6540e3f5739
+egui-pop-dialog-copy 424486452ba52062
+egui-pop-dialog-details 6b7485aa06c674c5
 egui-pop-dialog-filter 3a5e912c59d0059f
 egui-pop-dialog-resize ee0ad483933ed4a3
 egui-pop-editors-close bc07218ad72a8a52

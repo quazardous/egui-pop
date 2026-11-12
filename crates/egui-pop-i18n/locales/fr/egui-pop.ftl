@@ -921,6 +921,12 @@ egui-pop-devtools-waiting = En attente de l’accord suivant après { $keys }
 
 egui-pop-dialog-browse = Parcourir…
 
+egui-pop-dialog-copied = Copié.
+
+egui-pop-dialog-copy = Copier
+
+egui-pop-dialog-details = Détails
+
 egui-pop-dialog-filter = Filtrer
 
 egui-pop-editors-close = Fermer la recherche

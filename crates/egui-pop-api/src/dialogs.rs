@@ -55,6 +55,13 @@
 //! of its title row, named "Close", which is Escape: the same cancel,
 //! through the same step and hooks, refused when Escape is.
 //!
+//! A notice and a confirmation have a Copy button in their bottom left
+//! corner (left out with `.copyable(false)`): it puts their title and
+//! text on the clipboard, then their [`Details`], key-value lines for a
+//! bug report, under a separator. The details stay off screen, or show
+//! in a collapsed "Details" section ([`DetailsMode`]; shown by default
+//! on an error, [`Info::error`]).
+//!
 //! A dialog opened as [`DialogSpec::movable()`] (or every dialog, with
 //! the `dialogs.movable` setting) has a header band instead of its title
 //! row: its own tone, a separator, the move cursor, the ✕ when it is
@@ -122,12 +129,13 @@ use std::sync::{Arc, Mutex};
 use egui::{Key, Modifiers, Response, Ui, Vec2};
 use egui_pop_core::band;
 use egui_pop_core::debug::FnCollector;
+use egui_pop_core::icon::{Icon, Size as IconSize};
 use egui_pop_core::kit::{self, Kit};
 use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
 use egui_pop_core::strings::{self, CANCEL, CLOSE};
 use egui_pop_core::theme::Tokens;
-use egui_pop_core::ui::UiPop as _;
+use egui_pop_core::ui::{TextRole, UiPop as _};
 use egui_pop_core::widgets;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::fuzzy;
@@ -196,6 +204,11 @@ pub struct Confirm {
     pub danger: bool,
     pub command: CommandId,
     pub args: Json,
+    /// The Copy button in its bottom corner (on by default).
+    pub copy: bool,
+    /// Technical lines for a bug report (none by default).
+    #[serde(skip_serializing_if = "Details::is_empty")]
+    pub details: Details,
 }
 
 impl Confirm {
@@ -207,7 +220,27 @@ impl Confirm {
             danger: false,
             command,
             args: Json::Null,
+            copy: true,
+            details: Details::default(),
         }
+    }
+
+    /// With or without the Copy button.
+    pub fn copyable(mut self, copy: bool) -> Self {
+        self.copy = copy;
+        self
+    }
+
+    /// With technical details: key-value lines the Copy button appends to
+    /// the copied text, hidden or shown ([`DetailsMode`]; hidden by
+    /// default on a confirmation).
+    pub fn details<K: Into<String>, V: Into<String>>(
+        mut self,
+        lines: impl IntoIterator<Item = (K, V)>,
+        mode: DetailsMode,
+    ) -> Self {
+        self.details = Details::new(lines, mode);
+        self
     }
 
     pub fn detail(mut self, detail: &str) -> Self {
@@ -380,11 +413,31 @@ impl Choose {
     }
 }
 
-/// Something to read and acknowledge.
+/// Something to read and acknowledge: a message, or an error
+/// ([`Info::error`]).
+///
+/// ```
+/// use egui_pop_api::dialogs::{DetailsMode, Info};
+///
+/// let failed = Info::error("Export failed", "The disk is full.")
+///     .details([("version", "1.2.0"), ("job", "42")], DetailsMode::Auto);
+/// assert!(failed.details.shown(failed.error));
+/// assert_eq!(
+///     failed.copy_text(),
+///     "Export failed\n\nThe disk is full.\n\n---\nversion: 1.2.0\njob: 42"
+/// );
+/// ```
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Info {
     pub title: String,
     pub text: String,
+    /// An error: its details are shown (collapsed) by default.
+    pub error: bool,
+    /// The Copy button in its bottom corner (on by default).
+    pub copy: bool,
+    /// Technical lines for a bug report (none by default).
+    #[serde(skip_serializing_if = "Details::is_empty")]
+    pub details: Details,
 }
 
 impl Info {
@@ -392,8 +445,127 @@ impl Info {
         Self {
             title: title.into(),
             text: text.into(),
+            error: false,
+            copy: true,
+            details: Details::default(),
         }
     }
+
+    /// An error to acknowledge: its details are shown by default, in a
+    /// collapsed "Details" section.
+    pub fn error(title: &str, text: &str) -> Self {
+        Self {
+            error: true,
+            ..Self::new(title, text)
+        }
+    }
+
+    /// With or without the Copy button.
+    pub fn copyable(mut self, copy: bool) -> Self {
+        self.copy = copy;
+        self
+    }
+
+    /// With technical details: key-value lines the Copy button appends to
+    /// the copied text, hidden or shown ([`DetailsMode`]; shown on an
+    /// error, hidden otherwise, by default).
+    pub fn details<K: Into<String>, V: Into<String>>(
+        mut self,
+        lines: impl IntoIterator<Item = (K, V)>,
+        mode: DetailsMode,
+    ) -> Self {
+        self.details = Details::new(lines, mode);
+        self
+    }
+
+    /// What its Copy button puts on the clipboard.
+    pub fn copy_text(&self) -> String {
+        copy_text(&self.title, &self.text, &self.details)
+    }
+}
+
+impl Confirm {
+    /// What its Copy button puts on the clipboard.
+    pub fn copy_text(&self) -> String {
+        copy_text(&self.title, &self.detail, &self.details)
+    }
+}
+
+/// Where a dialog's details go.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DetailsMode {
+    /// The dialog's default: shown on an error ([`Info::error`]), hidden
+    /// otherwise.
+    #[default]
+    Auto,
+    /// Only in the copied text, never on screen.
+    Hidden,
+    /// Also on screen, in a collapsed "Details" section: a read-only,
+    /// monospace, selectable area holding the lines the Copy button
+    /// copies.
+    Shown,
+}
+
+/// A dialog's technical details, for a bug report: key-value lines,
+/// copied after its text under a `---` separator, each `key: value`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct Details {
+    pub lines: Vec<(String, String)>,
+    pub mode: DetailsMode,
+}
+
+impl Details {
+    pub fn new<K: Into<String>, V: Into<String>>(
+        lines: impl IntoIterator<Item = (K, V)>,
+        mode: DetailsMode,
+    ) -> Self {
+        Self {
+            lines: lines
+                .into_iter()
+                .map(|(k, v)| (k.into(), v.into()))
+                .collect(),
+            mode,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.lines.is_empty()
+    }
+
+    /// The lines, `key: value` each, one per line.
+    pub fn text(&self) -> String {
+        self.lines
+            .iter()
+            .map(|(k, v)| format!("{k}: {v}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// Shown on screen, in a dialog that is an error or not.
+    pub fn shown(&self, error: bool) -> bool {
+        !self.is_empty()
+            && match self.mode {
+                DetailsMode::Auto => error,
+                DetailsMode::Hidden => false,
+                DetailsMode::Shown => true,
+            }
+    }
+}
+
+/// The text a Copy button copies: the title, the message, then the
+/// details under a separator.
+fn copy_text(title: &str, message: &str, details: &Details) -> String {
+    let mut text = title.to_string();
+    if !message.is_empty() {
+        text.push_str("\n\n");
+        text.push_str(message);
+    }
+    if !details.is_empty() {
+        text.push_str("\n\n---\n");
+        text.push_str(&details.text());
+    }
+    text
 }
 
 /// A dialog with a body of its own (ADR 0013), drawn by a closure
@@ -849,6 +1021,9 @@ struct Open {
     drag_from: Option<Vec2>,
     /// Focus placed on its first pass.
     focused: bool,
+    /// When its Copy button was last clicked (egui's time): the "Copied"
+    /// note shows a moment.
+    copied_at: Option<f64>,
     /// The window it is shown over: the active one of its group when it
     /// came up.
     window: Option<egui::ViewportId>,
@@ -907,6 +1082,7 @@ impl Dialogs {
             moving: None,
             drag_from: None,
             focused: false,
+            copied_at: None,
             window: None,
             group: crate::windows::current_group(),
             picking: None,
@@ -1691,7 +1867,7 @@ fn custom_body(
                 values: values.clone(),
             });
         }
-    } else if let Some(a) = footer(ui, &c.verb, c.danger, focus_button) {
+    } else if let Some(a) = footer(ui, &c.verb, c.danger, focus_button, None) {
         answer = Some(match a {
             Answer::Accept { .. } => Answer::Accept {
                 values: values.clone(),
@@ -1761,21 +1937,38 @@ fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open, header: Header<'_>) -> Optio
             if !c.detail.is_empty() {
                 ui.label(&c.detail);
             }
+            if c.details.shown(false) {
+                details_section(ui, o.id, &c.details);
+            }
             let (verb, danger) = (c.verb.clone(), c.danger);
-            if let Some(a) = footer(ui, &verb, danger, first) {
+            let copy = c.copy.then(|| (c.copy_text(), &mut o.copied_at));
+            if let Some(a) = footer(ui, &verb, danger, first, copy) {
                 answer = Some(a);
-            } else if enter && !danger {
+            } else if enter && !danger && !copied_now(ui, o.copied_at) {
                 answer = Some(Answer::Accept { values: Map::new() });
             }
         }
         Dialog::Info(i) => {
             ui.label(&i.text);
+            if i.details.shown(i.error) {
+                details_section(ui, o.id, &i.details);
+            }
             ui.add_space(t.space.m);
-            let close = ui.button(strings::tr(ui.ctx(), &CLOSE));
+            let copy = i.copy.then(|| (i.copy_text(), &mut o.copied_at));
+            let close = ui
+                .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let close = ui.button(strings::tr(ui.ctx(), &CLOSE));
+                    if let Some((text, at)) = copy {
+                        copy_corner(ui, &text, at);
+                    }
+                    close
+                })
+                .inner;
             if first {
                 close.request_focus();
             }
-            if close.clicked() || enter {
+            // Enter on the Copy button copies, it does not close.
+            if close.clicked() || (enter && !copied_now(ui, o.copied_at)) {
                 answer = Some(Answer::Accept { values: Map::new() });
             }
         }
@@ -1908,7 +2101,7 @@ fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open, header: Header<'_>) -> Optio
                 files.show_inline(ui, app, id);
             }
             let verb = f.verb.clone();
-            if let Some(a) = footer(ui, &verb, false, false) {
+            if let Some(a) = footer(ui, &verb, false, false, None) {
                 answer = Some(match a {
                     Answer::Accept { .. } => Answer::Accept {
                         values: values_of(&f.fields),
@@ -2234,8 +2427,15 @@ fn close_button(ui: &mut Ui, side: f32) -> Response {
     band::button(ui, side, glyph, &name, false)
 }
 
-/// Cancel and the primary button, right-aligned.
-fn footer(ui: &mut Ui, verb: &str, danger: bool, first: bool) -> Option<Answer> {
+/// Cancel and the primary button, right-aligned; the Copy button in the
+/// other corner, given its text and when it last copied.
+fn footer(
+    ui: &mut Ui,
+    verb: &str,
+    danger: bool,
+    first: bool,
+    copy: Option<(String, &mut Option<f64>)>,
+) -> Option<Answer> {
     let t = Tokens::of(ui.ctx());
     ui.add_space(t.space.m);
     let mut answer = None;
@@ -2263,8 +2463,67 @@ fn footer(ui: &mut Ui, verb: &str, danger: bool, first: bool) -> Option<Answer> 
         if cancel.clicked() {
             answer = Some(Answer::Cancel);
         }
+        if let Some((text, at)) = copy {
+            copy_corner(ui, &text, at);
+        }
     });
     answer
+}
+
+/// How long the "Copied" note stays, in seconds.
+const COPIED_FOR: f64 = 2.0;
+
+/// The Copy button, at the start of the row left before it (the bottom
+/// left corner): the kit's `icon-button` with the copy icon, named and
+/// tooltipped "Copy", in the focus order after the dialog's buttons. A
+/// click puts `text` on the clipboard (egui's `copy_text`) and shows a
+/// short "Copied" note beside it.
+fn copy_corner(ui: &mut Ui, text: &str, at: &mut Option<f64>) {
+    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+        let ctx = ui.ctx().clone();
+        let name = strings::tr(&ctx, &txt::DIALOG_COPY);
+        let button = ui.add(Icon::Copy.size(IconSize::Inline).label(&name).sense_click());
+        let now = ctx.input(|i| i.time);
+        if button.clicked() {
+            ctx.copy_text(text.to_string());
+            *at = Some(now);
+        }
+        if let Some(when) = *at {
+            let left = COPIED_FOR - (now - when);
+            if left > 0.0 {
+                ui.text_role(TextRole::Muted, strings::tr(&ctx, &txt::DIALOG_COPIED));
+                ctx.request_repaint_after_secs(left as f32);
+            } else {
+                *at = None;
+            }
+        }
+    });
+}
+
+/// The Copy button copied during this pass (Enter on it copies only).
+fn copied_now(ui: &Ui, at: Option<f64>) -> bool {
+    at == Some(ui.input(|i| i.time))
+}
+
+/// A dialog's details on screen: a collapsed "Details" section holding a
+/// read-only, monospace, selectable area with the lines its Copy button
+/// copies.
+fn details_section(ui: &mut Ui, id: u64, details: &Details) {
+    let text = details.text();
+    let title = strings::tr(ui.ctx(), &txt::DIALOG_DETAILS);
+    egui::CollapsingHeader::new(&title)
+        .id_salt(("egui_pop.dialog.details", id))
+        .default_open(false)
+        .show(ui, |ui| {
+            let mut shown = text.as_str();
+            ui.add(
+                egui::TextEdit::multiline(&mut shown)
+                    .font(egui::TextStyle::Monospace)
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(details.lines.len().clamp(1, 8)),
+            )
+            .on_hover_text(&title);
+        });
 }
 
 /// A field's editor, labelled by `label`.

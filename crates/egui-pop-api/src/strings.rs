@@ -424,6 +424,9 @@ pub const SHORTCUTS_TARGET_WORKSPACE: StrKey =
 
 pub const DIALOG_FILTER: StrKey = StrKey::new("egui-pop-dialog-filter", "Filter");
 pub const DIALOG_BROWSE: StrKey = StrKey::new("egui-pop-dialog-browse", "Browse…");
+pub const DIALOG_COPY: StrKey = StrKey::new("egui-pop-dialog-copy", "Copy");
+pub const DIALOG_COPIED: StrKey = StrKey::new("egui-pop-dialog-copied", "Copied.");
+pub const DIALOG_DETAILS: StrKey = StrKey::new("egui-pop-dialog-details", "Details");
 pub const PICKER_UP: StrKey = StrKey::new("egui-pop-picker-up", "Up");
 pub const PICKER_CHOOSE_FOLDER: StrKey =
     StrKey::new("egui-pop-picker-choose-folder", "Choose this folder");
@@ -1572,6 +1575,9 @@ pub const ALL: &[StrKey] = &[
     SHORTCUTS_TARGET_WORKSPACE,
     DIALOG_FILTER,
     DIALOG_BROWSE,
+    DIALOG_COPY,
+    DIALOG_COPIED,
+    DIALOG_DETAILS,
     PICKER_UP,
     PICKER_CHOOSE_FOLDER,
     PICKER_CLOSE,
