@@ -8,6 +8,28 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 2026-11-12
+
+Published: egui-pop-tokens 0.2.7, egui-pop-core 0.9.3, egui-pop-api 0.9.4.
+
+### Features
+
+- egui-pop-api: The Settings app's window mode (`admin.window`, "Pop out") is an
+  application window (`admin::APP_WINDOW`, id `settings`) rather than an
+  immediate viewport: it repaints on its own, draws the application's
+  title bar when the application draws its frame, keeps its size and
+  place, closes alone (its close button, Escape, Close, `admin.close`),
+  and moves into the main window when the main window is closed while it
+  is open. Where the backend has no windows of its own (the web,
+  kittest), the overlay as before.
+- egui-pop-api, egui-pop-core, egui-pop-tokens: The guide shown while a side area's line is dragged far enough to fold
+  it takes `side-area.fold.border-width` and `border-color` (width 0: no
+  guide; a term left out keeps egui_stack's guide stroke). The edge of a
+  side area lying over the centre draws the hover and drag line from
+  `side-area.hover.border-*` and `side-area.active.border-*`, none without
+  them. New `Kit::fold_guide_stroke`, `paint_snap_guide`,
+  `paint_over_edge`, `AreaLineKit::fold`. Needs egui_stack 0.25.11.
+
 ## 0.10.2 (2026-11-12)
 
 Published: egui-pop-tokens 0.2.6, egui-pop-core 0.9.2, egui-pop-api 0.9.3, egui-pop-test 0.10.1, egui-pop 0.10.2.

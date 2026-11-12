@@ -1379,7 +1379,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-api"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "eframe",
  "egui",
@@ -1412,7 +1412,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-core"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "egui",
  "egui-pop-model",
@@ -1587,7 +1587,7 @@ version = "0.1.0"
 
 [[package]]
 name = "egui-pop-tokens"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "egui-pop-test-macros",
  "flate2",
