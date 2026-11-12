@@ -561,6 +561,24 @@ fn a_bare_strip_keeps_its_width_draws_no_icon_and_a_click_unfolds() {
     assert!(h.query_by_label("files body").is_some());
 }
 
+/// A bare strip is a button as a whole: a click well below its grip, at
+/// the window's mid-height, unfolds the area too.
+#[test]
+fn a_click_anywhere_on_a_bare_strip_unfolds_it() {
+    let mut h = harness(builder().bare_strips(&[Area::StartSide]));
+    let app = h.state().handle().clone();
+    let grip = h.get_by_label("Unfold the start side bar").rect();
+    let screen = h.ctx.content_rect();
+    let at = egui::pos2(grip.center().x, screen.center().y);
+    assert!(
+        at.y > grip.bottom() + grip.height(),
+        "{at:?} is not below the grip {grip:?}"
+    );
+    click_at(&mut h, at);
+    assert!(app.layout().folded.is_empty());
+    assert!(h.query_by_label("files body").is_some());
+}
+
 /// Presses at `from`, moves to `to` a frame at a time and releases there.
 fn drag_release(h: &mut Harness<'static, App>, from: egui::Pos2, to: egui::Pos2) {
     let mut send = |e: egui::Event| {
