@@ -27,7 +27,7 @@ command-about-read.title db312930f9856d95
 command-about.description 30c0275d84dc5428
 command-about.title d51842d2cbfc1eb6
 command-admin-close.title 277c580ae6de3982
-command-admin-open.description 2a96bc61112ab9ee
+command-admin-open.description 4020d707a179afe3
 command-admin-open.title 3b5b172596a8843e
 command-admin-popOut.description 8dee1e14ef113328
 command-admin-popOut.title a152e476d18d4805
@@ -555,6 +555,7 @@ egui-pop-admin-for-library 675618c602c695ec
 egui-pop-admin-for-workspace fd397a7452b7fe8e
 egui-pop-admin-modified 3d3fba55725804c0
 egui-pop-admin-modified-count 61c5304474f67f80
+egui-pop-admin-nav-resize 53b2149d26badea8
 egui-pop-admin-no-records 60e3f6e790f99f8a
 egui-pop-admin-no-widget 038cd11fce82df92
 egui-pop-admin-origin-library b8fdb419351a2926
