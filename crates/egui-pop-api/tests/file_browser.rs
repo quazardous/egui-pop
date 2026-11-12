@@ -640,6 +640,149 @@ fn the_carousel_asks_for_the_middle_first_then_outwards() {
     assert_eq!(last.len() - near, 2);
 }
 
+#[test]
+fn the_carousel_middle_follows_the_thumbnail_size_within_the_room() {
+    let mut small = harness(carousel("car-size-small", 30));
+    small.state_mut().set_thumbnail_size(96.0);
+    small
+        .state_mut()
+        .focus_on(Path::new("/p/IMG_010.png"), false);
+    small.run();
+    small.run();
+    let mut large = harness(carousel("car-size-large", 30));
+    large.state_mut().set_thumbnail_size(160.0);
+    large
+        .state_mut()
+        .focus_on(Path::new("/p/IMG_010.png"), false);
+    large.run();
+    large.run();
+    let s = small.get_by_label("IMG_010.png").rect();
+    let l = large.get_by_label("IMG_010.png").rect();
+    // The plain drawer's cell is its thumbnail and 8 points of margin.
+    assert!((s.width() - 104.0).abs() < 1.0, "{s:?}");
+    assert!((l.width() - 168.0).abs() < 1.0, "{l:?}");
+    // The largest size, clamped: the middle still fits a third of the room.
+    large.state_mut().set_thumbnail_size(256.0);
+    large.run();
+    large.run();
+    let c = large.get_by_label("IMG_010.png").rect();
+    assert!(
+        c.width() <= 640.0 * browser::CarouselMode::MIDDLE + 0.5,
+        "{c:?}"
+    );
+    assert!(c.width() > l.width(), "{c:?}");
+}
+
+/// Draws each cell as an empty box of the size it says, and keeps the
+/// rects drawn.
+struct Boxes {
+    cell: fn(f32) -> egui::Vec2,
+    rects: Vec<(usize, egui::Rect)>,
+}
+
+impl browser::EntryDrawer for Boxes {
+    fn row_size(&self, _ui: &egui::Ui, width: f32) -> egui::Vec2 {
+        egui::vec2(width, 20.0)
+    }
+
+    fn row(&mut self, ui: &mut egui::Ui, _n: usize, size: egui::Vec2) -> egui::Response {
+        ui.allocate_exact_size(size, egui::Sense::click()).1
+    }
+
+    fn cell_size(&self, _ui: &egui::Ui, side: f32) -> egui::Vec2 {
+        (self.cell)(side)
+    }
+
+    fn cell(
+        &mut self,
+        ui: &mut egui::Ui,
+        n: usize,
+        size: egui::Vec2,
+        _thumbnail: browser::ThumbState,
+    ) -> egui::Response {
+        let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+        self.rects.push((n, rect));
+        resp
+    }
+}
+
+/// The cells a carousel draws with `cell` as its drawer's sizes, on a
+/// 640 x 400 room, the focus on entry 10 of 30.
+fn carousel_cells(cell: fn(f32) -> egui::Vec2) -> Vec<(usize, egui::Rect)> {
+    let entries: Vec<_> = (1..=30)
+        .map(|i| browser::SourceEntry {
+            path: PathBuf::from(format!("/p/IMG_{i:03}.png")),
+            name: format!("IMG_{i:03}.png"),
+            kind: browser::EntryKind::File,
+            size: None,
+            modified: None,
+            taken: None,
+            app_id: None,
+        })
+        .collect();
+    let mut rects = Vec::new();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(640.0, 400.0))
+        .build_ui(|ui| {
+            let mut drawer = Boxes {
+                cell,
+                rects: Vec::new(),
+            };
+            let mut settings = browser::ModeSettings {
+                thumbnail_size: 200.0,
+                ..browser::ModeSettings::default()
+            };
+            let selection = browser::Selection::default();
+            let cx = browser::ModeContext {
+                entries: &entries,
+                selection: &selection,
+                focus: Some(9),
+                thumbnails: &browser::NoThumbnails,
+                settings: &mut settings,
+                id: egui::Id::unique("car-boxes"),
+                reveal_focus: false,
+                max_height: Some(400.0),
+                drawer: Some(&mut drawer),
+                name: None,
+                many: false,
+                place: Path::new("/p"),
+                ancestors: &[],
+                peek: None,
+                loading: false,
+                generation: 0,
+                marks: None,
+            };
+            let _ = browser::ViewMode::show(&mut browser::CarouselMode::default(), ui, cx);
+            rects = drawer.rects;
+        });
+    h.run();
+    drop(h);
+    rects
+}
+
+#[test]
+fn carousel_cells_wider_than_their_thumbnails_never_overlap() {
+    // A wide frame around the thumbnail, in proportion; a fixed least
+    // width (a long label); both.
+    let drawers: [fn(f32) -> egui::Vec2; 3] = [
+        |side| egui::vec2(side * 1.6, side + 20.0),
+        |side| egui::vec2(side.max(140.0), side + 20.0),
+        |side| egui::vec2((side * 1.4).max(90.0), side + 30.0),
+    ];
+    for (d, cell) in drawers.into_iter().enumerate() {
+        let rects = carousel_cells(cell);
+        assert!(rects.len() >= 3, "drawer {d}: {rects:?}");
+        for (a, (i, ra)) in rects.iter().enumerate() {
+            for (j, rb) in &rects[a + 1..] {
+                assert!(
+                    !ra.shrink(0.5).intersects(rb.shrink(0.5)),
+                    "drawer {d}: cells {i} and {j} overlap: {ra:?} {rb:?}"
+                );
+            }
+        }
+    }
+}
+
 /// `/d` holding files changed on three days and a folder without a time.
 fn days() -> Arc<dyn FileSource> {
     let at = |day: u64, hour: u64| {
