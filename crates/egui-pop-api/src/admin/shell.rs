@@ -36,42 +36,20 @@ use crate::app::AppHandle;
 use crate::hooks::SettingEntry;
 use crate::settings_window;
 use crate::strings as txt;
+use crate::windows::{WindowId, WindowSpec, WindowUi};
 
 /// Draws the app while it is open, in the mode the `admin.window`
-/// setting says.
+/// setting says: an overlay of the main window, or an application window
+/// of its own ([`super::APP_WINDOW`]). Where the backend has no windows of
+/// its own (the web, kittest), the overlay.
 pub(super) fn show(ui: &mut Ui, app: &AppHandle) {
     let Some(admin) = app.service(&ADMIN) else {
         return;
     };
-    if !admin.is_open() {
-        return;
-    }
     let ctx = ui.ctx().clone();
-    if in_window(app) {
-        let title = strings::tr(&ctx, &txt::SETTINGS_TITLE);
-        let builder = egui::ViewportBuilder::default()
-            .with_title(title)
-            .with_inner_size([1000.0, 700.0]);
-        let mut close = false;
-        ctx.show_viewport_immediate(
-            egui::ViewportId::from_hash_of("egui_pop.admin"),
-            builder,
-            |ui, _class| {
-                if ui.ctx().input(|i| i.viewport().close_requested()) {
-                    close = true;
-                }
-                egui::CentralPanel::default().show(ui, |ui| {
-                    tab::scope(ui, "egui_pop.admin", ScopeKind::Panel, |ui| {
-                        if page(ui, app, &admin) {
-                            close = true;
-                        }
-                    });
-                });
-            },
-        );
-        if close {
-            admin.close();
-        }
+    let windowed = in_window(app) && !ctx.embed_viewports();
+    follow_window(app, &admin, &ctx, windowed);
+    if !admin.is_open() || windowed {
         return;
     }
     let spec = OverlaySpec::new("egui_pop.admin", "Settings", Kind::Modal).keep_on_escape();
@@ -106,6 +84,70 @@ pub(super) fn show(ui: &mut Ui, app: &AppHandle) {
     if close || !open {
         admin.close();
         overlay::close(&ctx, spec.id);
+    }
+}
+
+/// The application window the app is drawn in while it is open in the
+/// window mode, opened and closed with it; closed by itself (its close
+/// button, `window.close`), the app closes. In the overlay mode, or
+/// closed, no window.
+fn follow_window(app: &AppHandle, admin: &Admin, ctx: &egui::Context, windowed: bool) {
+    let id = WindowId::new(super::APP_WINDOW);
+    let there = app.window_viewport(&id).is_some();
+    let wanted = windowed && admin.is_open();
+    let shown = admin.window_shown();
+    match (wanted, there) {
+        // Closed by itself: the app closes with it.
+        (true, false) if shown => {
+            admin.set_window_shown(false);
+            admin.close();
+        }
+        (true, false) => {
+            admin.set_window_shown(true);
+            let title = strings::tr(ctx, &txt::SETTINGS_TITLE);
+            let spec = WindowSpec::new(super::APP_WINDOW, title)
+                .size([1000.0, 700.0])
+                .min_size([PAGE_MIN_WIDTH + NAV_MIN_WIDTH + 48.0, 320.0]);
+            app.open_window(spec, window_content);
+        }
+        (false, true) => {
+            admin.set_window_shown(false);
+            app.close_window(&id);
+        }
+        (false, false) => admin.set_window_shown(false),
+        (true, true) => {}
+    }
+}
+
+/// The app's application window: the page, drawn in the window's own
+/// pass. Its close button, the page's Close and Escape close the app.
+fn window_content(ui: &mut Ui, window: &mut WindowUi<'_>) {
+    let app = window.app().clone();
+    let Some(admin) = app.service(&ADMIN) else {
+        return;
+    };
+    let title = strings::tr(ui.ctx(), &txt::SETTINGS_TITLE);
+    if window.title() != title {
+        window.set_title(title);
+    }
+    if window.close_requested() || !admin.is_open() {
+        admin.set_window_shown(false);
+        admin.close();
+        window.close();
+        return;
+    }
+    let mut close = false;
+    egui::CentralPanel::default().show(ui, |ui| {
+        tab::scope(ui, "egui_pop.admin", ScopeKind::Panel, |ui| {
+            if page(ui, &app, &admin) {
+                close = true;
+            }
+        });
+    });
+    if close {
+        admin.set_window_shown(false);
+        admin.close();
+        window.close();
     }
 }
 
@@ -175,7 +217,9 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
         let mut nav_width = kept.clamp(NAV_MIN_WIDTH, max_nav);
         // The top row: the search, above the tree and as wide, then pop out
         // and close.
-        let mut window = in_window(app);
+        // The overlay where windows are embedded, whatever the mode: it offers
+        // to pop out.
+        let mut window = in_window(app) && !ctx.embed_viewports();
         ui.horizontal(|ui| {
             let hint = strings::tr(&ctx, &txt::ADMIN_SEARCH_HINT);
             let r = ui.add(
