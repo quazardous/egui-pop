@@ -347,10 +347,7 @@ const TWO_WINDOWS: &str = r#"Scenario(
 )"#;
 
 /// The scenario's last step names a window that is not open.
-fn assert_two_windows(
-    r: Result<egui_pop_test::scenario::live::LivePassed, Box<egui_pop_test::scenario::Failure>>,
-    pressed: &Mutex<[u32; 2]>,
-) {
+fn assert_two_windows(r: LiveResult, pressed: &Mutex<[u32; 2]>) {
     let f = r.expect_err("no window `third`");
     assert_eq!(f.step, Some(14), "{f}");
     assert!(f.message.contains("no window `third`"), "{f}");
@@ -428,17 +425,16 @@ fn a_key_that_closes_an_embedded_window_answers_its_step_live() {
     assert_eq!(*pressed.lock().unwrap(), [1, 0]);
 }
 
+type LiveResult =
+    Result<egui_pop_test::scenario::live::LivePassed, Box<egui_pop_test::scenario::Failure>>;
+
 /// Runs `scenario` live against the two windows, each application
 /// window a viewport of its own, each window's pass on its own, as
 /// eframe runs them.
 fn run_in_own_windows(
     name: &str,
     scenario: &str,
-) -> (
-    Result<egui_pop_test::scenario::live::LivePassed, Box<egui_pop_test::scenario::Failure>>,
-    Arc<Mutex<[u32; 2]>>,
-    MultiWindow,
-) {
+) -> (LiveResult, Arc<Mutex<[u32; 2]>>, MultiWindow) {
     let dir = private_dir(name);
     let path = dir.join("app.sock");
     let (builder, pressed) = two_windows();
