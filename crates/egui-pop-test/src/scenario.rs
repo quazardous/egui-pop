@@ -83,8 +83,10 @@ pub enum Step {
     /// act in: an application window's id (ADR 0025), `main` for the
     /// main window. Before the first, they read the main window with what
     /// is embedded in it. Live, the window's own tree and input; headless
-    /// (kittest embeds the windows in the main one), the subtree of its
-    /// embedded window, and `main` without the embedded ones.
+    /// (kittest embeds the windows in the main one), its embedded window
+    /// and what is in it, and `main` without the embedded ones. Either
+    /// way, an application window's tree has a `Window` node named by its
+    /// title.
     Window(String),
 }
 
@@ -997,7 +999,14 @@ fn matching<'h>(
                 w.title
             ));
         };
-        return Ok(root.query_all(by_node(n)).collect());
+        // The window itself, then what is in it.
+        let itself = is(n, &root.accesskit_node());
+        let inside = root.query_all(by_node(n));
+        return Ok(itself
+            .then(|| root.clone())
+            .into_iter()
+            .chain(inside)
+            .collect());
     }
     let others: Vec<_> = windows
         .iter()
@@ -1017,6 +1026,16 @@ fn matching<'h>(
             true
         })
         .collect())
+}
+
+/// Whether an AccessKit node is `n` (its label and role; `nth` aside).
+fn is(n: &Node, node: &egui_kittest::kittest::AccessKitNode<'_>) -> bool {
+    n.label
+        .as_ref()
+        .is_none_or(|l| node.label().as_deref() == Some(l.as_str()))
+        && n.role
+            .as_ref()
+            .is_none_or(|r| format!("{:?}", node.role()).eq_ignore_ascii_case(r))
 }
 
 fn count(h: &Harness<'static, App>, window: Option<&str>, n: &Node) -> Result<usize, String> {

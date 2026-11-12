@@ -319,18 +319,21 @@ fn two_windows() -> (AppBuilder, Arc<Mutex<[u32; 2]>>) {
 }
 
 /// Clicks the second window's "Press", then the main window's: the same
-/// name in each, told apart by the `Window` step.
+/// name in each, told apart by the `Window` step; each window's tree has
+/// a `Window` node named by its title.
 const TWO_WINDOWS: &str = r#"Scenario(
     name: "two-windows-live",
     fixtures: [Fixture("test.second", ())],
     steps: [
         Wait(Settled),
         Window("second"),
+        Expect(Tree(has: (role: "Window", label: "Second"))),
         Ui(Click(role: "Button", label: "Press")),
         Wait(Settled),
         Expect(Tree(has: (label: "second pressed 1"), lacks: (label: "main pressed 0"))),
         Window("main"),
-        Expect(Tree(has: (label: "main pressed 0"), lacks: (label: "second pressed 1"))),
+        Expect(Tree(has: (label: "main pressed 0"), lacks: (role: "Window", label: "Second"))),
+        Expect(Tree(lacks: (label: "second pressed 1"))),
         Ui(Click(role: "Button", label: "Press")),
         Wait(Settled),
         Expect(Tree(has: (label: "main pressed 1"))),
@@ -345,7 +348,7 @@ fn assert_two_windows(
     pressed: &Mutex<[u32; 2]>,
 ) {
     let f = r.expect_err("no window `third`");
-    assert_eq!(f.step, Some(12), "{f}");
+    assert_eq!(f.step, Some(14), "{f}");
     assert!(f.message.contains("no window `third`"), "{f}");
     assert_eq!(*pressed.lock().unwrap(), [1, 1]);
 }

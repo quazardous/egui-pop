@@ -772,9 +772,10 @@ impl UiSide {
 }
 
 /// Where a `ui` request for `window` reads and acts (ADR 0025): the main
-/// window's viewport without one; an application window's own viewport,
-/// or, where egui embeds the windows in the main one, the main viewport
-/// within (or, for the main window, without) the embedded windows.
+/// window's viewport without one; an application window's own viewport
+/// (its root named by its title), or, where egui embeds the windows in the
+/// main one, the main viewport within (or, for the main window, without)
+/// the embedded windows.
 fn ui_scope(app: &AppHandle, window: Option<&str>) -> Result<ui::Scope, String> {
     let root = ui::Scope::viewport(egui::ViewportId::ROOT);
     let Some(name) = window else {
@@ -786,7 +787,10 @@ fn ui_scope(app: &AppHandle, window: Option<&str>) -> Result<ui::Scope, String> 
         return Err(format!("no window `{name}`: the open ones are {open:?}"));
     };
     if !app.egui().embed_viewports() {
-        return Ok(ui::Scope::viewport(w.viewport));
+        return Ok(ui::Scope {
+            title: (!w.main).then(|| w.title.clone()),
+            ..ui::Scope::viewport(w.viewport)
+        });
     }
     Ok(if w.main {
         ui::Scope {

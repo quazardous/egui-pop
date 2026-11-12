@@ -93,7 +93,7 @@ look at with `Window`, which holds until the next `Window`:
 Ui(Click(role: "Button", label: "Import photos…")),
 Wait(Settled),
 Window("import"),
-Expect(Tree(has: (role: "Button", label: "Import"))),
+Expect(Tree(has: (role: "Window", label: "Import photos"))),
 Ui(Click(role: "Button", label: "Import")),
 Window("main"),
 Expect(Tree(lacks: (label: "Import photos"))),
@@ -102,8 +102,12 @@ Expect(Tree(lacks: (label: "Import photos"))),
 Before the first `Window`, the steps read the main window with what is
 embedded in it, as they always did. Live, a window of its own has its
 own tree and input. In-process, kittest embeds every window in the main
-one as an egui window titled as it: a window is that embedded window's
-subtree, and `main` the rest. A window that is not open breaks the step
+one as an egui window titled as it: a window is that embedded window and
+what is in it, and `main` the rest. Either way an application window's
+tree has a `Window` node named by its title (`Expect(Tree(has: (role:
+"Window", label: "Import photos")))`): the embedded window's, or, in a
+window of its own, the root node, whose title is otherwise only the
+system's title bar. A window that is not open breaks the step
 that reads it, naming the open ones. `Call`, `Wait` and `Expect(Value)`
 are not affected: a call goes where the agent's calls go without a
 window (the active one).

@@ -83,12 +83,14 @@ fn scenario_a_window_step_clicks_in_the_second_window_then_in_the_main_one() {
             steps: [
                 Wait(Settled),
                 Window("second"),
+                Expect(Tree(has: (role: "Window", label: "Second"))),
                 Expect(Tree(has: (label: "second pressed 0"), lacks: (label: "main pressed 0"))),
                 Ui(Click(role: "Button", label: "Press")),
                 Wait(Settled),
                 Expect(Tree(has: (label: "second pressed 1"))),
                 Window("main"),
-                Expect(Tree(has: (label: "main pressed 0"), lacks: (label: "second pressed 1"))),
+                Expect(Tree(has: (label: "main pressed 0"), lacks: (role: "Window", label: "Second"))),
+                Expect(Tree(lacks: (label: "second pressed 1"))),
                 Ui(Click(role: "Button", label: "Press")),
                 Wait(Settled),
                 Expect(Tree(has: (label: "main pressed 1"))),
@@ -99,7 +101,7 @@ fn scenario_a_window_step_clicks_in_the_second_window_then_in_the_main_one() {
     let passed = runner(&pressed)
         .run(&scenario)
         .unwrap_or_else(|f| panic!("{f}"));
-    assert_eq!(passed.steps, 11);
+    assert_eq!(passed.steps, 13);
     assert_eq!((pressed[0].get(), pressed[1].get()), (1, 1));
 }
 

@@ -23,8 +23,9 @@
 //! the main window; ADR 0025), whose tree is read and whose input the
 //! events go to. Without it, the main window's (its own viewport, with
 //! what egui embeds in it). Where egui embeds the application windows in
-//! the main one (the web, kittest), a window is the subtree of its
-//! embedded `Window` node, and `main` is the main window without them.
+//! the main one (the web, kittest), a window is its embedded `Window`
+//! node and what is in it, and `main` is the main window without them; in
+//! a window of its own, the unnamed root node takes the window's title.
 //!
 //! A node is found by its label (exactly) and its role (`Button`,
 //! `Window`, `TextInput`, any case); an action needs exactly one, or
@@ -33,6 +34,7 @@
 //! `tree` needs the bridge on or read-only; the others change the
 //! application, so they need it on (`BridgeMode::On`).
 
+use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
@@ -106,10 +108,14 @@ impl Shared {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Scope {
     pub viewport: ViewportId,
-    /// Only the subtree of the embedded window of this title.
+    /// Only the embedded window of this title, and what is in it.
     pub within: Option<String>,
-    /// Without the subtrees of the embedded windows of these titles.
+    /// Without the embedded windows of these titles.
     pub without: Vec<String>,
+    /// An application window's title, the name of its own viewport's
+    /// root node (a `Window` node egui leaves unnamed; the title is the
+    /// system's title bar), as its embedded window is named.
+    pub title: Option<String>,
 }
 
 impl Scope {
@@ -119,7 +125,23 @@ impl Scope {
             viewport,
             within: None,
             without: Vec::new(),
+            title: None,
         }
+    }
+
+    /// `tree`, its unnamed root named by [`Scope::title`].
+    pub(crate) fn named<'t>(&self, tree: &'t [UiNode]) -> Cow<'t, [UiNode]> {
+        let Some(title) = &self.title else {
+            return Cow::Borrowed(tree);
+        };
+        let mut tree = tree.to_vec();
+        for n in tree
+            .iter_mut()
+            .filter(|n| n.parent.is_none() && n.label.as_deref().is_none_or(str::is_empty))
+        {
+            n.label = Some(title.clone());
+        }
+        Cow::Owned(tree)
     }
 
     /// The nodes of `tree` in scope.
@@ -152,7 +174,10 @@ impl Scope {
             if roots.is_empty() {
                 return Err(format!("the window \"{title}\" is not in the tree"));
             }
-            return Ok(tree.iter().filter(|n| under(n.id, &roots)).collect());
+            return Ok(tree
+                .iter()
+                .filter(|n| roots.contains(&n.id) || under(n.id, &roots))
+                .collect());
         }
         let roots: Vec<u64> = self.without.iter().flat_map(|t| window(t)).collect();
         Ok(tree
@@ -371,8 +396,9 @@ impl Request {
         if let Action::Key(m, k) = &self.action {
             return Ok((key_batches(*m, *k), json!({ "key": format!("{k:?}") })));
         }
+        let tree = scope.named(tree);
         let hits: Vec<&UiNode> = scope
-            .nodes(tree)?
+            .nodes(&tree)?
             .into_iter()
             .filter(|n| n.matches(self.label.as_deref(), self.role.as_deref()))
             .collect();
@@ -589,7 +615,7 @@ mod tests {
             within: Some("Second".into()),
             ..Scope::viewport(ViewportId::ROOT)
         };
-        assert_eq!(ids(&second), [4, 5]);
+        assert_eq!(ids(&second), [3, 4, 5]);
         let main = Scope {
             without: vec!["Second".into()],
             ..Scope::viewport(ViewportId::ROOT)
@@ -610,5 +636,27 @@ mod tests {
         assert!(click.on_tree(&tree, &gone).unwrap_err().contains("Third"));
         let w = Request::from_params(&json!({ "action": "tree", "window": "second" })).unwrap();
         assert_eq!(w.window.as_deref(), Some("second"));
+        // A window of its own: its unnamed root takes its title.
+        let own = vec![
+            UiNode {
+                label: None,
+                ..node(1, "Window", "")
+            },
+            child(2, 1, "Button", "OK"),
+        ];
+        let titled = Scope {
+            title: Some("Second".into()),
+            ..Scope::viewport(ViewportId::ROOT)
+        };
+        let find =
+            Request::from_params(&json!({ "action": "tree", "role": "Window", "label": "Second" }))
+                .unwrap();
+        assert_eq!(find.on_tree(&own, &titled).unwrap().1["count"], 1);
+        assert_eq!(
+            find.on_tree(&own, &Scope::viewport(ViewportId::ROOT))
+                .unwrap()
+                .1["count"],
+            0
+        );
     }
 }

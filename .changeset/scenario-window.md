@@ -12,5 +12,6 @@ kittest harness, where the windows are embedded in the main one, to
 its embedded window. `Step` gains the `Window` variant, a break for
 code matching every step. The agent socket's `ui` method (and the MCP
 `ui` tool) takes `window` as `call` and `snapshot` do: a window of its
-own has its own tree and input, and where egui embeds the windows, a
-window is its embedded window's subtree and `main` the rest.
+own has its own tree and input, its root node named by the window's
+title, and where egui embeds the windows, a window is its embedded
+window and what is in it, and `main` the rest.

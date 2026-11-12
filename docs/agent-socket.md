@@ -98,8 +98,11 @@ found twice, is error `-32003`, with the reason.
 an OS window of its own has its own tree and its own input. Without
 it, the main window, with what egui embeds in it. Where egui embeds the
 application windows in the main one (the web, a kittest harness), a
-window is the subtree of its embedded `Window` node (found by its
-title), and `main` is the main window without them. A window that is
+window is its embedded `Window` node (found by its title) and what is
+in it, and `main` is the main window without them. In a window of its
+own, the root node (a `Window` node egui leaves unnamed) takes the
+window's title, so an application window's tree has a `Window` node
+named by its title either way. A window that is
 not open is error `-32602`, naming the open ones.
 
 `commands.run` through `call` is queued for the next frame, as
