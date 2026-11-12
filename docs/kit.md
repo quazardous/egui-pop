@@ -229,6 +229,9 @@ dropped in silence. Replacing one means an egui-pop-drawn widget.
   Under the pointer and while dragged it takes egui's hovered and active
   widget strokes, unless the kit gives `side-area.hover.border-*` or
   `side-area.active.border-*` (Side areas, under [Built so far](#built-so-far)).
+  The guide shown while a drag would fold the area keeps egui_stack's
+  guide stroke (`LayoutStyle::snap_guide`, egui's selection colour)
+  unless the kit gives `side-area.fold.border-*`.
 
 Two parts of the token tree are outside the grid on purpose:
 
@@ -422,11 +425,19 @@ compiled at install.
   colour alone keeps the width at rest, a width alone egui's colour. A
   state whose tokens say nothing is drawn with egui's widget stroke
   (`widgets.hovered.fg_stroke`, `widgets.active.fg_stroke`), as the
-  default kit does. A side area may lie over the centre
+  default kit does. Dragged far enough to fold the area on release, the
+  line shows a guide where the strip will be: `side-area.fold.border-width`
+  and `border-color` draw it apart from the line (a width of 0: no
+  guide; a term left out keeps egui_stack's guide stroke, a 1-point line
+  in egui's selection colour). A side area may lie over the centre
   (`workbench.place`): its strip keeps the room (`selected` while the
   area is open; a click folds it) and the area is drawn above the
   centre in `side-area`'s box, casting its `shadow-*` towards the centre
-  (`shadow.side` by default). The gallery's `workbench-over-pop-dark`
+  (`shadow.side` by default). Its edge on the centre's side, which
+  resizes it, draws the line under the pointer and while dragged only
+  when the kit gives `side-area.hover.border-*` or
+  `side-area.active.border-*`, as a docked area's; without them it draws
+  none, as before. The gallery's `workbench-over-pop-dark`
   snapshot shows it.
 - **egui's own widgets** (`button`, `field`). egui's style is built from
   the kit when a theme is installed (`theme::style_with`): `button`'s

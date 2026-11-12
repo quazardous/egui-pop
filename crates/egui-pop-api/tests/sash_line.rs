@@ -2,7 +2,9 @@
 //! dragged, and the side area's grip: their states come from the kit's
 //! tokens (`side-area.hover.border-*`, `side-area.active.border-*`,
 //! `area-grip.hover.fill`), egui's widget strokes when the theme says
-//! nothing.
+//! nothing. The same tokens draw the free edge of a side area lying over
+//! the centre; the guide shown while a drag would fold the area takes
+//! `side-area.fold.border-*`.
 
 use egui::{Color32, Pos2, Rect, Shape, Stroke};
 use egui_kittest::Harness;
@@ -11,6 +13,7 @@ use egui_pop_api::{App, Ctx, DefaultPlugins, Plugin, PluginError};
 use egui_pop_core::theme::ThemeSpec;
 use egui_pop_core::tokens::kit::KitData;
 use egui_pop_model::ids::{PanelId, PluginId};
+use egui_pop_model::layout::Placement;
 use egui_pop_model::panels::{Area, PanelSpec};
 
 const FILES: PanelId = PanelId::from_static("demo.files");
@@ -198,4 +201,142 @@ area-grip:
     assert!(!fills(&h).contains(&hovered), "at rest");
     hover(&mut h, rect.center());
     assert!(fills(&h).contains(&hovered), "hovered");
+}
+
+/// Presses on `at` and drags to `to` in steps, held there.
+fn drag_to(h: &mut Harness<'_, App>, at: Pos2, to: Pos2) {
+    send(h, egui::Event::PointerMoved(at));
+    send(
+        h,
+        egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        },
+    );
+    for i in 1..=8 {
+        send(h, egui::Event::PointerMoved(at.lerp(to, i as f32 / 8.0)));
+    }
+    h.step();
+}
+
+/// Drags the start side area's sash to the window's left edge, where the
+/// area folds on release, and returns the full-height lines left of where
+/// the sash was: the fold guide among them.
+fn fold_guide_lines(h: &mut Harness<'_, App>) -> Vec<Stroke> {
+    let rect = sash(h);
+    drag_to(h, rect.center(), egui::pos2(4.0, rect.center().y));
+    lines(h, 0.0..=rect.left() - 40.0, rect.height())
+}
+
+#[test]
+fn without_tokens_the_fold_guide_keeps_egui_stack_s_stroke() {
+    let mut h = harness(None);
+    let guide = h.ctx.global_style().visuals.selection.stroke.color;
+    let lines = fold_guide_lines(&mut h);
+    assert!(
+        lines.contains(&Stroke::new(1.0, guide)),
+        "the fold guide: {lines:?}"
+    );
+}
+
+#[test]
+fn the_fold_guide_takes_its_tokens() {
+    let mut h = harness(Some(
+        r##"
+side-area:
+  fold:
+    border-width: {$type: "dimension", $value: {value: 3, unit: "px"}}
+    border-color: {$type: "color", $value: "#ff0000"}
+"##,
+    ));
+    let lines = fold_guide_lines(&mut h);
+    assert!(
+        lines.contains(&Stroke::new(3.0, Color32::RED)),
+        "the fold guide: {lines:?}"
+    );
+}
+
+#[test]
+fn a_zero_width_fold_guide_is_not_painted() {
+    // Red, so the guide tells itself from the dragged line beside it.
+    let mut h = harness(Some(
+        r##"
+side-area:
+  fold:
+    border-width: {$type: "dimension", $value: {value: 0, unit: "px"}}
+    border-color: {$type: "color", $value: "#ff0000"}
+"##,
+    ));
+    let lines = fold_guide_lines(&mut h);
+    assert!(
+        lines.iter().all(|s| s.color != Color32::RED),
+        "no fold guide: {lines:?}"
+    );
+}
+
+/// The app with the start side area lying over the centre, and the edge
+/// that resizes it.
+fn over(yaml: Option<&str>) -> (Harness<'static, App>, Rect) {
+    let mut h = harness(yaml);
+    let app = h.state().handle().clone();
+    let out = app.place_area(Area::StartSide, Placement::Over).unwrap();
+    assert!(out.ok(), "{out:?}");
+    h.run();
+    h.run();
+    assert_eq!(app.area_placement(Area::StartSide), Placement::Over);
+    let edge = sash(&h);
+    (h, edge)
+}
+
+const OVER_LINE: &str = r##"
+side-area:
+  hover:
+    border-width: {$type: "dimension", $value: {value: 3, unit: "px"}}
+    border-color: {$type: "color", $value: "#ff0000"}
+  active:
+    border-width: {$type: "dimension", $value: {value: 4, unit: "px"}}
+    border-color: {$type: "color", $value: "#00ff00"}
+"##;
+
+#[test]
+fn the_edge_of_an_area_lying_over_takes_the_hover_and_drag_line() {
+    let (mut h, rect) = over(Some(OVER_LINE));
+    let xs = rect.left() - 6.0..=rect.right() + 6.0;
+    hover(&mut h, rect.center());
+    let hovered = Stroke::new(3.0, Color32::RED);
+    assert!(
+        lines(&h, xs.clone(), rect.height()).contains(&hovered),
+        "hovered: {:?}",
+        lines(&h, xs, rect.height())
+    );
+    drag(&mut h, rect.center());
+    let xs = rect.left() - 6.0..=rect.right() + 26.0;
+    let dragged = Stroke::new(4.0, Color32::from_rgb(0, 255, 0));
+    assert!(
+        lines(&h, xs.clone(), rect.height()).contains(&dragged),
+        "dragged: {:?}",
+        lines(&h, xs, rect.height())
+    );
+}
+
+#[test]
+fn without_tokens_the_edge_of_an_area_lying_over_draws_no_line() {
+    let (mut h, rect) = over(None);
+    let widgets = h.ctx.global_style().visuals.widgets.clone();
+    let xs = rect.left() - 6.0..=rect.right() + 6.0;
+    hover(&mut h, rect.center());
+    let seen = lines(&h, xs, rect.height());
+    assert!(
+        !seen.contains(&widgets.hovered.fg_stroke),
+        "hovered: {seen:?}"
+    );
+    drag(&mut h, rect.center());
+    let xs = rect.left() - 6.0..=rect.right() + 26.0;
+    let seen = lines(&h, xs, rect.height());
+    assert!(
+        !seen.contains(&widgets.active.fg_stroke),
+        "dragged: {seen:?}"
+    );
 }

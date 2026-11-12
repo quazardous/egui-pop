@@ -147,8 +147,8 @@ use egui_pop_model::layout::{Auxiliary, FloatingGroup, Join, Layout, Node, Place
 use egui_pop_model::panels::{Area, PanelSpec, Panels, Place};
 use egui_stack::layout::{
     Content, Dir, Dismiss, Drops, Flyout, FlyoutPaint, Fold, Layout as ZoneLayout, LayoutArea,
-    LayoutEvent, LayoutPainter, LayoutStyle, SashPaint, Shown, Size, StripPaint, Zone, ZoneName,
-    ZoneViewer,
+    LayoutEvent, LayoutPainter, LayoutStyle, SashPaint, Shown, Size, SnapGuidePaint, StripPaint,
+    Zone, ZoneName, ZoneViewer,
 };
 use egui_stack::tab_viewer::DropVerdict;
 use egui_stack::{
@@ -3116,6 +3116,21 @@ impl LayoutPainter for ShellPainter<'_> {
         let inward =
             area_from(&sash.zone.0).map_or(egui::Vec2::ZERO, |area| inward(area, self.flipped));
         self.kit.paint_area_line(painter, sash, inward);
+    }
+
+    /// The fold guide from the kit (`side-area.fold.border-*`), the others
+    /// as egui_stack draws them.
+    fn snap_guide(&self, painter: &egui::Painter, guide: &SnapGuidePaint<'_>) {
+        self.kit.paint_snap_guide(painter, guide);
+    }
+
+    /// The free edge of an area lying over the centre: its line while
+    /// hovered or dragged when the kit gives the state's tokens, inside the
+    /// area as a docked area's.
+    fn over_edge(&self, painter: &egui::Painter, edge: &SashPaint<'_>) {
+        let inward =
+            area_from(&edge.zone.0).map_or(egui::Vec2::ZERO, |area| inward(area, self.flipped));
+        self.kit.paint_over_edge(painter, edge, inward);
     }
 
     fn strip(&self, painter: &egui::Painter, strip: &StripPaint<'_>) {
