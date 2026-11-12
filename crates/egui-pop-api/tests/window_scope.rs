@@ -363,10 +363,16 @@ fn a_window_moved_into_the_main_one_keeps_its_own_geometry() {
         m.window_pass(va);
         m.request_close(ViewportId::ROOT);
         m.root_pass();
+        // The main window takes A's size, as the system does when asked.
+        assert!(
+            m.commands(ViewportId::ROOT)
+                .contains(&ViewportCommand::InnerSize(egui::vec2(420.0, 260.0)))
+        );
+        m.set_inner_size(ViewportId::ROOT, [420.0, 260.0]);
         m.root_pass();
         assert_eq!(m.app().windows()[0].id.as_str(), "a");
         // Closing it now (it is the last) keeps the main window's size
-        // under `main`, not under A.
+        // under `main`, and A's under A.
         m.request_close(ViewportId::ROOT);
         m.root_pass();
         m.app().flush_documents();

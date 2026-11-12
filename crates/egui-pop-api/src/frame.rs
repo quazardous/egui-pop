@@ -566,6 +566,61 @@ fn title_block(ui: &mut Ui, app: &AppHandle) {
     }
 }
 
+/// An application window's own frame, when the application draws it (the
+/// `window.frame` setting): a title bar across the top of `ui` with the
+/// window's title and its minimize, maximize and close buttons, the same
+/// bar and accessible names as the main window's, then `content` below
+/// it. Drawn at the top of each application window, and around a
+/// window's content moved into the main window (whose shell, and the
+/// shell's bar, left with it). The system's frame, or full screen without
+/// the bar, draws `content` alone.
+pub(crate) fn window_frame(
+    ui: &mut Ui,
+    app: &AppHandle,
+    title: &str,
+    content: impl FnOnce(&mut Ui),
+) {
+    let ctx = ui.ctx().clone();
+    let root = ctx.viewport_id() == egui::ViewportId::ROOT;
+    // The main window follows the setting itself (its decorations, the
+    // native hit test); an application window is built with the
+    // decorations the setting asks for.
+    let own = if root {
+        follow_setting(ui, app)
+    } else {
+        own_frame(app)
+    };
+    if !own {
+        return content(ui);
+    }
+    if egui_pop_core::frame::full_screen(&ctx) && !bar_in_fullscreen(app) {
+        egui_pop_core::frame::hide_title_bar(&ctx);
+        return content(ui);
+    }
+    if root {
+        // The main window's edges are an overlay block: only its native
+        // requests (Windows' hit test) are left to take here.
+        for r in native::requests(&ctx) {
+            request(app, &ctx, r);
+        }
+    } else {
+        egui_pop_core::frame::resize_edges(&ctx);
+    }
+    let full = ui.max_rect();
+    let out = ui
+        .scope_builder(egui::UiBuilder::new().max_rect(full), |ui| {
+            egui_pop_core::focus::scope(ui, "titleBar", &[], |ui| {
+                TitleBar::new(title).show(ui, |_| {}, |_| {})
+            })
+        })
+        .inner;
+    if let Some(r) = out.request {
+        request(app, &ctx, r);
+    }
+    let rest = Rect::from_min_max(egui::pos2(full.left(), out.rect.bottom()), full.max);
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rest), content);
+}
+
 /// The resize edges, and the system menu when open.
 fn edges(ui: &mut Ui, app: &AppHandle) {
     let ctx = ui.ctx().clone();
