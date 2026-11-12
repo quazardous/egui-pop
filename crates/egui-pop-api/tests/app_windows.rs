@@ -382,3 +382,126 @@ fn quitting_with_another_window_open_closes_everything() {
     assert_eq!(m.app().windows()[0].id, WindowId::main());
     assert!(!m.app().quitting());
 }
+
+/// An application drawing its own frame (`FramePlugin::own`), with the
+/// window menu, and window A open and worked in, 420 by 260 at (300, 120).
+fn own_frame_with_a() -> (MultiWindow, ViewportId) {
+    use egui_pop_api::frame::FramePlugin;
+    use egui_pop_api::windows::WindowsPlugin;
+    let mut m = MultiWindow::new(|ctx| {
+        App::builder()
+            .name("Demo")
+            .plugin(FramePlugin::own())
+            .plugin(WindowsPlugin)
+            .build(ctx)
+            .unwrap()
+    });
+    open_counting(&m, "a");
+    m.root_pass();
+    let va = m.app().window_viewport(&"a".into()).unwrap();
+    m.set_inner_size(va, [420.0, 260.0]);
+    m.set_outer_position(va, [300.0, 120.0]);
+    m.focus(va);
+    m.window_pass(va);
+    (m, va)
+}
+
+/// The centre of a window button the last pass published, in points.
+fn button_at(m: &MultiWindow, viewport: ViewportId, close: bool) -> egui::Pos2 {
+    let regions = egui_pop_core::frame::HitTable::of(m.ctx())
+        .get(viewport)
+        .expect("the window publishes its frame's regions");
+    let r = if close {
+        regions.close
+    } else {
+        regions.maximize
+    }
+    .expect("the button is drawn");
+    let ppp = m.ctx().pixels_per_point();
+    egui::pos2(
+        (r.x as f32 + r.w as f32 / 2.0) / ppp,
+        (r.y as f32 + r.h as f32 / 2.0) / ppp,
+    )
+}
+
+#[test]
+fn an_application_window_draws_the_main_windows_title_bar() {
+    let (mut m, va) = own_frame_with_a();
+    // Built without the system's decorations: the application draws them.
+    m.window_pass(va);
+    let names = m.names(va);
+    for name in ["Minimize", "Maximize", "Close"] {
+        assert!(names.iter().any(|n| n == name), "{name} in {names:?}");
+    }
+    assert!(names.iter().any(|n| n.starts_with("A — ")), "{names:?}");
+    // Its close button closes it, through the system's close request its
+    // content may refuse.
+    let at = button_at(&m, va, true);
+    m.click(va, at);
+    assert!(m.commands(va).contains(&ViewportCommand::Close));
+}
+
+#[test]
+fn a_window_moved_into_the_main_window_keeps_its_geometry_and_a_title_bar() {
+    let (mut m, _) = own_frame_with_a();
+    m.request_close(ViewportId::ROOT);
+    m.root_pass();
+    // The main window takes A's size and place, rather than A's content
+    // showing where the main window was.
+    let sent = m.commands(ViewportId::ROOT);
+    assert!(sent.contains(&ViewportCommand::CancelClose));
+    assert!(
+        sent.contains(&ViewportCommand::InnerSize(egui::vec2(420.0, 260.0))),
+        "{sent:?}"
+    );
+    assert!(
+        sent.contains(&ViewportCommand::OuterPosition(egui::pos2(300.0, 120.0))),
+        "{sent:?}"
+    );
+    m.root_pass();
+    // The shell's title bar left with the shell: A's content has one of
+    // its own, with A's title and the window's buttons.
+    let names = m.names(ViewportId::ROOT);
+    for name in ["Minimize", "Maximize", "Close"] {
+        assert!(names.iter().any(|n| n == name), "{name} in {names:?}");
+    }
+    assert!(names.iter().any(|n| n.starts_with("A — ")), "{names:?}");
+    // Its buttons work on the main window.
+    let at = button_at(&m, ViewportId::ROOT, false);
+    m.click(ViewportId::ROOT, at);
+    assert!(
+        m.commands(ViewportId::ROOT)
+            .contains(&ViewportCommand::Maximized(true))
+    );
+    let at = button_at(&m, ViewportId::ROOT, true);
+    m.click(ViewportId::ROOT, at);
+    assert!(
+        m.commands(ViewportId::ROOT)
+            .contains(&ViewportCommand::Close)
+    );
+}
+
+#[test]
+fn raising_the_main_window_brings_its_shell_title_bar_and_geometry_back() {
+    use egui_pop_api::windows::CMD_SWITCH;
+    let (mut m, _) = own_frame_with_a();
+    m.request_close(ViewportId::ROOT);
+    m.root_pass();
+    m.root_pass();
+    m.app()
+        .run(CMD_SWITCH, serde_json::json!({ "window": "main" }));
+    m.root_pass();
+    // The main window's own size comes back (MultiWindow's first size).
+    let sent = m.commands(ViewportId::ROOT);
+    assert!(
+        sent.contains(&ViewportCommand::InnerSize(egui::vec2(640.0, 480.0))),
+        "{sent:?}"
+    );
+    m.root_pass();
+    // The shell's bar again: the application's name at its start, and no
+    // longer A's title.
+    let names = m.names(ViewportId::ROOT);
+    assert!(names.iter().any(|n| n == "Demo"), "{names:?}");
+    assert!(names.iter().any(|n| n == "Close"), "{names:?}");
+    assert!(!names.iter().any(|n| n.starts_with("A — ")), "{names:?}");
+}

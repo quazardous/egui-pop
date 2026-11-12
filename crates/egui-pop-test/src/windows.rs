@@ -33,6 +33,8 @@ pub struct MultiWindow {
     queued: BTreeMap<ViewportId, Vec<Event>>,
     /// The commands each window's last pass sent.
     commands: BTreeMap<ViewportId, Vec<ViewportCommand>>,
+    /// The accessible names each window's last pass gave.
+    names: BTreeMap<ViewportId, Vec<String>>,
     time: f64,
 }
 
@@ -49,6 +51,7 @@ impl MultiWindow {
     pub fn new(build: impl FnOnce(&Context) -> App) -> Self {
         let ctx = Context::default();
         ctx.set_embed_viewports(false);
+        ctx.enable_accesskit();
         let app = build(&ctx);
         let mut info = BTreeMap::new();
         info.insert(ViewportId::ROOT, Self::fresh_info());
@@ -59,6 +62,7 @@ impl MultiWindow {
             info,
             queued: BTreeMap::new(),
             commands: BTreeMap::new(),
+            names: BTreeMap::new(),
             time: 0.0,
         }
     }
@@ -90,6 +94,12 @@ impl MultiWindow {
         self.commands.get(&viewport).cloned().unwrap_or_default()
     }
 
+    /// The accessible names of what a window's last pass drew (a button's
+    /// label, a text's words), in no particular order.
+    pub fn names(&self, viewport: ViewportId) -> Vec<String> {
+        self.names.get(&viewport).cloned().unwrap_or_default()
+    }
+
     /// Gives a window the focus (the others lose it).
     pub fn focus(&mut self, viewport: ViewportId) {
         for (v, info) in &mut self.info {
@@ -105,6 +115,44 @@ impl MultiWindow {
     pub fn set_inner_size(&mut self, viewport: ViewportId, size: [f32; 2]) {
         let info = self.info.entry(viewport).or_insert_with(Self::fresh_info);
         info.inner_rect = Some(Rect::from_min_size(Pos2::ZERO, Vec2::from(size)));
+    }
+
+    /// Sets a window's outer position, as a platform telling positions
+    /// would (Wayland tells none).
+    pub fn set_outer_position(&mut self, viewport: ViewportId, at: [f32; 2]) {
+        let info = self.info.entry(viewport).or_insert_with(Self::fresh_info);
+        let size = info.inner_rect.map_or(SIZE, |r| r.size());
+        info.outer_rect = Some(Rect::from_min_size(Pos2::from(at), size));
+    }
+
+    /// Queues an event (a pointer's move or button) for a window's next
+    /// pass.
+    pub fn queue(&mut self, viewport: ViewportId, event: Event) {
+        self.queued.entry(viewport).or_default().push(event);
+    }
+
+    /// Clicks a point of a window (in points): the pointer moves there and
+    /// presses in one pass, releases in the next.
+    pub fn click(&mut self, viewport: ViewportId, at: Pos2) {
+        let button = |pressed| Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        };
+        self.queue(viewport, Event::PointerMoved(at));
+        self.queue(viewport, button(true));
+        self.run_pass(viewport);
+        self.queue(viewport, button(false));
+        self.run_pass(viewport);
+    }
+
+    fn run_pass(&mut self, viewport: ViewportId) {
+        if viewport == ViewportId::ROOT {
+            self.root_pass();
+        } else {
+            self.window_pass(viewport);
+        }
     }
 
     /// The user asks to close a window (its close button), seen in its
@@ -160,6 +208,14 @@ impl MultiWindow {
         // A close request is seen by one pass only.
         if let Some(info) = self.info.get_mut(&viewport) {
             info.events.clear();
+        }
+        if let Some(update) = &out.platform_output.accesskit_update {
+            let names = update
+                .nodes
+                .iter()
+                .filter_map(|(_, n)| n.label().or_else(|| n.value()).map(str::to_string))
+                .collect();
+            self.names.insert(viewport, names);
         }
         // The commands this pass sent: to its own window, and to others.
         self.commands.insert(viewport, Vec::new());

@@ -22,16 +22,24 @@
 //!   calls [`WindowUi::keep_open`] in the pass that sees the request
 //!   ([`WindowUi::close_requested`]). Closing the main window while other
 //!   windows are open does not quit: the close is cancelled and the window
-//!   worked in last moves into the main window (its content, title and
-//!   id), its own window closing. Closing the last window quits.
+//!   worked in last moves into the main window (its content, title, id,
+//!   size and, where the platform tells it, position), its own window
+//!   closing. Closing the last window quits.
 //!   Raising the main window ([`WindowId::main`]) then sends that content
-//!   back to a window of its own and draws the shell again;
+//!   back to a window of its own and draws the shell again, at the main
+//!   window's own size;
 //!   [`AppHandle::quit`] closes everything, moving nothing.
 //! - **Geometry** is read from each window's own pass (egui's
 //!   `ViewportInfo` rects stay empty for deferred windows on Wayland) and
 //!   saved per window id in the persistence directory (`windows.json`),
 //!   then given back when a window of that id opens again. The position
 //!   only where the platform tells it (never on Wayland).
+//! - **Frame.** When the application draws the frame
+//!   ([`FramePlugin::own`](crate::frame::FramePlugin::own)), each window
+//!   is built without the system's decorations and draws the main
+//!   window's title bar (its title, minimize, maximize, close); so does a
+//!   window's content moved into the main window, the shell's bar having
+//!   left with the shell.
 //! - **Per window:** its keys are dispatched in its own pass, with the
 //!   `appWindow` context key naming it (`when: "appWindow == 'import'"`);
 //!   dialogs, the palette and popup menus open over the window worked in
@@ -761,6 +769,16 @@ impl AppHandle {
                 (w.root.home.clone(), w.root.geometry),
                 (e.id.clone(), e.geometry),
             ];
+            // The main window takes the moved window's geometry: as last
+            // seen, else as it opened.
+            let geometry = e.geometry.or_else(|| {
+                let (size, position, maximized) = e.first;
+                size.map(|s| Geometry {
+                    size: [s.x, s.y],
+                    position,
+                    maximized,
+                })
+            });
             let left = std::mem::replace(&mut w.root.id, e.id.clone());
             let shell_title = w.root.title.replace(e.title.clone());
             if w.root.content.is_none() {
@@ -771,9 +789,12 @@ impl AppHandle {
             w.root.sent_title = None;
             w.root.content = e.content;
             w.root.last_active = e.last_active;
-            (left, e.id, kept)
+            (left, e.id, kept, geometry)
         };
-        let (left, id, kept) = moved;
+        let (left, id, kept, geometry) = moved;
+        if let Some(g) = geometry {
+            self.apply_root_geometry(g);
+        }
         for (at, g) in kept {
             if let Some(g) = g {
                 self.keep_geometry(&at, g);
@@ -790,6 +811,23 @@ impl AppHandle {
         );
         self.egui().request_repaint_of(ViewportId::ROOT);
         true
+    }
+
+    /// Gives the main window a geometry, through viewport commands: the
+    /// size always, the position where the platform tells positions (a
+    /// geometry seen on Wayland has none), maximized or not.
+    fn apply_root_geometry(&self, g: Geometry) {
+        let ctx = self.egui();
+        let root = ViewportId::ROOT;
+        if g.maximized {
+            ctx.send_viewport_cmd_to(root, ViewportCommand::Maximized(true));
+            return;
+        }
+        ctx.send_viewport_cmd_to(root, ViewportCommand::Maximized(false));
+        ctx.send_viewport_cmd_to(root, ViewportCommand::InnerSize(Vec2::from(g.size)));
+        if let Some([x, y]) = g.position {
+            ctx.send_viewport_cmd_to(root, ViewportCommand::OuterPosition(egui::pos2(x, y)));
+        }
     }
 
     /// The main window's own id, whatever content it shows now: `main`.
@@ -842,8 +880,10 @@ impl AppHandle {
             w.root.sent_title = None;
             let min_size = w.root.min_size.take();
             // The content's geometry was saved under its id when it moved
-            // in: its window opens again with it.
+            // in: its window opens again with it. The main window's own was
+            // saved under its id then: it takes it back.
             let saved = w.saved.as_ref().and_then(|s| s.get(id.as_str()).copied());
+            let home_geometry = w.saved.as_ref().and_then(|s| s.get(home.as_str()).copied());
             let first = match saved {
                 Some(g) => (Some(Vec2::from(g.size)), g.position, g.maximized),
                 None => (None, None, false),
@@ -866,9 +906,12 @@ impl AppHandle {
             });
             // The main window, asked to the front, is the one worked in.
             w.root.last_active = w.next_tick();
-            (home, id, title)
+            (home, id, title, home_geometry)
         };
-        let (home, id, title) = back;
+        let (home, id, title, home_geometry) = back;
+        if let Some(g) = home_geometry {
+            self.apply_root_geometry(g);
+        }
         REGISTRY.with(|r| {
             r.borrow_mut()
                 .insert(id.deferred_viewport(), (self.downgrade(), id.clone()))
@@ -898,10 +941,14 @@ impl AppHandle {
     pub(crate) fn root_pass(&self, ui: &mut Ui) -> bool {
         let ctx = ui.ctx().clone();
         if let Some(g) = read_geometry(&ctx) {
+            // While a window's content holds it, the geometry is that
+            // window's: the main window's own stays as it was.
             let id = {
                 let mut w = self.windows_mut();
-                w.root.geometry = Some(g);
-                w.root.home.clone()
+                if w.root.id == w.root.home {
+                    w.root.geometry = Some(g);
+                }
+                w.root.id.clone()
             };
             if ctx.input(|i| i.viewport().close_requested()) {
                 self.keep_geometry(&id, g);
@@ -928,7 +975,10 @@ impl AppHandle {
                     keep_open: false,
                     close: false,
                 };
-                content(ui, &mut wui);
+                // The shell's title bar left with the shell: the content
+                // gets the frame an application window has.
+                let title = wui.title.clone();
+                crate::frame::window_frame(ui, self, &title, |ui| content(ui, &mut wui));
                 let mut w = self.windows_mut();
                 if w.root.content.is_none() {
                     w.root.content = Some(content);
@@ -963,13 +1013,18 @@ impl AppHandle {
             return;
         }
         let app_id = self.app_id();
+        // The application draws each window's frame as the main window's
+        // (`frame::window_frame`), or the system draws them all.
+        let own = crate::frame::own_frame(self);
         let builders: Vec<(ViewportId, ViewportBuilder)> = {
             let mut w = self.windows_mut();
             w.entries.retain(|e| !e.closed);
             w.entries
                 .iter()
                 .map(|e| {
-                    let mut b = ViewportBuilder::default().with_title(e.title.clone());
+                    let mut b = ViewportBuilder::default()
+                        .with_title(e.title.clone())
+                        .with_decorations(!own);
                     if !app_id.is_empty() {
                         b = b.with_app_id(app_id.clone());
                     }
@@ -1110,7 +1165,13 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
         keep_open: false,
         close: false,
     };
-    content(ui, &mut wui);
+    if own_window {
+        let title = wui.title.clone();
+        crate::frame::window_frame(ui, &app, &title, |ui| content(ui, &mut wui));
+    } else {
+        // Embedded in the main window: egui's window frame is its frame.
+        content(ui, &mut wui);
+    }
     if own_window {
         app.show_zone(ui, &crate::zones::WINDOW_OVERLAYS);
     }
