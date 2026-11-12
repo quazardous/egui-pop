@@ -632,3 +632,173 @@ fn ctrl_comma_opens_the_settings_app_with_the_window_s_own_pages() {
     assert!(admin::is_open(&handle));
     assert!(!settings_window::is_open(&handle));
 }
+
+const DIVIDER: &str = "Resize the sections";
+
+/// The divider's width as it says it (the tree's width).
+fn divider_value(h: &Harness<'_, App>) -> f64 {
+    h.get_by_role_and_label(egui::accesskit::Role::Splitter, DIVIDER)
+        .accesskit_node()
+        .numeric_value()
+        .unwrap()
+}
+
+/// Drags from a point by so much, and lets go.
+fn drag(h: &mut Harness<'_, App>, from: egui::Pos2, by: egui::Vec2) {
+    h.hover_at(from);
+    h.run();
+    h.drag_at(from);
+    h.run();
+    for i in 1..=4 {
+        h.hover_at(from + by * (i as f32 / 4.0));
+        h.run();
+    }
+    h.drop_at(from + by);
+    h.run();
+    h.run();
+}
+
+#[test]
+fn the_tree_and_the_page_fit_a_narrow_and_a_wide_window() {
+    for width in [420.0, 1100.0] {
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(width, 600.0))
+            .build_ui_state(|ui, app: &mut App| app.show(ui), app());
+        h.run();
+        let a = h.state().handle().service(&ADMIN).unwrap();
+        a.offer(ValueScope::Library, true);
+        a.set_in(h.state().handle(), ValueScope::Library, &LONG, json!("two"))
+            .unwrap();
+        run(&mut h, &CMD_OPEN, json!({ "key": "compute.long" }));
+        h.run();
+        let right = width - 1.0;
+        // The scopes are in the tree, on the left, inside the window,
+        // with their sections nested.
+        h.get_by_role_and_label(egui::accesskit::Role::Tree, "Sections");
+        let divider = h
+            .get_by_role_and_label(egui::accesskit::Role::Splitter, DIVIDER)
+            .rect();
+        let r = h.get_by_label("Hardware").rect();
+        assert!(
+            r.max.x <= divider.min.x,
+            "{width}: `Hardware` ends at {} past the divider ({})",
+            r.max.x,
+            divider.min.x
+        );
+        // The page is right of the divider and keeps inside the window:
+        // its controls, and its text wrapped.
+        for label in ["Reset Long words", "Where Long words is set"] {
+            let r = h.get_by_label(label).rect();
+            assert!(
+                r.min.x >= divider.max.x && r.max.x <= right,
+                "{width}: `{label}` at {r:?}, the page runs from {} to {right}",
+                divider.max.x
+            );
+        }
+        let description = h.get_by_label_contains("so that every control of the row stays inside");
+        assert!(
+            description.rect().max.x <= right,
+            "{width}: the description is cut at {right}: {:?}",
+            description.rect()
+        );
+        // The top row too.
+        let close = h.get_by_label("Close").rect();
+        assert!(close.max.x <= right, "{width}: Close at {close:?}");
+        egui_pop_test::assert_all_named(&h);
+    }
+}
+
+#[test]
+fn the_divider_sets_the_tree_s_width_and_it_is_kept_across_a_reopen() {
+    let dir = std::env::temp_dir().join(format!("egui-pop-admin-nav-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let build = || {
+        App::builder()
+            .plugins(DefaultPlugins)
+            .plugin(AdminPlugin)
+            .plugin(Compute)
+            .persist(&dir)
+            .build(&egui::Context::default())
+            .unwrap()
+    };
+    let harness = |app: App| {
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(1100.0, 720.0))
+            .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+        h.run();
+        let a = h.state().handle().service(&ADMIN).unwrap();
+        a.offer(ValueScope::Library, true);
+        a.set_in(h.state().handle(), ValueScope::Library, &LONG, json!("two"))
+            .unwrap();
+        run(&mut h, &CMD_OPEN, json!({ "key": "compute.long" }));
+        h
+    };
+    let mut h = harness(build());
+    assert_eq!(divider_value(&h), f64::from(admin::NAV_WIDTH_DEFAULT));
+    let page_before = h.get_by_label("Reset Long words").rect();
+    let line = h
+        .get_by_role_and_label(egui::accesskit::Role::Splitter, DIVIDER)
+        .rect();
+    drag(&mut h, line.center(), egui::vec2(80.0, 0.0));
+    assert_eq!(
+        divider_value(&h),
+        f64::from(admin::NAV_WIDTH_DEFAULT) + 80.0
+    );
+    assert_eq!(
+        admin::nav_width(h.state().handle()),
+        admin::NAV_WIDTH_DEFAULT + 80.0
+    );
+    // The page gave the tree its room: its right edge stays, its left
+    // edge moved.
+    let page_after = h.get_by_label("Reset Long words").rect();
+    assert!((page_after.max.x - page_before.max.x).abs() < 1.0);
+    let moved = h
+        .get_by_role_and_label(egui::accesskit::Role::Splitter, DIVIDER)
+        .rect();
+    assert!((moved.center().x - line.center().x - 80.0).abs() < 1.0);
+    // Closed and opened again: the same width.
+    run(&mut h, &admin::CMD_CLOSE, json!({}));
+    assert!(!admin::is_open(h.state().handle()));
+    run(&mut h, &CMD_OPEN, json!({ "path": "general" }));
+    assert_eq!(
+        divider_value(&h),
+        f64::from(admin::NAV_WIDTH_DEFAULT) + 80.0
+    );
+    // The keyboard moves it too, and Enter gives the default back.
+    h.get_by_role_and_label(egui::accesskit::Role::Splitter, DIVIDER)
+        .focus();
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    h.run();
+    assert_eq!(divider_value(&h), f64::from(admin::NAV_WIDTH_DEFAULT));
+    drag(&mut h, line.center(), egui::vec2(-40.0, 0.0));
+    let kept = admin::NAV_WIDTH_DEFAULT - 40.0;
+    assert_eq!(divider_value(&h), f64::from(kept));
+    // Saved, and read back by the next run.
+    h.state().save().unwrap();
+    drop(h);
+    let h = harness(build());
+    assert_eq!(divider_value(&h), f64::from(kept));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_tree_nests_each_scope_s_sections_and_choosing_one_shows_its_page() {
+    let mut h = harness();
+    run(&mut h, &CMD_OPEN, json!({ "path": "general" }));
+    let a = h.state().handle().service(&ADMIN).unwrap();
+    // A scope's row shows its first section.
+    h.get_by_label("Hardware").click();
+    h.run();
+    h.run();
+    assert_eq!(a.shown().0.as_deref(), Some("hardware"));
+    // The sections are listed under their scope, below it and indented.
+    let scope = h.get_by_label("Hardware").rect();
+    let devices = h.get_by_label("Devices").rect();
+    assert!(devices.min.y > scope.max.y && devices.min.x > scope.min.x);
+    h.get_by_label("Devices").click();
+    h.run();
+    h.run();
+    assert_eq!(a.shown().1.as_deref(), Some("devices"));
+}

@@ -102,6 +102,8 @@ pub const ADMIN_POP_IN: StrKey = StrKey::new("egui-pop-admin-pop-in", "Back into
 pub const ADMIN_CLOSE: StrKey = StrKey::new("egui-pop-admin-close", "Close");
 pub const ADMIN_SCOPES: StrKey = StrKey::new("egui-pop-admin-scopes", "Setting families");
 pub const ADMIN_SECTIONS: StrKey = StrKey::new("egui-pop-admin-sections", "Sections");
+pub const ADMIN_NAV_RESIZE: StrKey =
+    StrKey::new("egui-pop-admin-nav-resize", "Resize the sections");
 pub const ADMIN_RESET_SECTION: StrKey =
     StrKey::new("egui-pop-admin-reset-section", "Reset section");
 pub const ADMIN_MODIFIED_COUNT: StrKey =
@@ -1450,6 +1452,7 @@ pub const ALL: &[StrKey] = &[
     ADMIN_CLOSE,
     ADMIN_SCOPES,
     ADMIN_SECTIONS,
+    ADMIN_NAV_RESIZE,
     ADMIN_RESET_SECTION,
     ADMIN_MODIFIED_COUNT,
     ADMIN_SET_FOR,

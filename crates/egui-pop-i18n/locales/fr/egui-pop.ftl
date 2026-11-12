@@ -42,7 +42,7 @@ command-admin-close =
     .title = Fermer les réglages
 
 command-admin-open =
-    .description = Tous les réglages en pages entières : les familles en haut, les sections sur le côté, une seule recherche.
+    .description = Tous les réglages en pages entières : les familles et leurs sections en arbre sur le côté, une seule recherche.
     .title = Réglages
 
 command-admin-popOut =
@@ -783,6 +783,7 @@ egui-pop-admin-scopes = Familles de réglages
 egui-pop-admin-search-hint = Chercher dans tous les réglages
 
 egui-pop-admin-sections = Sections
+egui-pop-admin-nav-resize = Redimensionner les sections
 
 egui-pop-admin-set-for = Pour
 
