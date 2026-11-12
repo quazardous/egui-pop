@@ -34,6 +34,66 @@ use crate::indicator;
 use crate::progress::paint_spinner_on;
 use crate::theme::{TextRole, Tokens};
 
+/// The line between two areas while hovered or focused (`hover`) and
+/// while dragged (`active`), from `side-area.hover.border-width`,
+/// `side-area.hover.border-color` and their `active` twins. A state whose
+/// tokens say nothing is drawn with egui's widget stroke, as before the
+/// tokens existed ([`Kit::area_line_stroke`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct AreaLineKit {
+    pub hover: AreaLineState,
+    pub active: AreaLineState,
+}
+
+/// The line between two areas in one state.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum AreaLineState {
+    /// The theme says nothing: egui's widget stroke for the state.
+    #[default]
+    Egui,
+    /// The theme's line: `width` points (0: none), in `color`, egui's
+    /// stroke colour for the state when the theme gives none.
+    Line { width: f32, color: Option<Color32> },
+}
+
+impl AreaLineState {
+    fn stroke(self, egui: Stroke, ppp: f32) -> Stroke {
+        match self {
+            AreaLineState::Egui => egui,
+            AreaLineState::Line { width, .. } if width <= 0.0 => Stroke::NONE,
+            AreaLineState::Line { width, color } => {
+                Stroke::new(crate::scale::snap(width, ppp), color.unwrap_or(egui.color))
+            }
+        }
+    }
+}
+
+impl AreaLineKit {
+    /// Reads `side-area.hover.border-*` and `side-area.active.border-*`;
+    /// a state giving either term takes its merged box's (the width at
+    /// rest when it gives only a colour).
+    pub(crate) fn compile(t: &Tokens, side_area: &super::Component) -> AreaLineKit {
+        let read = |state: State, name: &str| {
+            let width = t
+                .resolved()
+                .dimension(&format!("side-area.{name}.border-width"));
+            let color = t.color(&format!("side-area.{name}.border-color"));
+            if width.is_none() && color.is_none() {
+                return AreaLineState::Egui;
+            }
+            let b = side_area.style(state);
+            AreaLineState::Line {
+                width: b.border_width.max(0.0),
+                color: color.or((b.border_color.a() > 0).then_some(b.border_color)),
+            }
+        };
+        AreaLineKit {
+            hover: read(State::HOVER, "hover"),
+            active: read(State::ACTIVE, "active"),
+        }
+    }
+}
+
 /// The kit's state for egui_stack's flags (`DRAGGED` and `LEAF_FOCUSED`
 /// have no kit state).
 fn state(flags: PartState) -> State {
@@ -150,21 +210,15 @@ impl Kit {
 
     /// The line between two areas (an egui side panel's separator): shown
     /// at rest only when the kit's `side-area` has a border, highlighted
-    /// while hovered, focused or dragged. `inward` points from the
-    /// boundary into the area the line belongs to (zero: centred on the
-    /// boundary); the line then lies in the room the area keeps for it
-    /// ([`Kit::area_line_room`]), where egui drew a panel's separator.
+    /// while hovered, focused or dragged ([`Kit::area_line_stroke`]).
+    /// `inward` points from the boundary into the area the line belongs
+    /// to (zero: centred on the boundary); the line then lies in the room
+    /// the area keeps for it ([`Kit::area_line_room`]), where egui drew a
+    /// panel's separator.
     pub fn paint_area_line(&self, painter: &Painter, sash: &SashPaint<'_>, inward: Vec2) {
         let style = painter.ctx().global_style();
-        let widgets = &style.visuals.widgets;
-        let flags = sash.state;
-        let stroke = if flags.contains(PartState::DRAGGED) {
-            widgets.active.fg_stroke
-        } else if flags.contains(PartState::HOVERED) || flags.contains(PartState::FOCUSED) {
-            widgets.hovered.fg_stroke
-        } else if self.side_area.style(State::REST).border_width > 0.0 {
-            widgets.noninteractive.bg_stroke
-        } else {
+        let Some(stroke) = self.area_line_stroke(&style, sash.state, painter.pixels_per_point())
+        else {
             return;
         };
         let room = self.area_line_room(&style);
@@ -177,6 +231,32 @@ impl Kit {
                 painter.hline(sash.rect.x_range(), c.y, stroke);
             }
         }
+    }
+
+    /// The stroke of the line between two areas in a sash's state, none
+    /// when no line is drawn. Dragged: `side-area.active.border-*`;
+    /// hovered or focused: `side-area.hover.border-*` ([`AreaLineKit`]);
+    /// a state whose tokens say nothing takes egui's widget stroke
+    /// (`widgets.active.fg_stroke`, `widgets.hovered.fg_stroke`). At
+    /// rest, egui's non-interactive stroke when `side-area` has a border.
+    /// A width of 0 draws no line.
+    pub fn area_line_stroke(
+        &self,
+        style: &egui::Style,
+        flags: PartState,
+        ppp: f32,
+    ) -> Option<Stroke> {
+        let widgets = &style.visuals.widgets;
+        let stroke = if flags.contains(PartState::DRAGGED) {
+            self.area_line.active.stroke(widgets.active.fg_stroke, ppp)
+        } else if flags.contains(PartState::HOVERED) || flags.contains(PartState::FOCUSED) {
+            self.area_line.hover.stroke(widgets.hovered.fg_stroke, ppp)
+        } else if self.side_area.style(State::REST).border_width > 0.0 {
+            widgets.noninteractive.bg_stroke
+        } else {
+            return None;
+        };
+        (stroke.width > 0.0 && stroke.color.a() > 0).then_some(stroke)
     }
 
     /// A folded area's strip (`area-strip`): its box, the line on the side
