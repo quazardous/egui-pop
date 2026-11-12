@@ -1344,6 +1344,12 @@ egui-pop-devtools-waiting = Waiting for the next chord after { $keys }
 
 egui-pop-dialog-browse = Browse…
 
+egui-pop-dialog-copied = Copied.
+
+egui-pop-dialog-copy = Copy
+
+egui-pop-dialog-details = Details
+
 egui-pop-dialog-filter = Filter
 
 egui-pop-dialog-resize = Resize { $dialog }

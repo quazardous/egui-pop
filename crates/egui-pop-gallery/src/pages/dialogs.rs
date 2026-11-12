@@ -1,11 +1,13 @@
 //! The dialogs page: a confirmation, a dangerous one, a form with a path
 //! field, a choice, a notice, a confirmation with a close button, a
-//! movable form keeping its place and a movable preview over a clear
-//! backdrop, each opened by a button; what the accepted ones ran shows
-//! below.
+//! movable form keeping its place, a movable preview over a clear
+//! backdrop and an error with technical details, each opened by a
+//! button; what the accepted ones ran shows below.
 
 use egui::Ui;
-use egui_pop::api::dialogs::{Backdrop, Choose, Confirm, DIALOGS, DialogSpec, Form, Info};
+use egui_pop::api::dialogs::{
+    Backdrop, Choose, Confirm, DIALOGS, DetailsMode, DialogSpec, Form, Info,
+};
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::model::commands::CommandSpec;
@@ -50,7 +52,7 @@ impl Plugin for DialogsPage {
         )?;
         ctx.story(
             Story::new(StoryId::from_static("dialogs"), "Dialogs", show)
-                .description("Confirmations named by their verb, a dangerous one, a form from descriptors with a path picker, a choice, a notice, a close button, movable dialogs and a clear backdrop.")
+                .description("Confirmations named by their verb, a dangerous one, a form from descriptors with a path picker, a choice, a notice, a close button, movable dialogs, a clear backdrop and an error whose Copy button copies its details.")
                 .group("Components", 50),
         )?;
         Ok(())
@@ -134,7 +136,24 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                 .backdrop(Backdrop::Clear),
             );
         }
+        if ui.button("Show an error").clicked() {
+            d.open(
+                Info::error(
+                    "Export failed",
+                    "The disk is full: 3 images were not written.",
+                )
+                .details(
+                    [
+                        ("version", "egui-pop gallery"),
+                        ("command", "doc.export"),
+                        ("cause", "no space left on device"),
+                    ],
+                    DetailsMode::Auto,
+                ),
+            );
+        }
     });
+    ui.weak("Each dialog's Copy button (its bottom left corner) copies its title and text, and its details when it has some: shown under Details on the error, hidden on the others.");
     ui.weak("A movable dialog is dragged by its header band (a double click centres it); Alt+F7 moves it with the arrow keys. The levels dialog comes back where it was left.");
     section(ui, "Sent by the last accepted dialog");
     let sent = app.context().get("galleryDialogSent").to_string();

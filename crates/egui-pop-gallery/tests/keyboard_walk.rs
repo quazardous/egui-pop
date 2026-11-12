@@ -1225,7 +1225,7 @@ fn a_dialog_starts_on_its_action_or_on_cancel_for_a_danger_and_tab_wraps_in_it()
     reach_back(&mut h, "Confirm an export");
     assert_eq!(name(walk::press(&mut h, SPACE)), "Export");
     let walked = walk::walk(&mut h, TAB, 5);
-    assert_eq!(walked.names(), ["Cancel", "Export"], "{walked}");
+    assert_eq!(walked.names(), ["Cancel", "Copy", "Export"], "{walked}");
     assert_eq!(walked.end, End::Looped { at: 0 });
     // It ended back on Cancel; F6 stays in.
     assert_eq!(name(walk::press(&mut h, F6)), "Cancel");
@@ -1233,7 +1233,11 @@ fn a_dialog_starts_on_its_action_or_on_cancel_for_a_danger_and_tab_wraps_in_it()
     reach_back(&mut h, "Delete three images");
     assert_eq!(name(walk::press(&mut h, ENTER)), "Cancel");
     let walked = walk::walk(&mut h, SHIFT_TAB, 5);
-    assert_eq!(walked.names(), ["Delete 3 images", "Cancel"], "{walked}");
+    assert_eq!(
+        walked.names(),
+        ["Delete 3 images", "Copy", "Cancel"],
+        "{walked}"
+    );
 }
 
 /// What the dialogs page's commands ran: one per accepted dialog.
