@@ -289,3 +289,96 @@ fn the_window_menu_lists_the_windows_by_title_and_switches() {
             .contains(&ViewportCommand::Focus)
     );
 }
+
+#[test]
+fn raising_the_main_window_sends_a_moved_window_back_to_its_own() {
+    use egui_pop_api::windows::{CMD_SWITCH, WindowsPlugin};
+    let mut m = MultiWindow::new(|ctx| {
+        App::builder()
+            .name("Demo")
+            .plugin(WindowsPlugin)
+            .build(ctx)
+            .unwrap()
+    });
+    let a = open_counting(&m, "a");
+    m.root_pass();
+    let va = m.app().window_viewport(&"a".into()).unwrap();
+    m.focus(va);
+    m.window_pass(va);
+    m.request_close(ViewportId::ROOT);
+    m.root_pass();
+    m.root_pass();
+    assert_eq!(m.app().windows()[0].id, WindowId::new("a"));
+    assert!(m.declared().is_empty());
+    let mark = m.app().last_event();
+    // Window > Main window: `main` is still a window to switch to.
+    m.app()
+        .run(CMD_SWITCH, serde_json::json!({ "window": "main" }));
+    m.root_pass();
+    // The shell is back in the main window, under its own id and title.
+    let windows = m.app().windows();
+    assert_eq!(windows.len(), 2);
+    assert_eq!(windows[0].id, WindowId::main());
+    assert_eq!(windows[0].title, "Demo");
+    assert!(windows[0].active, "the main window, asked to the front");
+    assert!(
+        m.commands(ViewportId::ROOT)
+            .contains(&ViewportCommand::Title("Demo".into()))
+    );
+    // A is a window of its own again, with its title, drawn by its own
+    // pass and no longer by the main window's.
+    assert_eq!(windows[1].id, WindowId::new("a"));
+    assert!(windows[1].title.starts_with("A — "));
+    assert!(!windows[1].main);
+    assert_eq!(m.app().window_viewport(&"a".into()), Some(va));
+    assert_eq!(m.declared(), [va].into_iter().collect());
+    let before = a.get();
+    m.root_pass();
+    assert_eq!(a.get(), before);
+    m.window_pass(va);
+    assert_eq!(a.get(), before + 1);
+    let events = m.app().events_since(mark);
+    assert!(
+        events
+            .iter()
+            .any(|e| e.name == "window.moved" && e.data["window"] == "a" && e.data["to"] == "a")
+    );
+    assert!(
+        events
+            .iter()
+            .any(|e| e.name == "window.opened" && e.data["window"] == "main")
+    );
+    // Its keys are dispatched in its own pass again.
+    m.focus(va);
+    m.window_pass(va);
+    assert_eq!(m.app().active_app_window(), WindowId::new("a"));
+}
+
+#[test]
+fn quitting_with_another_window_open_closes_everything() {
+    let (mut m, _) = multi();
+    open_counting(&m, "a");
+    m.root_pass();
+    let va = m.app().window_viewport(&"a".into()).unwrap();
+    m.focus(va);
+    m.window_pass(va);
+    // `app.quit` run from window A closes the main window, not A.
+    m.app().run(egui_pop_api::app::CMD_QUIT, Json::Null);
+    m.root_pass();
+    assert!(m.app().quitting());
+    assert!(
+        m.commands(ViewportId::ROOT)
+            .contains(&ViewportCommand::Close)
+    );
+    assert!(!m.commands(va).contains(&ViewportCommand::Close));
+    // The close is seen: nothing moves into the main window, the close
+    // goes on and the application ends.
+    m.request_close(ViewportId::ROOT);
+    m.root_pass();
+    assert!(
+        !m.commands(ViewportId::ROOT)
+            .contains(&ViewportCommand::CancelClose)
+    );
+    assert_eq!(m.app().windows()[0].id, WindowId::main());
+    assert!(!m.app().quitting());
+}
