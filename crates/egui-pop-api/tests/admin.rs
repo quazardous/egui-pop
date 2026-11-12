@@ -11,8 +11,11 @@ use egui_pop_api::admin::model::{
     Action, Callout, Clauses as _, Confirmation, FORMAT, Field, Manifest, Records, RowField,
     Status, Tone,
 };
-use egui_pop_api::admin::{self, ADMIN, AdminPlugin, CMD_OPEN, CMD_POP_OUT, CMD_RESET, CMD_SET};
+use egui_pop_api::admin::{
+    self, ADMIN, AdminPlugin, CMD_OPEN, CMD_POP_OUT, CMD_RESET, CMD_SET, ExtraScope,
+};
 use egui_pop_api::{App, Ctx, DefaultPlugins, Plugin, PluginError};
+use egui_pop_core::strings::StrKey;
 use egui_pop_model::admin::ValueScope;
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::{PluginId, SettingId};
@@ -21,6 +24,20 @@ use serde_json::{Value as Json, json};
 
 const THREADS: SettingId = SettingId::from_static("compute.threads");
 const LONG: SettingId = SettingId::from_static("compute.long");
+const QUIET: SettingId = SettingId::from_static("compute.quiet");
+
+/// The host's scopes, lowest first: a workspace's value wins over a
+/// library's.
+const LIBRARY: ExtraScope = ExtraScope::new(
+    "library",
+    StrKey::new("test-library", "This library"),
+    StrKey::new("test-library-about", "while this library is open"),
+);
+const WORKSPACE: ExtraScope = ExtraScope::new(
+    "workspace",
+    StrKey::new("test-workspace", "This workspace"),
+    StrKey::new("test-workspace-about", "while this workspace is open"),
+);
 const DEVICES: egui_pop_model::ids::CommandId =
     egui_pop_model::ids::CommandId::from_static("compute.devices");
 const DISABLE: egui_pop_model::ids::CommandId =
@@ -50,13 +67,21 @@ impl Plugin for Compute {
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         ctx.setting(
             THREADS,
-            Descriptor::int("Worker threads", 1, 64, 4).description("Threads the pipeline uses."),
+            Descriptor::int("Worker threads", 1, 64, 4)
+                .description("Threads the pipeline uses.")
+                .scopes(&[LIBRARY.scope, WORKSPACE.scope]),
         )?;
         ctx.setting(
             LONG,
-            Descriptor::choice("Long words", &["one", "two"], "one").description(
-                "A description long enough to run past the right edge of a narrow page if the row did not wrap it, which it must, so that every control of the row stays inside the page and none is cut off.",
-            ),
+            Descriptor::choice("Long words", &["one", "two"], "one")
+                .description(
+                    "A description long enough to run past the right edge of a narrow page if the row did not wrap it, which it must, so that every control of the row stays inside the page and none is cut off.",
+                )
+                .scopes(&[LIBRARY.scope]),
+        )?;
+        ctx.setting(
+            QUIET,
+            Descriptor::bool("Quiet fans", false).description("App-wide: no other scope."),
         )?;
         ctx.command(
             egui_pop_model::commands::CommandSpec::new(DEVICES, "Devices", "Compute").read_only(),
@@ -92,6 +117,8 @@ impl Plugin for Compute {
             |call| Ok(call.args.clone()),
         )?;
         let admin = ctx.app().service(&ADMIN).expect("the admin service");
+        admin.declare_scope(LIBRARY);
+        admin.declare_scope(WORKSPACE);
         admin.hook(
             "compute.load",
             Hook::Status(Box::new(|| ("Idle".into(), Tone::Success))),
@@ -248,7 +275,7 @@ fn a_library_value_wins_says_its_origin_and_leaves_the_users_file_alone() {
         Origin::User,
     );
     assert!(refused.now().unwrap().is_err());
-    a.offer(ValueScope::Library, true);
+    a.offer(LIBRARY.scope, true);
     let ok = |r: egui_pop_api::host::Reply| r.now().unwrap().unwrap();
     ok(app.run(
         &CMD_SET,
@@ -261,14 +288,8 @@ fn a_library_value_wins_says_its_origin_and_leaves_the_users_file_alone() {
         Origin::User,
     ));
     assert_eq!(threads(&app), 8, "what everyone reads is the library's");
-    assert_eq!(
-        a.layers().origin("settings/compute.threads"),
-        ValueScope::Library
-    );
-    assert_eq!(
-        a.export_layer(ValueScope::Library)["compute.threads"],
-        json!(8)
-    );
+    assert_eq!(a.layers().origin("settings/compute.threads"), LIBRARY.scope);
+    assert_eq!(a.export_layer(LIBRARY.scope)["compute.threads"], json!(8));
     app.save().unwrap();
     let saved: String = std::fs::read_dir(&dir)
         .unwrap()
@@ -380,14 +401,14 @@ fn the_search_finds_settings_in_every_scope_and_a_row_edits_its_scope() {
     // A library value: the row says it is modified and where it comes
     // from.
     let a = h.state().handle().service(&ADMIN).unwrap();
-    a.offer(ValueScope::Library, true);
-    a.set_in(h.state().handle(), ValueScope::Library, &THREADS, json!(12))
+    a.offer(LIBRARY.scope, true);
+    a.set_in(h.state().handle(), LIBRARY.scope, &THREADS, json!(12))
         .unwrap();
     h.run();
     h.run();
     h.get_by_role_and_label(
         egui::accesskit::Role::Group,
-        "Worker threads, modified, library",
+        "Worker threads, modified, This library",
     );
     h.get_by_label("Where Worker threads is set");
     egui_pop_test::assert_all_named(&h);
@@ -424,8 +445,8 @@ fn rows_keep_their_controls_inside_the_page() {
         .build_ui_state(|ui, app: &mut App| app.show(ui), app());
     h.run();
     let a = h.state().handle().service(&ADMIN).unwrap();
-    a.offer(ValueScope::Library, true);
-    a.set_in(h.state().handle(), ValueScope::Library, &LONG, json!("two"))
+    a.offer(LIBRARY.scope, true);
+    a.set_in(h.state().handle(), LIBRARY.scope, &LONG, json!("two"))
         .unwrap();
     let inside = |h: &Harness<'_, App>, what: &str| {
         let right = width - 1.0;
@@ -666,8 +687,8 @@ fn the_tree_and_the_page_fit_a_narrow_and_a_wide_window() {
             .build_ui_state(|ui, app: &mut App| app.show(ui), app());
         h.run();
         let a = h.state().handle().service(&ADMIN).unwrap();
-        a.offer(ValueScope::Library, true);
-        a.set_in(h.state().handle(), ValueScope::Library, &LONG, json!("two"))
+        a.offer(LIBRARY.scope, true);
+        a.set_in(h.state().handle(), LIBRARY.scope, &LONG, json!("two"))
             .unwrap();
         run(&mut h, &CMD_OPEN, json!({ "key": "compute.long" }));
         h.run();
@@ -727,8 +748,8 @@ fn the_divider_sets_the_tree_s_width_and_it_is_kept_across_a_reopen() {
             .build_ui_state(|ui, app: &mut App| app.show(ui), app);
         h.run();
         let a = h.state().handle().service(&ADMIN).unwrap();
-        a.offer(ValueScope::Library, true);
-        a.set_in(h.state().handle(), ValueScope::Library, &LONG, json!("two"))
+        a.offer(LIBRARY.scope, true);
+        a.set_in(h.state().handle(), LIBRARY.scope, &LONG, json!("two"))
             .unwrap();
         run(&mut h, &CMD_OPEN, json!({ "key": "compute.long" }));
         h
@@ -801,4 +822,63 @@ fn the_tree_nests_each_scope_s_sections_and_choosing_one_shows_its_page() {
     h.run();
     h.run();
     assert_eq!(a.shown().1.as_deref(), Some("devices"));
+}
+
+#[test]
+fn an_app_wide_setting_has_no_set_for_and_an_opted_in_one_names_the_host_s_scopes() {
+    let mut h = harness();
+    let a = h.state().handle().service(&ADMIN).unwrap();
+    a.offer(LIBRARY.scope, true);
+    a.offer(WORKSPACE.scope, true);
+    run(&mut h, &CMD_OPEN, json!({ "key": "compute.long" }));
+    // App-wide (no scope opted into): its editor and reset, no choice.
+    h.get_by_role_and_label(egui::accesskit::Role::Group, "Quiet fans");
+    h.get_by_label("Reset Quiet fans");
+    assert!(h.query_by_label("Where Quiet fans is set").is_none());
+    // Opted into the library only: the labelled choice, the app's and
+    // the library's, never the workspace's.
+    h.get_by_label("Set for");
+    h.get_by_label("Where Long words is set").click();
+    h.run();
+    h.run();
+    h.get_by_label("This library");
+    assert!(h.query_by_label("This workspace").is_none());
+    egui_pop_test::assert_all_named(&h);
+    // Refused for a scope it did not opt into.
+    assert!(
+        a.set_in(h.state().handle(), WORKSPACE.scope, &LONG, json!("two"))
+            .is_err()
+    );
+    assert!(
+        a.set_in(h.state().handle(), LIBRARY.scope, &QUIET, json!(true))
+            .is_err()
+    );
+}
+
+#[test]
+fn the_later_declared_scope_wins_when_several_hold_a_value() {
+    let app = app();
+    let a = app.handle().service(&ADMIN).unwrap();
+    assert_eq!(a.extra_scopes(), vec![LIBRARY, WORKSPACE]);
+    a.offer(WORKSPACE.scope, true);
+    a.offer(LIBRARY.scope, true);
+    assert_eq!(
+        a.offered(),
+        vec![ValueScope::App, LIBRARY.scope, WORKSPACE.scope]
+    );
+    a.set_in(app.handle(), ValueScope::App, &THREADS, json!(6))
+        .unwrap();
+    a.set_in(app.handle(), WORKSPACE.scope, &THREADS, json!(9))
+        .unwrap();
+    a.set_in(app.handle(), LIBRARY.scope, &THREADS, json!(8))
+        .unwrap();
+    assert_eq!(threads(&app), 9, "the workspace's, over the library's");
+    assert_eq!(
+        a.layers().origin("settings/compute.threads"),
+        WORKSPACE.scope
+    );
+    a.clear_in(app.handle(), WORKSPACE.scope, &THREADS).unwrap();
+    assert_eq!(threads(&app), 8, "then the library's");
+    a.clear_in(app.handle(), LIBRARY.scope, &THREADS).unwrap();
+    assert_eq!(threads(&app), 6, "then the app's");
 }

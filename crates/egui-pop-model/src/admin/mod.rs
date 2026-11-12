@@ -238,8 +238,8 @@ pub struct Field {
     /// `None`: from the descriptor's type.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<FieldKind>,
-    /// Where its value may be set; empty: wherever the application
-    /// offers.
+    /// The host's scopes its value may also be set for, above `app`
+    /// (opt-in); empty: `app` only, and no "Set for" choice.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub scopes: Vec<ValueScope>,
     /// Help shown under it (the descriptor's description otherwise).
@@ -1625,7 +1625,7 @@ mod tests {
             .section("backup/strategy", "Strategy", |s| {
                 s.description("How many copies, and where.")
                     .group("copies", "Copies")
-                    .field(Field::setting("backup.copies").scopes(&[ValueScope::Library]))
+                    .field(Field::setting("backup.copies").scopes(&[ValueScope::new("library")]))
                     .field(
                         Field::draft("import", "into", "Into", FieldKind::Path)
                             .validate("writable"),

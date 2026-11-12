@@ -631,13 +631,13 @@ pub(super) fn manifest(admin: &Admin, app: &AppHandle, tree: &Tree) -> Manifest 
         .choice(json!("all"), "Every setting you changed")
         .default_value(json!("all"));
     if layers {
-        of = of.choice(json!("layer"), "The values of a library or workspace");
+        of = of.choice(json!("layer"), "The values set for one scope");
     }
     of = of.choice(json!("place"), "One family or section of the settings");
     let mut layer =
         draft(EXPORT_WIZARD, "layer", "Values of", FieldKind::Choice).default_value(json!("app"));
     for s in &offered {
-        layer = layer.choice(json!(s.name()), scope_words(*s));
+        layer = layer.choice(json!(s.name()), scope_words(admin, *s));
     }
     layer.meta.when = Some("form.of == 'layer'".into());
     let mut place = draft(
@@ -734,7 +734,7 @@ pub(super) fn manifest(admin: &Admin, app: &AppHandle, tree: &Tree) -> Manifest 
     let mut scope_field =
         draft(IMPORT_WIZARD, "scope", "Into", FieldKind::Choice).default_value(json!("app"));
     for s in &offered {
-        scope_field = scope_field.choice(json!(s.name()), scope_words(*s));
+        scope_field = scope_field.choice(json!(s.name()), scope_words(admin, *s));
     }
     let mut args = json!({ "file": "${file}", "keys": "${keys}" });
     let mut preview = json!({ "file": "${file}" });
@@ -803,12 +803,11 @@ pub(super) fn manifest(admin: &Admin, app: &AppHandle, tree: &Tree) -> Manifest 
     m
 }
 
-/// A value scope as the wizards say it.
-fn scope_words(s: ValueScope) -> &'static str {
+/// A value scope as the wizards say it: the host's label for its own.
+fn scope_words(admin: &Admin, s: ValueScope) -> &'static str {
     match s {
         ValueScope::App => "Your settings",
-        ValueScope::Library => "This library",
-        ValueScope::Workspace => "This workspace",
         ValueScope::Run => "The command line",
+        s => admin.extra_scope(s).map_or(s.name(), |x| x.label.fallback),
     }
 }

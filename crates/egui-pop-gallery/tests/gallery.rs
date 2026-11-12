@@ -1259,8 +1259,9 @@ fn values_bind_in_three_modes_and_watch_follows() {
     );
 }
 
-/// The Settings app: the gallery's settings as a generated page with a
-/// library and a workspace value (their origin tags and modified bars), a
+/// The Settings app: the gallery's settings as a generated page, app-wide
+/// but the size, which opts into the gallery's project scope (its origin
+/// tag, its "Set for"), a
 /// manifest's section, and the search across every scope.
 #[test]
 fn the_settings_app_shows_generated_pages_value_scopes_and_search() {
@@ -1273,15 +1274,18 @@ fn the_settings_app_shows_generated_pages_value_scopes_and_search() {
     let app = h.state().app.handle();
     assert!(egui_pop::api::admin::is_open(app));
     egui_pop_test::assert_all_named(&h);
-    // The workspace's tone, said.
-    h.get_by_role_and_label(egui::accesskit::Role::Group, "Tone, modified, workspace");
+    // An app-wide setting: no "Set for".
+    h.get_by_role_and_label(egui::accesskit::Role::Group, "Tone");
+    assert!(h.query_by_label("Where Tone is set").is_none());
     results.add(h.try_snapshot("admin-pop-dark"));
     // The library's size, on the custom page that edits it (only there),
     // drawn as the app's row.
     h.get_by_label("Greeting preview").click();
     h.run();
     h.run();
-    h.get_by_role_and_label(egui::accesskit::Role::Group, "Size, modified, library");
+    h.get_by_role_and_label(egui::accesskit::Role::Group, "Size, modified, This project");
+    h.get_by_label("Where Size is set");
+    h.get_by_label("Set for");
     egui_pop_test::assert_all_named(&h);
     // The section a manifest declares.
     h.get_by_label("Greeting text").click();

@@ -711,9 +711,7 @@ egui-pop-admin-close = Fermer
 
 egui-pop-admin-for-app = Cette application
 
-egui-pop-admin-for-library = Cette bibliothèque
-
-egui-pop-admin-for-workspace = Cet espace de travail
+egui-pop-admin-for-app-about = partout, sauf si une portée plus bas la fixe
 
 egui-pop-admin-modified = modifié
 
@@ -752,13 +750,9 @@ egui-pop-admin-section-advanced = Avancé
 egui-pop-admin-advanced-about = La fenêtre des réglages d’avant : tous les réglages et les raccourcis sur un seul formulaire où chercher.
 egui-pop-admin-advanced-open = Ouvrir la fenêtre des réglages…
 
-egui-pop-admin-origin-library = bibliothèque
-
 egui-pop-admin-origin-run = ligne de commande
 
-egui-pop-admin-origin-tip = Cette valeur vient de la couche { $origin }
-
-egui-pop-admin-origin-workspace = espace de travail
+egui-pop-admin-origin-tip = Cette valeur est fixée pour : { $origin }
 
 egui-pop-admin-pop-in = Revenir dans la fenêtre
 
@@ -788,6 +782,8 @@ egui-pop-admin-nav-resize = Redimensionner les sections
 egui-pop-admin-set-for = Pour
 
 egui-pop-admin-set-for-name = Où { $setting } est fixé
+
+egui-pop-admin-set-for-tip = Où cette valeur s’applique. Quand plusieurs en ont une, la plus basse de la liste l’emporte :
 
 egui-pop-admin-show-item = Montrer
 

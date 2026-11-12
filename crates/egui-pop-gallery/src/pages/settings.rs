@@ -3,8 +3,9 @@
 //! preview", under the gallery's section, drawing two of them with the
 //! preview; and the Settings app (`admin`), every setting as full pages
 //! generated from the declarations, with a manifest's section (a
-//! callout, a status from a hook, an action) and a library and a
-//! workspace layer over the user's values; and a wizard (the wizard kit)
+//! callout, a status from a hook, an action) and a value scope the
+//! gallery declares, "This project", that the size alone opts into (its
+//! row's "Set for"), every other setting app-wide; and a wizard (the wizard kit)
 //! that sets the greeting up in four steps, one of them shown only for a
 //! bold greeting, and hands its draft to a command.
 
@@ -14,7 +15,7 @@ use egui_pop::api::admin::model::{
     Action, Callout, Confirmation, FORMAT, Field, FieldKind, Manifest, Records, RowField, Status,
     Tone, Wizard,
 };
-use egui_pop::api::admin::{ADMIN, CMD_OPEN, CMD_WIZARD_OPEN};
+use egui_pop::api::admin::{ADMIN, CMD_OPEN, CMD_WIZARD_OPEN, ExtraScope};
 use egui_pop::api::settings;
 use egui_pop::api::settings_pages::SettingsPage as CustomPage;
 use egui_pop::api::settings_window;
@@ -40,6 +41,17 @@ const APPLY: egui_pop::model::ids::CommandId =
 
 const SIZE: SettingId = SettingId::from_static("gallery.size");
 const STRONG: SettingId = SettingId::from_static("gallery.strong");
+
+/// The value scope the gallery declares above the app's: a demo host's
+/// "project", which the size opts into.
+pub const PROJECT: ExtraScope = ExtraScope::new(
+    "project",
+    egui_pop::core::strings::StrKey::new("gallery-scope-project", "This project"),
+    egui_pop::core::strings::StrKey::new(
+        "gallery-scope-project-about",
+        "while this project is open, over the app's value",
+    ),
+);
 
 /// The settings page.
 #[derive(Debug, Default)]
@@ -68,7 +80,8 @@ impl Plugin for SettingsPage {
             Descriptor::float("Size", 8.0, 48.0, 18.0)
                 .step(1.0)
                 .unit("pt")
-                .description("The preview's font size."),
+                .description("The preview's font size.")
+                .scopes(&[PROJECT.scope]),
         )?
         .setting(
             STRONG,
@@ -86,6 +99,7 @@ impl Plugin for SettingsPage {
         // A section of the Settings app declared as data: no widget drawn
         // by this plugin.
         if let Some(admin) = ctx.app().service(&ADMIN) {
+            admin.declare_scope(PROJECT);
             admin.hook(
                 "gallery.greeting.length",
                 Hook::Status(Box::new(|| ("5 letters".into(), Tone::Success))),
@@ -289,23 +303,16 @@ fn preview(ui: &mut Ui, app: &AppHandle) {
     ui.label(rich);
 }
 
-/// Opens the Settings app on the gallery's section, a library and a
-/// workspace open with a value each over the user's.
+/// Opens the Settings app on the gallery's section, a project open with
+/// its size over the user's.
 pub fn open_admin(app: &AppHandle) {
-    use egui_pop::model::admin::ValueScope;
     if let Some(admin) = app.service(&ADMIN) {
-        admin.offer(ValueScope::Library, true);
-        admin.offer(ValueScope::Workspace, true);
-        if admin.export_layer(ValueScope::Library).is_empty() {
+        admin.offer(PROJECT.scope, true);
+        if admin.export_layer(PROJECT.scope).is_empty() {
             admin.load_layer(
                 app,
-                ValueScope::Library,
+                PROJECT.scope,
                 [("gallery.size".to_string(), serde_json::json!(24.0))].into(),
-            );
-            admin.load_layer(
-                app,
-                ValueScope::Workspace,
-                [("gallery.tone".to_string(), serde_json::json!("accent"))].into(),
             );
         }
     }

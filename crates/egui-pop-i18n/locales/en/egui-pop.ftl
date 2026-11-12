@@ -1118,9 +1118,7 @@ egui-pop-admin-close = Close
 
 egui-pop-admin-for-app = This app
 
-egui-pop-admin-for-library = This library
-
-egui-pop-admin-for-workspace = This workspace
+egui-pop-admin-for-app-about = everywhere, unless set for a scope below
 
 egui-pop-admin-modified = modified
 
@@ -1132,13 +1130,9 @@ egui-pop-admin-no-records = Nothing here yet.
 
 egui-pop-admin-no-widget = No widget kind `{ $kind }` is registered
 
-egui-pop-admin-origin-library = library
-
 egui-pop-admin-origin-run = command line
 
-egui-pop-admin-origin-tip = This value comes from the { $origin } layer
-
-egui-pop-admin-origin-workspace = workspace
+egui-pop-admin-origin-tip = This value is set for: { $origin }
 
 egui-pop-admin-pop-in = Back into the window
 
@@ -1171,6 +1165,8 @@ egui-pop-admin-sections = Sections
 egui-pop-admin-set-for = Set for
 
 egui-pop-admin-set-for-name = Where { $setting } is set
+
+egui-pop-admin-set-for-tip = Where this value applies. When several hold a value, the lowest in this list wins:
 
 egui-pop-admin-show-item = Show
 

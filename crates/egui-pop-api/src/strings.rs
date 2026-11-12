@@ -112,16 +112,18 @@ pub const ADMIN_SET_FOR: StrKey = StrKey::new("egui-pop-admin-set-for", "Set for
 pub const ADMIN_SET_FOR_NAME: StrKey =
     StrKey::new("egui-pop-admin-set-for-name", "Where { $setting } is set");
 pub const ADMIN_FOR_APP: StrKey = StrKey::new("egui-pop-admin-for-app", "This app");
-pub const ADMIN_FOR_LIBRARY: StrKey = StrKey::new("egui-pop-admin-for-library", "This library");
-pub const ADMIN_FOR_WORKSPACE: StrKey =
-    StrKey::new("egui-pop-admin-for-workspace", "This workspace");
-pub const ADMIN_ORIGIN_LIBRARY: StrKey = StrKey::new("egui-pop-admin-origin-library", "library");
-pub const ADMIN_ORIGIN_WORKSPACE: StrKey =
-    StrKey::new("egui-pop-admin-origin-workspace", "workspace");
+pub const ADMIN_FOR_APP_ABOUT: StrKey = StrKey::new(
+    "egui-pop-admin-for-app-about",
+    "everywhere, unless set for a scope below",
+);
+pub const ADMIN_SET_FOR_TIP: StrKey = StrKey::new(
+    "egui-pop-admin-set-for-tip",
+    "Where this value applies. When several hold a value, the lowest in this list wins:",
+);
 pub const ADMIN_ORIGIN_RUN: StrKey = StrKey::new("egui-pop-admin-origin-run", "command line");
 pub const ADMIN_ORIGIN_TIP: StrKey = StrKey::new(
     "egui-pop-admin-origin-tip",
-    "This value comes from the { $origin } layer",
+    "This value is set for: { $origin }",
 );
 pub const ADMIN_RUN_READ_ONLY: StrKey = StrKey::new(
     "egui-pop-admin-run-read-only",
@@ -1458,10 +1460,8 @@ pub const ALL: &[StrKey] = &[
     ADMIN_SET_FOR,
     ADMIN_SET_FOR_NAME,
     ADMIN_FOR_APP,
-    ADMIN_FOR_LIBRARY,
-    ADMIN_FOR_WORKSPACE,
-    ADMIN_ORIGIN_LIBRARY,
-    ADMIN_ORIGIN_WORKSPACE,
+    ADMIN_FOR_APP_ABOUT,
+    ADMIN_SET_FOR_TIP,
     ADMIN_ORIGIN_RUN,
     ADMIN_ORIGIN_TIP,
     ADMIN_RUN_READ_ONLY,

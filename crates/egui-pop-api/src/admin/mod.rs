@@ -17,15 +17,20 @@
 //!   moved by its arrow keys) and its width kept ([`NAV_WIDTH`]). The
 //!   search above the tree searches every scope.
 //! - **Rows**: each setting's editor, a modified bar, an origin tag
-//!   (`library`, `workspace`, `command line`), its reset (of the layer
-//!   shown), and a "Set for" menu when it may be set in several value
-//!   scopes. Applied live, undone with the settings' history.
+//!   (a host scope's label, `command line`), its reset (of the layer
+//!   shown), and a labelled "Set for" menu only on a setting that opted
+//!   into a host scope open now. Applied live, undone with the settings'
+//!   history.
 //! - **Generated**: the declared settings become pages with no
 //!   hand-written page ([`egui_pop_model::admin::generate`]); manifests
 //!   add scopes and sections ([`Admin::manifest`]).
-//! - **Value scopes**: [`Admin::offer`] opens the library or workspace
-//!   layer, [`Admin::load_layer`] fills it, [`Admin::set_run`] records a
-//!   command line override ([`egui_pop_model::admin::layers`]).
+//! - **Value scopes**: a setting is app-wide by default. The host
+//!   declares its own scopes above `app` ([`Admin::declare_scope`], a
+//!   later one winning), a setting opts into them in its declaration
+//!   ([`Descriptor::scopes`]) or a manifest's field
+//!   ([`model::Field::scopes`]); [`Admin::offer`] opens a scope's layer,
+//!   [`Admin::load_layer`] fills it, [`Admin::set_run`] records a command
+//!   line override ([`egui_pop_model::admin::layers`]).
 //! - **Records and statuses**: lists and tables read their rows from a
 //!   `read_only` command or a `records` hook, statuses their value from a
 //!   `read_only` command or a `status` hook; read once, and again after
@@ -59,6 +64,7 @@ use std::sync::{Arc, Mutex};
 
 use egui::Ui;
 use egui_pop_core::lock;
+use egui_pop_core::strings::StrKey;
 use egui_pop_model::admin::generate::{self, Entry};
 use egui_pop_model::admin::hooks::{Hook, Hooks};
 use egui_pop_model::admin::layers::Layers;
@@ -102,6 +108,31 @@ pub const APP_WINDOW: &str = "settings";
 
 /// The service.
 pub const ADMIN: ServiceToken<Admin> = ServiceToken::new("admin");
+
+/// A value scope the host application declares above `app` (egui-pop
+/// has none of its own): its name, its label and what it means. A
+/// setting is app-wide unless its field opts into a declared scope
+/// ([`model::Field::scopes`]); the "Set for" choice shows only then.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExtraScope {
+    pub scope: ValueScope,
+    /// Its name in the "Set for" choice and as a value's origin ("This
+    /// library").
+    pub label: StrKey,
+    /// What it means, in the choice's tooltip ("While this library is
+    /// open").
+    pub about: StrKey,
+}
+
+impl ExtraScope {
+    pub const fn new(name: &'static str, label: StrKey, about: StrKey) -> ExtraScope {
+        ExtraScope {
+            scope: ValueScope::new(name),
+            label,
+            about,
+        }
+    }
+}
 
 /// The focus surface the pages are drawn in: its local scope is the
 /// settings' history.
@@ -157,6 +188,8 @@ pub struct Admin {
     finished: Mutex<Option<Json>>,
     /// A path field's Browse waiting for its choice: the draft key.
     browsing: Mutex<Option<(String, crate::host::Pending)>>,
+    /// The host's value scopes, lowest first.
+    extra: Mutex<Vec<ExtraScope>>,
     /// Settings export and import: retired settings, the last import.
     transfer: transfer::State,
 }
@@ -390,8 +423,31 @@ impl Admin {
         lock(&self.layers).clone()
     }
 
-    /// Offers the library or workspace layer for editing (the application
-    /// opened one), or takes it back.
+    /// Declares a host value scope above those declared before it: a
+    /// value set for it wins over theirs and `app`'s. Declare them in
+    /// order, lowest first, before offering them; declaring one again
+    /// changes its label and about.
+    pub fn declare_scope(&self, extra: ExtraScope) {
+        let mut d = lock(&self.extra);
+        match d.iter_mut().find(|x| x.scope == extra.scope) {
+            Some(x) => *x = extra,
+            None => d.push(extra),
+        }
+        lock(&self.layers).declare(extra.scope);
+    }
+
+    /// The host's value scopes, lowest first.
+    pub fn extra_scopes(&self) -> Vec<ExtraScope> {
+        lock(&self.extra).clone()
+    }
+
+    /// A declared scope's declaration.
+    pub fn extra_scope(&self, scope: ValueScope) -> Option<ExtraScope> {
+        lock(&self.extra).iter().find(|x| x.scope == scope).copied()
+    }
+
+    /// Offers a host value scope for editing (the application opened its
+    /// library, its workspace...), or takes it back.
     pub fn offer(&self, scope: ValueScope, on: bool) {
         lock(&self.layers).offer(scope, on);
     }
@@ -458,6 +514,9 @@ impl Admin {
         if scope != ValueScope::App && !self.offered().contains(&scope) {
             return Err(format!("no {} is open", scope.name()));
         }
+        if scope != ValueScope::App && !self.allows(app, id, scope) {
+            return Err(format!("`{id}` is not set for a {}", scope.name()));
+        }
         let (w, plain) = {
             let mut l = lock(&self.layers);
             let plain = scope == ValueScope::App && l.origin(&path) == ValueScope::App;
@@ -478,6 +537,21 @@ impl Admin {
             }
             (None, _) => Ok(()),
         }
+    }
+
+    /// Whether a setting opted into a host scope: in its declaration
+    /// ([`Descriptor::scopes`]) or on a field of a manifest placing it.
+    pub fn allows(&self, app: &AppHandle, id: &SettingId, scope: ValueScope) -> bool {
+        if scope == ValueScope::App {
+            return true;
+        }
+        if descriptor(app, &id.path()).is_ok_and(|d| d.scopes.contains(&scope)) {
+            return true;
+        }
+        self.tree(app)
+            .fields()
+            .into_iter()
+            .any(|(_, f)| f.setting_id() == Some(id.as_str()) && f.scopes.contains(&scope))
     }
 
     /// Takes a value scope's value of a setting back: `app` goes back to
@@ -663,9 +737,9 @@ pub(crate) fn setting_row(ui: &mut Ui, app: &AppHandle, id: &SettingId) -> bool 
     shell::setting_row(ui, app, id)
 }
 
-/// A value scope from its name.
+/// A value scope from its name (`app`, `run` or a host's).
 pub fn scope_named(name: &str) -> Option<ValueScope> {
-    ValueScope::ALL.into_iter().find(|s| s.name() == name)
+    (!name.is_empty()).then(|| ValueScope::named(name))
 }
 
 /// Whether the application's administration app is open.
