@@ -103,7 +103,10 @@ in it, and `main` is the main window without them. In a window of its
 own, the root node (a `Window` node egui leaves unnamed) takes the
 window's title, so an application window's tree has a `Window` node
 named by its title either way. A window that is
-not open is error `-32602`, naming the open ones.
+not open is error `-32602`, naming the open ones. An action that closes
+its window (`Escape`, a close button) is answered once the window is
+gone, with `"window_closed": true`; the events left for it are dropped,
+and the application keeps running.
 
 `commands.run` through `call` is queued for the next frame, as
 `AppHandle::debug_call` does: its result comes on the journal. Wait for

@@ -7,7 +7,9 @@
 //! `Expect(Journal)`, `Shot`) work as in-process; the ones that need the
 //! accessibility tree (`Ui`, `Expect(Tree)`) go through the socket's `ui`
 //! method, its input queued into egui's next frames, in the window the
-//! last `Window` step named (its own OS window). After every step the
+//! last `Window` step named (its own OS window); an action that closes
+//! that window answers its step, and the next steps go to the main
+//! window. After every step the
 //! runner checks `NoErrorToast`, `NoFailedCommand`, `NoUnknownCommand`,
 //! `NoMissingText`, and `NoPanic` (the application is gone: it crashed or
 //! exited); `StableWindows` and `FrameBudget` need the frames, so they
@@ -496,13 +498,17 @@ impl LiveRun<'_> {
             Step::Ui(ui) => {
                 self.mark = self.client.last_event().map_err(|e| gone(&e))?;
                 let params = self.ui_params(ui);
-                self.client
-                    .request("ui", params)
-                    .map(|_| ())
-                    .map_err(|e| match e {
-                        ClientError::Rpc(m) => ("ui".into(), m),
-                        e => gone(&e),
-                    })
+                let r = self.client.request("ui", params).map_err(|e| match e {
+                    ClientError::Rpc(m) => ("ui".into(), m),
+                    e => gone(&e),
+                })?;
+                // The action closed its window (a key, a close button):
+                // the next steps are the main window's, until a `Window`
+                // step names another.
+                if r["window_closed"] == true {
+                    self.window = None;
+                }
+                Ok(())
             }
             Step::Expect(e) => self.expect(e),
             Step::Shot(name) => self.shoot(name),
