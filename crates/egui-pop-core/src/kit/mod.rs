@@ -48,6 +48,7 @@ mod source;
 mod tone;
 mod window;
 
+pub use dock::{AreaLineKit, AreaLineState};
 pub use drag::DragCursorKit;
 pub use glyph::{Glyph, Glyphs};
 
@@ -659,6 +660,9 @@ macro_rules! components {
             /// The drag cursors by kind (`drag-cursor.<kind>.hover`,
             /// `.drag`, `.policy`), under the pointer profile's.
             pub drag_cursors: DragCursorKit,
+            /// The line between two areas while hovered and dragged
+            /// (`side-area.hover.border-*`, `side-area.active.border-*`).
+            pub area_line: AreaLineKit,
             /// The scroll bars' terms (`scroll-bar.width`, `width-rest`,
             /// `opacity-rest`, `room`, `min-length`, `margin`, `placement`,
             /// `visibility`, `track-fill`): egui's
@@ -695,6 +699,7 @@ macro_rules! components {
                     sections: SectionsKit::default(),
                     drag_cursors: DragCursorKit::default(),
                     scroll: ScrollBarKit::default(),
+                    area_line: AreaLineKit::default(),
                     scoped: ScopedKit::default(),
                     problems,
                 }
@@ -1146,6 +1151,7 @@ impl Kit {
         kit.window = WindowKit::compile(t, &mut problems);
         kit.sections = SectionsKit::compile(t, &mut problems);
         kit.drag_cursors = DragCursorKit::compile(t, &mut problems);
+        kit.area_line = dock::AreaLineKit::compile(t, &kit.side_area);
         kit.scroll = ScrollBarKit::compile(t, &kit.scroll_bar.data, &mut problems);
         kit.scoped = ScopedKit::compile(&kit);
         problems.extend(egui_losses(t, &kit));
@@ -1370,6 +1376,57 @@ mod tests {
         assert_eq!(s.spread, 0, "egui's spread is never negative");
         assert_eq!(s.blur, 32);
         assert_eq!(s.color, Color32::from_rgba_unmultiplied(255, 0, 0, 128));
+    }
+
+    #[test]
+    fn the_area_line_s_states_come_from_tokens_else_from_egui() {
+        use egui_stack::PartState;
+        let style = egui::Style::default();
+        let w = &style.visuals.widgets;
+        let (hover, drag) = (PartState::HOVERED, PartState::DRAGGED);
+        // A theme saying nothing keeps egui's strokes.
+        let kit = Kit::compile(&Tokens::default(), &Shapes::default());
+        assert_eq!(kit.area_line, AreaLineKit::default());
+        let s = |kit: &Kit, f| kit.area_line_stroke(&style, f, 1.0);
+        assert_eq!(s(&kit, hover), Some(w.hovered.fg_stroke));
+        assert_eq!(s(&kit, PartState::FOCUSED), Some(w.hovered.fg_stroke));
+        assert_eq!(s(&kit, drag), Some(w.active.fg_stroke));
+        assert_eq!(s(&kit, PartState::NONE), Some(w.noninteractive.bg_stroke));
+        // Width 0: no line on hover nor drag.
+        let t = tokens_with(
+            r##"{
+              "$extends": "pop-dark",
+              "side-area": {
+                "hover": {"border-width": {"$type": "dimension", "$value": {"value": 0, "unit": "px"}}},
+                "active": {"border-width": {"$type": "dimension", "$value": {"value": 0, "unit": "px"}}}
+              }
+            }"##,
+        );
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert!(kit.problems.is_empty(), "{:?}", kit.problems);
+        assert_eq!(s(&kit, hover), None);
+        assert_eq!(s(&kit, drag), None);
+        assert_eq!(
+            s(&kit, PartState::NONE),
+            Some(w.noninteractive.bg_stroke),
+            "the line at rest is unchanged"
+        );
+        // A colour alone keeps the width at rest; a width alone egui's colour.
+        let t = tokens_with(
+            r##"{
+              "$extends": "pop-dark",
+              "side-area": {
+                "hover": {"border-color": {"$type": "color", "$value": "#ff0000"}},
+                "active": {"border-width": {"$type": "dimension", "$value": {"value": 3, "unit": "px"}}}
+              }
+            }"##,
+        );
+        let kit = Kit::compile(&t, &Shapes::default());
+        assert_eq!(s(&kit, hover), Some(Stroke::new(1.0, Color32::RED)));
+        assert_eq!(
+            s(&kit, drag),
+            Some(Stroke::new(3.0, w.active.fg_stroke.color))
+        );
     }
 
     #[test]

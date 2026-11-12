@@ -226,6 +226,9 @@ dropped in silence. Replacing one means an egui-pop-drawn widget.
 - **`side-area`.** egui draws the separator line, with its
   non-interactive stroke: `border-width` 0 hides it; another width than
   the button's, or a colour other than `border.default`, is reported.
+  Under the pointer and while dragged it takes egui's hovered and active
+  widget strokes, unless the kit gives `side-area.hover.border-*` or
+  `side-area.active.border-*` (Side areas, under [Built so far](#built-so-far)).
 
 Two parts of the token tree are outside the grid on purpose:
 
@@ -407,10 +410,19 @@ compiled at install.
   area's grip is painted at the middle of its edge (`width` thick,
   `height` long), above the panels; egui still takes the drag and draws
   the separator line (it reserves room for it in the panel's layout).
-  The default kit's grip is transparent. An open side area
+  The default kit's grip is transparent; its `hover` and `active` fills
+  (under the pointer, while the edge is dragged) let a kit show the grip
+  as the only cue. An open side area
   (`side-area`) has `padding-x` and `padding-y` between its edges and its
   panels (egui's 8 and 2 by default), and no separator line when its
-  `border-width` is 0 (egui draws the line: see Bridges to egui). A side area may lie over the centre
+  `border-width` is 0 (egui draws the line: see Bridges to egui). The
+  line under the pointer or with the keyboard (`hover`) and while
+  dragged (`active`) takes `side-area.hover.border-width` and
+  `border-color` and their `active` twins: a width of 0 draws no line, a
+  colour alone keeps the width at rest, a width alone egui's colour. A
+  state whose tokens say nothing is drawn with egui's widget stroke
+  (`widgets.hovered.fg_stroke`, `widgets.active.fg_stroke`), as the
+  default kit does. A side area may lie over the centre
   (`workbench.place`): its strip keeps the room (`selected` while the
   area is open; a click folds it) and the area is drawn above the
   centre in `side-area`'s box, casting its `shadow-*` towards the centre
