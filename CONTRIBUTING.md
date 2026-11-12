@@ -137,9 +137,11 @@ CI also runs `cargo deny check`, builds the gallery for
 title, and runs `cargo semver-checks` on every published crate against
 crates.io, with the versions the pending changesets lead to: a break
 without a `major` changeset fails.
-Pull requests target `next`, not `main`: into `next`, CI runs the quick
-checks only and the pull request merges once they pass; every push to
-`next` runs everything, and `main` fast-forwards to `next` once that
+Pull requests target `next`, not `main`. A contributor's pull request
+from a fork runs the quick checks and merges once they pass. The
+maintainers' own pull requests (branches of this repository) run no CI:
+they are tested on the maintainers' bench box and merged, and only
+`next`'s run counts. Every push to `next` runs everything, and `main` fast-forwards to `next` once that
 passes ([docs/testing.md](docs/testing.md#the-next-branch)). On a pull
 request into `main`, CI runs only the jobs and the tests the change can
 affect (`cargo xtask affected` says which, and why); `main` and `next`
