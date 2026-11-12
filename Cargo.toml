@@ -60,9 +60,9 @@ idna = "1"
 egui-pop-model = { version = "0.7.0", path = "crates/egui-pop-model" }
 # Without its default fonts: the facade's `bundled-fonts` turns them on,
 # so an application can leave them out.
-egui-pop-core = { version = "0.9.0", path = "crates/egui-pop-core", default-features = false }
-egui-pop-api = { version = "0.9.0", path = "crates/egui-pop-api", default-features = false }
-egui-pop-test = { version = "0.9.0", path = "crates/egui-pop-test" }
+egui-pop-core = { version = "0.9.1", path = "crates/egui-pop-core", default-features = false }
+egui-pop-api = { version = "0.9.1", path = "crates/egui-pop-api", default-features = false }
+egui-pop-test = { version = "0.10.0", path = "crates/egui-pop-test" }
 egui-pop-test-macros = { version = "0.1.0", path = "crates/egui-pop-test-macros" }
 egui-pop-viewport = { version = "0.9.0", path = "crates/egui-pop-viewport" }
 egui-pop-i18n = { version = "0.9.0", path = "crates/egui-pop-i18n" }
@@ -72,7 +72,7 @@ egui-pop-wayland = { version = "0.2.0", path = "crates/egui-pop-wayland" }
 egui-pop-views = { version = "0.9.0", path = "crates/egui-pop-views" }
 egui-pop-editors = { version = "0.9.0", path = "crates/egui-pop-editors", default-features = false }
 egui-pop-imaging = { version = "0.9.0", path = "crates/egui-pop-imaging" }
-egui-pop-agent = { version = "0.3.0", path = "crates/egui-pop-agent" }
+egui-pop-agent = { version = "0.4.0", path = "crates/egui-pop-agent" }
 egui = { version = "0.37", default-features = false }
 # MIT OR Apache-2.0: the scopes egui, egui-wgpu and wgpu already use;
 # compiled out unless a profiler backend is chosen (docs/threading.md).
@@ -110,7 +110,7 @@ image = { version = "0.25", default-features = false }
 # and the resize edge of a zone lying over; 0.25.7 title drags in sections
 # sized by their content (`Sections::fill(false)`).
 egui_stack = { version = "0.25.8", default-features = false }
-egui-pop = { version = "0.9.0", path = "crates/egui-pop" }
+egui-pop = { version = "0.10.0", path = "crates/egui-pop" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

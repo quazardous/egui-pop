@@ -8,6 +8,37 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.10.0 (2026-11-12)
+
+Published: egui-pop-core 0.9.1, egui-pop-api 0.9.1, egui-pop-test 0.10.0, egui-pop-agent 0.4.0, egui-pop 0.10.0.
+
+### Breaking changes
+
+- egui-pop, egui-pop-agent, egui-pop-test: A scenario names the application window its steps look at:
+  `Window("import")` makes the `Ui` steps and `Expect(Tree)` that follow
+  read and act in that window (`main` for the main window), until the
+  next `Window`. Live, they go to that window's own tree and input; in a
+  kittest harness, where the windows are embedded in the main one, to
+  its embedded window. `Step` gains the `Window` variant, a break for
+  code matching every step. The agent socket's `ui` method (and the MCP
+  `ui` tool) takes `window` as `call` and `snapshot` do: a window of its
+  own has its own tree and input, its root node named by the window's
+  title, and where egui embeds the windows, a window is its embedded
+  window and what is in it, and `main` the rest.
+
+### Features
+
+- egui-pop, egui-pop-api, egui-pop-core: Foreground layers have ranks (ADR 0026, `egui_pop::layers`): in each
+  window, the areas lying over the centre and the flyouts (`Rank::Over`)
+  stay under the overlays (`Rank::Overlay`), which stay under the menus,
+  popups and dialogs, whatever was clicked last. A panel lying over the
+  centre no longer covers an application's card once clicked. egui-pop's
+  toasts, tips card and halo, hover cards, popovers, zen way out and the
+  file browser's quick look take `Rank::Overlay`; an application shows
+  its own overlay with `layers::area` (or ranks a layer with
+  `layers::rank`) instead of calling `ctx.move_to_top`. egui_stack 0.25.8
+  is required.
+
 ## 0.9.0 (2026-11-11)
 
 Published: egui-pop-tokens 0.2.5, egui-pop-model 0.7.0, egui-pop-core 0.9.0, egui-pop-api 0.9.0, egui-pop-test 0.9.0, egui-pop-viewport 0.9.0, egui-pop-i18n 0.9.0, egui-pop-agent 0.3.0, egui-pop-editors 0.9.0, egui-pop-platform 0.9.0, egui-pop-views 0.9.0, egui-pop-imaging 0.9.0, egui-pop 0.9.0.
