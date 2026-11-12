@@ -8,6 +8,31 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.10.2 (2026-11-12)
+
+Published: egui-pop-tokens 0.2.6, egui-pop-core 0.9.2, egui-pop-api 0.9.3, egui-pop-test 0.10.1, egui-pop 0.10.2.
+
+### Features
+
+- egui-pop-api, egui-pop-test: Closing the main window while another is open moves that window's
+  content into it at the window's own size and place (the position where
+  the platform tells it), and the main window takes its own back when
+  raised. With the application's frame (`FramePlugin::own`), application
+  windows and content moved into the main window get the main window's
+  title bar: title, minimize, maximize, close. `MultiWindow` gains
+  `names`, `click`, `queue` and `set_outer_position`.
+- egui-pop-core, egui-pop-tokens: The line between a side area and the centre takes its hover and drag
+  looks from the kit: `side-area.hover.border-width` and `border-color`,
+  and their `active` twins, a width of 0 drawing no line. A theme giving
+  none keeps egui's widget strokes, as before. `Kit::area_line_stroke`
+  tells the stroke for a sash state, `Kit::area_line` holds the compiled
+  tokens. The side area's grip (`area-grip`) documents its `hover` and
+  `active` fills, so a kit can keep the grip as the only cue.
+
+### Fixes
+
+- egui-pop, egui-pop-api: While a docked side area is resized, its content follows the sash in the same frame instead of one frame behind (egui_stack 0.25.10 is required).
+
 ## 0.10.1 (2026-11-12)
 
 Published: egui-pop-api 0.9.2, egui-pop-i18n 0.9.1, egui-pop 0.10.1.
