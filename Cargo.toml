@@ -109,7 +109,7 @@ image = { version = "0.25", default-features = false }
 # the host decides (`LayoutArea::flyout_dismiss`, `over_dismiss`, `inside`)
 # and the resize edge of a zone lying over; 0.25.7 title drags in sections
 # sized by their content (`Sections::fill(false)`).
-egui_stack = { version = "0.25.9", default-features = false }
+egui_stack = { version = "0.25.10", default-features = false }
 egui-pop = { version = "0.10.1", path = "crates/egui-pop" }
 
 [workspace.lints.rust]
