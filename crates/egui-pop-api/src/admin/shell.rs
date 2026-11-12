@@ -1510,27 +1510,32 @@ pub(super) fn kit_tone(tone: Tone) -> KitTone {
     }
 }
 
-fn origin_text(ctx: &egui::Context, scope: ValueScope) -> String {
-    strings::tr(
-        ctx,
-        match scope {
-            ValueScope::Library => &txt::ADMIN_ORIGIN_LIBRARY,
-            ValueScope::Workspace => &txt::ADMIN_ORIGIN_WORKSPACE,
-            _ => &txt::ADMIN_ORIGIN_RUN,
-        },
-    )
+/// A scope's label: the host's for its scopes, egui-pop's for `app`
+/// and `run`, the name of a scope never declared.
+fn for_text(ctx: &egui::Context, admin: &Admin, scope: ValueScope) -> String {
+    match scope {
+        ValueScope::App => strings::tr(ctx, &txt::ADMIN_FOR_APP),
+        ValueScope::Run => strings::tr(ctx, &txt::ADMIN_ORIGIN_RUN),
+        s => admin
+            .extra_scope(s)
+            .map_or_else(|| s.name().to_string(), |x| strings::tr(ctx, &x.label)),
+    }
 }
 
-fn for_text(ctx: &egui::Context, scope: ValueScope) -> String {
-    strings::tr(
-        ctx,
-        match scope {
-            ValueScope::App => &txt::ADMIN_FOR_APP,
-            ValueScope::Library => &txt::ADMIN_FOR_LIBRARY,
-            ValueScope::Workspace => &txt::ADMIN_FOR_WORKSPACE,
-            ValueScope::Run => &txt::ADMIN_ORIGIN_RUN,
-        },
-    )
+/// The "Set for" tooltip: each scope the setting may be set for, lowest
+/// first, with what it means; the lowest in the list holding a value
+/// wins.
+fn set_for_tip(ctx: &egui::Context, admin: &Admin, allowed: &[ValueScope]) -> String {
+    let mut out = strings::tr(ctx, &txt::ADMIN_SET_FOR_TIP);
+    for s in allowed {
+        let about = match admin.extra_scope(*s) {
+            Some(x) => strings::tr(ctx, &x.about),
+            None if *s == ValueScope::App => strings::tr(ctx, &txt::ADMIN_FOR_APP_ABOUT),
+            None => String::new(),
+        };
+        out.push_str(&format!("\n• {}: {about}", for_text(ctx, admin, *s)));
+    }
+    out
 }
 
 /// One setting's row: the modified bar, its editor (the settings form's,
@@ -1549,11 +1554,13 @@ fn field_row(ui: &mut Ui, app: &AppHandle, admin: &Admin, e: &SettingEntry, f: &
     };
     let layers = admin.layers();
     let origin = layers.origin(&e.path);
-    let offered = admin.offered();
-    let allowed: Vec<ValueScope> = offered
-        .iter()
-        .copied()
-        .filter(|s| f.scopes.is_empty() || *s == ValueScope::App || f.scopes.contains(s))
+    // `app`, and the host's scopes open that the field opted into.
+    let allowed: Vec<ValueScope> = admin
+        .offered()
+        .into_iter()
+        .filter(|s| {
+            *s == ValueScope::App || e.descriptor.scopes.contains(s) || f.scopes.contains(s)
+        })
         .collect();
     let target = admin
         .target(&e.path)
@@ -1599,30 +1606,40 @@ fn field_row(ui: &mut Ui, app: &AppHandle, admin: &Admin, e: &SettingEntry, f: &
                 if r.clicked() {
                     let _ = admin.clear_in(app, origin, &e.id);
                 }
-                // "Set for", when it may be set in more than one scope.
+                // "Set for", only on a setting that opted into a host
+                // scope open now.
                 if allowed.len() > 1 {
                     let mut picked = target;
+                    let tip = set_for_tip(&ctx, admin, &allowed);
                     let combo = widgets::combo_box(("egui_pop.admin.set_for", id))
-                        .selected_text(for_text(&ctx, target));
+                        .selected_text(for_text(&ctx, admin, target));
                     let r = ui
                         .combo_box(combo, |ui| {
                             for s in &allowed {
-                                widgets::selectable_value(ui, &mut picked, *s, for_text(&ctx, *s));
+                                widgets::selectable_value(
+                                    ui,
+                                    &mut picked,
+                                    *s,
+                                    for_text(&ctx, admin, *s),
+                                );
                             }
                         })
-                        .response;
+                        .response
+                        .on_hover_text(&tip);
                     a11y::name(
                         &r,
                         Role::ComboBox,
                         &strings::tr_args(&ctx, &txt::ADMIN_SET_FOR_NAME, &setting),
                     );
+                    ui.label(strings::tr(&ctx, &txt::ADMIN_SET_FOR))
+                        .on_hover_text(&tip);
                     if picked != target {
                         admin.set_target(&e.path, picked);
                     }
                 }
                 // The origin tag.
                 if origin != ValueScope::App {
-                    let text = origin_text(&ctx, origin);
+                    let text = for_text(&ctx, admin, origin);
                     ui.add(
                         Indicator::text(&text)
                             .tone(KitTone::Accent)
@@ -1671,7 +1688,7 @@ fn field_row(ui: &mut Ui, app: &AppHandle, admin: &Admin, e: &SettingEntry, f: &
         name = format!("{name}, {}", strings::tr(&ctx, &txt::ADMIN_MODIFIED));
     }
     if origin != ValueScope::App {
-        name = format!("{name}, {}", origin_text(&ctx, origin));
+        name = format!("{name}, {}", for_text(&ctx, admin, origin));
     }
     if marked {
         ui.painter().set(

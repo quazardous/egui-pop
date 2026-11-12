@@ -215,6 +215,10 @@ pub struct Descriptor {
     /// export, never read from one.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub sensitive: bool,
+    /// The host's value scopes it may also be set for, above `app`
+    /// (opt-in, [`crate::admin::ValueScope`]); empty: app-wide only.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub scopes: Vec<crate::admin::ValueScope>,
 }
 
 /// Decimals enough to show one step.
@@ -246,6 +250,7 @@ impl Descriptor {
             path: None,
             writers: Writers::Owner,
             sensitive: false,
+            scopes: Vec::new(),
         }
     }
 
@@ -372,6 +377,13 @@ impl Descriptor {
     /// Lets anyone write it.
     pub fn any_writer(mut self) -> Self {
         self.writers = Writers::Any;
+        self
+    }
+
+    /// Opts into host value scopes: the settings app offers "Set for"
+    /// with `app` and these (those the host has open).
+    pub fn scopes(mut self, scopes: &[crate::admin::ValueScope]) -> Self {
+        self.scopes = scopes.to_vec();
         self
     }
 

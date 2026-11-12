@@ -1,49 +1,78 @@
 //! Value scopes: where a setting's value is set. `app` is this person on
-//! this machine (the settings store, as today); `library` and `workspace`
-//! are layers above it that the application opens with its library and
-//! workspace; `run` is the command line's overrides, shown, never edited.
+//! this machine (the settings store, as today) and the only scope a
+//! setting has unless it opts into more; the host application declares
+//! its own scopes above `app` (a project, a library, a workspace...),
+//! each later one winning over the earlier ones; `run` is the command
+//! line's overrides, above them all, shown, never edited.
 //!
 //! The store keeps the **effective** value at `settings/<id>`, so every
 //! reader (`AppHandle::setting`, bindings, listeners) sees it unchanged;
 //! [`Layers`] keeps the layers above `app`, and the `app` value of a path
 //! while a layer above holds it. Saving the user's settings takes the
-//! `app` values back ([`Layers::app_doc`]), so a library's value never
+//! `app` values back ([`Layers::app_doc`]), so a scope's value never
 //! leaks into the user's file.
 //!
 //! Each change returns the effective value to write when it changes:
 //! the caller writes it (the model stays free of the store's locks).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::{Mutex, OnceLock};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value as Json;
 
-/// A layer of values, lowest first.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ValueScope {
-    App,
-    Library,
-    Workspace,
-    /// The command line's overrides: shown as an origin, never edited.
-    Run,
-}
+/// A layer of values, by name: `app` and `run` are egui-pop's, the
+/// others the host application's ([`ValueScope::new`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ValueScope(&'static str);
 
+#[allow(non_upper_case_globals)]
 impl ValueScope {
-    pub const ALL: [ValueScope; 4] = [
-        ValueScope::App,
-        ValueScope::Library,
-        ValueScope::Workspace,
-        ValueScope::Run,
-    ];
+    /// This person on this machine: the settings store.
+    pub const App: ValueScope = ValueScope("app");
+    /// The command line's overrides: shown as an origin, never edited.
+    pub const Run: ValueScope = ValueScope("run");
+    /// Helios's former built-in scope.
+    #[deprecated(
+        since = "0.8.0",
+        note = "declare the host's scopes with `ValueScope::new` and `Layers::declare`"
+    )]
+    pub const Library: ValueScope = ValueScope("library");
+    /// Helios's former built-in scope.
+    #[deprecated(
+        since = "0.8.0",
+        note = "declare the host's scopes with `ValueScope::new` and `Layers::declare`"
+    )]
+    pub const Workspace: ValueScope = ValueScope("workspace");
+
+    /// A host application's scope, by its name (`"library"`).
+    pub const fn new(name: &'static str) -> ValueScope {
+        ValueScope(name)
+    }
+
+    /// A scope from its name, as read from a file or a command's
+    /// arguments (a name not seen before is kept for the process).
+    pub fn named(name: &str) -> ValueScope {
+        static NAMES: OnceLock<Mutex<BTreeSet<&'static str>>> = OnceLock::new();
+        for known in ["app", "run"] {
+            if name == known {
+                return ValueScope(known);
+            }
+        }
+        let mut names = NAMES
+            .get_or_init(Mutex::default)
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(n) = names.get(name) {
+            return ValueScope(n);
+        }
+        let n: &'static str = Box::leak(name.to_owned().into_boxed_str());
+        names.insert(n);
+        ValueScope(n)
+    }
 
     pub fn name(self) -> &'static str {
-        match self {
-            ValueScope::App => "app",
-            ValueScope::Library => "library",
-            ValueScope::Workspace => "workspace",
-            ValueScope::Run => "run",
-        }
+        self.0
     }
 
     pub fn editable(self) -> bool {
@@ -51,14 +80,28 @@ impl ValueScope {
     }
 }
 
+impl Serialize for ValueScope {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for ValueScope {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<ValueScope, D::Error> {
+        let name = String::deserialize(d)?;
+        Ok(ValueScope::named(&name))
+    }
+}
+
 /// The layers above `app`, by path.
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct Layers {
+    /// The host's scopes above `app`, lowest first: a later one wins.
+    declared: Vec<ValueScope>,
     /// The editable layers the application has open (`app` always).
     offered: Vec<ValueScope>,
-    library: BTreeMap<String, Json>,
-    workspace: BTreeMap<String, Json>,
-    run: BTreeMap<String, Json>,
+    /// Each layer's values, `run` included.
+    layers: BTreeMap<ValueScope, BTreeMap<String, Json>>,
     /// A path's `app` value while a layer above holds it.
     app: BTreeMap<String, Json>,
 }
@@ -71,17 +114,43 @@ impl Layers {
         }
     }
 
-    /// Offers a layer for editing (the application opened a library or a
-    /// workspace), or takes it back.
+    /// Declares a host scope above those declared before it (it wins over
+    /// them); declaring it again changes nothing. `app` and `run` are not
+    /// declared.
+    pub fn declare(&mut self, scope: ValueScope) {
+        if scope != ValueScope::App && scope != ValueScope::Run && !self.declared.contains(&scope) {
+            self.declared.push(scope);
+        }
+    }
+
+    /// The host's scopes, lowest first.
+    pub fn declared(&self) -> &[ValueScope] {
+        &self.declared
+    }
+
+    /// Every scope, lowest first: `app`, the host's, `run`.
+    pub fn stack(&self) -> Vec<ValueScope> {
+        let mut out = vec![ValueScope::App];
+        out.extend(self.declared.iter().copied());
+        out.push(ValueScope::Run);
+        out
+    }
+
+    /// Offers a host scope for editing (the application opened its
+    /// library, its workspace...), or takes it back. A scope not declared
+    /// yet is declared, above the others.
     pub fn offer(&mut self, scope: ValueScope, on: bool) {
         if !scope.editable() || scope == ValueScope::App {
             return;
         }
+        self.declare(scope);
         self.offered.retain(|s| *s != scope);
         if on {
             self.offered.push(scope);
-            self.offered.sort();
         }
+        let order = self.stack();
+        self.offered
+            .sort_by_key(|s| order.iter().position(|o| o == s));
     }
 
     /// The editable layers open, lowest first.
@@ -90,40 +159,38 @@ impl Layers {
     }
 
     fn map(&self, scope: ValueScope) -> Option<&BTreeMap<String, Json>> {
-        match scope {
-            ValueScope::App => None,
-            ValueScope::Library => Some(&self.library),
-            ValueScope::Workspace => Some(&self.workspace),
-            ValueScope::Run => Some(&self.run),
+        if scope == ValueScope::App {
+            return None;
         }
+        self.layers.get(&scope)
     }
 
     fn map_mut(&mut self, scope: ValueScope) -> Option<&mut BTreeMap<String, Json>> {
-        match scope {
-            ValueScope::App => None,
-            ValueScope::Library => Some(&mut self.library),
-            ValueScope::Workspace => Some(&mut self.workspace),
-            ValueScope::Run => Some(&mut self.run),
+        if scope == ValueScope::App {
+            return None;
         }
+        self.declare(scope);
+        Some(self.layers.entry(scope).or_default())
     }
 
     /// The layer the effective value comes from: the highest holding the
     /// path, else `app`.
     pub fn origin(&self, path: &str) -> ValueScope {
-        [ValueScope::Run, ValueScope::Workspace, ValueScope::Library]
+        self.stack()
             .into_iter()
+            .rev()
             .find(|s| self.map(*s).is_some_and(|m| m.contains_key(path)))
             .unwrap_or(ValueScope::App)
     }
 
-    /// The scopes holding a value for the path (`app` when it differs
-    /// from the default, as `store` and `default` say).
+    /// The scopes holding a value for the path, lowest first (`app` when
+    /// it differs from the default, as `store` and `default` say).
     pub fn holders(&self, path: &str, store: &Json, default: &Json) -> Vec<ValueScope> {
         let mut out = Vec::new();
         if self.app_value(path, store) != *default {
             out.push(ValueScope::App);
         }
-        for s in [ValueScope::Library, ValueScope::Workspace, ValueScope::Run] {
+        for s in self.stack().into_iter().skip(1) {
             if self.map(s).is_some_and(|m| m.contains_key(path)) {
                 out.push(s);
             }
@@ -181,7 +248,10 @@ impl Layers {
         if self.origin(path) == ValueScope::App {
             self.app.insert(path.into(), store.clone());
         }
-        self.run.insert(path.into(), value.clone());
+        self.layers
+            .entry(ValueScope::Run)
+            .or_default()
+            .insert(path.into(), value.clone());
         (value != *store).then_some(value)
     }
 
@@ -291,21 +361,48 @@ mod tests {
     use serde_json::json;
 
     const P: &str = "settings/appearance.theme";
+    const LIB: ValueScope = ValueScope::new("library");
+    const WS: ValueScope = ValueScope::new("workspace");
+
+    #[test]
+    fn the_host_declares_its_scopes_and_the_later_one_wins() {
+        let mut l = Layers::new();
+        // Declared workspace first: library wins over it.
+        l.declare(WS);
+        l.declare(LIB);
+        l.declare(WS);
+        assert_eq!(l.declared(), &[WS, LIB]);
+        l.offer(LIB, true);
+        l.offer(WS, true);
+        assert_eq!(l.offered(), &[ValueScope::App, WS, LIB]);
+        let mut store = json!(1);
+        store = l.set(LIB, P, json!(2), &store).unwrap();
+        assert_eq!(l.set(WS, P, json!(3), &store), None, "under the library");
+        assert_eq!(l.origin(P), LIB);
+        assert_eq!(l.holders(P, &store, &json!(1)), vec![WS, LIB]);
+        // The library's reset gives the workspace's value.
+        assert_eq!(l.clear(LIB, P, &store, &json!(1)), Some(json!(3)));
+    }
+
+    #[test]
+    fn a_scope_name_round_trips() {
+        let s: ValueScope = serde_json::from_value(json!("library")).unwrap();
+        assert_eq!(s, LIB);
+        assert_eq!(serde_json::to_value(ValueScope::App).unwrap(), json!("app"));
+        assert_eq!(ValueScope::named("run"), ValueScope::Run);
+    }
 
     #[test]
     fn a_layer_above_app_wins_and_its_reset_gives_app_back() {
         let mut l = Layers::new();
-        l.offer(ValueScope::Library, true);
+        l.offer(LIB, true);
         l.offer(ValueScope::Run, true);
-        assert_eq!(l.offered(), &[ValueScope::App, ValueScope::Library]);
+        assert_eq!(l.offered(), &[ValueScope::App, LIB]);
         let store = json!("dark");
         // Library over app: the effective value changes.
-        assert_eq!(
-            l.set(ValueScope::Library, P, json!("light"), &store),
-            Some(json!("light"))
-        );
+        assert_eq!(l.set(LIB, P, json!("light"), &store), Some(json!("light")));
         let store = json!("light");
-        assert_eq!(l.origin(P), ValueScope::Library);
+        assert_eq!(l.origin(P), LIB);
         assert_eq!(l.value_in(ValueScope::App, P, &store), Some(json!("dark")));
         // Setting app under it changes nothing shown.
         assert_eq!(l.set(ValueScope::App, P, json!("system"), &store), None);
@@ -315,7 +412,7 @@ mod tests {
         assert_eq!(doc[P], json!("system"));
         // The library's reset gives app's value back.
         assert_eq!(
-            l.clear(ValueScope::Library, P, &store, &json!("dark")),
+            l.clear(LIB, P, &store, &json!("dark")),
             Some(json!("system"))
         );
         assert_eq!(l.origin(P), ValueScope::App);
@@ -328,33 +425,26 @@ mod tests {
     fn workspace_wins_over_library_and_run_over_both() {
         let mut l = Layers::new();
         let mut store = json!(1);
-        store = l.set(ValueScope::Library, P, json!(2), &store).unwrap();
-        store = l.set(ValueScope::Workspace, P, json!(3), &store).unwrap();
-        assert_eq!(l.origin(P), ValueScope::Workspace);
-        assert_eq!(
-            l.holders(P, &store, &json!(1)),
-            vec![ValueScope::Library, ValueScope::Workspace]
-        );
+        store = l.set(LIB, P, json!(2), &store).unwrap();
+        store = l.set(WS, P, json!(3), &store).unwrap();
+        assert_eq!(l.origin(P), WS);
+        assert_eq!(l.holders(P, &store, &json!(1)), vec![LIB, WS]);
         store = l.set_run(P, json!(4), &store).unwrap();
         assert_eq!(l.origin(P), ValueScope::Run);
         assert_eq!(l.set(ValueScope::Run, P, json!(5), &store), None);
         // The workspace's reset under run changes nothing shown.
-        assert_eq!(l.clear(ValueScope::Workspace, P, &store, &json!(1)), None);
-        assert_eq!(l.value_in(ValueScope::Library, P, &store), Some(json!(2)));
+        assert_eq!(l.clear(WS, P, &store, &json!(1)), None);
+        assert_eq!(l.value_in(LIB, P, &store), Some(json!(2)));
     }
 
     #[test]
     fn loading_a_layer_writes_what_changes() {
         let mut l = Layers::new();
         let store = |_: &str| Some(json!(1));
-        let w = l.load(
-            ValueScope::Workspace,
-            BTreeMap::from([(P.to_string(), json!(9))]),
-            &store,
-        );
+        let w = l.load(WS, BTreeMap::from([(P.to_string(), json!(9))]), &store);
         assert_eq!(w, vec![(P.to_string(), json!(9))]);
         let store = |_: &str| Some(json!(9));
-        let w = l.load(ValueScope::Workspace, BTreeMap::new(), &store);
+        let w = l.load(WS, BTreeMap::new(), &store);
         assert_eq!(w, vec![(P.to_string(), json!(1))]);
         assert_eq!(l.origin(P), ValueScope::App);
     }

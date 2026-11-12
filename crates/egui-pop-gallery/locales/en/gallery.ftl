@@ -50,3 +50,5 @@ command-gallery-help-github =
 command-gallery-help-docs =
     .description = Opens egui-pop's documentation in the browser.
     .title = Documentation
+gallery-scope-project = This project
+gallery-scope-project-about = while this project is open, over the app's value
