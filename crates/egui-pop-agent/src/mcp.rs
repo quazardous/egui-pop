@@ -252,13 +252,14 @@ fn builtins() -> Vec<GeneratedTool> {
         "ui",
         "The interface, as a person sees and drives it. `action: \"tree\"` lists the \
          accessibility tree's nodes (role, label, value, rect), or those matching `label` \
-         (exactly) and `role` (`Button`, `TextInput`, any case). `click`, `type` (with `text`) \
-         and `scroll` (`up`, optional) act on the one node `label` and `role` name, `key` presses \
+         (exactly) and `role` (`Button`, `TextInput`, any case). `click`, `hover`, \
+         `secondary_click` (a right-click), `type` (with `text`) and `scroll` (`up`, optional) act \
+         on the one node `label` and `role` name, `key` presses \
          `key` (`Escape`, `Ctrl+K`); they answer once the input went in, and need the bridge on.",
         object(json!({
             "type": "object",
             "properties": {
-                "action": { "type": "string", "enum": ["tree", "click", "type", "key", "scroll"] },
+                "action": { "type": "string", "enum": ["tree", "click", "hover", "secondary_click", "type", "key", "scroll"] },
                 "label": { "type": "string" },
                 "role": { "type": "string" },
                 "nth": { "type": "integer", "description": "Which of several matching nodes, in reading order, from 0." },
@@ -549,7 +550,7 @@ impl<B: Backend> ServerHandler for McpBridge<B> {
             .with_instructions(
                 "Drives a running egui-pop application through its agent socket. The tools are \
                  its capabilities; `snapshot` reads its state, `wait` waits for an event or for \
-                 it to settle, `ui` reads the interface's tree and clicks, types and scrolls. Calls that change the application are refused unless it offers \
+                 it to settle, `ui` reads the interface's tree and clicks, hovers, right-clicks, types and scrolls. Calls that change the application are refused unless it offers \
                  them.",
             )
     }

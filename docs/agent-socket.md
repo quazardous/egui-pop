@@ -74,7 +74,7 @@ journal apply as to any agent.
 | `call` | `{ "collector", "action", "args"? }` | the bridge's feedback block: `{ "ok", "collector", "action", "mutates", "message", "data" }`, a refusal included (`ok: false`) |
 | `wait` | `bridge.wait`'s arguments (`event` and `cause`, `settled: true`, or `any`; `since`) and `deadline_ms` (5 s by default, 120 s at most) | `{ "met", "by", "event", "last" }`; `met: false` at the deadline |
 | `ui` | `{ "action": "tree", "label"?, "role"?, "window"? }` | `{ "count", "nodes" }`: the accessibility tree's nodes (`id`, `parent`, `role`, `label`, `value`, `rect` in points, `disabled`), every one or those matching |
-| `ui` | `{ "action": "click" \| "type" \| "scroll", "label"?, "role"?, "nth"?, "text"?, "up"?, "window"? }` | `{ "node" }`, once the input went in |
+| `ui` | `{ "action": "click" \| "hover" \| "secondary_click" \| "type" \| "scroll", "label"?, "role"?, "nth"?, "text"?, "up"?, "window"? }` | `{ "node" }`, once the input went in |
 | `ui` | `{ "action": "key", "key": "Ctrl+K", "window"? }` | `{ "key" }` |
 
 **The interface.** `ui` reads the AccessKit tree of the frame just
@@ -83,7 +83,10 @@ as a person does: a node is found by its `label` (exactly; a text
 label's text) and its `role` (`Button`, `TextInput`, `Window`, any
 case), and an action needs exactly one, or `nth` picks one of several
 in reading order (top to bottom, then left to right, from 0). `click` hovers the node's
-centre, presses and releases, a frame each; `type` clicks it, then
+centre, presses and releases, a frame each; `hover` moves the pointer
+over its centre and leaves it there, so egui shows its tooltip after its
+delay (read the tree for it); `secondary_click` is a click with the
+secondary (right) button, which opens a context menu; `type` clicks it, then
 types `text`; `scroll` turns the wheel over it, down unless `up`; `key`
 presses and releases a key with its modifiers (`Ctrl`, `Shift`, `Alt`,
 `Cmd`). The events go into egui's raw input through an egui plugin
