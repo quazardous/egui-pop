@@ -1147,6 +1147,10 @@ pub struct Manifest {
     /// Multi-step flows ([`wizard`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub wizards: Vec<Wizard>,
+    /// The settings offered in the quick settings (setting ids), in this
+    /// order: the few a person changes often, without opening Settings.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub quick: Vec<String>,
 }
 
 /// Why a manifest cannot be read.
@@ -1275,7 +1279,15 @@ impl Manifest {
             scopes: Vec::new(),
             sections: Vec::new(),
             wizards: Vec::new(),
+            quick: Vec::new(),
         }
+    }
+
+    /// Marks settings quick (setting ids): offered in the quick settings,
+    /// after those marked before.
+    pub fn quick(mut self, ids: &[&str]) -> Manifest {
+        self.quick.extend(ids.iter().map(|id| id.to_string()));
+        self
     }
 
     /// A wizard ([`wizard`]): opened by `admin.wizard.open` or an action.
@@ -1505,6 +1517,9 @@ pub struct Tree {
     pub sections: Vec<Section>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub wizards: Vec<Wizard>,
+    /// The settings marked quick, each once, in their manifests' order.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub quick: Vec<String>,
 }
 
 /// Where a deep link leads: `scope/section/key` (any tail may be left
@@ -1536,6 +1551,11 @@ impl Tree {
         for w in m.wizards {
             if !self.wizards.iter().any(|x| x.meta.id == w.meta.id) {
                 self.wizards.push(w);
+            }
+        }
+        for q in m.quick {
+            if !self.quick.contains(&q) {
+                self.quick.push(q);
             }
         }
         self.scopes.sort_by_key(|s| s.meta.order);

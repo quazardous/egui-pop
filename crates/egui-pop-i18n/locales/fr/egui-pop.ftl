@@ -783,6 +783,22 @@ egui-pop-admin-search-hint = Chercher dans tous les réglages
 egui-pop-admin-sections = Sections
 egui-pop-admin-nav-resize = Redimensionner les sections
 
+egui-pop-admin-quick-title = Réglages rapides
+
+egui-pop-admin-quick-hint = Chercher dans tous les réglages
+
+egui-pop-admin-quick-marked = Souvent changés
+
+egui-pop-admin-quick-recent = Changés récemment
+
+egui-pop-admin-quick-none = Pas encore de réglages rapides : tapez pour chercher dans tous les réglages.
+
+egui-pop-admin-quick-no-hit = Aucun réglage ne correspond.
+
+egui-pop-admin-quick-open = Ouvrir dans les réglages
+
+egui-pop-admin-quick-open-name = Ouvrir { $setting } dans les réglages
+
 egui-pop-admin-set-for = Pour
 
 egui-pop-admin-set-for-name = Où { $setting } est fixé
