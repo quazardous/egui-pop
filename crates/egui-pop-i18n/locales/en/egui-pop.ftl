@@ -1180,6 +1180,10 @@ egui-pop-admin-quick-open = Open in Settings
 
 egui-pop-admin-quick-open-name = Open { $setting } in Settings
 
+egui-pop-admin-focus = Settings for
+
+egui-pop-admin-focus-tip = Whose values these settings show and change. Settings with no such level are the app's, the same everywhere.
+
 egui-pop-admin-set-for = Set for
 
 egui-pop-admin-set-for-name = Where { $setting } is set

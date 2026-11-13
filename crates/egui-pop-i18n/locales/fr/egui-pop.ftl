@@ -799,6 +799,10 @@ egui-pop-admin-quick-open = Ouvrir dans les réglages
 
 egui-pop-admin-quick-open-name = Ouvrir { $setting } dans les réglages
 
+egui-pop-admin-focus = Réglages de
+
+egui-pop-admin-focus-tip = À qui sont les valeurs que ces réglages montrent et changent. Un réglage sans ce niveau est celui de l’application, le même partout.
+
 egui-pop-admin-set-for = Pour
 
 egui-pop-admin-set-for-name = Où { $setting } est fixé

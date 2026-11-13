@@ -62,6 +62,7 @@
 //! `gestures`, `fonts`, `settings-page`); the settings window of before
 //! opens from General › Advanced.
 
+pub mod focus;
 pub mod quick;
 mod shell;
 pub mod store;
@@ -215,6 +216,8 @@ pub struct Admin {
     recent: Mutex<Vec<(String, f64)>>,
     /// The quick settings open, per window group.
     quick: Mutex<BTreeMap<egui::ViewportId, quick::Open>>,
+    /// The host's foci and the one the Settings edit ([`focus`]).
+    foci: Mutex<focus::Foci>,
 }
 
 /// The answers of the `read_only` commands statuses and records read:
@@ -257,8 +260,11 @@ impl Admin {
     }
 
     /// Opens it on a place: `scope`, `scope/section`, `scope/section/key`
-    /// or a setting id (`None`: where it was).
+    /// or a setting id (`None`: where it was). Asked in a window of one of
+    /// the host's foci, it edits that focus ([`focus`]).
     pub fn open(&self, app: &AppHandle, place: Option<&str>) -> Result<(), String> {
+        let asked = app.window_of_group(app.current_window_group());
+        self.asked_in(app, &asked);
         if let Some(link) = place.filter(|p| !p.is_empty()) {
             let tree = self.tree(app);
             let p = tree
@@ -979,6 +985,7 @@ impl Plugin for AdminPlugin {
         wizard::commands(ctx)?;
         transfer::commands(ctx)?;
         quick::commands(ctx)?;
+        focus::commands(ctx)?;
         ctx.block(
             zones::OVERLAYS,
             Block::add(BlockId::from_static("egui_pop.admin"), 6, shell::show),
@@ -1032,6 +1039,7 @@ fn describe(app: &AppHandle) -> Json {
         "tree": tree,
         "wizard": a.wizard_state(app),
         "quick": a.quick_settings(app),
+        "focus": focus::state(app, &a),
         "recent": a.recent_settings(app, quick::now()),
         "lastFinished": a.last_finished(),
         "hooks": a.hooks().list().into_iter().map(|(n, k)| json!({"name": n, "kind": k})).collect::<Vec<_>>(),
