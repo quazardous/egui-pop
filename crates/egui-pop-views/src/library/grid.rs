@@ -217,6 +217,8 @@ struct ViewMem {
     /// A rubber band: where it started and where it is, in content
     /// coordinates, and the modifiers it started with.
     band: Option<(Vec2, Vec2, Modifiers)>,
+    /// How many images a drag out of the view carries, while it lasts.
+    carry: Option<usize>,
 }
 
 /// A library's state between passes: the selection, the stacks
@@ -368,6 +370,13 @@ pub enum Signal<K> {
     Activate {
         key: K,
     },
+    /// A drag started on a cell of a view built with
+    /// [`ThumbGrid::drag_out`]: these images go, the selection when the
+    /// cell is in it, else that cell's image alone (the selection is
+    /// left as it is). The application sets its drag payload.
+    DragOut {
+        keys: Vec<K>,
+    },
     /// The thumbnails' size changed (zoom).
     Zoom {
         size: f32,
@@ -407,6 +416,8 @@ enum Op<K> {
     /// A request that could not be read.
     Fail(StepId, String),
     Activate(K),
+    /// A drag out of the view started with these images.
+    DragOut(Vec<K>),
     Zoom(f32),
 }
 
@@ -423,6 +434,7 @@ pub struct ThumbGrid<'a> {
     captions: bool,
     overlays: bool,
     empty_stars: EmptyStars,
+    drag_out: bool,
 }
 
 impl<'a> ThumbGrid<'a> {
@@ -439,6 +451,7 @@ impl<'a> ThumbGrid<'a> {
             captions: true,
             overlays: true,
             empty_stars: EmptyStars::OnHover,
+            drag_out: false,
         }
     }
 
@@ -501,6 +514,18 @@ impl<'a> ThumbGrid<'a> {
     /// culling pass where every image gets a rating).
     pub fn empty_stars(mut self, empty: EmptyStars) -> Self {
         self.empty_stars = empty;
+        self
+    }
+
+    /// A drag that starts on a cell carries images out instead of
+    /// drawing a rubber band, which then starts from the space between
+    /// cells (off by default): the view signals [`Signal::DragOut`] as
+    /// it starts, for the application to set its payload
+    /// (`egui::DragAndDrop::set_payload`) and its drop targets to take
+    /// it; while it lasts the cursor shows a carry and the pointer how
+    /// many images go.
+    pub fn drag_out(mut self, on: bool) -> Self {
+        self.drag_out = on;
         self
     }
 
@@ -678,6 +703,8 @@ impl<'a> ThumbGrid<'a> {
         let order = &state.order;
         let index = |p: usize| order.map.as_ref().map_or(p, |m| m[p]);
         let mut band = mem.band.take();
+        let mut carry = mem.carry.take();
+        let drag_out = self.drag_out;
         let mut take_focus = false;
         let mut built = 0;
         let mut wanted: Vec<K> = Vec::new();
@@ -714,7 +741,39 @@ impl<'a> ThumbGrid<'a> {
             // The rubber band, under the cells: a drag from anywhere.
             let visible = Rect::from_min_size(origin + viewport.min.to_vec2(), viewport.size());
             let bg = ui.interact(visible, id.with("band"), Sense::DRAG);
-            if mode == Mode::Multiple {
+            // A drag out starts on a cell: the selection when the cell is
+            // in it, else the cell's image alone.
+            let carried = (drag_out && bg.drag_started())
+                .then(|| bg.interact_pointer_pos())
+                .flatten()
+                .and_then(|p| {
+                    let at = (p - origin).to_pos2();
+                    cells_in(Rect::from_min_max(at, at), grid, cols, n, cell, gap, line)
+                        .first()
+                        .map(|&q| items.key(index(q)))
+                })
+                .map(|key| {
+                    if selection.contains(&key) {
+                        selection.keys().to_vec()
+                    } else {
+                        vec![key]
+                    }
+                });
+            if let Some(keys) = carried {
+                carry = Some(keys.len());
+                cell_ops.push(Op::DragOut(keys));
+            }
+            if carry.is_some() {
+                if bg.dragged() {
+                    egui_pop_core::pointer::hold_drag_cursor(
+                        ui.ctx(),
+                        egui_pop_core::pointer::DragKind::Carry,
+                    );
+                } else {
+                    carry = None;
+                }
+            }
+            if mode == Mode::Multiple && carry.is_none() {
                 if bg.drag_started()
                     && let Some(p) = bg.interact_pointer_pos()
                 {
@@ -992,6 +1051,10 @@ impl<'a> ThumbGrid<'a> {
         });
         ops.extend(cell_ops);
         mem.band = band;
+        mem.carry = carry;
+        if let Some(count) = carry {
+            carry_count(ui, count);
+        }
         egui_pop_core::ui::contain_wheel(ui, &out);
         if grid {
             mem.offset = out.state.clamped_offset().y;
@@ -1115,6 +1178,10 @@ impl<'a> ThumbGrid<'a> {
                 }
                 Op::Activate(key) => {
                     out.push(Signal::Activate { key });
+                    continue;
+                }
+                Op::DragOut(keys) => {
+                    out.push(Signal::DragOut { keys });
                     continue;
                 }
                 Op::Zoom(size) => {
@@ -1533,6 +1600,29 @@ fn overlay(
 /// The modifiers of this pass's last pointer button event (a click's
 /// own, even when the keys were let go in the same pass), else those
 /// held now.
+/// How many images a drag out carries, beside the pointer.
+fn carry_count(ui: &Ui, count: usize) {
+    let ctx = ui.ctx();
+    let Some(at) = ctx.pointer_latest_pos() else {
+        return;
+    };
+    let t = Tokens::of(ctx);
+    let painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Tooltip,
+        Id::unique("egui_pop_views::library::carry"),
+    ));
+    let visuals = ui.visuals().clone();
+    let galley = painter.layout_no_wrap(
+        count.to_string(),
+        TextStyle::Small.resolve(ui.style()),
+        visuals.selection.stroke.color,
+    );
+    let pad = vec2(t.space.xs * 2.0, t.space.xs);
+    let rect = Rect::from_min_size(at + vec2(14.0, 14.0), galley.size() + pad * 2.0);
+    painter.rect_filled(rect, rect.height() / 2.0, visuals.selection.bg_fill);
+    painter.galley(rect.min + pad, galley, visuals.selection.stroke.color);
+}
+
 fn click_modifiers(ui: &Ui) -> Modifiers {
     ui.input(|i| {
         i.events
