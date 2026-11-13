@@ -1121,3 +1121,40 @@ fn the_right_click_menu_types_a_value_and_resets() {
     h.run();
     assert_eq!(ev(&h), 0.0, "back to the default");
 }
+
+#[test]
+fn a_sensitive_text_is_masked_on_screen_and_in_the_accessibility_tree() {
+    let store: SharedStore = Arc::new(Mutex::new(Store::new()));
+    let token = Descriptor::text("Token", "").sensitive();
+    let note = Descriptor::text("Note", "");
+    {
+        let mut s = store.lock().unwrap();
+        s.declare(&OwnerId::FRAMEWORK, "p/token", token.clone())
+            .unwrap();
+        s.declare(&OwnerId::FRAMEWORK, "p/note", note.clone())
+            .unwrap();
+        for (path, text) in [("p/token", "hunter2-secret"), ("p/note", "plain-note")] {
+            s.set(egui_pop_model::values::Set::new(
+                path,
+                egui_pop_model::values::Change::To(Value::Text(text.into())),
+                egui_pop_model::commands::Origin::User,
+            ))
+            .unwrap();
+        }
+    }
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(420.0, 120.0))
+        .build_ui_state(
+            move |ui, s: &mut SharedStore| {
+                param::param(ui, &token, Mode::Bound(s, "p/token"));
+                param::param(ui, &note, Mode::Bound(s, "p/note"));
+            },
+            store.clone(),
+        );
+    h.run();
+    // The plain text shows; the secret is nowhere in the tree.
+    assert!(h.query_all_by_value("plain-note").next().is_some());
+    assert!(h.query_all_by_value("hunter2-secret").next().is_none());
+    let dump = format!("{:?}", h.root());
+    assert!(!dump.contains("hunter2-secret"), "masked in the tree");
+}
