@@ -1153,8 +1153,8 @@ fn a_sensitive_text_is_masked_on_screen_and_in_the_accessibility_tree() {
         );
     h.run();
     // The plain text shows; the secret is nowhere in the tree.
-    assert!(h.query_by_value("plain-note").is_some());
-    assert!(h.query_by_value("hunter2-secret").is_none());
+    assert!(h.query_all_by_value("plain-note").next().is_some());
+    assert!(h.query_all_by_value("hunter2-secret").next().is_none());
     let dump = format!("{:?}", h.root());
     assert!(!dump.contains("hunter2-secret"), "masked in the tree");
 }
