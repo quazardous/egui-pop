@@ -686,10 +686,16 @@ pub fn x11_window(ctx: &Context) -> Option<u64> {
 
 /// Records the main window's native handle from eframe's creation context:
 /// the `HWND` on Windows ([`set_native_window`]), the X11 id on Linux's X11
-/// ([`set_x11_window`]). `AppBuilder::run_native` calls it; an application
-/// starting eframe itself calls it from its creation context.
+/// ([`set_x11_window`]), and the window itself, which the system's file
+/// chooser asked from it is attached to (`files::set_parent_window`).
+/// `AppBuilder::run_native` calls it; an application starting eframe
+/// itself calls it from its creation context.
 #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
 pub fn record_native_window(cc: &eframe::CreationContext<'_>) {
+    if let Some(window) = cc.winit_window() {
+        let window: std::sync::Arc<dyn crate::files::ParentWindow> = window.clone();
+        crate::files::set_parent_window(&cc.egui_ctx, egui::ViewportId::ROOT, window);
+    }
     #[cfg(windows)]
     {
         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
