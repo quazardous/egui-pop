@@ -505,3 +505,107 @@ fn raising_the_main_window_brings_its_shell_title_bar_and_geometry_back() {
     assert!(names.iter().any(|n| n == "Close"), "{names:?}");
     assert!(!names.iter().any(|n| n.starts_with("A — ")), "{names:?}");
 }
+
+const MAIN_ONLY: CommandId = CommandId::from_static("demo.main_only");
+
+/// Commands in the main window's File menu: one for any window, one for
+/// the main window only.
+struct FileMenu(Ran);
+
+impl Plugin for FileMenu {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("demo.file")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        use egui_pop_api::app::MENU_FILE;
+        let ran = self.0.clone();
+        ctx.command(
+            CommandSpec::new(HERE, "Here", "Demo").menu(MENU_FILE, "1_demo", 0),
+            move |c| {
+                ran.borrow_mut()
+                    .push(("here".into(), c.app.active_app_window().to_string()));
+                Ok(Json::Null)
+            },
+        )?
+        .command(
+            CommandSpec::new(MAIN_ONLY, "Main only", "Demo")
+                .when("appWindow == 'main'")
+                .menu(MENU_FILE, "1_demo", 1),
+            |_| Ok(Json::Null),
+        )?;
+        Ok(())
+    }
+}
+
+/// Clicks the node a window's last pass named `name`.
+fn click_named(m: &mut MultiWindow, viewport: ViewportId, name: &str) {
+    let (rect, _) = m
+        .node(viewport, name)
+        .unwrap_or_else(|| panic!("no `{name}` in {:?}", m.names(viewport)));
+    m.click(viewport, rect.center());
+}
+
+#[test]
+fn a_window_with_the_shell_bars_has_the_main_title_bar_start_and_menus_run_in_it() {
+    use egui_pop_api::frame::FramePlugin;
+    use egui_pop_api::windows::WindowsPlugin;
+    let ran = Ran::default();
+    let file = ran.clone();
+    let mut m = MultiWindow::new(move |ctx| {
+        App::builder()
+            .name("Demo")
+            .plugin(FramePlugin::own())
+            .plugin(WindowsPlugin)
+            .plugin(FileMenu(file))
+            .build(ctx)
+            .unwrap()
+    });
+    m.app().open_window(
+        WindowSpec::new("b", "B")
+            .size([640.0, 480.0])
+            .shell_bars(true),
+        |ui, _| {
+            ui.label("window B");
+        },
+    );
+    open_counting(&m, "a");
+    m.root_pass();
+    let vb = m.app().window_viewport(&"b".into()).unwrap();
+    let va = m.app().window_viewport(&"a".into()).unwrap();
+    m.focus(vb);
+    m.window_pass(vb);
+    m.window_pass(va);
+    // B: the title bar's start (the window menu's button, the
+    // application's name) and the main menu, as the main window has.
+    let names = m.names(vb);
+    for name in ["Demo", "File", "Window", "Close"] {
+        assert!(names.iter().any(|n| n == name), "{name} in {names:?}");
+    }
+    // A, without them: its title and buttons only.
+    let names = m.names(va);
+    assert!(!names.iter().any(|n| n == "File"), "{names:?}");
+    assert!(!names.iter().any(|n| n == "Demo"), "{names:?}");
+    // File in B: a command for any window, and the main window's greyed.
+    click_named(&mut m, vb, "File");
+    m.window_pass(vb);
+    let (_, disabled) = m.node(vb, "Here").expect("Here in B's File menu");
+    assert!(!disabled);
+    let (main_only, disabled) = m.node(vb, "Main only").expect("Main only listed");
+    assert!(disabled, "the main window's command is greyed in B");
+    // Its tooltip says where it runs.
+    m.queue(vb, egui::Event::PointerMoved(main_only.center()));
+    let mut said = false;
+    for _ in 0..90 {
+        m.window_pass(vb);
+        if m.names(vb).iter().any(|n| n == "Only in the Demo window") {
+            said = true;
+            break;
+        }
+    }
+    assert!(said, "{:?}", m.names(vb));
+    // A command run from B's menu runs in B's context.
+    click_named(&mut m, vb, "Here");
+    m.root_pass();
+    assert_eq!(*ran.borrow(), [("here".to_owned(), "b".to_owned())]);
+}

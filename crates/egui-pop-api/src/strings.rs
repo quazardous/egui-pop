@@ -48,6 +48,9 @@ pub const MENU_DOES_NOT_APPLY: StrKey = StrKey::new(
 );
 pub const MENU_NOT_AVAILABLE: StrKey =
     StrKey::new("egui-pop-menu-not-available", "Not available here");
+/// A greyed menu entry whose command runs in another open window.
+pub const MENU_IN_WINDOW: StrKey =
+    StrKey::new("egui-pop-menu-in-window", "Only in the { $window } window");
 pub const MENU_NO_COMMAND: StrKey = StrKey::new("egui-pop-menu-no-command", "No command `{ $id }`");
 pub const MENU_RUNNING: StrKey = StrKey::new("egui-pop-menu-running", "Running…");
 pub const MENU_LAST_RUN_FAILED: StrKey = StrKey::new(
@@ -1445,6 +1448,7 @@ pub const ALL: &[StrKey] = &[
     TOOLBAR_WITH_KEY,
     MENU_DOES_NOT_APPLY,
     MENU_NOT_AVAILABLE,
+    MENU_IN_WINDOW,
     MENU_NO_COMMAND,
     MENU_RUNNING,
     MENU_LAST_RUN_FAILED,

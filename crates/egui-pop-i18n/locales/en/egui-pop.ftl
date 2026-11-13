@@ -1826,6 +1826,8 @@ egui-pop-menu-does-not-apply = Does not apply here ({ $when })
 
 egui-pop-menu-empty = (empty)
 
+egui-pop-menu-in-window = Only in the { $window } window
+
 egui-pop-menu-last-run-failed = Last run failed: { $error }
 
 egui-pop-menu-main = Main menu

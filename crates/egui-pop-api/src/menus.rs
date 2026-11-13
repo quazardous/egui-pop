@@ -1312,9 +1312,19 @@ fn command_row(
     let spec = app.command(id);
     let (title, why) = match &spec {
         Some(s) => {
-            let applies = s.when.is_empty() || When::parse(&s.when).is_ok_and(|w| w.eval(cx));
+            let when = When::parse(&s.when);
+            let applies = s.when.is_empty() || when.as_ref().is_ok_and(|w| w.eval(cx));
             let why = (!applies)
-                .then(|| strings::tr_args(&ctx, &txt::MENU_DOES_NOT_APPLY, &[("when", &s.when)]))
+                .then(
+                    || match when.as_ref().ok().and_then(|w| other_window(app, w, cx)) {
+                        Some(window) => {
+                            strings::tr_args(&ctx, &txt::MENU_IN_WINDOW, &[("window", &window)])
+                        }
+                        None => {
+                            strings::tr_args(&ctx, &txt::MENU_DOES_NOT_APPLY, &[("when", &s.when)])
+                        }
+                    },
+                )
                 .or_else(|| (!enabled).then(|| strings::tr(&ctx, &txt::MENU_NOT_AVAILABLE)));
             (
                 label.clone().unwrap_or_else(|| app.command_menu_title(s)),
@@ -1511,6 +1521,22 @@ fn command_row(
         ));
     }
     response.clicked()
+}
+
+/// The title of the open window, other than the one of `cx`, where a
+/// clause that does not apply in `cx` would: a command of another window
+/// (`appWindow == 'main'`), greyed in this one with where it runs.
+fn other_window(app: &AppHandle, when: &When, cx: &WhenContext) -> Option<String> {
+    let here = cx.get(crate::windows::CONTEXT_APP_WINDOW);
+    app.windows()
+        .into_iter()
+        .filter(|w| w.id.as_str() != here)
+        .find(|w| {
+            let mut there = cx.clone();
+            there.set(crate::windows::CONTEXT_APP_WINDOW, w.id.as_str());
+            when.eval(&there)
+        })
+        .map(|w| w.title)
 }
 
 /// The ↗ ending an entry that opens a page outside the application: an

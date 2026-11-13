@@ -35,6 +35,9 @@ pub struct MultiWindow {
     commands: BTreeMap<ViewportId, Vec<ViewportCommand>>,
     /// The accessible names each window's last pass gave.
     names: BTreeMap<ViewportId, Vec<String>>,
+    /// Each named node's rectangle (in points) and whether it is
+    /// disabled, per window, from its last pass.
+    nodes: BTreeMap<ViewportId, Vec<(String, Rect, bool)>>,
     time: f64,
 }
 
@@ -63,6 +66,7 @@ impl MultiWindow {
             queued: BTreeMap::new(),
             commands: BTreeMap::new(),
             names: BTreeMap::new(),
+            nodes: BTreeMap::new(),
             time: 0.0,
         }
     }
@@ -98,6 +102,16 @@ impl MultiWindow {
     /// label, a text's words), in no particular order.
     pub fn names(&self, viewport: ViewportId) -> Vec<String> {
         self.names.get(&viewport).cloned().unwrap_or_default()
+    }
+
+    /// Where a window's last pass drew the first node named `name` (in
+    /// points), and whether it is disabled.
+    pub fn node(&self, viewport: ViewportId, name: &str) -> Option<(Rect, bool)> {
+        self.nodes
+            .get(&viewport)?
+            .iter()
+            .find(|(n, _, _)| n == name)
+            .map(|(_, r, d)| (*r, *d))
     }
 
     /// Gives a window the focus (the others lose it).
@@ -216,6 +230,21 @@ impl MultiWindow {
                 .filter_map(|(_, n)| n.label().or_else(|| n.value()).map(str::to_string))
                 .collect();
             self.names.insert(viewport, names);
+            let ppp = self.ctx.pixels_per_point();
+            let nodes = update
+                .nodes
+                .iter()
+                .filter_map(|(_, n)| {
+                    let name = n.label().or_else(|| n.value())?.to_string();
+                    let b = n.bounds()?;
+                    let rect = Rect::from_min_max(
+                        Pos2::new(b.x0 as f32 / ppp, b.y0 as f32 / ppp),
+                        Pos2::new(b.x1 as f32 / ppp, b.y1 as f32 / ppp),
+                    );
+                    Some((name, rect, n.is_disabled()))
+                })
+                .collect();
+            self.nodes.insert(viewport, nodes);
         }
         // The commands this pass sent: to its own window, and to others.
         self.commands.insert(viewport, Vec::new());
