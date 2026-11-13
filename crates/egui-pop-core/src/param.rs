@@ -161,7 +161,9 @@ pub fn param_shown(
         }),
         Type::Text => labelled(ui, &d.label, |ui| {
             with(ui, mode, |ui, v: &mut String| {
-                let r = ui.text_edit_singleline(v);
+                // A secret is typed masked, and its accessibility value
+                // is masked too: it never shows on screen or in the tree.
+                let r = ui.add(egui::TextEdit::singleline(v).password(d.sensitive));
                 crate::focus_mode::follow_pointer(&r);
                 r
             })
