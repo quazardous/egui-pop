@@ -25,9 +25,10 @@
 //! | `ui` | `{ "action", "label"?, "role"?, "nth"?, "text"?, "key"?, "up"?, "window"? }` | the accessibility tree, or the node acted on |
 //!
 //! `ui` reads the interface as a person sees it and drives it: `tree`
-//! lists the AccessKit nodes of the frame just drawn; `click`, `type`,
-//! `key` and `scroll` queue raw egui events (hover, press, release, text,
-//! wheel) into the next frames' input, through an egui plugin, so they
+//! lists the AccessKit nodes of the frame just drawn; `click`, `hover`,
+//! `secondary_click`, `type`, `key` and `scroll` queue raw egui events
+//! (pointer moves, presses, releases, text, wheel) into the next frames'
+//! input, through an egui plugin, so they
 //! work headless as in a window. Reading needs the bridge on or
 //! read-only, acting needs it on. With `window`, it reads and acts in
 //! that application window (its own OS window, or, where egui embeds it

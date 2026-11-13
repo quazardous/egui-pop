@@ -1,6 +1,7 @@
 //! The `ui` method: the accessibility tree of the frame just drawn, and
 //! input on its nodes (click, type, key, scroll), as raw egui events
-//! queued for the next frames.
+//! queued for the next frames (hover, click, right-click, type, key,
+//! scroll).
 //!
 //! An egui plugin ([`UiInput`]) does both ends: at the end of a pass it
 //! keeps the AccessKit tree when someone asked for it, and before a pass
@@ -15,6 +16,8 @@
 //! |---|---|---|
 //! | `tree` | `label`?, `role`? | `{ "count", "nodes": [..] }`, every node or the matching ones |
 //! | `click` | `label`?, `role`? | `{ "node" }`, once the press and release went in |
+//! | `hover` | `label`?, `role`? | `{ "node" }`, once the pointer is over it (a tooltip shows after egui's delay) |
+//! | `secondary_click` | `label`?, `role`? | `{ "node" }`, once the secondary (right) button's press and release went in |
 //! | `type` | `label`?, `role`?, `text` | `{ "node" }`, the node clicked, then the text typed |
 //! | `key` | `key` (`Escape`, `Ctrl+K`) | `{ "key" }` |
 //! | `scroll` | `label`?, `role`?, `up`? | `{ "node" }`, down unless `up` |
@@ -304,14 +307,23 @@ impl egui::Plugin for UiInput {
     }
 }
 
+/// The `ui` actions, as an error names them.
+const ACTIONS: &str = "tree, click, hover, secondary_click, type, key, scroll";
+
 /// A `ui` request, read from its params.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Action {
     Tree,
     Click,
+    /// The pointer moved over the node and left there.
+    Hover,
+    /// A click with the secondary (right) button: a context menu.
+    SecondaryClick,
     Type(String),
     Key(Modifiers, Key),
-    Scroll { up: bool },
+    Scroll {
+        up: bool,
+    },
 }
 
 /// A `ui` request: what to do, and on which node.
@@ -332,6 +344,8 @@ impl Request {
         let action = match s("action").as_deref() {
             Some("tree") => Action::Tree,
             Some("click") => Action::Click,
+            Some("hover") => Action::Hover,
+            Some("secondary_click") => Action::SecondaryClick,
             Some("type") => Action::Type(s("text").ok_or("`type` needs `text`")?),
             Some("key") => {
                 let k = s("key").ok_or("`key` needs `key`, as `Ctrl+K`")?;
@@ -342,11 +356,9 @@ impl Request {
                 up: p.get("up").and_then(Json::as_bool).unwrap_or(false),
             },
             Some(other) => {
-                return Err(format!(
-                    "no ui action `{other}`: tree, click, type, key, scroll"
-                ));
+                return Err(format!("no ui action `{other}`: {ACTIONS}"));
             }
-            None => return Err("`action` is missing: tree, click, type, key, scroll".into()),
+            None => return Err(format!("`action` is missing: {ACTIONS}")),
         };
         let r = Self {
             action,
@@ -372,7 +384,11 @@ impl Request {
     fn needs_node(&self) -> bool {
         matches!(
             self.action,
-            Action::Click | Action::Type(_) | Action::Scroll { .. }
+            Action::Click
+                | Action::Hover
+                | Action::SecondaryClick
+                | Action::Type(_)
+                | Action::Scroll { .. }
         )
     }
 
@@ -431,14 +447,17 @@ impl Request {
         let Some(rect) = node.rect else {
             return Err(format!("{} has no bounds", self.named()));
         };
-        if node.disabled && !matches!(self.action, Action::Scroll { .. }) {
+        // A disabled node still scrolls and shows its tooltip.
+        if node.disabled && !matches!(self.action, Action::Scroll { .. } | Action::Hover) {
             return Err(format!("{} is disabled", self.named()));
         }
         let at = rect.center();
         let batches = match &self.action {
-            Action::Click => click_batches(at),
+            Action::Click => click_batches(at, PointerButton::Primary),
+            Action::Hover => vec![Batch::of(vec![Event::PointerMoved(at)])],
+            Action::SecondaryClick => click_batches(at, PointerButton::Secondary),
             Action::Type(text) => {
-                let mut b = click_batches(at);
+                let mut b = click_batches(at, PointerButton::Primary);
                 b.push(Batch::of(vec![Event::Text(text.clone())]));
                 b
             }
@@ -462,10 +481,10 @@ impl Request {
 }
 
 /// Hover, press, release: a frame each, as a person's click.
-fn click_batches(at: Pos2) -> Vec<Batch> {
+fn click_batches(at: Pos2, button: PointerButton) -> Vec<Batch> {
     let button = |pressed| Event::PointerButton {
         pos: at,
-        button: PointerButton::Primary,
+        button,
         pressed,
         modifiers: Modifiers::NONE,
     };
@@ -553,6 +572,61 @@ mod tests {
         assert!(!t.writes());
         let k = Request::from_params(&json!({ "action": "key", "key": "Ctrl+K" })).unwrap();
         assert!(matches!(k.action, Action::Key(m, Key::K) if m.ctrl && m.command));
+        let h = Request::from_params(&json!({ "action": "hover", "label": "OK" })).unwrap();
+        assert_eq!(h.action, Action::Hover);
+        assert!(h.writes());
+        assert!(Request::from_params(&json!({ "action": "hover" })).is_err());
+        let s = Request::from_params(&json!({ "action": "secondary_click", "role": "Button" }))
+            .unwrap();
+        assert_eq!(s.action, Action::SecondaryClick);
+        assert!(
+            Request::from_params(&json!({ "action": "fly" }))
+                .unwrap_err()
+                .contains("secondary_click")
+        );
+    }
+
+    #[test]
+    fn hover_moves_the_pointer_and_a_secondary_click_presses_the_right_button() {
+        let tree = vec![node(1, "Button", "OK")];
+        let root = Scope::viewport(ViewportId::ROOT);
+        let centre = Pos2::new(5.0, 10.0);
+        let act = |action: &str| {
+            Request::from_params(&json!({ "action": action, "label": "OK" }))
+                .unwrap()
+                .on_tree(&tree, &root)
+                .unwrap()
+        };
+        let (b, r) = act("hover");
+        assert_eq!(r["node"]["id"], 1);
+        assert_eq!(b.len(), 1);
+        assert_eq!(b[0].events, [Event::PointerMoved(centre)]);
+        let (b, _) = act("secondary_click");
+        assert_eq!(b.len(), 3);
+        assert_eq!(b[0].events, [Event::PointerMoved(centre)]);
+        for (batch, pressed) in b[1..].iter().zip([true, false]) {
+            assert!(
+                matches!(
+                    batch.events.as_slice(),
+                    [Event::PointerButton { pos, button: PointerButton::Secondary, pressed: p, .. }]
+                        if *pos == centre && *p == pressed
+                ),
+                "{:?}",
+                batch.events
+            );
+        }
+        // A disabled node shows its tooltip, but takes no click.
+        let off = vec![UiNode {
+            disabled: true,
+            ..node(1, "Button", "OK")
+        }];
+        let on_off = |action: &str| {
+            Request::from_params(&json!({ "action": action, "label": "OK" }))
+                .unwrap()
+                .on_tree(&off, &root)
+        };
+        assert!(on_off("hover").is_ok());
+        assert!(on_off("secondary_click").unwrap_err().contains("disabled"));
     }
 
     #[test]
