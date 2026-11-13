@@ -50,6 +50,7 @@ pub(super) fn show(ui: &mut Ui, app: &AppHandle) {
     // The host's store, open or not: what changed is saved, what changed
     // elsewhere comes in.
     admin.sync(app, &ctx);
+    admin.keep_focus(app);
     let windowed = in_window(app) && !ctx.embed_viewports();
     follow_window(app, &admin, &ctx, windowed);
     if !admin.is_open() || windowed {
@@ -253,6 +254,7 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
         // The overlay where windows are embedded, whatever the mode: it offers
         // to pop out.
         let mut window = in_window(app) && !ctx.embed_viewports();
+        super::focus::header(ui, app, admin);
         ui.horizontal(|ui| {
             let hint = strings::tr(&ctx, &txt::ADMIN_SEARCH_HINT);
             let r = ui.add(

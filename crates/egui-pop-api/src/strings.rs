@@ -127,6 +127,11 @@ pub const ADMIN_QUICK_OPEN_NAME: StrKey = StrKey::new(
     "egui-pop-admin-quick-open-name",
     "Open { $setting } in Settings",
 );
+pub const ADMIN_FOCUS: StrKey = StrKey::new("egui-pop-admin-focus", "Settings for");
+pub const ADMIN_FOCUS_TIP: StrKey = StrKey::new(
+    "egui-pop-admin-focus-tip",
+    "Whose values these settings show and change. Settings with no such level are the app's, the same everywhere.",
+);
 pub const ADMIN_SET_FOR: StrKey = StrKey::new("egui-pop-admin-set-for", "Set for");
 pub const ADMIN_SET_FOR_NAME: StrKey =
     StrKey::new("egui-pop-admin-set-for-name", "Where { $setting } is set");
@@ -1498,6 +1503,8 @@ pub const ALL: &[StrKey] = &[
     ADMIN_QUICK_NO_HIT,
     ADMIN_QUICK_OPEN,
     ADMIN_QUICK_OPEN_NAME,
+    ADMIN_FOCUS,
+    ADMIN_FOCUS_TIP,
     ADMIN_SET_FOR,
     ADMIN_SET_FOR_NAME,
     ADMIN_FOR_APP,
