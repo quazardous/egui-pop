@@ -18,8 +18,9 @@
 //! window is closed; it blocks the main window and its detached panels
 //! (their keys dropped, a backdrop over them; a click there brings the
 //! dialog's window to the front). A dialog whose application window
-//! closes (or moves into the main window) goes to the main window's
-//! queue. The dialogs' block is in the `WINDOW_OVERLAYS` zone, drawn in
+//! closes is cancelled with it, as a file choice asked from there is; one
+//! whose window moves into the main window (the main window closed while
+//! it was open) goes to the main window's queue. The dialogs' block is in the `WINDOW_OVERLAYS` zone, drawn in
 //! every window.
 //!
 //! [`Dialogs::current`], [`Dialogs::answer`] and the `dialogs` collector
@@ -1058,6 +1059,9 @@ struct State {
     given: Vec<(u64, Answer, Origin)>,
     /// What happened to the last dialogs: title and answer.
     answered: VecDeque<(String, Answer, Origin)>,
+    /// Dialogs whose application window closed: cancelled at the next
+    /// pass, before any is drawn.
+    orphaned: Vec<u64>,
 }
 
 /// The queue of dialogs.
@@ -1582,6 +1586,25 @@ fn answer_step(
     }
 }
 
+/// An application window closed: the dialogs opened from it are
+/// cancelled at the next pass instead of moving to the main window's
+/// queue. A window moving into the main window does not call this.
+pub(crate) fn window_closed(app: &AppHandle, window: egui::ViewportId) {
+    let Some(d) = app.service(&DIALOGS) else {
+        return;
+    };
+    let mut s = lock(&d.0);
+    let ids: Vec<u64> = s
+        .queue
+        .iter()
+        .filter(|o| o.group == Some(window))
+        .map(|o| o.id)
+        .collect();
+    s.orphaned.extend(ids);
+    drop(s);
+    app.egui().request_repaint_of(egui::ViewportId::ROOT);
+}
+
 /// Draws the dialog shown, and applies the answers given meanwhile.
 fn show(ui: &mut Ui, app: &AppHandle) {
     let Some(d) = app.service(&DIALOGS) else {
@@ -1590,6 +1613,16 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let ctx = ui.ctx().clone();
     let here = ctx.viewport_id();
     let group = app.window_group(here);
+    // The dialogs of a window that closed are cancelled: they do not come
+    // up again over the main window.
+    let orphaned = std::mem::take(&mut lock(&d.0).orphaned);
+    for id in orphaned {
+        if d.is_open(id)
+            && let Err(e) = apply(app, &d, id, Answer::Cancel, Origin::User)
+        {
+            log::warn!(target: "egui_pop", "dialog: {e}");
+        }
+    }
     // Each dialog's group: the one it was opened in, while that window is
     // open (the main window's otherwise); the active one's when unknown.
     {

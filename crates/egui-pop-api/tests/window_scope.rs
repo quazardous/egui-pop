@@ -217,8 +217,8 @@ fn a_dialog_blocks_only_the_window_it_was_opened_from() {
 }
 
 #[test]
-fn a_closed_window_s_dialog_goes_to_the_main_window() {
-    let (mut m, _) = multi();
+fn a_closed_window_s_dialog_is_cancelled_with_it() {
+    let (mut m, ran) = multi();
     let (_, vb) = two(&mut m, None);
     key_in(&mut m, vb, Key::D, Modifiers::COMMAND);
     let d = m.app().service(&dialogs::DIALOGS).unwrap();
@@ -227,6 +227,25 @@ fn a_closed_window_s_dialog_goes_to_the_main_window() {
     m.window_pass(vb);
     m.root_pass();
     m.root_pass();
+    // Cancelled, not moved over the main window; its command did not run.
+    assert!(d.is_empty());
+    assert!(d.current_in(ViewportId::ROOT).is_none());
+    assert!(egui_pop_core::overlay::modal_windows(m.ctx()).is_empty());
+    assert!(ran.borrow().is_empty(), "{:?}", ran.borrow());
+}
+
+#[test]
+fn a_window_moved_into_the_main_window_takes_its_dialog_there() {
+    let (mut m, _) = multi();
+    let (_, vb) = two(&mut m, None);
+    key_in(&mut m, vb, Key::D, Modifiers::COMMAND);
+    let d = m.app().service(&dialogs::DIALOGS).unwrap();
+    assert!(d.current_in(vb).is_some());
+    // The main window closed: B, worked in last, moves into it.
+    m.request_close(ViewportId::ROOT);
+    m.root_pass();
+    m.root_pass();
+    assert!(m.app().window_viewport(&"b".into()) == Some(ViewportId::ROOT));
     assert!(d.current_in(ViewportId::ROOT).is_some());
 }
 
