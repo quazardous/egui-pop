@@ -48,7 +48,7 @@ pub const STATUS_BAR: ZoneId = ZoneId::from_static("app.status-bar");
 
 /// Drawn after the shell, every frame, in the main window only: blocks
 /// there show what stays in the main window (the settings window, the
-/// in-app file chooser, the frame's edges) or follow a setting. Overlays that open
+/// frame's edges) or follow a setting. Overlays that open
 /// in the window the user works in go in [`WINDOW_OVERLAYS`].
 pub const OVERLAYS: ZoneId = ZoneId::from_static("app.overlays");
 

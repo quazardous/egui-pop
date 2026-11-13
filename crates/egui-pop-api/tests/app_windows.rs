@@ -609,3 +609,143 @@ fn a_window_with_the_shell_bars_has_the_main_title_bar_start_and_menus_run_in_it
     m.root_pass();
     assert_eq!(*ran.borrow(), [("here".to_owned(), "b".to_owned())]);
 }
+
+/// The modal of an in-app picker, as the files plugin names it.
+fn picker_modal(id: u64) -> egui::Id {
+    egui::Id::unique(("egui_pop.files", id))
+}
+
+#[test]
+fn a_folder_chosen_from_an_application_window_is_asked_over_that_window() {
+    use egui_pop_api::files::{self, FILES, FileRequest, FilesPlugin};
+
+    let mut m = MultiWindow::new(|ctx| {
+        App::builder()
+            .plugin(FilesPlugin::in_app())
+            .build(ctx)
+            .unwrap()
+    });
+    let asked: Rc<RefCell<Option<egui_pop_api::host::Pending>>> = Rc::default();
+    let a = asked.clone();
+    let app = m.app().clone();
+    m.app()
+        .open_window(WindowSpec::new("import", "Import"), move |ui, _| {
+            ui.label("import");
+            if a.borrow().is_none() {
+                let f = app.service(&FILES).unwrap();
+                *a.borrow_mut() = Some(f.choose(&app, FileRequest::folder("Choose a folder…")));
+            }
+        });
+    m.root_pass();
+    let import = m.app().window_viewport(&"import".into()).unwrap();
+    m.window_pass(import);
+    let f = m.app().service(&FILES).unwrap();
+    let id = f.open_ids()[0];
+    // Asked in the import window's pass: that window owns the choice.
+    assert_eq!(f.owner(id), Some(import));
+    m.root_pass();
+    m.window_pass(import);
+    m.root_pass();
+    // Its picker is drawn over the import window, not the main one, and
+    // blocks it alone.
+    assert_eq!(
+        egui_pop_api::core::overlay::window_of(m.ctx(), picker_modal(id)),
+        Some(import)
+    );
+    assert_eq!(
+        egui_pop_api::core::overlay::modal_windows(m.ctx()),
+        [import]
+    );
+    // Answered, it ends in that window's pass and its modal goes.
+    f.deliver(id, Some(vec!["/tmp/photos".into()])).unwrap();
+    m.root_pass();
+    assert!(asked.borrow().as_ref().unwrap().take().is_none());
+    m.window_pass(import);
+    m.window_pass(import);
+    let r = asked
+        .borrow()
+        .as_ref()
+        .unwrap()
+        .take()
+        .expect("the choice ended");
+    assert_eq!(
+        files::chosen(&r).unwrap(),
+        files::Chosen::Paths(vec!["/tmp/photos".into()])
+    );
+    assert_eq!(
+        egui_pop_api::core::overlay::window_of(m.ctx(), picker_modal(id)),
+        None
+    );
+}
+
+#[test]
+fn a_folder_chosen_from_the_main_window_is_asked_over_it() {
+    use egui_pop_api::files::{FILES, FileRequest, FilesPlugin};
+
+    let mut m = MultiWindow::new(|ctx| {
+        App::builder()
+            .plugin(FilesPlugin::in_app())
+            .build(ctx)
+            .unwrap()
+    });
+    open_counting(&m, "import");
+    m.root_pass();
+    let import = m.app().window_viewport(&"import".into()).unwrap();
+    m.window_pass(import);
+    let f = m.app().service(&FILES).unwrap();
+    let _pending = f.choose(m.app(), FileRequest::folder("Choose a folder…"));
+    let id = f.open_ids()[0];
+    m.root_pass();
+    m.window_pass(import);
+    assert_eq!(f.owner(id), Some(ViewportId::ROOT));
+    assert_eq!(
+        egui_pop_api::core::overlay::window_of(m.ctx(), picker_modal(id)),
+        Some(ViewportId::ROOT)
+    );
+}
+
+#[test]
+fn closing_the_window_a_folder_is_chosen_from_cancels_the_choice() {
+    use egui_pop_api::files::{self, FILES, FileRequest, FilesPlugin};
+
+    let mut m = MultiWindow::new(|ctx| {
+        App::builder()
+            .plugin(FilesPlugin::in_app())
+            .build(ctx)
+            .unwrap()
+    });
+    let asked: Rc<RefCell<Option<egui_pop_api::host::Pending>>> = Rc::default();
+    let a = asked.clone();
+    let app = m.app().clone();
+    m.app()
+        .open_window(WindowSpec::new("import", "Import"), move |ui, _| {
+            ui.label("import");
+            if a.borrow().is_none() {
+                let f = app.service(&FILES).unwrap();
+                *a.borrow_mut() = Some(f.choose(&app, FileRequest::folder("Choose a folder…")));
+            }
+        });
+    m.root_pass();
+    let import = m.app().window_viewport(&"import".into()).unwrap();
+    m.window_pass(import);
+    m.window_pass(import);
+    let f = m.app().service(&FILES).unwrap();
+    let id = f.open_ids()[0];
+    m.request_close(import);
+    m.window_pass(import);
+    m.root_pass();
+    m.root_pass();
+    // Cancelled, not moved over the main window.
+    assert!(f.open_ids().is_empty());
+    assert_eq!(
+        egui_pop_api::core::overlay::window_of(m.ctx(), picker_modal(id)),
+        None
+    );
+    let r = asked
+        .borrow()
+        .as_ref()
+        .unwrap()
+        .take()
+        .expect("the choice ended");
+    assert_eq!(files::chosen(&r).unwrap(), files::Chosen::Cancelled);
+}
