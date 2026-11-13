@@ -47,6 +47,9 @@ pub(super) fn show(ui: &mut Ui, app: &AppHandle) {
         return;
     };
     let ctx = ui.ctx().clone();
+    // The host's store, open or not: what changed is saved, what changed
+    // elsewhere comes in.
+    admin.sync(app, &ctx);
     let windowed = in_window(app) && !ctx.embed_viewports();
     follow_window(app, &admin, &ctx, windowed);
     if !admin.is_open() || windowed {
@@ -85,6 +88,36 @@ pub(super) fn show(ui: &mut Ui, app: &AppHandle) {
         admin.close();
         overlay::close(&ctx, spec.id);
     }
+}
+
+/// Above the page: that the values last this session only (no store
+/// keeps them), and the store's errors (a failed load or save, a setting
+/// two handlers claim).
+fn store_notices(ui: &mut Ui, app: &AppHandle, admin: &Admin) {
+    let ctx = ui.ctx().clone();
+    let errors = admin.store_errors();
+    let session = admin.session_only(app);
+    if !session && errors.is_empty() {
+        return;
+    }
+    if session {
+        ui.add(Indicator::text(strings::tr(&ctx, &txt::ADMIN_SESSION_ONLY)).tone(KitTone::Warning));
+    }
+    for (scope, error) in errors {
+        let error = match scope {
+            Some(s) => format!("{}: {error}", s.name()),
+            None => error,
+        };
+        ui.add(
+            Indicator::text(strings::tr_args(
+                &ctx,
+                &txt::ADMIN_STORE_ERROR,
+                &[("error", error.as_str())],
+            ))
+            .tone(KitTone::Danger),
+        );
+    }
+    ui.separator();
 }
 
 /// The application window the app is drawn in while it is open in the
@@ -257,6 +290,7 @@ fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) -> bool {
             });
         });
         ui.separator();
+        store_notices(ui, app, admin);
         let query = filter.trim().to_string();
         let found = if query.is_empty() {
             Vec::new()

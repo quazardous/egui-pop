@@ -5,7 +5,8 @@
 //! generated from the declarations, with a manifest's section (a
 //! callout, a status from a hook, an action) and a value scope the
 //! gallery declares, "This project", that the size alone opts into (its
-//! row's "Set for"), every other setting app-wide; and a wizard (the wizard kit)
+//! row's "Set for"), every other setting app-wide, kept by a composite
+//! store (the gallery's own settings in memory, the rest in a file); and a wizard (the wizard kit)
 //! that sets the greeting up in four steps, one of them shown only for a
 //! bold greeting, and hands its draft to a command.
 
@@ -15,6 +16,7 @@ use egui_pop::api::admin::model::{
     Action, Callout, Confirmation, FORMAT, Field, FieldKind, Manifest, Records, RowField, Status,
     Tone, Wizard,
 };
+use egui_pop::api::admin::store::{CompositeStore, MemoryStore};
 use egui_pop::api::admin::{ADMIN, CMD_OPEN, CMD_WIZARD_OPEN, ExtraScope};
 use egui_pop::api::settings;
 use egui_pop::api::settings_pages::SettingsPage as CustomPage;
@@ -22,6 +24,7 @@ use egui_pop::api::settings_window;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::binding;
+use egui_pop::model::admin::ValueScope;
 use egui_pop::model::ids::{PluginId, SettingId, StoryId};
 use egui_pop::model::values::Descriptor;
 
@@ -100,6 +103,7 @@ impl Plugin for SettingsPage {
         // by this plugin.
         if let Some(admin) = ctx.app().service(&ADMIN) {
             admin.declare_scope(PROJECT);
+            admin.attach_store(gallery_store());
             admin.hook(
                 "gallery.greeting.length",
                 Hook::Status(Box::new(|| ("5 letters".into(), Tone::Success))),
@@ -183,7 +187,6 @@ impl Plugin for SettingsPage {
                 .description("The greeting wizard's result: its words, weight, size and colour.")
                 .args(serde_json::json!({ "words": "Hello", "bold": false, "size": 18, "colour": null })),
             |call| {
-                use egui_pop::model::admin::ValueScope;
                 let admin = call.app.service(&ADMIN).ok_or("no admin")?;
                 let set = |id: &str, v: &serde_json::Value| -> Result<(), String> {
                     if v.is_null() {
@@ -303,18 +306,34 @@ fn preview(ui: &mut Ui, app: &AppHandle) {
     ui.label(rich);
 }
 
+/// Where the gallery keeps its settings: a composite store whose handler
+/// keeps the gallery's own (`gallery.*`, the project's size among them)
+/// in memory, every other setting going to a file in a temporary folder
+/// of this process (in memory too on the web, which has no files).
+fn gallery_store() -> CompositeStore {
+    #[cfg(not(target_arch = "wasm32"))]
+    let default = egui_pop::api::admin::store::FileStore::new().file(
+        ValueScope::App,
+        std::env::temp_dir()
+            .join(format!("egui-pop-gallery-{}", std::process::id()))
+            .join("settings.json"),
+    );
+    #[cfg(target_arch = "wasm32")]
+    let default = MemoryStore::new(&[ValueScope::App]);
+    let gallery = MemoryStore::new(&[ValueScope::App, PROJECT.scope])
+        .claiming(|id| id.starts_with("gallery."))
+        .with(
+            PROJECT.scope,
+            [("gallery.size".to_string(), serde_json::json!(24.0))].into(),
+        );
+    CompositeStore::new(default).handler(gallery)
+}
+
 /// Opens the Settings app on the gallery's section, a project open with
 /// its size over the user's.
 pub fn open_admin(app: &AppHandle) {
     if let Some(admin) = app.service(&ADMIN) {
         admin.offer(PROJECT.scope, true);
-        if admin.export_layer(PROJECT.scope).is_empty() {
-            admin.load_layer(
-                app,
-                PROJECT.scope,
-                [("gallery.size".to_string(), serde_json::json!(24.0))].into(),
-            );
-        }
     }
     app.run(
         CMD_OPEN,

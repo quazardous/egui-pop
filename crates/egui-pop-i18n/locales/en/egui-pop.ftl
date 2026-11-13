@@ -1162,6 +1162,8 @@ egui-pop-admin-section-gestures = Pointer gestures
 
 egui-pop-admin-sections = Sections
 
+egui-pop-admin-session-only = Changes made here last this session only: nothing keeps them.
+
 egui-pop-admin-set-for = Set for
 
 egui-pop-admin-set-for-name = Where { $setting } is set
@@ -1171,6 +1173,8 @@ egui-pop-admin-set-for-tip = Where this value applies. When several hold a value
 egui-pop-admin-show-item = Show
 
 egui-pop-admin-show-item-name = Show { $item } in its page
+
+egui-pop-admin-store-error = Settings not kept: { $error }
 
 egui-pop-admin-wizard-above = { $field }: at most { $max }.
 

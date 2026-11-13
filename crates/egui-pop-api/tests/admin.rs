@@ -2,7 +2,8 @@
 //! opened by deep links, searched, edited in value scopes (a library
 //! value over the user's, its origin said and its reset), the user's
 //! file keeping the user's value; a manifest's section rendered from
-//! data; every row a named node.
+//! data; every row a named node; the values loaded from, saved to and
+//! followed in the host's store, its errors and its absence said.
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
@@ -11,6 +12,7 @@ use egui_pop_api::admin::model::{
     Action, Callout, Clauses as _, Confirmation, FORMAT, Field, Manifest, Records, RowField,
     Status, Tone,
 };
+use egui_pop_api::admin::store::MemoryStore;
 use egui_pop_api::admin::{
     self, ADMIN, AdminPlugin, CMD_OPEN, CMD_POP_OUT, CMD_RESET, CMD_SET, ExtraScope,
 };
@@ -289,7 +291,9 @@ fn a_library_value_wins_says_its_origin_and_leaves_the_users_file_alone() {
     ));
     assert_eq!(threads(&app), 8, "what everyone reads is the library's");
     assert_eq!(a.layers().origin("settings/compute.threads"), LIBRARY.scope);
-    assert_eq!(a.export_layer(LIBRARY.scope)["compute.threads"], json!(8));
+    #[allow(deprecated)]
+    let library = a.export_layer(LIBRARY.scope);
+    assert_eq!(library["compute.threads"], json!(8));
     app.save().unwrap();
     let saved: String = std::fs::read_dir(&dir)
         .unwrap()
@@ -881,4 +885,124 @@ fn the_later_declared_scope_wins_when_several_hold_a_value() {
     assert_eq!(threads(&app), 8, "then the library's");
     a.clear_in(app.handle(), LIBRARY.scope, &THREADS).unwrap();
     assert_eq!(threads(&app), 6, "then the app's");
+}
+
+/// Runs passes until `done` holds, the store's worker saving away from
+/// the UI thread; fails past a deadline.
+fn until(h: &mut Harness<'_, App>, what: &str, done: impl Fn(&Harness<'_, App>) -> bool) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !done(h) {
+        assert!(std::time::Instant::now() < deadline, "timed out: {what}");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        h.run();
+    }
+}
+
+#[test]
+fn the_values_round_trip_through_the_host_s_store() {
+    let store = MemoryStore::new(&[ValueScope::App, LIBRARY.scope])
+        .with(
+            ValueScope::App,
+            [("compute.threads".into(), json!(5))].into(),
+        )
+        .with(LIBRARY.scope, [("compute.threads".into(), json!(7))].into());
+    let mut h = harness();
+    let a = h.state().handle().service(&ADMIN).unwrap();
+    a.attach_store(store.clone());
+    h.run();
+    assert_eq!(threads(h.state()), 5, "the user's own, loaded");
+    assert!(
+        store.saves().is_empty(),
+        "what was loaded is not saved back"
+    );
+    a.offer(LIBRARY.scope, true);
+    h.run();
+    assert_eq!(threads(h.state()), 7, "the library's, loaded once offered");
+    run(
+        &mut h,
+        &CMD_SET,
+        json!({ "key": "compute.threads", "scope": "app", "value": 6 }),
+    );
+    run(
+        &mut h,
+        &CMD_SET,
+        json!({ "key": "compute.threads", "scope": "library", "value": 9 }),
+    );
+    until(&mut h, "both scopes saved", |_| {
+        store.values(ValueScope::App).get("compute.threads") == Some(&json!(6))
+            && store.values(LIBRARY.scope).get("compute.threads") == Some(&json!(9))
+    });
+    // Back to the default: taken out of the store.
+    run(
+        &mut h,
+        &CMD_RESET,
+        json!({ "key": "compute.threads", "scope": "app" }),
+    );
+    until(&mut h, "the reset saved", |_| {
+        !store
+            .values(ValueScope::App)
+            .contains_key("compute.threads")
+    });
+    assert!(!a.saving() || a.store_errors().is_empty());
+}
+
+#[test]
+fn a_change_made_elsewhere_updates_the_window_and_is_not_written_back() {
+    let store = MemoryStore::new(&[ValueScope::App]);
+    let mut h = harness();
+    let a = h.state().handle().service(&ADMIN).unwrap();
+    a.attach_store(store.clone());
+    run(&mut h, &CMD_OPEN, json!({ "key": "compute.threads" }));
+    store.change(
+        ValueScope::App,
+        [("compute.threads".into(), Some(json!(11)))].into(),
+    );
+    h.run();
+    h.run();
+    assert_eq!(threads(h.state()), 11);
+    // The row says its value is no longer the default.
+    h.get_by_role_and_label(egui::accesskit::Role::Group, "Worker threads, modified");
+    assert!(store.saves().is_empty(), "nothing goes back to the store");
+}
+
+#[test]
+fn a_failing_save_is_shown_in_the_window() {
+    let store = MemoryStore::new(&[ValueScope::App]);
+    store.fail_saves(Some("the disk is full"));
+    let mut h = harness();
+    let a = h.state().handle().service(&ADMIN).unwrap();
+    a.attach_store(store.clone());
+    run(&mut h, &CMD_OPEN, json!({ "key": "compute.threads" }));
+    assert!(
+        h.query_by_label_contains("Changes made here last")
+            .is_none()
+    );
+    run(
+        &mut h,
+        &CMD_SET,
+        json!({ "key": "compute.threads", "scope": "app", "value": 3 }),
+    );
+    let shown = "Settings not kept: app: the disk is full";
+    until(&mut h, "the error shown", |h| {
+        h.query_by_label(shown).is_some()
+    });
+    // A save that succeeds clears it.
+    store.fail_saves(None);
+    run(
+        &mut h,
+        &CMD_SET,
+        json!({ "key": "compute.threads", "scope": "app", "value": 5 }),
+    );
+    until(&mut h, "the error cleared", |h| {
+        h.query_by_label(shown).is_none()
+    });
+    assert_eq!(store.values(ValueScope::App)["compute.threads"], json!(5));
+}
+
+#[test]
+fn without_a_store_the_window_says_the_values_last_the_session() {
+    let mut h = harness();
+    run(&mut h, &CMD_OPEN, json!({ "key": "compute.threads" }));
+    h.get_by_label("Changes made here last this session only: nothing keeps them.");
+    egui_pop_test::assert_all_named(&h);
 }
