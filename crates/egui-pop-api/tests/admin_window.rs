@@ -100,6 +100,19 @@ fn the_window_mode_opens_an_application_window_drawing_the_page() {
     assert_eq!(m.declared().len(), 1);
 }
 
+/// A peer of the main window: the main menu is drawn in it too
+/// (`WindowSpec::shell_bars`).
+#[test]
+fn the_window_draws_the_main_menu() {
+    let mut m = multi();
+    let v = open_in_window(&mut m);
+    m.window_pass(v);
+    let names = m.names(v);
+    for name in ["File", "Window"] {
+        assert!(names.iter().any(|n| n == name), "{name} in {names:?}");
+    }
+}
+
 #[test]
 fn its_close_button_closes_the_app_and_only_its_window() {
     let mut m = multi();
