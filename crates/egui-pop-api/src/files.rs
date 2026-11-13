@@ -20,6 +20,11 @@
 //!   ([`system_chooser_refused`]). The xdg desktop portal on Linux, the
 //!   common dialogs on Windows, the open and save panels on macOS. It is
 //!   created on the interface thread and awaited on a thread of its own.
+//!   It is attached to the window it was asked from (the portal's parent
+//!   window, the owner window on Windows, a sheet on macOS) when that
+//!   window's handle is known ([`set_parent_window`]; the main window's
+//!   is recorded by `AppBuilder::run_native`); else to none, never to
+//!   another window.
 //! - **The in-app picker** ([`FilePicker`]), in every other case: a
 //!   click selects and a double click or Enter opens, keyboard navigation
 //!   (arrows, Enter, Backspace or `Alt+Up` for the parent folder,
@@ -730,6 +735,87 @@ impl State {
 #[derive(Clone, Debug, Default)]
 pub struct Files(Arc<Mutex<State>>);
 
+/// A window the system's chooser can be attached to: what gives its
+/// native handles, such as winit's window (eframe's
+/// `CreationContext::winit_window`).
+#[cfg(not(target_arch = "wasm32"))]
+pub trait ParentWindow:
+    raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle + Send + Sync
+{
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl<T> ParentWindow for T where
+    T: raw_window_handle::HasWindowHandle
+        + raw_window_handle::HasDisplayHandle
+        + Send
+        + Sync
+        + ?Sized
+{
+}
+
+/// A window's native handles, per window, for the system's chooser.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone)]
+#[cfg_attr(not(feature = "native-dialogs"), allow(dead_code))]
+struct Parent(Arc<dyn ParentWindow>);
+
+#[cfg(not(target_arch = "wasm32"))]
+impl std::fmt::Debug for Parent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ParentWindow")
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const PARENT_WINDOW: egui_pop_core::state::Slot<Parent> =
+    egui_pop_core::state::Slot::new("api.files.parent_window");
+
+/// Records `window`'s native handles as the window `viewport`'s: a system
+/// chooser asked from that window (or a panel detached from it) is
+/// attached to it. `AppBuilder::run_native` records the main window's
+/// (`frame::record_native_window`); an application that has another
+/// window's handles records them, and forgets them when it closes
+/// ([`forget_parent_window`]). Without a window's handles, its chooser
+/// is attached to no window, never to another one.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn set_parent_window(
+    ctx: &egui::Context,
+    viewport: egui::ViewportId,
+    window: Arc<dyn ParentWindow>,
+) {
+    PARENT_WINDOW.keyed(viewport).set(ctx, Parent(window));
+}
+
+/// Forgets the handles recorded for `viewport` ([`set_parent_window`]).
+#[cfg(not(target_arch = "wasm32"))]
+pub fn forget_parent_window(ctx: &egui::Context, viewport: egui::ViewportId) {
+    PARENT_WINDOW.keyed(viewport).remove(ctx);
+}
+
+/// Whether handles are recorded for `viewport` ([`set_parent_window`]).
+pub fn has_parent_window(ctx: &egui::Context, viewport: egui::ViewportId) -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        PARENT_WINDOW.keyed(viewport).exists(ctx)
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = (ctx, viewport);
+        false
+    }
+}
+
+/// The window a system chooser asked from `owner` is attached to: the
+/// application window `owner` belongs to (`AppHandle::window_group`) when
+/// its handles are recorded, else none. Never the main window for a
+/// choice asked from another window: attached there, the chooser would
+/// come up over the wrong window and block it.
+pub fn chooser_parent(app: &AppHandle, owner: egui::ViewportId) -> Option<egui::ViewportId> {
+    let window = picker_window(app, owner);
+    has_parent_window(&app.egui(), window).then_some(window)
+}
+
 /// Whether the system's chooser can be used here: the feature is on and,
 /// on Linux and the BSDs, a session bus is there for the portal.
 pub fn native_available() -> bool {
@@ -987,9 +1073,11 @@ impl Files {
         if native {
             o.via = Via::Native;
             let answer = o.answer.clone();
+            let owner = o.owner;
             drop(s);
-            native::start(&app.egui(), &request, start, answer);
-            return Ok(json!({ "via": "native" }));
+            let parent = chooser_parent(app, owner);
+            native::start(&app.egui(), &request, start, parent, answer);
+            return Ok(json!({ "via": "native", "attached": parent.is_some() }));
         }
         o.via = Via::InApp;
         let at = FileRequest {
@@ -5913,6 +6001,7 @@ mod native {
         ctx: &egui::Context,
         request: &FileRequest,
         start: Option<PathBuf>,
+        parent: Option<egui::ViewportId>,
         answer: Arc<Mutex<Option<Answer>>>,
     ) {
         use std::future::Future;
@@ -5921,6 +6010,11 @@ mod native {
         use super::ChooseKind;
 
         let mut d = rfd::AsyncFileDialog::new().set_title(&request.title);
+        // Attached to the window it was asked from: rfd reads the handles
+        // here, on the interface thread, while the window is there.
+        if let Some(window) = parent.and_then(|v| super::PARENT_WINDOW.keyed(v).get(ctx)) {
+            d = d.set_parent(&*window.0);
+        }
         if let Some(dir) = start {
             d = d.set_directory(dir);
         }
@@ -5973,6 +6067,7 @@ mod native {
         _ctx: &egui::Context,
         _request: &FileRequest,
         _start: Option<PathBuf>,
+        _parent: Option<egui::ViewportId>,
         answer: Arc<Mutex<Option<Answer>>>,
     ) {
         // Never reached: `native_available` is false without the feature.

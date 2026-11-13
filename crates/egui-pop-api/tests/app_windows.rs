@@ -749,3 +749,57 @@ fn closing_the_window_a_folder_is_chosen_from_cancels_the_choice() {
         .expect("the choice ended");
     assert_eq!(files::chosen(&r).unwrap(), files::Chosen::Cancelled);
 }
+
+/// A window whose handles are never available: enough to be recorded as
+/// a chooser's parent.
+struct NoHandles;
+
+impl raw_window_handle::HasWindowHandle for NoHandles {
+    fn window_handle(
+        &self,
+    ) -> Result<raw_window_handle::WindowHandle<'_>, raw_window_handle::HandleError> {
+        Err(raw_window_handle::HandleError::Unavailable)
+    }
+}
+
+impl raw_window_handle::HasDisplayHandle for NoHandles {
+    fn display_handle(
+        &self,
+    ) -> Result<raw_window_handle::DisplayHandle<'_>, raw_window_handle::HandleError> {
+        Err(raw_window_handle::HandleError::Unavailable)
+    }
+}
+
+#[test]
+fn the_system_chooser_is_attached_to_the_window_it_is_asked_from_never_another() {
+    use egui_pop_api::files::{self, FilesPlugin};
+
+    let mut m = MultiWindow::new(|ctx| {
+        App::builder()
+            .plugin(FilesPlugin::in_app())
+            .build(ctx)
+            .unwrap()
+    });
+    open_counting(&m, "import");
+    m.root_pass();
+    let import = m.app().window_viewport(&"import".into()).unwrap();
+    m.window_pass(import);
+    // Only the main window's handles known (what `run_native` records):
+    // a chooser asked from the import window is attached to none, not to
+    // the main window.
+    files::set_parent_window(m.ctx(), ViewportId::ROOT, std::sync::Arc::new(NoHandles));
+    assert_eq!(
+        files::chooser_parent(m.app(), ViewportId::ROOT),
+        Some(ViewportId::ROOT)
+    );
+    assert_eq!(files::chooser_parent(m.app(), import), None);
+    // The import window's handles recorded: its chooser is attached to it.
+    files::set_parent_window(m.ctx(), import, std::sync::Arc::new(NoHandles));
+    assert_eq!(files::chooser_parent(m.app(), import), Some(import));
+    assert_eq!(
+        files::chooser_parent(m.app(), ViewportId::ROOT),
+        Some(ViewportId::ROOT)
+    );
+    files::forget_parent_window(m.ctx(), import);
+    assert_eq!(files::chooser_parent(m.app(), import), None);
+}

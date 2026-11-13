@@ -496,6 +496,22 @@ limit.
 - **Remove when**: winit gives an owner on every desktop platform and
   egui's `ViewportBuilder` passes it through.
 
+## eframe: no window handle for a viewport other than the main window
+
+- **Compensated**: the system's file chooser asked from an application
+  window cannot be attached to it: eframe gives the native window
+  (`CreationContext::winit_window`, `Frame::winit_window`) of the main
+  window only, never of a deferred or immediate viewport. Such a chooser
+  is attached to no window, rather than to the main window, where it
+  would block the wrong window.
+- **Upstream**: not filed yet; the same need as a viewport's owner above
+  (a viewport's native window, or its raw handles, from eframe).
+- **Workaround**: `files::set_parent_window` takes a window's handles
+  from an application that has them; `AppBuilder::run_native` records the
+  main window's.
+- **Remove when**: eframe gives each viewport's window or raw handles;
+  egui-pop then records them as each window opens.
+
 ## egui_table: unnamed resize handles, rows drawn per region
 
 - **Compensated**: the column resize handles are interactive widgets

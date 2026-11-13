@@ -59,9 +59,10 @@ web-time = "1"
 # The Windows layer of the frame (stubs elsewhere).
 egui-pop-win32.workspace = true
 
-[target.'cfg(any(windows, target_os = "linux"))'.dependencies]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # MIT OR Apache-2.0 OR Zlib: the window handle eframe gives, to subclass
-# the window for its hit tests (Windows), or to know its X11 id (Linux).
+# the window for its hit tests (Windows), to know its X11 id (Linux), and
+# to attach the system's file chooser to its window.
 raw-window-handle = "0.6"
 
 [dev-dependencies]
@@ -69,3 +70,5 @@ egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true }
 # No version: a dev-dependency back up the layers, dropped when published.
 egui-pop-test = { path = "../egui-pop-test" }
+# The system chooser's parent window, in the windows tests.
+raw-window-handle = "0.6"
