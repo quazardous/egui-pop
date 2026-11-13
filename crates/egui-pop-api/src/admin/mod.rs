@@ -62,6 +62,7 @@
 //! `gestures`, `fonts`, `settings-page`); the settings window of before
 //! opens from General › Advanced.
 
+pub mod quick;
 mod shell;
 pub mod store;
 mod sync;
@@ -209,6 +210,11 @@ pub struct Admin {
     /// The host loads and saves the layers itself (the deprecated
     /// `load_layer` and `export_layer`).
     legacy: std::sync::atomic::AtomicBool,
+    /// The settings the person changed, with when (seconds since the
+    /// epoch), the latest last ([`quick`]).
+    recent: Mutex<Vec<(String, f64)>>,
+    /// The quick settings open, per window group.
+    quick: Mutex<BTreeMap<egui::ViewportId, quick::Open>>,
 }
 
 /// The answers of the `read_only` commands statuses and records read:
@@ -972,9 +978,15 @@ impl Plugin for AdminPlugin {
         )?;
         wizard::commands(ctx)?;
         transfer::commands(ctx)?;
+        quick::commands(ctx)?;
         ctx.block(
             zones::OVERLAYS,
             Block::add(BlockId::from_static("egui_pop.admin"), 6, shell::show),
+        );
+        // Drawn in every window, shown in its own.
+        ctx.block(
+            zones::WINDOW_OVERLAYS,
+            Block::add(BlockId::from_static("egui_pop.admin.quick"), 1, quick::show),
         );
         let w = ctx.app().downgrade();
         ctx.collector(
@@ -1019,6 +1031,8 @@ fn describe(app: &AppHandle) -> Json {
         "origins": origins,
         "tree": tree,
         "wizard": a.wizard_state(app),
+        "quick": a.quick_settings(app),
+        "recent": a.recent_settings(app, quick::now()),
         "lastFinished": a.last_finished(),
         "hooks": a.hooks().list().into_iter().map(|(n, k)| json!({"name": n, "kind": k})).collect::<Vec<_>>(),
         "diagnostics": a.diagnostics().all().iter().map(|d| json!({"code": d.code, "subject": d.subject, "message": d.message})).collect::<Vec<_>>(),

@@ -111,6 +111,22 @@ pub const ADMIN_RESET_SECTION: StrKey =
     StrKey::new("egui-pop-admin-reset-section", "Reset section");
 pub const ADMIN_MODIFIED_COUNT: StrKey =
     StrKey::new("egui-pop-admin-modified-count", "Changed: { $count }");
+pub const ADMIN_QUICK_TITLE: StrKey = StrKey::new("egui-pop-admin-quick-title", "Quick settings");
+pub const ADMIN_QUICK_HINT: StrKey =
+    StrKey::new("egui-pop-admin-quick-hint", "Search every setting");
+pub const ADMIN_QUICK_MARKED: StrKey = StrKey::new("egui-pop-admin-quick-marked", "Often changed");
+pub const ADMIN_QUICK_RECENT: StrKey = StrKey::new("egui-pop-admin-quick-recent", "Changed lately");
+pub const ADMIN_QUICK_NONE: StrKey = StrKey::new(
+    "egui-pop-admin-quick-none",
+    "No quick settings yet: type to search every setting.",
+);
+pub const ADMIN_QUICK_NO_HIT: StrKey =
+    StrKey::new("egui-pop-admin-quick-no-hit", "No setting matches.");
+pub const ADMIN_QUICK_OPEN: StrKey = StrKey::new("egui-pop-admin-quick-open", "Open in Settings");
+pub const ADMIN_QUICK_OPEN_NAME: StrKey = StrKey::new(
+    "egui-pop-admin-quick-open-name",
+    "Open { $setting } in Settings",
+);
 pub const ADMIN_SET_FOR: StrKey = StrKey::new("egui-pop-admin-set-for", "Set for");
 pub const ADMIN_SET_FOR_NAME: StrKey =
     StrKey::new("egui-pop-admin-set-for-name", "Where { $setting } is set");
@@ -1474,6 +1490,14 @@ pub const ALL: &[StrKey] = &[
     ADMIN_NAV_RESIZE,
     ADMIN_RESET_SECTION,
     ADMIN_MODIFIED_COUNT,
+    ADMIN_QUICK_TITLE,
+    ADMIN_QUICK_HINT,
+    ADMIN_QUICK_MARKED,
+    ADMIN_QUICK_RECENT,
+    ADMIN_QUICK_NONE,
+    ADMIN_QUICK_NO_HIT,
+    ADMIN_QUICK_OPEN,
+    ADMIN_QUICK_OPEN_NAME,
     ADMIN_SET_FOR,
     ADMIN_SET_FOR_NAME,
     ADMIN_FOR_APP,

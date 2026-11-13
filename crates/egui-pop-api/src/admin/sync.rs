@@ -244,6 +244,9 @@ impl Admin {
                 d
             };
             if !changes.is_empty() {
+                // Changed here, by the person: offered among the recent
+                // ones in the quick settings.
+                self.note_changed(changes.keys().map(String::as_str), super::quick::now());
                 self.send(store, scope, changes);
             }
         }

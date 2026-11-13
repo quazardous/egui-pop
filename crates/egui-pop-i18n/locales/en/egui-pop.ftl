@@ -1164,6 +1164,22 @@ egui-pop-admin-sections = Sections
 
 egui-pop-admin-session-only = Changes made here last this session only: nothing keeps them.
 
+egui-pop-admin-quick-title = Quick settings
+
+egui-pop-admin-quick-hint = Search every setting
+
+egui-pop-admin-quick-marked = Often changed
+
+egui-pop-admin-quick-recent = Changed lately
+
+egui-pop-admin-quick-none = No quick settings yet: type to search every setting.
+
+egui-pop-admin-quick-no-hit = No setting matches.
+
+egui-pop-admin-quick-open = Open in Settings
+
+egui-pop-admin-quick-open-name = Open { $setting } in Settings
+
 egui-pop-admin-set-for = Set for
 
 egui-pop-admin-set-for-name = Where { $setting } is set

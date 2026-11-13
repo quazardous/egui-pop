@@ -1576,7 +1576,7 @@ fn set_for_tip(ctx: &egui::Context, admin: &Admin, allowed: &[ValueScope]) -> St
 /// writing to the scope chosen), the origin tag, "Set for", its reset
 /// and its help under it. The row is a named group for assistive
 /// technology: its label, "modified" and its origin.
-fn field_row(ui: &mut Ui, app: &AppHandle, admin: &Admin, e: &SettingEntry, f: &Field) {
+pub(super) fn field_row(ui: &mut Ui, app: &AppHandle, admin: &Admin, e: &SettingEntry, f: &Field) {
     let ctx = ui.ctx().clone();
     let t = Tokens::of(&ctx);
     let store = app.store();
