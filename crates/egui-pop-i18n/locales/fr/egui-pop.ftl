@@ -764,6 +764,10 @@ egui-pop-admin-reset-section = Rétablir la section
 
 egui-pop-admin-run-read-only = Fixé par la ligne de commande pour cette exécution : non modifiable ici
 
+egui-pop-admin-session-only = Les changements faits ici ne durent que cette session : rien ne les garde.
+
+egui-pop-admin-store-error = Réglages non gardés : { $error }
+
 egui-pop-admin-scope-developer = Développement
 
 egui-pop-admin-scope-general = Général

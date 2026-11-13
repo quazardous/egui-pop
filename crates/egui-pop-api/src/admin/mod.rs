@@ -29,8 +29,15 @@
 //!   later one winning), a setting opts into them in its declaration
 //!   ([`Descriptor::scopes`]) or a manifest's field
 //!   ([`model::Field::scopes`]); [`Admin::offer`] opens a scope's layer,
-//!   [`Admin::load_layer`] fills it, [`Admin::set_run`] records a command
-//!   line override ([`egui_pop_model::admin::layers`]).
+//!   the store fills it, [`Admin::set_run`] records a command line
+//!   override ([`egui_pop_model::admin::layers`]).
+//! - **Storage**: the host provides where the values are kept, a
+//!   [`store::SettingsStore`] ([`Admin::attach_store`]): loaded when
+//!   attached and when a scope is offered, saved away from the UI thread
+//!   as values change, followed when they change elsewhere; its errors
+//!   are shown in the window. egui-pop keeps no location of its own:
+//!   without a store, the values last the session, and the window says
+//!   so.
 //! - **Records and statuses**: lists and tables read their rows from a
 //!   `read_only` command or a `records` hook, statuses their value from a
 //!   `read_only` command or a `status` hook; read once, and again after
@@ -56,6 +63,8 @@
 //! opens from General › Advanced.
 
 mod shell;
+pub mod store;
+mod sync;
 pub mod transfer;
 pub mod wizard;
 
@@ -192,6 +201,14 @@ pub struct Admin {
     extra: Mutex<Vec<ExtraScope>>,
     /// Settings export and import: retired settings, the last import.
     transfer: transfer::State,
+    /// The host's settings store and what was last loaded from or saved
+    /// to it.
+    sync: Mutex<sync::Synced>,
+    /// What the store's threads hand to the UI thread.
+    shared: Arc<sync::Shared>,
+    /// The host loads and saves the layers itself (the deprecated
+    /// `load_layer` and `export_layer`).
+    legacy: std::sync::atomic::AtomicBool,
 }
 
 /// The answers of the `read_only` commands statuses and records read:
@@ -449,7 +466,12 @@ impl Admin {
     /// Offers a host value scope for editing (the application opened its
     /// library, its workspace...), or takes it back.
     pub fn offer(&self, scope: ValueScope, on: bool) {
+        let was = self.offered().contains(&scope);
         lock(&self.layers).offer(scope, on);
+        if was != on {
+            // The store's layer is read (or taken back) at the next pass.
+            self.reload(scope);
+        }
     }
 
     /// The editable value scopes offered (`app` always).
@@ -460,7 +482,23 @@ impl Admin {
     /// Replaces a layer's values (setting id to JSON), as the application
     /// keeps them with its library or workspace; the effective values
     /// change at once.
+    #[deprecated(note = "attach a `store::SettingsStore` with `Admin::attach_store`")]
     pub fn load_layer(&self, app: &AppHandle, scope: ValueScope, values: BTreeMap<String, Json>) {
+        self.legacy
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.put_layer(app, scope, values);
+    }
+
+    /// A layer's values, by setting id: what the application saves.
+    #[deprecated(note = "attach a `store::SettingsStore` with `Admin::attach_store`")]
+    pub fn export_layer(&self, scope: ValueScope) -> BTreeMap<String, Json> {
+        self.legacy
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.layer_values(scope)
+    }
+
+    /// Replaces a layer's values (setting id to JSON).
+    fn put_layer(&self, app: &AppHandle, scope: ValueScope, values: BTreeMap<String, Json>) {
         let store = app.store();
         let values = values
             .into_iter()
@@ -475,8 +513,8 @@ impl Admin {
         }
     }
 
-    /// A layer's values, by setting id: what the application saves.
-    pub fn export_layer(&self, scope: ValueScope) -> BTreeMap<String, Json> {
+    /// A layer's values, by setting id.
+    fn layer_values(&self, scope: ValueScope) -> BTreeMap<String, Json> {
         lock(&self.layers)
             .export(scope)
             .into_iter()

@@ -129,6 +129,16 @@ pub const ADMIN_RUN_READ_ONLY: StrKey = StrKey::new(
     "egui-pop-admin-run-read-only",
     "Set on the command line for this run: not editable here",
 );
+/// Above the Settings page when no store keeps the values.
+pub const ADMIN_SESSION_ONLY: StrKey = StrKey::new(
+    "egui-pop-admin-session-only",
+    "Changes made here last this session only: nothing keeps them.",
+);
+/// A store's error above the Settings page (a failed load or save).
+pub const ADMIN_STORE_ERROR: StrKey = StrKey::new(
+    "egui-pop-admin-store-error",
+    "Settings not kept: { $error }",
+);
 pub const ADMIN_MODIFIED: StrKey = StrKey::new("egui-pop-admin-modified", "modified");
 pub const ADMIN_NO_WIDGET: StrKey = StrKey::new(
     "egui-pop-admin-no-widget",
@@ -1468,6 +1478,8 @@ pub const ALL: &[StrKey] = &[
     ADMIN_ORIGIN_RUN,
     ADMIN_ORIGIN_TIP,
     ADMIN_RUN_READ_ONLY,
+    ADMIN_SESSION_ONLY,
+    ADMIN_STORE_ERROR,
     ADMIN_MODIFIED,
     ADMIN_NO_WIDGET,
     ADMIN_SECTION_GESTURES,

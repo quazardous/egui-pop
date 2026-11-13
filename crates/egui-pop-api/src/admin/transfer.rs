@@ -204,7 +204,7 @@ impl Admin {
                 })
                 .collect(),
             scope => self
-                .export_layer(scope)
+                .layer_values(scope)
                 .into_iter()
                 .filter(|(id, _)| ids.contains(id))
                 .collect(),
@@ -339,7 +339,7 @@ impl Admin {
                 skipped.push(json!({ "key": k, "reason": "not in the file" }));
             }
         }
-        let layer_before = (scope != ValueScope::App).then(|| self.export_layer(scope));
+        let layer_before = (scope != ValueScope::App).then(|| self.layer_values(scope));
         let store = app.store();
         let layers = self.layers();
         let group = {
@@ -429,7 +429,7 @@ impl Admin {
                 .map_err(|e| e.to_string())?;
         }
         if let Some(layer) = last.layer {
-            self.load_layer(app, last.scope, layer);
+            self.put_layer(app, last.scope, layer);
         }
         if let Some(keymap) = last.keymap {
             app.load_keymap(keymap, Layer::User);

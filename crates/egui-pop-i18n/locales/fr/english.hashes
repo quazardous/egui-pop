@@ -573,11 +573,13 @@ egui-pop-admin-search-hint 1e9712157663667c
 egui-pop-admin-section-advanced e172dc9a05b5446b
 egui-pop-admin-section-gestures a5f1be521254004c
 egui-pop-admin-sections 553ce4b6095455ad
+egui-pop-admin-session-only cdcdfc45a3fb03d6
 egui-pop-admin-set-for ca9028c6b4b2043a
 egui-pop-admin-set-for-name 698823d86e98552a
 egui-pop-admin-set-for-tip a492777c5aa0254f
 egui-pop-admin-show-item feda564230a3a49a
 egui-pop-admin-show-item-name 235fc50a891e2f45
+egui-pop-admin-store-error 87b73a634858d533
 egui-pop-admin-wizard-above 64329aff4d2f4db5
 egui-pop-admin-wizard-all 32190eaf774f8552
 egui-pop-admin-wizard-back 5f409e65a5b970e0
