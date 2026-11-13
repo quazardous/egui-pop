@@ -63,8 +63,9 @@ wbox on labwc, headless mutter and Xwayland) measured eframe 0.37:
     time; a dialog blocks its group only. `modalOpen` is per group
     (`overlay::modal_open`, with `overlay::set_separate_windows`): a
     modal in an application window no longer makes `!modalOpen`
-    commands refuse in the main window. A closed (or moved) window's
-    dialogs go to the main window's queue.
+    commands refuse in the main window. A closed window's dialogs
+    are cancelled with it (2026-11-13), as a file choice asked from it
+    is; a window moved into the main window takes its dialogs there.
   - **The palette:** one per group, opened where it is asked, offering
     and running in that window's context (its commands and the global
     ones), Escape closing that one only.

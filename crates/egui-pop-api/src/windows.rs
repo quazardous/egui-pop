@@ -770,6 +770,8 @@ impl AppHandle {
 
     fn window_closed(&self, id: &WindowId) {
         REGISTRY.with(|r| r.borrow_mut().remove(&id.deferred_viewport()));
+        // Its dialogs go with it, as a file choice asked from it does.
+        crate::dialogs::window_closed(self, id.deferred_viewport());
         self.sync_separate_windows();
         self.publish("egui_pop", None, "window.closed", json!({ "window": id }));
         let ctx = self.egui();
