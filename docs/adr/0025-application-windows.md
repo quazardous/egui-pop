@@ -75,6 +75,15 @@ wbox on labwc, headless mutter and Xwayland) measured eframe 0.37:
   - **Quick pick:** `window.pick` (Window > Switch to window…) lists the
     open windows by title in a choice with a filter, in the window it is
     asked in.
+  - **The shell's bars** (2026-11-13): a window opened with
+    `WindowSpec::shell_bars(true)` shows the main window's bars, as VS
+    Code's windows do: the title bar's start (the `CAPTION_START` zone:
+    the menu button, the name or logo) and the main menu (`app.main`,
+    when the application has a menu bar), evaluated and run in that
+    window's context. A command whose `when` holds only in another open
+    window (`appWindow == 'main'`) is greyed there, its tooltip naming
+    that window ("Only in the Demo window"). A menu opened as a popup
+    (`menus::popup_at`) is drawn in the window it was opened in.
 - **Geometry when a window moves into the main window:** the main
   window keeps its own geometry under its own id (`main`), and the
   moved content keeps the one saved under its id; the main window's size

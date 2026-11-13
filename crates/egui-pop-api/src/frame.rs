@@ -572,12 +572,15 @@ fn title_block(ui: &mut Ui, app: &AppHandle) {
 /// bar and accessible names as the main window's, then `content` below
 /// it. Drawn at the top of each application window, and around a
 /// window's content moved into the main window (whose shell, and the
-/// shell's bar, left with it). The system's frame, or full screen without
+/// shell's bar, left with it). With `caption_start`, the bar holds the
+/// [`zones::CAPTION_START`] zone at its start, as the main window's does
+/// (`WindowSpec::shell_bars`). The system's frame, or full screen without
 /// the bar, draws `content` alone.
 pub(crate) fn window_frame(
     ui: &mut Ui,
     app: &AppHandle,
     title: &str,
+    caption_start: bool,
     content: impl FnOnce(&mut Ui),
 ) {
     let ctx = ui.ctx().clone();
@@ -610,7 +613,15 @@ pub(crate) fn window_frame(
     let out = ui
         .scope_builder(egui::UiBuilder::new().max_rect(full), |ui| {
             egui_pop_core::focus::scope(ui, "titleBar", &[], |ui| {
-                TitleBar::new(title).show(ui, |_| {}, |_| {})
+                TitleBar::new(title).show(
+                    ui,
+                    |ui| {
+                        if caption_start && app.zone_has_blocks(&zones::CAPTION_START) {
+                            app.show_zone(ui, &zones::CAPTION_START);
+                        }
+                    },
+                    |_| {},
+                )
             })
         })
         .inner;

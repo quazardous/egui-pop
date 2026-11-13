@@ -126,6 +126,9 @@ pub struct WindowSpec {
     /// The inner size at its first opening (a saved size wins).
     pub size: Option<Vec2>,
     pub min_size: Option<Vec2>,
+    /// Draws the main window's bars in this window too
+    /// ([`WindowSpec::shell_bars`]).
+    pub shell_bars: bool,
 }
 
 impl WindowSpec {
@@ -135,7 +138,25 @@ impl WindowSpec {
             title: title.into(),
             size: None,
             min_size: None,
+            shell_bars: false,
         }
+    }
+
+    /// The window shows the main window's bars, as VS Code's windows do:
+    /// its title bar holds the [`zones::CAPTION_START`] zone (the
+    /// application's menu button and name, its logo), and the main menu
+    /// (`app.main`) is drawn under it when the application has a menu
+    /// bar ([`AppBuilder::menu_bar`]). The menus are evaluated and run in
+    /// this window's context (`appWindow`): a command whose `when` holds
+    /// only in another window is greyed, its tooltip naming that window.
+    /// Embedded in the main window (no windows of their own), the main
+    /// window's bars are already above it: none is drawn.
+    ///
+    /// [`zones::CAPTION_START`]: crate::zones::CAPTION_START
+    /// [`AppBuilder::menu_bar`]: crate::app::AppBuilder::menu_bar
+    pub fn shell_bars(mut self, on: bool) -> Self {
+        self.shell_bars = on;
+        self
     }
 
     pub fn size(mut self, size: impl Into<Vec2>) -> Self {
@@ -257,6 +278,8 @@ pub(crate) struct Entry {
     /// would move the window.
     first: (Option<Vec2>, Option<[f32; 2]>, bool),
     min_size: Option<Vec2>,
+    /// [`WindowSpec::shell_bars`].
+    shell_bars: bool,
     pub(crate) geometry: Option<Geometry>,
     pub(crate) focused: Option<bool>,
     /// When it was last worked in (a tick, larger is later).
@@ -284,6 +307,8 @@ pub(crate) struct Root {
     home_title: Option<String>,
     /// The minimum size of the content moved in, for its own window again.
     min_size: Option<Vec2>,
+    /// Whether the content moved in shows the main window's bars.
+    shell_bars: bool,
 }
 
 /// The application's windows.
@@ -315,6 +340,7 @@ impl Default for Windows {
                 geometry: None,
                 home_title: None,
                 min_size: None,
+                shell_bars: false,
             },
             entries: Vec::new(),
             saved: None,
@@ -470,6 +496,7 @@ impl AppHandle {
                     content: Some(Box::new(content)),
                     first,
                     min_size: spec.min_size,
+                    shell_bars: spec.shell_bars,
                     geometry: saved,
                     focused: None,
                     last_active: tick,
@@ -786,6 +813,7 @@ impl AppHandle {
                 w.root.home_title = shell_title;
             }
             w.root.min_size = e.min_size;
+            w.root.shell_bars = e.shell_bars;
             w.root.sent_title = None;
             w.root.content = e.content;
             w.root.last_active = e.last_active;
@@ -879,6 +907,7 @@ impl AppHandle {
             w.root.title = home_title.or_else(|| Some(self.name()).filter(|n| !n.is_empty()));
             w.root.sent_title = None;
             let min_size = w.root.min_size.take();
+            let shell_bars = std::mem::take(&mut w.root.shell_bars);
             // The content's geometry was saved under its id when it moved
             // in: its window opens again with it. The main window's own was
             // saved under its id then: it takes it back.
@@ -897,6 +926,7 @@ impl AppHandle {
                 content: Some(content),
                 first,
                 min_size,
+                shell_bars,
                 geometry: saved,
                 focused: None,
                 last_active: tick,
@@ -962,9 +992,13 @@ impl AppHandle {
         let content = self.windows_mut().root.content.take();
         let drawn = match content {
             Some(mut content) => {
-                let (id, title) = {
+                let (id, title, bars) = {
                     let w = self.windows_ref();
-                    (w.root.id.clone(), w.root.title.clone().unwrap_or_default())
+                    (
+                        w.root.id.clone(),
+                        w.root.title.clone().unwrap_or_default(),
+                        w.root.shell_bars,
+                    )
                 };
                 let mut wui = WindowUi {
                     app: self,
@@ -978,7 +1012,7 @@ impl AppHandle {
                 // The shell's title bar left with the shell: the content
                 // gets the frame an application window has.
                 let title = wui.title.clone();
-                crate::frame::window_frame(ui, self, &title, |ui| content(ui, &mut wui));
+                framed(ui, self, &title, bars, |ui| content(ui, &mut wui));
                 let mut w = self.windows_mut();
                 if w.root.content.is_none() {
                     w.root.content = Some(content);
@@ -1081,6 +1115,33 @@ impl AppHandle {
     }
 }
 
+/// An application window's frame around its content, with the main
+/// window's bars when it asks for them ([`WindowSpec::shell_bars`]).
+fn framed(ui: &mut Ui, app: &AppHandle, title: &str, bars: bool, content: impl FnOnce(&mut Ui)) {
+    crate::frame::window_frame(ui, app, title, bars, |ui| {
+        if bars {
+            menu_bar(ui, app);
+        }
+        content(ui);
+    });
+}
+
+/// The main menu (`app.main`) at the top of an application window, in
+/// its context, when the application has a menu bar.
+fn menu_bar(ui: &mut Ui, app: &AppHandle) {
+    if !app.menu_bar() {
+        return;
+    }
+    let id = egui::Id::unique(("egui_pop.window_menu", ui.ctx().viewport_id()));
+    egui::Panel::top(id).show(ui, |ui| {
+        egui_pop_core::focus::scope(ui, "topBar", &[], |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
+                crate::menus::bar(ui, app, &crate::app::MENU_MAIN);
+            });
+        });
+    });
+}
+
 /// Reads a window's geometry from its own pass.
 fn read_geometry(ctx: &Context) -> Option<Geometry> {
     ctx.input(|i| {
@@ -1118,7 +1179,7 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
     let _group = enter_group(Some(viewport));
     let ctx = ui.ctx().clone();
     let own_window = class != ViewportClass::EmbeddedWindow;
-    let (content, title, raise) = {
+    let (content, title, raise, bars) = {
         let mut w = app.windows_mut();
         let tick = w.next_tick();
         let Some(e) = w.entry_mut(&id) else { return };
@@ -1135,7 +1196,7 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
             }
         }
         let raise = std::mem::take(&mut e.raise);
-        (content, e.title.clone(), raise)
+        (content, e.title.clone(), raise, e.shell_bars)
     };
     let mut content = content;
     if own_window {
@@ -1167,13 +1228,15 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
     };
     if own_window {
         let title = wui.title.clone();
-        crate::frame::window_frame(ui, &app, &title, |ui| content(ui, &mut wui));
+        framed(ui, &app, &title, bars, |ui| content(ui, &mut wui));
     } else {
         // Embedded in the main window: egui's window frame is its frame.
         content(ui, &mut wui);
     }
     if own_window {
         app.show_zone(ui, &crate::zones::WINDOW_OVERLAYS);
+        // A menu opened as a popup in this window (`menus::popup_at`).
+        crate::menus::draw_popup(&ctx, &app);
     }
     let closing = wui.close || (close_requested && !wui.keep_open);
     let (send_title, geometry) = {
