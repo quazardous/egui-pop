@@ -98,6 +98,7 @@ struct Lib {
     signals: Vec<Signal<u32>>,
     built: usize,
     columns: usize,
+    drag_out: bool,
 }
 
 fn harness(n: u32, stacked: bool, with_app: bool, keymap: CullKeymap) -> Harness<'static, Lib> {
@@ -110,6 +111,7 @@ fn harness(n: u32, stacked: bool, with_app: bool, keymap: CullKeymap) -> Harness
         signals: Vec::new(),
         built: 0,
         columns: 0,
+        drag_out: false,
     };
     Harness::builder()
         .with_size(egui::vec2(800.0, 600.0))
@@ -125,7 +127,9 @@ fn harness(n: u32, stacked: bool, with_app: bool, keymap: CullKeymap) -> Harness
                     );
                 }
                 let handle = l.app.as_ref().map(|a| a.handle().clone());
-                let mut grid = ThumbGrid::new("grid").keymap(l.keymap.clone());
+                let mut grid = ThumbGrid::new("grid")
+                    .keymap(l.keymap.clone())
+                    .drag_out(l.drag_out);
                 if let Some(h) = &handle {
                     grid = grid.app(h);
                 }
@@ -276,6 +280,54 @@ fn clicks_shift_ctrl_and_a_rubber_band_select() {
     h.run();
     assert_eq!(h.state().state.selection().keys(), &[0, 1]);
     assert_eq!(cursor(&h), Some(1));
+}
+
+/// Drags from `a` to `b` in a few moves, as a hand does.
+fn drag(h: &mut Harness<'_, Lib>, a: egui::Pos2, b: egui::Pos2) {
+    h.drag_at(a);
+    h.run();
+    for i in 1..=4 {
+        h.hover_at(a + (b - a) * (i as f32 / 4.0));
+        h.run();
+    }
+    h.drop_at(b);
+    h.run();
+}
+
+#[test]
+fn a_drag_out_carries_the_selection_or_the_image_under_the_pointer() {
+    let mut h = harness(100, false, false, CullKeymap::lightroom());
+    h.state_mut().drag_out = true;
+    h.run();
+    cell(&h, 2).click();
+    h.run();
+    cell(&h, 4).click_modifiers(Modifiers::SHIFT);
+    h.run();
+    assert_eq!(h.state().state.selection().keys(), &[2, 3, 4]);
+    // From a selected cell: the selection goes, and stays selected.
+    h.state_mut().signals.clear();
+    let (a, b) = (cell(&h, 3).rect().center(), cell(&h, 9).rect().center());
+    drag(&mut h, a, b);
+    assert!(
+        h.state().signals.contains(&Signal::DragOut {
+            keys: vec![2, 3, 4]
+        }),
+        "{:?}",
+        h.state().signals
+    );
+    assert_eq!(h.state().state.selection().keys(), &[2, 3, 4], "no band");
+    // From a cell not selected: that image alone, the selection kept.
+    h.state_mut().signals.clear();
+    let (a, b) = (cell(&h, 7).rect().center(), cell(&h, 0).rect().center());
+    drag(&mut h, a, b);
+    assert!(
+        h.state()
+            .signals
+            .contains(&Signal::DragOut { keys: vec![7] }),
+        "{:?}",
+        h.state().signals
+    );
+    assert_eq!(h.state().state.selection().keys(), &[2, 3, 4]);
 }
 
 #[test]

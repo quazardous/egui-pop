@@ -323,6 +323,7 @@ impl PageState {
                 if *expanded { "expanded" } else { "collapsed" }
             ),
             Signal::Activate { key } => format!("activate {key}"),
+            Signal::DragOut { keys } => format!("drag out: {}", keys.len()),
             Signal::Zoom { size } => format!("zoom {size:.0}"),
             Signal::Vetoed { step, reason } => format!("{step} vetoed: {reason}"),
         };
