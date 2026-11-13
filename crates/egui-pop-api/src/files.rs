@@ -6,7 +6,10 @@
 //! 0010): the frame never waits. In-app pickers open in a modal of their
 //! own, or inside the caller's dialog ([`Files::choose_inline`], as a
 //! form's path field does). The result is `{ "paths": [...] }`, or
-//! `null` when the person cancelled; [`chosen`] reads it.
+//! `null` when the person cancelled; [`chosen`] reads it. A choice
+//! belongs to the window it was asked from ([`Files::owner`]): its
+//! in-app picker's modal is drawn over that application window and blocks
+//! it alone; the window closed, the choice is cancelled.
 //!
 //! - **The system's chooser** (feature `native-dialogs`, through `rfd`):
 //!   a fallback kept in case an application cannot do with the in-app
@@ -672,6 +675,11 @@ struct Open {
     /// The application's choices as whoever answered set them
     /// ([`Files::set_choices`]), over the in-app picker's.
     choices: Option<ChoiceValues>,
+    /// The window it was asked from (the window being drawn or commanded
+    /// then, else the active one): its in-app picker is shown over that
+    /// window's group (`AppHandle::window_group`); cancelled once that
+    /// window closes.
+    owner: egui::ViewportId,
 }
 
 #[derive(Debug, Default)]
@@ -848,6 +856,7 @@ impl Files {
 
     fn start_choice(&self, app: &AppHandle, request: FileRequest, inline: bool) -> (u64, Pending) {
         let (pending, resolver) = host::pending();
+        let owner = crate::windows::current_group().unwrap_or_else(|| app.active_window());
         let id = {
             let mut s = lock(&self.0);
             s.next += 1;
@@ -862,6 +871,7 @@ impl Files {
                 inline,
                 by: Origin::User,
                 choices: None,
+                owner,
             });
             id
         };
@@ -918,6 +928,17 @@ impl Files {
         settle(app, id, &mut picker, &answer, out, true);
         self.keep(id, picker);
         true
+    }
+
+    /// The window a choice was asked from ([`Files::choose`] called in its
+    /// pass, or for its command): its in-app picker shows over that
+    /// window's group. `None` once the choice is over.
+    pub fn owner(&self, id: u64) -> Option<egui::ViewportId> {
+        lock(&self.0)
+            .open
+            .iter()
+            .find(|o| o.id == id)
+            .map(|o| o.owner)
     }
 
     /// The entry highlighted in the in-app picker of a choice (the one its
@@ -1700,9 +1721,11 @@ impl Plugin for FilesPlugin {
             )
             .args(json!({ "id": 1, "paths": ["/tmp/a.png"] })),
         )?;
+        // In every window: each in-app picker is drawn over the window it
+        // was asked from, before the dialogs (a question over it).
         ctx.block(
-            zones::OVERLAYS,
-            Block::add(BlockId::from_static("egui_pop.files"), 12, frame),
+            zones::WINDOW_OVERLAYS,
+            Block::add(BlockId::from_static("egui_pop.files"), 9, frame),
         );
         Ok(())
     }
@@ -1752,10 +1775,32 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
         Option<Resolver>,
         Origin,
     )> = {
+        let here = ui.ctx().viewport_id();
         let mut s = lock(&files.0);
         let mut done = Vec::new();
         let mut i = 0;
         while i < s.open.len() {
+            // Its window closed, a choice is cancelled: it does not come
+            // up again over another window.
+            let owner = s.open[i].owner;
+            if owner != egui::ViewportId::ROOT && app.still_open(owner) != owner {
+                let mut answer = lock(&s.open[i].answer);
+                if answer.is_none() {
+                    *answer = Some(None);
+                }
+                drop(answer);
+                s.open[i].picker = None;
+            }
+            // An in-app picker's modal is its window's: the choice ends in
+            // that window's pass, which closes it.
+            let shown = picker_window(app, s.open[i].owner);
+            if s.open[i].picker.is_some() && !s.open[i].inline && shown != here {
+                if lock(&s.open[i].answer).is_some() {
+                    ui.ctx().request_repaint_of(shown);
+                }
+                i += 1;
+                continue;
+            }
             let answer = lock(&s.open[i].answer).take();
             match answer {
                 Some(a) => {
@@ -1976,16 +2021,28 @@ fn split_list(available: f32, gap: f32, preview: bool, wanted: f32) -> (f32, Opt
     }
 }
 
+/// The window an in-app picker asked from `owner` is drawn in: that
+/// application window, else the main window (a detached panel's choice,
+/// like the main window's, is shown there).
+fn picker_window(app: &AppHandle, owner: egui::ViewportId) -> egui::ViewportId {
+    app.window_group(owner)
+}
+
 /// The in-app picker of the first choice that has one (and is not drawn
-/// by its caller), in a modal.
+/// by its caller), in a modal, over the window it was asked from: drawn
+/// in that window's pass only.
 fn picker_overlay(ctx: &egui::Context, app: &AppHandle, files: &Files) {
+    let here = ctx.viewport_id();
     let Some((id, title, mut picker, answer)) = ({
         let s = lock(&files.0);
-        s.open.iter().filter(|o| !o.inline).find_map(|o| {
-            o.picker
-                .clone()
-                .map(|p| (o.id, o.request.title.clone(), p, o.answer.clone()))
-        })
+        s.open
+            .iter()
+            .filter(|o| !o.inline && picker_window(app, o.owner) == here)
+            .find_map(|o| {
+                o.picker
+                    .clone()
+                    .map(|p| (o.id, o.request.title.clone(), p, o.answer.clone()))
+            })
     }) else {
         return;
     };
