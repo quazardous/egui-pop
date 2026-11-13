@@ -122,7 +122,8 @@ fn store_notices(ui: &mut Ui, app: &AppHandle, admin: &Admin) {
 }
 
 /// The application window the app is drawn in while it is open in the
-/// window mode, opened and closed with it; closed by itself (its close
+/// window mode, opened and closed with it, with the main window's bars
+/// (its menus evaluated and run in it); closed by itself (its close
 /// button, `window.close`), the app closes. In the overlay mode, or
 /// closed, no window.
 fn follow_window(app: &AppHandle, admin: &Admin, ctx: &egui::Context, windowed: bool) {
@@ -139,9 +140,12 @@ fn follow_window(app: &AppHandle, admin: &Admin, ctx: &egui::Context, windowed: 
         (true, false) => {
             admin.set_window_shown(true);
             let title = strings::tr(ctx, &txt::SETTINGS_TITLE);
+            // A peer of the main window: its title bar start and menus,
+            // run in this window (`WindowSpec::shell_bars`).
             let spec = WindowSpec::new(super::APP_WINDOW, title)
                 .size([1000.0, 700.0])
-                .min_size([PAGE_MIN_WIDTH + NAV_MIN_WIDTH + 48.0, 320.0]);
+                .min_size([PAGE_MIN_WIDTH + NAV_MIN_WIDTH + 48.0, 320.0])
+                .shell_bars(true);
             app.open_window(spec, window_content);
         }
         (false, true) => {
