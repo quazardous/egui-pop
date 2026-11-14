@@ -1349,8 +1349,23 @@ fn cell(ui: &mut Ui, c: &Column, row: &Json, tone: Option<Tone>) -> egui::Respon
 fn records(ui: &mut Ui, app: &AppHandle, admin: &Admin, r: &Records, values: &Values, table: bool) {
     let ctx = ui.ctx().clone();
     let t = Tokens::of(&ctx);
-    if !r.meta.title.is_empty() {
-        ui.label(egui::RichText::new(&r.meta.title).strong());
+    // Read again after a change, the list keeps its last rows, marked,
+    // until the new ones come: a refresh never blanks it.
+    let refreshing = match &r.source {
+        RecordSource::Command { command, args, .. } => {
+            admin.refreshing(command, &template::expand(args, values).0)
+        }
+        RecordSource::Hook { .. } => false,
+    };
+    if !r.meta.title.is_empty() || refreshing {
+        ui.horizontal_wrapped(|ui| {
+            if !r.meta.title.is_empty() {
+                ui.label(egui::RichText::new(&r.meta.title).strong());
+            }
+            if refreshing {
+                ui.weak(strings::tr(&ctx, &txt::ADMIN_REFRESHING));
+            }
+        });
     }
     let rows = match &r.source {
         RecordSource::Hook { hook } => admin

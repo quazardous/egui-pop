@@ -520,6 +520,45 @@ fn records_and_statuses_read_commands_and_clauses_apply() {
     );
 }
 
+#[test]
+fn a_refresh_keeps_the_rows_shown_marked_until_the_new_answer() {
+    let mut h = harness();
+    run(&mut h, &CMD_OPEN, json!({ "path": "hardware/devices" }));
+    for _ in 0..3 {
+        h.run();
+    }
+    h.get_by_label("Main GPU");
+    let a = h.state().handle().service(&ADMIN).unwrap();
+    let ran = |h: &Harness<'_, App>| {
+        h.state()
+            .handle()
+            .history()
+            .iter()
+            .filter(|r| r.id == DEVICES)
+            .count()
+    };
+    let before = ran(&h);
+    a.refresh();
+    // Frame by frame: the rows never leave the page while they are read
+    // again; the list says it is refreshing until the answer comes.
+    let mut marked = false;
+    for _ in 0..6 {
+        h.step();
+        assert!(
+            h.query_by_label("Main GPU").is_some(),
+            "a refresh blanked the list"
+        );
+        assert!(h.query_by_label("Two devices").is_some(), "nor its status");
+        marked |= h.query_by_label("Refreshing…").is_some();
+    }
+    assert!(marked, "the list said it was refreshing");
+    h.run();
+    assert!(ran(&h) > before, "the command was read again");
+    assert!(!a.refreshing(DEVICES.as_str(), &Json::Null));
+    assert!(h.query_by_label("Refreshing…").is_none());
+    h.get_by_label("Main GPU");
+}
+
 fn last_run(h: &Harness<'_, App>, id: &egui_pop_model::ids::CommandId) -> Option<Json> {
     h.state()
         .handle()

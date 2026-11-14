@@ -719,6 +719,7 @@ egui-pop-admin-modified-count = Modifiés : { $count }
 
 egui-pop-admin-no-widget = Aucun type de widget « { $kind } » n’est enregistré
 egui-pop-admin-no-records = Rien ici pour l’instant.
+egui-pop-admin-refreshing = Actualisation…
 egui-pop-admin-wizard-next = Suivant
 egui-pop-admin-wizard-back = Précédent
 egui-pop-admin-wizard-skip = Passer
