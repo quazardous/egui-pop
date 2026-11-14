@@ -225,6 +225,18 @@ pub(crate) fn install(ctx: &Context) -> SharedRef {
     shared(ctx)
 }
 
+/// Asks for a frame of `viewport` and of the main window. The main
+/// window's pass is where the agent's requests are read and answered, so
+/// it must run while one waits on another window; and an immediate
+/// viewport (`Context::show_viewport_immediate`) only runs inside its
+/// parent's pass: a repaint asked for it alone may give it no frame.
+pub(crate) fn repaint(ctx: &Context, viewport: ViewportId) {
+    ctx.request_repaint_of(viewport);
+    if viewport != ViewportId::ROOT {
+        ctx.request_repaint_of(ViewportId::ROOT);
+    }
+}
+
 /// The egui plugin: keeps the tree, feeds the queued events.
 pub(crate) struct UiInput;
 
@@ -253,7 +265,7 @@ impl egui::Plugin for UiInput {
             None => false,
         };
         if more || s.want_tree {
-            ctx.request_repaint_of(viewport);
+            repaint(ctx, viewport);
         }
     }
 
@@ -558,6 +570,36 @@ mod tests {
             )),
             disabled: false,
         }
+    }
+
+    #[test]
+    fn a_window_waited_on_keeps_the_main_window_running() {
+        let ctx = Context::default();
+        ctx.set_embed_viewports(false);
+        let asked = Arc::new(Mutex::new(Vec::new()));
+        let a = asked.clone();
+        ctx.set_request_repaint_callback(move |info| {
+            a.lock().unwrap().push(info.viewport_id);
+        });
+        // A `ui` request waits on a window's tree.
+        install(&ctx).lock().unwrap().want_tree = true;
+        let child = ViewportId::from_hash_of("child");
+        let mut input = RawInput {
+            viewport_id: child,
+            ..Default::default()
+        };
+        input.viewports.insert(child, Default::default());
+        let mut out = ctx.run_ui(input, |ui| {
+            ui.label("child");
+        });
+        // Nothing renders: the textures are dropped on purpose.
+        out.textures_delta.clear();
+        // The window's pass asks for its next one and for the main
+        // window's, where the request is answered (and inside which an
+        // immediate viewport runs).
+        let asked = asked.lock().unwrap();
+        assert!(asked.contains(&child), "{asked:?}");
+        assert!(asked.contains(&ViewportId::ROOT), "{asked:?}");
     }
 
     #[test]
