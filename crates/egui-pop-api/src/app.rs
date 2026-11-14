@@ -6698,6 +6698,12 @@ impl App {
                 });
             no_drop.push(shown.response.rect);
         }
+        // A wizard as a focus screen covers the page: the title bar alone
+        // under it (to move or quit), no menus, status bar or centre.
+        if crate::admin::focus_screen(&h) {
+            h.workbench_mut().no_drop = no_drop;
+            return;
+        }
         if h.menu_bar() {
             let shown = egui::Panel::top(Id::unique("egui_pop.top")).show(ui, |ui| {
                 focus::scope(ui, "topBar", &[], |ui| {
