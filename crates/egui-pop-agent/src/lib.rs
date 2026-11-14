@@ -396,14 +396,18 @@ impl Waker {
         }
     }
 
-    /// Asks for a pass soon. Not at once: an immediate repaint would
-    /// count as "a repaint asked for" during the next frame, and a wait
-    /// for the application to settle would never end.
+    /// Asks for a pass of the main window soon: the requests are read
+    /// and answered there. Not at once: an immediate repaint would count
+    /// as "a repaint asked for" during the next frame, and a wait for the
+    /// application to settle would never end. Named, not "the current
+    /// viewport": from this thread, that is whichever window's pass runs
+    /// meanwhile, and another window's frame would leave the main one
+    /// idle.
     pub(crate) fn wake(&self) {
         if let Ok(c) = self.0.lock()
             && let Some(c) = c.as_ref()
         {
-            c.request_repaint_after(Duration::from_millis(1));
+            c.request_repaint_after_for(Duration::from_millis(1), egui::ViewportId::ROOT);
         }
     }
 }
@@ -685,7 +689,7 @@ impl UiSide {
                 if let Ok(mut s) = shared.lock() {
                     s.want_tree = true;
                 }
-                ctx.request_repaint_of(scope.viewport);
+                ui::repaint(&ctx, scope.viewport);
                 self.ui_jobs.push(UiJob {
                     from_pass: ctx.cumulative_pass_nr_for(scope.viewport),
                     request,
@@ -792,7 +796,7 @@ impl UiSide {
             .into_iter()
             .chain(self.ui_jobs.iter().map(|j| j.scope.viewport))
         {
-            ctx.request_repaint_of(v);
+            ui::repaint(ctx, v);
         }
     }
 }
@@ -857,6 +861,42 @@ mod tests {
         assert_eq!(
             AgentSocket::from_value("/run/x.sock"),
             Some(AgentSocket::at("/run/x.sock"))
+        );
+    }
+
+    /// The repaints `ctx` asked for, by viewport and delay.
+    fn repaints(ctx: &egui::Context) -> Arc<Mutex<Vec<(egui::ViewportId, Duration)>>> {
+        let asked = Arc::new(Mutex::new(Vec::new()));
+        let a = asked.clone();
+        ctx.set_request_repaint_callback(move |info| {
+            a.lock().unwrap().push((info.viewport_id, info.delay));
+        });
+        asked
+    }
+
+    #[test]
+    fn a_request_wakes_the_main_window_even_during_another_windows_pass() {
+        let ctx = egui::Context::default();
+        let wake = Waker::default();
+        wake.set(ctx.clone());
+        let child = egui::ViewportId::from_hash_of("child");
+        let mut input = egui::RawInput {
+            viewport_id: child,
+            ..Default::default()
+        };
+        input.viewports.insert(child, Default::default());
+        let asked = repaints(&ctx);
+        // The socket's thread wakes the application while a window's
+        // pass runs: the main window's pass reads the request.
+        let mut out = ctx.run_ui(input, |_| wake.wake());
+        // Nothing renders: the textures are dropped on purpose.
+        out.textures_delta.clear();
+        let asked = asked.lock().unwrap();
+        assert!(
+            asked
+                .iter()
+                .any(|(v, d)| *v == egui::ViewportId::ROOT && *d <= Duration::from_millis(1)),
+            "{asked:?}"
         );
     }
 
