@@ -827,9 +827,16 @@ pub fn want_nav_width(app: &AppHandle, width: f32) {
     }
 }
 
-/// Whether it opens in a window of its own.
+/// Whether it opens in a window of its own: never while a wizard runs
+/// as a focus screen ([`Admin::open_focus_wizard`]).
 pub fn in_window(app: &AppHandle) -> bool {
-    app.setting::<bool>(&WINDOW).unwrap_or(false)
+    !focus_screen(app) && app.setting::<bool>(&WINDOW).unwrap_or(false)
+}
+
+/// Whether a wizard runs as a focus screen: the shell draws its title bar
+/// alone under it.
+pub fn focus_screen(app: &AppHandle) -> bool {
+    app.service(&ADMIN).is_some_and(|a| a.focus_screen())
 }
 
 /// The plugin: the `admin` service, its commands, its setting and its

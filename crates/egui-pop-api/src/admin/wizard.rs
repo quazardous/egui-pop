@@ -14,7 +14,7 @@
 //!   list, a focused control) and `Alt+N` go next or finish,
 //!   `Alt+B` back, Escape cancels.
 //! - Every gesture is a command an agent runs too: `admin.wizard.open`
-//!   (`{"id", "step", "values"}`), `admin.wizard.set` (`{"key", "value"}`
+//!   (`{"id", "step", "values", "focus"}`), `admin.wizard.set` (`{"key", "value"}`
 //!   or `{"values"}`), `admin.wizard.next`, `admin.wizard.back`,
 //!   `admin.wizard.skip`, `admin.wizard.go` (`{"step"}`),
 //!   `admin.wizard.finish` and `admin.wizard.cancel` (`{"force"}`); each
@@ -25,6 +25,12 @@
 //! plugin's chooser, its choice written into the draft), and a multi (a
 //! tick box per choice; its value the choices ticked, `null` for every
 //! choice).
+//!
+//! A wizard opened as a focus screen ([`Admin::open_focus_wizard`],
+//! `"focus": true`) is drawn over the main window's whole page whatever
+//! the app's window setting, the shell's menus, status bar and centre
+//! hidden while it runs: a first-run setup, where nothing else is to be
+//! seen yet.
 //!
 //! Finishing runs the wizard's command with the draft as its arguments,
 //! then closes the wizard (and the Settings app, when the wizard opened
@@ -78,6 +84,9 @@ pub(super) struct Running {
     /// Why the last Next, Go or Finish was refused; cleared by the next
     /// gesture.
     pub refused: Option<String>,
+    /// A focus screen: drawn over the main window's whole page, whatever
+    /// the app's window setting, the shell's bars and centre hidden.
+    pub focus: bool,
 }
 
 /// A field's own check, in words.
@@ -133,6 +142,37 @@ impl Admin {
         step: Option<&str>,
         values: Values,
     ) -> Result<Json, String> {
+        self.open_wizard_as(app, id, step, values, false)
+    }
+
+    /// Opens a wizard as [`Admin::open_wizard`] does, as a focus screen:
+    /// the main window's whole page, whatever the app's window setting
+    /// (`admin.window`), with the shell's menus, status bar and centre
+    /// hidden until it ends; the title bar stays, to move or quit. For a
+    /// setup run before anything else (a first launch).
+    pub fn open_focus_wizard(
+        &self,
+        app: &AppHandle,
+        id: &str,
+        step: Option<&str>,
+        values: Values,
+    ) -> Result<Json, String> {
+        self.open_wizard_as(app, id, step, values, true)
+    }
+
+    /// Whether a wizard opened as a focus screen is running.
+    pub fn focus_screen(&self) -> bool {
+        lock(&self.wizard).as_ref().is_some_and(|r| r.focus)
+    }
+
+    fn open_wizard_as(
+        &self,
+        app: &AppHandle,
+        id: &str,
+        step: Option<&str>,
+        values: Values,
+        focus: bool,
+    ) -> Result<Json, String> {
         let tree = self.tree(app);
         let w = tree.wizard(id).ok_or_else(|| format!("no wizard `{id}`"))?;
         let (flow, refused) = self.judging(app, |j| {
@@ -145,6 +185,7 @@ impl Admin {
             flow,
             opened,
             refused,
+            focus,
         });
         lock(&self.state).open = true;
         self.refresh();
@@ -317,6 +358,7 @@ impl Admin {
                 "refused": run.refused,
                 "dirty": f.dirty(),
                 "canFinish": f.first_blocked(w, j).is_none(),
+                "focus": run.focus,
             })
         })
     }
@@ -961,7 +1003,7 @@ pub(super) fn commands(ctx: &mut crate::Ctx<'_>) -> Result<(), crate::PluginErro
     ctx.command(
         CommandSpec::new(CMD_WIZARD_OPEN, "Open a wizard", "File")
             .hidden()
-            .args(json!({ "id": "", "step": "", "values": {} })),
+            .args(json!({ "id": "", "step": "", "values": {}, "focus": false })),
         |call| {
             let id = call
                 .args
@@ -973,7 +1015,8 @@ pub(super) fn commands(ctx: &mut crate::Ctx<'_>) -> Result<(), crate::PluginErro
                 .get("step")
                 .and_then(Json::as_str)
                 .filter(|s| !s.is_empty());
-            admin(call)?.open_wizard(call.app, id, step, values_arg(call.args))
+            let focus = call.args.get("focus").and_then(Json::as_bool) == Some(true);
+            admin(call)?.open_wizard_as(call.app, id, step, values_arg(call.args), focus)
         },
     )?;
     ctx.command(

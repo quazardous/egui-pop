@@ -44,6 +44,17 @@ impl Plugin for Trip {
             booked.lock().unwrap().push(call.args.clone());
             Ok(json!({ "booked": true }))
         })?;
+        // A status bar block: the shell's, hidden by a focus screen.
+        ctx.block(
+            egui_pop_api::zones::STATUS_BAR,
+            egui_pop_api::zones::Block::add(
+                egui_pop_model::ids::BlockId::from_static("trip.status"),
+                0,
+                |ui, _| {
+                    ui.label("Trip status");
+                },
+            ),
+        );
         let admin = ctx.app().service(&ADMIN).expect("the admin service");
         admin.hook(
             "trip.long",
@@ -316,6 +327,48 @@ fn cancelling_with_nothing_entered_closes_at_once_and_back_to_the_page_left() {
         run(&mut h, &CMD_WIZARD_NEXT, json!({})).is_err(),
         "no wizard open"
     );
+}
+
+/// A wizard opened as a focus screen is drawn over the main window
+/// whatever the window setting, the shell's bars hidden under it; the
+/// setting and the shell come back when it ends.
+#[test]
+fn a_focus_wizard_covers_the_main_window_whatever_the_window_setting() {
+    let booked = Booked::default();
+    let mut h = harness(&booked);
+    let a = h.state().handle().service(&ADMIN).unwrap();
+    let app = h.state().handle().clone();
+    a.set_in(
+        &app,
+        egui_pop_model::admin::layers::ValueScope::App,
+        &admin::WINDOW,
+        json!(true),
+    )
+    .unwrap();
+    h.run();
+    assert!(admin::in_window(&app), "the Settings app in its own window");
+    assert!(h.query_by_label("Trip status").is_some(), "the shell drawn");
+    let s = run(
+        &mut h,
+        &CMD_WIZARD_OPEN,
+        json!({ "id": "trip", "focus": true }),
+    )
+    .unwrap();
+    assert_eq!(s["focus"], true);
+    assert!(a.focus_screen());
+    assert!(!admin::in_window(&app), "drawn in the main window");
+    assert!(
+        h.query_by_label("Trip status").is_none(),
+        "nothing of the shell under it"
+    );
+    assert!(
+        h.query_by_label("Where").is_some(),
+        "the wizard's step drawn"
+    );
+    run(&mut h, &CMD_WIZARD_CANCEL, json!({})).unwrap();
+    assert!(!a.focus_screen());
+    assert!(admin::in_window(&app), "the window setting holds again");
+    assert!(h.query_by_label("Trip status").is_some(), "the shell back");
 }
 
 /// A toast that stays (an error) sits in the corner the footer's Finish
