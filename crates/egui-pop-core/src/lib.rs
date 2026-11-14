@@ -92,6 +92,7 @@ pub mod knob;
 pub mod latest;
 pub mod layers;
 pub mod motion;
+pub mod number;
 pub mod overlay;
 pub mod param;
 pub mod persist;

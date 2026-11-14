@@ -1575,6 +1575,16 @@ egui-pop-slider-minimum = { $label }, minimum
 
 egui-pop-slider-type-value = Saisir une valeur
 
+egui-pop-number-increase = Augmenter { $label }
+
+egui-pop-number-decrease = Diminuer { $label }
+
+egui-pop-number-not-a-number = Ce n’est pas un nombre
+
+egui-pop-number-whole = Un nombre entier est attendu
+
+egui-pop-number-out-of-range = Entre { $min } et { $max }
+
 egui-pop-status-announce = { $item } : { $state }
 
 egui-pop-status-errors = Erreurs : { $count }
