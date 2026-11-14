@@ -94,6 +94,16 @@ pub const SLIDER_MINIMUM: StrKey = StrKey::new("egui-pop-slider-minimum", "{ $la
 pub const SLIDER_MAXIMUM: StrKey = StrKey::new("egui-pop-slider-maximum", "{ $label }, maximum");
 /// A slider's or a knob's menu item opening its typed entry.
 pub const SLIDER_TYPE_VALUE: StrKey = StrKey::new("egui-pop-slider-type-value", "Type a value");
+/// A number input's arrows, as assistive technologies name them.
+pub const NUMBER_INCREASE: StrKey = StrKey::new("egui-pop-number-increase", "Increase { $label }");
+pub const NUMBER_DECREASE: StrKey = StrKey::new("egui-pop-number-decrease", "Decrease { $label }");
+/// Why a number input refused a typed value.
+pub const NUMBER_NOT_A_NUMBER: StrKey = StrKey::new("egui-pop-number-not-a-number", "Not a number");
+pub const NUMBER_WHOLE: StrKey = StrKey::new("egui-pop-number-whole", "A whole number is expected");
+pub const NUMBER_OUT_OF_RANGE: StrKey = StrKey::new(
+    "egui-pop-number-out-of-range",
+    "Between { $min } and { $max }",
+);
 
 /// A busy indicator without a label of its own.
 pub const BUSY: StrKey = StrKey::new("egui-pop-busy", "Busy");
@@ -167,6 +177,11 @@ pub const ALL: &[StrKey] = &[
     SLIDER_MINIMUM,
     SLIDER_MAXIMUM,
     SLIDER_TYPE_VALUE,
+    NUMBER_INCREASE,
+    NUMBER_DECREASE,
+    NUMBER_NOT_A_NUMBER,
+    NUMBER_WHOLE,
+    NUMBER_OUT_OF_RANGE,
     BUSY,
     LOADING,
     INDICATOR_OFF,

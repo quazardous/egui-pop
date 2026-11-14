@@ -1,6 +1,7 @@
 //! A parameter widget: the editor a value descriptor calls for, in any
 //! of the three binding modes (ADR 0009). A float or an int is a
-//! [`Slider`], a bool a check box, a choice a
+//! [`Slider`], or a [`NumberInput`] when its range is too wide to slide
+//! ([`crate::number::is_wide`]), a bool a check box, a choice a
 //! drop-down, three or four floats in `[0, 1]` a colour swatch, a text a
 //! field; every editor is named by the descriptor's label.
 //!
@@ -22,6 +23,7 @@ use egui::{Response, Ui};
 use egui_pop_model::values::{Descriptor, Type, Value};
 
 use crate::binding::{self, Bindable, Binding, Choice, SharedStore};
+use crate::number::NumberInput;
 use crate::slider::Slider;
 use crate::ui::UiPop as _;
 use crate::widgets;
@@ -113,6 +115,20 @@ pub fn param_shown(
     shown: &dyn Fn(&str) -> String,
 ) -> Response {
     match d.ty {
+        // A range too wide for a slider: typed, with arrows.
+        Type::Float if crate::number::is_wide(d) => labelled(ui, &d.label, |ui| {
+            with(ui, mode, |ui, v: &mut f64| {
+                NumberInput::from_descriptor(v, d).show(ui)
+            })
+        }),
+        Type::Int if crate::number::is_wide(d) => labelled(ui, &d.label, |ui| {
+            with(ui, mode, |ui, v: &mut i64| {
+                let mut f = *v as f64;
+                let r = NumberInput::from_descriptor(&mut f, d).show(ui);
+                *v = f.round() as i64;
+                r
+            })
+        }),
         Type::Float => with(ui, mode, |ui, v: &mut f64| {
             ui.add(Slider::from_descriptor(v, d))
         }),
