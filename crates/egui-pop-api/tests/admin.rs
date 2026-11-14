@@ -545,17 +545,20 @@ fn a_refresh_keeps_the_rows_shown_marked_until_the_new_answer() {
     for _ in 0..6 {
         h.step();
         assert!(
-            h.query_by_label("Main GPU").is_some(),
+            h.query_all_by_label("Main GPU").next().is_some(),
             "a refresh blanked the list"
         );
-        assert!(h.query_by_label("Two devices").is_some(), "nor its status");
-        marked |= h.query_by_label("Refreshing…").is_some();
+        assert!(
+            h.query_all_by_label("Two devices").next().is_some(),
+            "nor its status"
+        );
+        marked |= h.query_all_by_label("Refreshing…").next().is_some();
     }
     assert!(marked, "the list said it was refreshing");
     h.run();
     assert!(ran(&h) > before, "the command was read again");
     assert!(!a.refreshing(DEVICES.as_str(), &Json::Null));
-    assert!(h.query_by_label("Refreshing…").is_none());
+    assert!(h.query_all_by_label("Refreshing…").next().is_none());
     h.get_by_label("Main GPU");
 }
 
