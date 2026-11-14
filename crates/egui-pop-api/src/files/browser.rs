@@ -582,25 +582,100 @@ impl Default for ModeSettings {
 }
 
 /// What an application says of an entry beyond its facts
-/// ([`FileBrowser::with_marks`]): short badges ("RAW+JPG", "in your
-/// Library") drawn on its cell and after its name, and said with its name
-/// to assistive technology; and whether it is dimmed (shown, but not what
-/// the person acts on).
+/// ([`FileBrowser::with_marks`]): short badges drawn as text on its cell
+/// and after its name; chips (an icon or a short text in a corner of its
+/// thumbnail, [`MarkChip`]); both said with its name to assistive
+/// technology; and whether it is dimmed (shown, but not what the person
+/// acts on).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct EntryMarks {
+    /// Texts stacked from the thumbnail's bottom left corner.
     pub badges: Vec<String>,
+    /// Icons and short texts in the thumbnail's corners.
+    pub chips: Vec<MarkChip>,
     pub dimmed: bool,
 }
 
 impl EntryMarks {
-    /// The entry's name with its badges, as a screen reader says it.
+    /// The entry's name with its badges and its chips' names, as a screen
+    /// reader says it.
     pub fn label(&self, name: &str) -> String {
         let mut label = name.to_owned();
-        for b in &self.badges {
+        for b in self.badges.iter().chain(self.chips.iter().map(|c| &c.name)) {
             label.push_str(" · ");
             label.push_str(b);
         }
         label
+    }
+
+    /// Whether there is nothing to say of the entry beyond its name.
+    fn is_plain(&self) -> bool {
+        self.badges.is_empty() && self.chips.is_empty()
+    }
+}
+
+/// The corner of a thumbnail a [`MarkChip`] sits in. Chips in one corner
+/// line up from it towards the middle, in their order.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum MarkCorner {
+    TopLeft,
+    /// Where states go (in the library, offline, backed up).
+    #[default]
+    TopRight,
+    /// Where facts of the content go (a file type, a pair).
+    BottomRight,
+}
+
+/// A mark in a corner of an entry's thumbnail: an icon ("in your
+/// Library" as a check) or a short text ("R+J" for a RAW and JPEG pair),
+/// on a pill of its tone. Its name is said after the entry's name and is
+/// its tooltip.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MarkChip {
+    /// An icon of the icon registry (`phosphor:check-circle`), drawn
+    /// instead of the text.
+    pub icon: Option<String>,
+    /// The short text drawn without an icon.
+    pub text: String,
+    /// What it means, in words: its accessible name and its tooltip.
+    pub name: String,
+    pub tone: egui_pop_core::kit::Tone,
+    pub corner: MarkCorner,
+}
+
+impl MarkChip {
+    /// An icon named `name`, top right.
+    pub fn icon(icon: impl Into<String>, name: impl Into<String>) -> MarkChip {
+        MarkChip {
+            icon: Some(icon.into()),
+            text: String::new(),
+            name: name.into(),
+            tone: egui_pop_core::kit::Tone::Neutral,
+            corner: MarkCorner::TopRight,
+        }
+    }
+
+    /// A short text named `name` (`"R+J"`, "RAW+JPG"), bottom right.
+    pub fn text(text: impl Into<String>, name: impl Into<String>) -> MarkChip {
+        MarkChip {
+            icon: None,
+            text: text.into(),
+            name: name.into(),
+            tone: egui_pop_core::kit::Tone::Neutral,
+            corner: MarkCorner::BottomRight,
+        }
+    }
+
+    #[must_use]
+    pub fn tone(mut self, tone: egui_pop_core::kit::Tone) -> MarkChip {
+        self.tone = tone;
+        self
+    }
+
+    #[must_use]
+    pub fn corner(mut self, corner: MarkCorner) -> MarkChip {
+        self.corner = corner;
+        self
     }
 }
 
@@ -1044,7 +1119,7 @@ impl EntryDrawer for PlainDrawer<'_> {
             visuals.text_color()
         };
         let badged;
-        let e = if marks.badges.is_empty() {
+        let e = if marks.is_plain() {
             e
         } else {
             badged = SourceEntry {
@@ -1117,16 +1192,24 @@ impl EntryDrawer for PlainDrawer<'_> {
         let marks = self.marks_of(n);
         self.back(ui, &resp, n, 4.0, &marks);
         paint_cell(ui, rect, &self.entries[n], thumbnail);
-        paint_marks(ui, rect, &marks);
-        resp
+        let chips = paint_marks(ui, rect, &marks);
+        // A chip's name is its tooltip.
+        let over = resp
+            .hover_pos()
+            .and_then(|p| chips.iter().position(|r| r.contains(p)));
+        match over {
+            Some(k) => resp.on_hover_text_at_pointer(&marks.chips[k].name),
+            None => resp,
+        }
     }
 }
 
 /// A cell's marks over its thumbnail: dimmed, its badges stacked from the
-/// image's bottom left corner.
-pub fn paint_marks(ui: &Ui, rect: egui::Rect, marks: &EntryMarks) {
-    if !marks.dimmed && marks.badges.is_empty() {
-        return;
+/// image's bottom left corner, its chips in their corners. Gives where
+/// each chip was drawn, in their order.
+pub fn paint_marks(ui: &Ui, rect: egui::Rect, marks: &EntryMarks) -> Vec<egui::Rect> {
+    if !marks.dimmed && marks.is_plain() {
+        return Vec::new();
     }
     let visuals = ui.visuals();
     let caption = ui.text_style_height(&egui::TextStyle::Small) + 4.0;
@@ -1152,6 +1235,84 @@ pub fn paint_marks(ui: &Ui, rect: egui::Rect, marks: &EntryMarks) {
         bottom = at.y - 4.0;
         painter.galley(at, galley, visuals.strong_text_color());
     }
+    paint_chips(&painter, image, &marks.chips, font)
+}
+
+/// The chips over a thumbnail's square `image`: pills of their tone, an
+/// icon or a short text on each, lined up from their corner.
+fn paint_chips(
+    painter: &egui::Painter,
+    image: egui::Rect,
+    chips: &[MarkChip],
+    font: egui::FontId,
+) -> Vec<egui::Rect> {
+    use egui_pop_core::kit::{Kit, KitCx, Part, State};
+    if chips.is_empty() {
+        return Vec::new();
+    }
+    let kit = Kit::of(painter.ctx());
+    let cx = KitCx {
+        painter,
+        ppp: painter.ctx().pixels_per_point(),
+    };
+    let glyph = font.size;
+    let pad = 4.0;
+    // How far each corner's line has gone.
+    let mut ends = [0.0f32; 3];
+    let mut rects = Vec::with_capacity(chips.len());
+    for chip in chips {
+        let state = State::REST.toned(chip.tone);
+        let galley = chip.icon.is_none().then(|| {
+            painter.layout_no_wrap(chip.text.clone(), font.clone(), egui::Color32::PLACEHOLDER)
+        });
+        let inner = galley
+            .as_ref()
+            .map_or(egui::vec2(glyph, glyph), |g| g.size());
+        let size = kit.pill.measure(inner);
+        let (slot, anchor, at) = match chip.corner {
+            MarkCorner::TopLeft => (
+                0,
+                egui::Align2::LEFT_TOP,
+                image.left_top() + egui::vec2(pad, pad),
+            ),
+            MarkCorner::TopRight => (
+                1,
+                egui::Align2::RIGHT_TOP,
+                image.right_top() + egui::vec2(-pad, pad),
+            ),
+            MarkCorner::BottomRight => (
+                2,
+                egui::Align2::RIGHT_BOTTOM,
+                image.right_bottom() - egui::vec2(pad, pad),
+            ),
+        };
+        let shift = if chip.corner == MarkCorner::TopLeft {
+            ends[slot]
+        } else {
+            -ends[slot]
+        };
+        let r = anchor.anchor_size(at + egui::vec2(shift, 0.0), size);
+        ends[slot] += size.x + 3.0;
+        let part = Part {
+            rect: r,
+            room: r,
+            state,
+            label: galley.as_ref(),
+        };
+        kit.pill.paint_part(&cx, &part);
+        if let Some(icon) = &chip.icon {
+            let colour = kit.pill.style(state).text;
+            egui_pop_core::icon::registry::resolve(icon, "files.marks")
+                .unwrap_or(egui_pop_core::icon::PLACEHOLDER)
+                .paint(
+                    painter,
+                    egui::Rect::from_center_size(r.center(), egui::vec2(glyph, glyph)),
+                    colour,
+                );
+        }
+        rects.push(r);
+    }
+    rects
 }
 
 /// A cell's thumbnail (or what stands in for it) and its name, in `rect`.

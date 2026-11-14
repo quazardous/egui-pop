@@ -1343,6 +1343,14 @@ fn marks_badge_and_dim_entries_in_every_mode_and_are_said_with_their_names() {
             } else {
                 Vec::new()
             },
+            chips: if e.name == "IMG_003.png" {
+                vec![
+                    browser::MarkChip::icon("phosphor:check-circle", "in your Library"),
+                    browser::MarkChip::text("R+J", "RAW+JPG"),
+                ]
+            } else {
+                Vec::new()
+            },
             dimmed: e.name == "IMG_002.png",
         });
     let mut h = harness(browser);
@@ -1352,6 +1360,11 @@ fn marks_badge_and_dim_entries_in_every_mode_and_are_said_with_their_names() {
         assert!(
             h.query_by_label("IMG_002.png · in your Library").is_some(),
             "{mode}: the badge is said with the name"
+        );
+        assert!(
+            h.query_by_label("IMG_003.png · in your Library · RAW+JPG")
+                .is_some(),
+            "{mode}: the chips are said by their names, not their texts"
         );
         assert!(h.query_by_label("IMG_001.png").is_some(), "{mode}");
     }
