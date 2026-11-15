@@ -847,6 +847,9 @@ pub(crate) struct Shared {
     running_commands: RefCell<Vec<(CommandId, Option<OwnerId>)>>,
     /// The application windows (`AppHandle::open_window`).
     pub(crate) windows: RefCell<crate::windows::Windows>,
+    /// The bus: the hook kernel of the requests' listeners and the window
+    /// registry (ADR 0029).
+    pub(crate) bus: crate::bus::Bus,
     /// The keymap as last rebuilt, for the windows dispatching their keys
     /// in their own pass.
     keymap: RefCell<Rc<Keymap>>,
@@ -964,6 +967,7 @@ impl AppHandle {
             stack_writing: std::cell::Cell::new(false),
             running_commands: RefCell::new(Vec::new()),
             windows: RefCell::default(),
+            bus: crate::bus::Bus::default(),
             keymap: RefCell::default(),
         }))
     }
@@ -4708,6 +4712,7 @@ impl App {
             ),
         )?;
         crate::layout_controls::declare(&mut ctx)?;
+        crate::bus::declare(&mut ctx)?;
         ctx.service(&FOCUS_MODE, modes)?;
         ctx.step(
             crate::steps::StepSpec::new(
@@ -5069,6 +5074,43 @@ impl App {
             .snapshot(move |_| {
                 let Ok(app) = up(&w) else { return Json::Null };
                 json!({ "steps": app.steps(), "runs": app.step_traces() })
+            }),
+        )
+        .expect("distinct names");
+        let w = h.weak();
+        b.register(
+            FnCollector::new(
+                "bus",
+                "The bus (ADR 0029): each window and popup point with its listeners in the order they run (owner, after, before, priority, missing targets, runs, failures), the order as text, and the window registry (`windows.list`).",
+            )
+            .snapshot(move |_| {
+                let Ok(app) = up(&w) else { return Json::Null };
+                let kernel = app.bus();
+                let points: Vec<Json> = crate::bus::WINDOW_POINTS
+                    .iter()
+                    .map(|p| {
+                        let listeners: Vec<Json> = kernel
+                            .listeners(p)
+                            .unwrap_or_default()
+                            .into_iter()
+                            .map(|l| {
+                                json!({
+                                    "id": l.id,
+                                    "owner": l.owner,
+                                    "after": l.after,
+                                    "before": l.before,
+                                    "priority": l.priority,
+                                    "missing": l.missing,
+                                    "runs": l.runs,
+                                    "failures": l.failures,
+                                    "last_failure": l.last_failure,
+                                })
+                            })
+                            .collect();
+                        json!({ "point": p, "listeners": listeners })
+                    })
+                    .collect();
+                json!({ "points": points, "order": app.bus_order(), "windows": app.windows_list() })
             }),
         )
         .expect("distinct names");

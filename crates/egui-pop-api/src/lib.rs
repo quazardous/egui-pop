@@ -127,6 +127,7 @@ pub mod about;
 pub mod admin;
 pub mod app;
 pub mod arrangements;
+pub mod bus;
 pub mod busy;
 pub mod clipboard;
 pub mod contexts;
