@@ -33,7 +33,7 @@
 
 use egui::{Color32, Rect, Response, Role, Sense, Ui, Widget, WidgetInfo, pos2, vec2};
 
-use crate::icon::Icon;
+use crate::icon::IconRef;
 use crate::kit::{Kit, KitCx, Part, State, Tone};
 use crate::motion;
 use crate::strings;
@@ -123,10 +123,17 @@ impl Widget for Skeleton {
         let line = t.font.body;
         let gap = t.space.s;
         let block = t.size.control_height;
-        let width = self
-            .width
-            .unwrap_or_else(|| ui.available_width())
-            .max(block * 2.0);
+        // A row with a block needs room for it; lines alone keep the
+        // width given (a late value's short line).
+        let has_block = self
+            .rows
+            .iter()
+            .flatten()
+            .any(|s| matches!(s, Shape::Block));
+        let width = match self.width {
+            Some(w) if !has_block => w.max(1.0),
+            w => w.unwrap_or_else(|| ui.available_width()).max(block * 2.0),
+        };
         let row_h = |row: &Vec<Shape>| {
             if row.iter().any(|s| matches!(s, Shape::Block)) {
                 block
@@ -211,7 +218,7 @@ impl Widget for Skeleton {
 #[derive(Clone, Debug, PartialEq)]
 #[must_use = "show it with `show`"]
 pub struct EmptyState {
-    icon: Icon,
+    icon: IconRef,
     title: String,
     text: Option<String>,
     action: Option<String>,
@@ -219,9 +226,11 @@ pub struct EmptyState {
 }
 
 impl EmptyState {
-    pub fn new(icon: Icon, title: impl Into<String>) -> Self {
+    /// An icon by value or by name (`Icon::Folder`, `"phosphor:image"`),
+    /// and a title.
+    pub fn new(icon: impl Into<IconRef>, title: impl Into<String>) -> Self {
         Self {
-            icon,
+            icon: icon.into(),
             title: title.into(),
             text: None,
             action: None,
@@ -268,7 +277,11 @@ impl EmptyState {
             let side = t.size.icon_panel * 2.0;
             let (rect, _) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
             if ui.is_rect_visible(rect) {
-                self.icon.paint(ui.painter(), rect, empty.style(state).text);
+                self.icon.or_placeholder("empty-state").paint(
+                    ui.painter(),
+                    rect,
+                    empty.style(state).text,
+                );
             }
             ui.add_space(t.space.s);
             ui.label(egui::RichText::new(&self.title).strong());

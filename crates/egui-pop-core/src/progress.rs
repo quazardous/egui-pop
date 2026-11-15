@@ -682,6 +682,7 @@ impl Widget for Meter {
 #[must_use = "add it with `ui.add`"]
 pub struct Spinner {
     label: String,
+    name: Option<String>,
     size: Option<f32>,
     tone: Tone,
     busy: Option<(Busy, bool)>,
@@ -697,6 +698,7 @@ impl Spinner {
     pub fn new() -> Self {
         Self {
             label: String::new(),
+            name: None,
             size: None,
             tone: Tone::Accent,
             busy: None,
@@ -706,6 +708,13 @@ impl Spinner {
     /// The text after it ("Loading previews"), also its accessible name.
     pub fn label(mut self, label: impl Into<String>) -> Self {
         self.label = label.into();
+        self
+    }
+
+    /// Its accessible name, no text drawn ("Updating free space"); a
+    /// [`Spinner::label`] is drawn and names it too. "Busy" by default.
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
         self
     }
 
@@ -783,10 +792,12 @@ impl Widget for Spinner {
             }
         }
         if visible {
-            let name = if self.label.is_empty() {
-                crate::strings::tr(&ctx, &crate::strings::BUSY)
-            } else {
+            let name = if !self.label.is_empty() {
                 self.label.clone()
+            } else if let Some(name) = &self.name {
+                name.clone()
+            } else {
+                crate::strings::tr(&ctx, &crate::strings::BUSY)
             };
             access(ui, &response, None, &name, None, None);
         }
