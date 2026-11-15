@@ -153,6 +153,8 @@ pub mod palettes;
 pub mod plugin;
 pub mod pointer;
 pub mod reads;
+#[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
+pub mod runner;
 pub mod scroll_bars;
 pub mod selection;
 pub mod services;

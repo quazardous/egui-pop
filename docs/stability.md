@@ -131,6 +131,7 @@ Three tiers:
 
 - Pixel output: snapshots are refreshed when the drawing improves.
 - The gallery and the application template: examples, not APIs.
-- The operating system layers (`egui-pop-win32`, `egui-pop-wayland`):
+- The operating system layers (`egui-pop-win32`, `egui-pop-wayland`,
+  `egui-pop-winit`):
   they serve the window frame and the viewport, which carry the promise.
 - Undocumented items and the `pub(crate)` internals.

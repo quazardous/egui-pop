@@ -53,6 +53,13 @@ versioned_files = [
     { path = "Cargo.lock", dependency = "egui-pop-wayland" },
 ]
 
+[packages.egui-pop-winit]
+versioned_files = [
+    "crates/egui-pop-winit/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-winit" },
+    { path = "Cargo.lock", dependency = "egui-pop-winit" },
+]
+
 [packages.egui-pop-model]
 versioned_files = [
     "crates/egui-pop-model/Cargo.toml",

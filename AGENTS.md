@@ -7,6 +7,7 @@
 | `crates/egui-pop-tokens` | L0, design tokens (DTCG parser, themes, contrast). No egui. |
 | `crates/egui-pop-win32` | L0, the frame's Windows hit-test layer (`SetWindowSubclass`, `WM_NCHITTEST`); no egui, `unsafe` allowed only in its `sys` module (as in `egui-pop-wayland`). |
 | `crates/egui-pop-wayland` | L0, the image viewport's Wayland layer: a subsurface under a window, tagged through `wp_color_management_v1`, and the compositor's preferred image description; no egui, `unsafe` allowed only in its `sys` module (the window's raw handles). |
+| `crates/egui-pop-winit` | L0, the runner's winit layer: a winit 0.30 window id as the window's raw handles (Win32, X11, Wayland), checked per system by its `window_id` test; no egui, `unsafe` allowed only in its `sys` module. |
 | `crates/ortho-router` | L0, a standalone crate without dependencies: orthogonal connector routing around rectangles (a Hanan grid and A* with a bend cost), published on its own for any project; the node graph's orthogonal wires. |
 | `crates/egui-pop-hooks` | L0, a standalone hook kernel without dependencies and without egui: typed hook points, listeners with ids ordered by `after`/`before` and priority, `alter` and `collect` emits, a per-listener error boundary (errors, caught panics, deadlines), failure sinks, introspection; for applications and their modules, the interface thread or not. |
 | `crates/egui-pop-model` | L1, the logic without egui: ids, diagnostics, `when` clauses, commands, keymap, menus, panels, layouts, value store, documents and migrations, plugin ordering. |

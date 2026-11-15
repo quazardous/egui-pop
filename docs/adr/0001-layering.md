@@ -20,6 +20,7 @@ Crates are stacked; a crate depends only on crates of a lower layer:
 | L0 | `egui-pop-tokens`: design tokens | no |
 | L0 | `egui-pop-win32`: the frame's Windows hit-test layer (amended 2026-10-12) | no |
 | L0 | `egui-pop-wayland`: the image viewport's Wayland layer, a tagged subsurface (amended 2026-10-13) | no |
+| L0 | `egui-pop-winit`: the runner's winit layer, a winit window id as the window's raw handles (amended 2026-11-15) | no |
 | L0 | `egui-pop-test-macros`: the test kit's attributes, a procedural macro crate without dependencies (amended 2026-10-20) | no |
 | L0 | `ortho-router`: orthogonal connector routing around rectangles, a standalone crate without dependencies, used by the node graph (amended 2026-10-21) | no |
 | L0 | `egui-pop-hooks`: a hook kernel (typed hook points, ordered listeners, alter and collect emits, a per-listener error boundary, introspection), a standalone crate without dependencies, usable off the interface thread (amended 2026-11-15) | no |
@@ -43,7 +44,8 @@ API, so the test kit (L4) can carry test doubles for it; one that needs
 plugins sits above the API, at L4 (`egui-pop-i18n`, amended
 2026-10-12; `egui-pop-views`, whose moments are steps, 2026-10-13), so
 the facade can re-export it. A platform layer that must call the system
-(`egui-pop-win32`, amended 2026-10-12; `egui-pop-wayland`, 2026-10-13)
+(`egui-pop-win32`, amended 2026-10-12; `egui-pop-wayland`, 2026-10-13;
+`egui-pop-winit`, 2026-11-15)
 knows nothing of egui: it sits at L0 as a leaf, may use `unsafe` (in
 one module, the only crates that may), and the layer above maps its
 plain types. A test

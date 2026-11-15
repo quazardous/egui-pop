@@ -61,6 +61,8 @@ struct Demo {
     counts: Rc<Counts>,
     seen: u64,
     quit_sent: bool,
+    /// What the runner said last (`runner` lines when it changes).
+    runner_seen: Option<(Option<bool>, bool)>,
 }
 
 /// What both windows do each pass: focus changes, the first `opened`
@@ -77,6 +79,9 @@ fn common(ui: &egui::Ui, win: &WindowUi<'_>, frames: u64, focused: &Cell<Option<
             "window": win.id(),
             "embedded": win.embedded(),
             "geometry": win.app().window_geometry(win.id()),
+            // The window's handle, read by egui-pop's runner from its winit id.
+            "handle": egui_pop::api::runner::window_handle(ui.ctx().viewport_id())
+                .map(|h| format!("{h:?}")),
         }));
     }
     if ui.input(|i| i.key_pressed(egui::Key::W)) {
@@ -103,6 +108,8 @@ fn open_a(app: &AppHandle, counts: Rc<Counts>, start: Instant) {
                     "root": counts.root.get(),
                     "windows": {"a": n, "b": counts.b.get()},
                     "in_root": ui.ctx().viewport_id() == egui::ViewportId::ROOT,
+                    "handle": egui_pop::api::runner::window_handle(ui.ctx().viewport_id())
+                        .map(|h| format!("{h:?}")),
                     "cpu_ms": cpu_ms(),
                 }));
             }
@@ -194,6 +201,25 @@ impl eframe::App for Demo {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.counts.root.set(self.counts.root.get() + 1);
+        // What egui-pop's runner saw, each time it changes: the screens
+        // before the main window, whether winit's ids are the native
+        // windows (known once the main window is painted after a redraw
+        // request: not while eframe paints it hidden at start), its handle.
+        let root_handle = egui_pop::api::runner::window_handle(egui::ViewportId::ROOT);
+        let now = (egui_pop::api::runner::ids_verified(), root_handle.is_some());
+        if self.runner_seen != Some(now) {
+            self.runner_seen = Some(now);
+            emit(serde_json::json!({
+                "event": "runner",
+                "screens": egui_pop::api::runner::screens()
+                    .iter()
+                    .map(|r| [r.min.x, r.min.y, r.width(), r.height()])
+                    .collect::<Vec<_>>(),
+                "ids_verified": egui_pop::api::runner::ids_verified(),
+                "root_handle": root_handle.map(|h| format!("{h:?}")),
+                "root_frames": self.counts.root.get(),
+            }));
+        }
         if ui.input(|i| i.viewport().close_requested())
             && self.app.handle().windows().len() == 1
             && !self.quit_sent
@@ -268,6 +294,7 @@ fn main() -> eframe::Result {
             counts,
             seen,
             quit_sent: false,
+            runner_seen: None,
         }))
     })
 }

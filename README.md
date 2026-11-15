@@ -320,7 +320,7 @@ authors), [GOVERNANCE.md](https://github.com/quazardous/egui-pop/blob/main/GOVER
 ## Unsafe code
 
 `unsafe` is forbidden in the whole workspace (`unsafe_code = "forbid"` in
-the workspace lints), except in the two crates that call the operating
+the workspace lints), except in the three crates that call the operating
 system directly:
 
 - `egui-pop-win32`, the Windows layer of the window frame (Snap Layouts,
@@ -328,6 +328,9 @@ system directly:
   platforms get safe stubs.
 - `egui-pop-wayland`, the Wayland layer of the image viewport (a colour
   managed subsurface), only with the viewport's `wayland` feature.
+- `egui-pop-winit`, the runner's winit layer: it borrows a window's raw
+  handles from its winit id, so every window of the application is
+  reachable (the file chooser's parent, the hit test).
 
 ## License
 

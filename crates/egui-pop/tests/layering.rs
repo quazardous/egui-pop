@@ -10,6 +10,7 @@ const LAYERS: &[(&str, u32)] = &[
     ("egui-pop-tokens", 0),
     ("egui-pop-win32", 0),
     ("egui-pop-wayland", 0),
+    ("egui-pop-winit", 0),
     ("egui-pop-test-macros", 0),
     ("ortho-router", 0),
     ("egui-pop-hooks", 0),

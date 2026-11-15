@@ -6,6 +6,7 @@ members = [
     "crates/egui-pop-hooks",
     "crates/egui-pop-win32",
     "crates/egui-pop-wayland",
+    "crates/egui-pop-winit",
     "crates/egui-pop-model",
     "crates/egui-pop-core",
     "crates/egui-pop-api",
@@ -71,6 +72,7 @@ egui-pop-i18n = { version = "0.10.0", path = "crates/egui-pop-i18n" }
 egui-pop-platform = { version = "0.10.0", path = "crates/egui-pop-platform", default-features = false }
 egui-pop-win32 = { version = "0.2.1", path = "crates/egui-pop-win32" }
 egui-pop-wayland = { version = "0.2.0", path = "crates/egui-pop-wayland" }
+egui-pop-winit = { version = "0.1.0", path = "crates/egui-pop-winit" }
 egui-pop-views = { version = "0.10.0", path = "crates/egui-pop-views" }
 egui-pop-editors = { version = "0.10.0", path = "crates/egui-pop-editors", default-features = false }
 egui-pop-imaging = { version = "0.10.0", path = "crates/egui-pop-imaging" }
