@@ -68,6 +68,8 @@
 pub mod focus;
 pub mod quick;
 mod shell;
+
+pub(crate) use shell::follow as follow_window;
 pub mod store;
 mod sync;
 pub mod transfer;
