@@ -653,7 +653,11 @@ pub(super) fn show<R>(
         ..Measured::default()
     };
     if folded {
-        next = prev.clone();
+        // Folded cells measure nothing: the columns keep what they had.
+        next = Measured {
+            remeasure: false,
+            ..prev.clone()
+        };
     }
     let mut cells = Cells {
         ui,
@@ -695,7 +699,7 @@ pub(super) fn show<R>(
             next.remeasure = false;
         }
     }
-    let changed = !next.near(&prev) || measuring;
+    let changed = !next.near(&prev) || (measuring && !folded);
     if changed {
         ui.data_mut(|d| d.insert_temp(id, next));
         ui.ctx()

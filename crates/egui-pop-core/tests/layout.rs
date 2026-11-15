@@ -158,6 +158,17 @@ fn a_grid_narrower_than_its_fold_stacks_headers_over_values() {
     assert_eq!(kind.left(), raw.left());
     assert!(raw.top() >= kind.bottom());
     assert!(size.top() > raw.bottom());
+    // Folded, it rests too: one pass a frame.
+    let before = ctx.cumulative_pass_nr();
+    frames(&ctx, 200.0, |ui| {
+        let grid =
+            Grid::new("details", [Track::CONTENT, Track::fr(1.0)]).fold_below(Length::Em(30.0));
+        ui.grid(grid, |g| {
+            g.header("Kind");
+            g.cell(|ui| ui.label("Raw image"));
+        });
+    });
+    assert_eq!(ctx.cumulative_pass_nr() - before, 3);
 }
 
 #[test]
