@@ -87,6 +87,10 @@ fn setup(app: &AppHandle) {
 The cost is a counter and a scan of the pass's shapes that stops at the
 first text or image.
 
+[ADR 0029](adr/0029-not-on-the-bus.md) makes the guard's findings
+events of the window lifecycle (`window.painted`, `window.invariant`)
+read from one window registry, instead of watches of its own.
+
 ## Failure behaviour
 
 - Where panics abort (`panic = "abort"`, WebAssembly without unwinding)

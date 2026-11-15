@@ -80,6 +80,13 @@ the application's frames (the runner's state is kept there; elsewhere
 the functions answer nothing), and keep them no longer than the viewport
 stays open.
 
+The windows the runner knows are one side of a check
+[ADR 0029](adr/0029-not-on-the-bus.md) decides: the window registry (the
+one list of what egui-pop believes is shown, fed by `window.open` and
+`window.close` on the bus) must equal the windows that exist, every
+pass. Until its slices land, each module shows and closes its own
+viewports.
+
 Immediate viewports (painted inside their parent's pass) are not
 paired. On the web, and without the feature, eframe runs as before and
 these functions answer nothing (`Vec::new()`, `None`).

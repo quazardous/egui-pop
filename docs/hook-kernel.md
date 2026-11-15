@@ -13,6 +13,14 @@ tied to `App`: the kernel works in any Rust program, the interface
 thread or not. No egui-pop crate depends on it yet; applications use it
 for their own extension points.
 
+[ADR 0029](adr/0029-not-on-the-bus.md) decides its first use inside
+egui-pop: the application's central bus is the steps (requests), the
+journal (events) and this kernel for the listeners of each, named and
+run in the order they declare, the window lifecycle first. The kernel
+itself stays no bus: it carries nothing and keeps no record. That ADR
+adds one constraint to it, "last" (an invariants listener after every
+other of its point), in its first slice.
+
 **Owns**: typed hook points, listeners with ids ordered by
 `after`/`before` and priority, `alter` and `collect` emits, a
 per-listener error boundary (errors, caught panics, deadlines), failure

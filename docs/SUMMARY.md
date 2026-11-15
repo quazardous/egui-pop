@@ -133,6 +133,7 @@
   - [0026: Layer ranks](adr/0026-layer-ranks.md)
   - [0027: Component families](adr/0027-component-families.md)
   - [0028: A removed contributor's work in flight](adr/0028-removed-contributor-work-in-flight.md)
+  - [0029: Not on the bus, it does not exist](adr/0029-not-on-the-bus.md)
 - [Micro-indicators, the design](design/indicators.md)
 - [Agent control, the design](design/agent-control.md)
 - [Icons: an inventory](icons.md)
