@@ -23,7 +23,8 @@
 //! The crate knows nothing of egui (it sits under every egui-pop layer).
 //! [`Display::of`] reads the event loop's display; [`Display::window`]
 //! turns a window id into [`WindowHandles`], which implement
-//! [`HasWindowHandle`] and [`HasDisplayHandle`] for whatever takes a
+//! [`HasWindowHandle`](raw_window_handle::HasWindowHandle) and
+//! [`HasDisplayHandle`](raw_window_handle::HasDisplayHandle) for whatever takes a
 //! window (rfd's parent, a Wayland subsurface). What a window id maps to
 //! is decided by [`raw_window`], plain code tested on every system; the
 //! `sys` module only borrows the handles.
