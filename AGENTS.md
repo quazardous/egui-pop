@@ -71,5 +71,7 @@ layering`.
   request; publishing and tagging are the owner's.
 - GUI runs only headless (kittest, or wbox); never open a window on a
   desktop session from automation.
+- A new public module goes into one family row of ADR 0027
+  (`cargo xtask families --check`).
 - A new crate goes into the layering table of
   `crates/egui-pop/tests/layering.rs` and of ADR 0001.

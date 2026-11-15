@@ -73,6 +73,10 @@ jobs:
       - name: docs/ui-index.md is current
         if: ${{ !cancelled() }}
         run: cargo xtask ui-index --check
+      # A new public module comes with its family (ADR 0027).
+      - name: Every public module in one family
+        if: ${{ !cancelled() }}
+        run: cargo xtask families --check
       # A new crate without a release on crates.io is left out of the
       # semver job, which runs on `next` only.
       - name: Semver job's exclusions
