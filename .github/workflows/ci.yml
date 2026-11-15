@@ -261,6 +261,12 @@ jobs:
           else
             cargo xtask affected --base "$BASE" --run -- --profile ci --partition hash:${{ matrix.shard }}/3
           fi
+      # The icon set rasterises SVG only under egui-pop-core's `svg`
+      # feature, which no workspace crate turns on: the runs above compile
+      # its tests out. They run here, on one shard.
+      - name: Icon set tests with SVG
+        if: matrix.shard == 1
+        run: cargo nextest run -p egui-pop-core --locked --profile ci --features svg -E 'test(icon_set) | binary(icon_set)'
       - name: Upload the test report
         if: always()
         uses: actions/upload-artifact@v4
