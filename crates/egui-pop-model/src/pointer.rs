@@ -294,11 +294,11 @@ impl SliderWheel {
 #[serde(rename_all = "kebab-case")]
 pub enum KnobDrag {
     /// Up is more (the audio convention).
-    #[default]
     Vertical,
     /// Right is more.
     Horizontal,
     /// Right and up both add.
+    #[default]
     Both,
     /// Around the dial's centre, relative to the press: the value never
     /// jumps to where the pointer is.

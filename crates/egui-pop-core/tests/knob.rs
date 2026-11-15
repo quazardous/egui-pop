@@ -158,7 +158,7 @@ fn circular_waits_near_the_centre() {
 fn the_knob_mode_comes_from_the_profile_unless_the_knob_says() {
     let mut h = knob(None);
     let mut g = egui_pop_core::slider::gestures(&h.ctx);
-    assert_eq!(g.knob_drag, KnobDrag::Vertical);
+    assert_eq!(g.knob_drag, KnobDrag::Both);
     g.knob_drag = KnobDrag::Horizontal;
     egui_pop_core::slider::set_gestures(&h.ctx, g);
     h.run();

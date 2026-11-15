@@ -7,9 +7,10 @@
 //!
 //! Gestures:
 //!
-//! - **Drag**, in one mode per knob ([`KnobDrag`]): up is more
-//!   (`Vertical`, the default), right is more (`Horizontal`), both add
-//!   (`Both`), or around the centre (`Circular`, relative to the press).
+//! - **Drag**, in one mode per knob ([`KnobDrag`]): right and up both
+//!   add (`Both`, the default: some people drag up, others sideways),
+//!   up only (`Vertical`), right only (`Horizontal`), or around the
+//!   centre (`Circular`, relative to the press).
 //!   The knob's own mode ([`Knob::drag`]), else the pointer profile's
 //!   (`options.knob_drag`). Where the press lands never changes the
 //!   mode, and a click never makes the value jump. The linear modes move

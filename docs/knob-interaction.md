@@ -53,7 +53,7 @@ driven:
 
 | Gesture | Today |
 |---|---|
-| Drag | **Hybrid, chosen at the press**: a press within 60 % of the radius from the centre drags **vertically** (up is more, `Knob::travel` points, 200 by default, for the soft range, whatever the knob's size); a press farther out drags **around**, relative to the press angle, the soft range over the 270° sweep. Horizontal motion is ignored in the vertical mode. |
+| Drag | **Both axes by default** (2026-11-15): right and up both add, `Knob::travel` points (200 by default) for the soft range, whatever the knob's size; some people drag a knob upward, others sideways, and neither is ignored. A knob or the pointer profile can ask for `vertical` (the audio convention), `horizontal` or `circular` (around the centre, relative to the press). Where the press lands never changes the mode. |
 | Fine | Shift, or the profile's fine modifier (Ctrl by default): ten times finer, from where it is. Coarse is never applied to a drag. |
 | Wheel | The slider's rule: by default (the "guarded" profiles) the wheel scrolls the panel and steps the knob only when it has the focus or Alt is held over it; the darktable profile steps the knob under the pointer. One step per frame with wheel input, whatever the delta. |
 | Keys | When focused: arrows step, Page Up/Down ten steps, Home/End the soft ends, Enter opens the typed entry. |

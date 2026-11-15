@@ -389,7 +389,7 @@ fn a_profile_changes_when_the_hover_cursor_shows() {
 fn every_shipped_profile_drags_knobs_vertically() {
     for id in pointer::ids() {
         let p = pointer::profile(id).unwrap();
-        assert_eq!(p.options.knob_drag, KnobDrag::Vertical, "{id}");
+        assert_eq!(p.options.knob_drag, KnobDrag::Both, "{id}");
     }
     for choice in KnobDrag::CHOICES {
         assert_eq!(KnobDrag::parse(choice).unwrap().as_str(), choice);
