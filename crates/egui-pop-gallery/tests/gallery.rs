@@ -5544,6 +5544,18 @@ fn layout_by_role(theme: &str) {
     h.run();
     h.snapshot(format!("roles-{theme}"));
     assert!(h.query_by_label("Nothing clicked yet.").is_some());
+    // Rows and grids: the wide grid keeps headers beside values, the
+    // narrow one folds them over their values.
+    let mut kinds: Vec<_> = h.query_all_by_label("Kind").map(|n| n.rect()).collect();
+    let mut raws: Vec<_> = h
+        .query_all_by_label("Raw image")
+        .map(|n| n.rect())
+        .collect();
+    kinds.sort_by(|a, b| a.left().total_cmp(&b.left()));
+    raws.sort_by(|a, b| a.left().total_cmp(&b.left()));
+    assert_eq!((kinds.len(), raws.len()), (2, 2));
+    assert!(raws[0].left() > kinds[0].right(), "wide: beside");
+    assert!(raws[1].top() >= kinds[1].bottom(), "narrow: folded");
     h.get_by_label("danger").click();
     h.run();
     assert!(h.query_by_label("Last clicked: danger").is_some());

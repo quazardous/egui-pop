@@ -195,7 +195,7 @@ pub fn builder(options: &Options) -> AppBuilder {
             plugin: PluginId::from_static("gallery.roles"),
             story: StoryId::from_static("roles"),
             title: "Layout by role",
-            description: "The UiPop helpers: text roles, spacing by intent, cards and buttons by tone, each read from the theme.",
+            description: "The UiPop helpers: text roles, spacing by intent, cards and buttons by tone, rows and grids on one baseline, each read from the theme.",
             group: "Layout",
             weight: 200,
             show: pages::roles::show,
