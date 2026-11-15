@@ -27,6 +27,13 @@
 //!   when winit destroys the window. [`window`] gives a viewport's
 //!   window by its id, [`windows`] the viewports whose window is known,
 //!   [`window_handle`] the raw handle alone.
+//! - **Paced paints.** A window paints at most once per interval, a
+//!   little under the fastest screen's refresh period (read in `resumed`,
+//!   60 Hz when no screen tells): a `RedrawRequested` that comes sooner
+//!   is held and painted at its time. Vsync and Wayland's frame callbacks
+//!   pace a window already; this holds where the present does not wait
+//!   (an X server without DRI3, Mesa's software rendering), where an
+//!   animating window would otherwise draw as fast as the CPU goes.
 //!
 //! Immediate viewports (painted inside their parent's pass) are not
 //! paired. On the web, and without the feature, eframe runs as before and
