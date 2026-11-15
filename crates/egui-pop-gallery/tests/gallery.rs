@@ -958,6 +958,8 @@ fn compact_controls_scrub_choose_mark_and_reveal_from_their_slots() {
         kinds,
         [("mark", "changed"), ("mark", "held"), ("mark", "moved")]
     );
+    h.get_by_label("Reset Exposure").scroll_to_me();
+    h.run();
     h.get_by_label("Reset Exposure").click();
     h.run();
     assert_eq!(value_of(&h, "Exposure"), 0.0);
