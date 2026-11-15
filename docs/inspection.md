@@ -168,7 +168,7 @@ that panel and read it like any other widget.
 
 ## Tests
 
-`crates/egui-pop-gallery/tests/inspection.rs` attaches the plugin eframe
+`crates/egui-pop-gallery/tests/it/inspection.rs` attaches the plugin eframe
 attaches to a headless gallery (kittest, no window), serves it on a free
 loopback port and asks for the info and the tree over TCP: the gallery
 must answer with its Help menu in the tree. CI also builds and lints

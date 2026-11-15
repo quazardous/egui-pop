@@ -18,7 +18,7 @@ cargo run -p egui-pop-gallery --example rerun_like
 
 The code is the gallery crate's `rerun_like` module
 (`crates/egui-pop-gallery/src/rerun_like/`), started by
-`examples/rerun_like.rs`; its tests are `tests/rerun_like.rs`.
+`examples/rerun_like.rs`; its tests are `tests/it/rerun_like.rs`.
 
 ## What it shows
 

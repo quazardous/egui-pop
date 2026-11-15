@@ -61,18 +61,22 @@ const BOOK: &[&str] = &["book.toml", "tools/book/"];
 /// `cargo xtask changeset-check` (its own CI job), built by nothing.
 const CHANGESETS: &str = ".changeset/";
 
-/// Test binaries that read the documentation, besides `consumer-smoke`
-/// (its doctests are the guides' code).
+/// Test targets that read the documentation, besides `consumer-smoke`
+/// (its doctests are the guides' code). A target is a test binary, or a
+/// module of one (`it::gallery_doc`, see [`target_of`]).
 const DOC_READERS: &[(&str, &str)] = &[
     ("egui-pop", "readme_links"),
-    ("egui-pop-gallery", "gallery_doc"),
-    ("egui-pop-gallery", "hosts_doc"),
+    ("egui-pop-gallery", "it::gallery_doc"),
+    ("egui-pop-gallery", "it::hosts_doc"),
 ];
 
 /// Data outside the crates, and the test binaries that read it.
 const DATA_READERS: &[(&str, &[(&str, &str)])] = &[(
     "examples/",
-    &[("egui-pop-tokens", "kits"), ("egui-pop-gallery", "gallery")],
+    &[
+        ("egui-pop-tokens", "kits"),
+        ("egui-pop-gallery", "it::gallery"),
+    ],
 )];
 
 /// A workspace package, as `cargo metadata --no-deps` gives it.
@@ -374,7 +378,7 @@ fn scan_critical(root: &Path, packages: &[Package]) -> Vec<Critical> {
                 let binary = if sub == "src" {
                     None
                 } else {
-                    Some(binary_of(p, &rel).unwrap_or_else(|| {
+                    Some(target_of(p, &rel).unwrap_or_else(|| {
                         // A module of a test binary: the binary is not
                         // known, the package's tests are scanned whole.
                         String::new()
@@ -448,6 +452,28 @@ fn binary_of(p: &Package, path: &str) -> Option<String> {
         .iter()
         .find(|(_, src)| src == path)
         .map(|(name, _)| name.clone())
+}
+
+/// The test target a test file is: the binary whose root it is, or
+/// `<binary>::<module>` for a file beside a binary's `main.rs`
+/// (`tests/it/gallery.rs` of the binary `it`: `it::gallery`, run alone
+/// by a test name filter).
+fn target_of(p: &Package, path: &str) -> Option<String> {
+    if let Some(b) = binary_of(p, path) {
+        return Some(b);
+    }
+    let (dir, file) = path.rsplit_once('/')?;
+    let module = file.strip_suffix(".rs")?;
+    let bin = binary_of(p, &format!("{dir}/main.rs"))?;
+    Some(format!("{bin}::{module}"))
+}
+
+/// A test target split into its binary and, for a module, the module.
+fn split_target(target: &str) -> (&str, Option<&str>) {
+    match target.split_once("::") {
+        Some((bin, module)) => (bin, Some(module)),
+        None => (target, None),
+    }
 }
 
 /// The package a path belongs to: the one with the longest folder
@@ -631,10 +657,11 @@ fn select_in(
         if inner.ends_with("README.md") {
             binaries.insert(("egui-pop".into(), "readme_links".into()));
         }
-        if let Some(bin) = binary_of(p, path)
-            && !included_elsewhere(root, p, path)
+        if let Some(bin) = target_of(p, path)
+            // A module is included by its binary's `main.rs`, by design.
+            && (split_target(&bin).1.is_some() || !included_elsewhere(root, p, path))
         {
-            // A test file: its own binary, nothing depends on it.
+            // A test file: its own binary (or module), nothing depends on it.
             jobs.clippy = true;
             binaries.insert((p.name.clone(), bin));
             continue;
@@ -696,9 +723,13 @@ fn select_in(
         .iter()
         .filter(|c| !sel.packages.contains(&c.package))
         .filter(|c| {
-            c.binary
-                .as_ref()
-                .is_none_or(|b| !sel.binaries.contains(&(c.package.clone(), b.clone())))
+            c.binary.as_ref().is_none_or(|b| {
+                let whole = split_target(b).0;
+                !sel.binaries.contains(&(c.package.clone(), b.clone()))
+                    && !sel
+                        .binaries
+                        .contains(&(c.package.clone(), whole.to_string()))
+            })
         })
         .filter(|c| !(sel.docs_only && c.gpu))
         .cloned()
@@ -859,14 +890,26 @@ pub fn plan(sel: &Selection, packages: &[Package], extra: &[String]) -> Vec<Step
         } = n;
         let mut args = s(&["-p", p]);
         let mut filter = Vec::new();
+        // Each binary built once, whether run whole or by modules.
+        let mut built: BTreeSet<&str> = BTreeSet::new();
         for b in &bins {
-            args.extend(s(&["--test", b]));
-            filter.push(format!("binary_id({p}::{b})"));
+            let (bin, module) = split_target(b);
+            if built.insert(bin) {
+                args.extend(s(&["--test", bin]));
+            }
+            filter.push(match module {
+                Some(m) => format!("(binary_id({p}::{bin}) & test(/^{m}::/))"),
+                None => format!("binary_id({p}::{bin})"),
+            });
         }
         for b in &crit {
             match b {
-                Some(b) if !bins.contains(b) => args.extend(s(&["--test", b])),
-                Some(_) => {}
+                Some(b) => {
+                    let bin = split_target(b).0;
+                    if built.insert(bin) {
+                        args.extend(s(&["--test", bin]));
+                    }
+                }
                 None => args.push("--lib".into()),
             }
         }
@@ -950,9 +993,13 @@ mod tests {
             deps: all,
             build_deps,
             has_lib: true,
+            // `it/main` is the binary `it`, rooted at `tests/it/main.rs`.
             tests: tests
                 .iter()
-                .map(|t| (t.to_string(), format!("{dir}/tests/{t}.rs")))
+                .map(|t| {
+                    let name = t.split('/').next().unwrap_or(t);
+                    (name.to_string(), format!("{dir}/tests/{t}.rs"))
+                })
                 .collect(),
         }
     }
@@ -1006,7 +1053,7 @@ mod tests {
                 "crates/egui-pop-gallery",
                 &["egui-pop"],
                 &[],
-                &["gallery", "gallery_doc", "hosts_doc"],
+                &["it/main"],
             ),
             pkg(
                 "consumer-smoke",
@@ -1028,7 +1075,7 @@ mod tests {
             },
             Critical {
                 package: "egui-pop-gallery".into(),
-                binary: Some("gallery".into()),
+                binary: Some("it::gallery".into()),
                 name: "critical_gpu_every_node_is_named".into(),
                 gpu: true,
             },
@@ -1062,7 +1109,7 @@ mod tests {
         assert_eq!(names(&sel.packages), ["consumer-smoke"]);
         assert!(
             sel.binaries
-                .contains(&("egui-pop-gallery".into(), "gallery_doc".into()))
+                .contains(&("egui-pop-gallery".into(), "it::gallery_doc".into()))
         );
         assert!(
             sel.binaries
@@ -1168,6 +1215,37 @@ mod tests {
     }
 
     #[test]
+    fn a_module_of_a_test_binary_selects_that_module_alone() {
+        let ws = workspace();
+        let gallery = &ws[6];
+        assert_eq!(
+            target_of(gallery, "crates/egui-pop-gallery/tests/it/main.rs").as_deref(),
+            Some("it")
+        );
+        let sel = select(
+            &ws,
+            &changed(&["crates/egui-pop-gallery/tests/it/mounts.rs"]),
+            &critical(),
+            false,
+        );
+        assert!(sel.packages.is_empty());
+        assert_eq!(
+            sel.binaries.iter().collect::<Vec<_>>(),
+            [&("egui-pop-gallery".to_string(), "it::mounts".to_string())]
+        );
+        let steps: Vec<String> = plan(&sel, &ws, &[])
+            .into_iter()
+            .map(|s| s.0.join(" "))
+            .collect();
+        assert!(
+            steps.iter().any(|s| s.contains(
+                "-p egui-pop-gallery --test it -E (binary_id(egui-pop-gallery::it) & test(/^mounts::/)) | test("
+            )),
+            "{steps:?}"
+        );
+    }
+
+    #[test]
     fn a_snapshot_alone_runs_its_crate_only() {
         let ws = workspace();
         let sel = select(
@@ -1240,7 +1318,7 @@ mod tests {
         );
         assert!(
             sel.binaries
-                .contains(&("egui-pop-gallery".into(), "gallery".into()))
+                .contains(&("egui-pop-gallery".into(), "it::gallery".into()))
         );
         // Both critical tests sit in selected binaries: none is added.
         assert!(sel.critical.is_empty());
@@ -1260,7 +1338,7 @@ mod tests {
                 "nextest run --locked --no-tests=warn -p consumer-smoke",
                 "test --locked --doc -p consumer-smoke",
                 "nextest run --locked --no-tests=warn -p egui-pop --test readme_links -E binary_id(egui-pop::readme_links)",
-                "nextest run --locked --no-tests=warn -p egui-pop-gallery --test gallery_doc --test hosts_doc -E binary_id(egui-pop-gallery::gallery_doc) | binary_id(egui-pop-gallery::hosts_doc)",
+                "nextest run --locked --no-tests=warn -p egui-pop-gallery --test it -E (binary_id(egui-pop-gallery::it) & test(/^gallery_doc::/)) | (binary_id(egui-pop-gallery::it) & test(/^hosts_doc::/))",
                 "nextest run --locked --no-tests=warn -p egui-pop-tokens --test kits -E (test(/(^|::)critical_/) - test(/(^|::)critical_gpu_/))",
             ]
         );

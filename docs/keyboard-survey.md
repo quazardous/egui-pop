@@ -22,7 +22,7 @@ is **still owed**. Every finding about today's state says where it comes
 from:
 
 - **[walk]**: seen by a keyboard walk (`egui_pop_test::walk`), pinned or
-  listed as a gap in `crates/egui-pop-gallery/tests/keyboard_walk.rs`.
+  listed as a gap in `crates/egui-pop-gallery/tests/it/keyboard_walk.rs`.
 - **[read]**: from reading the code or a document; not seen happening.
   Treat it as a strong hypothesis.
 - **[test]**: an existing kittest test asserts it, named where it helps.
@@ -705,7 +705,7 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
 ### egui-pop
 
 1. **Done: a Tab walk in the test kit, and the first walks.** `egui_pop_test::walk`
-   and `crates/egui-pop-gallery/tests/keyboard_walk.rs` ([testing](testing.md#keyboard-walks)).
+   and `crates/egui-pop-gallery/tests/it/keyboard_walk.rs` ([testing](testing.md#keyboard-walks)).
 2. **Done: a rebound key keeps its `when`,** in `Keymap::rebind` and
    `rebind_all`, before the walk ran.
 3. **Done: one focused panel.** `workbench.focus` hands over the widget focus
@@ -904,10 +904,10 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
 Run on 2026-10-30 for egui-pop: 18 checks on the gallery at 1100 by 720 in
 `pop-dark`, on egui 0.36.2, and on small harnesses where the gallery has no
 such case, all by real key presses through kittest
-(`crates/egui-pop-gallery/tests/keyboard_walk.rs`, `crates/egui-pop-test/tests/walk.rs`).
+(`crates/egui-pop-gallery/tests/it/keyboard_walk.rs`, `crates/egui-pop-test/tests/walk.rs`).
 Item 5's round was added after it (`f6_goes_through_the_regions_in_order...`).
 Each confirmed gap is an ignored test whose reason names its item:
-`cargo test -p egui-pop-gallery --test keyboard_walk -- --ignored` lists them.
+`cargo test -p egui-pop-gallery --test it keyboard_walk:: -- --ignored` lists them.
 "Right" says whether reading predicted the result. None of it ran in a real
 window; item 20 and check 9's pixels are worth seeing once in a nested
 compositor.

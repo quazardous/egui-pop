@@ -199,7 +199,7 @@ would be refused outside the main window with U2.
 
 ## Notes
 
-- **Evidence.** `crates/egui-pop-gallery/tests/mounts.rs` mounts every component's gallery story
+- **Evidence.** `crates/egui-pop-gallery/tests/it/mounts.rs` mounts every component's gallery story
   in a mock host built from each offer that accepts it (the panel and
   the story by the gallery itself; the palette as an area of bounded
   width; the raw modal and the popover through the overlay stack; the

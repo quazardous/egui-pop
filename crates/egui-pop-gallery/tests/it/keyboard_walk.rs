@@ -3,7 +3,7 @@
 //!
 //! Behaviour that holds is pinned. A gap the walk confirmed is an ignored
 //! test asserting what the survey asks for, its reason naming the survey's
-//! item: `cargo test -p egui-pop-gallery --test keyboard_walk -- --ignored`
+//! item: `cargo test -p egui-pop-gallery --test it keyboard_walk:: -- --ignored`
 //! lists what is still open, and the change closing an item removes the
 //! `ignore`. "Check" numbers are the survey's walk, "item" numbers its
 //! ranked list.

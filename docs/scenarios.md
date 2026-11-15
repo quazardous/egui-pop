@@ -149,7 +149,7 @@ scenario `unknown-page` failed
 
 The gallery's scenarios are in `crates/egui-pop-gallery/tests/scenarios`;
 the broken ones, under `broken/`, fail on purpose and
-`tests/scenarios.rs` checks their reports.
+`tests/it/scenarios.rs` checks their reports.
 
 ## Live runs
 

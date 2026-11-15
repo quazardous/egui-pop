@@ -76,7 +76,7 @@ The last `KEPT` (32) announcements are kept for tests and agents
 The test kit fails a test when an interactive node has no name
 (`egui_pop_test::assert_all_named`, `unnamed_interactive`) and prints
 the tree for a review (`egui_pop_test::a11y_tree`). A keyboard walk over
-the gallery (`crates/egui-pop-gallery/tests/keyboard_walk.rs`) reaches
+the gallery (`crates/egui-pop-gallery/tests/it/keyboard_walk.rs`) reaches
 every page by keys alone.
 
 A pass with a real screen reader (Orca on Linux) is not run yet; it is
@@ -94,5 +94,5 @@ announcer"); the test kit's checks are **Supported** with the test kit.
 - Names across components: `crates/egui-pop-views/tests/views.rs`,
   `crates/egui-pop-api/tests/files.rs`, `status_items.rs`, `zen.rs`;
   focus rings at several scales: `crates/egui-pop-test/tests/focus_ring.rs`;
-  the gallery's pages: `crates/egui-pop-gallery/tests/inspect.rs`,
+  the gallery's pages: `crates/egui-pop-gallery/tests/it/inspect.rs`,
   `keyboard_walk.rs`.
