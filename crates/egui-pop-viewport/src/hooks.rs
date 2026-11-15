@@ -126,7 +126,9 @@ pub struct Hooks {
     /// it to a grid, keep it inside the image).
     pub before_handle: Option<BeforeHandle>,
     /// Before the comparison changes (the current one, the proposed
-    /// one): allow, veto or redirect.
+    /// one): allow, veto or redirect. Over the `before` key it is asked
+    /// once when the key goes down and once when it comes up, the
+    /// latter only after a press it let through.
     pub before_compare: Option<BeforeCompare>,
     /// Replaces the readout's text.
     pub on_readout: Option<OnReadout>,
