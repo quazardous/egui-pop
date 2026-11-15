@@ -1,0 +1,18 @@
+[package]
+name = "egui-pop-hooks"
+version = "0.1.0"
+description = "A small hook kernel: typed hook points, listeners with ids ordered by after/before and priority, alter and collect emits, a per-listener error boundary with panics caught and deadlines, introspection (no GUI toolkit, no dependencies)"
+readme = "README.md"
+keywords = ["hooks", "plugins", "extension-points", "listeners", "events"]
+categories = ["rust-patterns", "concurrency"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]

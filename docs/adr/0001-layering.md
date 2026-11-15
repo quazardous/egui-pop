@@ -22,6 +22,7 @@ Crates are stacked; a crate depends only on crates of a lower layer:
 | L0 | `egui-pop-wayland`: the image viewport's Wayland layer, a tagged subsurface (amended 2026-10-13) | no |
 | L0 | `egui-pop-test-macros`: the test kit's attributes, a procedural macro crate without dependencies (amended 2026-10-20) | no |
 | L0 | `ortho-router`: orthogonal connector routing around rectangles, a standalone crate without dependencies, used by the node graph (amended 2026-10-21) | no |
+| L0 | `egui-pop-hooks`: a hook kernel (typed hook points, ordered listeners, alter and collect emits, a per-listener error boundary, introspection), a standalone crate without dependencies, usable off the interface thread (amended 2026-11-15) | no |
 | L1 | `egui-pop-model`: commands, keymap, menus, panels, layouts, values, ids, diagnostics, documents | no |
 | L2 | `egui-pop-core`: theme, focus, keys, overlays, placement, accessibility, strings, icons, persistence, fault boundary, binding, thumbnails and their grid (moved down from the viewport for the file picker, amended 2026-10-30), debug bridge | yes |
 | L3 | `egui-pop-api`: plugins, the app builder, `Ctx`, zones and blocks, hooks, services, stories | yes |
