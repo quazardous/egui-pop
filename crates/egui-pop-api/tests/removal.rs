@@ -365,7 +365,16 @@ fn what_a_plugin_left_on_screen_is_cancelled_greyed_kept_dormant_or_removed() {
         "its plugin `owned` is disconnected"
     );
     assert!(!events.iter().any(|e| e.name == "command.refused"));
-    assert_eq!(dialogs.len(), 1);
+    assert_eq!(
+        dialogs.len(),
+        1,
+        "answered: {:?}; events: {:?}",
+        dialogs.answered(),
+        events
+            .iter()
+            .map(|e| (e.name.clone(), e.data.clone()))
+            .collect::<Vec<_>>()
+    );
     assert_eq!(dialogs.current().unwrap().1.title(), "Unrelated");
     assert!(logged(
         log::Level::Info,

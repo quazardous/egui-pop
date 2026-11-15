@@ -1609,7 +1609,11 @@ pub(crate) fn owner_gone(
         gone.into()
     };
     let reason = format!("its plugin `{plugin}` is disconnected");
+    let ctx = app.egui();
     for open in &gone {
+        // Its overlay leaves the stack now: the next dialog comes up as
+        // the top one, not under a modal no one draws.
+        overlay::close(&ctx, overlay_id(open.id));
         if let Dialog::Custom(c) = &open.dialog {
             app.local::<Bodies>().0.borrow_mut().remove(&open.id);
             if let Some(needs) = &c.needs {
