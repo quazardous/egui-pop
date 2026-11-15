@@ -94,14 +94,23 @@ test.
   command's owner (and a custom body with its opener) and cancel it on
   `Disconnected` (`crates/egui-pop-api/src/dialogs.rs`, `Open`,
   `apply`). Toasts' actions naming a gone command are not greyed
-  (`crates/egui-pop-api/src/toasts.rs`).
+  (`crates/egui-pop-api/src/toasts.rs`). **Closed (2026-11-15):** a
+  dialog on a gone plugin's command, or a custom one it opened, is
+  cancelled at once (`dialog.cancelled` from `egui_pop` with its
+  `reason`); a toast's action naming a gone command is greyed with the
+  plugin's name (`AppHandle::command_gone_with`).
 - **A panel's place is forgotten.** Layout repair drops panels no longer
   declared, and the repaired layout is what is saved; keep their place
   dormant instead (`crates/egui-pop-model/src/layout.rs`, `repair`).
+  **Closed (2026-11-15):** `SavedLayout::dormant` keeps the place (docked,
+  detached, floating or closed), saved, and `repair` gives it back when
+  the panel is declared again.
 - **Mount declarations outlive their plugin.** Components and host
   offers are kept by owner but never removed, and `Mounted` records
   carry no owner (`crates/egui-pop-api/src/mounts.rs`, `Registry`,
-  `record_mount`; `remove_owner` in `app.rs`).
+  `record_mount`; `remove_owner` in `app.rs`). **Closed (2026-11-15):**
+  its components, host offers, the mounts of either and those made while
+  its code ran are removed, counted on `plugin.disconnected`.
 - **Icons are never removed.** The icon set keeps every name for the
   process and has no way to remove one, though `docs/icons.md` says a
   plugin's icons go with it (`crates/egui-pop-core/src/icon_set.rs`;

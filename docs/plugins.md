@@ -19,7 +19,8 @@ Its disconnection leaves a `plugin.disconnected` event on the journal
 `disabled` for `AppHandle::set_plugin_enabled`, `requirement gone` for
 a plugin that required it, `failed connect` when its connection failed
 after it registered things), `removed` with counts by kind (`commands`,
-`panels`, `undo_steps`, `mixed_undo_steps`) and `undo`, one entry per
+`panels`, `components`, `hosts`, `mounts`, `undo_steps`,
+`mixed_undo_steps`) and `undo`, one entry per
 history that lost steps (`history`, `steps`, `mixed`: those also
 changing other owners' values). The value store logs each such history
 at info level too (`Store::remove_owner_report` gives the counts).
@@ -31,6 +32,16 @@ accepted dialog, a key still bound to it) does not run: it is a
 "its plugin `x` is disconnected" (or the registry's refusal for a
 command never declared). A key bound to such a command also logs a
 warning.
+
+What it left on screen is closed, greyed or kept for its return. A
+dialog on one of its commands, or a custom one it opened, is cancelled
+(`dialog.cancelled` with the reason, [Dialogs](dialogs.md)). A toast's
+action naming one of its commands is greyed, its tooltip saying which
+plugin went (`AppHandle::command_gone_with`). Its panels leave the
+layout but their places stay in it, dormant and saved
+(`SavedLayout::dormant`), and a panel declared again goes back where it was
+([Workbench](workbench.md)). Its components, host offers and their
+mounts are removed ([Hosts](hosts.md)).
 
 `DefaultPlugins` is the paved road: the command palette, dialogs,
 toasts, the settings window, the window's place and saved arrangements.

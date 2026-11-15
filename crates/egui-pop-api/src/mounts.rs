@@ -295,12 +295,53 @@ pub struct Mounted {
     pub fit: Fit,
 }
 
-/// What the application declared, and what is mounted.
+/// What the application declared, and what is mounted: each mount with
+/// the owner that mounted it (the plugin whose command, connection or
+/// handler was running), when one was.
 #[derive(Debug, Default)]
 pub(crate) struct Registry {
     components: RefCell<Vec<(OwnerId, Mountable)>>,
     hosts: RefCell<Vec<(OwnerId, HostOffer)>>,
-    mounted: RefCell<Vec<Mounted>>,
+    mounted: RefCell<Vec<(Option<OwnerId>, Mounted)>>,
+}
+
+/// What went with an owner ([`remove_owner`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct RemovedMounts {
+    pub components: usize,
+    pub hosts: usize,
+    pub mounts: usize,
+}
+
+/// Removes what an owner declared and mounted (ADR 0028): its components
+/// and host offers, the mounts it made, and the mounts of its components
+/// or in its hosts, whoever made them.
+pub(crate) fn remove_owner(app: &AppHandle, owner: &OwnerId) -> RemovedMounts {
+    let registry = app.mount_registry();
+    let mut components = registry.components.borrow_mut();
+    let mut hosts = registry.hosts.borrow_mut();
+    let mut mounted = registry.mounted.borrow_mut();
+    let its_components: Vec<String> = (components.iter())
+        .filter(|(o, _)| o == owner)
+        .map(|(_, m)| m.id.clone())
+        .collect();
+    let its_hosts: Vec<String> = (hosts.iter())
+        .filter(|(o, _)| o == owner)
+        .map(|(_, h)| h.id.clone())
+        .collect();
+    components.retain(|(o, _)| o != owner);
+    hosts.retain(|(o, _)| o != owner);
+    let before = mounted.len();
+    mounted.retain(|(by, m)| {
+        by.as_ref() != Some(owner)
+            && !its_components.contains(&m.component)
+            && !its_hosts.contains(&m.host)
+    });
+    RemovedMounts {
+        components: its_components.len(),
+        hosts: its_hosts.len(),
+        mounts: before - mounted.len(),
+    }
 }
 
 impl AppHandle {
@@ -417,13 +458,16 @@ impl AppHandle {
         let mut mounted = registry.mounted.borrow_mut();
         if !mounted
             .iter()
-            .any(|m| m.component == component && m.host == host)
+            .any(|(_, m)| m.component == component && m.host == host)
         {
-            mounted.push(Mounted {
-                component: component.into(),
-                host: host.into(),
-                fit: fit.clone(),
-            });
+            mounted.push((
+                egui_pop_model::values::current_scope(),
+                Mounted {
+                    component: component.into(),
+                    host: host.into(),
+                    fit: fit.clone(),
+                },
+            ));
         }
         Ok(fit)
     }
@@ -434,13 +478,15 @@ impl AppHandle {
         let registry = self.mount_registry();
         let mut mounted = registry.mounted.borrow_mut();
         let before = mounted.len();
-        mounted.retain(|m| !(m.component == component && m.host == host));
+        mounted.retain(|(_, m)| !(m.component == component && m.host == host));
         mounted.len() != before
     }
 
     /// What is mounted where, in mounting order.
     pub fn mounts(&self) -> Vec<Mounted> {
-        self.mount_registry().mounted.borrow().clone()
+        (self.mount_registry().mounted.borrow().iter())
+            .map(|(_, m)| m.clone())
+            .collect()
     }
 }
 

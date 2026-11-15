@@ -2,18 +2,28 @@
 //! disconnection is a `plugin.disconnected` event and a log line, a run
 //! of its command queued after it went is refused on the journal, a key
 //! still bound to it warns, and the undo steps that went with it are
-//! counted.
+//! counted. What it left on screen is closed or kept dormant: its dialog
+//! is cancelled with the reason, a toast's action naming its command is
+//! greyed, its panel's place is kept and given back, its components,
+//! hosts and mounts go.
 
 use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::{Mutex, Once};
 
 use egui_kittest::Harness;
+use egui_kittest::kittest::{NodeT as _, Queryable as _};
+use egui_pop_api::dialogs::{Answer, Confirm, DIALOGS, DialogsPlugin, Info};
 use egui_pop_api::host::Event;
+use egui_pop_api::mounts;
+use egui_pop_api::toasts::{TOASTS, Toast, ToastsPlugin};
 use egui_pop_api::{App, Ctx, Plugin, PluginError};
 use egui_pop_core::lock;
 use egui_pop_model::commands::{CommandSpec, Origin};
-use egui_pop_model::ids::{CommandId, OwnerId, PluginId};
+use egui_pop_model::ids::{CommandId, OwnerId, PanelId, PluginId};
+use egui_pop_model::layout::{DormantPlace, Layout, Node, SavedLayout, schema};
+use egui_pop_model::mount::{HostOffer, Mountable};
+use egui_pop_model::panels::{Area, PanelSpec};
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
 use serde_json::Value as Json;
 
@@ -266,4 +276,169 @@ fn a_key_still_bound_to_a_gone_command_warns_and_is_refused() {
         log::Level::Warn,
         "its plugin `keyed` is disconnected"
     ));
+}
+
+const OPEN: CommandId = CommandId::from_static("owned.open");
+const DO: CommandId = CommandId::from_static("owned.do");
+const LOG: PanelId = PanelId::from_static("owned.log");
+const HOST: &str = "owned.host";
+const WIDGET: &str = "owned.widget";
+
+/// A plugin with a panel, a component and a host; its `owned.open`
+/// mounts a component in its host, opens a dialog on its `owned.do` and
+/// shows a toast offering it.
+struct Owned;
+
+impl Plugin for Owned {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("owned")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        ctx.command(CommandSpec::new(DO, "Do", "Owned"), |_| Ok(Json::Null))?;
+        ctx.command(CommandSpec::new(OPEN, "Open", "Owned"), |call| {
+            call.app.mount(mounts::PROGRESS, HOST)?;
+            call.app
+                .service(&DIALOGS)
+                .ok_or("no dialogs")?
+                .open(Confirm::new("Do it?", "Do", DO));
+            call.app.service(&TOASTS).ok_or("no toasts")?.notify(
+                Toast::info("Owned note")
+                    .sticky()
+                    .action("Do again", DO, Json::Null),
+            );
+            Ok(Json::Null)
+        })?;
+        ctx.panel(PanelSpec::new(LOG, "Owned log", Area::Bottom), |ui, _| {
+            ui.label("log");
+        })?;
+        ctx.mountable(Mountable::new(WIDGET, "Owned widget"));
+        ctx.host_offer(HostOffer::new(HOST, "O", "Owned host"));
+        Ok(())
+    }
+}
+
+#[test]
+fn what_a_plugin_left_on_screen_is_cancelled_greyed_kept_dormant_or_removed() {
+    capture();
+    let app = App::builder()
+        .plugin(DialogsPlugin)
+        .plugin(ToastsPlugin)
+        .plugin(Owned)
+        .build(&egui::Context::default())
+        .unwrap();
+    let h = app.handle().clone();
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(900.0, 600.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    harness.run();
+    // Its panel moved by the user to the end side bar.
+    h.set_layout(Layout {
+        areas: vec![(Area::EndSide, Node::tab(LOG))],
+        ..Layout::default()
+    });
+    harness.run();
+    assert_eq!(h.layout().area_of(&LOG), Some(Area::EndSide));
+    h.run_as(OPEN, Json::Null, Origin::User);
+    harness.run();
+    // A mount of nobody's, which stays.
+    h.mount(mounts::JOBS_CENTRE, mounts::STATUS_BAR).unwrap();
+    let dialogs = h.service(&DIALOGS).unwrap();
+    dialogs.open(Info::new("Unrelated", "Stays open."));
+    assert_eq!(dialogs.len(), 2);
+    assert_eq!(dialogs.current().unwrap().1.title(), "Do it?");
+    assert!(h.mounts().iter().any(|m| m.host == HOST));
+    assert!(h.mountables().iter().any(|m| m.id == WIDGET));
+
+    let before = h.last_event();
+    h.set_plugin_enabled(PluginId::from_static("owned"), false);
+    harness.run();
+    harness.run();
+    let events = h.events_since(before);
+
+    // Its dialog is cancelled, saying why; the other one shows.
+    let cancelled = event(&events, "dialog.cancelled");
+    assert_eq!(cancelled.source, "egui_pop");
+    assert_eq!(cancelled.data["title"], "Do it?");
+    assert_eq!(
+        cancelled.data["reason"],
+        "its plugin `owned` is disconnected"
+    );
+    assert!(!events.iter().any(|e| e.name == "command.refused"));
+    assert_eq!(dialogs.len(), 1);
+    assert_eq!(dialogs.current().unwrap().1.title(), "Unrelated");
+    assert!(logged(
+        log::Level::Info,
+        "dialog `Do it?` cancelled: its plugin `owned` is disconnected"
+    ));
+    dialogs.answer(Answer::Cancel, Origin::User).unwrap();
+    harness.run();
+    harness.run();
+    assert!(dialogs.is_empty());
+
+    // Its components, hosts and mounts are gone, counted; others stay.
+    let gone = event(&events, "plugin.disconnected");
+    assert_eq!(gone.data["removed"]["components"], 1);
+    assert_eq!(gone.data["removed"]["hosts"], 1);
+    assert_eq!(gone.data["removed"]["mounts"], 1);
+    assert!(!h.mountables().iter().any(|m| m.id == WIDGET));
+    assert!(!h.host_offers().iter().any(|o| o.id == HOST));
+    let mounted: Vec<(String, String)> = h
+        .mounts()
+        .into_iter()
+        .map(|m| (m.component, m.host))
+        .collect();
+    assert_eq!(
+        mounted,
+        [(
+            mounts::JOBS_CENTRE.to_string(),
+            mounts::STATUS_BAR.to_string()
+        )]
+    );
+
+    // The toast's action is greyed, saying why.
+    let toasts = h.service(&TOASTS).unwrap();
+    assert_eq!(toasts.shown().len(), 1);
+    let action = harness.get_by_label("Do again");
+    assert!(action.accesskit_node().is_disabled());
+
+    // Its panel's place is kept, dormant, in what is saved.
+    let saved = h.saved_layout();
+    assert!(!saved.layout.placed().contains(&&LOG));
+    let kept = saved.dormant.iter().find(|d| d.panel == LOG);
+    assert!(
+        matches!(
+            kept.map(|d| &d.place),
+            Some(DormantPlace::Docked {
+                area: Area::EndSide,
+                ..
+            })
+        ),
+        "{:?}",
+        saved.dormant
+    );
+    let text = schema().save(&saved).unwrap();
+    let read: SavedLayout = schema().load(&text).unwrap().value;
+    assert_eq!(read, saved);
+    assert!(logged(
+        log::Level::Info,
+        "layout: panel `owned.log` is not declared: its place is kept"
+    ));
+
+    // Back: the panel where it was, the toast's action alive again; the
+    // dialog stays closed.
+    h.set_plugin_enabled(PluginId::from_static("owned"), true);
+    harness.run();
+    harness.run();
+    let saved = h.saved_layout();
+    assert_eq!(saved.layout.area_of(&LOG), Some(Area::EndSide), "{saved:?}");
+    assert!(saved.dormant.is_empty());
+    assert!(
+        !harness
+            .get_by_label("Do again")
+            .accesskit_node()
+            .is_disabled()
+    );
+    assert!(dialogs.is_empty());
+    assert!(h.mountables().iter().any(|m| m.id == WIDGET));
 }

@@ -1897,6 +1897,8 @@ egui-pop-tips-state-dismissed = Écartée
 
 egui-pop-tips-state-used = Sa commande a servi
 
+egui-pop-toast-action-gone = Son plugin { $plugin } est déconnecté
+
 egui-pop-toast-close = Fermer : { $text }
 
 egui-pop-toast-error = Erreur

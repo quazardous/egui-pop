@@ -70,7 +70,9 @@ and a job's progress when given one. Information and success go after
 4 s, warnings after 8 s, errors stay until closed; a thin bar in the
 level's colour empties as the time runs. The pointer over a toast stops
 its time (and its bar); it goes on from where it stopped once the
-pointer leaves.
+pointer leaves. An action whose command went with its plugin is greyed,
+its tooltip saying which plugin is disconnected (ADR 0028); it is alive
+again when the plugin reconnects.
 
 They show in the corner the `appearance.toast_corner` setting chooses,
 under Appearance: `top-left`, `top-center`, `top-right`, `bottom-left`,

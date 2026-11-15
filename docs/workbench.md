@@ -13,6 +13,13 @@ areas (the centre, the start and end side bars, the bottom panel), as
 tabs, rows, columns and grids over [egui_stack](https://github.com/quazardous/egui_stack)
 (the continuation of egui_dock),
 saves where the user put them and repairs that layout at the next start.
+A panel no longer declared (its plugin disconnected or not installed)
+leaves the layout, but its place is kept dormant (`SavedLayout::dormant`:
+docked in an area at its tab's index beside the same panels, detached
+on a screen, floating at a corner, or closed), saved with the layout,
+and the panel goes back there when it is declared again (ADR 0028,
+`AppHandle::saved_layout`, `Layout::repair_dormant`); the
+log says each with a `layout:` info line.
 The shell's side bar, main and inspector zones are panels of their areas.
 
 **One dock space.** The areas are the named docks of one egui_stack

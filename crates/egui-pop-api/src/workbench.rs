@@ -938,6 +938,9 @@ pub(crate) struct Workbench {
     /// Panels showing a zone.
     pub zone_of: BTreeMap<PanelId, ZoneId>,
     pub layout: Layout,
+    /// The places of panels no longer declared, kept for their return
+    /// (ADR 0028), saved with the layout.
+    pub dormant: Vec<egui_pop_model::layout::Dormant>,
     /// The areas as drawn, each a dock of the space (and each its bare
     /// target); taken out while a dock is drawn.
     space: Option<DockSpace<PanelId>>,
@@ -1017,6 +1020,7 @@ impl Default for Workbench {
             specs: Vec::new(),
             zone_of: BTreeMap::new(),
             layout: Layout::default(),
+            dormant: Vec::new(),
             space: None,
             rects: BTreeMap::new(),
             bars: BTreeMap::new(),
@@ -1077,16 +1081,21 @@ impl Workbench {
         self.read_back();
         self.specs = specs;
         let panels = self.panels();
-        let (layout, notes) = std::mem::take(&mut self.layout).repair(&panels, screens);
-        self.layout = layout;
+        let dormant = std::mem::take(&mut self.dormant);
+        let (saved, notes) =
+            std::mem::take(&mut self.layout).repair_dormant(dormant, &panels, screens);
+        self.layout = saved.layout;
+        self.dormant = saved.dormant;
         self.stale = true;
         notes
     }
 
     /// Puts in a layout (loaded, or an arrangement), repaired.
     pub fn set_layout(&mut self, layout: Layout, screens: &[&str]) -> Vec<String> {
-        let (layout, notes) = layout.repair(&self.panels(), screens);
-        self.layout = layout;
+        let dormant = std::mem::take(&mut self.dormant);
+        let (saved, notes) = layout.repair_dormant(dormant, &self.panels(), screens);
+        self.layout = saved.layout;
+        self.dormant = saved.dormant;
         self.stale = true;
         notes
     }

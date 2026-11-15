@@ -586,6 +586,11 @@ fn notes(o: &mut String) {
 - **Declarations can lie.** A component declared as reading keys when
   focused that reads one globally (the node graph's Space) shows a fit
   where it misbehaves; the mount tests are the guard.
+- **A plugin that goes** takes its components, its host offers and
+  their mounts with it, and the mounts made while its code ran (ADR
+  0028): the `mounts` collector no longer lists them, and its
+  `plugin.disconnected` event counts them (`components`, `hosts`,
+  `mounts`). Connected again, it declares them again.
 "
     );
 }
