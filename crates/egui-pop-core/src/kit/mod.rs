@@ -2,6 +2,9 @@
 //! the theme and drawing handlers, compiled once when the theme is
 //! installed.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! egui-pop's widgets keep the behaviour (clicks, drags, focus, the
 //! keyboard, accessibility) and compute a [`State`]; the kit measures and
 //! paints. Every component is described with the same words: per state

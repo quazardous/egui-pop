@@ -1,5 +1,8 @@
 //! Charts: time series, scatters and bars, on `egui_plot`.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! It wraps egui_plot (MIT OR Apache-2.0), which draws the axes, the
 //! grid, the legend and the series and takes the zoom, the pan and the
 //! box zoom, and adds what an egui-pop view has:

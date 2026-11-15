@@ -1,5 +1,8 @@
 //! Overlays in image coordinates, edited through one handle kit.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! The application owns its overlays (shapes, guides, a crop box) and
 //! gives them to the viewport each frame; the viewport draws them and
 //! turns drags on their handles into [`Signal::Handle`](crate::Signal)s

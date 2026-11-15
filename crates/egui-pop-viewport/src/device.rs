@@ -1,6 +1,9 @@
 //! Device tiles (feature `wgpu`): a tile that already lives on the
 //! render device, handed to the viewport with no copy through the CPU.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A source that renders on the GPU (an engine running on the device
 //! eframe opened) answers a request with a [`DeviceTile`] through
 //! [`TileSink::deliver_device`](crate::source::TileSink::deliver_device):

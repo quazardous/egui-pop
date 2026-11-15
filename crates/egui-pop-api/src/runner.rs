@@ -1,5 +1,8 @@
 //! The native runner: eframe on an event loop egui-pop owns.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! With the `create-native` feature (on by default), `AppBuilder::run_native`
 //! and `run_native_with` do not call `eframe::run_native`: they build the
 //! winit event loop, hand eframe to it through `eframe::create_native`, and

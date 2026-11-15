@@ -1,5 +1,8 @@
 //! A slow load that follows a selection: the latest asked wins.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A panel previewing what is selected elsewhere asks for the current key
 //! each time it draws ([`Latest::want`]). A key that changed starts a load
 //! on a worker thread and the panel goes on drawing; a load asked before

@@ -1,6 +1,9 @@
 //! The arithmetic of a stack of collapsible sections: how heights share
 //! a panel, and what a drag on a boundary between two sections does.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! **Deprecated:** it moved to egui_stack (`egui_stack::sections::plan`,
 //! re-exported as `egui_pop_core::sections::plan`), with the section
 //! widget; this copy is kept, unchanged and unused, for one release. It is

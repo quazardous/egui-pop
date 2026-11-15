@@ -4,6 +4,9 @@
 //! here draws a component's own widgets: a component declares a
 //! [`Manifest`] and the shell renders it with egui-pop's bricks.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **Full page**: an overlay of the whole main window, or "Pop out" to
 //!   a window of its own; the mode used last is remembered (the
 //!   `admin.window` setting). The window is an application window

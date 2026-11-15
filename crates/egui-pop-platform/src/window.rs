@@ -1,6 +1,9 @@
 //! The main window brought to the front, as the platform services do
 //! when a second launch, a tray click or a notification asks for the
 //! application.
+//!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
 
 use egui::{Context, UserAttentionType, ViewportCommand};
 

@@ -1,5 +1,8 @@
 //! The host: the application's kernel, which egui-pop wraps (ADR 0010).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! egui-pop keeps the interface's part: command declarations (name,
 //! keys, `when`, menus) feeding the menus, the palette, the keymap and the
 //! traces; focus, overlays, layout, theme and interface settings. The

@@ -2,6 +2,9 @@
 //! disclosure mark, a title, a count) over its own scrolling body, as a
 //! code editor's side bar stacks its views.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! The stack is egui_stack's ([`egui_stack::sections`]), which holds the
 //! layout arithmetic ([`plan`]), the drag, the fold, the keyboard, the
 //! accessibility, the windowed rows and the wheel. egui-pop gives it its

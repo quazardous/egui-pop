@@ -1,6 +1,9 @@
 //! Application windows: several OS windows in one process, each almost an
 //! application of its own (ADR 0025).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! The application opens a window with [`AppHandle::open_window`], giving
 //! a [`WindowSpec`] and the window's content: a closure drawing it each
 //! pass, which may hold `Rc` state. Each window is an egui **deferred

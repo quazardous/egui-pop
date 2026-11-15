@@ -6,6 +6,9 @@
 //! its `set_view` action moves a viewport as a command would (through
 //! its `before_view` hook, on the next frame).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! ```
 //! use egui_pop_core::debug::DebugBridge;
 //!

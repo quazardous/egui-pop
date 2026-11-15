@@ -4,6 +4,9 @@
 //! folds the new ones into the [`Jobs`] model behind the [`JOBS`]
 //! service. Nothing polls: without events, nothing is read.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **Every job carries an estimated overall fraction**
 //!   ([`Job::fraction`]): sub-steps and child jobs roll up, weighted by
 //!   their estimates; a job that cannot estimate is indeterminate until

@@ -271,6 +271,9 @@ impl ThemeService {
     /// The kits added (`AppBuilder::kit`, then the user's kits), each a
     /// theme of [`ThemeService::themes`] under its name, a kit holding
     /// both variants listed once per variant: what a theme picker lists.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn kits(&self) -> &[egui_pop_core::tokens::kit::KitInfo] {
         &self.kits
     }
@@ -480,6 +483,9 @@ pub const THEME: ServiceToken<ThemeService> = ServiceToken::new("app.theme");
 
 /// The focus mode (click or hover, the system's way and the user's
 /// choice), as a service.
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
 pub const FOCUS_MODE: ServiceToken<FocusModes> = ServiceToken::new("app.focus_mode");
 
 /// The setting choosing the focus mode: `system`, `click`, `hover`.
@@ -691,6 +697,9 @@ pub enum Request {
         layer: Layer,
     },
     /// A workbench change asked for while the areas were drawn.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     Workbench(crate::workbench::Change),
 }
 
@@ -1357,6 +1366,9 @@ impl AppHandle {
 
     /// Appends an event to the host's journal (held until the host is
     /// free when published from a command it is running).
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn publish(&self, source: &str, cause: Option<Seq>, name: &str, data: Json) {
         match self.0.host.borrow_mut().as_mut() {
             Some(h) => {
@@ -1394,6 +1406,9 @@ impl AppHandle {
 
     /// The journal's events after `seq` (empty while the host is
     /// dispatching), read through the host.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn events_since(&self, seq: Seq) -> Vec<Event> {
         self.0
             .host
@@ -1592,6 +1607,9 @@ impl AppHandle {
     }
 
     /// The journal's last sequence number, as the host says.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn last_event(&self) -> Seq {
         self.0.host.borrow().as_ref().map_or(0, |h| {
             h.last_seq()
@@ -2737,6 +2755,9 @@ impl AppHandle {
     /// handle.set_shell_panel_min_size(PANEL_SIDE_BAR, None);
     /// assert_eq!(handle.shell_panel_min_size(&PANEL_SIDE_BAR), None);
     /// ```
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn set_shell_panel_min_size(
         &self,
         panel: PanelId,
@@ -2751,6 +2772,9 @@ impl AppHandle {
     /// Sets a shell panel's largest size across its area while the
     /// application runs, as [`AppBuilder::shell_panel_max_size`] does at
     /// build time; `None`: no largest size.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn set_shell_panel_max_size(
         &self,
         panel: PanelId,
@@ -2764,6 +2788,9 @@ impl AppHandle {
 
     /// A shell panel's least size the application set, at build time or
     /// since; `None` when it set none.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn shell_panel_min_size(&self, panel: &PanelId) -> Option<crate::workbench::ShellSize> {
         let bounds = self.0.shell_bounds.borrow();
         bounds
@@ -2774,6 +2801,9 @@ impl AppHandle {
 
     /// A shell panel's largest size the application set, at build time
     /// or since; `None` when it set none.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn shell_panel_max_size(&self, panel: &PanelId) -> Option<crate::workbench::ShellSize> {
         let bounds = self.0.shell_bounds.borrow();
         bounds
@@ -2799,6 +2829,9 @@ impl AppHandle {
 
     /// The centre's least width the application set
     /// ([`AppBuilder::centre_min_size`]).
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn centre_min_size(&self) -> Option<crate::workbench::ShellSize> {
         self.0.centre_min.get()
     }
@@ -2896,6 +2929,9 @@ impl AppHandle {
     /// The drop hint on screen, while a tab is dragged (where it would
     /// land, in its area or another) or a palette over an area it docks
     /// in.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn drop_hint(&self) -> Option<crate::workbench::DropHint> {
         self.workbench_mut().hint.clone()
     }
@@ -2903,6 +2939,9 @@ impl AppHandle {
     /// The detached window under a dragged tab, where letting it go
     /// moves it (as a tab), found in the last pass: `None` while no tab
     /// is dragged over one.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn window_drop(&self) -> Option<crate::workbench::WindowDrop> {
         self.workbench_mut().window_drop.clone()
     }
@@ -2916,6 +2955,9 @@ impl AppHandle {
 
     /// Changes the workbench through its step (ADR 0011): `None` when
     /// asked while the areas are drawn (it is done at the frame's end).
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn change_workbench(&self, change: crate::workbench::Change) -> Option<Outcome> {
         if self.0.drawing_areas.get() {
             self.push_request(Request::Workbench(change));
@@ -2967,6 +3009,9 @@ impl AppHandle {
 
     /// Lays out the row, column or grid holding a panel's group again
     /// (`workbench.arrange`; refused for a group alone in its area).
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn arrange(&self, panel: &PanelId, how: crate::workbench::Arrangement) -> Option<Outcome> {
         self.change_workbench(crate::workbench::Change::Arrange(panel.clone(), how))
     }
@@ -3006,6 +3051,9 @@ impl AppHandle {
     }
 
     /// The indicators and their states, lightest first.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn indicators(&self) -> Vec<(crate::strips::Indicator, crate::strips::IndicatorState)> {
         let mut v: Vec<_> = self
             .0
@@ -3294,6 +3342,9 @@ impl AppBuilder {
     /// `workbench.panel_alignment` setting's default; `Center`, under
     /// the editors between the side bars as VS Code has it, unless
     /// given).
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn panel_alignment(mut self, alignment: crate::workbench::PanelAlignment) -> Self {
         self.panel_alignment = alignment;
         self
@@ -3340,6 +3391,9 @@ impl AppBuilder {
     /// Draws the main area edge to edge: no margin around the centre's
     /// panels (an image viewer, a canvas). Their bodies keep their own
     /// frame; [`AppBuilder::frameless`] takes that away too.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn main_edge_to_edge(mut self, on: bool) -> Self {
         self.edge_to_edge = on;
         self
@@ -3364,6 +3418,9 @@ impl AppBuilder {
     /// assert!(app.handle().frameless(Area::Bottom));
     /// assert!(!app.handle().frameless(Area::EndSide));
     /// ```
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn frameless(mut self, areas: &[Area]) -> Self {
         self.frameless = areas.to_vec();
         self
@@ -3423,6 +3480,9 @@ impl AppBuilder {
     ///     .unwrap();
     /// assert!(!app.handle().panel_visible(&PANEL_SIDE_BAR));
     /// ```
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn layout(mut self, layout: egui_pop_model::layout::Layout) -> Self {
         self.layout = Some(layout);
         self
@@ -3478,6 +3538,9 @@ impl AppBuilder {
     ///     .unwrap();
     /// # let _ = app;
     /// ```
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn shell_panel_min_size(
         mut self,
         panel: PanelId,
@@ -3490,6 +3553,9 @@ impl AppBuilder {
     /// The largest size of a panel across its area, in points or as a
     /// share of the window; none by default. Dragging stops there; a
     /// least size larger wins.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn shell_panel_max_size(
         mut self,
         panel: PanelId,
@@ -3503,6 +3569,9 @@ impl AppBuilder {
     /// the side areas give way to it, each down to its own least width
     /// (a window too narrow for all of them squeezes the centre). None by
     /// default.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn centre_min_size(mut self, size: impl Into<crate::workbench::ShellSize>) -> Self {
         self.centre_min = Some(size.into());
         self
@@ -3542,6 +3611,9 @@ impl AppBuilder {
     /// Draws around the whole application every frame (a custom frame,
     /// a backdrop): `f` gets the `Ui`, the handle and the application's
     /// drawing, to call where it likes.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn wrap(
         mut self,
         f: impl FnMut(&mut Ui, &AppHandle, &mut dyn FnMut(&mut Ui)) + 'static,
@@ -3552,6 +3624,9 @@ impl AppBuilder {
 
     /// Runs `f` when the application closes, before the `app.exit` step
     /// (which saves).
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn on_exit(mut self, f: impl FnMut(&AppHandle) + 'static) -> Self {
         self.on_exit.push(Box::new(f));
         self
@@ -3631,6 +3706,9 @@ impl AppBuilder {
     ///
     /// What is wrong with a kit is logged and in the diagnostics
     /// (`kit-problem`); the kit is added anyway, with fallbacks.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn kit(mut self, kit: impl Into<KitSource>) -> Self {
         self.kits.push(kit.into());
         self
@@ -3685,6 +3763,9 @@ impl AppBuilder {
 
     /// The application's kernel: runs the commands, keeps the journal
     /// and the store (`LocalHost` by default, see `host`).
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn host(mut self, host: impl Host + 'static) -> Self {
         self.host = Some(Box::new(host));
         self
@@ -3765,6 +3846,9 @@ impl AppBuilder {
     /// The window manager's focus mode (`focus_mode::read_system()`
     /// reads it). Not given, it is read by `run_native` and taken as
     /// click elsewhere (tests stay the same on every desktop).
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn system_focus(mut self, system: SystemFocus) -> Self {
         self.system_focus = Some(system);
         self
@@ -4038,6 +4122,9 @@ impl AppBuilder {
     /// (its kernel does not start, a file is missing): the error is
     /// logged, published on the journal as `app.make_failed` and returned
     /// as eframe's `Error::AppCreation`.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
     pub fn run_native_with(
         mut self,
@@ -6138,12 +6225,18 @@ impl App {
 
     /// Runs a command now, in the current context: its result, or a
     /// result to come (`Reply::Later`, kept until it arrives).
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn run(&mut self, command: &CommandId, args: Json, origin: Origin) -> Reply {
         let cx = self.handle.when_context();
         self.run_in(command, args, origin, &cx)
     }
 
     /// Runs a command now, in a given context, through the host.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn run_in(
         &mut self,
         command: &CommandId,

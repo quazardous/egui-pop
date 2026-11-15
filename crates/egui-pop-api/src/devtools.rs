@@ -9,6 +9,9 @@
 //! build sees it, as they take Ctrl+Shift+C, I, J, K (Cmd+Option on a
 //! Mac) and Shift+F5, F7, F9.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! Tabs: the key resolutions (each binding considered and its verdict),
 //! the journal's last events, the steps and their hooks, the focus
 //! chain and the overlays, the scale of each window, and every collector

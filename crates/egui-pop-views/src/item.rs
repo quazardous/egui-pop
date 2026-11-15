@@ -1,5 +1,8 @@
 //! Dense list items: one row look for lists, trees and panels.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A [`ListItem`] is a row of the theme's row height (`size.row.height`,
 //! apart from the controls' `size.control.height`): an optional drag
 //! handle, indent guides down its levels, a collapsing arrow, an icon,

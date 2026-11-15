@@ -1,5 +1,8 @@
 //! The selection: one range, from where it started (the anchor) to where
 //! the cursor is (the head).
+//!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
 
 use serde::{Deserialize, Serialize};
 

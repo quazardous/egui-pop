@@ -55,6 +55,9 @@ impl Default for Deadline {
 /// says what made it hold; checked before the first frame too. Past the
 /// deadline, an error naming the condition, the frames stepped and the
 /// journal's last events.
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
 pub fn wait_until(
     h: &mut Harness<'_, App>,
     until: &WaitFor,

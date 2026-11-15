@@ -11,6 +11,9 @@
 //! to pointer chords in the keymap's default layer
 //! (`docs/pointer-gestures.md`).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! The user's changes are ordinary user-layer bindings, made in the
 //! shortcuts editor: they stay over the profile. When the profile
 //! changes and some exist, a dialog asks whether to keep them on the

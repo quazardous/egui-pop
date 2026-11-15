@@ -3,6 +3,9 @@
 //! in a pseudo-terminal (`PtySource`, feature `pty`), or a read-only
 //! [`Console`] the application writes logs and agent output to.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - ANSI colours from the theme's `terminal.*` tokens (the 256-colour
 //!   cube and RGB colours as programs give them), bold, dim, italics,
 //!   underline, inverse; the cursor;

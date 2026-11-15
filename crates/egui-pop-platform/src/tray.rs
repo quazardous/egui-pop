@@ -1,6 +1,9 @@
 //! A tray icon (a status icon in the panel, the notification area, the
 //! menu bar) with a declared menu.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! The tray's menu is an egui-pop menu, [`MENU_TRAY`]: plugins fill it as
 //! any other (`CommandSpec::menu(MENU_TRAY, ...)`, `Ctx::menu_item`,
 //! submenus, lists), its items' titles, `when` clauses, ticks and

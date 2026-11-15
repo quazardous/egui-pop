@@ -1,6 +1,9 @@
 //! The system's text scaling (the desktop's "larger text"), read in the
 //! process, to seed egui-pop's text size setting.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! It is not the display's scale: winit gives that as the pixels per
 //! point, and egui-pop already follows it. This is the separate factor a
 //! desktop applies to text only.

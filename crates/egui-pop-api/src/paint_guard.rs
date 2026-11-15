@@ -1,6 +1,9 @@
 //! The main window's paint guard: a window never stays empty without a
 //! word.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! Two holes are watched at the end of each pass of the main window:
 //!
 //! - **The focus screen without its page.** A wizard run as a focus

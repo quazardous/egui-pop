@@ -5,6 +5,9 @@
 //! each set of modifiers ([`ViewGestures`]); [`set_gestures`] sets them
 //! outright. They follow the shared interaction grammar:
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **Space held**: a drag pans, whatever is under the pointer (a handle
 //!   included);
 //! - **Escape** during a gesture puts things back as they were, with no

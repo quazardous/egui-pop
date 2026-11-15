@@ -5,7 +5,9 @@
 //! docking workbench, dialogs, toasts, settings, an undo history, a debug
 //! bridge an agent can drive) and parts usable on their own (design tokens
 //! and themes, visual kits, widgets, the image viewport, data views,
-//! editors). What is stable and what is experimental is in the README;
+//! editors). What is stable and what is experimental is in the README
+//! and `docs/stability.md`; experimental crates, modules and items say
+//! so in a warning block in their documentation;
 //! what works without `App` is in the guide's "Using parts without App".
 //!
 //! The smallest start: themes are DTCG token files (see [`tokens`]) in
@@ -62,20 +64,32 @@ pub use egui_pop_api as api;
 
 /// The image viewport, thumbnails and the histogram (feature
 /// `viewport`).
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
 #[cfg(feature = "viewport")]
 pub use egui_pop_viewport as viewport;
 
 /// The image tools' steps: each change of the histogram's drag, a
 /// curve, a colour wheel, the zoom control or the navigator runs as a
 /// step of the application (feature `imaging`).
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
 #[cfg(feature = "imaging")]
 pub use egui_pop_imaging as imaging;
 
 /// Data views: a live tree, a list and a data table (feature `views`).
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
 #[cfg(feature = "views")]
 pub use egui_pop_views as views;
 
 /// Text and code editors (feature `editors`).
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
 #[cfg(feature = "editors")]
 pub use egui_pop_editors as editors;
 
@@ -89,6 +103,9 @@ pub use egui_pop_i18n as i18n;
 /// reports, the focus mode and the text scaling read in-process, the
 /// system clipboard (feature `platform`, or `platform-<service>` for
 /// one).
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
 #[cfg(any(
     feature = "platform-clipboard",
     feature = "platform-instance",
@@ -109,6 +126,9 @@ pub use egui_pop_core::theme;
 
 /// Layer ranks: what lies over what in a window's foreground (from
 /// `egui-pop-core`, ADR 0026).
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
 pub use egui_pop_core::layers;
 
 pub mod mounts;

@@ -239,6 +239,8 @@ use invariants::*;
 pub struct Check<'a> {
     pub harness: &'a Harness<'static, App>,
     pub step: &'a Step,
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub events: &'a [Event],
 }
 

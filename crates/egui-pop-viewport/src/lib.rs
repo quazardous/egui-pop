@@ -2,6 +2,9 @@
 //! physical pixels, tiles from an asynchronous source, overlays in image
 //! coordinates.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - [`view`]: the view model (zoom in physical pixels per image pixel,
 //!   the zoom ladder, fit) and [`view::Mapping`], the one mapping between
 //!   image and screen that drawing, hit tests and the readout share;

@@ -50,6 +50,9 @@ impl Store {
     }
 
     /// A history's snapshots, oldest first.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn snapshots_in(&self, history: &ScopeId) -> Vec<Snapshot> {
         self.histories
             .get(history)
@@ -60,6 +63,9 @@ impl Store {
     /// Pins the history's current state under `name`: the value of every
     /// path its steps touched. Never dropped by the cap. With `dry_run`,
     /// the snapshot it would take (id 0), nothing kept.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn take_snapshot(
         &mut self,
         history: &ScopeId,
@@ -140,6 +146,9 @@ impl Store {
     /// ("Restore “name”") that an undo takes back. `None`: the state is
     /// already the snapshot's. With `dry_run`, the step it would make
     /// (id 0), nothing changed.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn restore_snapshot(
         &mut self,
         history: &ScopeId,
@@ -213,6 +222,9 @@ impl Store {
     /// does; an older step by a new step ("Undo “label”") putting back
     /// the values it changed, refused when a later step changed one of
     /// them. The step undone; with `dry_run`, checked only.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn undo_step_in(
         &mut self,
         history: &ScopeId,
@@ -361,6 +373,9 @@ impl Store {
     /// The values that would differ at a point of a history (a step, 0
     /// the start, a replaced step, or a snapshot): each path with its
     /// value now and its value there. `None`: no such point.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn values_at(&self, history: &ScopeId, at: At) -> Option<Vec<(String, Value, Value)>> {
         let then = match at {
             At::Snapshot(id) => self.snap(history, id).ok()?.values.clone(),

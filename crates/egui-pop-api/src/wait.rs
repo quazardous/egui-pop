@@ -2,6 +2,9 @@
 //! the application is settled. The `bridge.wait` capability and the test
 //! kit's frame-stepping wait (`egui_pop_test::wait_until`) share it.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! The check never blocks: [`AppHandle::wait_met`] says whether the
 //! condition holds now. Who waits holds the call and checks again after
 //! each frame until it holds or a deadline passes: a kittest harness

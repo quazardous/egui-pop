@@ -39,6 +39,9 @@ struct Inner {
 
 /// The test source. Clone it to keep a handle while the viewport uses
 /// another.
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
 #[derive(Clone, Debug)]
 pub struct TestSource {
     sink: TileSink,

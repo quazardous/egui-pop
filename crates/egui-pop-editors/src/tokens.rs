@@ -1,5 +1,8 @@
 //! The editors' component tokens (`editor.*` and `syntax.*` in the theme
 //! files), each an alias of a system token.
+//!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
 
 use egui::{Color32, Context};
 use egui_pop_core::theme::Tokens;

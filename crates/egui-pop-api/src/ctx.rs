@@ -547,6 +547,9 @@ impl<'a> Ctx<'a> {
     /// history, also in a modal (the settings window). A text field
     /// inside keeps its own undo. One scope per surface: a second
     /// replaces the first. It goes with the plugin.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn local_scope(
         &mut self,
         surface: &str,
@@ -637,6 +640,9 @@ impl<'a> Ctx<'a> {
     /// area's strip.
     /// Its `when` clause, when it has one, must parse: one that does not
     /// keeps the indicator hidden and is reported (`indicator-when`).
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn indicator(&mut self, indicator: crate::strips::Indicator) -> &mut Self {
         if let Some(Err(e)) = indicator.clause() {
             self.app.warn(

@@ -2,6 +2,9 @@
 //! notes, with a message and maybe a range), breakpoints and diff marks.
 //! They follow the text: a line inserted above moves them down, a line
 //! deleted under them drops them.
+//!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
 
 use serde::{Deserialize, Serialize};
 

@@ -330,6 +330,9 @@ pub trait UiPop: sealed::Sealed {
     /// widget, from the kit and the pointer profile in force; the
     /// widget may change them before it is dropped
     /// ([`pointer::drag_cursor`](crate::pointer::drag_cursor)).
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     fn drag_cursor<'a>(
         &self,
         response: &'a Response,

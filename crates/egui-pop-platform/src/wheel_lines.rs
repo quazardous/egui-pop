@@ -2,6 +2,9 @@
 //! seed egui-pop's wheel speed: winit gives notches, and leaves the system's lines
 //! out.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! | | Read from |
 //! |---|---|
 //! | Windows | `HKCU\Control Panel\Desktop` `WheelScrollLines`, where the system keeps what `SPI_GETWHEELSCROLLLINES` answers, through the registry API (winreg). "One screen at a time" (`-1`) is no number of lines: 3 |

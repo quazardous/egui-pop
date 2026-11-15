@@ -2,6 +2,9 @@
 //! sees it before it is written, and the value's form in a step's
 //! arguments.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! The histogram's drag, the curve editor, the colour wheels, the zoom
 //! control and the navigator work alike, after the sliders
 //! (`egui_pop_core::slider`): each change is a [`Change`] (`from`, `to`,

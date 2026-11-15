@@ -1,6 +1,9 @@
 //! The context stack (ADR 0012): where the user is and how the
 //! application behaves right now, without egui.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **Places** are drill-downs (an album, a group, a sub-workspace):
 //!   a path from the root, shown as a breadcrumb.
 //! - **Modes** are global states (an orientation, compare, read-only):

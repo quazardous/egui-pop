@@ -4,6 +4,9 @@
 //! value picked under the pointer in the image selects or adds the
 //! point to drag).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! Points are `[x, y]` in 0..1, sorted by `x`, at least two. The editor
 //! owns no curve maths: [`Spline::eval`] draws the curve through them
 //! ([`MonotoneCubic`] by default, [`Linear`] for straight segments).

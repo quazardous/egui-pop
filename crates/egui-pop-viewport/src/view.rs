@@ -2,6 +2,9 @@
 //! one mapping between image and screen that drawing, hit testing and the
 //! pixel readout all use.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **Zoom is physical**: [`View::zoom`] counts physical screen pixels
 //!   per image pixel, so 100 % is exactly `1.0` and means one image pixel
 //!   on one pixel of the window's surface, whatever the window's scale.

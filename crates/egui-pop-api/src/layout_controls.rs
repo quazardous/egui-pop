@@ -1,5 +1,8 @@
 //! The workbench's layout, as VS Code arranges it.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **Areas shown or hidden**: the commands
 //!   `workbench.toggle.primarySideBar` (`Ctrl+B`), `.panel` (`Ctrl+J`)
 //!   and `.secondarySideBar` (`Ctrl+Alt+B`) fold a shown area to its

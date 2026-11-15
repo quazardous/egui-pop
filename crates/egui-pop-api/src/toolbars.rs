@@ -3,6 +3,9 @@
 //! menu's (`Ctx::menu_item`, `CommandSpec::menu`, an alter hook), and
 //! drawn as a row or a column of buttons instead of a list.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - A command item is a button showing the command's icon
 //!   ([`CommandSpec::icon`](egui_pop_model::commands::CommandSpec::icon),
 //!   its `icon_on` while checked), its title and first key binding in the

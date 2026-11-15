@@ -1,5 +1,8 @@
 //! The canvas in use, and the navigation commands sent to it.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A canvas (the node graph, the image viewport, a plot) marks itself
 //! active each frame the pointer is over it or it has the keyboard
 //! ([`mark_active`]). The application's `view.*` commands

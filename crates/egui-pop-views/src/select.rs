@@ -1,5 +1,8 @@
 //! Selection by key, shared by the tree, the list and the table.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A selection holds keys, never row numbers: rows come and go, are
 //! sorted or moved, and what was selected stays selected. The **cursor**
 //! is the row the keyboard is on; the **anchor** is where a range

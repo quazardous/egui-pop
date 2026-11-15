@@ -4,6 +4,9 @@
 //! closure, and ends the group when the closure succeeds or cancels it
 //! (every write put back) when it fails or panics.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! The group goes through the host, so a host keeping its own history
 //! sees it. While the host dispatches a command it is out of reach; a
 //! command's group then goes through the host's

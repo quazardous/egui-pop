@@ -4,6 +4,9 @@
 //! service, the openers, the widget and the confirmation are
 //! `egui_pop_api::links`'.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - A **target** ([`Target`]) is a URL (`https:`, `mailto:`, `file:`,
 //!   `docs:`, `command:`, the application's own scheme) or an absolute
 //!   local path, parsed once; its host is kept in punycode and shown in

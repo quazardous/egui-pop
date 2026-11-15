@@ -1,5 +1,8 @@
 //! A multi-line text editor in the theme's body font.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! ```
 //! use egui_pop_editors::{EditorState, TextSurface};
 //!

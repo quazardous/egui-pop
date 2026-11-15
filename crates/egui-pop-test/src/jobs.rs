@@ -67,6 +67,9 @@ struct Inner {
 }
 
 /// A host whose jobs a test scripts.
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
 #[derive(Clone, Default)]
 pub struct FakeHost(Rc<RefCell<Inner>>);
 

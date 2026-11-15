@@ -2,6 +2,9 @@
 //! level and body, filtered by level and by text, following the tail, and
 //! tied to a time cursor.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! Its design follows the text log view of the Rerun viewer
 //! (<https://rerun.io>, `re_view_text_log`, MIT OR Apache-2.0): the same
 //! four columns, the level in its colour (`palette.log.*`), the rows at

@@ -1,6 +1,9 @@
 //! The display transform: the last step from the source's pixels to the
 //! window, where the application plugs in its colour management.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - A [`DisplayTarget`] is an encoding a surface expects: primaries,
 //!   transfer, the luminance of SDR white, the headroom above it, the
 //!   surface format. A window's surface has one ([`set_target`],

@@ -1,6 +1,9 @@
 //! Crash reports, written on the machine and offered on the next start.
 //! Nothing is sent anywhere.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! [`CrashPlugin`] marks the session as running (`session-<pid>.json` in
 //! the crash directory, `<state>/crashes`) and installs a panic hook
 //! (chained to the one before it). A panic writes `panic-<pid>.json`:

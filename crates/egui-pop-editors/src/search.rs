@@ -1,6 +1,9 @@
 //! Search and replace over a buffer: plain text or a regular
 //! expression, with or without case, whole words or not. A match never
 //! spans a line break.
+//!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
 
 use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};

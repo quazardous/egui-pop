@@ -4,6 +4,9 @@
 //! file's facts. Its behaviour follows the photo applications it is
 //! modelled on (`docs/rating.md`):
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **empty stars** are outlines, shown always or only while the item
 //!   they rate (or the stars) is under the pointer ([`EmptyStars`]), so
 //!   an unrated item still says it can be rated;

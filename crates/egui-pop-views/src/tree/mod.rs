@@ -1,5 +1,8 @@
 //! A live tree over a source the application implements.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **Lazy, asynchronous**: a branch's children are asked for the
 //!   first time it is expanded ([`TreeSource::load`]); the source
 //!   answers now or later, from any thread, through the [`Sink`] it is

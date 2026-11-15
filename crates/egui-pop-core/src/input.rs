@@ -1,6 +1,9 @@
 //! The decorated input: one component around a text, number, path or
 //! search field, with what desktop and web toolkits put around a field.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - a **placeholder** shown while the field is empty (`field.tone.muted.text`);
 //! - **leading and trailing slots**: an icon, a prefix or a suffix text,
 //!   a unit;

@@ -1,6 +1,9 @@
 //! Where the pixels come from: a [`TileSource`] the application
 //! implements, asynchronous and live.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - The viewport **asks** for tiles ([`TileSource::request`]): square
 //!   tiles of [`TileRequest::size`] pixels at a scale of the image, first
 //!   a *proxy* of the whole image at a coarse scale, then the *exact*

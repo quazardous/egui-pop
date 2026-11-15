@@ -186,7 +186,55 @@ Three tiers:
   number field (`egui_pop_core::number`), new in 0.11.
 - Thumbnails and their grid (`egui_pop_core::thumbnail`, re-exported
   by `egui_pop_viewport::thumbnail`), with the photo library.
-- Anything marked "experimental" in its documentation.
+- Anything marked "experimental" in its documentation (see below).
+
+## How experimental is marked
+
+In the code, not only on this page. An experimental crate, module or
+item carries a warning block in its documentation, which rustdoc
+draws at the top of its page or beside the item:
+
+```rust,ignore
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+```
+
+The block in a crate's `lib.rs` covers the whole crate; in a public
+module's file, the module and every file under it; on an item (a type,
+a function, a method, a field, a variant), that item, and a type's
+methods with it. `cargo xtask experimental --list` prints what is
+marked.
+
+`cargo xtask experimental --check`, run by pr-lint, keeps the
+boundary:
+
+- a module of a family whose tier is wholly Experimental in
+  [ADR 0027](adr/0027-component-families.md) carries the block, and a
+  module of a family with no experimental part does not;
+- no public item outside the tier names an experimental type in its
+  signature (arguments, return type, bounds, public fields, variants, a
+  trait's items). A stable type's method that takes a workbench or host
+  type is itself marked: `AppHandle::arrange`, `App::run` (it answers a
+  `host::Reply`), the value store's history methods. The few exposures
+  kept on purpose are listed with their reason in
+  `xtask/experimental.allow` (the kit's tones and box states, which the
+  stable `ui` module and the header bands name).
+
+The check reads the source with `syn` and resolves names through each
+file's `use` lines and the crate roots' re-exports, not through the
+compiler: a type reached by a glob import escapes it.
+
+Why a marker and not an `unstable` Cargo feature (decided 2026-11-15):
+the experimental items are public in every release so far, and
+applications use them (Helios, the gallery, the templates use the
+workbench, the host, the views). Gating them behind a feature is a
+break for every one of those users; a feature on by default would not
+break, but it would mark nothing either, as long as it stays on, and
+it would double the builds to check (with and without it). The marker
+breaks no one, shows in the API documentation where users read it, and
+the check gives it teeth. If a 1.0 needs a hard boundary, an opt-in
+feature can follow, announced a minor ahead, with the marker's list as
+its content.
 
 ## Not covered
 

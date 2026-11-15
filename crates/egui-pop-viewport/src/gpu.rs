@@ -2,6 +2,9 @@
 //! drawn by an `egui_wgpu` paint callback whose shader runs the display
 //! transform's [`Stage`].
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! Call [`install`] once with the render state eframe (or a test
 //! harness) opened; from then on, viewports in that context send scene
 //! tiles here. Without it, everything takes the CPU path.

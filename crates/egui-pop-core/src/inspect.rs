@@ -334,6 +334,9 @@ pub(crate) fn painted(
 }
 
 /// A kit state's name: its flags joined with `+`, or `rest`.
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
 pub fn state_name(state: KitState) -> String {
     let names: Vec<&str> = KitState::ORDER
         .iter()

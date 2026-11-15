@@ -5,6 +5,9 @@
 //! `egui-pop-platform`). Inside the window they fire as global bindings
 //! do.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! Whoever registers them says how it went through the [`SYSTEM_KEYS`]
 //! service: whether the desktop offers global shortcuts at all
 //! ([`Support`]), and each binding's [`KeyStatus`]. The shortcuts editor

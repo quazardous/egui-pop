@@ -5,6 +5,9 @@
 //! `done: true` from the value before it; Escape during it puts the value
 //! back with no trace.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! Gestures:
 //!
 //! - **Drag**, in one mode per knob ([`KnobDrag`]): right and up both

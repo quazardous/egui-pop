@@ -1,5 +1,8 @@
 //! A single instance, and deep links.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! [`single`], called at the top of `main`, before any window: the first
 //! launch listens on a local socket named after the application (an
 //! abstract socket on Linux, a named pipe on Windows, a socket in `/tmp`

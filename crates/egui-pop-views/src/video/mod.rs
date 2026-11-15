@@ -1,6 +1,9 @@
 //! Video: the [`Video`] widget, a local video file played in place, and the
 //! [`VideoBackend`] it plays through.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! ```no_run
 //! use egui_pop_views::video::{Controls, Fit, Video};
 //!

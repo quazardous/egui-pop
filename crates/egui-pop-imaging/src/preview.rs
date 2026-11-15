@@ -4,6 +4,9 @@
 //! own, the interface behind stays as it is (a `Clear` backdrop) and
 //! keeps drawing, its own viewport included, while the dialog is modal.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! The dialog keeps every dialog rule: the primary button says what it
 //! does ("Export"), Enter runs it, Escape cancels it, except during a
 //! drag of the viewport (Escape then cancels the drag: the viewport

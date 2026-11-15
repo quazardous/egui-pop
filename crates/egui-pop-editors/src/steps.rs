@@ -1,6 +1,9 @@
 //! The editors' steps (ADR 0011), their commands (keys, palette, the
 //! agent surface), their debug collectors, and the plugin declaring them.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! | Step | Arguments | Default |
 //! |---|---|---|
 //! | `edit.change` | `editor`, `kind` (`typing`, `deletion`, `paste`, `cut`, `indentation`, `replace`, `edit`, `undo`, `redo`), `origin`, `version`, `changes` (`[{from, to, text}]`, positions `{line, col}` from 0, applied in order), `selection` (after, or `null`) | applies the changes; the result is the new `version` |

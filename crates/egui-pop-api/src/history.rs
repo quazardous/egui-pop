@@ -1,6 +1,9 @@
 //! Undo (ADR 0014): histories owned by the kernel, routed by focus,
 //! projected by the interface.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **The owner** implements [`History`]: its scopes (one history
 //!   each: a document's edit, a collection's marks), their steps as
 //!   [`StepInfo`]s, and the requests `undo`, `redo`, `jump` and `group`.

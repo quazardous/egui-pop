@@ -4,6 +4,9 @@
 //! encoding of; egui's interface stays sRGB on the window's surface
 //! (`docs/wayland-colour.md`).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - [`install`] (once, with eframe's creation context) joins the
 //!   compositor through the window's handles and records what it offers
 //!   ([`Offer`]): its colour manager's announcements, the formats and

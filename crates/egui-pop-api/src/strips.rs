@@ -7,6 +7,9 @@
 //! the host's events (a job's progress, a connection, a count), each
 //! with an optional command run on a click.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! An indicator is a reducer over the journal: egui-pop hands it every
 //! new event whose name starts with its prefix, in order, and draws its
 //! state. Nothing polls: the host publishes, the indicator follows.

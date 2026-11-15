@@ -1,5 +1,8 @@
 //! Property rows: a name and a value, their name column aligned.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A [`PropertyRow`] is a [`ListItem`](crate::item::ListItem)'s row (its
 //! height, its box, hovered under the pointer) split in two: the name, in
 //! the row's muted tone, and the value, any widget. The name column is as

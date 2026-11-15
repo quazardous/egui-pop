@@ -1,6 +1,9 @@
 //! A field's state drawn, announced and reported: the egui side of
 //! [`egui_pop_model::field`].
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! Every input shows its [`FieldState`] the same way, the decorated
 //! input ([`crate::input`]) and the sliders alike:
 //!

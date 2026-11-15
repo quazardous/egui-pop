@@ -1,6 +1,9 @@
 //! Folding by indentation: a line folds the lines under it that are
 //! indented further (blank lines inside included, blank lines at the end
 //! left out), as most editors do without a grammar.
+//!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
 
 use std::collections::BTreeSet;
 

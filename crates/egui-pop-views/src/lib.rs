@@ -1,5 +1,8 @@
 //! Data views for egui-pop: a live tree, a list, a data table and charts.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - [`tree`]: a tree over a source the application implements, with
 //!   lazy, asynchronous branches and edits at any time;
 //! - [`list`]: a list of rows the application draws;

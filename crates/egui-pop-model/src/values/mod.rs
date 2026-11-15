@@ -369,6 +369,9 @@ pub struct Step {
     /// When it was made (its last merged write), on the store's clock.
     pub at: f64,
     /// The place of the context stack it was made in.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub place: Vec<Place>,
     /// Its merge key, when its writes merge with the next.
     pub merge: Option<String>,
@@ -1070,6 +1073,9 @@ impl Store {
 
     /// The place of the context stack new steps are made in (the
     /// interface follows the stack), root first.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn set_place(&mut self, place: Vec<Place>) {
         self.place = place;
     }

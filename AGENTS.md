@@ -73,6 +73,11 @@ layering`.
   desktop session from automation.
 - A new public module goes into one family row of ADR 0027
   (`cargo xtask families --check`).
+- An experimental crate, module or item carries the warning block of
+  `docs/stability.md` ("How experimental is marked"), and a stable or
+  supported item names no experimental type in its signature (`cargo
+  xtask experimental --check`); an exposure kept on purpose goes into
+  `xtask/experimental.allow` with its reason.
 - A Rust path named in backticks in `docs/` (`egui_pop_core::kit::Tone`)
   resolves in the crates (`cargo xtask doc-paths --check`); a path that
   cannot on purpose goes into `xtask/doc-paths.allow` with its reason.

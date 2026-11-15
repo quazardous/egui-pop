@@ -3,6 +3,9 @@
 //! the contrast of the pairs it takes part in, started from any built-in
 //! theme, exported and imported as a token file, every change undoable.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! [`show`] draws the editor in any `Ui` (a panel, a window, a settings
 //! page); the state lives in the plugin's service ([`THEME_EDITOR`]),
 //! over the theme service: each change is written to the application's
