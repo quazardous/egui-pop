@@ -75,7 +75,7 @@ released").
 
 ## Tests
 
-- `crates/egui-pop-gallery/tests/gallery.rs`
+- `crates/egui-pop-gallery/tests/it/gallery.rs`
   (`compact_controls_scrub_choose_mark_and_reveal_from_their_slots`)
   drives the gallery's compact page; its snapshots are
   `compact-pop-dark.png` and `compact-pop-light.png`.

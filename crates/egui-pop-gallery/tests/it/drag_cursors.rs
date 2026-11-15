@@ -7,7 +7,7 @@
 //! arrow stays until the drag starts. The widget, the pointer profile and
 //! the kit can each change that, the most specific winning.
 //!
-//! `cargo test -p egui-pop-gallery --test drag_cursors -- --nocapture`
+//! `cargo test -p egui-pop-gallery --test it drag_cursors:: -- --nocapture`
 //! prints the table.
 
 use std::cell::Cell;

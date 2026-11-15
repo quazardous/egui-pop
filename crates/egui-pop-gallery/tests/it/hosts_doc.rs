@@ -1,7 +1,7 @@
 //! `docs/hosts.md` is generated from the mount declarations (ADR 0013):
 //! the committed page must be what the declarations write. Regenerate
 //! with `cargo xtask hosts` (or `UPDATE_HOSTS=1 cargo test -p
-//! egui-pop-gallery --test hosts_doc`).
+//! egui-pop-gallery --test it hosts_doc::`).
 
 use std::path::Path;
 

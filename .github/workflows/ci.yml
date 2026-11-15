@@ -133,7 +133,7 @@ jobs:
           shared-key: clippy
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       # The gallery's `inspection` feature (eframe's), off by default:
-      # its smoke test runs in the default build (tests/inspection.rs).
+      # its smoke test runs in the default build (tests/it/inspection.rs).
       - run: cargo clippy -p egui-pop-gallery --all-targets --locked --features inspection -- -D warnings
       # The system's file chooser, a fallback off by default: linted, never
       # tested with (its tests would only check that it is refused).
@@ -309,7 +309,7 @@ jobs:
       - run: cargo doc -p egui-pop-views -p egui-pop --no-deps --locked --features egui-pop-views/video,egui-pop/views-video
       - run: cargo test -p egui-pop-views --locked --features video --lib -- viewer video
       - run: cargo test -p egui-pop-views --locked --features video --test video --test video_gstreamer --test viewer_video --test viewer_gstreamer
-      - run: cargo test -p egui-pop-gallery --locked --features video --test viewer_video
+      - run: cargo test -p egui-pop-gallery --locked --features video --test it viewer_video::
       - name: Upload snapshot differences
         if: failure()
         uses: actions/upload-artifact@v4

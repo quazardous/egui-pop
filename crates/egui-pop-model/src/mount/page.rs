@@ -13,7 +13,7 @@ use super::{
 };
 
 /// Where the mount tests are, as the page links them.
-pub const MOUNT_TESTS: &str = "crates/egui-pop-gallery/tests/mounts.rs";
+pub const MOUNT_TESTS: &str = "crates/egui-pop-gallery/tests/it/mounts.rs";
 
 /// The page.
 pub fn render(components: &[Mountable], hosts: &[HostOffer]) -> String {

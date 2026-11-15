@@ -390,7 +390,14 @@ fn root() -> PathBuf {
 fn hosts() -> Result<(), String> {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
     let status = Command::new(cargo)
-        .args(["test", "-p", "egui-pop-gallery", "--test", "hosts_doc"])
+        .args([
+            "test",
+            "-p",
+            "egui-pop-gallery",
+            "--test",
+            "it",
+            "hosts_doc::",
+        ])
         .env("UPDATE_HOSTS", "1")
         .current_dir(root())
         .status()
