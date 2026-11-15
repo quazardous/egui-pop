@@ -133,6 +133,15 @@ pub(crate) fn orphan_pass(ctx: &egui::Context, viewport: egui::ViewportId, why: 
             said: false,
         });
         e.passes += 1;
+        if e.passes == 1 {
+            // Its system window shows this pass's frame: the clear colour
+            // alone, without a title bar (said, to tell a black window).
+            log::info!(
+                target: "egui_pop",
+                "a pass of viewport {viewport:?} after its window went ({why}): it paints \
+                 nothing, and the window is asked to hide and close"
+            );
+        }
         let due = !e.said && e.passes >= MIN_PASSES && now.duration_since(e.since) >= DEFAULT_DELAY;
         if due {
             e.said = true;
@@ -150,6 +159,7 @@ pub(crate) fn orphan_pass(ctx: &egui::Context, viewport: egui::ViewportId, why: 
             since.as_secs_f32()
         );
     }
+    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     ctx.request_repaint_of(egui::ViewportId::ROOT);
     ctx.request_repaint_after(DEFAULT_DELAY);

@@ -122,6 +122,18 @@ fn store_notices(ui: &mut Ui, app: &AppHandle, admin: &Admin) {
     ui.separator();
 }
 
+/// Opens or closes the app's application window to follow the app, from
+/// the main window's pass before it declares the windows: an app closed
+/// from the main window (`admin.close`, a command) takes its window in
+/// the same pass, so the window never runs a pass with nothing to draw.
+pub(crate) fn follow(app: &AppHandle, ctx: &egui::Context) {
+    let Some(admin) = app.service(&ADMIN) else {
+        return;
+    };
+    let windowed = in_window(app) && !ctx.embed_viewports();
+    follow_window(app, &admin, ctx, windowed);
+}
+
 /// The application window the app is drawn in while it is open in the
 /// window mode, opened and closed with it, with the main window's bars
 /// (its menus evaluated and run in it); closed by itself (its close

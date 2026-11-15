@@ -562,6 +562,13 @@ impl AppHandle {
         if let Some(g) = geometry {
             self.keep_geometry(id, g);
         }
+        // Hidden at once, where the system allows it (not on Wayland):
+        // a pass the system runs before the window goes paints nothing,
+        // and must not be seen (a black window without its title bar).
+        if !self.egui().embed_viewports() {
+            self.egui()
+                .send_viewport_cmd_to(id.deferred_viewport(), ViewportCommand::Visible(false));
+        }
         self.window_closed(id);
         true
     }
@@ -1068,6 +1075,9 @@ impl AppHandle {
         if ctx.viewport_id() != ViewportId::ROOT {
             return;
         }
+        // The Settings app's window follows the app first: closed from
+        // here, it is not declared again.
+        crate::admin::follow_window(self, ctx);
         let app_id = self.app_id();
         // The application draws each window's frame as the main window's
         // (`frame::window_frame`), or the system draws them all.
