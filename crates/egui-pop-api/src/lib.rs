@@ -152,6 +152,7 @@ pub mod palette;
 pub mod palettes;
 pub mod plugin;
 pub mod pointer;
+pub mod reads;
 pub mod scroll_bars;
 pub mod selection;
 pub mod services;
