@@ -59,6 +59,19 @@ pub fn boundary<R>(
     name: &str,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> Option<R> {
+    boundary_reporting(ui, id, name, add, |_| {})
+}
+
+/// Draws `add` as [`boundary`] does, and hands a panic it catches to
+/// `failed`, once per failure: for the caller to say what failed in its
+/// own words (a panel's id, its owner) and to publish it.
+pub fn boundary_reporting<R>(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    name: &str,
+    add: impl FnOnce(&mut Ui) -> R,
+    failed: impl FnOnce(&Fault),
+) -> Option<R> {
     let id = ui.scope_id().with(id);
     let key = FAULT.keyed(id);
     if let Some(fault) = key.get(ui.ctx()) {
@@ -75,6 +88,7 @@ pub fn boundary<R>(
                 count: 1,
             };
             log::error!(target: "egui_pop", "`{name}` panicked: {}", fault.message);
+            failed(&fault);
             key.set(ui.ctx(), fault.clone());
             FAILED.update(ui.ctx(), |all| {
                 if !all.contains(&id) {

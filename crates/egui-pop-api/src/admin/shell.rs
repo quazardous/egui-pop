@@ -79,6 +79,7 @@ pub(super) fn show(ui: &mut Ui, app: &AppHandle) {
                 ui.set_max_size(rect.size());
                 let mut child = ui.new_child(egui::UiBuilder::new().max_rect(inner));
                 tab::scope(&mut child, "egui_pop.admin", ScopeKind::Modal, |ui| {
+                    admin.note_page_drawn();
                     if page(ui, app, &admin) {
                         close = true;
                     }

@@ -148,6 +148,7 @@ pub mod layout_controls;
 pub mod links;
 pub mod menus;
 pub mod mounts;
+pub mod paint_guard;
 pub mod palette;
 pub mod palettes;
 pub mod plugin;

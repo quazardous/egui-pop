@@ -1433,6 +1433,14 @@ egui-pop-editors-toggle-replace = Show replace
 
 egui-pop-editors-whole-word = Whole word
 
+egui-pop-empty-window-back = Back to the start
+
+egui-pop-empty-window-body = This window had nothing to draw. The log says what held it.
+
+egui-pop-empty-window-reset = Reset the layout
+
+egui-pop-empty-window-title = Nothing to show here
+
 egui-pop-fault-body = The rest of the application is fine. Retry, or report the message below.
 
 egui-pop-fault-title = { $name } stopped working

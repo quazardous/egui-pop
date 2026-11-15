@@ -1459,7 +1459,26 @@ pub const LINKS_NOT_OPENED: StrKey =
     StrKey::new("egui-pop-links-not-opened", "Not opened: { $reason }");
 
 /// Every string of this module, for catalogues and tests.
+/// The fallback page of a window that painted nothing: its title.
+pub const EMPTY_WINDOW_TITLE: StrKey =
+    StrKey::new("egui-pop-empty-window-title", "Nothing to show here");
+/// The fallback page's sentence.
+pub const EMPTY_WINDOW_BODY: StrKey = StrKey::new(
+    "egui-pop-empty-window-body",
+    "This window had nothing to draw. The log says what held it.",
+);
+/// The fallback page's action: the arrangement reset.
+pub const EMPTY_WINDOW_RESET: StrKey =
+    StrKey::new("egui-pop-empty-window-reset", "Reset the layout");
+/// The fallback page's second action: the first place.
+pub const EMPTY_WINDOW_BACK: StrKey =
+    StrKey::new("egui-pop-empty-window-back", "Back to the start");
+
 pub const ALL: &[StrKey] = &[
+    EMPTY_WINDOW_TITLE,
+    EMPTY_WINDOW_BODY,
+    EMPTY_WINDOW_RESET,
+    EMPTY_WINDOW_BACK,
     COMMAND_LABEL,
     COMMAND_WITH_CHANGE,
     NOTHING_MATCHES,

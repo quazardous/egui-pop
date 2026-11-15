@@ -1007,6 +1007,14 @@ egui-pop-editors-toggle-replace = Afficher le remplacement
 
 egui-pop-editors-whole-word = Mot entier
 
+egui-pop-empty-window-back = Revenir au début
+
+egui-pop-empty-window-body = Cette fenêtre n’avait rien à dessiner. Le journal dit ce qui la tenait.
+
+egui-pop-empty-window-reset = Réinitialiser la disposition
+
+egui-pop-empty-window-title = Rien à afficher ici
+
 egui-pop-fault-body = Le reste de l’application fonctionne. Réessayez, ou signalez le message ci-dessous.
 
 egui-pop-fault-title = { $name } a cessé de fonctionner

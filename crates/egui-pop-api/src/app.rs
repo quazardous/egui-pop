@@ -788,6 +788,8 @@ pub(crate) struct Shared {
     collectors: RefCell<Vec<(OwnerId, String)>>,
     /// A shortcuts editor waits for keys: the dispatcher stands aside.
     capturing: std::cell::Cell<bool>,
+    /// The main window's paint guard ([`crate::paint_guard`]).
+    pub(crate) paint_guard: RefCell<crate::paint_guard::Guard>,
     /// The shortcuts editor offers to change keys for the workspace.
     workspace_keys: std::cell::Cell<bool>,
     /// How the host names where a binding comes from.
@@ -916,6 +918,7 @@ impl AppHandle {
             running_since: RefCell::new(BTreeMap::new()),
             collectors: RefCell::new(Vec::new()),
             capturing: std::cell::Cell::new(false),
+            paint_guard: RefCell::default(),
             workspace_keys: std::cell::Cell::new(false),
             key_source_names: RefCell::new(None),
             steps: RefCell::new(Registry::new()),
@@ -2596,7 +2599,21 @@ impl AppHandle {
             focus::scope(ui, &scope, &[], |ui| {
                 let taking = self.takes_the_focus(ui.ctx(), id, &scope);
                 let stop = self.panel_stop(ui, id, title, taking);
-                fault::boundary(ui, "panel", title, |ui| draw(ui, self));
+                let failed = |fault: &fault::Fault| {
+                    log::error!(
+                        target: "egui_pop",
+                        "panel `{id}` (of `{owner}`) panicked while drawing: {}; \
+                         its region shows the fault, the rest of the window is drawn",
+                        fault.message
+                    );
+                    self.publish(
+                        "egui_pop",
+                        None,
+                        "panel.fault",
+                        json!({ "panel": id.as_str(), "owner": owner.as_str(), "message": fault.message }),
+                    );
+                };
+                fault::boundary_reporting(ui, "panel", title, |ui| draw(ui, self), failed);
                 // What the inspect mode names the panel by.
                 egui_pop_core::inspect::region(ui, "panel", id.as_str(), None, owner.as_str());
                 if taking {
@@ -6606,6 +6623,7 @@ impl App {
         // holds it: that content goes back to a window of its own.
         self.handle.move_out_of_root();
         self.handle.declare_windows(&ctx);
+        self.handle.mark_pass_start(ui);
         if !self.handle.root_pass(ui) {
             self.outlined(ui);
         }
@@ -6624,6 +6642,9 @@ impl App {
         }
         handle.show_zone(ui, &zones::OVERLAYS);
         handle.show_zone(ui, &zones::WINDOW_OVERLAYS);
+        // A focus screen without its page, a window that painted nothing:
+        // said and repaired, never left as it is.
+        handle.end_shell_pass(ui);
         crate::menus::draw_popup(&ctx, &self.handle);
         a11y::live_regions(ui);
         // Interactive indicators bound to a command, activated this frame.
@@ -6683,6 +6704,7 @@ impl App {
         crate::zen::show(&h, ui.ctx());
         if h.zen() {
             // Zen mode: the centre alone, and no caption published.
+            h.mark_shell_start(ui);
             egui_pop_core::frame::hide_title_bar(ui.ctx());
             crate::workbench::show(&h, ui);
             return;
@@ -6702,9 +6724,14 @@ impl App {
                 });
             no_drop.push(shown.response.rect);
         }
+        // What is painted from here on is the shell's content: the paint
+        // guard looks for it at the end of the pass.
+        h.mark_shell_start(ui);
         // A wizard as a focus screen covers the page: the title bar alone
-        // under it (to move or quit), no menus, status bar or centre.
-        if crate::admin::focus_screen(&h) {
+        // under it (to move or quit), no menus, status bar or centre. Not
+        // while its page is not drawn (the Settings closed under it): the
+        // shell is drawn then, never the title bar alone.
+        if h.hidden_by_focus_screen() {
             h.workbench_mut().no_drop = no_drop;
             return;
         }
