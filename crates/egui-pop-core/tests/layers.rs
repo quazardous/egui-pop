@@ -36,7 +36,7 @@ fn fill(ui: &mut egui::Ui) {
 fn harness() -> Harness<'static, Stack> {
     Harness::builder()
         .with_size(vec2(400.0, 400.0))
-        .with_context_setup(|ctx| layers::install(ctx))
+        .with_context_setup(layers::install)
         .build_ui_state(
             |ui, s: &mut Stack| {
                 let ctx = ui.ctx().clone();
