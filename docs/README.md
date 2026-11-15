@@ -238,6 +238,8 @@ of every crate with every feature on.
   platforms', the egui crates), whether YouTube and other hosts can play
   inside and under which terms, and the follow-ups ranked.
 - [API stability](stability.md): what each release promises.
+- [Outside review, November 2026](review-2026-11.md): an outside
+  review's concerns checked against 0.11, with the follow-ups.
 - [Changesets and releases](releasing.md): the changeset each change
   adds, commit subjects, the checks, and how a release is made.
 - [How quality is held](quality.md): AI-assisted development, the
