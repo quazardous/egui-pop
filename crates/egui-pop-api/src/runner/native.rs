@@ -34,6 +34,8 @@ thread_local! {
     /// The main window's handle as eframe gives it.
     static ROOT: Cell<Option<RawWindowHandle>> = const { Cell::new(None) };
     static VERIFIED: Cell<Option<bool>> = const { Cell::new(None) };
+    /// The main window, as eframe gives it at creation.
+    static ROOT_WINDOW: RefCell<Option<super::Window>> = const { RefCell::new(None) };
     /// The application's context, to forget a destroyed window's handles.
     static CTX: RefCell<Option<egui::Context>> = const { RefCell::new(None) };
 }
@@ -56,7 +58,36 @@ fn handles(viewport: ViewportId) -> Option<WindowHandles> {
 }
 
 pub(super) fn window_handle(viewport: ViewportId) -> Option<RawWindowHandle> {
+    if viewport == ViewportId::ROOT
+        && let Some(h) = ROOT.get()
+    {
+        return Some(h);
+    }
     handles(viewport).map(|h| h.raw_window())
+}
+
+pub(super) fn window(viewport: ViewportId) -> Option<super::Window> {
+    if viewport == ViewportId::ROOT {
+        return ROOT_WINDOW.with_borrow(Clone::clone);
+    }
+    handles(viewport).map(|h| super::Window::new(Arc::new(h)))
+}
+
+pub(super) fn windows() -> Vec<ViewportId> {
+    let mut known = Vec::new();
+    if ROOT_WINDOW.with_borrow(Option::is_some) {
+        known.push(ViewportId::ROOT);
+    }
+    if VERIFIED.get() == Some(true) && DISPLAY.get().is_some() {
+        WINDOWS.with_borrow(|w| {
+            known.extend(
+                w.iter()
+                    .map(|p| p.viewport)
+                    .filter(|v| *v != ViewportId::ROOT),
+            )
+        });
+    }
+    known
 }
 
 /// The `on_begin_pass` hook: pairs the window being painted with the
@@ -257,6 +288,7 @@ pub(super) fn run(
     // A new run starts clean (a second run in the same process).
     PAINTING.set(None);
     ROOT.set(None);
+    ROOT_WINDOW.set(None);
     VERIFIED.set(None);
     WINDOWS.with_borrow_mut(Vec::clear);
     let hook = options.event_loop_builder.take();
@@ -285,6 +317,10 @@ pub(super) fn run(
         if let Ok(h) = cc.window_handle() {
             ROOT.set(Some(h.as_raw()));
         }
+        if let Some(w) = cc.winit_window() {
+            let w: Arc<dyn crate::files::ParentWindow> = w.clone();
+            ROOT_WINDOW.set(Some(super::Window::new(w)));
+        }
         CTX.set(Some(cc.egui_ctx.clone()));
         cc.egui_ctx
             .on_begin_pass("egui_pop::runner", Arc::new(note_viewport));
@@ -309,6 +345,8 @@ pub(super) fn run(
         Ok(())
     });
     CTX.set(None);
+    ROOT_WINDOW.set(None);
+    ROOT.set(None);
     WINDOWS.with_borrow_mut(Vec::clear);
     ran?;
     match std::mem::take(&mut *made.borrow_mut()) {

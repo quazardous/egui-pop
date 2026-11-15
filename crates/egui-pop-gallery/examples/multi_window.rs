@@ -62,7 +62,7 @@ struct Demo {
     seen: u64,
     quit_sent: bool,
     /// What the runner said last (`runner` lines when it changes).
-    runner_seen: Option<(Option<bool>, bool)>,
+    runner_seen: Option<(Option<bool>, bool, usize)>,
 }
 
 /// What both windows do each pass: focus changes, the first `opened`
@@ -82,6 +82,8 @@ fn common(ui: &egui::Ui, win: &WindowUi<'_>, frames: u64, focused: &Cell<Option<
             // The window's handle, read by egui-pop's runner from its winit id.
             "handle": egui_pop::api::runner::window_handle(ui.ctx().viewport_id())
                 .map(|h| format!("{h:?}")),
+            // The window reached by its viewport id, with its display.
+            "window": runner_window(ui.ctx().viewport_id()),
         }));
     }
     if ui.input(|i| i.key_pressed(egui::Key::W)) {
@@ -206,7 +208,12 @@ impl eframe::App for Demo {
         // windows (known once the main window is painted after a redraw
         // request: not while eframe paints it hidden at start), its handle.
         let root_handle = egui_pop::api::runner::window_handle(egui::ViewportId::ROOT);
-        let now = (egui_pop::api::runner::ids_verified(), root_handle.is_some());
+        let known = egui_pop::api::runner::windows();
+        let now = (
+            egui_pop::api::runner::ids_verified(),
+            root_handle.is_some(),
+            known.len(),
+        );
         if self.runner_seen != Some(now) {
             self.runner_seen = Some(now);
             emit(serde_json::json!({
@@ -218,6 +225,12 @@ impl eframe::App for Demo {
                 "ids_verified": egui_pop::api::runner::ids_verified(),
                 "root_handle": root_handle.map(|h| format!("{h:?}")),
                 "root_frames": self.counts.root.get(),
+                // The viewports whose window the runner knows, each with
+                // its handles.
+                "windows": known
+                    .iter()
+                    .map(|v| serde_json::json!({ "viewport": format!("{v:?}"), "window": runner_window(*v) }))
+                    .collect::<Vec<_>>(),
             }));
         }
         if ui.input(|i| i.viewport().close_requested())
@@ -297,4 +310,17 @@ fn main() -> eframe::Result {
             runner_seen: None,
         }))
     })
+}
+
+/// The window egui-pop's runner gives for `viewport`: its window and
+/// display handles, as the kinds a consumer would see.
+fn runner_window(viewport: egui::ViewportId) -> serde_json::Value {
+    use egui_pop::api::runner::raw_window_handle::HasDisplayHandle;
+    match egui_pop::api::runner::window(viewport) {
+        None => serde_json::Value::Null,
+        Some(w) => serde_json::json!({
+            "window": w.raw_window().map(|h| format!("{h:?}")),
+            "display": w.display_handle().ok().map(|d| format!("{:?}", d.as_raw())),
+        }),
+    }
 }

@@ -24,7 +24,9 @@
 //!   eframe: they are used only once both agree ([`ids_verified`]). Each
 //!   window's handles are recorded where egui-pop keeps them per viewport
 //!   (`files::set_parent_window`, `frame::set_native_window`) and forgotten
-//!   when winit destroys the window. [`window_handle`] gives them.
+//!   when winit destroys the window. [`window`] gives a viewport's
+//!   window by its id, [`windows`] the viewports whose window is known,
+//!   [`window_handle`] the raw handle alone.
 //!
 //! Immediate viewports (painted inside their parent's pass) are not
 //! paired. On the web, and without the feature, eframe runs as before and
@@ -54,6 +56,14 @@ mod native {
         None
     }
 
+    pub(super) fn window(_: ViewportId) -> Option<super::Window> {
+        None
+    }
+
+    pub(super) fn windows() -> Vec<ViewportId> {
+        Vec::new()
+    }
+
     pub(super) fn ids_verified() -> Option<bool> {
         None
     }
@@ -67,8 +77,88 @@ mod native {
     }
 }
 
+use std::sync::Arc;
+
 use egui::{Rect, ViewportId};
-use raw_window_handle::RawWindowHandle;
+use raw_window_handle::{
+    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle, WindowHandle,
+};
+
+use crate::files::ParentWindow;
+
+/// The handle traits [`Window`] implements.
+pub use raw_window_handle;
+
+/// The native window showing a viewport ([`window`]): what takes a window
+/// through `HasWindowHandle` and `HasDisplayHandle` (a file chooser's
+/// parent, a Wayland subsurface, a Win32 subclass) is given it.
+///
+/// The main window's is eframe's own window; another window's handles
+/// are read from its winit id. They name a window winit keeps: use them
+/// on the thread that runs the event loop (the one running the
+/// application's frames), and keep them no longer than the viewport is
+/// open; once it closes, [`window`] answers none for it.
+#[derive(Clone)]
+pub struct Window(Arc<dyn ParentWindow>);
+
+impl Window {
+    #[cfg_attr(
+        not(all(
+            feature = "create-native",
+            not(any(target_os = "ios", target_os = "android"))
+        )),
+        allow(dead_code)
+    )]
+    pub(crate) fn new(window: Arc<dyn ParentWindow>) -> Window {
+        Window(window)
+    }
+
+    /// The raw window handle; none if the window refuses it.
+    pub fn raw_window(&self) -> Option<RawWindowHandle> {
+        self.0.window_handle().ok().map(|h| h.as_raw())
+    }
+
+    /// The same window as what a file chooser is attached to
+    /// (`files::set_parent_window` takes it).
+    pub fn as_parent(&self) -> Arc<dyn ParentWindow> {
+        self.0.clone()
+    }
+}
+
+impl std::fmt::Debug for Window {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Window").field(&self.raw_window()).finish()
+    }
+}
+
+impl HasWindowHandle for Window {
+    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+        self.0.window_handle()
+    }
+}
+
+impl HasDisplayHandle for Window {
+    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
+        self.0.display_handle()
+    }
+}
+
+/// The native window showing `viewport`, reached by its id: the main
+/// window ([`ViewportId::ROOT`]) as soon as eframe created it, on every
+/// system; another deferred viewport's once it was painted for a redraw
+/// request and the window ids were verified ([`ids_verified`]). None for
+/// an immediate viewport (painted inside its parent's window), a viewport
+/// not open (or closed since), when called off the event loop's thread,
+/// or when egui-pop does not own the event loop.
+pub fn window(viewport: ViewportId) -> Option<Window> {
+    native::window(viewport)
+}
+
+/// The viewports whose native window is known ([`window`]), the main
+/// window first.
+pub fn windows() -> Vec<ViewportId> {
+    native::windows()
+}
 
 /// The screens the event loop saw before the main window was created, in
 /// points (each monitor's physical rectangle over its scale factor); empty
@@ -77,10 +167,12 @@ pub fn screens() -> Vec<Rect> {
     native::screens()
 }
 
-/// The raw handle of the window showing `viewport`, once it was painted
-/// for a redraw request (eframe paints a window still hidden at start
-/// outside of one) and the window ids were verified ([`ids_verified`]); none for an
-/// immediate viewport, or when egui-pop does not own the event loop.
+/// The raw handle of the window showing `viewport` ([`window`]): the main
+/// window's as eframe gives it, another window's once it was painted for
+/// a redraw request (eframe paints a window still hidden at start
+/// outside of one) and the window ids were verified ([`ids_verified`]);
+/// none for an immediate viewport, or when egui-pop does not own the
+/// event loop.
 pub fn window_handle(viewport: ViewportId) -> Option<RawWindowHandle> {
     native::window_handle(viewport)
 }
@@ -157,6 +249,14 @@ pub(crate) fn repair_place(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn no_window_before_the_loop_runs() {
+        assert!(window(ViewportId::ROOT).is_none());
+        assert!(window(ViewportId::from_hash_of("secondary")).is_none());
+        assert!(windows().is_empty());
+        assert!(window_handle(ViewportId::ROOT).is_none());
+    }
 
     #[test]
     fn a_monitor_in_points() {
