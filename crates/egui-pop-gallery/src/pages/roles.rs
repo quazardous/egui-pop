@@ -37,6 +37,7 @@ impl Default for State {
 pub fn show(ui: &mut Ui, state: &mut State) {
     let t = Tokens::of(ui.ctx());
     ui.muted("Layout code says what a piece of text is and why there is space; the helpers draw from the theme's text roles, spacing by intent and kit.");
+    rows_and_grids(ui, state);
     ui.space_role(Space::Section);
     ui.section_title("Text roles");
     ui.space_role(Space::Inline);
@@ -102,8 +103,6 @@ pub fn show(ui: &mut Ui, state: &mut State) {
         Some(tone) => ui.meta(format!("Last clicked: {}", tone.name())),
         None => ui.meta("Nothing clicked yet."),
     };
-
-    rows_and_grids(ui, state);
 }
 
 /// `ui.row` and `ui.grid`: tracks, one baseline, gaps by intent.

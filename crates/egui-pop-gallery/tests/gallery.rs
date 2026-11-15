@@ -5556,6 +5556,9 @@ fn layout_by_role(theme: &str) {
     assert_eq!((kinds.len(), raws.len()), (2, 2));
     assert!(raws[0].left() > kinds[0].right(), "wide: beside");
     assert!(raws[1].top() >= kinds[1].bottom(), "narrow: folded");
+    // Below the rows and grids: brought into view first.
+    h.get_by_label("danger").scroll_to_me();
+    h.run();
     h.get_by_label("danger").click();
     h.run();
     assert!(h.query_by_label("Last clicked: danger").is_some());
@@ -6553,6 +6556,9 @@ fn egui_s_widgets_in_a_scope_follow_their_kit_component() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "scoped"));
     h.run();
     h.snapshot("scoped-pop-dark");
+    // Below the rows and grids: brought into view first.
+    h.get_by_label("danger").scroll_to_me();
+    h.run();
     h.get_by_label("danger").click();
     h.run();
     assert!(h.query_by_label("Last clicked: danger").is_some());
