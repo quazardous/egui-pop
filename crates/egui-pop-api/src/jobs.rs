@@ -20,6 +20,16 @@
 //!   for the host to run, or run in-process by a runner the application
 //!   gives ([`JobsPlugin::run_locally`]). [`ask`] runs one and marks the
 //!   job as waiting until the host answers.
+//! - A job belongs to a plugin when its `job.started` names it (`owner`,
+//!   or `command`, a command of the plugin), or when the plugin
+//!   published it itself. When that plugin is disconnected (ADR 0028),
+//!   the framework asks the host to cancel its jobs that can be
+//!   (`job.cancel` with `{ "id", "reason" }`, from `egui_pop`; the job
+//!   keeps the reason, [`Job::reason`]) and publishes `job.orphaned` for
+//!   the others, which go on, marked ([`Job::orphaned`]: the jobs centre
+//!   says "its plugin is off") until they end or the plugin is back
+//!   (`job.adopted`). `plugin.disconnected` counts both
+//!   (`jobs_cancelled`, `jobs_orphaned`).
 //! - Time left comes from the plugin's clock ([`JobsPlugin::clock`]),
 //!   the motion clock by default (`egui_pop_core::motion`, frozen in
 //!   tests); tests may give a
@@ -61,8 +71,9 @@ use egui_pop_core::theme::Tokens;
 use egui_pop_core::ui::UiPop as _;
 use egui_pop_model::clock::SharedClock;
 use egui_pop_model::commands::CommandSpec;
-use egui_pop_model::ids::{BlockId, CommandId, PluginId, StepId};
-use egui_pop_model::jobs::{Incoming, Job, Jobs, Request, Summary};
+use egui_pop_model::commands::Origin;
+use egui_pop_model::ids::{BlockId, CommandId, OwnerId, PluginId, StepId};
+use egui_pop_model::jobs::{Incoming, Job, Jobs, Left, Request, Summary};
 use egui_pop_model::panels::{Area, PanelSpec};
 use serde_json::{Value as Json, json};
 
@@ -237,6 +248,12 @@ impl JobsService {
 
     /// Folds the journal's new events; the jobs that moved.
     fn feed(&self, app: &AppHandle) -> BTreeSet<String> {
+        self.fold(app);
+        lock(&self.state).jobs.take_changed()
+    }
+
+    /// Folds the journal's new events.
+    fn fold(&self, app: &AppHandle) {
         let time = egui_pop_core::motion::now(&app.egui());
         let seen = {
             let mut s = lock(&self.state);
@@ -245,7 +262,7 @@ impl JobsService {
         };
         let last = app.last_event();
         if last <= seen {
-            return BTreeSet::new();
+            return;
         }
         let events = app.events_since(seen);
         let now = self.now();
@@ -261,7 +278,75 @@ impl JobsService {
             s.jobs.apply(&incoming, now);
         }
         s.seen = last;
-        s.jobs.take_changed()
+    }
+}
+
+/// The journal's source of what the framework itself asks or says.
+const FRAMEWORK: &str = "egui_pop";
+
+/// The jobs a plugin that goes leaves (ADR 0028), read before its
+/// disconnection is published so that the event counts them; nothing
+/// without the jobs plugin.
+pub(crate) fn left_by(
+    app: &AppHandle,
+    plugin: &PluginId,
+    owner: &OwnerId,
+    commands: &[CommandId],
+) -> Left {
+    let Some(jobs) = app.service(&JOBS) else {
+        return Left::default();
+    };
+    // Up to the last event: a job started since the last pass counts.
+    jobs.fold(app);
+    let commands: Vec<&str> = commands.iter().map(CommandId::as_str).collect();
+    jobs.with(|j| j.left_by(&[plugin.as_str(), owner.as_str()], &commands))
+}
+
+/// Does what [`left_by`] found, on the journal alone (the model follows
+/// from there, as for any job event): the host is asked to cancel the
+/// jobs that can be, with the reason, and the others are published as
+/// orphaned.
+pub(crate) fn owner_gone(app: &AppHandle, plugin: &PluginId, left: &Left) {
+    if left.is_empty() {
+        return;
+    }
+    let reason = format!("its plugin `{plugin}` is disconnected");
+    for id in &left.cancel {
+        log::info!(target: "egui_pop", "job `{id}`: the host is asked to cancel it: {reason}");
+        // Queued as the framework's own request, whoever asked for the
+        // plugin to go.
+        app.push_request(crate::app::Request::Run {
+            command: CMD_CANCEL,
+            args: json!({ "id": id, "reason": reason }),
+            origin: Origin::Script(FRAMEWORK.into()),
+        });
+    }
+    for id in &left.orphan {
+        log::info!(target: "egui_pop", "job `{id}` is orphaned: {reason}");
+        app.publish(
+            FRAMEWORK,
+            None,
+            egui_pop_model::jobs::ORPHANED,
+            json!({ "id": id, "plugin": plugin, "reason": reason }),
+        );
+    }
+}
+
+/// A plugin is back: the jobs it had left are its own again
+/// (`job.adopted`, one event naming them).
+fn owner_back(app: &AppHandle, plugin: &PluginId) {
+    let Some(jobs) = app.service(&JOBS) else {
+        return;
+    };
+    jobs.fold(app);
+    let back = lock(&jobs.state).jobs.adopt(plugin.as_str());
+    if !back.is_empty() {
+        app.publish(
+            FRAMEWORK,
+            None,
+            "job.adopted",
+            json!({ "plugin": plugin, "jobs": back }),
+        );
     }
 }
 
@@ -533,6 +618,11 @@ impl Plugin for JobsPlugin {
             )
             .args(json!({ "id": "export-1", "title": "Export", "kind": "export", "fraction": 0.25, "done": 2, "total": 8, "steps": [], "step": null, "elapsed": 4.0 })),
         )?;
+        ctx.on(On::Connected, |app, ev| {
+            if let crate::hooks::Lifecycle::Connected(p) = ev {
+                owner_back(app, p);
+            }
+        });
         ctx.on(On::Pass, |app, _| {
             let Some(jobs) = app.service(&JOBS) else {
                 return;

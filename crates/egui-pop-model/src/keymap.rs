@@ -14,6 +14,13 @@
 //! and keypad digits are the same. A shortcut is one or more chords
 //! (`Ctrl+K Ctrl+S`).
 //!
+//! A binding whose command went with its plugin is **dormant**
+//! ([`Keymap::set_dormant`], ADR 0028): it stays in its layer and is saved
+//! with it, but it does not take its keys, which go to the next binding
+//! of them; it shows no key and makes no conflict, a trace says
+//! [`DORMANT`], and [`Keymap::dormant`] lists it for a shortcuts editor.
+//! It is live again as soon as its command is taken out of the set.
+//!
 //! A chord's key may also be a pointer gesture ([`Pointer`]): the wheel,
 //! a smooth scroll, a pinch, a click, a double click or a drag of a
 //! button, with the same modifiers (`Ctrl+Wheel`, `MiddleDrag`,
@@ -45,6 +52,12 @@ use crate::diagnostics::Diagnostics;
 use crate::ids::{CommandId, OwnerId};
 use crate::registry::OwnedList;
 use crate::when::{When, WhenContext};
+
+/// What a trace says of a binding whose command's plugin is
+/// disconnected: the `because` of its [`Verdict::Lost`], whose `to` is
+/// the binding that got the keys (empty when none did). A verdict of its
+/// own comes with the next breaking release of this enum.
+pub const DORMANT: &str = "dormant: its command's plugin is disconnected";
 
 /// Where a binding comes from; later variants win.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -619,6 +632,12 @@ impl fmt::Display for Verdict {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Verdict::Won => write!(f, "won"),
+            Verdict::Lost { to, because } if *because == DORMANT && to.is_empty() => {
+                write!(f, "{because}")
+            }
+            Verdict::Lost { to, because } if *because == DORMANT => {
+                write!(f, "{because}; the keys go to {to}")
+            }
             Verdict::Lost { to, because } => write!(f, "lost to {to} ({because})"),
             Verdict::WhenFalse => write!(f, "its clause is false here"),
             Verdict::RemovedBy { owner, layer } => {
@@ -693,6 +712,8 @@ fn is_auto(t: &Typing) -> bool {
 #[derive(Clone, Debug, Default)]
 pub struct Keymap {
     rules: OwnedList<Rule>,
+    /// Commands whose bindings are dormant.
+    dormant: std::collections::BTreeSet<CommandId>,
 }
 
 impl Keymap {
@@ -772,12 +793,45 @@ impl Keymap {
         None
     }
 
-    /// The bindings in force, after removals, with their order.
+    /// Makes the bindings running these commands dormant, and those of
+    /// every other command live: the commands that went with a
+    /// disconnected plugin (ADR 0028). Whether the set changed.
+    pub fn set_dormant(&mut self, commands: impl IntoIterator<Item = CommandId>) -> bool {
+        let commands: std::collections::BTreeSet<CommandId> = commands.into_iter().collect();
+        let changed = commands != self.dormant;
+        self.dormant = commands;
+        changed
+    }
+
+    /// Whether a command's bindings are dormant.
+    pub fn is_dormant(&self, command: &CommandId) -> bool {
+        self.dormant.contains(command)
+    }
+
+    /// The dormant bindings, in declaration order: those running a
+    /// command of [`Keymap::set_dormant`] that no higher layer removed
+    /// (what a shortcuts editor lists apart, with the plugin's name).
+    pub fn dormant(&self) -> Vec<Binding> {
+        self.rules
+            .iter()
+            .map(|s| &s.item.binding)
+            .filter(|b| self.asleep(b) && self.removed_by(b).is_none())
+            .cloned()
+            .collect()
+    }
+
+    fn asleep(&self, b: &Binding) -> bool {
+        b.action.command().is_some_and(|c| self.dormant.contains(c))
+    }
+
+    /// The bindings in force, after removals and without the dormant
+    /// ones, with their order.
     fn live(&self) -> impl Iterator<Item = (u64, &Rule)> {
         self.rules
             .iter()
             .filter(|s| {
                 matches!(s.item.binding.action, Action::Run(_))
+                    && !self.asleep(&s.item.binding)
                     && self.removed_by(&s.item.binding).is_none()
             })
             .map(|s| (s.order, &s.item))
@@ -909,6 +963,15 @@ impl Keymap {
             }
             let verdict = if let Some(v) = self.removed_by(&r.binding) {
                 v
+            } else if self.asleep(&r.binding) {
+                Verdict::Lost {
+                    to: winner
+                        .as_ref()
+                        .filter(|_| exact)
+                        .and_then(|w| w.2.to_file())
+                        .unwrap_or_default(),
+                    because: DORMANT,
+                }
             } else if let Some(v) = Self::blocked(r, cx) {
                 v
             } else if !r.when.eval(cx) {

@@ -1795,6 +1795,8 @@ egui-pop-job-no-log = No log yet.
 
 egui-pop-job-of = { $done } of { $total }
 
+egui-pop-job-orphaned = { $state }, its plugin { $plugin } is off
+
 egui-pop-job-pause = Pause
 
 egui-pop-job-paused = paused
@@ -2028,6 +2030,12 @@ egui-pop-shortcuts-conflict-in-scope = { $keys } in { $scope }: { $loser } goes 
 egui-pop-shortcuts-conflicts = Conflicts
 
 egui-pop-shortcuts-default-name = Default keys of { $command }
+
+egui-pop-shortcuts-dormant = Dormant keys
+
+egui-pop-shortcuts-dormant-note = Their command's plugin is off: these keys do nothing until it is back.
+
+egui-pop-shortcuts-dormant-plugin = dormant: plugin { $plugin } is off
 
 egui-pop-shortcuts-from-user = user
 

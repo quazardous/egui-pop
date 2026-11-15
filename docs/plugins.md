@@ -20,18 +20,35 @@ Its disconnection leaves a `plugin.disconnected` event on the journal
 a plugin that required it, `failed connect` when its connection failed
 after it registered things), `removed` with counts by kind (`commands`,
 `panels`, `components`, `hosts`, `mounts`, `undo_steps`,
-`mixed_undo_steps`) and `undo`, one entry per
+`mixed_undo_steps`, `jobs_cancelled`, `jobs_orphaned`) and `undo`, one entry per
 history that lost steps (`history`, `steps`, `mixed`: those also
 changing other owners' values). The value store logs each such history
 at info level too (`Store::remove_owner_report` gives the counts).
 
 A run of one of its commands asked after it went (queued with
 `AppHandle::run_as`, a menu, a toast's or a finished job's action, an
-accepted dialog, a key still bound to it) does not run: it is a
-`command.refused` event, from the origin that asked, whose `reason` is
-"its plugin `x` is disconnected" (or the registry's refusal for a
-command never declared). A key bound to such a command also logs a
-warning.
+accepted dialog) does not run: it is a `command.refused` event, from
+the origin that asked, whose `reason` is "its plugin `x` is
+disconnected" (or the registry's refusal for a command never declared;
+a key bound to a command never declared also logs a warning).
+
+A key the user, the workspace or another plugin bound to one of its
+commands is kept, **dormant**: it stays in its layer and is saved with
+it, but it no longer takes its keys, which go to the next binding of
+them (the application's default, most often). The command shows no key
+and the binding makes no conflict; the key trace says `dormant: its
+command's plugin is disconnected` for it
+(`egui_pop_model::keymap::DORMANT`), the `keys` collector lists it under
+`dormant`, an info line says it once, and the shortcuts editor lists it
+under "Dormant keys" with the plugin's name (`AppHandle::dormant_keys`).
+When the plugin reconnects, the binding is live again as it was.
+
+Its jobs ([Progress](progress.md)): a job going on that names it
+(`owner`, or `command`, in `job.started`) and can be cancelled is
+cancelled by the host, asked by the framework (`job.cancel` with the
+`reason`, from `script:egui_pop`); one that cannot, and one it published
+itself, goes on and is said orphaned (`job.orphaned`), which the jobs
+centre shows as "its plugin x is off".
 
 What it left on screen is closed, greyed or kept for its return. A
 dialog on one of its commands, or a custom one it opened, is cancelled

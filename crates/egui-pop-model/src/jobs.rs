@@ -9,14 +9,27 @@
 //!
 //! | Event | Data |
 //! |---|---|
-//! | `job.started` | `id`, `title`, `kind`, `parent`, `weight` (its share of its parent), `total` (none: indeterminate), `steps` (`[{id, title, weight}]` or names), `cancellable` (true), `pausable` (false), `retryable` (true) |
+//! | `job.started` | `id`, `title`, `kind`, `parent`, `weight` (its share of its parent), `total` (none: indeterminate), `steps` (`[{id, title, weight}]` or names), `cancellable` (true), `pausable` (false), `retryable` (true), `owner` (the plugin the job runs for), `command` (the command that started it) |
 //! | `job.progress` | `id`, `done`, `total`, `failed`, `skipped`, `item` (the current item), `item_progress` (0 to 1), `phase`, `step` (the current step), `step_done`, `step_total`, `estimate` (the host's own fraction, 0 to 1) |
 //! | `job.item_failed` | `id`, `item`, `error` (the job goes on) |
-//! | `job.paused`, `job.resumed`, `job.cancelling` | `id` |
+//! | `job.paused`, `job.resumed` | `id` |
+//! | `job.cancelling` | `id`, `reason` (why, when it was not the user) |
 //! | `job.failed` | `id`, `error` |
 //! | `job.finished` | `id`, `actions` (`[{title, command, args}]`) |
-//! | `job.cancelled` | `id` |
+//! | `job.cancelled` | `id`, `reason` (why, when it was not the user) |
+//! | `job.orphaned` | `id`, `plugin`, `reason` (published by egui-pop: the job's plugin is disconnected and the job goes on) |
 //! | `job.log` | `id`, `text` (lines of the job's log) |
+//!
+//! **A job has an owner** when its `job.started` names one: `owner`, the
+//! plugin it runs for, or `command`, the command that started it; a job
+//! naming neither belongs to the plugin that published it, when its
+//! events' source is a plugin. When that plugin is disconnected (ADR
+//! 0028, [`Jobs::left_by`]) a job naming it that can be cancelled is
+//! cancelled through the host's `job.cancel`, with the reason
+//! ([`Job::reason`]); any other is kept and marked orphaned
+//! ([`Job::orphaned`], from `job.orphaned`) until it ends, starts again
+//! or its plugin is back ([`Jobs::adopt`]). An orphaned job can be
+//! dismissed while it goes on: nothing may ever end it.
 //!
 //! A `job.started` for a job already known starts it again (a retry):
 //! its progress is reset, its log kept, its finished children
@@ -83,6 +96,9 @@ pub const CANCELLING: &str = "job.cancelling";
 pub const FAILED: &str = "job.failed";
 pub const FINISHED: &str = "job.finished";
 pub const CANCELLED: &str = "job.cancelled";
+/// The job's plugin is disconnected and the job goes on (published by
+/// egui-pop, not by the host).
+pub const ORPHANED: &str = "job.orphaned";
 /// Lines of a job's log.
 pub const LOG: &str = "job.log";
 
@@ -227,6 +243,16 @@ pub struct Job {
     pub kind: String,
     /// Who published it (the journal's source).
     pub source: String,
+    /// The plugin it runs for, when its `job.started` named one.
+    pub owner: Option<String>,
+    /// The command that started it, when its `job.started` named one.
+    pub command: Option<String>,
+    /// The plugin it was left by: its owner is disconnected and the job
+    /// goes on (`job.orphaned`).
+    pub orphaned: Option<String>,
+    /// Why it is being cancelled or was, when it was not the user (its
+    /// plugin is disconnected).
+    pub reason: Option<String>,
     pub parent: Option<String>,
     /// Its share of its parent.
     pub weight: f64,
@@ -284,6 +310,10 @@ impl Job {
             title: id.into(),
             kind: String::new(),
             source: String::new(),
+            owner: None,
+            command: None,
+            orphaned: None,
+            reason: None,
             parent: None,
             weight: 1.0,
             state: JobState::Running,
@@ -378,6 +408,23 @@ impl Job {
             }
             self.sample = Some((now, f));
         }
+    }
+}
+
+/// The jobs a disconnected plugin left ([`Jobs::left_by`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
+pub struct Left {
+    /// Jobs naming it as owner that can be cancelled: the host is asked.
+    pub cancel: Vec<String>,
+    /// Jobs kept and marked orphaned: those that cannot be cancelled,
+    /// and those it published itself without naming an owner.
+    pub orphan: Vec<String>,
+}
+
+impl Left {
+    pub fn is_empty(&self) -> bool {
+        self.cancel.is_empty() && self.orphan.is_empty()
     }
 }
 
@@ -506,6 +553,10 @@ impl Jobs {
         let Some(id) = text(d, "id") else {
             return false;
         };
+        if e.name == ORPHANED && !self.jobs.get(&id).is_some_and(Job::active) {
+            // Only a job going on is left behind.
+            return false;
+        }
         if e.name == STARTED {
             self.start(&id, e, now);
         } else if !self.jobs.contains_key(&id) {
@@ -608,12 +659,19 @@ impl Jobs {
             CANCELLING => {
                 job.state = JobState::Cancelling;
                 job.requested = None;
+                if let Some(reason) = text(d, "reason") {
+                    job.reason = Some(reason);
+                }
+            }
+            ORPHANED => {
+                job.orphaned = Some(text(d, "plugin").unwrap_or_default());
             }
             FAILED => {
                 job.state = JobState::Failed;
                 job.error = text(d, "error").or_else(|| Some(String::new()));
                 job.ended_at = Some(now);
                 job.requested = None;
+                job.orphaned = None;
             }
             FINISHED => {
                 job.state = match d["outcome"].as_str() {
@@ -655,11 +713,16 @@ impl Jobs {
                 job.item_progress = None;
                 job.ended_at = Some(now);
                 job.requested = None;
+                job.orphaned = None;
             }
             CANCELLED => {
                 job.state = JobState::Cancelled;
                 job.ended_at = Some(now);
                 job.requested = None;
+                job.orphaned = None;
+                if let Some(reason) = text(d, "reason") {
+                    job.reason = Some(reason);
+                }
             }
             LOG => {
                 let text = text(d, "text").unwrap_or_default();
@@ -713,6 +776,8 @@ impl Jobs {
         job.title = text(d, "title").unwrap_or_else(|| id.into());
         job.kind = text(d, "kind").unwrap_or_default();
         job.source = text(d, "source").unwrap_or_else(|| e.source.into());
+        job.owner = text(d, "owner");
+        job.command = text(d, "command");
         job.parent = text(d, "parent").filter(|p| p != id);
         job.weight = d["weight"].as_f64().unwrap_or(1.0).max(0.0);
         job.total = count(d, "total");
@@ -761,6 +826,10 @@ impl Jobs {
                 };
                 job.requested = Some(req);
                 job.request_error = None;
+                if req == Request::Cancel {
+                    // Why, when it is not the user asking.
+                    job.reason = text(&e.data["args"], "reason");
+                }
                 self.dispatched.insert(e.seq, (id.clone(), req));
                 self.changed.insert(id);
                 true
@@ -917,10 +986,70 @@ impl Jobs {
         }
     }
 
+    /// The jobs going on that a disconnected plugin left (ADR 0028), by
+    /// what becomes of them. `owners` are the names it goes by (its
+    /// plugin id, its owner id), `commands` the commands that went with
+    /// it. A job naming it (`owner`, or `command`) that is cancellable is
+    /// to be cancelled by the host; one that is not, and one naming no
+    /// owner that it published itself (its events' source), is to be
+    /// marked orphaned. A child job follows its parent: it is not listed.
+    pub fn left_by(&self, owners: &[&str], commands: &[&str]) -> Left {
+        let mut left = Left::default();
+        for job in self.all() {
+            if !job.active() || job.orphaned.is_some() {
+                continue;
+            }
+            let named = job.owner.as_deref().is_some_and(|o| owners.contains(&o))
+                || job
+                    .command
+                    .as_deref()
+                    .is_some_and(|c| commands.contains(&c));
+            let published =
+                job.owner.is_none() && job.command.is_none() && owners.contains(&&*job.source);
+            if !named && !published {
+                continue;
+            }
+            if job
+                .parent
+                .as_ref()
+                .is_some_and(|p| self.jobs.get(p).is_some_and(Job::active))
+            {
+                continue;
+            }
+            if named && job.cancellable {
+                if job.state != JobState::Cancelling && job.requested != Some(Request::Cancel) {
+                    left.cancel.push(job.id.clone());
+                }
+            } else {
+                left.orphan.push(job.id.clone());
+            }
+        }
+        left
+    }
+
+    /// Takes the orphaned mark off the jobs a plugin left: it is back.
+    /// Returns the jobs it took it off.
+    pub fn adopt(&mut self, plugin: &str) -> Vec<String> {
+        let mut back = Vec::new();
+        for job in self.jobs.values_mut() {
+            if job.orphaned.as_deref() == Some(plugin) {
+                job.orphaned = None;
+                back.push(job.id.clone());
+            }
+        }
+        self.changed.extend(back.iter().cloned());
+        back
+    }
+
     /// Forgets a job and its children (a dismissed error, a cleared
-    /// history entry); an active job is kept.
+    /// history entry); an active job is kept, unless it is orphaned
+    /// (nothing may ever end it).
     pub fn dismiss(&mut self, id: &str) -> bool {
-        if self.jobs.get(id).is_none_or(Job::active) {
+        if self
+            .jobs
+            .get(id)
+            .is_none_or(|j| j.active() && j.orphaned.is_none())
+        {
             return false;
         }
         let mut gone = vec![id.to_string()];
@@ -1224,6 +1353,65 @@ mod tests {
         f.at(2.0, CANCELLED, json!({ "id": "e" }));
         assert_eq!(f.job("e").state, JobState::Cancelled);
         assert_eq!(f.job("e").requested, None);
+    }
+
+    #[test]
+    fn a_gone_plugins_jobs_are_cancelled_or_orphaned() {
+        let mut f = Feed::new();
+        f.at(0.0, STARTED, json!({ "id": "mine", "owner": "p" }));
+        f.at(
+            0.0,
+            STARTED,
+            json!({ "id": "fixed", "owner": "p", "cancellable": false }),
+        );
+        f.at(
+            0.0,
+            STARTED,
+            json!({ "id": "by-command", "command": "p.go" }),
+        );
+        f.at(0.0, STARTED, json!({ "id": "other", "owner": "q" }));
+        f.at(0.0, STARTED, json!({ "id": "ended", "owner": "p" }));
+        f.at(0.5, FINISHED, json!({ "id": "ended" }));
+        // One it published itself, naming no owner.
+        f.seq += 1;
+        let data = json!({ "id": "own" });
+        f.jobs
+            .apply(&Incoming::new(f.seq, STARTED, &data).source("p"), 0.0);
+        let left = f.jobs.left_by(&["p"], &["p.go"]);
+        assert_eq!(left.cancel, ["mine", "by-command"]);
+        assert_eq!(left.orphan, ["fixed", "own"]);
+
+        // The host is asked, with the reason; the others are marked.
+        f.at(
+            1.0,
+            "command.dispatched",
+            json!({ "command": "job.cancel", "args": { "id": "mine", "reason": "its plugin `p` is disconnected" } }),
+        );
+        f.at(1.0, ORPHANED, json!({ "id": "fixed", "plugin": "p" }));
+        f.at(1.0, ORPHANED, json!({ "id": "ended", "plugin": "p" }));
+        f.at(1.0, ORPHANED, json!({ "id": "never", "plugin": "p" }));
+        assert_eq!(f.job("mine").requested, Some(Request::Cancel));
+        assert_eq!(f.job("fixed").orphaned.as_deref(), Some("p"));
+        assert_eq!(f.job("ended").orphaned, None, "it had ended");
+        assert!(f.jobs.get("never").is_none(), "not made up");
+        assert!(f.job("fixed").active());
+        // Asked once: neither is listed again.
+        let again = f.jobs.left_by(&["p"], &[]);
+        assert_eq!(again.cancel, Vec::<String>::new());
+        assert_eq!(again.orphan, ["own"]);
+
+        f.at(2.0, CANCELLED, json!({ "id": "mine" }));
+        let j = f.job("mine");
+        assert_eq!(j.state, JobState::Cancelled);
+        assert_eq!(j.reason.as_deref(), Some("its plugin `p` is disconnected"));
+
+        // Its plugin back, the job is its own again; left once more, it
+        // can be dismissed while it goes on.
+        assert_eq!(f.jobs.adopt("p"), ["fixed"]);
+        assert_eq!(f.job("fixed").orphaned, None);
+        assert!(!f.jobs.dismiss("fixed"), "it goes on");
+        f.at(3.0, ORPHANED, json!({ "id": "fixed", "plugin": "p" }));
+        assert!(f.jobs.dismiss("fixed"));
     }
 
     #[test]

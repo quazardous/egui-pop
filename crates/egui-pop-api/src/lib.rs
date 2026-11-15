@@ -182,7 +182,7 @@ pub mod zones;
 pub mod zoom;
 
 pub use app::{
-    App, AppBuilder, AppHandle, CMD_THEME_TOGGLE, Call, FOCUS_MODE, MakeError, Request,
+    App, AppBuilder, AppHandle, CMD_THEME_TOGGLE, Call, DormantKey, FOCUS_MODE, MakeError, Request,
     SETTING_ACCENT_COLOR, SETTING_FOCUS, SETTING_THEME_PREFERENCE, THEME, ThemeService,
 };
 pub use ctx::{Ctx, CtxError, ValueWriter};

@@ -889,6 +889,7 @@ egui-pop-job-failed d15aea9ea7f99692
 egui-pop-job-hide-log 72d9e1e24d11f6ba
 egui-pop-job-no-log eda07e0d90437f16
 egui-pop-job-of eecffc24673fc1a2
+egui-pop-job-orphaned f1b6fb1ab603546d
 egui-pop-job-pause ad449c6e5bac8b8d
 egui-pop-job-paused f2da03c9f377080b
 egui-pop-job-refused dff48b02de27518b
@@ -1006,6 +1007,9 @@ egui-pop-shortcuts-change-name c784fd50dba0b68e
 egui-pop-shortcuts-conflict-in-scope b9414dcbc041a701
 egui-pop-shortcuts-conflicts c21440118166b982
 egui-pop-shortcuts-default-name ceea5e681817a45a
+egui-pop-shortcuts-dormant 44a39ebf4e26f44c
+egui-pop-shortcuts-dormant-note bc6a730c9de4d9f1
+egui-pop-shortcuts-dormant-plugin 68246600e364dafb
 egui-pop-shortcuts-from-user 7c1015e324534020
 egui-pop-shortcuts-from-workspace 03c22c9a1e72a85c
 egui-pop-shortcuts-goes-to c8356e3ae2ee2b67
