@@ -214,6 +214,10 @@ result goes to the journal".
 (The second event's `result` is cut here; it is the whole answer shown
 above.)
 
+A plugin's disconnection is a `plugin.disconnected` event, and a run of
+a command whose plugin went is a `command.refused` event saying so
+([Plugins](plugins.md#plugins)).
+
 ### Act through collector actions
 
 Besides `commands.run`, collectors offer actions of their own. Each

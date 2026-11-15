@@ -357,6 +357,27 @@ struct Gesture {
     changes: Vec<(String, Value, Value)>,
 }
 
+/// What [`Store::remove_owner_report`] removed with an owner.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct OwnerRemoval {
+    /// The owner's paths, removed (their changed values kept pending).
+    pub paths: Vec<String>,
+    /// Per history, the undo steps dropped; only histories that lost
+    /// some.
+    pub dropped: Vec<DroppedSteps>,
+}
+
+/// The undo steps one history lost when an owner went: those changing
+/// one of its paths, undo, redo and kept branches alike.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DroppedSteps {
+    pub history: ScopeId,
+    /// Steps dropped.
+    pub steps: usize,
+    /// Of those, the steps that also changed values of other owners.
+    pub mixed: usize,
+}
+
 /// One undo step.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Step {
@@ -1559,8 +1580,17 @@ impl Store {
 
     /// Removes an owner's paths and listeners; their undo steps go too.
     /// Changed values of removed paths are kept as pending, so they come
-    /// back when the owner declares them again.
+    /// back when the owner declares them again. The paths removed;
+    /// [`Store::remove_owner_report`] also says which steps went.
     pub fn remove_owner(&mut self, owner: &OwnerId) -> Vec<String> {
+        self.remove_owner_report(owner).paths
+    }
+
+    /// [`Store::remove_owner`], saying what went: the paths, and per
+    /// history the undo steps dropped because they changed one of them,
+    /// those also changing other owners' values included (ADR 0028).
+    /// Each history that lost steps logs how many at info level.
+    pub fn remove_owner_report(&mut self, owner: &OwnerId) -> OwnerRemoval {
         let paths: Vec<String> = self
             .entries
             .iter()
@@ -1575,23 +1605,47 @@ impl Store {
             }
         }
         let gone = |s: &Step| s.changes.iter().any(|(p, _, _)| paths.contains(p));
-        for h in self.histories.values_mut() {
+        let mixed = |s: &Step| s.changes.iter().any(|(p, _, _)| !paths.contains(p));
+        let mut dropped = Vec::new();
+        for (scope, h) in &mut self.histories {
+            let mut out = DroppedSteps {
+                history: scope.clone(),
+                steps: 0,
+                mixed: 0,
+            };
+            let mut keep = |s: &Step| {
+                if !gone(s) {
+                    return true;
+                }
+                out.steps += 1;
+                out.mixed += usize::from(mixed(s));
+                false
+            };
             let n = h.undo.len() + h.redo.len();
-            h.undo.retain(|s| !gone(s));
-            h.redo.retain(|s| !gone(s));
+            h.undo.retain(&mut keep);
+            h.redo.retain(&mut keep);
             if h.undo.len() + h.redo.len() != n {
                 h.rev += 1;
             }
             for b in &mut h.replaced {
-                b.steps.retain(|s| !gone(s));
+                b.steps.retain(&mut keep);
             }
             h.replaced.retain(|b| !b.steps.is_empty());
             for snap in &mut h.snapshots {
                 snap.values.retain(|p, _| !paths.contains(p));
             }
+            if out.steps > 0 {
+                log::info!(
+                    target: "egui_pop",
+                    "history `{scope}`: {} undo step(s) dropped with `{owner}` ({} also changing other values)",
+                    out.steps,
+                    out.mixed,
+                );
+                dropped.push(out);
+            }
         }
         self.listeners.retain(|_, l| l.owner != *owner);
-        paths
+        OwnerRemoval { paths, dropped }
     }
 
     /// The values under a prefix that differ from their default, and the
