@@ -25,6 +25,8 @@ default = ["eframe", "phosphor", "theme-zip", "bundled-fonts", "image-previews"]
 bundled-fonts = ["egui-pop-api/bundled-fonts"]
 ## Run applications through eframe (`App::run_native`, `eframe::App`).
 eframe = ["egui-pop-api/eframe"]
+## Spike (never merged): eframe on an event loop egui-pop owns.
+create-native = ["egui-pop-api/create-native"]
 ## Icons drawn from the Phosphor icon font (MIT, about 480 KB); without
 ## it, icons are painted with lines and fills.
 phosphor = ["egui-pop-api/phosphor"]

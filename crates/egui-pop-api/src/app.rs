@@ -3997,7 +3997,7 @@ impl AppBuilder {
         if self.multi_window {
             crate::windows::present_mode(&mut options);
         }
-        eframe::run_native(
+        start(
             title,
             options,
             Box::new(move |cc| {
@@ -4037,7 +4037,7 @@ impl AppBuilder {
         if self.multi_window {
             crate::windows::present_mode(&mut options);
         }
-        eframe::run_native(
+        start(
             title,
             options,
             Box::new(move |cc| {
@@ -4050,6 +4050,19 @@ impl AppBuilder {
             }),
         )
     }
+}
+
+/// eframe's `run_native`, or (spike) eframe on egui-pop's own event loop.
+#[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
+fn start(
+    title: &str,
+    options: eframe::NativeOptions,
+    creator: eframe::AppCreator<'_>,
+) -> eframe::Result {
+    #[cfg(feature = "create-native")]
+    return crate::runner::run(title, options, creator);
+    #[cfg(not(feature = "create-native"))]
+    eframe::run_native(title, options, creator)
 }
 
 /// Why `make` (of `AppBuilder::run_native_with`) gave no application.

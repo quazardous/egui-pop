@@ -13,7 +13,9 @@ authors.workspace = true
 workspace = true
 
 [features]
-default = ["graph-png", "graph-pdf"]
+default = ["graph-png", "graph-pdf", "create-native"]
+## Spike (never merged, on by default here): eframe through `create_native`.
+create-native = ["egui-pop/create-native"]
 ## The node graph page exports PNG (`egui-pop/graph-png`).
 graph-png = ["egui-pop/graph-png"]
 ## The node graph page exports PDF (`egui-pop/graph-pdf`).

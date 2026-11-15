@@ -12,8 +12,14 @@ repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
 
-[lints]
-workspace = true
+# Spike: `deny` instead of the workspace's `forbid`, so `runner` may
+# borrow raw handles (a real version would live in a platform crate).
+[lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
 
 [features]
 default = ["eframe", "bundled-fonts", "image-previews"]
@@ -22,6 +28,9 @@ default = ["eframe", "bundled-fonts", "image-previews"]
 bundled-fonts = ["egui-pop-core/bundled-fonts"]
 ## Run applications in a native window or a browser through eframe.
 eframe = ["dep:eframe"]
+## Spike (never merged): eframe through `create_native` on an event loop
+## egui-pop owns (`runner`).
+create-native = ["eframe", "dep:winit"]
 ## The system's file chooser (rfd), a fallback kept just in case: off by
 ## default, and even built in, used only when the application allows it at
 ## run time (`AppBuilder::system_file_chooser`), never under tests
@@ -64,6 +73,8 @@ egui-pop-win32.workspace = true
 # the window for its hit tests (Windows), to know its X11 id (Linux), and
 # to attach the system's file chooser to its window.
 raw-window-handle = "0.6"
+# Apache-2.0: the event loop the spike runner owns (eframe's own version).
+winit = { version = "0.30", optional = true, default-features = false, features = ["rwh_06"] }
 
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }
