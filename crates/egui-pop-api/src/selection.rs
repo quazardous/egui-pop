@@ -808,6 +808,28 @@ impl Plugin for SelectionPlugin {
 mod tests {
     use super::*;
 
+    /// `SelectionItem` moved to `egui_pop_model::selection` and is
+    /// re-exported here; everything egui-pop-api 0.10.0 offered on it
+    /// still works through this path (cargo-semver-checks cannot follow
+    /// the re-export across crates, see the crate's Cargo.toml).
+    #[test]
+    fn selection_item_keeps_its_0_10_surface() {
+        use std::collections::HashSet;
+        use std::sync::Arc;
+
+        let a = SelectionItem::new(Arc::<str>::from("a"));
+        let b: SelectionItem = String::from("b").into();
+        assert_eq!(SelectionItem::from("a"), a.clone());
+        assert_eq!(SelectionItem::from_key(&12).as_str(), "12");
+        assert_eq!(SelectionItem::from_key("x").as_str(), "x");
+        assert!(a < b);
+        assert_eq!(format!("{a} {b:?}"), "a \"b\"");
+        assert_eq!(HashSet::from([a.clone(), a.clone()]).len(), 1);
+        let text = serde_json::to_string(&a).unwrap();
+        assert_eq!(text, "\"a\"");
+        assert_eq!(serde_json::from_str::<SelectionItem>(&text).unwrap(), a);
+    }
+
     fn items(ids: &[&str]) -> Vec<SelectionItem> {
         ids.iter().map(|s| SelectionItem::from(*s)).collect()
     }
