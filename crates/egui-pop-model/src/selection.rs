@@ -10,7 +10,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value as Json;
 
 /// An item of the selection: a string id the application chooses, the
@@ -20,9 +20,24 @@ use serde_json::Value as Json;
 /// tree by path, a table by row id, a canvas by entity) meet on it, it
 /// goes through the journal, the history and the agents' commands as it
 /// is, and it clones for the cost of a reference count.
-#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
+///
+/// It serialises as its string. The impls are written by hand: deriving
+/// them over `Arc<str>` needs serde's `rc` feature, which this crate does
+/// not turn on (it would build only beside a crate that does).
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SelectionItem(Arc<str>);
+
+impl Serialize for SelectionItem {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for SelectionItem {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer).map(Self::from)
+    }
+}
 
 impl SelectionItem {
     pub fn new(id: impl Into<Arc<str>>) -> Self {
@@ -65,5 +80,18 @@ impl From<&str> for SelectionItem {
 impl From<String> for SelectionItem {
     fn from(s: String) -> Self {
         Self::new(s)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serialises_as_its_string() {
+        let item = SelectionItem::from("photos/a.jpg");
+        let text = serde_json::to_string(&item).unwrap();
+        assert_eq!(text, "\"photos/a.jpg\"");
+        assert_eq!(serde_json::from_str::<SelectionItem>(&text).unwrap(), item);
     }
 }
