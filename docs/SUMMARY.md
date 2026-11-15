@@ -79,6 +79,7 @@
 - [Graph wires survey](graph-wires-survey.md)
 - [Knob interaction study](knob-interaction.md)
 - [API stability](stability.md)
+- [Outside review, November 2026](review-2026-11.md)
 - [Changesets and releases](releasing.md)
 - [How quality is held](quality.md)
 - [Upstream workarounds](upstream.md)

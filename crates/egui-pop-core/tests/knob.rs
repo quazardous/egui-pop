@@ -66,7 +66,7 @@ fn near(v: f64, want: f64, what: &str) {
 
 #[test]
 fn vertical_is_up_for_more_wherever_the_press_lands() {
-    let mut h = knob(None);
+    let mut h = knob(Some(KnobDrag::Vertical));
     let c = centre(&h);
     // 50 points up, a quarter of the 200-point travel.
     drag(&mut h, &line(c, vec2(0.0, -50.0)), Modifiers::NONE);
@@ -78,6 +78,20 @@ fn vertical_is_up_for_more_wherever_the_press_lands() {
     let rim = c + vec2(50.0, 0.0);
     drag(&mut h, &line(rim, vec2(0.0, 50.0)), Modifiers::NONE);
     near(*h.state(), 50.0, "down from the rim");
+}
+
+#[test]
+fn by_default_both_up_and_right_are_more() {
+    let mut h = knob(None);
+    let c = centre(&h);
+    // 50 points up, a quarter of the 200-point travel.
+    drag(&mut h, &line(c, vec2(0.0, -50.0)), Modifiers::NONE);
+    near(*h.state(), 75.0, "up");
+    // Sideways counts too: right is more, left is less.
+    drag(&mut h, &line(c, vec2(-50.0, 0.0)), Modifiers::NONE);
+    near(*h.state(), 50.0, "left");
+    drag(&mut h, &line(c, vec2(20.0, 0.0)), Modifiers::NONE);
+    near(*h.state(), 60.0, "right");
 }
 
 #[test]
@@ -158,7 +172,7 @@ fn circular_waits_near_the_centre() {
 fn the_knob_mode_comes_from_the_profile_unless_the_knob_says() {
     let mut h = knob(None);
     let mut g = egui_pop_core::slider::gestures(&h.ctx);
-    assert_eq!(g.knob_drag, KnobDrag::Vertical);
+    assert_eq!(g.knob_drag, KnobDrag::Both);
     g.knob_drag = KnobDrag::Horizontal;
     egui_pop_core::slider::set_gestures(&h.ctx, g);
     h.run();

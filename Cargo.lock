@@ -1387,6 +1387,7 @@ dependencies = [
  "egui-pop-model",
  "egui-pop-test",
  "egui-pop-win32",
+ "egui-pop-winit",
  "egui_kittest",
  "egui_stack",
  "image",
@@ -1397,6 +1398,7 @@ dependencies = [
  "serde",
  "serde_json",
  "web-time",
+ "winit",
 ]
 
 [[package]]
@@ -1670,6 +1672,14 @@ name = "egui-pop-win32"
 version = "0.2.1"
 dependencies = [
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "egui-pop-winit"
+version = "0.1.0"
+dependencies = [
+ "raw-window-handle",
+ "winit",
 ]
 
 [[package]]

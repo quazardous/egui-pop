@@ -40,7 +40,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 70] = [
+pub const PAGES: [&str; 71] = [
     "overview",
     "tokens",
     "builtins",
@@ -55,6 +55,7 @@ pub const PAGES: [&str; 70] = [
     "history",
     "sliders",
     "faders",
+    "compact",
     "inputs",
     "menus",
     "toolbars",
@@ -195,7 +196,7 @@ pub fn builder(options: &Options) -> AppBuilder {
             plugin: PluginId::from_static("gallery.roles"),
             story: StoryId::from_static("roles"),
             title: "Layout by role",
-            description: "The UiPop helpers: text roles, spacing by intent, cards and buttons by tone, each read from the theme.",
+            description: "The UiPop helpers: text roles, spacing by intent, cards and buttons by tone, rows and grids on one baseline, each read from the theme.",
             group: "Layout",
             weight: 200,
             show: pages::roles::show,
@@ -253,6 +254,16 @@ pub fn builder(options: &Options) -> AppBuilder {
             group: "Components",
             weight: 46,
             show: pages::faders::show,
+            playground: None,
+        })
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.compact"),
+            story: StoryId::from_static("compact"),
+            title: "Compact controls",
+            description: "Controls for a slot of a given size with no label beside it, as a HUD's card or a property sheet lays them out: scrub fields, a text, a number and a choice in compact cells, a value's marks (changed, held, moved), value bars across and upright, and a fold's menu rows.",
+            group: "Components",
+            weight: 47,
+            show: pages::compact::show,
             playground: None,
         })
         .plugin(pages::inputs::InputsPage)

@@ -162,6 +162,61 @@ out.textures_delta.clear();
 | `scoped(Stock, Tone, ..)` | egui's own widgets (a button on or off, a text field in a tone) drawn from a kit component in a scope ([kits](kit.md#eguis-widgets-in-a-scope)) |
 | `combo_box(combo, ..)` | egui's combo box with its box from the kit's `combo-box` |
 | `scroll_area(area, ..)` | egui's scroll area with its bars' colours from the kit's `scroll-bar` (their width, margin, placement and visibility come with the theme, in every scroll area) |
+| `row(Row, ..)`, `grid(Grid, ..)` | cells on tracks, on one text baseline, `Space` apart (below) |
+
+### Rows and grids
+
+`ui.row` places one line of cells and `ui.grid` lines of cells on shared
+tracks, with types from `egui_pop::core::ui`. A track is sized by its
+content (`Track::CONTENT`), a share of what is left (`Track::fr`), a share
+of the container (`Track::percent`) or lines of body text (`Track::em`),
+each with a `Length` minimum and maximum; there are no points. Cells sit
+on one text baseline by default, whatever their text sizes and widget
+padding; gaps are `Space` intents only.
+
+```rust
+use egui_pop::core::ui::{Align, Grid, Length, Row, Track};
+use egui_pop::egui;
+use egui_pop::prelude::*;
+
+fn details(ui: &mut egui::Ui, name: &mut String) {
+    // A field between 8 and 24 em taking what is left, beside its title
+    // and a button, on one baseline.
+    let field = Track::fr(1.0).min(Length::Em(8.0)).max(Length::Em(24.0));
+    ui.row(Row::new([Track::CONTENT, field, Track::CONTENT]), |r| {
+        r.cell(|ui| ui.section_title("Name"));
+        r.cell(|ui| ui.text_edit_singleline(name));
+        r.cell(|ui| ui.button("Rename"));
+    });
+    // Headers as wide as the widest, values beside them; headers over
+    // values below 30 em.
+    let grid = Grid::new("details", [Track::CONTENT, Track::fr(1.0)])
+        .fold_below(Length::Em(30.0));
+    ui.grid(grid, |g| {
+        g.header("Kind");
+        g.cell(|ui| ui.label("Raw image"));
+        g.header("Size");
+        g.cell(|ui| ui.label("24 MB"));
+    });
+    // A button bar: as wide as the widest, at the end.
+    let bar = Row::new([Track::CONTENT; 2]).justify(Align::End).equal_widths();
+    ui.row(bar, |r| {
+        r.cell(|ui| ui.button("Cancel"));
+        r.cell(|ui| ui.button_tone(Tone::Accent, "Export"));
+    });
+}
+
+let ctx = egui::Context::default();
+egui_pop::theme::install(&ctx, &ThemeSpec::new("pop-dark"));
+let mut name = String::from("IMG_0001.raw");
+let mut out = ctx.run_ui(Default::default(), |ui| details(ui, &mut name));
+out.textures_delta.clear();
+```
+
+Cells are placed from the sizes and baselines they had on the previous
+pass; when those change, the layout asks egui for one more pass, as
+egui's own `Grid` does, so nothing is measured twice at rest. The
+gallery's `roles` page shows them.
 
 ## Next
 

@@ -109,6 +109,11 @@ pub const NUMBER_OUT_OF_RANGE: StrKey = StrKey::new(
 pub const BUSY: StrKey = StrKey::new("egui-pop-busy", "Busy");
 /// A skeleton standing in for content that loads.
 pub const LOADING: StrKey = StrKey::new("egui-pop-loading", "Loading");
+/// A late value's placeholder, its spinner and its Retry button, as
+/// assistive technologies name them.
+pub const LATE_LOADING: StrKey = StrKey::new("egui-pop-late-loading", "Loading { $name }");
+pub const LATE_UPDATING: StrKey = StrKey::new("egui-pop-late-updating", "Updating { $name }");
+pub const LATE_RETRY: StrKey = StrKey::new("egui-pop-late-retry", "Retry { $name }");
 
 /// What an indicator means, when the application gives it no name of
 /// its own: an LED's state, a flag, a pip, a swatch.
@@ -125,6 +130,11 @@ pub const INDICATOR_FAILED: StrKey = StrKey::new("egui-pop-indicator-failed", "F
 pub const INDICATOR_PERCENT: StrKey = StrKey::new("egui-pop-indicator-percent", "{ $percent }%");
 pub const INDICATOR_NO_COLOR: StrKey = StrKey::new("egui-pop-indicator-no-color", "No colour");
 pub const INDICATOR_MIXED: StrKey = StrKey::new("egui-pop-indicator-mixed", "Mixed");
+/// A value's marks (`indicator::ValueMark`).
+pub const INDICATOR_CHANGED: StrKey =
+    StrKey::new("egui-pop-indicator-changed", "Changed from its default");
+pub const INDICATOR_HELD: StrKey = StrKey::new("egui-pop-indicator-held", "Held by { $by }");
+pub const INDICATOR_MOVED: StrKey = StrKey::new("egui-pop-indicator-moved", "Moved by { $by }");
 /// A decorated input's clear button.
 pub const INPUT_CLEAR: StrKey = StrKey::new("egui-pop-input-clear", "Clear { $label }");
 /// A decorated input's dropdown chevron.
@@ -184,6 +194,9 @@ pub const ALL: &[StrKey] = &[
     NUMBER_OUT_OF_RANGE,
     BUSY,
     LOADING,
+    LATE_LOADING,
+    LATE_UPDATING,
+    LATE_RETRY,
     INDICATOR_OFF,
     INDICATOR_ON,
     INDICATOR_WARNING,
@@ -197,6 +210,9 @@ pub const ALL: &[StrKey] = &[
     INDICATOR_PERCENT,
     INDICATOR_NO_COLOR,
     INDICATOR_MIXED,
+    INDICATOR_CHANGED,
+    INDICATOR_HELD,
+    INDICATOR_MOVED,
     INPUT_CLEAR,
     INPUT_CHOICES,
     INPUT_MORE,

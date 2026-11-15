@@ -630,6 +630,7 @@ pub struct Slider<'a> {
     vertical: bool,
     size: Option<Vec2>,
     compact: bool,
+    scrub: bool,
     menu: bool,
 }
 
@@ -660,6 +661,7 @@ impl<'a> Slider<'a> {
             vertical: false,
             size: None,
             compact: false,
+            scrub: false,
             menu: true,
         }
     }
@@ -676,6 +678,7 @@ impl<'a> Slider<'a> {
             vertical: false,
             size: None,
             compact: false,
+            scrub: false,
             menu: true,
         }
     }
@@ -713,6 +716,19 @@ impl<'a> Slider<'a> {
     /// itself, and drops the unit when even the value does not fit.
     pub fn compact(mut self) -> Self {
         self.compact = true;
+        self
+    }
+
+    /// The scrub field: the label and the value in a plain field, with
+    /// no fill and no thumb, for a dense row (a HUD, a property sheet)
+    /// where the value matters more than where it sits in its range. The
+    /// slider's gestures, keys, typed entry, menu, history and
+    /// accessibility stay: a drag along the field scrubs the value over
+    /// the soft range, whatever the field's width. Too narrow for its
+    /// label, it shows the value alone, as [`Slider::compact`] does.
+    /// Horizontal only: a vertical slider keeps its track.
+    pub fn scrub(mut self) -> Self {
+        self.scrub = true;
         self
     }
 
@@ -775,6 +791,7 @@ impl<'a> Slider<'a> {
             vertical,
             size,
             compact,
+            scrub,
             menu,
         } = self;
         let row_height = ui.spacing().interact_size.y;
@@ -904,7 +921,10 @@ impl<'a> Slider<'a> {
                     &[*value],
                     &text,
                     past,
-                    compact,
+                    Fit {
+                        compact,
+                        track: !scrub,
+                    },
                 )
             };
             if label_shown {
@@ -1466,15 +1486,42 @@ pub(crate) fn paint_bar(
     text: &str,
     past: bool,
 ) {
-    paint_bar_fitted(ui, rect, responses, spec, thumbs, text, past, false);
+    paint_bar_fitted(
+        ui,
+        rect,
+        responses,
+        spec,
+        thumbs,
+        text,
+        past,
+        Fit::default(),
+    );
+}
+
+/// How [`paint_bar_fitted`] fits the bar: `compact`, the value alone;
+/// without `track`, no fill and no thumb (the scrub field).
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Fit {
+    pub compact: bool,
+    pub track: bool,
+}
+
+impl Default for Fit {
+    fn default() -> Self {
+        Fit {
+            compact: false,
+            track: true,
+        }
+    }
 }
 
 /// [`paint_bar`] fitted to its width: the label and the value when both
-/// fit (and not `compact`), else the value alone, without its unit when
-/// even that does not fit. Says whether the label shows.
+/// fit (and not `fit.compact`), else the value alone, without its unit
+/// when even that does not fit; the fill and the thumbs unless the bar
+/// has no track (`fit.track`). Says whether the label shows.
 #[allow(
     clippy::too_many_arguments,
-    reason = "paint_bar's arguments and the compact wish"
+    reason = "paint_bar's arguments and how it fits"
 )]
 pub(crate) fn paint_bar_fitted(
     ui: &Ui,
@@ -1484,8 +1531,9 @@ pub(crate) fn paint_bar_fitted(
     thumbs: &[f64],
     text: &str,
     past: bool,
-    compact: bool,
+    fit: Fit,
 ) -> bool {
+    let Fit { compact, track } = fit;
     let kit = Kit::of(ui.ctx());
     let font = egui::TextStyle::Button.resolve(ui.style());
     let pad = kit.slider.data.padding_x.max(0.0);
@@ -1531,57 +1579,61 @@ pub(crate) fn paint_bar_fitted(
         label: label_shown.then_some(&label),
     };
     kit.slider.paint(&cx, &bar);
-    let x_of = |v: f64| rect.left() + rect.width() * spec.frac(v).clamp(0.0, 1.0) as f32;
-    // The fill is a strip along the bottom, so the label and the value
-    // stay on the track's colour (one contrast pair).
-    if let Some(g) = &spec.gradient {
-        // A gradient's colours are the content: a taller strip.
-        let strip = (rect.height() * 0.3).max(4.0);
-        let r = Rect::from_min_max(pos2(rect.left(), rect.bottom() - strip), rect.max);
-        g.paint(&painter, r);
-    } else {
-        let fill = &kit.slider_fill;
-        let strip = match fill.data.height {
-            h if h > 0.0 => h.min(rect.height()),
-            _ => (rect.height() * 0.15).max(3.0),
-        };
-        let (from, to) = match thumbs {
-            [v] => (rect.left(), x_of(*v)),
-            [a, b, ..] => (x_of(*a), x_of(*b)),
-            [] => (rect.left(), rect.left()),
-        };
-        let strip = Rect::from_min_max(pos2(from, rect.bottom() - strip), pos2(to, rect.bottom()));
-        fill.paint_part(
-            &cx,
-            &Part {
-                rect: strip,
-                room: rect,
-                state,
-                label: None,
-            },
-        );
-    }
-    let thumb = &kit.slider_thumb;
-    let width = thumb.data.width.max(0.0);
-    for (i, v) in thumbs.iter().enumerate() {
-        let x = x_of(*v);
-        let state = responses
-            .get(i)
-            .map_or(State::REST, |r| State::from_response(r))
-            .toned(tone);
-        let r = Rect::from_min_max(
-            pos2(x - width / 2.0, rect.top()),
-            pos2(x + width / 2.0, rect.bottom()),
-        );
-        thumb.paint_part(
-            &cx,
-            &Part {
-                rect: r,
-                room: rect,
-                state,
-                label: None,
-            },
-        );
+    // A scrub field has neither fill nor thumb: the value says it all.
+    if track {
+        let x_of = |v: f64| rect.left() + rect.width() * spec.frac(v).clamp(0.0, 1.0) as f32;
+        // The fill is a strip along the bottom, so the label and the value
+        // stay on the track's colour (one contrast pair).
+        if let Some(g) = &spec.gradient {
+            // A gradient's colours are the content: a taller strip.
+            let strip = (rect.height() * 0.3).max(4.0);
+            let r = Rect::from_min_max(pos2(rect.left(), rect.bottom() - strip), rect.max);
+            g.paint(&painter, r);
+        } else {
+            let fill = &kit.slider_fill;
+            let strip = match fill.data.height {
+                h if h > 0.0 => h.min(rect.height()),
+                _ => (rect.height() * 0.15).max(3.0),
+            };
+            let (from, to) = match thumbs {
+                [v] => (rect.left(), x_of(*v)),
+                [a, b, ..] => (x_of(*a), x_of(*b)),
+                [] => (rect.left(), rect.left()),
+            };
+            let strip =
+                Rect::from_min_max(pos2(from, rect.bottom() - strip), pos2(to, rect.bottom()));
+            fill.paint_part(
+                &cx,
+                &Part {
+                    rect: strip,
+                    room: rect,
+                    state,
+                    label: None,
+                },
+            );
+        }
+        let thumb = &kit.slider_thumb;
+        let width = thumb.data.width.max(0.0);
+        for (i, v) in thumbs.iter().enumerate() {
+            let x = x_of(*v);
+            let state = responses
+                .get(i)
+                .map_or(State::REST, |r| State::from_response(r))
+                .toned(tone);
+            let r = Rect::from_min_max(
+                pos2(x - width / 2.0, rect.top()),
+                pos2(x + width / 2.0, rect.bottom()),
+            );
+            thumb.paint_part(
+                &cx,
+                &Part {
+                    rect: r,
+                    room: rect,
+                    state,
+                    label: None,
+                },
+            );
+        }
     }
     kit.slider.paint_label(&cx, &bar);
     // The value's digits line up from one value to the next

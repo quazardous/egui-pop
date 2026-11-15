@@ -40,6 +40,9 @@ pub use crate::kit::{Stock, Tone};
 pub use crate::theme::TextRole;
 use crate::theme::Tokens;
 
+pub mod layout;
+pub use layout::{Align, Cells, Grid, Length, Row, Track};
+
 /// Spacing by intent (`space.inline`, `group`, `section`, `page`): what
 /// the space is for, each an alias of a step of the spacing scale, so
 /// densities scale it.
@@ -332,6 +335,17 @@ pub trait UiPop: sealed::Sealed {
         response: &'a Response,
         kind: crate::pointer::DragKind,
     ) -> crate::pointer::DragCursorFor<'a>;
+
+    /// One line of cells on [`Track`]s, `add` filling them in order with
+    /// [`Cells::cell`]: sized by content, fractions, percentages or em with
+    /// minimum and maximum, [`Space`] apart, on one text baseline by
+    /// default ([`Row`]; examples in the [`layout` module](self::layout)).
+    fn row<R>(&mut self, row: Row, add: impl FnOnce(&mut Cells<'_>) -> R) -> InnerResponse<R>;
+
+    /// Lines of cells on shared [`Track`]s, `add` filling them left to
+    /// right with [`Cells::header`] and [`Cells::cell`]: a header/value
+    /// grid, folding to one column when narrow ([`Grid::fold_below`]).
+    fn grid<R>(&mut self, grid: Grid, add: impl FnOnce(&mut Cells<'_>) -> R) -> InnerResponse<R>;
 }
 
 impl UiPop for Ui {
@@ -487,6 +501,14 @@ impl UiPop for Ui {
         kind: crate::pointer::DragKind,
     ) -> crate::pointer::DragCursorFor<'a> {
         crate::pointer::drag_cursor(response, kind)
+    }
+
+    fn row<R>(&mut self, row: Row, add: impl FnOnce(&mut Cells<'_>) -> R) -> InnerResponse<R> {
+        layout::show(self, row.0, add)
+    }
+
+    fn grid<R>(&mut self, grid: Grid, add: impl FnOnce(&mut Cells<'_>) -> R) -> InnerResponse<R> {
+        layout::show(self, grid.0, add)
     }
 }
 

@@ -82,11 +82,16 @@ impl Primitive<ComponentKit> for Tick {
         if data.width <= 0.0 || b.fill.a() == 0 {
             return;
         }
-        let x = part.rect.center().x;
-        cx.painter.line_segment(
-            [pos2(x, part.rect.top()), pos2(x, part.rect.bottom())],
-            Stroke::new(data.width, b.fill),
-        );
+        let r = part.rect;
+        // Across the bar: a line along the rect's longer side (a
+        // vertical meter's ticks are horizontal).
+        let ends = if r.width() > r.height() {
+            [pos2(r.left(), r.center().y), pos2(r.right(), r.center().y)]
+        } else {
+            [pos2(r.center().x, r.top()), pos2(r.center().x, r.bottom())]
+        };
+        cx.painter
+            .line_segment(ends, Stroke::new(data.width, b.fill));
     }
 
     fn paint_label(&self, cx: &KitCx<'_>, data: &ComponentKit, part: &Part<'_>) {

@@ -15,6 +15,9 @@ and records, per backend, what the platform does:
 - close A: the process quits by itself (the spike); with the API, close
   the main window instead: A moves into it (a `moved` line, A still
   counting), then close it, the last window: the process quits;
+- the runner (egui-pop's own event loop, `create_native`): the screens
+  read before the main window, whether winit's window ids were verified
+  as the native windows, and each window's handle (`opened` lines);
 - geometry: a second start with B's size and position edited in the state
   file the first run saved; what B reports.
 
@@ -320,6 +323,9 @@ def run_backend(cfg: dict, comp_name: str, backend: str, out: Path) -> dict:
         time.sleep(1.5)
         result["after_close_a"] = titles(comp)
         result["errors"] = events(jsonl, "error")
+        result["runner"] = events(jsonl, "runner")
+        last = last_counts(jsonl)
+        result["a_handle"] = last.get("handle") if last else None
     finally:
         comp.stop()
 

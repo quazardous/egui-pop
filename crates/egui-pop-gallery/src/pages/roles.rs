@@ -1,8 +1,9 @@
 //! The layout by role page: the `UiPop` helpers (text roles, spacing by
-//! intent, cards and buttons by tone), each with the tokens it reads.
+//! intent, cards and buttons by tone, rows and grids), each with the
+//! tokens it reads.
 
 use egui::Ui;
-use egui_pop::core::ui::{Space, TextRole, Tone, UiPop};
+use egui_pop::core::ui::{Align, Grid, Length, Row, Space, TextRole, Tone, Track, UiPop};
 use egui_pop::theme::Tokens;
 
 /// The tones shown, each by its name.
@@ -17,15 +18,26 @@ const TONES: [Tone; 8] = [
     Tone::Record,
 ];
 
-/// What the buttons did.
-#[derive(Debug, Default)]
+/// What the buttons did, and the rows' field.
+#[derive(Debug)]
 pub struct State {
     last: Option<Tone>,
+    name: String,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            last: None,
+            name: "IMG_0001.raw".to_owned(),
+        }
+    }
 }
 
 pub fn show(ui: &mut Ui, state: &mut State) {
     let t = Tokens::of(ui.ctx());
     ui.muted("Layout code says what a piece of text is and why there is space; the helpers draw from the theme's text roles, spacing by intent and kit.");
+    rows_and_grids(ui, state);
     ui.space_role(Space::Section);
     ui.section_title("Text roles");
     ui.space_role(Space::Inline);
@@ -91,6 +103,67 @@ pub fn show(ui: &mut Ui, state: &mut State) {
         Some(tone) => ui.meta(format!("Last clicked: {}", tone.name())),
         None => ui.meta("Nothing clicked yet."),
     };
+}
+
+/// `ui.row` and `ui.grid`: tracks, one baseline, gaps by intent.
+fn rows_and_grids(ui: &mut Ui, state: &mut State) {
+    ui.space_role(Space::Section);
+    ui.section_title("Rows and grids");
+    ui.muted("Cells on tracks (content, fractions, em, percent, with bounds), Space apart, every text on one baseline.");
+    ui.space_role(Space::Group);
+
+    // A title, a field between 8 and 24 em taking what is left, a button,
+    // small print: four text sizes on one baseline.
+    let field = Track::fr(1.0).min(Length::Em(8.0)).max(Length::Em(24.0));
+    let tracks = [Track::CONTENT, field, Track::CONTENT, Track::CONTENT];
+    ui.row(Row::new(tracks), |r| {
+        let title = r.cell(|ui| ui.section_title("Name")).id;
+        r.cell(|ui| {
+            egui::TextEdit::singleline(&mut state.name)
+                .desired_width(f32::INFINITY)
+                .show(ui)
+                .response
+                .response
+                .labelled_by(title)
+        });
+        r.cell(|ui| ui.button("Rename"));
+        r.cell(|ui| ui.meta("24 MB"));
+    });
+    ui.space_role(Space::Group);
+
+    // A header/value grid, and the same grid in a narrow column, folded
+    // to headers over values.
+    let details = |ui: &mut Ui, id: &str| {
+        let grid = Grid::new(id, [Track::CONTENT, Track::fr(1.0)]).fold_below(Length::Em(24.0));
+        ui.grid(grid, |g| {
+            g.header("Kind");
+            g.cell(|ui| ui.label("Raw image"));
+            g.header("Taken");
+            g.cell(|ui| ui.label("12 October, 18:42"));
+            g.header("Rating");
+            g.cell(|ui| ui.button("Rate"));
+        });
+    };
+    ui.row(
+        Row::new([Track::fr(2.0), Track::fr(1.0)])
+            .gap(Space::Page)
+            .align(Align::Start),
+        |r| {
+            r.cell(|ui| details(ui, "roles.details"));
+            r.cell(|ui| details(ui, "roles.details.narrow"));
+        },
+    );
+    ui.space_role(Space::Group);
+
+    // A button bar: buttons as wide as the widest, at the end.
+    let bar = Row::new([Track::CONTENT; 3])
+        .justify(Align::End)
+        .equal_widths();
+    ui.row(bar, |r| {
+        r.cell(|ui| ui.button("Cancel"));
+        r.cell(|ui| ui.button("Apply"));
+        r.cell(|ui| ui.button_tone(Tone::Accent, "Export all"));
+    });
 }
 
 fn sample(role: TextRole) -> &'static str {

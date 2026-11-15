@@ -34,6 +34,8 @@
 //!   on the motion clock, named for assistive technologies;
 //! - [`placeholder`]: skeletons standing in for loading content, and
 //!   empty states;
+//! - [`late`]: a cell for a value arriving after asynchronous work
+//!   (pending, fresh, refreshing, failed with Retry), its size kept;
 //! - [`placement`]: floating elements placed with flip and shift;
 //! - [`pointer`](mod@pointer): the pointer gestures in force (the profile's table
 //!   canvases read) and the wheel read raw, unit and modifiers kept;
@@ -73,6 +75,7 @@ pub mod a11y;
 pub mod band;
 pub mod binding;
 pub mod canvas;
+pub mod compact;
 pub mod debug;
 pub mod fault;
 pub mod field;
@@ -89,6 +92,7 @@ pub mod inspect;
 pub mod keys;
 pub mod kit;
 pub mod knob;
+pub mod late;
 pub mod latest;
 pub mod layers;
 pub mod motion;

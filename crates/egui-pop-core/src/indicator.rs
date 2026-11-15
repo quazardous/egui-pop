@@ -1,5 +1,5 @@
 //! Micro-indicators: the small marks that say a state in very little
-//! space, beside or on another widget. Five kinds need nothing but the
+//! space, beside or on another widget. Six kinds need nothing but the
 //! theme, plus icons that follow a state:
 //!
 //! - a **dot** or an **LED** ([`Led`]: off, on, busy, warning, error),
@@ -13,7 +13,10 @@
 //!   a diamond, a triangle, a square, an asterisk;
 //! - a **swatch** ([`Swatch`]): a colour over egui's alpha checkerboard,
 //!   no colour (a slash), or mixed (a dash);
-//! - a **dynamic icon**: a built-in [`Icon`], or one of two by a state.
+//! - a **dynamic icon**: a built-in [`Icon`], or one of two by a state;
+//! - a **value's mark** ([`ValueMark`]): changed from its default (a
+//!   dot), held by another party (a square), moved by another party (a
+//!   diamond), drawn as the dot and the flags are.
 //!
 //! They are drawn by the kit (`docs/kit.md`) like every other
 //! component: `indicator-dot`, `indicator-badge`, `indicator-flag`,
@@ -369,6 +372,67 @@ impl Flag {
     }
 }
 
+/// A value's marks, beside the control showing it: it is not at its
+/// default, another party holds it, another party just moved it. Each
+/// has its shape and its meaning (in the current language), so none
+/// rests on colour alone:
+///
+/// - [`Changed`](ValueMark::Changed): a dot in the `accent` tone, "Changed
+///   from its default"; made [`interactive`](Indicator::interactive) it
+///   is the value's reset button;
+/// - [`Held`](ValueMark::Held): a square in the `warning` tone, "Held by
+///   …" (a binding, an automation, another module owns the value);
+/// - [`Moved`](ValueMark::Moved): a diamond in the `accent` tone, "Moved
+///   by …" (a gesture elsewhere, a script, a link changed it).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ValueMark {
+    Changed,
+    /// Held by whom (a name the user knows).
+    Held(String),
+    /// Moved by whom.
+    Moved(String),
+}
+
+impl ValueMark {
+    /// Its name for agents (`changed`, `held`, `moved`).
+    pub fn name(&self) -> &'static str {
+        match self {
+            ValueMark::Changed => "changed",
+            ValueMark::Held(_) => "held",
+            ValueMark::Moved(_) => "moved",
+        }
+    }
+
+    /// What it means, in the current language.
+    pub fn meaning(&self, ctx: &Context) -> String {
+        match self {
+            ValueMark::Changed => strings::tr(ctx, &strings::INDICATOR_CHANGED),
+            ValueMark::Held(by) => {
+                strings::tr_args(ctx, &strings::INDICATOR_HELD, &[("by", by.as_str())])
+            }
+            ValueMark::Moved(by) => {
+                strings::tr_args(ctx, &strings::INDICATOR_MOVED, &[("by", by.as_str())])
+            }
+        }
+    }
+
+    fn kind(&self) -> Kind {
+        match self {
+            ValueMark::Changed => Kind::Dot(None),
+            ValueMark::Held(_) => Kind::Flag(FlagShape::Square, None),
+            ValueMark::Moved(_) => Kind::Flag(FlagShape::Diamond, None),
+        }
+    }
+
+    fn tone(&self) -> Tone {
+        match self {
+            ValueMark::Changed | ValueMark::Moved(_) => Tone::Accent,
+            ValueMark::Held(_) => Tone::Warning,
+        }
+    }
+}
+
 /// What a swatch shows.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Swatch {
@@ -551,6 +615,7 @@ pub struct Indicator {
     attention: Option<f64>,
     delayed: Option<(Id, f64, bool)>,
     overhang: Option<bool>,
+    mark: Option<ValueMark>,
 }
 
 impl Indicator {
@@ -568,6 +633,7 @@ impl Indicator {
             attention: None,
             delayed: None,
             overhang: None,
+            mark: None,
         }
     }
 
@@ -617,6 +683,13 @@ impl Indicator {
     /// A flag of the application's: a shape, then a tone and a name.
     pub fn flag_shape(shape: FlagShape) -> Indicator {
         Indicator::new(Kind::Flag(shape, None))
+    }
+
+    /// A value's mark ([`ValueMark`]): its shape, tone and meaning.
+    pub fn mark(mark: ValueMark) -> Indicator {
+        let mut i = Indicator::new(mark.kind()).tone(mark.tone());
+        i.mark = Some(mark);
+        i
     }
 
     /// A colour swatch.
@@ -801,6 +874,9 @@ impl Indicator {
         if let Some(n) = &self.name {
             return Some(n.clone());
         }
+        if let Some(m) = &self.mark {
+            return Some(m.meaning(ctx));
+        }
         match &self.kind {
             Kind::Dot(Some(led)) => Some(strings::tr(ctx, &led.key())),
             Kind::Dot(None) | Kind::Icon { .. } => None,
@@ -862,6 +938,10 @@ impl Indicator {
                 Some(if *on { 1.0 } else { 0.0 }),
             ),
             Kind::Icon { icon, .. } => ("icon", icon.name().to_string(), None),
+        };
+        let (kind, state) = match &self.mark {
+            Some(m) => ("mark", m.name().to_string()),
+            None => (kind, state),
         };
         let text = match &self.kind {
             Kind::Swatch(Swatch::Color(c)) => Some(hex(*c)),
@@ -1397,11 +1477,13 @@ impl IndicatorExt for Response {
 pub struct Record {
     /// Its id ([`Indicator::id`]).
     pub id: String,
-    /// `dot`, `led`, `badge`, `pip`, `flag`, `swatch` or `icon`.
+    /// `dot`, `led`, `badge`, `pip`, `flag`, `swatch`, `icon` or `mark`
+    /// (a [`ValueMark`]).
     pub kind: &'static str,
     /// The LED's, pip's or flag's state, `count` or `text` for a badge,
     /// `color`, `none` or `mixed` for a swatch, `on` or `off` for a
-    /// toggle, the icon's name, `shown` for a dot.
+    /// toggle, the icon's name, `shown` for a dot, `changed`, `held` or
+    /// `moved` for a mark.
     pub state: String,
     /// A badge's count, a pip's fraction, a toggle's 1 or 0.
     pub value: Option<f64>,

@@ -118,9 +118,9 @@ comment at the code site.
 
 | Limit | egui-pop's workaround | Entry |
 |---|---|---|
-| No window handle for a viewport other than the root | `files::set_parent_window`; `frame::record_native_window` records the root's from the creation context (`frame.rs:694`); the system chooser opened from a secondary window is attached to none; the Windows hit test and the Wayland image surface serve the main window only | [upstream.md:499](upstream.md#eframe-no-window-handle-for-a-viewport-other-than-the-main-window) |
+| No window handle for a viewport other than the root | the runner reads each window's handles from its winit id and records them per viewport (`files::set_parent_window`, `frame::set_native_window`); the root's still come from the creation context (`frame::record_native_window`). Their consumers still serve the main window only: the Windows hit test and the Wayland image surface | [upstream.md:499](upstream.md#eframe-no-window-handle-for-a-viewport-other-than-the-main-window) |
 | No owner window (winit and egui) | palettes stay inside the main window; detached panels are ordinary top-level windows (U3 in [hosts.md](hosts.md)) | [upstream.md:478](upstream.md#winit-and-egui-no-owner-window-for-a-viewport) |
-| No screens before the window is placed | `window::WindowState::repair` bounds the size and drops a far position (`crates/egui-pop-api/src/window.rs:147`) | [upstream.md:612](upstream.md#eframe-no-list-of-screens-when-a-window-is-placed) |
+| No screens before the window is placed | the runner reads the monitors before eframe creates the main window, and the root's `window_builder` hook repairs the restored place against them (`WindowState::repair`); without the runner, the size is bounded and a far position dropped (`crates/egui-pop-api/src/window.rs:147`) | [upstream.md:612](upstream.md#eframe-no-list-of-screens-when-a-window-is-placed) |
 | No surface format or colour space | the viewport reports sRGB truthfully; on Wayland the image gets its own surface | [upstream.md:660](upstream.md#egui-wgpu-no-surface-format-or-colour-space-to-choose), [upstream.md:729](upstream.md#wayland-no-colour-management-through-winit) |
 | No hit-test hook on Windows (winit) | `egui-pop-win32` subclasses the root window | [upstream.md:628](upstream.md#winit-no-hit-test-hook-for-a-custom-title-bar-on-windows) |
 | Custom cursors dropped on the web and in immediate viewports | a system cursor fallback per bitmap cursor | [upstream.md:430](upstream.md#eframe-no-custom-cursor-on-the-web-or-in-immediate-viewports) |
@@ -168,13 +168,12 @@ comment at the code site.
 Cost: low; the glue is already thin and runner-agnostic. Risk: the
 limits above stay until upstream moves, so their workarounds stay.
 
-A variant inside A: `create_native` runs eframe on an event loop
-egui-pop owns (`lib.rs:376`, "with other windows you manage outside of
-eframe", `native/run.rs:536`). It would let egui-pop open a few windows
-of its own beside eframe's (a Windows utility window with an owner, an
-image window whose surface it configures), at the price of handling
-their events itself. Kept in reserve for a case that needs it; nothing
-today does.
+A variant inside A, **adopted (2026-11-15)**: `create_native` runs
+eframe on an event loop egui-pop owns (`lib.rs:376`, `native/run.rs:540`).
+eframe still creates, paints and runs every window, on the desktop and
+on the web, so there stays one runner for both targets; owning the loop
+reaches several native hooks eframe does not expose. See
+[The runner](#the-runner-eframe-through-create_native) below.
 
 ### B. An own runner on winit and egui-wgpu (rejected)
 
@@ -217,7 +216,9 @@ Keep eframe (A), and organise egui-pop's work around it in three parts.
   working on the web and in kittest (embedded as `egui::Window`).
 - **Raw window handles**: take them where eframe gives them (the creation
   context, `Frame`), through `raw-window-handle` types, as `files` and
-  `frame` already do; never reach into winit beyond that.
+  `frame` already do; for the windows eframe does not expose, from the
+  event loop egui-pop owns (the runner), behind the same per-viewport
+  functions.
 - **Frame pacing**: move the present-mode choice to
   `Frame::set_wgpu_surface_config`, so it can follow the number of open
   windows instead of being fixed at start-up.
@@ -250,9 +251,9 @@ replaces the inside of an egui-pop function and not its API.
 
 | Gap | Proposal | Layer | Workaround meanwhile, compatible with the fix |
 |---|---|---|---|
-| A viewport's window handle | expose each viewport's raw handles (on `ViewportInfo`, or a `Context` query on native) | eframe | `files::set_parent_window` and `frame::set_native_window` per viewport id: when eframe gives handles, egui-pop records them as each window opens, behind the same functions |
+| A viewport's window handle | expose each viewport's raw handles (on `ViewportInfo`, or a `Context` query on native) | eframe | the runner reads them from winit's window ids and records them through `files::set_parent_window` and `frame::set_native_window`; when eframe gives handles, they replace the ids behind the same functions |
 | An owner window | `ViewportBuilder::with_parent(ViewportId)`, mapped to winit's owner where it exists | winit first (issue 4256), then egui-winit | palettes inside the main window; the U3 cell in hosts.md flips when it lands |
-| Screens before placement | the monitors (rects and scales) given to the `window_builder` hook or in `ViewportInfo` | eframe | `WindowState::repair(&screens)` already takes screens; it gets real ones instead of none |
+| Screens before placement | the monitors (rects and scales) given to the `window_builder` hook or in `ViewportInfo` | eframe | reached by the runner (`runner::screens`), which hands them to `WindowState::repair`; the ask stays for applications on eframe's own runner |
 | Surface format and colour space | `WgpuConfiguration` choosing them, the renderer's output transfer from the colour space | egui-wgpu | the display stage reports sRGB with its reason; `gpu::install` reads the format from the render state, so it follows automatically |
 | Custom cursors in immediate viewports and on the web | pass the bitmap through | egui-winit, eframe web | a system cursor fallback per bitmap |
 | A Windows hit test | a hit-test callback | winit (PR 3207) | the subclass layer in `egui-pop-win32`, removed by a step |
@@ -263,3 +264,60 @@ Drafts already exist for several of them in
 filed yet" in [upstream.md](upstream.md), which stays the register: a
 workaround and its entry go when the fix ships in a release egui-pop
 moves to.
+
+## The runner: eframe through `create_native`
+
+Decided 2026-11-15, after a time-boxed spike (one file of about 270
+lines, run in wbox on Wayland and X11): egui-pop keeps eframe as its one
+runner for native and web, and on the desktop runs it on an event loop of
+its own. `AppBuilder::run_native` and `run_native_with` build the winit
+event loop, hand eframe to it with `eframe::create_native`, and run it
+with a handler (`crates/egui-pop-api/src/runner/native.rs`) that sees
+every winit callback before eframe; behind the `create-native` feature,
+on by default. Without the feature, on the web, on iOS and Android,
+eframe runs as before (`eframe::run_native`, `WebRunner`). kittest never
+goes through `run_native`.
+
+What owning the loop reaches:
+
+| Hook | Reached? | How | Workaround it removes |
+|---|---|---|---|
+| Each viewport's raw window handle | Yes on Windows, X11, Wayland; not on macOS (winit's id is the `NSWindow`, the handle wants its `NSView`) | eframe paints a window synchronously in its `RedrawRequested` (`native/run.rs:420`); the handler notes which, a `Context::on_begin_pass` hook pairs it with `ctx.viewport_id()`. winit 0.30's `WindowId` is the native window (the `HWND`, the X11 id, the `wl_surface` proxy): `egui-pop-winit` turns it into raw handles, the only crate with the `unsafe` | the per-viewport consumers move to it next: the chooser's parent from a secondary window, the Windows hit test, the Wayland image surface on any window |
+| Monitors before placement | Yes | the handler reads `available_monitors` in `resumed`, before eframe's own creates the main window; the root's `window_builder` hook, called inside it, repairs the restored place | `WindowState::repair(&[])` gets real screens |
+| Owner / parent window | Not at creation (eframe builds the windows). After creation, from the handle: Windows (`GWLP_HWNDPARENT`), X11 (`WM_TRANSIENT_FOR`); not Wayland | not coded | palettes inside the main window, on Windows and X11 only |
+| Events before eframe | Yes (filter or add `WindowEvent`s) | not coded | candidate: `frame::compositor_grab` |
+| Surface format / colour space | No: egui-wgpu's painter is private to eframe | - | none |
+| Present mode per window | No, and unrelated to the loop: `Frame::set_wgpu_surface_config` is per frame but for every surface | - | none beyond realignment step 3 |
+| Activation token | Already in eframe 0.37 for the root; the handler sees `ActivationTokenDone` for every window | - | none |
+
+Guards on the assumptions it rests on:
+
+- **`WindowId` is the native window**, an implementation detail of
+  winit 0.30, not its API. `egui-pop-winit`'s `window_id` test creates a
+  hidden window on each system and compares; and at run time the runner
+  compares the main window's id, read as a handle, with the handle
+  eframe gives for it: other windows' handles are used only when both
+  agree (`runner::ids_verified`).
+- **eframe paints inside `RedrawRequested`**, true in 0.37. Only the
+  first pass that begins there is paired; immediate viewports (painted
+  inside their parent's pass) are not.
+- **eframe's own result**: `create_native` keeps the run's error inside
+  its handler, so the runner keeps the application creator's error
+  itself (`run_native_with`'s `Error::AppCreation`), and reports a run
+  that stopped before the application was made as an error too.
+- **One event loop per process** (winit): it is kept for a second run, as
+  eframe does.
+
+### An own runner for native and web (sketched, not built)
+
+Built on egui-winit, egui-wgpu and egui's web pieces, it would
+re-implement what eframe 0.37 keeps in about 2,900 lines natively for
+wgpu (`native/run.rs`, `winit_integration.rs`, `wgpu_integration.rs`,
+`epi_integration.rs`, without glow) and 4,500 lines on the web (`web/`:
+the runner, events, text agent, screen reader, painter, storage),
+re-synced at each egui release. On top of what `create_native` reaches,
+it would gain the surface format and colour space per window, the
+present mode per window, owners set at creation (winit has them on
+Windows only), and lose the users who mix egui-pop parts into a plain
+eframe application. It stays the fallback if wide gamut in the main egui
+surface, or another hook only the painter holds, becomes a must.
