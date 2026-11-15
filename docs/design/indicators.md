@@ -67,7 +67,12 @@ theme system. egui-phosphor stays the glyph source.
 ### 1.3 What egui-pop already has
 
 egui-pop has many marks already, each written for one component. None
-is shared, and four `Tone` enums coexist.
+is shared, and four `Tone` enums coexist. (That was the state when
+this survey was written. Since the kits, three remain:
+`egui_pop_core::kit::Tone`, the one tone indicators, progress, the
+status bar and the library share; `egui_pop_core::icon::Tone`, an
+icon's content colour; and `egui_pop_model::admin::Tone`, the admin
+forms' own. See section 6.2.)
 
 | Where | What | Notes |
 |---|---|---|
@@ -339,7 +344,8 @@ Component tokens aliasing system tokens, as `progress.*` and
   outline against the badge fill.
 
 The tone set is the occasion to settle the four existing `Tone`
-enums: they merge into one (section 5, decision 2).
+enums: they merge into one (section 5, decision 2; it became
+`egui_pop_core::kit::Tone`, section 6.2).
 
 ### 3.4 Anchoring
 
@@ -524,7 +530,8 @@ The owner settled the questions below on 2026-10-14:
    becomes `StatusItem`. The rename waits for the mount contract branch
    to land; until then only the new module is added.
 2. **One tone.** The four `Tone` enums merge into one shared `Tone` in
-   core before 0.1 (`egui_pop_core::tone::Tone`), as a commit of its own.
+   core before 0.1 (asked as a `tone` module of core; it became
+   `egui_pop_core::kit::Tone`, section 6.2), as a commit of its own.
 3. **Badge cap.** A badge reads `99+` past its cap; the cap stays a
    parameter.
 4. **Recording** has its own tone, `record`, which defaults to the
@@ -607,7 +614,7 @@ toggle that is on is `selected`, and a disabled mark takes
 
 ### 6.2 The tone (decisions 2 and 4)
 
-- Decision 2 asked for `egui_pop_core::tone::Tone`. The kits already
+- Decision 2 asked for a `Tone` in a `tone` module of core. The kits already
   had a tone dimension, `kit::Tone`, which progress used; it became
   the one tone instead, and `strips::Tone` and `library::Tone` are
   re-exports of it. **Deviation:** its path is `kit::Tone`, and its

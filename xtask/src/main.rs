@@ -11,6 +11,9 @@
 //! crate is in exactly one row of the component families' table, ADR 0027
 //! (`families.rs`).
 //!
+//! `doc-paths --check` checks that every Rust path the documentation
+//! names in backticks resolves in the crates' source (`doc_paths.rs`).
+//!
 //! `publish` publishes the workspace's crates to crates.io in the order
 //! of their dependencies, skipping what is already there (`publish.rs`).
 //!
@@ -40,6 +43,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 
 mod affected;
+mod doc_paths;
 mod families;
 mod gallery;
 mod publish;
@@ -69,6 +73,9 @@ Tasks:
                          a test fails when it is stale
   families --check       every public module of the published crates is
                          in exactly one family row of ADR 0027
+  doc-paths --check      every `egui_pop_*::a::b` path named in docs/
+                         resolves to a module or an item of the crates;
+                         exceptions in xtask/doc-paths.allow
   publish [--dry-run] [--interval SECS]
                          publish the workspace's crates to crates.io in the
                          order of their dependencies, skipping the versions
@@ -337,6 +344,7 @@ fn main() -> ExitCode {
         Some("hosts") => hosts(),
         Some("ui-index") => ui_index::ui_index(&args[1..]),
         Some("families") => families::families(&args[1..]),
+        Some("doc-paths") => doc_paths::doc_paths(&args[1..]),
         Some("publish") => publish::publish(&args[1..]),
         Some("affected") => affected::affected(&args[1..]),
         Some("changeset-check") => release::check(&args[1..]),

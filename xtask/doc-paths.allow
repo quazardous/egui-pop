@@ -1,0 +1,2 @@
+# Paths named in docs/ that do not resolve on purpose: `path # reason`.
+crate::strings::Message::new # an extension's own path, quoted as a call the key extractor matches (i18n.md)
