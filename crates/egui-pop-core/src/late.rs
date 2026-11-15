@@ -305,6 +305,11 @@ impl<T> LateValue<T> {
             Late::Failed(error) => Some(error.clone()),
         };
         let busy = self.late.is_busy();
+        if let (Some(at), false) = (since, busy) {
+            // The work ended: the delayed spinners' state lets go, so the
+            // next wait is delayed again.
+            let _ = crate::motion::Busy::new(id, at).visible(&ctx, false);
+        }
         ctx.accesskit_node_builder(response.id, |node| {
             match value {
                 Some(v) => node.set_value(v),
