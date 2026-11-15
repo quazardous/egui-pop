@@ -14,8 +14,8 @@
 //!   the work again).
 //!
 //! The cell keeps the spinner's room in every state, so its size is the
-//! same pending, fresh and refreshing. Its accessible node keeps the
-//! value's name; its value says the state (the value, "Loading", the
+//! same pending, fresh and refreshing. Its accessible node (a status) keeps
+//! the value's name; its value says the state (the value, "Loading", the
 //! error) and it is `busy` while the work runs.
 //!
 //! ```
@@ -298,7 +298,7 @@ impl<T> LateValue<T> {
         let rect = inner.response.rect;
         let response = ui.interact(rect, id, Sense::hover());
         let enabled = ui.is_enabled();
-        response.widget_info(|| WidgetInfo::labeled(Role::Label, enabled, &self.name));
+        response.widget_info(|| WidgetInfo::labeled(Role::Status, enabled, &self.name));
         let value = match &self.late {
             Late::Pending => Some(strings::tr(&ctx, &LOADING)),
             Late::Fresh(_) | Late::Refreshing(_) => value_text,
@@ -310,7 +310,11 @@ impl<T> LateValue<T> {
             // next wait is delayed again.
             let _ = crate::motion::Busy::new(id, at).visible(&ctx, false);
         }
+        let label = self.name.clone();
         ctx.accesskit_node_builder(response.id, |node| {
+            // A status, not a label: a label's name is its value, and here
+            // the name stays while the value says the state.
+            node.set_label(label);
             match value {
                 Some(v) => node.set_value(v),
                 None => node.clear_value(),

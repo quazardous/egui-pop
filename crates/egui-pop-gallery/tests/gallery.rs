@@ -5585,7 +5585,7 @@ fn late_values_keep_their_room_and_a_failed_one_retries() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "placeholders"));
     h.run();
     let cell = |h: &Harness<'_, Gallery>, name: &str| {
-        let node = h.get_by_role_and_label(egui::accesskit::Role::Label, name);
+        let node = h.get_by_role_and_label(egui::accesskit::Role::Status, name);
         let width = node.rect().width().round();
         let a = node.accesskit_node();
         (width, a.is_busy(), a.value())
