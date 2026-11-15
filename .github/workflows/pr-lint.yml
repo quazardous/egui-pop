@@ -1,0 +1,86 @@
+name: pr-lint
+
+# The one check our own pull requests wait for (docs/testing.md, "The next
+# branch"): what is cheap and builds no test, so `next` does not go red an
+# hour after a merge on a rustdoc link, a stale generated file or a new
+# crate the semver job cannot compare. Their tests run on the bench box;
+# everything runs on `next` (ci.yml). A contributor's pull request from a
+# fork runs ci.yml instead.
+on:
+  pull_request:
+    branches: [next]
+    # `labeled`, `unlabeled`: the internal label lets the changeset check
+    # pass.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+# One run per pull request: a new push cancels the run of the previous one.
+concurrency:
+  group: pr-lint-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# As ci.yml's, so that this job reads the cache its Clippy job saves.
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+  RUST_TOOLCHAIN: "1.95"
+
+jobs:
+  pr-lint:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: rustfmt
+      # The dependencies ci.yml's Clippy job checked on `next`; read, never
+      # saved from a pull request.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: clippy
+          save-if: false
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      # Every step runs even when an earlier one failed, so one run names
+      # everything there is to fix.
+      - name: Pull request title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: tools/pr-title.sh "$TITLE"
+      - name: Format
+        if: ${{ !cancelled() }}
+        run: cargo fmt --all --check
+      - name: Changesets
+        if: ${{ !cancelled() }}
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          INTERNAL: ${{ contains(github.event.pull_request.labels.*.name, 'internal') }}
+        run: |
+          if [ "$INTERNAL" = true ]; then
+            cargo xtask changeset-check --base "$BASE" --internal
+          else
+            cargo xtask changeset-check --base "$BASE"
+          fi
+      - name: docs/ui-index.md is current
+        if: ${{ !cancelled() }}
+        run: cargo xtask ui-index --check
+      # A new crate without a release on crates.io is left out of the
+      # semver job, which runs on `next` only.
+      - name: Semver job's exclusions
+        if: ${{ !cancelled() }}
+        run: python3 tools/semver-excludes.py
+      - name: Licences and advisories
+        if: ${{ !cancelled() }}
+        run: cargo deny check
+      - name: Documentation without a warning
+        if: ${{ !cancelled() }}
+        run: cargo doc --workspace --no-deps --locked

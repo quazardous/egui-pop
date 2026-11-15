@@ -3,30 +3,21 @@ name: Pull request title
 # A squash merge makes the title the commit's subject: it follows
 # Conventional Commits (CONTRIBUTING.md, "Commit subjects"). Its own
 # workflow, so that editing the title checks it again without running CI.
+# Every pull request, our own included (pr-lint.yml checks the title too,
+# on each push; this one answers an edited title).
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   title:
-    # Our own pull requests (branches of this repository) run no CI; a
-    # contributor's from a fork runs everything. next's push run decides.
-    if: github.event.pull_request.head.repo.full_name != github.repository
     name: Pull request title
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v5
       - env:
           TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          types='feat|fix|perf|refactor|docs|test|build|ci|chore|style|revert'
-          if printf '%s' "$TITLE" | grep -Eq "^($types)(\([a-z0-9._/-]+\))?!?: [^ ].*[^ ]$"; then
-            echo "ok: $TITLE"
-          else
-            echo "::error::The title is not a Conventional Commits subject: $TITLE"
-            echo "Expected: <type>(<scope>)!: <what changed>, with <type> one of"
-            echo "${types//|/, }; the scope and the ! (a breaking change) are optional."
-            echo "Example: feat(views): the list sorts by any column"
-            exit 1
-          fi
+        run: tools/pr-title.sh "$TITLE"
