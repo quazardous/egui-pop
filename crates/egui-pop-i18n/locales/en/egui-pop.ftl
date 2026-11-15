@@ -1809,6 +1809,12 @@ egui-pop-jobs-open-panel = Open the panel
 
 egui-pop-jobs-title = Jobs
 
+egui-pop-late-loading = Loading { $name }
+
+egui-pop-late-retry = Retry { $name }
+
+egui-pop-late-updating = Updating { $name }
+
 egui-pop-layout-customize = Customize layout
 
 egui-pop-layout-panel-center = Panel under the editors

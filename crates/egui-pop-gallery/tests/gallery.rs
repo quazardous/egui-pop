@@ -5596,6 +5596,34 @@ fn skeletons_are_busy_until_the_content_loads_and_empty_states_act() {
 }
 
 #[test]
+fn late_values_keep_their_room_and_a_failed_one_retries() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "placeholders"));
+    h.run();
+    let cell = |h: &Harness<'_, Gallery>, name: &str| {
+        let node = h.get_by_role_and_label(egui::accesskit::Role::Status, name);
+        let width = node.rect().width().round();
+        let a = node.accesskit_node();
+        (width, a.is_busy(), a.value())
+    };
+    let photos = cell(&h, "Photos");
+    let free = cell(&h, "Free space");
+    let size = cell(&h, "Folder size");
+    let backup = cell(&h, "Backup disk");
+    // Pending, fresh and refreshing take the same room.
+    assert_eq!(photos.0, free.0);
+    assert_eq!(free.0, size.0);
+    assert!(photos.1 && size.1 && !free.1);
+    assert_eq!(free.2.as_deref(), Some("412.7 GB"));
+    assert_eq!(backup.2.as_deref(), Some("Not mounted"));
+    // Below the fold: brought into view first.
+    h.get_by_label("Retry Backup disk").scroll_to_me();
+    h.run();
+    h.get_by_label("Retry Backup disk").click();
+    h.run();
+    assert!(h.query_by_label("Late values retried 1 times.").is_some());
+}
+
+#[test]
 fn the_motion_page_shows_the_busy_indicator_after_its_delay_for_its_minimum() {
     use egui_pop::core::motion;
     let mut h = harness(options("pop-dark", Density::Comfortable, "motion"));

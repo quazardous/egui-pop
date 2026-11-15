@@ -109,6 +109,11 @@ pub const NUMBER_OUT_OF_RANGE: StrKey = StrKey::new(
 pub const BUSY: StrKey = StrKey::new("egui-pop-busy", "Busy");
 /// A skeleton standing in for content that loads.
 pub const LOADING: StrKey = StrKey::new("egui-pop-loading", "Loading");
+/// A late value's placeholder, its spinner and its Retry button, as
+/// assistive technologies name them.
+pub const LATE_LOADING: StrKey = StrKey::new("egui-pop-late-loading", "Loading { $name }");
+pub const LATE_UPDATING: StrKey = StrKey::new("egui-pop-late-updating", "Updating { $name }");
+pub const LATE_RETRY: StrKey = StrKey::new("egui-pop-late-retry", "Retry { $name }");
 
 /// What an indicator means, when the application gives it no name of
 /// its own: an LED's state, a flag, a pip, a swatch.
@@ -184,6 +189,9 @@ pub const ALL: &[StrKey] = &[
     NUMBER_OUT_OF_RANGE,
     BUSY,
     LOADING,
+    LATE_LOADING,
+    LATE_UPDATING,
+    LATE_RETRY,
     INDICATOR_OFF,
     INDICATOR_ON,
     INDICATOR_WARNING,
