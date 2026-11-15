@@ -81,6 +81,7 @@
 - [Changesets and releases](releasing.md)
 - [How quality is held](quality.md)
 - [Upstream workarounds](upstream.md)
+- [eframe and egui-pop](eframe-comparison.md)
 - [egui_stack directions](egui-stack-directions.md)
 - [Advanced widgets](widgets.md)
 - [Fonts](fonts.md)
