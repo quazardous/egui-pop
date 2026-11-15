@@ -90,6 +90,9 @@ impl<'a, S: AsRef<str>> ChoiceCell<'a, S> {
         let pad = Tokens::of(ui.ctx()).space.xs;
         let mut response = ui
             .scope(|ui| {
+                // egui's combo box truncates its word to the room left,
+                // not to its width: a long word would widen the slot.
+                ui.set_max_width(size.x);
                 let spacing = ui.spacing_mut();
                 spacing.interact_size.y = size.y;
                 spacing.button_padding = vec2(pad, 0.0);

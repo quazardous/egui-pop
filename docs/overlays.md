@@ -169,9 +169,12 @@ between kinds of foreground layers may still gain ranks").
 - Overlays per window and blocking: `crates/egui-pop-api/tests/windows.rs`,
   `window_scope.rs`, `app_windows.rs`; flyouts held by their owner:
   `flyouts.rs`.
-- Ranks: `crates/egui-pop-api/tests/layer_ranks.rs` (an application
-  area and an overlay stay above a panel lying over, a popup opened
-  from it too).
+- Ranks: `crates/egui-pop-core/tests/layers.rs` (the order between
+  ranks and the unranked layers whatever was raised last, a rank kept
+  one pass, sublayers of a base noted at its rank, `rank_from`, a layer
+  outside the foreground left alone);
+  `crates/egui-pop-api/tests/layer_ranks.rs` (an application area and
+  an overlay stay above a panel lying over, a popup opened from it too).
 - Bands: through the movable dialogs in
   `crates/egui-pop-api/tests/dialogs.rs`; the band has no test of its
   own yet.

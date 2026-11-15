@@ -569,8 +569,10 @@ registered, the name works everywhere a name does: `CommandSpec::icon`,
   window's pixels per point; an icon drawn at another size is rasterised
   once at that size, then kept (a scaled texture would blur).
 - **Registering again** under a name replaces its SVG, in use from the
-  next theme install. A name is kept for the whole process: the set
-  has no removal (see the note in 4.5).
+  next theme install. A name keeps its id for the whole process, even
+  unregistered (`unregister`, `unregister_owner`: the name stops
+  resolving at once, its textures go at the next theme install) and
+  registered again (see 4.5).
 
 **Failure**: `register` refuses (`IconError`) a name of egui-pop's own
 or in the `phosphor:` name space (`Taken`), an SVG that does not parse
@@ -588,5 +590,8 @@ names and their prefixes are what declarations and kits store).
 **Tests**: unit tests in `crates/egui-pop-core/src/icon_set.rs` (a name
 and a mask, a plugin's prefix, refusals, a kit glyph naming an
 application icon, one texture per size, a size rasterised once);
-commands drawn with their icons in
+frames in `crates/egui-pop-core/tests/icon_set.rs` (a mask tinted, a
+full-colour icon drawn as it is, a size rasterised at that size, a name
+drawn from the next install and gone at once when unregistered, the
+refusal without the `svg` feature); commands drawn with their icons in
 `crates/egui-pop-api/tests/command_icons.rs`.

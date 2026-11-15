@@ -29,7 +29,9 @@
 //!   the others, which go on, marked ([`Job::orphaned`]: the jobs centre
 //!   says "its plugin is off") until they end or the plugin is back
 //!   (`job.adopted`). `plugin.disconnected` counts both
-//!   (`jobs_cancelled`, `jobs_orphaned`).
+//!   (`jobs_cancelled`, `jobs_orphaned`). An orphaned job is not waited
+//!   on: [`JobsService::idle`] leaves it out (nothing owns it, it may
+//!   never end) and [`JobsService::orphans`] lists it.
 //! - Time left comes from the plugin's clock ([`JobsPlugin::clock`]),
 //!   the motion clock by default (`egui_pop_core::motion`, frozen in
 //!   tests); tests may give a
@@ -184,9 +186,15 @@ impl JobsService {
         self.with(Jobs::summary)
     }
 
-    /// Whether no job goes on.
+    /// Whether no job that something still owns goes on; orphaned jobs
+    /// are not waited on ([`Jobs::idle`]).
     pub fn idle(&self) -> bool {
         self.with(Jobs::idle)
+    }
+
+    /// The orphaned jobs still going on ([`Jobs::orphans`]).
+    pub fn orphans(&self) -> Vec<Job> {
+        self.with(|j| j.orphans().into_iter().cloned().collect())
     }
 
     /// A job's log from line `from` on, as far as it is kept.
@@ -252,8 +260,9 @@ impl JobsService {
         lock(&self.state).jobs.take_changed()
     }
 
-    /// Folds the journal's new events.
-    fn fold(&self, app: &AppHandle) {
+    /// Folds the journal's new events: a read that must see every job
+    /// event up to the last (a wait, a disconnection) calls it first.
+    pub(crate) fn fold(&self, app: &AppHandle) {
         let time = egui_pop_core::motion::now(&app.egui());
         let seen = {
             let mut s = lock(&self.state);
@@ -501,10 +510,20 @@ fn status_item(ui: &mut Ui, app: &AppHandle) {
             // The ring is drawn only: the button's text names the item.
             let side = t.size.icon_inline;
             let (rect, _) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::hover());
+            // Only orphaned jobs going on: nothing owns them and they may
+            // never end, so the ring does not spin for them (a spinning
+            // ring asks for a repaint each pass, and the application
+            // would never settle).
+            let owned = jobs.with(|j| j.roots().iter().any(|r| r.active() && r.orphaned.is_none()));
+            let fraction = summary.fraction.map(|f| f as f32);
             paint_ring(
                 ui,
                 rect,
-                summary.fraction.map(|f| f as f32),
+                if owned {
+                    fraction
+                } else {
+                    Some(fraction.unwrap_or(0.0))
+                },
                 Tone::Accent.color(&ctx),
             );
         } else {
