@@ -515,6 +515,7 @@ impl AppHandle {
                 r.borrow_mut()
                     .insert(id.deferred_viewport(), (self.downgrade(), id.clone()))
             });
+            self.app_window_opened(id.deferred_viewport());
             self.publish(
                 "egui_pop",
                 None,
@@ -535,19 +536,41 @@ impl AppHandle {
                 .send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Close);
             return;
         }
-        let closed = {
+        self.close_entry(id);
+    }
+
+    /// The one way an application window closes, whatever asked (its
+    /// close button, its content, [`AppHandle::close_window`], the
+    /// system): it is marked closed, so the main window's next pass no
+    /// longer declares its viewport and egui's backend destroys its
+    /// system window; its geometry is kept; and the main window is asked
+    /// for that pass at once. Whether a window was open under that id.
+    fn close_entry(&self, id: &WindowId) -> bool {
+        let geometry = {
             let mut w = self.windows_mut();
             match w.entry_mut(id) {
                 Some(e) => {
                     e.closed = true;
-                    true
+                    Some(e.geometry)
                 }
-                None => false,
+                None => None,
             }
         };
-        if closed {
-            self.window_closed(id);
+        let Some(geometry) = geometry else {
+            return false;
+        };
+        if let Some(g) = geometry {
+            self.keep_geometry(id, g);
         }
+        // Hidden at once, where the system allows it (not on Wayland):
+        // a pass the system runs before the window goes paints nothing,
+        // and must not be seen (a black window without its title bar).
+        if !self.egui().embed_viewports() {
+            self.egui()
+                .send_viewport_cmd_to(id.deferred_viewport(), ViewportCommand::Visible(false));
+        }
+        self.window_closed(id);
+        true
     }
 
     /// Brings a window to the front and gives it the keyboard focus. The
@@ -773,6 +796,7 @@ impl AppHandle {
 
     fn window_closed(&self, id: &WindowId) {
         REGISTRY.with(|r| r.borrow_mut().remove(&id.deferred_viewport()));
+        self.app_window_closed(id.deferred_viewport(), id.as_str());
         // Its dialogs go with it, as a file choice asked from it does.
         crate::dialogs::window_closed(self, id.deferred_viewport());
         self.sync_separate_windows();
@@ -1051,6 +1075,9 @@ impl AppHandle {
         if ctx.viewport_id() != ViewportId::ROOT {
             return;
         }
+        // The Settings app's window follows the app first: closed from
+        // here, it is not declared again.
+        crate::admin::follow_window(self, ctx);
         let app_id = self.app_id();
         // The application draws each window's frame as the main window's
         // (`frame::window_frame`), or the system draws them all.
@@ -1089,6 +1116,17 @@ impl AppHandle {
             ctx.show_viewport_deferred(viewport, builder, move |ui, class| {
                 window_pass(viewport, ui, class)
             });
+        }
+        // A closed window the backend still lists past the delay: shown
+        // hidden for one pass (egui's backend hides it), then dropped.
+        for viewport in self.watch_closed_windows(ctx) {
+            ctx.show_viewport_deferred(
+                viewport,
+                ViewportBuilder::default().with_visible(false),
+                move |ui, _| {
+                    crate::paint_guard::orphan_pass(ui.ctx(), viewport, "it is closed");
+                },
+            );
         }
     }
 
@@ -1176,9 +1214,13 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
         return;
     }
     let Some((weak, id)) = REGISTRY.with(|r| r.borrow().get(&viewport).cloned()) else {
+        crate::paint_guard::orphan_pass(ui.ctx(), viewport, "no application window has it");
         return;
     };
-    let Ok(app) = weak.get() else { return };
+    let Ok(app) = weak.get() else {
+        crate::paint_guard::orphan_pass(ui.ctx(), viewport, "its application is gone");
+        return;
+    };
     // What opens while it draws (a dialog, a toast, a command asked from
     // its content) belongs to it.
     let _group = enter_group(Some(viewport));
@@ -1187,7 +1229,11 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
     let (content, title, raise, bars) = {
         let mut w = app.windows_mut();
         let tick = w.next_tick();
-        let Some(e) = w.entry_mut(&id) else { return };
+        let Some(e) = w.entry_mut(&id) else {
+            drop(w);
+            crate::paint_guard::orphan_pass(&ctx, viewport, "its window is closed");
+            return;
+        };
         let Some(content) = e.content.take() else {
             return;
         };
@@ -1231,9 +1277,15 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
         keep_open: false,
         close: false,
     };
+    let mut painted = false;
     if own_window {
         let title = wui.title.clone();
-        framed(ui, &app, &title, bars, |ui| content(ui, &mut wui));
+        framed(ui, &app, &title, bars, |ui| {
+            // What the content paints, under the title bar.
+            let mark = crate::paint_guard::mark(ui);
+            content(ui, &mut wui);
+            painted = crate::paint_guard::painted_since(ui.ctx(), &mark);
+        });
     } else {
         // Embedded in the main window: egui's window frame is its frame.
         content(ui, &mut wui);
@@ -1242,9 +1294,14 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
         app.show_zone(ui, &crate::zones::WINDOW_OVERLAYS);
         // A menu opened as a popup in this window (`menus::popup_at`).
         crate::menus::draw_popup(&ctx, &app);
+        // A window whose content paints nothing: said, and a page that
+        // closes it.
+        if app.watch_app_window(&ctx, &id, painted) && app.app_window_fallback(&ctx) {
+            wui.close = true;
+        }
     }
     let closing = wui.close || (close_requested && !wui.keep_open);
-    let (send_title, geometry) = {
+    let send_title = {
         let mut w = app.windows_mut();
         let Some(e) = w.entry_mut(&id) else { return };
         e.content = Some(content);
@@ -1253,21 +1310,16 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
         if send.is_some() {
             e.sent_title = send.clone();
         }
-        if closing {
-            e.closed = true;
-        }
-        (send, e.geometry)
+        send
     };
     if let Some(t) = send_title
         && own_window
+        && !closing
     {
         ctx.send_viewport_cmd(ViewportCommand::Title(t));
     }
     if closing {
-        if let Some(g) = geometry {
-            app.keep_geometry(&id, g);
-        }
-        app.window_closed(&id);
+        app.close_entry(&id);
     }
     if app.has_requests() {
         ctx.request_repaint_of(ViewportId::ROOT);

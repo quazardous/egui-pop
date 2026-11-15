@@ -38,6 +38,8 @@ pub struct MultiWindow {
     /// Each named node's rectangle (in points) and whether it is
     /// disabled, per window, from its last pass.
     nodes: BTreeMap<ViewportId, Vec<(String, Rect, bool)>>,
+    /// Windows the backend keeps listing once no longer declared.
+    held: BTreeSet<ViewportId>,
     time: f64,
 }
 
@@ -67,6 +69,7 @@ impl MultiWindow {
             commands: BTreeMap::new(),
             names: BTreeMap::new(),
             nodes: BTreeMap::new(),
+            held: BTreeSet::new(),
             time: 0.0,
         }
     }
@@ -169,6 +172,14 @@ impl MultiWindow {
         }
     }
 
+    /// The backend keeps listing a window (its system window) after the
+    /// main window's pass stopped declaring it, as a backend that failed
+    /// to destroy it would: the input of every later pass still has it.
+    pub fn hold_listed(&mut self, viewport: ViewportId) {
+        self.held.insert(viewport);
+        self.info.entry(viewport).or_insert_with(Self::fresh_info);
+    }
+
     /// The user asks to close a window (its close button), seen in its
     /// next pass.
     pub fn request_close(&mut self, viewport: ViewportId) {
@@ -261,8 +272,10 @@ impl MultiWindow {
                 .filter_map(|(v, o)| o.viewport_ui_cb.map(|cb| (v, cb)))
                 .collect();
             let declared = self.declared.clone();
-            self.info
-                .retain(|v, _| *v == ViewportId::ROOT || declared.contains_key(v));
+            let held = &self.held;
+            self.info.retain(|v, _| {
+                *v == ViewportId::ROOT || declared.contains_key(v) || held.contains(v)
+            });
         }
     }
 
