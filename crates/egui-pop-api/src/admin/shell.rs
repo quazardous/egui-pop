@@ -181,13 +181,14 @@ fn window_content(ui: &mut Ui, window: &mut WindowUi<'_>) {
     if window.title() != title {
         window.set_title(title);
     }
-    if window.close_requested() || !admin.is_open() {
+    if !admin.is_open() {
         admin.set_window_shown(false);
-        admin.close();
         window.close();
         return;
     }
-    let mut close = false;
+    // Asked to close (its close button, the system): the page is drawn
+    // once more, so the frame the system shows last is not an empty one.
+    let mut close = window.close_requested();
     egui::CentralPanel::default().show(ui, |ui| {
         tab::scope(ui, "egui_pop.admin", ScopeKind::Panel, |ui| {
             if page(ui, &app, &admin) {
