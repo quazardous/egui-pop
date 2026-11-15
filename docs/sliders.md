@@ -70,6 +70,18 @@ bar's end (a colour picker: `Icon::Picker`), whose click is in
 it into a toggle, lit when on. Either is named for assistive
 technologies by its label.
 
+## The scrub field
+
+`Slider::scrub()` draws the label and the value in a plain field, with
+no fill and no thumb, for a dense row (a HUD's card, a property sheet)
+where the value matters more than where it sits in its range. Every
+gesture, key, menu and name stays the slider's: a drag along the field
+scrubs the value over the soft range, a double click resets it, Enter
+types a value. Too narrow for its label, it shows the value alone. The
+gallery's "Compact controls" page shows it beside the compact cells
+(`Input::cell`, `compact::ChoiceCell`) and the menu rows
+(`compact::MenuRow`).
+
 ## Variants
 
 - **Logarithmic**: `.logarithmic()` gives equal ratios equal lengths

@@ -873,6 +873,133 @@ fn faders_and_knobs_go_up_and_reset_and_narrow_sliders_keep_their_name() {
 }
 
 #[test]
+fn compact_controls_scrub_choose_mark_and_reveal_from_their_slots() {
+    use egui::accesskit::{Orientation, Role};
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "compact"));
+        h.run();
+        egui_pop_test::assert_all_named(&h);
+        results.add(h.try_snapshot(format!("compact-{theme}")));
+    }
+    let mut h = harness(options("pop-dark", Density::Comfortable, "compact"));
+    h.run();
+
+    // A scrub field: a slider for assistive technologies, filling its
+    // slot; a drag right raises it, the arrows step it, a double click
+    // resets it.
+    let radius = h.get_by_label("Radius");
+    assert_eq!(radius.accesskit_node().role(), Role::Slider);
+    assert!(
+        (radius.rect().width() - 220.0).abs() < 1.0,
+        "fills its slot"
+    );
+    assert_eq!(value_of(&h, "Radius"), 12.0);
+    let at = radius.rect().center();
+    drag_by(&mut h, at, egui::vec2(44.0, 0.0), egui::Modifiers::NONE);
+    let dragged = value_of(&h, "Radius");
+    assert!(
+        dragged > 25.0,
+        "a fifth of the width is a fifth of the range: {dragged}"
+    );
+    h.get_by_label("Radius").focus();
+    h.run();
+    h.key_press(egui::Key::ArrowRight);
+    h.run();
+    assert_eq!(value_of(&h, "Radius"), dragged + 1.0, "Right steps it");
+    egui_pop_test::double_click(&mut h, "Radius");
+    assert_eq!(value_of(&h, "Radius"), 12.0, "a double click resets it");
+    // Too narrow for its label: still named.
+    let narrow = h.get_by_label("Exposure, narrow");
+    assert_eq!(narrow.accesskit_node().role(), Role::Slider);
+    assert!((narrow.rect().width() - 72.0).abs() < 1.0);
+
+    // Compact cells: no taller than the row; a choice steps with the
+    // arrows while its list is closed.
+    let name = text_input(&h, "Layer name");
+    assert!(name.rect().height() <= 22.5, "{:?}", name.rect());
+    assert_eq!(name.value().as_deref(), Some("Sky"));
+    let mode = h.get_by_label("Blend mode");
+    assert_eq!(mode.accesskit_node().role(), Role::ComboBox);
+    assert_eq!(mode.value().as_deref(), Some("Multiply"));
+    assert!(mode.rect().height() <= 22.5, "{:?}", mode.rect());
+    h.get_by_label("Blend mode").focus();
+    h.run();
+    h.key_press(egui::Key::ArrowDown);
+    h.run();
+    assert_eq!(
+        h.get_by_label("Blend mode").value().as_deref(),
+        Some("Screen")
+    );
+    h.key_press(egui::Key::Home);
+    h.run();
+    assert_eq!(
+        h.get_by_label("Blend mode").value().as_deref(),
+        Some("Normal")
+    );
+    h.key_press(egui::Key::ArrowUp);
+    h.run();
+    assert_eq!(
+        h.get_by_label("Blend mode").value().as_deref(),
+        Some("Normal"),
+        "stays at the first"
+    );
+
+    // The marks: each its meaning; the changed dot resets the value.
+    assert!(h.query_by_label("Held by Auto exposure").is_some());
+    assert!(h.query_by_label("Moved by Mask 1").is_some());
+    let marks = egui_pop::core::indicator::drawn(&h.ctx);
+    let kinds: Vec<_> = marks
+        .iter()
+        .filter(|m| m.id.starts_with("exposure."))
+        .map(|m| (m.kind, m.state.as_str()))
+        .collect();
+    assert_eq!(
+        kinds,
+        [("mark", "changed"), ("mark", "held"), ("mark", "moved")]
+    );
+    h.get_by_label("Reset Exposure").click();
+    h.run();
+    assert_eq!(value_of(&h, "Exposure"), 0.0);
+    assert!(
+        h.query_by_label("Reset Exposure").is_none(),
+        "at its default: no mark"
+    );
+
+    // Value bars: meters, the upright ones vertical.
+    let left = h.get_by_label("Left level");
+    assert_eq!(left.accesskit_node().role(), Role::Meter);
+    assert_eq!(
+        left.accesskit_node().orientation(),
+        Some(Orientation::Vertical)
+    );
+    assert!((left.rect().height() - 72.0).abs() < 1.0);
+    assert_eq!(
+        h.get_by_label("Shadows").accesskit_node().role(),
+        Role::Meter
+    );
+
+    // Menu rows: buttons named with their note, pressed by a click or
+    // by Enter once focused.
+    h.get_by_label("Show Contrast, hidden").scroll_to_me();
+    h.run();
+    assert_eq!(
+        h.get_by_label("Show Contrast, hidden")
+            .accesskit_node()
+            .role(),
+        Role::Button
+    );
+    h.get_by_label("Show Contrast, hidden").click();
+    h.run();
+    assert!(h.query_by_label("Shown: Contrast").is_some());
+    h.get_by_label("Show Vibrance, hidden").focus();
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert!(h.query_by_label("Shown: Contrast, Vibrance").is_some());
+}
+
+#[test]
 fn the_inputs_page_shows_every_decorator_and_state() {
     let mut results = egui_kittest::SnapshotResults::new();
     for theme in ["pop-dark", "pop-light", "pop-high-contrast"] {

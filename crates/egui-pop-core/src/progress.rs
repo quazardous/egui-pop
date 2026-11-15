@@ -31,7 +31,7 @@ use std::f32::consts::TAU;
 
 use egui::accesskit::Role;
 use egui::{
-    Color32, Context, FontId, Id, Painter, Pos2, Rect, Response, Sense, Stroke, Ui, Widget,
+    Color32, Context, FontId, Id, Painter, Pos2, Rect, Response, Sense, Stroke, Ui, Vec2, Widget,
     WidgetInfo, pos2, vec2,
 };
 
@@ -565,6 +565,8 @@ pub struct Meter {
     label: String,
     text: Option<String>,
     width: Option<f32>,
+    size: Option<Vec2>,
+    vertical: bool,
 }
 
 impl Meter {
@@ -578,6 +580,8 @@ impl Meter {
             label: String::new(),
             text: None,
             width: None,
+            size: None,
+            vertical: false,
         }
     }
 
@@ -604,6 +608,22 @@ impl Meter {
         self
     }
 
+    /// Its size, for a value bar in a slot (a HUD's level, a property
+    /// row's read-out): the bar fills it, instead of the kit's thickness
+    /// (`meter.height`) across the width available.
+    pub fn size(mut self, size: Vec2) -> Self {
+        self.size = Some(size);
+        self
+    }
+
+    /// A vertical bar, filled from the bottom (a level meter); vertical
+    /// for assistive technologies too. Give it a [`size`](Self::size),
+    /// else it is the kit's thickness wide and a row and a half high.
+    pub fn vertical(mut self) -> Self {
+        self.vertical = true;
+        self
+    }
+
     /// The tone at its value.
     pub fn tone(&self) -> Tone {
         self.thresholds
@@ -619,14 +639,29 @@ impl Widget for Meter {
         let ctx = ui.ctx().clone();
         let kit = Kit::of(&ctx);
         let thick = kit.meter.data.height.max(1.0);
-        let width = self
-            .width
-            .unwrap_or_else(|| ui.available_width())
-            .max(thick * 4.0);
-        let (rect, response) = ui.allocate_exact_size(vec2(width, thick), Sense::hover());
+        let size = match (self.size, self.vertical) {
+            (Some(s), _) => vec2(s.x.max(1.0), s.y.max(1.0)),
+            (None, false) => vec2(
+                self.width
+                    .unwrap_or_else(|| ui.available_width())
+                    .max(thick * 4.0),
+                thick,
+            ),
+            (None, true) => vec2(thick, ui.spacing().interact_size.y * 1.5),
+        };
+        let vertical = self.vertical;
+        let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
         let span = self.max - self.min;
-        let at =
-            |v: f64| rect.left() + rect.width() * ((v - self.min) / span).clamp(0.0, 1.0) as f32;
+        let share = |v: f64| ((v - self.min) / span).clamp(0.0, 1.0) as f32;
+        // Where a value falls along the bar: from the left, or up from
+        // the bottom.
+        let at = |v: f64| {
+            if vertical {
+                rect.bottom() - rect.height() * share(v)
+            } else {
+                rect.left() + rect.width() * share(v)
+            }
+        };
         if ui.is_rect_visible(rect) {
             let cx = KitCx {
                 painter: ui.painter(),
@@ -640,13 +675,20 @@ impl Widget for Meter {
             };
             kit.meter.paint_part(&cx, &part(rect));
             let x = at(self.value);
-            if x > rect.left() {
+            if vertical && x < rect.bottom() {
+                let fill = Rect::from_min_max(pos2(rect.left(), x), rect.max);
+                paint_fill(&kit, &cx, fill, rect, self.tone());
+            } else if !vertical && x > rect.left() {
                 let fill = Rect::from_min_max(rect.min, pos2(x, rect.bottom()));
                 paint_fill(&kit, &cx, fill, rect, self.tone());
             }
             for (v, _) in &self.thresholds {
                 let x = at(*v);
-                let tick = Rect::from_min_max(pos2(x, rect.top()), pos2(x, rect.bottom()));
+                let tick = if vertical {
+                    Rect::from_min_max(pos2(rect.left(), x), pos2(rect.right(), x))
+                } else {
+                    Rect::from_min_max(pos2(x, rect.top()), pos2(x, rect.bottom()))
+                };
                 kit.meter_tick.paint_part(&cx, &part(tick));
             }
         }
@@ -672,6 +714,11 @@ impl Widget for Meter {
             Some(&value),
             Some(&text),
         );
+        if vertical {
+            ctx.accesskit_node_builder(response.id, |node| {
+                node.set_orientation(egui::accesskit::Orientation::Vertical);
+            });
+        }
         response
     }
 }

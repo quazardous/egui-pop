@@ -1709,17 +1709,23 @@ egui-pop-history-take-snapshot = Take a snapshot
 
 egui-pop-history-undo-this = Undo this step
 
+egui-pop-indicator-changed = Changed from its default
+
 egui-pop-indicator-done = Done
 
 egui-pop-indicator-error = Error
 
 egui-pop-indicator-failed = Failed
 
+egui-pop-indicator-held = Held by { $by }
+
 egui-pop-indicator-invalid = Invalid
 
 egui-pop-indicator-mixed = Mixed
 
 egui-pop-indicator-modified = Modified
+
+egui-pop-indicator-moved = Moved by { $by }
 
 egui-pop-indicator-no-color = No colour
 
