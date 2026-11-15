@@ -11,7 +11,7 @@ on:
     branches: [next]
   workflow_dispatch:
 
-# One run per branch: a newer push to `next` cancels the running one.
+# One run per branch.
 # A run is never cancelled: next moves often and a cancelled run tells
 # nothing. A newer push waits for the running one; GitHub keeps only the
 # newest waiting run, so at most one run goes and one waits.

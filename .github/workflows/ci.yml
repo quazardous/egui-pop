@@ -11,11 +11,15 @@ on:
     # the internal label lets the changeset check pass.
     types: [opened, synchronize, reopened, labeled]
 
-# One run per push to `next`: a newer push cancels the running one, so a
-# batch of merges is checked once. Pull requests and `main` are not cancelled.
+# One run at a time on `next`, never cancelled: with merges landing every
+# few minutes, a newer push cancelling the running run meant no run ever
+# finished and `main` was never promoted. The running run finishes; a newer
+# push waits behind it (GitHub keeps only the newest waiting run), so a
+# batch of merges is still checked once. Pull requests and `main` are not
+# grouped.
 concurrency:
   group: ci-${{ github.event_name == 'push' && github.ref == 'refs/heads/next' && 'next' || github.run_id }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
