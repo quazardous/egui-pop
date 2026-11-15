@@ -136,3 +136,33 @@ fn the_last_plugin_wins_and_the_icon_goes_with_its_plugin() {
     assert_eq!(icon(&app, &clipboard::CMD_CUT).0.as_deref(), Some("cut"));
     assert_eq!(app.handle().icon_set_by(&clipboard::CMD_PASTE), None);
 }
+
+/// Registers an SVG icon of its own.
+#[cfg(feature = "svg")]
+struct Drawer;
+
+#[cfg(feature = "svg")]
+impl Plugin for Drawer {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("test-drawer")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        const RING: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="black" stroke-width="2"/></svg>"#;
+        ctx.icon("ring", RING, egui_pop_core::icon_set::Paint::Mono)
+            .map_err(|e| PluginError::Failed(e.to_string()))?;
+        Ok(())
+    }
+}
+
+#[cfg(feature = "svg")]
+#[test]
+fn a_plugin_icon_goes_with_its_plugin() {
+    use egui_pop_core::icon::registry::is_known;
+    let mut app = build(App::builder().plugin(Drawer));
+    assert!(is_known("test-drawer:ring"));
+    app.disconnect(&PluginId::from_static("test-drawer"));
+    assert!(!is_known("test-drawer:ring"), "removed with its plugin");
+    app.connect(&PluginId::from_static("test-drawer")).unwrap();
+    assert!(is_known("test-drawer:ring"), "back when it connects again");
+}

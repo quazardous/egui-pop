@@ -31,7 +31,8 @@ pub struct Fault {
     /// The boundary's name.
     pub name: String,
     pub message: String,
-    /// How many times it failed since the last retry.
+    /// How many times in a row it failed: a retry that fails again adds
+    /// one, a pass that draws without a panic starts again from zero.
     pub count: u32,
 }
 
@@ -39,6 +40,9 @@ pub struct Fault {
 const FAULT: Slot<Fault> = Slot::new("core.fault");
 /// Every boundary that failed.
 const FAILED: Slot<Vec<Id>> = Slot::new("core.fault.failed");
+/// How many times in a row a boundary failed, per boundary: kept across a
+/// retry, removed when the boundary draws without a panic.
+const STREAK: Slot<u32> = Slot::new("core.fault.streak");
 
 /// The panic's message.
 pub(crate) fn message(payload: &(dyn std::any::Any + Send)) -> String {
@@ -78,14 +82,24 @@ pub fn boundary_reporting<R>(
         card(ui, key, &fault);
         return None;
     }
+    let streak = STREAK.keyed(id);
     let result = catch_unwind(AssertUnwindSafe(|| ui.scope(add).inner));
     match result {
-        Ok(r) => Some(r),
+        Ok(r) => {
+            if streak.exists(ui.ctx()) {
+                streak.remove(ui.ctx());
+            }
+            Some(r)
+        }
         Err(payload) => {
+            let count = streak.update(ui.ctx(), |n| {
+                *n += 1;
+                *n
+            });
             let fault = Fault {
                 name: name.into(),
                 message: message(&*payload),
-                count: 1,
+                count,
             };
             log::error!(target: "egui_pop", "`{name}` panicked: {}", fault.message);
             failed(&fault);

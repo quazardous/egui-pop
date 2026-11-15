@@ -78,8 +78,9 @@ layering`.
   supported item names no experimental type in its signature (`cargo
   xtask experimental --check`); an exposure kept on purpose goes into
   `xtask/experimental.allow` with its reason.
-- A Rust path named in backticks in `docs/` (`egui_pop_core::kit::Tone`)
-  resolves in the crates (`cargo xtask doc-paths --check`); a path that
-  cannot on purpose goes into `xtask/doc-paths.allow` with its reason.
+- A Rust path named in backticks in `docs/` or in rustdoc
+  (`egui_pop_core::kit::Tone`) resolves in the crates (`cargo xtask
+  doc-paths --check`); a path that cannot on purpose goes into
+  `xtask/doc-paths.allow` with its reason.
 - A new crate goes into the layering table of
   `crates/egui-pop/tests/layering.rs` and of ADR 0001.

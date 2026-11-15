@@ -1358,14 +1358,15 @@ fn handle_keys(ui: &Ui, response: &Response, g: &Gestures, f: &mut Frame<'_>) {
     }
 }
 
-/// The accessible name, with the zoom as the value.
+/// The accessible node: an image (readers say what the widget is), its
+/// name, and the zoom as the value.
 fn name(response: &Response, label: Option<&str>, zoom: Option<f64>) {
     let label = label.map_or_else(
         || egui_pop_core::strings::tr(&response.ctx, &crate::strings::VIEWPORT),
         str::to_string,
     );
     response.widget_info(move || {
-        let mut info = WidgetInfo::labeled(Role::Unknown, true, &label);
+        let mut info = WidgetInfo::labeled(Role::Image, true, &label);
         if let Some(z) = zoom {
             info.value = Some(z * 100.0);
             info.current_text_value = Some(format!("{:.0} %", z * 100.0));

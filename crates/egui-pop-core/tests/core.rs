@@ -286,6 +286,38 @@ fn a_panic_in_a_boundary_shows_a_card_until_retried() {
     assert!(fault::faults(&h.ctx).is_empty());
 }
 
+#[test]
+fn a_fault_counts_the_failures_in_a_row() {
+    let mut h = Harness::new_ui_state(
+        |ui, boom: &mut bool| {
+            let fail = *boom;
+            fault::boundary(ui, "inspector", "Inspector", |ui| {
+                if fail {
+                    panic!("index out of range");
+                }
+                ui.label("All good");
+            });
+        },
+        true,
+    );
+    let count = |h: &Harness<'_, bool>| fault::faults(&h.ctx).first().map(|f| f.count);
+    h.run();
+    assert_eq!(count(&h), Some(1));
+    h.get_by_label("Retry").click();
+    h.run();
+    assert_eq!(count(&h), Some(2), "a retry that fails again adds one");
+    h.get_by_label("Retry").click();
+    h.run();
+    assert_eq!(count(&h), Some(3));
+    *h.state_mut() = false;
+    h.get_by_label("Retry").click();
+    h.run();
+    assert!(h.query_by_label("All good").is_some());
+    *h.state_mut() = true;
+    h.run();
+    assert_eq!(count(&h), Some(1), "a pass that draws starts from zero");
+}
+
 fn store() -> binding::SharedStore {
     let store = Arc::new(Mutex::new(Store::new()));
     store
@@ -445,6 +477,33 @@ fn announcements_reach_a_live_region() {
         .collect();
     assert_eq!(labels, [Some("Saved".to_string()), Some(String::new())]);
     assert_eq!(a11y::announcements(&h.ctx).len(), 1);
+}
+
+#[test]
+fn the_same_text_announced_twice_changes_the_live_region_twice() {
+    let mut h = Harness::new_ui(|ui| {
+        a11y::live_regions(ui);
+        if ui.button("Save").clicked() {
+            a11y::announce(ui.ctx(), "Saved", a11y::Politeness::Polite);
+        }
+    });
+    let polite = |h: &Harness<'_>| {
+        h.query_all_by_role(egui::accesskit::Role::Status)
+            .find(|n| n.accesskit_node().live() == egui::accesskit::Live::Polite)
+            .and_then(|n| n.accesskit_node().label())
+            .unwrap_or_default()
+    };
+    h.run();
+    let mut seen = Vec::new();
+    for _ in 0..3 {
+        h.get_by_label("Save").click();
+        h.run();
+        seen.push(polite(&h));
+    }
+    assert_eq!(seen[0].trim(), "Saved");
+    assert_ne!(seen[0], seen[1], "a repeat changes the region");
+    assert_ne!(seen[1], seen[2], "and again");
+    assert!(seen.iter().all(|l| l.trim() == "Saved"), "{seen:?}");
 }
 
 #[test]

@@ -3,7 +3,9 @@
 //!
 //! A path is a backtick span under `docs/` (fenced code blocks left out)
 //! that starts with `egui_pop` (`egui_pop_core::kit::Tone`,
-//! `egui_pop::core::kit::Tone`) or `crate::`. Its leading path is kept
+//! `egui_pop::core::kit::Tone`) or `crate::`, or a backtick span starting
+//! with `egui_pop` in a crate's rustdoc comments (`//!`, `///` in
+//! `crates/*/src`; `crate::` there is the crate's own, left to rustdoc). Its leading path is kept
 //! (`f(x)`, `<T>`, `!` and what follows are dropped); a `{a, b}` list
 //! after `::` is expanded; a segment ending in `*` matches any name
 //! starting with what precedes it.
@@ -37,14 +39,14 @@ pub fn doc_paths(args: &[String]) -> Result<(), String> {
     let root = crate::root();
     let problems = check(&root)?;
     if problems.is_empty() {
-        println!("every path named in docs/ resolves");
+        println!("every path named in docs/ and in rustdoc resolves");
         return Ok(());
     }
     for p in &problems {
         eprintln!("{p}");
     }
     Err(format!(
-        "{} path(s) in docs/ that resolve to nothing (fix them, or list them in {ALLOW} with a reason)",
+        "{} path(s) in docs/ or rustdoc that resolve to nothing (fix them, or list them in {ALLOW} with a reason)",
         problems.len()
     ))
 }
@@ -77,9 +79,39 @@ pub fn check(root: &Path) -> Result<Vec<String>, String> {
             }
         }
     }
+    let mut sources = Vec::new();
+    for entry in fs::read_dir(root.join("crates")).map_err(|e| format!("crates: {e}"))? {
+        let src = entry.map_err(|e| e.to_string())?.path().join("src");
+        if src.is_dir() {
+            rust_files(&src, &mut sources)?;
+        }
+    }
+    sources.sort();
+    for file in sources {
+        let text = fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+        let rel = file
+            .strip_prefix(root)
+            .unwrap_or(&file)
+            .display()
+            .to_string();
+        for (line, span) in spans(&rustdoc(&text)) {
+            if !span.starts_with("egui_pop") {
+                continue;
+            }
+            for path in expand(&span) {
+                if allow.contains(&path) {
+                    allowed_used.insert(path);
+                    continue;
+                }
+                if !ws.resolves(&path) {
+                    problems.push(format!("{rel}:{line}: `{path}` resolves to nothing"));
+                }
+            }
+        }
+    }
     for path in allow.difference(&allowed_used) {
         problems.push(format!(
-            "{ALLOW}: `{path}` is no longer named in docs/, remove it"
+            "{ALLOW}: `{path}` is no longer named in docs/ or rustdoc, remove it"
         ));
     }
     Ok(problems)
@@ -119,6 +151,36 @@ fn markdown_files(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+    for entry in fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))? {
+        let path = entry.map_err(|e| e.to_string())?.path();
+        if path.is_dir() {
+            rust_files(&path, out)?;
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            out.push(path);
+        }
+    }
+    Ok(())
+}
+
+/// A source file's rustdoc as markdown, line for line: a `//!` or `///`
+/// line gives its text, any other line an empty one (so line numbers
+/// hold).
+pub fn rustdoc(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() / 2);
+    for line in text.lines() {
+        let t = line.trim_start();
+        let doc = t
+            .strip_prefix("//!")
+            .or_else(|| t.strip_prefix("///").filter(|r| !r.starts_with('/')));
+        if let Some(d) = doc {
+            out.push_str(d.strip_prefix(' ').unwrap_or(d));
+        }
+        out.push('\n');
+    }
+    out
 }
 
 /// The backtick spans of a page naming a path, with their line, outside
@@ -709,6 +771,19 @@ mod tests {
             ["egui_pop_core::kit::Tone", "egui_pop_core::kit::Glyph"]
         );
         assert_eq!(expand(&spans[1].1), ["egui_pop::api::wait::until"]);
+    }
+
+    #[test]
+    fn rustdoc_keeps_doc_lines_in_place() {
+        let src = "//! `egui_pop_a::x`\nfn f() {} // `egui_pop_b::y`\n    /// `egui_pop_c::z`\n//// `egui_pop_d::w`\n";
+        let spans = spans(&rustdoc(src));
+        assert_eq!(
+            spans,
+            [
+                (1, "egui_pop_a::x".to_owned()),
+                (3, "egui_pop_c::z".to_owned())
+            ]
+        );
     }
 
     #[test]

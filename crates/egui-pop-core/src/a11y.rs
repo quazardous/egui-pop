@@ -44,7 +44,15 @@ pub struct Announcement {
 #[derive(Debug, Default)]
 struct State {
     all: Vec<Announcement>,
+    /// How many messages each politeness was given (polite, assertive),
+    /// never trimmed: its parity marks a repeat.
+    made: [u64; 2],
 }
+
+/// The mark a region's text alternates with, so the same text announced
+/// twice in a row still changes the region: a no-break space at its end,
+/// which readers do not say.
+const REPEAT_MARK: char = '\u{a0}';
 
 /// How many announcements are kept.
 pub const KEPT: usize = 32;
@@ -54,6 +62,7 @@ pub fn announce(ctx: &Context, text: impl Into<String>, politeness: Politeness) 
     let time = ctx.input(|i| i.time);
     let st = shared::<State>(ctx, "core.a11y");
     let mut s = lock(&st);
+    s.made[usize::from(politeness == Politeness::Assertive)] += 1;
     s.all.push(Announcement {
         text: text.into(),
         politeness,
@@ -74,19 +83,28 @@ pub fn announcements(ctx: &Context) -> Vec<Announcement> {
 
 /// Draws the live regions (one polite, one assertive) holding the latest
 /// messages. Invisible; call it once per pass, anywhere (the app shell
-/// does).
+/// does). Every other message of a region ends with an invisible no-break
+/// space, so the same text announced twice in a row changes the region
+/// and is read twice.
 pub fn live_regions(ui: &mut Ui) {
-    let all = announcements(ui.ctx());
+    let (all, made) = {
+        let st = shared::<State>(ui.ctx(), "core.a11y");
+        let s = lock(&st);
+        (s.all.clone(), s.made)
+    };
     for (politeness, live, salt) in [
         (Politeness::Polite, Live::Polite, "polite"),
         (Politeness::Assertive, Live::Assertive, "assertive"),
     ] {
-        let text = all
+        let mut text = all
             .iter()
             .rev()
             .find(|a| a.politeness == politeness)
             .map(|a| a.text.clone())
             .unwrap_or_default();
+        if made[usize::from(politeness == Politeness::Assertive)] % 2 == 0 && !text.is_empty() {
+            text.push(REPEAT_MARK);
+        }
         let id = ui.scope_id().with(("egui_pop_live_region", salt));
         let (rect, _) = ui.allocate_exact_size(egui::Vec2::ZERO, egui::Sense::hover());
         let _ = rect;
