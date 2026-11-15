@@ -130,6 +130,11 @@ pub const INDICATOR_FAILED: StrKey = StrKey::new("egui-pop-indicator-failed", "F
 pub const INDICATOR_PERCENT: StrKey = StrKey::new("egui-pop-indicator-percent", "{ $percent }%");
 pub const INDICATOR_NO_COLOR: StrKey = StrKey::new("egui-pop-indicator-no-color", "No colour");
 pub const INDICATOR_MIXED: StrKey = StrKey::new("egui-pop-indicator-mixed", "Mixed");
+/// A value's marks (`indicator::ValueMark`).
+pub const INDICATOR_CHANGED: StrKey =
+    StrKey::new("egui-pop-indicator-changed", "Changed from its default");
+pub const INDICATOR_HELD: StrKey = StrKey::new("egui-pop-indicator-held", "Held by { $by }");
+pub const INDICATOR_MOVED: StrKey = StrKey::new("egui-pop-indicator-moved", "Moved by { $by }");
 /// A decorated input's clear button.
 pub const INPUT_CLEAR: StrKey = StrKey::new("egui-pop-input-clear", "Clear { $label }");
 /// A decorated input's dropdown chevron.
@@ -205,6 +210,9 @@ pub const ALL: &[StrKey] = &[
     INDICATOR_PERCENT,
     INDICATOR_NO_COLOR,
     INDICATOR_MIXED,
+    INDICATOR_CHANGED,
+    INDICATOR_HELD,
+    INDICATOR_MOVED,
     INPUT_CLEAR,
     INPUT_CHOICES,
     INPUT_MORE,

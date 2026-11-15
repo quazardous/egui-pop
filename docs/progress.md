@@ -208,7 +208,7 @@ tokens are no longer read (see the changelog's migration table).
 |---|---|
 | `ProgressBar` | determinate (`new(Some(f))`, `counts(done, total)`) or indeterminate (`new(None)`: a segment travelling along the track; a still striped track under reduced motion); tones (`Tone::Accent` while running, `Info`, `Success`, `Warning`, `Danger`, `Muted` when paused); stacked `section`s after the fill (failed, skipped); `line()` for the thin line; `caption(true)` draws the name and the value text above it |
 | `Ring` | a small circle: an arc from the top, or a turning arc when indeterminate |
-| `Meter` | a value against thresholds (disk space, memory), its tone the highest threshold reached; AccessKit role `Meter` |
+| `Meter` | a value against thresholds (disk space, memory), its tone the highest threshold reached; AccessKit role `Meter`. As a value bar in a slot: `size(vec2)` fills it, `vertical()` fills it from the bottom (a level meter, vertical for assistive technologies too) |
 | `Spinner` | a turning arc with a label; `delayed(id, since, busy)` shows it only after `motion.spinner.delay` and keeps it `motion.spinner.min`, its space kept while hidden |
 
 Each is an AccessKit `ProgressIndicator` with its name (`label`); a

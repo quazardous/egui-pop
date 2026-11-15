@@ -47,7 +47,7 @@
 
 use egui::{
     Align2, Color32, CornerRadius, FontId, Id, Rect, Response, Role, Sense, Stroke, StrokeKind,
-    TextStyle, Ui, WidgetInfo, pos2, vec2,
+    TextStyle, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 use egui_pop_model::field::FieldState;
 
@@ -154,6 +154,7 @@ pub struct Input<'a> {
     state: FieldState,
     stop: TabStop,
     width: Option<f32>,
+    cell: Option<Vec2>,
     salt: Option<Id>,
     default: Option<String>,
     precision: Option<usize>,
@@ -205,6 +206,7 @@ impl<'a> Input<'a> {
             state: FieldState::default(),
             stop: TabStop::new(),
             width: None,
+            cell: None,
             salt: None,
             default: None,
             precision: None,
@@ -311,6 +313,17 @@ impl<'a> Input<'a> {
         self
     }
 
+    /// A compact cell: exactly `size` (attached buttons included), for
+    /// a slot of a dense layout (a HUD part, a table cell, a property
+    /// row), its padding the small step (`space.xs`) instead of
+    /// `space.s`, and none of the room an input otherwise keeps for its
+    /// text (four rows' height). Everything else is the input's: the
+    /// placeholder, the slots, the state, the keys and the name.
+    pub fn cell(mut self, size: Vec2) -> Self {
+        self.cell = Some(size);
+        self
+    }
+
     /// Distinguishes inputs with the same label in one place.
     pub fn id_salt(mut self, salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
         self.salt = Some(Id::unique(salt));
@@ -360,6 +373,7 @@ impl<'a> Input<'a> {
             state,
             stop,
             width,
+            cell,
             salt: _,
             default,
             precision,
@@ -368,8 +382,17 @@ impl<'a> Input<'a> {
         let t = Tokens::of(&ctx);
         let kit = Kit::of(&ctx);
         let fk = &kit.field;
-        let h = ui.spacing().interact_size.y;
-        let pad = t.space.s;
+        let h = cell.map_or(ui.spacing().interact_size.y, |c| c.y.max(1.0));
+        if cell.is_some() {
+            // The text field inside is no taller than the cell (egui's
+            // text edit is at least a row high); `draw` runs in a scope.
+            ui.spacing_mut().interact_size.y = h;
+        }
+        let pad = if cell.is_some() {
+            t.space.xs
+        } else {
+            t.space.s
+        };
         let gap = t.space.xs;
         let side = t.size.icon_inline.min(h - 2.0);
         let font = TextStyle::Body.resolve(ui.style());
@@ -409,9 +432,12 @@ impl<'a> Input<'a> {
             })
             .collect();
         let attached: f32 = widths.iter().map(|(a, b)| a + b).sum();
-        let total = width
-            .unwrap_or_else(|| ui.available_width())
-            .max(attached + h * 4.0);
+        let total = match cell {
+            Some(c) => c.x.max(attached + h),
+            None => width
+                .unwrap_or_else(|| ui.available_width())
+                .max(attached + h * 4.0),
+        };
         let (_, row) = ui.allocate_space(vec2(total, h));
         let field = Rect::from_min_max(row.min, pos2(row.right() - attached, row.bottom()));
         let text_id = base.with("text");

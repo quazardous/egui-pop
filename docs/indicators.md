@@ -21,6 +21,7 @@ them, is [design/indicators.md](design/indicators.md).
 | Flag | `Indicator::flag(Flag::…)`, `Indicator::flag_shape(shape)` | `Modified`, `Pinned`, `Required`, `Invalid`, or the application's | a corner triangle, a diamond, an asterisk, a triangle; a stripe, a square |
 | Swatch | `Indicator::swatch(color)`, `Indicator::swatch_of(Swatch::None \| Mixed)` | a colour (egui's checkerboard under alpha), none, mixed | an outlined square; a slash; a dash |
 | Icon | `Indicator::icon(icon)`, `Indicator::toggle(on, when_on, when_off)` | a built-in `Icon`, or one of two by a state | the glyph |
+| Value mark | `Indicator::mark(ValueMark::…)` | `Changed` (from its default; interactive, the value's reset), `Held(by)`, `Moved(by)`: "Changed from its default", "Held by …", "Moved by …" | a dot (accent), a square (warning), a diamond (accent) |
 
 Every state has a shape, a glyph or a text, and a name: colour is never
 the only carrier. The kit gives colours and sizes, and the shapes of

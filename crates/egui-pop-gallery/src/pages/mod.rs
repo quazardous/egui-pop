@@ -10,6 +10,7 @@ pub mod about;
 pub mod arrangements;
 pub mod builtins;
 pub mod clipboard;
+pub mod compact;
 pub mod contexts;
 pub mod cursors;
 pub mod debug;
