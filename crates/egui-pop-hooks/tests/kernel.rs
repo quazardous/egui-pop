@@ -383,3 +383,28 @@ fn listeners_may_reenter_the_kernel_and_emits_cross_threads() {
         assert_eq!(h.join().unwrap(), 2);
     }
 }
+
+#[test]
+fn a_last_listener_runs_after_every_other_one_and_is_alone() {
+    let kernel = Kernel::new();
+    push(&kernel, "check", ListenOpts::new().last());
+    push(&kernel, "early", ListenOpts::new().priority(10));
+    // Registered after it, ordered against nothing: still before it.
+    push(
+        &kernel,
+        "late",
+        ListenOpts::new().after("early").priority(-10),
+    );
+    let out = kernel.alter::<Trail>((), Vec::new());
+    assert_eq!(out.value, ["early", "late", "check"]);
+    assert!(out.failures.is_empty(), "LAST is no missing target");
+    let listeners = kernel.listeners(Trail::ID).unwrap();
+    assert!(listeners[2].after.iter().any(|a| a == egui_pop_hooks::LAST));
+    assert!(ListenOpts::new().last().last().is_last());
+    // A second last one: each would run after the other.
+    let refused = kernel
+        .listen::<Trail>("check-too", ListenOpts::new().last(), |_, _| Ok(()))
+        .unwrap_err();
+    assert!(matches!(refused, Refused::Cycle { .. }), "{refused:?}");
+    assert_eq!(kernel.listeners(Trail::ID).unwrap().len(), 3);
+}

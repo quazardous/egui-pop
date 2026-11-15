@@ -118,13 +118,109 @@ pub(crate) fn painted_since(ctx: &egui::Context, mark: &Mark) -> bool {
         .any(|l| has_content(ctx, l, from(l), None))
 }
 
+/// A closed window's page, drawn by its passes until the backend drops
+/// its system window (ADR 0029: one pass of grace draws the window's last
+/// page, never nothing).
+struct LastPage {
+    title: String,
+    /// The shapes of the pass it closed in, per layer; `None` when it
+    /// closed from elsewhere (the main window's pass, a command).
+    shapes: Option<Vec<(LayerId, Vec<egui::epaint::ClippedShape>)>>,
+}
+
+thread_local! {
+    /// The application windows closed and not yet dropped, by viewport.
+    static LAST_PAGES: std::cell::RefCell<std::collections::BTreeMap<egui::ViewportId, LastPage>> =
+        const { std::cell::RefCell::new(std::collections::BTreeMap::new()) };
+}
+
+/// An application window closed (`window.registry`): its passes until
+/// the main window's next one draw its last page.
+pub(crate) fn closing(viewport: egui::ViewportId, title: String) {
+    LAST_PAGES.with_borrow_mut(|p| {
+        p.insert(
+            viewport,
+            LastPage {
+                title,
+                shapes: None,
+            },
+        )
+    });
+}
+
+/// The window closed in this very pass of its own: what the pass painted
+/// is its last page.
+pub(crate) fn keep_last_page(ctx: &egui::Context, viewport: egui::ViewportId) {
+    let layers: Vec<LayerId> = ctx.memory(|m| m.layer_ids().collect());
+    let shapes: Vec<(LayerId, Vec<egui::epaint::ClippedShape>)> = ctx.graphics(|g| {
+        layers
+            .iter()
+            .filter_map(|l| {
+                let list = g.get(*l)?;
+                let shapes: Vec<_> = list.all_entries().cloned().collect();
+                (!shapes.is_empty()).then_some((*l, shapes))
+            })
+            .collect()
+    });
+    LAST_PAGES.with_borrow_mut(|p| {
+        if let Some(page) = p.get_mut(&viewport) {
+            page.shapes = Some(shapes);
+        }
+    });
+}
+
+/// The main window's pass no longer declares the window: the backend
+/// drops its system window, its last page goes.
+pub(crate) fn closed_for_good(viewport: egui::ViewportId) {
+    LAST_PAGES.with_borrow_mut(|p| p.remove(&viewport));
+}
+
+/// Draws a closed window's last page in a pass of its own: the shapes of
+/// the pass it closed in, or, closed from elsewhere, its title on the
+/// canvas. Whether it had one.
+fn draw_last_page(ui: &mut Ui, viewport: egui::ViewportId) -> bool {
+    let Some((title, shapes)) = LAST_PAGES.with_borrow(|p| {
+        p.get(&viewport)
+            .map(|l| (l.title.clone(), l.shapes.clone()))
+    }) else {
+        return false;
+    };
+    let ctx = ui.ctx().clone();
+    match shapes {
+        Some(shapes) => ctx.graphics_mut(|g| {
+            for (layer, shapes) in shapes {
+                let list = g.entry(layer);
+                for s in shapes {
+                    list.add(s.clip_rect, s.shape);
+                }
+            }
+        }),
+        None => {
+            let t = egui_pop_core::theme::Tokens::of(&ctx);
+            let rect = ui.max_rect();
+            ui.painter().rect_filled(rect, 0.0, t.surface.canvas);
+            ui.painter().text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                title,
+                egui::FontId::proportional(14.0),
+                t.text.muted,
+            );
+        }
+    }
+    true
+}
+
 /// A pass of a viewport with no application window behind it (closed, or
-/// never opened): it paints nothing, so its system window shows the clear
-/// colour alone. A pass or two run between a close and the main window's
-/// next pass, which drops the viewport; past the delay, an error says
-/// which window it is, once, and the main window is asked to pass (where
-/// a closed window's viewport is dropped).
-pub(crate) fn orphan_pass(ctx: &egui::Context, viewport: egui::ViewportId, why: &str) {
+/// never opened). A window closed lately draws its last page; otherwise
+/// the pass paints nothing, so its system window shows the clear colour
+/// alone. A pass or two run between a close and the main window's next
+/// pass, which drops the viewport; past the delay, an error says which
+/// window it is, once, and the main window is asked to pass (where a
+/// closed window's viewport is dropped).
+pub(crate) fn orphan_pass(ui: &mut Ui, viewport: egui::ViewportId, why: &str) {
+    let ctx = ui.ctx().clone();
+    let drawn = draw_last_page(ui, viewport);
     let now = Instant::now();
     let say = ORPHANS.with_borrow_mut(|o| {
         let e = o.entry(viewport).or_insert(Orphan {
@@ -134,13 +230,22 @@ pub(crate) fn orphan_pass(ctx: &egui::Context, viewport: egui::ViewportId, why: 
         });
         e.passes += 1;
         if e.passes == 1 {
-            // Its system window shows this pass's frame: the clear colour
-            // alone, without a title bar (said, to tell a black window).
-            log::info!(
-                target: "egui_pop",
-                "a pass of viewport {viewport:?} after its window went ({why}): it paints \
-                 nothing, and the window is asked to hide and close"
-            );
+            if drawn {
+                log::debug!(
+                    target: "egui_pop",
+                    "a pass of viewport {viewport:?} after its window went ({why}): it draws \
+                     the window's last page until the backend drops it"
+                );
+            } else {
+                // Its system window shows this pass's frame: the clear
+                // colour alone, without a title bar (said, to tell a black
+                // window).
+                log::info!(
+                    target: "egui_pop",
+                    "a pass of viewport {viewport:?} after its window went ({why}): it paints \
+                     nothing, and the window is asked to hide and close"
+                );
+            }
         }
         let due = !e.said && e.passes >= MIN_PASSES && now.duration_since(e.since) >= DEFAULT_DELAY;
         if due {
@@ -154,8 +259,8 @@ pub(crate) fn orphan_pass(ctx: &egui::Context, viewport: egui::ViewportId, why: 
             .unwrap_or_default();
         log::error!(
             target: "egui_pop",
-            "the window of viewport {viewport:?} (title {title:?}) painted nothing for {passes} \
-             passes ({:.1} s): {why}; it is closed",
+            "the window of viewport {viewport:?} (title {title:?}) outlived its close for \
+             {passes} passes ({:.1} s): {why}; it is closed",
             since.as_secs_f32()
         );
     }
@@ -169,6 +274,7 @@ pub(crate) fn orphan_pass(ctx: &egui::Context, viewport: egui::ViewportId, why: 
 /// passes are forgotten.
 pub(crate) fn forget_orphan(viewport: egui::ViewportId) {
     ORPHANS.with_borrow_mut(|o| o.remove(&viewport));
+    LAST_PAGES.with_borrow_mut(|p| p.remove(&viewport));
 }
 
 /// The guard's state, per application (the main window's).
