@@ -200,6 +200,9 @@ pub struct Admin {
     kernel: Mutex<Option<Arc<crate::reads::ReadKernel>>>,
     /// The wizard running, if any.
     wizard: Mutex<Option<wizard::Running>>,
+    /// The page was drawn in the main window in this pass (the shell's
+    /// paint guard reads it: a focus screen without its page).
+    page_drawn: std::sync::atomic::AtomicBool,
     /// What the last wizard finished ran.
     finished: Mutex<Option<Json>>,
     /// A path field's Browse waiting for its choice: the draft key.
@@ -290,6 +293,18 @@ impl Admin {
         lock(&self.state).open = true;
         self.refresh();
         Ok(())
+    }
+
+    /// The page was drawn in the main window in this pass.
+    pub(crate) fn note_page_drawn(&self) {
+        self.page_drawn
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Whether the page was drawn in the main window since the last ask.
+    pub(crate) fn take_page_drawn(&self) -> bool {
+        self.page_drawn
+            .swap(false, std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Closes it, and the wizard running with it.

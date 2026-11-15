@@ -708,6 +708,10 @@ egui-pop-editors-terminal-refused a6e6e43c11ffb249
 egui-pop-editors-text 7c172d47e4e4264b
 egui-pop-editors-toggle-replace bc1c6bf6ca52327a
 egui-pop-editors-whole-word a4a39a882a6f6852
+egui-pop-empty-window-back 363824d5c4876cfa
+egui-pop-empty-window-body f4ca427e766ef233
+egui-pop-empty-window-reset d379cd9f682b9a1b
+egui-pop-empty-window-title 601da450590d74e4
 egui-pop-fault-body 69dbeb00c37f33b6
 egui-pop-fault-title 7f46f8bee9c2261e
 egui-pop-field-disabled 2704e0e02ec3722f
