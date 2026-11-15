@@ -1,6 +1,9 @@
 //! A data table: virtualised rows, a sticky header, columns sorted and
 //! resized, cells drawn by the application.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! It wraps Rerun's `egui_table` (MIT OR Apache-2.0), which draws the
 //! rows in view, the header and the resize handles, and adds what an
 //! egui-pop view has: a selection by key with the keyboard and the

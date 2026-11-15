@@ -3,6 +3,9 @@
 //! between what a copy offers and what the target accepts, and hooks at
 //! each boundary.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **The owner** implements [`Clipboard`]: one item per slot (the
 //!   user's, and each agent session's own), `put`, `get`, a revision. The
 //!   host gives it ([`Host::clipboard`](crate::host::Host::clipboard));

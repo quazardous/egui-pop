@@ -1,6 +1,9 @@
 //! Desktop notifications with actions, routed to commands, falling back
 //! to an in-app toast.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A [`Notification`] has a title, a body, a level, actions (each a
 //! label and a command with its arguments) and a command for a click on
 //! its body. [`show`] shows one now (on the interface thread);

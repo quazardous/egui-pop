@@ -1,6 +1,9 @@
 //! The read kernel: what a page reads from the host (a status's value, a
 //! list's rows), kept in one place and read away from the UI thread.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **Keyed**: a read is a command and its arguments. Two pages asking
 //!   the same thing share one entry, and one request while it is in
 //!   flight.

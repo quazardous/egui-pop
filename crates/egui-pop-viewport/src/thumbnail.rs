@@ -2,6 +2,9 @@
 //! application supplies. The drawing lives in the egui layer
 //! ([`egui_pop_core::thumbnail`]), where the file picker of the
 //! application API uses it too (ADR 0001).
+//!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
 
 pub use egui_pop_core::thumbnail::{
     Thumbnail, ThumbnailGrid, caption_height, fitted, thumbnail_grid,

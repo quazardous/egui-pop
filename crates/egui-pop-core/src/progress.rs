@@ -5,6 +5,9 @@
 //! `progress-ring`, `spinner`; docs/kit.md) on the motion clock
 //! (`motion`): frozen in tests, still under reduced motion.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! Each is an AccessKit `ProgressIndicator` (the meter a `Meter`) with
 //! a name, and, when determinate, a numeric value and its range (0 to
 //! the total, or 0 to 100) and a value text ("12 of 340"); an

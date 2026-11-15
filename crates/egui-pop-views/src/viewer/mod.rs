@@ -1,6 +1,9 @@
 //! The in-app viewer (ADR 0017): a panel showing one page at a time, the
 //! links service's way inside. Feature `markdown`.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! [`ViewerPlugin`] (opt-in) declares a panel in the end side bar
 //! (detachable into its own window, like any panel) and installs itself
 //! as the links service's [`Inside`]: `docs:` pages, markdown pages on

@@ -14,6 +14,10 @@
 //! `doc-paths --check` checks that every Rust path the documentation
 //! names in backticks resolves in the crates' source (`doc_paths.rs`).
 //!
+//! `experimental --check` checks that the experimental tier is marked in
+//! the code and that no stable or supported item names an experimental
+//! type in its signature (`experimental.rs`).
+//!
 //! `publish` publishes the workspace's crates to crates.io in the order
 //! of their dependencies, skipping what is already there (`publish.rs`).
 //!
@@ -44,6 +48,7 @@ use std::process::{Command, ExitCode, Stdio};
 
 mod affected;
 mod doc_paths;
+mod experimental;
 mod families;
 mod gallery;
 mod publish;
@@ -76,6 +81,11 @@ Tasks:
   doc-paths --check      every `egui_pop_*::a::b` path named in docs/
                          resolves to a module or an item of the crates;
                          exceptions in xtask/doc-paths.allow
+  experimental --check | --list
+                         the experimental tier is marked in the code, and
+                         no stable or supported item names an experimental
+                         type in its signature; exceptions in
+                         xtask/experimental.allow
   publish [--dry-run] [--interval SECS]
                          publish the workspace's crates to crates.io in the
                          order of their dependencies, skipping the versions
@@ -345,6 +355,7 @@ fn main() -> ExitCode {
         Some("ui-index") => ui_index::ui_index(&args[1..]),
         Some("families") => families::families(&args[1..]),
         Some("doc-paths") => doc_paths::doc_paths(&args[1..]),
+        Some("experimental") => experimental::experimental(&args[1..]),
         Some("publish") => publish::publish(&args[1..]),
         Some("affected") => affected::affected(&args[1..]),
         Some("changeset-check") => release::check(&args[1..]),

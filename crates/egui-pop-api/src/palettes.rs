@@ -1,6 +1,9 @@
 //! Palettes: toolboxes, colour palettes, navigators floating over the
 //! interface (not the command palette, [`crate::palette`]).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A palette is a panel ([`PanelSpec::palette`]) placed floating instead
 //! of docked: one model, two placements. It opens floating, is dragged by
 //! its header band ([`egui_pop_core::band`], the movable dialogs' band),

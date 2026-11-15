@@ -2,6 +2,9 @@
 //! image of any size computed on worker threads, scene-referred (linear
 //! floats), with a parameter that changes the whole image.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! It shows how a source behaves: requests return at once, workers skip
 //! cancelled requests, tiles come back through the sink, and a change
 //! is announced with [`TileSink::changed`]. [`Procedural::wait_idle`]

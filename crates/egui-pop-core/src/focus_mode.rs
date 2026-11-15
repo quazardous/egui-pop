@@ -1,6 +1,9 @@
 //! Whether the pointer gives the keyboard: as the window manager does
 //! between windows (`system`), or as the user chose (`click`, `hover`).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! In **click** mode the keyboard goes where the user clicks (or tabs).
 //! In **hover** mode, moving the pointer over a surface (a focus scope:
 //! a panel, an editor) gives it the keys, and a text field the pointer

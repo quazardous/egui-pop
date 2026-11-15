@@ -2,6 +2,9 @@
 //! buttons do on each kind of canvas, as named presets of keymap
 //! bindings (`docs/pointer-gestures.md`).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A **gesture** is a command like any other (`gesture.image.zoom`),
 //! bound to a pointer chord (`Ctrl+Wheel`, [`crate::keymap::Pointer`])
 //! in the scope of a canvas kind (`surface:canvas.image`). A

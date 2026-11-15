@@ -1,6 +1,9 @@
 //! The tile cache: what to ask the source for, what arrived, what is
 //! drawn, and what to forget when over budget.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! Each frame, for each side shown:
 //!
 //! 1. take what the source delivered (a tile answering a request no

@@ -1,6 +1,9 @@
 //! Undo histories, as the interface sees them (ADR 0014): the pure parts
 //! of the `History` contract.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - A **scope** ([`ScopeId`], described by [`ScopeInfo`]) is one
 //!   history: a document's edit, a collection's marks, the application's
 //!   values, the settings window. Steps never cross scopes.

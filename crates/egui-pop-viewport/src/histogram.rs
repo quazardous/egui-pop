@@ -3,6 +3,9 @@
 //! channel, linear or logarithmic, with clipping markers and a drag
 //! handed back to the application.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **Channels**: each [`Channel`] has its bins (any scale; they are
 //!   normalised together) and its colour.
 //! - **Clipping**: [`Histogram::clipping`] lights a marker in a bottom

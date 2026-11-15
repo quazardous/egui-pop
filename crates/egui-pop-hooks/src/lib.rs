@@ -1,4 +1,5 @@
 #![doc = include_str!("../README.md")]
+#![doc = "\n\n<div class=\"warning\">Experimental: may change in any release\n(docs/stability.md).</div>"]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 

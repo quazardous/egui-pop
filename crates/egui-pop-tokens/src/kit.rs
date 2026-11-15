@@ -2,6 +2,9 @@
 //! tokens, its fonts and its licence, read at run time or embedded in the
 //! binary.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! ```text
 //! underline-tabs/
 //!   kit.yaml            a DTCG token file, like a theme (`$extends`, tokens);

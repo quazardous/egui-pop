@@ -4,6 +4,9 @@
 //! documents, videos, fonts…), the thumbnail the desktop made or can
 //! make.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **Linux and the BSDs**: the freedesktop thumbnail cache
 //!   (`$XDG_CACHE_HOME/thumbnails`, a thumbnail kept only while its
 //!   `Thumb::MTime` is the file's), then the installed thumbnailers

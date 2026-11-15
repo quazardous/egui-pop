@@ -2,6 +2,9 @@
 //! and a hue and saturation picker, each with a luminance slider
 //! (egui-pop's slider, `egui_pop_core::slider`).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A wheel's value is a [`WheelValue`]: a hue (degrees), a chroma (0 at
 //! the centre, 1 at the rim) and a luminance. What they mean is the
 //! application's (an offset added to shadows, a power, a gain, or a

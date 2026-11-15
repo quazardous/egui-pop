@@ -4,6 +4,9 @@
 //! the slider's [`scrub`](crate::slider::Slider::scrub) look, and a text
 //! in a compact cell the decorated input's [`cell`](crate::input::Input::cell).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - [`ChoiceCell`]: one of a few words in a slot, egui-pop's
 //!   [`combo_box`] sized to it. Its name is
 //!   given to assistive technologies and shown in its tooltip; while it

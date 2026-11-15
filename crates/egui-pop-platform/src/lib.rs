@@ -2,6 +2,9 @@
 //! (a Cargo feature of this crate, on by default, and a plugin the
 //! application adds):
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - [`instance`]: a single instance; a second launch hands its
 //!   arguments and links to the running one (`instance.second_launch`,
 //!   `deeplink.open`).

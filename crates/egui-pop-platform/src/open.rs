@@ -4,6 +4,9 @@
 //! egui's `OpenUrl` (the browser, `$BROWSER` honoured; a new tab on the
 //! web build).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! | | Open a file or folder | Reveal |
 //! |---|---|---|
 //! | Linux | `xdg-open` (inside Flatpak, the runtime's forwards to the OpenURI portal, which opens what the sandbox can read) | the freedesktop file manager interface (`org.freedesktop.FileManager1.ShowItems`), else the OpenURI portal's `OpenDirectory` |

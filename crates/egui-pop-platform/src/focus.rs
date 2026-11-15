@@ -2,6 +2,9 @@
 //! the pointer), read in the process instead of through a helper
 //! program.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! egui-pop follows the system's focus mode (`egui_pop_core::focus_mode`);
 //! by default it asks `gsettings`, `kreadconfig` or `reg` at start. This
 //! reads the same answers in-process:

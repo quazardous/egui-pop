@@ -1,6 +1,9 @@
 //! Logs to a file in the platform's log directory, rotated by size, at
 //! a level the user sets.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! [`Logs`] is a sink for the `log` facade (egui-pop and most crates log
 //! through it): each line goes to `<dir>/<name>.log` and to a tail kept
 //! in memory (what a crash report quotes). When the file passes its

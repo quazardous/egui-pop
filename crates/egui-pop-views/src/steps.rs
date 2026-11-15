@@ -1,5 +1,8 @@
 //! The views' steps (ADR 0011) and the plugin that declares them.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! Every moment a view acts on (a branch expanded, a selection changed,
 //! a drop, a rename, a sort) runs as a step: a plugin may watch it on the
 //! journal, veto or redirect it with a before-hook, do it its own way

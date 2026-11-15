@@ -4,6 +4,9 @@
 //! "Copy version info" button for bug reports. The host describes the
 //! application with an [`AppInfo`].
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! Links open through egui's `Context::open_url` (a new tab on the web,
 //! the system's browser on the desktop).
 //!

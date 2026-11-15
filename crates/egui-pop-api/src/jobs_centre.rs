@@ -2,6 +2,9 @@
 //! until asked for) and as a popover from the status bar's jobs item,
 //! the same list in both.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! Each job shows its title, its state, a bar of its estimated overall
 //! percentage (stacked with its failed and skipped items), "n of m",
 //! the current step and item, the time left, the reason it failed, and

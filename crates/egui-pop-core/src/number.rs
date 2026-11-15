@@ -2,6 +2,9 @@
 //! beside it, and small up and down arrows. For a value whose range is
 //! too wide for a slider (a count up to millions, days up to years).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - Typing commits on Enter or when the field loses focus; Escape
 //!   drops the typed text.
 //! - A typed value outside the range, a fraction where a whole number is

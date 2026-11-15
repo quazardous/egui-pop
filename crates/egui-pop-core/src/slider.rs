@@ -107,6 +107,9 @@ use crate::theme::Tokens;
 /// the keys: a click never makes the value jump, a drag is relative and
 /// one gesture, a modifier scales the step and never changes what is
 /// adjusted.
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Gestures {
     /// Held: ten times finer (drag, arrows, wheel); none: never.
@@ -727,6 +730,9 @@ impl<'a> Slider<'a> {
     /// the soft range, whatever the field's width. Too narrow for its
     /// label, it shows the value alone, as [`Slider::compact`] does.
     /// Horizontal only: a vertical slider keeps its track.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn scrub(mut self) -> Self {
         self.scrub = true;
         self

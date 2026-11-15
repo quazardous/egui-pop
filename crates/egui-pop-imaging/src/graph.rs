@@ -2,6 +2,9 @@
 //! what the editor reports goes on the journal, and agents read and
 //! edit a graph through commands.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! | Step | Arguments | Default |
 //! |---|---|---|
 //! | `graph.connect` | `graph`, `from`, `to` (`{node, port}`), `replaces` (`[{from, to}]`), `cause` | hands the edit to the application |

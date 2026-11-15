@@ -2,6 +2,9 @@
 //! [`Scene`](egui::Scene), its pan and zoom driven by the pointer
 //! profile.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! **The application keeps the graph.** It describes its nodes, their
 //! typed ports, its wires and groups through [`GraphModel`]; the editor
 //! draws them and hands back what the user did as [`Edit`]s (connect,

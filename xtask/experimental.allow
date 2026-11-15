@@ -1,0 +1,5 @@
+# Stable or supported items that name an experimental type on purpose:
+# `item path # reason` (cargo xtask experimental --check).
+egui_pop_core::ui::UiPop # `Tone` and `Stock` come from the kit and are re-exported by `ui` and the prelude: the names of the tones and of the stock widget kinds are kept; what a kit draws for them is experimental
+egui_pop_core::band::Band::state # a band is drawn by the kit (stability.md: its drawing follows the kit): its state is the kit's box state, whose names are kept
+egui_pop_core::band::begin # as `Band::state`: the band's state is the kit's box state

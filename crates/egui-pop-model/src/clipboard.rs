@@ -3,6 +3,9 @@
 //! offers and what a paste target accepts. No egui: the contract, its
 //! default owner and the commands are `egui_pop_api::clipboard`'s.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - A **format** ([`FormatId`]) is a MIME-like id: an application's
 //!   private types are `application/x-<app>.<type>+json` (egui-pop's
 //!   own `application/x-egui-pop.<type>+json`), the standard ones

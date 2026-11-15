@@ -2,6 +2,9 @@
 //! space, beside or on another widget. Six kinds need nothing but the
 //! theme, plus icons that follow a state:
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - a **dot** or an **LED** ([`Led`]: off, on, busy, warning, error),
 //!   each state with a shape of its own (hollow, filled, pulsing, a
 //!   triangle, a square);

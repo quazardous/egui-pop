@@ -2,6 +2,9 @@
 //! clipboard's [`SystemBackend`] for files, images, HTML and text, and
 //! the primary selection on X11 and Wayland.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! egui-pop's default backend writes text through egui and reads
 //! nothing. [`SystemClipboardPlugin`] installs [`Arboard`] instead
 //! (`egui_pop_api::clipboard::set_backend`): a copy writes its richest

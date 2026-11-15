@@ -36,6 +36,9 @@ pub const TOP_BAR: ZoneId = ZoneId::from_static("app.top-bar");
 /// name, a readout, a widget of the application's). They keep the width
 /// they took the pass before, as the top bar's do; the menus overflow
 /// first. Declared by the framework beside the shell's zones.
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
 pub const TOP_BAR_END: ZoneId = ZoneId::from_static("app.top-bar-end");
 /// The side bar at the start (left in left-to-right).
 pub const SIDE_BAR: ZoneId = ZoneId::from_static("app.side-bar");

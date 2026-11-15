@@ -1,5 +1,8 @@
 //! A list of rows the application draws, virtualised.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! The application gives the rows ([`ListRows`]): how many, each one's
 //! key (the selection is kept by key, so it survives the rows being
 //! sorted, filtered or changed) and label (its accessible name and what

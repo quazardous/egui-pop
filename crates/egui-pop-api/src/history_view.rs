@@ -2,6 +2,9 @@
 //! `history.*` commands agents drive it with, brought by
 //! [`HistoryPlugin`].
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **The panel** ([`PANEL_HISTORY`], closed until asked for; [`show`]
 //!   draws it anywhere): the scopes there are, as chips (the one Ctrl+Z
 //!   goes to first), then the chosen scope's steps, oldest first, under

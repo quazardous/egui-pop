@@ -2,6 +2,9 @@
 //! breadcrumb) and modes (global states, shown as chips), owned by the
 //! application's kernel and projected by the interface.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **The owner** implements [`Contexts`]: the frames, the state, the
 //!   transitions (through the pure `egui_pop_model::context::apply`), the
 //!   holds. The host gives it ([`Host::contexts`](crate::host::Host::contexts));

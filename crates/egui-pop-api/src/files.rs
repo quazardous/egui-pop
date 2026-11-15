@@ -2,6 +2,9 @@
 //! egui-pop's in-app picker, or, as a fallback an application allows, the
 //! system's chooser off the interface thread.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! [`Files::choose`] returns a [`Pending`] (the host contract's, ADR
 //! 0010): the frame never waits. In-app pickers open in a modal of their
 //! own, or inside the caller's dialog ([`Files::choose_inline`], as a

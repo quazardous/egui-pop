@@ -3,6 +3,9 @@
 //! held, a drag, a handle under the pointer) and drawn crisp at the
 //! window's scale.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A [`Cursor`] is one of:
 //!
 //! - a system cursor ([`egui::CursorIcon`]);

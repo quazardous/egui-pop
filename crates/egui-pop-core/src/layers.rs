@@ -1,6 +1,9 @@
 //! Layer ranks: a fixed order between the foreground layers of a window
 //! (ADR 0026).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! egui has no z-index: inside an [`Order`], the layer shown or clicked
 //! last goes on top. A panel lying over the centre and an application's
 //! card both live in [`Order::Foreground`], so a click on the panel would

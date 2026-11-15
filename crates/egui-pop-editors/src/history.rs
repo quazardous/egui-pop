@@ -1,5 +1,8 @@
 //! The editor's own history of edits, for undo and redo.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! egui-pop's host contract (`Host::undo`) undoes the application's
 //! history, and offers no way to add entries to it: the editor keeps its
 //! own. Typing in a row coalesces into one entry (until a pause, a word

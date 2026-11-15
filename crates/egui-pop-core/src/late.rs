@@ -2,6 +2,9 @@
 //! (a volume's free space, a folder's size, a count from a database),
 //! in four states ([`Late`]):
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **pending**: a [`Skeleton`] line, or a delayed [`Spinner`]
 //!   ([`Waiting::Spinner`]), in a box sized like the expected value
 //!   ([`LateValue::sample`], [`LateValue::size`]), so nothing moves when

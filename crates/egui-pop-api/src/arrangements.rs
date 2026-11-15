@@ -5,6 +5,9 @@
 //! name, and `settings/workbench.arrangement`, the current name), so they
 //! are saved with the settings, or wherever a host keeps its store.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! With the context stack (ADR 0012), the current arrangement is the
 //! **arranged frame's**: the last active mode that declares an
 //! arrangement (`FrameSpec::arrangement`), else the top place, else the

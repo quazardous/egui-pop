@@ -1,6 +1,9 @@
 //! The application-wide selection: what the user selected and what the
 //! pointer is over, shared by every panel.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A tree, a list and a canvas showing the same things select and hover
 //! them together: a click in one highlights the item in the others, and
 //! hovering a row lights up the same item everywhere. The selection is

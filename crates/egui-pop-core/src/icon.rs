@@ -1174,6 +1174,9 @@ pub enum Tone {
 impl Tone {
     /// The kit's tone it is drawn in on a button; `Default`, `Strong`
     /// and `OnAccent` are the button's own box.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
     pub fn kit_tone(self) -> crate::kit::Tone {
         use crate::kit::Tone as K;
         match self {

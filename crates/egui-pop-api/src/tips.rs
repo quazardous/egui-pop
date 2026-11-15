@@ -3,6 +3,9 @@
 //! remembered in the settings (`tips.dismissed`, the ids of the tips not
 //! to show again; `tips.show` turns them all off).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A tip's title and text are translated by keys derived from its id,
 //! `tip-<id>.title` and `tip-<id>.text` (the id's dots become dashes), in
 //! the application's catalogues; the English given is the fallback.

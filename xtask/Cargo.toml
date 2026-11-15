@@ -26,3 +26,5 @@ color_quant = "1.1"
 ab_glyph = "0.2"
 # The labels' font, egui's own monospace (Hack, MIT and Bitstream Vera).
 epaint_default_fonts = "0.37"
+# MIT OR Apache-2.0: reading the crates' items for the experimental check.
+syn = { version = "2", default-features = false, features = ["full", "parsing", "visit", "printing"] }

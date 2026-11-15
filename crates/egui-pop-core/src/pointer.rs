@@ -2,6 +2,9 @@
 //! [`PointerMap`]: what each pointer chord does per canvas kind, with
 //! the options in force), and the wheel read raw.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! The application API publishes the map from the keymap and the
 //! pointer profile ([`set_map`]); without it, canvases follow the
 //! default profile (Document). egui's own scrolling follows the

@@ -2,6 +2,9 @@
 //! graph, the image viewport, plots): what `docs/design/navigation.md`
 //! proposes, in one place so each canvas behaves the same.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **Hand mode** ([`hand`]): H toggles it, Space held is the same for
 //!   the moment; a primary drag then pans from anywhere on the canvas,
 //!   for a pen, a touch screen or a mouse without a middle button. The

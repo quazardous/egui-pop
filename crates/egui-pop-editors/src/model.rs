@@ -2,6 +2,9 @@
 //! pinned to lines, folds, the search; shared by the widget, the
 //! application and the commands agents run.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! [`EditorState`] is a handle (cloned, sent to any thread). Every
 //! change of the text goes through [`EditorState::edit`], which runs the
 //! `edit.change` step when an application is given: a plugin may refuse

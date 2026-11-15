@@ -8,6 +8,9 @@
 //! the end side or below, it goes to the pointer's other side, the same
 //! distance away, rather than being pushed back under the pointer.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! egui's own [`egui::Response::on_hover_text`] keeps the popup's look:
 //! [`TooltipExt::tip`] is its kit counterpart, with egui's timing (the
 //! delay, the grace between neighbours), its accessibility (the text

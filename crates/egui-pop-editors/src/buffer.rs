@@ -1,5 +1,8 @@
 //! The text: lines, positions, changes and their inverses.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A [`Buffer`] is a list of lines without their line breaks (a file of
 //! 100 000 lines is a vector of 100 000 strings: an edit touches the
 //! lines it changes, never the whole text). A [`Pos`] is a line and a

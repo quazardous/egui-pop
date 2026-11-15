@@ -2,6 +2,9 @@
 //! logs, its crash reports. Read from the environment, as each platform
 //! names these places:
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! | | State | Logs |
 //! |---|---|---|
 //! | Linux and BSD | `$XDG_STATE_HOME/<app>` (`~/.local/state/<app>`) | `<state>/logs` |

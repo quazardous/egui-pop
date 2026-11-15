@@ -2,6 +2,9 @@
 //! with the desktop so their command runs while the application is not
 //! focused.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A command declares one like any key, with a scope:
 //! `CommandSpec::key_with("Ctrl+Alt+P", BindOptions::system())` (`system`
 //! in keymap files). It shows in the shortcuts editor, the user rebinds

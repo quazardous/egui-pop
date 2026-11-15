@@ -1,5 +1,8 @@
 //! The application's way into each step of the viewport's lifecycle.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! The widget does the plumbing; at each step an application may:
 //!
 //! - **observe**: every change is a [`Signal`](crate::Signal) in

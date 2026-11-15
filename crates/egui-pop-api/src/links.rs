@@ -1,6 +1,9 @@
 //! Links (ADR 0017): one service opens them, through one policy and one
 //! step, with a replaceable opener.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - **Requests** ([`Request`], from `egui_pop_model::links`) name the
 //!   target, how (`Auto`, `Outside`, `Inside`, `Reveal`), the source
 //!   (declared by the application, found in content, asked by an agent),

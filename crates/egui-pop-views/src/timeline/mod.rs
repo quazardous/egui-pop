@@ -2,6 +2,9 @@
 //! range, markers and the transport keys, over a [`TimeScale`] (seconds,
 //! frames and timecode, bars and beats).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! ```no_run
 //! use egui_pop_views::timeline::{Marker, TimeScale, Timeline, TimelineState};
 //!

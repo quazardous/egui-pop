@@ -1,6 +1,9 @@
 //! The loupe: the pixels under the pointer, magnified, in a square that
 //! follows it.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! It shows **displayed pixels**: the viewport's own tile textures,
 //! after the display transform, drawn again through a magnifying
 //! mapping and clipped to the loupe. On the GPU path the half-float

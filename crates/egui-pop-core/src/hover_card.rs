@@ -3,6 +3,9 @@
 //! moves onto it (so its links can be clicked), and closes on leave
 //! after a short grace, on Escape or on a click elsewhere.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! Its content is data ([`Card`]): formatted text (a small Markdown
 //! subset: `**bold**`, `` `code` ``, `- ` list lines), rows of key and
 //! value, progress, separators and command links. Being data, an agent

@@ -1,6 +1,9 @@
 //! Syntax highlighting behind a trait, so the grammar engine is the
 //! application's choice.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A [`Highlighter`] gives each line its [`Run`]s (byte ranges and their
 //! [`Kind`]); the editor colours each kind from the theme's `syntax.*`
 //! tokens, so code follows the theme like everything else. Highlighting

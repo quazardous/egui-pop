@@ -2,6 +2,9 @@
 //! assistant, a word list) offers while code is typed, modelled on the
 //! Language Server Protocol's requests.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! An [`AssistProvider`] answers requests: completion (on typing, on a
 //! trigger character, or asked with Ctrl+Space), hover, signature help,
 //! code actions, go to definition, and inline suggestions (ghost text,

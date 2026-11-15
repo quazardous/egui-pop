@@ -3,6 +3,9 @@
 //! breakpoints, diff), the cursor's line, matching brackets, indentation
 //! guides, folding by indentation and syntax highlighting.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! ```
 //! use egui_pop_editors::markers::{Diagnostic, Severity};
 //! use egui_pop_editors::{CodeEditor, EditorState};

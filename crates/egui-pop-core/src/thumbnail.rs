@@ -5,6 +5,9 @@
 //! (`egui_pop_viewport::thumbnail` re-exports it) and the file picker of
 //! the application API can draw them.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! ```
 //! use egui_pop_core::thumbnail::{Thumbnail, thumbnail_grid};
 //!

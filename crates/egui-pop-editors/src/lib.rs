@@ -1,5 +1,8 @@
 //! Text and code editors for egui-pop.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - [`TextSurface`]: a multi-line text editor;
 //! - [`CodeEditor`]: the same surface for code, with a gutter (line
 //!   numbers, markers the application pushes), highlighting behind the

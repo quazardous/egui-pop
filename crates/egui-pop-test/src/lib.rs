@@ -440,6 +440,9 @@ pub fn a11y_tree<S>(h: &Harness<'_, S>) -> String {
 
 /// The micro-indicators with an id drawn in the harness's last pass
 /// (what the debug bridge's `indicators` collector shows).
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
 pub fn indicators<S>(h: &Harness<'_, S>) -> Vec<egui_pop_core::indicator::Record> {
     egui_pop_core::indicator::drawn(&h.ctx)
 }

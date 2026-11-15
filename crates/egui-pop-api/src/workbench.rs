@@ -5,6 +5,9 @@
 //! which is how they are drawn and rearranged by hand, and which is read
 //! back into the layout as needed.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! The workbench lays the areas out (a side area's width, its fold and
 //! flyout, the bottom panel's alignment) and draws each area's dock where
 //! it put the area; the docks share one drag, so a tab dragged from one

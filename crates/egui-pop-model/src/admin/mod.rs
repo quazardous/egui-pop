@@ -2,6 +2,9 @@
 //! declarative form tree for everything an application shows that is not
 //! its work surface (settings, tools, tasks).
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! A component never draws its own widgets: it declares a [`Manifest`]
 //! (scopes, sections, groups and their items: fields, actions, statuses,
 //! callouts) and the framework renders it with a closed set of bricks.

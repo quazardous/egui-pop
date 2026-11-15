@@ -3,6 +3,9 @@
 //! veto it, redirect it, replace it or follow it, and the journal
 //! records it.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! The tools are egui widgets: they see their changes through a hook
 //! (`on_change`). The functions here give a hook running each finished
 //! change (`done`: a drag's release, a key, a click, a reset) as the

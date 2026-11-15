@@ -1,6 +1,9 @@
 //! The viewport widget: draws a view of an image and turns gestures into
 //! changes of the [`View`], reported as [`Signal`]s.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! The application owns the view (per window or per document) and the
 //! [`ViewportState`] (what the widget keeps between frames, its hooks
 //! included). Every change the widget makes goes through the

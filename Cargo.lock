@@ -7913,6 +7913,7 @@ dependencies = [
  "image",
  "png 0.18.1",
  "serde_json",
+ "syn 2.0.119",
 ]
 
 [[package]]

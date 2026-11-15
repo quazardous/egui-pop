@@ -2,6 +2,9 @@
 //! paths, sliders): whether it is modified, required, invalid, disabled
 //! (and why), read-only or pending.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! The state is data: a widget draws it (an edge, a marker and an icon
 //! per state, never colour alone), gives it to assistive technologies and
 //! reports it to agents. Which states a field has comes from the

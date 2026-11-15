@@ -4,6 +4,9 @@
 //! follows, and the views (bars, the status bar, the jobs centre) draw
 //! what it holds.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! | Event | Data |
 //! |---|---|
 //! | `job.started` | `id`, `title`, `kind`, `parent`, `weight` (its share of its parent), `total` (none: indeterminate), `steps` (`[{id, title, weight}]` or names), `cancellable` (true), `pausable` (false), `retryable` (true) |

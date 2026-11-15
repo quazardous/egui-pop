@@ -4,6 +4,9 @@
 //! own gestures ([`ViewportState::propose`]), and comes out as the
 //! viewport's [`Signal::View`](crate::Signal) with the next frame.
 //!
+//! <div class="warning">Experimental: may change in any release
+//! (docs/stability.md).</div>
+//!
 //! - [`ZoomControl`]: zoom out, the zoom in percent, zoom in, fit and
 //!   100 %, one step of the zoom ladder at a time.
 //! - [`Navigator`]: the whole image (a texture the application gives,
