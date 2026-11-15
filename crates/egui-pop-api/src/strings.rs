@@ -169,6 +169,9 @@ pub const ADMIN_NO_WIDGET: StrKey = StrKey::new(
     "No widget kind `{ $kind }` is registered",
 );
 pub const ADMIN_NO_RECORDS: StrKey = StrKey::new("egui-pop-admin-no-records", "Nothing here yet.");
+/// Beside a list read again: its rows are the last ones until the new
+/// ones come.
+pub const ADMIN_REFRESHING: StrKey = StrKey::new("egui-pop-admin-refreshing", "Refreshing…");
 pub const ADMIN_SECTION_GESTURES: StrKey =
     StrKey::new("egui-pop-admin-section-gestures", "Pointer gestures");
 pub const ADMIN_SECTION_ADVANCED: StrKey =
@@ -1522,6 +1525,7 @@ pub const ALL: &[StrKey] = &[
     ADMIN_ADVANCED_ABOUT,
     ADMIN_ADVANCED_OPEN,
     ADMIN_NO_RECORDS,
+    ADMIN_REFRESHING,
     ADMIN_SCOPE_GENERAL,
     ADMIN_SCOPE_INTERFACE,
     ADMIN_SCOPE_INPUT,

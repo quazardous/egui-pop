@@ -223,10 +223,14 @@ pub struct Admin {
 /// The answers of the `read_only` commands statuses and records read:
 /// asked once, kept until an event says they changed (a command that
 /// changes something ran, or an event a node names in `refresh`), never
-/// read per frame.
+/// read per frame. Asked again, a read keeps its last answer, shown
+/// (stale) until the new one comes: a refresh never blanks a page.
 #[derive(Debug, Default)]
 struct Reads {
     answers: BTreeMap<String, Result<Json, String>>,
+    /// The answers a refresh set aside, each kept until its read answers
+    /// again ([`Admin::refreshing`]).
+    stale: BTreeMap<String, Result<Json, String>>,
     /// A read asked: its command, its arguments, and how many runs of
     /// that command the history held then (its answer is a later one).
     asked: BTreeMap<String, (CommandId, Json, usize)>,
@@ -629,9 +633,11 @@ impl Admin {
         Ok(())
     }
 
-    /// A `read_only` command's answer: `None` while it is being read (the
-    /// command is asked for, run before the next frame; its result is
-    /// taken from the runs).
+    /// A `read_only` command's answer: `None` while it is read for the
+    /// first time (the command is asked for, run before the next frame;
+    /// its result is taken from the runs). Read again after a refresh, it
+    /// answers what it answered before until the new answer comes
+    /// ([`Admin::refreshing`] says so meanwhile).
     pub fn read(
         &self,
         app: &AppHandle,
@@ -657,15 +663,19 @@ impl Admin {
             if runs.len() < egui_pop_model::commands::HISTORY
                 && runs.iter().filter(|x| x.id == id).count() == before
             {
-                return None;
+                return r.stale.get(&key).cloned();
             }
-            let run = runs
+            let Some(run) = runs
                 .iter()
                 .rev()
                 .find(|x| x.id == id && x.args == args)
-                .or_else(|| runs.iter().rev().find(|x| x.id == id))?
-                .clone();
+                .or_else(|| runs.iter().rev().find(|x| x.id == id))
+                .cloned()
+            else {
+                return r.stale.get(&key).cloned();
+            };
             r.asked.remove(&key);
+            r.stale.remove(&key);
             r.answers.insert(key, run.result.clone());
             return Some(run.result);
         }
@@ -679,20 +689,38 @@ impl Admin {
                 Some(_) => {
                     let before = app.history().iter().filter(|x| x.id == id).count();
                     app.run(id.clone(), args.clone());
+                    let stale = r.stale.get(&key).cloned();
                     r.asked.insert(key, (id, args, before));
-                    return None;
+                    return stale;
                 }
             },
         };
+        r.stale.remove(&key);
         r.answers.insert(key, answer.clone());
         Some(answer)
     }
 
-    /// Forgets the answers read, and the reads still in flight (their
-    /// answer may predate the change): they are read again when shown.
+    /// Whether the read of `command` with `args` shows its last answer
+    /// while a new one is read (after a refresh): a page marks it
+    /// "Refreshing…" and keeps its rows.
+    pub fn refreshing(&self, command: &str, args: &Json) -> bool {
+        let args = if args.is_null() {
+            json!({})
+        } else {
+            args.clone()
+        };
+        let key = read_key(command, &args);
+        let r = lock(&self.reads);
+        r.stale.contains_key(&key) && !r.answers.contains_key(&key)
+    }
+
+    /// Sets the answers read aside and forgets the reads still in flight
+    /// (their answer may predate the change): they are read again when
+    /// shown, each showing its last answer until the new one comes.
     pub fn refresh(&self) {
         let mut r = lock(&self.reads);
-        r.answers.clear();
+        let answers = std::mem::take(&mut r.answers);
+        r.stale.extend(answers);
         r.asked.clear();
     }
 

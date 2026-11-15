@@ -58,6 +58,9 @@ command-about-read =
 command-admin-close =
     .title = Close settings
 
+command-admin-focus =
+    .title = Settings: edit a focus
+
 command-admin-open =
     .description = Every setting as full pages: families and their sections in a tree on the side, one search.
     .title = Settings
@@ -65,6 +68,10 @@ command-admin-open =
 command-admin-popOut =
     .description = Moves the settings between the main window and a window of their own.
     .title = Settings: pop out
+
+command-admin-quick =
+    .description = The settings changed often and those changed lately, edited without opening Settings.
+    .title = Quick settings
 
 command-admin-reset =
     .title = Reset a setting in a value scope
@@ -1116,6 +1123,10 @@ egui-pop-admin-advanced-open = Open the settings window…
 
 egui-pop-admin-close = Close
 
+egui-pop-admin-focus = Settings for
+
+egui-pop-admin-focus-tip = Whose values these settings show and change. Settings with no such level are the app's, the same everywhere.
+
 egui-pop-admin-for-app = This app
 
 egui-pop-admin-for-app-about = everywhere, unless set for a scope below
@@ -1140,6 +1151,24 @@ egui-pop-admin-pop-out = Pop out
 
 egui-pop-admin-pop-out-tip = Move the settings to a window of their own
 
+egui-pop-admin-quick-hint = Search every setting
+
+egui-pop-admin-quick-marked = Often changed
+
+egui-pop-admin-quick-no-hit = No setting matches.
+
+egui-pop-admin-quick-none = No quick settings yet: type to search every setting.
+
+egui-pop-admin-quick-open = Open in Settings
+
+egui-pop-admin-quick-open-name = Open { $setting } in Settings
+
+egui-pop-admin-quick-recent = Changed lately
+
+egui-pop-admin-quick-title = Quick settings
+
+egui-pop-admin-refreshing = Refreshing…
+
 egui-pop-admin-reset-section = Reset section
 
 egui-pop-admin-run-read-only = Set on the command line for this run: not editable here
@@ -1163,26 +1192,6 @@ egui-pop-admin-section-gestures = Pointer gestures
 egui-pop-admin-sections = Sections
 
 egui-pop-admin-session-only = Changes made here last this session only: nothing keeps them.
-
-egui-pop-admin-quick-title = Quick settings
-
-egui-pop-admin-quick-hint = Search every setting
-
-egui-pop-admin-quick-marked = Often changed
-
-egui-pop-admin-quick-recent = Changed lately
-
-egui-pop-admin-quick-none = No quick settings yet: type to search every setting.
-
-egui-pop-admin-quick-no-hit = No setting matches.
-
-egui-pop-admin-quick-open = Open in Settings
-
-egui-pop-admin-quick-open-name = Open { $setting } in Settings
-
-egui-pop-admin-focus = Settings for
-
-egui-pop-admin-focus-tip = Whose values these settings show and change. Settings with no such level are the app's, the same everywhere.
 
 egui-pop-admin-set-for = Set for
 
@@ -1864,6 +1873,16 @@ egui-pop-menu-too-deep = `{ $menu }` nests too deep
 
 egui-pop-nothing-matches = Nothing matches.
 
+egui-pop-number-decrease = Decrease { $label }
+
+egui-pop-number-increase = Increase { $label }
+
+egui-pop-number-not-a-number = Not a number
+
+egui-pop-number-out-of-range = Between { $min } and { $max }
+
+egui-pop-number-whole = A whole number is expected
+
 egui-pop-ok = OK
 
 egui-pop-palette-argument-help = Argument { $at } of { $count }. Enter: next; empty: { $example }; Escape: back.
@@ -2057,16 +2076,6 @@ egui-pop-slider-maximum = { $label }, maximum
 egui-pop-slider-minimum = { $label }, minimum
 
 egui-pop-slider-type-value = Type a value
-
-egui-pop-number-increase = Increase { $label }
-
-egui-pop-number-decrease = Decrease { $label }
-
-egui-pop-number-not-a-number = Not a number
-
-egui-pop-number-whole = A whole number is expected
-
-egui-pop-number-out-of-range = Between { $min } and { $max }
 
 egui-pop-status-announce = { $item }: { $state }
 
