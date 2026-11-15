@@ -383,6 +383,11 @@ impl<'a> Input<'a> {
         let kit = Kit::of(&ctx);
         let fk = &kit.field;
         let h = cell.map_or(ui.spacing().interact_size.y, |c| c.y.max(1.0));
+        if cell.is_some() {
+            // The text field inside is no taller than the cell (egui's
+            // text edit is at least a row high); `draw` runs in a scope.
+            ui.spacing_mut().interact_size.y = h;
+        }
         let pad = if cell.is_some() {
             t.space.xs
         } else {

@@ -198,15 +198,24 @@ impl Widget for MenuRow {
                 painter: &painter,
                 ppp: ctx.pixels_per_point(),
             };
-            let part = Part {
-                rect,
-                room: rect,
-                state,
-                label: Some(&label),
-            };
-            item.paint_part(&cx, &part);
+            item.paint(
+                &cx,
+                &Part {
+                    rect,
+                    room: rect,
+                    state,
+                    label: None,
+                },
+            );
+            // The text at the start, as a menu's items have it, whatever
+            // the component's label alignment.
+            let pad = item.data.padding_x.max(0.0);
+            painter.galley(
+                egui::pos2(rect.left() + pad, rect.center().y - label.size().y / 2.0),
+                label,
+                item.style(state).text,
+            );
             if let Some(note) = &self.note {
-                let pad = item.data.padding_x.max(0.0);
                 let galley = painter.layout_no_wrap(
                     note.clone(),
                     font,
