@@ -73,5 +73,8 @@ layering`.
   desktop session from automation.
 - A new public module goes into one family row of ADR 0027
   (`cargo xtask families --check`).
+- A Rust path named in backticks in `docs/` (`egui_pop_core::kit::Tone`)
+  resolves in the crates (`cargo xtask doc-paths --check`); a path that
+  cannot on purpose goes into `xtask/doc-paths.allow` with its reason.
 - A new crate goes into the layering table of
   `crates/egui-pop/tests/layering.rs` and of ADR 0001.

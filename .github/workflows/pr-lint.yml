@@ -77,6 +77,10 @@ jobs:
       - name: Every public module in one family
         if: ${{ !cancelled() }}
         run: cargo xtask families --check
+      # A path the docs name in backticks resolves in the crates.
+      - name: Paths named in docs/ resolve
+        if: ${{ !cancelled() }}
+        run: cargo xtask doc-paths --check
       # A new crate without a release on crates.io is left out of the
       # semver job, which runs on `next` only.
       - name: Semver job's exclusions
