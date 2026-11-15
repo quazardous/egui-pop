@@ -306,11 +306,50 @@ each run (the `junit` artifact) list every test's time.
 - **Snapshots** (`crates/egui-pop-gallery/tests/snapshots`): the gallery's
   pages rendered with wgpu, per theme; thresholds per operating system in
   `kittest.toml`. Regenerate with `UPDATE_SNAPSHOTS=1 cargo test -p
-  egui-pop-gallery` and look at the images in the diff. A page's shot
-  veils the side bar's page list (`Nav::veil_list`): the list is laid
-  out and answers as usual, but it is drawn over with the side bar's
-  fill, so a page added to the gallery changes only the list's own
-  shots (`pages-*`, which lift the veil), not every page's.
+  egui-pop-gallery` and look at the images in the diff. Each is cut to
+  what it tests ([below](#snapshots-cut-to-what-they-test)).
+
+## Snapshots cut to what they test
+
+A picture of the whole gallery window holds the top bar, the side bar
+and the status bar around the page. Compared whole, every picture
+changes when a bar does: a label added to the top bar would rewrite
+every page's snapshot, and the diff would hide what the change did to
+the pages. So no test of a page calls kittest's `snapshot`; the gallery's
+tests cut the picture (`crates/egui-pop-gallery/tests/it/shot.rs`):
+
+| Call | What the picture holds | For |
+|---|---|---|
+| `h.page_shot(name)`, `h.try_page_shot(name)` | the page's region: the main zone's block, heading included, and the playground beside it (`Nav::region`, recorded by the gallery's shell as it draws) | a page's own content: nearly every snapshot |
+| `h.body_shot(name)`, `h.try_body_shot(name)` | everything under the top bar | a page that drives the side bar, the bottom area or the status bar (`workbench-*`, `arrangements-*`, `strips-*`, `contexts-*`, `jobs-*`) |
+| `h.window_shot(name)`, `h.try_window_shot(name)` | the whole window | what fills the window or draws its frame (`admin-*`, `frame-own-*`, `frame-full-screen-*`), and `chrome-window-*` |
+| `h.try_shot_of(name, rect)` | a rectangle the test names | the bars (`chrome-*`), the side bar with its list (`pages-*`) |
+
+What floats over the window (a dialog, a file chooser, a menu, a tip, a
+toast, a palette) widens a page's or a body's cut when it reaches out of
+it, so the picture holds all of it; a sheet over the whole window (a
+modal's dimming) does not. The cut is rounded to whole pixels and depends
+on the layout alone, so a picture has the same size on every run.
+
+The bars have a suite of their own, `gallery::the_bars_have_their_own_snapshots`:
+`chrome-top-bar-*`, `chrome-side-bar-*` and `chrome-status-bar-*` per
+theme and in the compact density, and `chrome-window-pop-dark`, the one
+picture of a whole window. So:
+
+- a change to the top bar changes the `chrome-top-bar-*` pictures and
+  `chrome-window-pop-dark`, plus the few whole-window pictures above and
+  any whose floating part reaches over the bar;
+- a change to the side bar or the status bar changes its `chrome-*`
+  pictures, the body shots, and the pictures a dialog widens over it;
+- a change to a page changes that page's pictures only.
+
+A shot that reaches over the side bar still veils the page list
+(`Nav::veil_list`): the list is laid out and answers as usual, but it is
+drawn over with the side bar's fill, so a page added to the gallery
+changes only the list's own shots (`pages-*`, which lift the veil).
+
+The Rerun-like example (`rerun-like-*`) is an application of its own,
+without the gallery's bars: its pictures show its whole window.
 
 ## Keyboard walks
 

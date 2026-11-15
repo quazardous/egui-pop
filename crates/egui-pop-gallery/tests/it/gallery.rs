@@ -1,6 +1,10 @@
 //! The gallery renders every page under every theme, and its pages are the
 //! snapshot fixtures (`tests/snapshots/`, thresholds in `kittest.toml`).
 //! Regenerate with `UPDATE_SNAPSHOTS=1 cargo test -p egui-pop-gallery`.
+//!
+//! A shot is cut to what it tests (`shot.rs`): a page's to the page's
+//! region, the bars around it in a suite of their own
+//! (`the_bars_have_their_own_snapshots`, `chrome-*`).
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
@@ -8,6 +12,8 @@ use egui_pop::model::ids::StoryId;
 use egui_pop::theme::{BUILT_IN_THEMES, Density, POP_THEMES, Tokens};
 use egui_pop_gallery::{Gallery, Options, PAGES};
 use egui_pop_test::SharedGpu as _;
+
+use crate::shot::{self, Shots as _};
 
 fn harness(options: Options) -> Harness<'static, Gallery> {
     harness_from(Harness::builder(), options)
@@ -41,10 +47,11 @@ fn harness_from(
         })
 }
 
-/// The gallery with its page list veiled (`Nav::veil_list`): a page's
-/// snapshot shows the page, the top bar and the side bar's place, but not
-/// the list, so a page added to the gallery leaves the other pages' shots
-/// alone. The list's own shots lift it with [`unveil`].
+/// The gallery with its page list veiled (`Nav::veil_list`): a shot that
+/// reaches over the side bar (a file chooser, a workbench's) shows the
+/// side bar's place, but not the list, so a page added to the gallery
+/// leaves the other pages' shots alone. The list's own shots lift it with
+/// [`unveil`].
 fn veiled(gallery: Gallery) -> Gallery {
     nav(&gallery).veil_list(true);
     gallery
@@ -154,19 +161,73 @@ fn snapshots_per_theme() {
         for page in ["overview", "builtins", "icons"] {
             let mut h = harness(options(theme, Density::Comfortable, page));
             h.run();
-            results.add(h.try_snapshot(format!("{page}-{theme}")));
+            results.add(h.try_page_shot(format!("{page}-{theme}")));
         }
     }
     let mut h = harness(options("pop-dark", Density::Compact, "builtins"));
     h.run();
-    results.add(h.try_snapshot("builtins-pop-dark-compact"));
+    results.add(h.try_page_shot("builtins-pop-dark-compact"));
     let mut h = harness(options("pop-light", Density::Compact, "icons"));
     h.run();
-    results.add(h.try_snapshot("icons-pop-light-compact"));
+    results.add(h.try_page_shot("icons-pop-light-compact"));
     for page in ["tokens", "zones", "settings", "debug"] {
         let mut h = harness(options("pop-dark", Density::Comfortable, page));
         h.run();
-        results.add(h.try_snapshot(format!("{page}-pop-dark")));
+        results.add(h.try_page_shot(format!("{page}-pop-dark")));
+    }
+}
+
+/// The bars around the pages, in a suite of their own: the pages' shots
+/// are cut to the page (`shot.rs`), so a change to a bar changes these
+/// pictures and no page's. One picture of the whole window says how they
+/// fit together; it changes with anything.
+#[test]
+fn the_bars_have_their_own_snapshots() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for (theme, density, suffix) in [
+        ("pop-dark", Density::Comfortable, "pop-dark"),
+        ("pop-light", Density::Comfortable, "pop-light"),
+        (
+            "pop-high-contrast",
+            Density::Comfortable,
+            "pop-high-contrast",
+        ),
+        ("pop-dark", Density::Compact, "pop-dark-compact"),
+    ] {
+        let mut h = harness(options(theme, density, "overview"));
+        h.run();
+        let bars = shot::bars(&h);
+        // The bars are there, each with room: the page does not reach the
+        // window's edges.
+        assert!(bars.top.height() >= 16.0, "{suffix}: {bars:?}");
+        assert!(bars.side.width() >= 100.0, "{suffix}: {bars:?}");
+        assert!(bars.status.height() >= 16.0, "{suffix}: {bars:?}");
+        results.add(h.try_shot_of(format!("chrome-top-bar-{suffix}"), bars.top));
+        results.add(h.try_shot_of(format!("chrome-side-bar-{suffix}"), bars.side));
+        results.add(h.try_shot_of(format!("chrome-status-bar-{suffix}"), bars.status));
+    }
+    let mut h = harness(options("pop-dark", Density::Comfortable, "overview"));
+    h.run();
+    results.add(h.try_window_shot("chrome-window-pop-dark"));
+}
+
+/// A page's shot holds none of the bars: its region lies inside the
+/// window, clear of every edge but the right one, the same for every page
+/// that leaves the shell's zones alone.
+#[test]
+fn a_pages_region_is_the_same_whatever_the_page() {
+    let region = |page: &str| {
+        let mut h = harness(options("pop-dark", Density::Comfortable, page));
+        h.run();
+        (shot::region(&h), h.ctx.content_rect())
+    };
+    let (overview, window) = region("overview");
+    assert!(overview.left() > window.left() + 100.0, "{overview:?}");
+    assert!(overview.top() > window.top() + 16.0, "{overview:?}");
+    assert!(overview.bottom() < window.bottom() - 16.0, "{overview:?}");
+    assert!(overview.right() <= window.right(), "{overview:?}");
+    for page in ["builtins", "dialogs", "tree"] {
+        assert_eq!(region(page).0, overview, "{page}");
     }
 }
 
@@ -377,7 +438,7 @@ fn menu_snapshots() {
         h.run();
         topmost(&h, "Zoom").hover();
         h.run();
-        results.add(h.try_snapshot(format!("menus-{theme}")));
+        results.add(h.try_page_shot(format!("menus-{theme}")));
     }
 }
 
@@ -430,7 +491,7 @@ fn the_menus_gutter_aligns_icons_ticks_and_radio_dots() {
         assert_eq!(mark("100%"), Mark::Radio);
         assert_eq!(mark("50%"), Mark::None);
         if let Some(name) = name {
-            results.add(h.try_snapshot(name));
+            results.add(h.try_page_shot(name));
         }
     }
 }
@@ -455,7 +516,7 @@ fn menu_icons_off_keeps_ticks_and_dots_in_the_gutter() {
     let mark = |label: &str| rows.iter().find(|r| r.label == label).unwrap().mark;
     assert_eq!(mark("Show grid"), Mark::Check);
     assert_eq!(mark("100%"), Mark::Radio);
-    h.snapshot("menus-icons-off");
+    h.page_shot("menus-icons-off");
 }
 
 #[test]
@@ -491,7 +552,7 @@ fn the_palette_shows_the_commands_icons_in_a_column() {
         Some("unlock"),
         "{drawn:?}"
     );
-    h.snapshot("palette-icons");
+    h.page_shot("palette-icons");
 }
 
 #[test]
@@ -531,7 +592,7 @@ fn toolbars_show_icons_states_and_the_tools_that_do_not_fit() {
         let pick = palette.tools.iter().find(|t| t.label == "Pick").unwrap();
         assert!(pick.checked);
         assert_eq!(pick.icon.as_deref(), Some("picker"));
-        results.add(h.try_snapshot(name));
+        results.add(h.try_page_shot(name));
     }
     // The tools that did not fit, opened from More tools.
     let mut h = harness(options("pop-dark", Density::Comfortable, "toolbars"));
@@ -541,7 +602,7 @@ fn toolbars_show_icons_states_and_the_tools_that_do_not_fit() {
     h.run();
     let rows = egui_pop::api::menus::rows_drawn(&h.ctx);
     assert!(rows.iter().any(|r| r.menu == BAR_NARROW), "{rows:?}");
-    results.add(h.try_snapshot("toolbars-more"));
+    results.add(h.try_page_shot("toolbars-more"));
 }
 
 #[test]
@@ -569,7 +630,7 @@ fn dialogs_open_from_the_page_and_send_what_they_ran() {
         h.get_by_label("Export settings").click();
         h.run();
         egui_pop_test::assert_all_named(&h);
-        results.add(h.try_snapshot(format!("dialogs-{theme}")));
+        results.add(h.try_page_shot(format!("dialogs-{theme}")));
         h.key_press(egui::Key::Escape);
         h.run();
         h.get_by_label("Delete three images").click();
@@ -592,7 +653,7 @@ fn a_closable_dialog_closes_by_its_button_as_by_escape() {
         h.run();
         egui_pop_test::assert_all_named(&h);
         assert!(h.get_by_label("Share").is_focused());
-        results.add(h.try_snapshot(format!("dialogs-closable-{theme}")));
+        results.add(h.try_page_shot(format!("dialogs-closable-{theme}")));
         // The dialog's, above anything else named so.
         h.query_all_by_role_and_label(egui::accesskit::Role::Button, "Close")
             .last()
@@ -628,7 +689,7 @@ fn a_movable_dialog_has_its_header_band_and_is_dragged_by_it() {
             moved.x < a.x - 150.0 && moved.y < a.y - 60.0,
             "{a:?} {moved:?}"
         );
-        results.add(h.try_snapshot(format!("dialogs-movable-{theme}")));
+        results.add(h.try_page_shot(format!("dialogs-movable-{theme}")));
         // Its close button is on the band.
         h.query_all_by_role_and_label(egui::accesskit::Role::Button, "Close")
             .last()
@@ -649,7 +710,7 @@ fn a_movable_dialog_has_its_header_band_and_is_dragged_by_it() {
     h.get_by_label("Preview, clear backdrop").click();
     h.run();
     egui_pop_test::assert_all_named(&h);
-    results.add(h.try_snapshot("dialogs-clear-pop-dark"));
+    results.add(h.try_page_shot("dialogs-clear-pop-dark"));
 }
 
 #[test]
@@ -662,7 +723,7 @@ fn long_toasts_wrap_before_their_buttons_in_two_languages() {
     egui_pop::core::motion::freeze(&h.ctx, 1.0);
     h.run();
     egui_pop_test::assert_all_named(&h);
-    h.snapshot("toasts-long-pop-dark");
+    h.page_shot("toasts-long-pop-dark");
 }
 
 #[test]
@@ -679,7 +740,7 @@ fn toasts_show_in_a_corner_and_their_action_runs() {
         egui_pop::core::motion::freeze(&h.ctx, 1.0);
         h.run();
         egui_pop_test::assert_all_named(&h);
-        results.add(h.try_snapshot(format!("toasts-{theme}")));
+        results.add(h.try_page_shot(format!("toasts-{theme}")));
         h.get_by_label("Show").click();
         h.run();
         h.run();
@@ -697,7 +758,7 @@ fn sliders_run_their_step_and_a_plugin_snaps_one() {
         let mut h = harness(options(theme, Density::Comfortable, "sliders"));
         h.run();
         egui_pop_test::assert_all_named(&h);
-        results.add(h.try_snapshot(format!("sliders-{theme}")));
+        results.add(h.try_page_shot(format!("sliders-{theme}")));
     }
     let mut h = harness(options("pop-dark", Density::Comfortable, "sliders"));
     h.run();
@@ -772,7 +833,7 @@ fn faders_and_knobs_go_up_and_reset_and_narrow_sliders_keep_their_name() {
         let mut h = harness(options(theme, Density::Comfortable, "faders"));
         h.run();
         egui_pop_test::assert_all_named(&h);
-        results.add(h.try_snapshot(format!("faders-{theme}")));
+        results.add(h.try_page_shot(format!("faders-{theme}")));
     }
     let mut h = harness(options("pop-dark", Density::Comfortable, "faders"));
     h.run();
@@ -880,7 +941,7 @@ fn compact_controls_scrub_choose_mark_and_reveal_from_their_slots() {
         let mut h = harness(options(theme, Density::Comfortable, "compact"));
         h.run();
         egui_pop_test::assert_all_named(&h);
-        results.add(h.try_snapshot(format!("compact-{theme}")));
+        results.add(h.try_page_shot(format!("compact-{theme}")));
     }
     let mut h = harness(options("pop-dark", Density::Comfortable, "compact"));
     h.run();
@@ -1008,11 +1069,11 @@ fn the_inputs_page_shows_every_decorator_and_state() {
         let mut h = harness(options(theme, Density::Comfortable, "inputs"));
         h.run();
         egui_pop_test::assert_all_named(&h);
-        results.add(h.try_snapshot(format!("inputs-{theme}")));
+        results.add(h.try_page_shot(format!("inputs-{theme}")));
     }
     let mut h = harness(options("pop-dark", Density::Compact, "inputs"));
     h.run();
-    results.add(h.try_snapshot("inputs-pop-dark-compact"));
+    results.add(h.try_page_shot("inputs-pop-dark-compact"));
 }
 
 fn text_input<'h>(h: &'h Harness<'_, Gallery>, label: &'h str) -> egui_kittest::Node<'h> {
@@ -1276,7 +1337,7 @@ fn the_history_page_lists_the_steps_and_jumps_to_one() {
     assert_eq!(history::snapshots(&app, &APP).len(), 1);
     assert!(h.query_by_label("Snapshot 1").is_some());
     egui_pop_test::assert_all_named(&h);
-    h.snapshot("history-pop-dark");
+    h.page_shot("history-pop-dark");
     // The start row undoes everything.
     h.get_by_label("Start").click();
     h.run();
@@ -1365,7 +1426,7 @@ fn values_bind_in_three_modes_and_watch_follows() {
         let mut h = harness(options(theme, Density::Comfortable, "values"));
         h.run();
         egui_pop_test::assert_all_named(&h);
-        results.add(h.try_snapshot(format!("values-{theme}")));
+        results.add(h.try_page_shot(format!("values-{theme}")));
     }
     let mut h = harness(options("pop-dark", Density::Comfortable, "values"));
     h.run();
@@ -1406,7 +1467,7 @@ fn the_settings_app_shows_generated_pages_value_scopes_and_search() {
     // An app-wide setting: no "Set for".
     h.get_by_role_and_label(egui::accesskit::Role::Group, "Tone");
     assert!(h.query_by_label("Where Tone is set").is_none());
-    results.add(h.try_snapshot("admin-pop-dark"));
+    results.add(h.try_window_shot("admin-pop-dark"));
     // The library's size, on the custom page that edits it (only there),
     // drawn as the app's row.
     h.get_by_label("Greeting preview").click();
@@ -1422,7 +1483,7 @@ fn the_settings_app_shows_generated_pages_value_scopes_and_search() {
     h.run();
     h.get_by_label("5 letters");
     egui_pop_test::assert_all_named(&h);
-    results.add(h.try_snapshot("admin-manifest-pop-dark"));
+    results.add(h.try_window_shot("admin-manifest-pop-dark"));
     // Records from a hook, as a table and a list.
     h.get_by_label("Greetings").click();
     h.run();
@@ -1434,13 +1495,13 @@ fn the_settings_app_shows_generated_pages_value_scopes_and_search() {
     );
     h.get_by_label("No hook gives these records yet.");
     egui_pop_test::assert_all_named(&h);
-    results.add(h.try_snapshot("admin-records-pop-dark"));
+    results.add(h.try_window_shot("admin-records-pop-dark"));
     // A row action that asks first: its confirmation names the row.
     h.get_all_by_label("Use").next().unwrap().click();
     h.run();
     h.run();
     h.get_by_label("Greet in English?");
-    results.add(h.try_snapshot("admin-confirm-pop-dark"));
+    results.add(h.try_window_shot("admin-confirm-pop-dark"));
     h.get_by_label("Cancel").click();
     h.run();
     h.run();
@@ -1454,7 +1515,7 @@ fn the_settings_app_shows_generated_pages_value_scopes_and_search() {
     h.run();
     h.run();
     egui_pop_test::assert_all_named(&h);
-    results.add(h.try_snapshot("admin-search-pop-dark"));
+    results.add(h.try_window_shot("admin-search-pop-dark"));
 }
 
 /// Settings import: the wizard's diff step lists each change with its
@@ -1501,7 +1562,7 @@ fn the_settings_import_shows_its_changes_before_applying_them() {
     h.get_by_role_and_label(Role::CheckBox, "Size: 18.0 → 24.0");
     h.get_by_label("unknown: no such setting here");
     egui_pop_test::assert_all_named(&h);
-    results.add(h.try_snapshot("admin-import-diff-pop-dark"));
+    results.add(h.try_window_shot("admin-import-diff-pop-dark"));
 }
 
 /// The wizard kit: the greeting wizard checks its words before Next, adds
@@ -1538,7 +1599,7 @@ fn the_greeting_wizard_checks_each_step_and_applies_its_draft() {
     h.run();
     h.get_by_role_and_label(Role::ListItem, "Step 3 of 4, Colour");
     egui_pop_test::assert_all_named(&h);
-    results.add(h.try_snapshot("admin-wizard-pop-dark"));
+    results.add(h.try_window_shot("admin-wizard-pop-dark"));
     h.get_by_label("Next").click();
     h.run();
     h.run();
@@ -1548,7 +1609,7 @@ fn the_greeting_wizard_checks_each_step_and_applies_its_draft() {
     // The summary, each value as shown.
     h.get_by_role_and_label(Role::Group, "Colour: The accent");
     egui_pop_test::assert_all_named(&h);
-    results.add(h.try_snapshot("admin-wizard-summary-pop-dark"));
+    results.add(h.try_window_shot("admin-wizard-summary-pop-dark"));
     h.get_by_label("Use this greeting").click();
     for _ in 0..3 {
         h.run();
@@ -1569,12 +1630,12 @@ fn the_settings_window_searches_and_edits_shortcuts() {
     h.run();
     h.run();
     egui_pop_test::assert_all_named(&h);
-    results.add(h.try_snapshot("settings-window-pop-dark"));
+    results.add(h.try_page_shot("settings-window-pop-dark"));
     h.get_by_label("Keyboard shortcuts").click();
     h.run();
     h.run();
     egui_pop_test::assert_all_named(&h);
-    results.add(h.try_snapshot("shortcuts-pop-dark"));
+    results.add(h.try_page_shot("shortcuts-pop-dark"));
 }
 
 /// `Ctrl+,` opens the Settings app; the shortcuts editor is its Input ›
@@ -1596,7 +1657,7 @@ fn the_settings_app_holds_the_shortcuts_editor() {
     h.run();
     assert!(h.query_by_label("Change the keys of Edit: Undo").is_some());
     egui_pop_test::assert_all_named(&h);
-    results.add(h.try_snapshot("admin-shortcuts-pop-dark"));
+    results.add(h.try_window_shot("admin-shortcuts-pop-dark"));
 }
 
 #[test]
@@ -1646,7 +1707,7 @@ fn every_editor_inspired_theme_draws_the_overview() {
         let tokens = Tokens::of(&h.ctx);
         assert!(tokens.resolved().problems().is_empty(), "{theme}");
         assert_eq!(tokens.resolved().spec().base, *theme);
-        results.add(h.try_snapshot(format!("overview-{theme}")));
+        results.add(h.try_page_shot(format!("overview-{theme}")));
     }
 }
 
@@ -1677,7 +1738,7 @@ fn the_viewport_page_zooms_through_commands_and_reports_signals() {
         snap["viewport"]["viewports"]["gallery"]["tiles"]["complete"],
         true
     );
-    h.snapshot("viewport-pop-dark");
+    h.page_shot("viewport-pop-dark");
 }
 
 /// Runs a page until it settles: the viewport page until its tiles are
@@ -1723,7 +1784,7 @@ fn the_frame_page_draws_the_gallerys_own_frame_and_vetoes_closing() {
     // The preview's buttons and regions, then the gallery's own frame.
     assert!(h.query_by_label("Preview menu").is_some());
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("frame-pop-dark"));
+    results.add(h.try_page_shot("frame-pop-dark"));
     let store = h.state().app.handle().store();
     egui_pop::core::lock(&store)
         .set(egui_pop::model::values::Set::new(
@@ -1749,7 +1810,7 @@ fn the_frame_page_draws_the_gallerys_own_frame_and_vetoes_closing() {
     let trace = h.state().app.handle().step_traces().pop().unwrap();
     assert_eq!(trace.step.as_str(), "frame.close");
     assert!(trace.vetoed_by.is_some());
-    results.add(h.try_snapshot("frame-own-pop-dark"));
+    results.add(h.try_window_shot("frame-own-pop-dark"));
 }
 
 #[test]
@@ -1780,7 +1841,7 @@ fn in_full_screen_the_gallerys_own_title_bar_stays_with_its_way_out() {
     assert_eq!(h.query_all_by_label("Close").count(), 2);
     let r = egui_pop::core::frame::regions(&h.ctx).expect("published");
     assert!(r.fullscreen && r.caption.is_some() && r.grip == 0, "{r:?}");
-    h.snapshot("frame-full-screen-pop-dark");
+    h.window_shot("frame-full-screen-pop-dark");
 }
 
 #[test]
@@ -1788,7 +1849,7 @@ fn the_scale_page_sets_the_interface_zoom_and_draws_at_twice_the_pixels() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "scale"));
     h.run();
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("scale-pop-dark"));
+    results.add(h.try_page_shot("scale-pop-dark"));
     h.get_by_label("125%").click();
     h.run();
     assert!((h.ctx.zoom_factor() - 1.25).abs() < 1e-4);
@@ -1815,7 +1876,7 @@ fn the_scale_page_sets_the_interface_zoom_and_draws_at_twice_the_pixels() {
             )
         });
     h.run();
-    results.add(h.try_snapshot("overview-pop-dark@2x"));
+    results.add(h.try_page_shot("overview-pop-dark@2x"));
 }
 
 #[test]
@@ -1827,7 +1888,7 @@ fn the_image_widgets_page_selects_a_thumbnail() {
     assert!(h.query_by_label("Selected: Image 3").is_some());
     assert!(h.query_by_label("Histogram").is_some());
     assert!(h.query_by_label("Image 2000").is_none(), "virtualised");
-    h.snapshot("images-pop-dark");
+    h.page_shot("images-pop-dark");
 }
 
 /// The last trace of a step, by its id.
@@ -1849,7 +1910,7 @@ fn the_curves_and_wheels_page_runs_their_steps_and_caps_the_gain() {
         let mut h = harness(options(theme, Density::Comfortable, "grading"));
         h.run();
         egui_pop_test::assert_all_named(&h);
-        results.add(h.try_snapshot(format!("grading-{theme}")));
+        results.add(h.try_page_shot(format!("grading-{theme}")));
     }
     let mut h = harness(options("pop-dark", Density::Comfortable, "grading"));
     h.run();
@@ -1892,7 +1953,7 @@ fn the_labels_page_draws_labels_over_a_bright_and_a_dark_image() {
             .style(egui_pop::core::kit::State::REST)
             .fill;
         assert!(fill.a() > 0 && fill.a() < 255, "translucent: {fill:?}");
-        results.add(h.try_snapshot(format!("viewport-labels-{theme}")));
+        results.add(h.try_page_shot(format!("viewport-labels-{theme}")));
     }
 }
 
@@ -1925,7 +1986,7 @@ fn the_cursors_page_shows_a_brush_outline_and_the_loupe() {
         let t = last_trace_of(&h, "cursor.resolve");
         assert_eq!(t.args["viewport"], "gallery");
         assert_eq!(t.args["query"]["tool"], "brush");
-        results.add(h.try_snapshot(format!("cursors-{theme}")));
+        results.add(h.try_page_shot(format!("cursors-{theme}")));
     }
 }
 
@@ -1947,7 +2008,7 @@ fn the_navigator_page_zooms_through_its_step_and_a_plugin_caps_it() {
     assert_eq!(last_trace_of(&h, "zoom.change").args["to"]["zoom"], "fit");
     h.get_by_label("Zoom in").click();
     h.run();
-    h.snapshot("navigator-pop-dark");
+    h.page_shot("navigator-pop-dark");
 }
 
 #[test]
@@ -1981,7 +2042,7 @@ fn the_node_graph_page_shows_fifty_nodes_and_edits_through_its_steps() {
     // Groups fold into stacks in the overview.
     assert!(h.query_by_label("Unfold Tone (12 nodes)").is_some());
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("node-graph-pop-dark"));
+    results.add(h.try_page_shot("node-graph-pop-dark"));
 
     // The page's plugin keeps the output.
     let _ = h.state_mut().app.run(
@@ -2014,7 +2075,7 @@ fn the_node_graph_page_shows_fifty_nodes_and_edits_through_its_steps() {
             .all(|n| n.accesskit_node().role() == egui::accesskit::Role::Slider)
     );
     egui_pop_test::assert_all_named(&h);
-    results.add(h.try_snapshot("node-graph-detail-pop-dark"));
+    results.add(h.try_page_shot("node-graph-detail-pop-dark"));
 }
 
 /// The node graph page's view: the part of the graph shown and the zoom.
@@ -2209,7 +2270,7 @@ fn the_node_graph_pages_zoom_control_drives_the_graph() {
             "the menu offers {item}"
         );
     }
-    h.snapshot("node-graph-zoom-menu-pop-dark");
+    h.page_shot("node-graph-zoom-menu-pop-dark");
     // The menu's item, not the playground's button of the same name.
     let menu_item = |h: &Harness<'_, Gallery>, label: &str| {
         let level = h.get_by_label("Zoom level").rect().center();
@@ -2268,7 +2329,7 @@ fn the_node_graph_page_routes_wires_around_the_nodes() {
         }
     }
     egui_pop_test::assert_all_named(&h);
-    h.snapshot("node-graph-orthogonal-pop-dark");
+    h.page_shot("node-graph-orthogonal-pop-dark");
 }
 
 #[test]
@@ -2421,7 +2482,7 @@ fn the_node_graph_page_selects_deletes_and_undoes_wires() {
         "a hovered wire stands out: {seen} pixels changed along {wire_px}"
     );
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("node-graph-wire-hover-pop-dark"));
+    results.add(h.try_page_shot("node-graph-wire-hover-pop-dark"));
 
     // An agent selects a wire; graph.read says so.
     let other = serde_json::json!({
@@ -2468,7 +2529,7 @@ fn the_node_graph_page_selects_deletes_and_undoes_wires() {
         h.query_by_label("Click a wire to select it").is_none(),
         "the hint goes once a wire was selected"
     );
-    results.add(h.try_snapshot("node-graph-wire-selected-pop-dark"));
+    results.add(h.try_page_shot("node-graph-wire-selected-pop-dark"));
     h.key_press(egui::Key::Delete);
     h.run();
     h.run();
@@ -2538,7 +2599,7 @@ fn the_workbench_page_opens_moves_and_vetoes_panels() {
     assert!(app.panel_visible(&outline));
     assert!(h.query_by_label("Sections of the document.").is_some());
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("workbench-pop-dark"));
+    results.add(h.try_body_shot("workbench-pop-dark"));
     // The console stays in the bottom panel: refused.
     h.get_by_label("Move Console to the start side").click();
     h.run();
@@ -2575,7 +2636,7 @@ fn the_layout_page_toggles_the_areas_and_opens_the_layout_menu() {
     h.run();
     let app = h.state().app.handle().clone();
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("layout-pop-dark"));
+    results.add(h.try_page_shot("layout-pop-dark"));
     let toggled = |h: &Harness<'_, Gallery>| {
         h.get_by_label("Toggle primary side bar")
             .accesskit_node()
@@ -2598,7 +2659,7 @@ fn the_layout_page_toggles_the_areas_and_opens_the_layout_menu() {
         h.query_by_label("Save the current arrangement as…")
             .is_some()
     );
-    results.add(h.try_snapshot("layout-menu-pop-dark"));
+    results.add(h.try_page_shot("layout-menu-pop-dark"));
     h.get_by_label("Primary side bar on the right").click();
     h.run();
     h.run();
@@ -2757,7 +2818,7 @@ fn the_workbench_page_shows_where_a_tab_dragged_to_another_area_would_land() {
         "joins its tabs"
     );
     assert_eq!(snap["workbench"]["drop_hint"]["index"], 2);
-    h.snapshot("workbench-drag-pop-dark");
+    h.body_shot("workbench-drag-pop-dark");
     pointer(&mut h, button(b, false));
     h.run();
     assert!(app.drop_hint().is_none());
@@ -2833,7 +2894,7 @@ fn the_workbench_page_shows_drop_zones_and_arranges_the_bottom_area_as_a_grid() 
     }
     h.step();
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("workbench-zone-pop-dark"));
+    results.add(h.try_body_shot("workbench-zone-pop-dark"));
     pointer(&mut h, button(b, false));
     h.run();
     assert_eq!(
@@ -2852,7 +2913,7 @@ fn the_workbench_page_shows_drop_zones_and_arranges_the_bottom_area_as_a_grid() 
     );
     h.remove_cursor();
     h.run();
-    results.add(h.try_snapshot("workbench-grid-pop-dark"));
+    results.add(h.try_body_shot("workbench-grid-pop-dark"));
     // And back in a row.
     h.get_by_label("Bottom: arrange as row").click();
     h.run();
@@ -2884,7 +2945,7 @@ fn the_palettes_page_floats_a_toolbox_a_colour_palette_and_a_navigator() {
     egui_pop_test::assert_all_named(&h);
     assert!(h.query_by_label_contains("Tool: Brush").is_some());
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("palettes-pop-dark"));
+    results.add(h.try_page_shot("palettes-pop-dark"));
     // The navigator, dropped on the playground's side bar, docks there.
     let a = h.get_by_label("Navigator").rect().center();
     let b = h.get_by_label("Playground").rect().center();
@@ -2921,7 +2982,7 @@ fn the_strips_page_feeds_an_indicator_and_folds_the_side_bar() {
     // In the status bar, and in the page's list.
     assert_eq!(h.query_all_by_label_contains("Exporting 50").count(), 2);
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("strips-pop-dark"));
+    results.add(h.try_body_shot("strips-pop-dark"));
     h.get_by_label("Fold the side bar (Ctrl+B)").click();
     h.run();
     let app = h.state().app.handle().clone();
@@ -2957,7 +3018,7 @@ fn the_strips_page_shows_live_states_a_popover_and_a_hover_card() {
     h.run();
     assert!(h.query_by_label("Dismiss all").is_some());
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("strips-popover-pop-dark"));
+    results.add(h.try_body_shot("strips-popover-pop-dark"));
     h.key_press(egui::Key::Escape);
     h.run();
     assert!(h.query_by_label("Dismiss all").is_none());
@@ -2966,7 +3027,7 @@ fn the_strips_page_shows_live_states_a_popover_and_a_hover_card() {
     h.run();
     h.run();
     assert!(h.query_by_label("Reconnect").is_some());
-    results.add(h.try_snapshot("strips-card-pop-dark"));
+    results.add(h.try_body_shot("strips-card-pop-dark"));
     let node = egui_pop::api::strips::status(&app)
         .into_iter()
         .find(|e| e.id == "gallery.node")
@@ -2999,7 +3060,7 @@ fn the_workbench_page_detaches_a_panel_into_its_own_window() {
     assert_eq!(app.layout().auxiliary[0].panel, notes);
     assert!(h.query_by_label("Free notes.").is_some());
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("workbench-detached-pop-dark"));
+    results.add(h.try_body_shot("workbench-detached-pop-dark"));
     // The Properties tab dragged over the window, held: the window shows
     // its drop zone; let go, it joins the window's tabs.
     let properties = egui_pop::model::ids::PanelId::from_static("gallery.properties");
@@ -3032,7 +3093,7 @@ fn the_workbench_page_detaches_a_panel_into_its_own_window() {
         (over.panel.clone(), over.window.clone()),
         (properties.clone(), notes.clone())
     );
-    results.add(h.try_snapshot("workbench-detached-drop-pop-dark"));
+    results.add(h.try_body_shot("workbench-detached-drop-pop-dark"));
     pointer(&mut h, button(b, false));
     h.run();
     let window = app.layout().auxiliary[0].clone();
@@ -3150,7 +3211,7 @@ fn the_arrangements_page_switches_saves_and_vetoes() {
     assert!(app.panel_visible(&outline));
     assert_eq!(egui_pop::api::arrangements::current(&app), "Writing");
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("arrangements-pop-dark"));
+    results.add(h.try_body_shot("arrangements-pop-dark"));
     h.get_by_label("Veto switching (a before-hook on arrangement.switch)")
         .click();
     h.run();
@@ -3203,7 +3264,7 @@ fn the_context_stack_page_drills_down_switches_modes_and_comes_back() {
     assert!(app.panel_visible(&SECOND));
     assert!(h.query_by_label("Back from Compare").is_some());
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("contexts-pop-dark"));
+    results.add(h.try_body_shot("contexts-pop-dark"));
     // Its chip goes back, as Escape does: its panel goes, the
     // orientation stays.
     h.get_by_label("Back from Compare").click();
@@ -3288,7 +3349,7 @@ fn the_clipboard_page_copies_a_colour_between_palettes_and_previews_paste_specia
     h.run();
     assert_eq!(value(&h, "Palette B"), "#2e8b57, #3a7bd5");
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("clipboard-pop-dark"));
+    results.add(h.try_page_shot("clipboard-pop-dark"));
     // The greys take it only through a lossy transform, which a toast
     // names.
     h.get_by_label("Greys").focus();
@@ -3352,7 +3413,7 @@ fn the_links_page_opens_declared_links_and_asks_for_content_and_agents() {
     egui_pop_test::assert_all_named(&h);
     egui_pop_test::assert_links_clean(&h.state().app);
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("links-pop-dark"));
+    results.add(h.try_page_shot("links-pop-dark"));
     // A declared web link opens at once, outside.
     h.get_by_role_and_label(Role::Link, "Source code").click();
     h.run();
@@ -3467,7 +3528,7 @@ fn the_viewers_html_subset_keeps_blocks_and_drops_what_could_run() {
     assert_eq!(s["title"], "An HTML page");
     assert!(rec.records().is_empty(), "nothing went outside");
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("viewer-html-pop-dark"));
+    results.add(h.try_page_shot("viewer-html-pop-dark"));
 
     // The same blocks as markdown: headings with their anchors, a table,
     // a list, code.
@@ -3637,7 +3698,7 @@ fn the_viewer_shows_docs_pages_finds_zooms_and_asks_before_remote_images() {
     assert!(rec.records().is_empty(), "nothing went outside");
     egui_pop_test::assert_all_named(&h);
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("viewer-pop-dark"));
+    results.add(h.try_page_shot("viewer-pop-dark"));
     // A link of the page: the guide, inside; back and forward walk.
     v.follow(&app, "guide.md", false);
     h.run();
@@ -3754,7 +3815,7 @@ fn the_gallery_opens_devtools_from_the_start() {
     h.run();
     assert!(app.panel_visible(&egui_pop::api::devtools::PANEL_DEVTOOLS));
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("devtools-pop-dark"));
+    results.add(h.try_page_shot("devtools-pop-dark"));
 }
 
 #[test]
@@ -3896,7 +3957,7 @@ fn the_display_page_says_why_a_wide_gamut_falls_back() {
         r.drawn.color_space(),
         Some(egui_pop::viewport::display::ColorSpace::Srgb)
     );
-    h.snapshot("display-pop-dark");
+    h.page_shot("display-pop-dark");
 }
 
 /// The files page's last choice, a file in a demo folder, written with
@@ -3911,7 +3972,7 @@ fn last_choice(folder: &str, file: &str) -> String {
 /// Windows and macOS (docs/testing.md, "Known failures").
 fn demo_path_snapshot(h: &mut Harness<'static, Gallery>, name: &str) {
     if cfg!(target_os = "linux") {
-        h.snapshot(name);
+        h.page_shot(name);
     }
 }
 
@@ -3925,7 +3986,7 @@ fn the_files_page_chooses_with_the_in_app_picker() {
     assert!(h.query_by_label("harbour.png").is_some());
     assert!(h.query_by_label("notes.txt").is_none(), "filtered out");
     // The preview pane shows the highlighted entry's once it is made.
-    h.snapshot("files-pop-dark");
+    h.page_shot("files-pop-dark");
     h.get_by_label("Filter, or type a path").type_text("light");
     settle_picker(&mut h);
     h.key_press(egui::Key::Enter);
@@ -3968,7 +4029,7 @@ fn the_files_page_resizes_the_picker() {
     }
     settle_picker(&mut h);
     egui_pop_test::assert_all_named(&h);
-    h.snapshot("files-resized-pop-dark");
+    h.page_shot("files-resized-pop-dark");
 }
 
 #[test]
@@ -3982,7 +4043,7 @@ fn the_files_page_saves_with_a_question_before_replacing() {
     // The list's row, and the preview pane's title.
     assert!(h.query_all_by_label("harbour-edit.png").next().is_some());
     egui_pop_test::assert_all_named(&h);
-    h.snapshot("files-save-pop-dark");
+    h.page_shot("files-save-pop-dark");
     // The name of a new folder, by its key; Escape closes only the row.
     h.key_press_modifiers(
         egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
@@ -3994,7 +4055,7 @@ fn the_files_page_saves_with_a_question_before_replacing() {
             .is_focused()
     );
     egui_pop_test::assert_all_named(&h);
-    h.snapshot("files-new-folder-pop-dark");
+    h.page_shot("files-new-folder-pop-dark");
     h.key_press(egui::Key::Escape);
     settle_picker(&mut h);
     assert!(h.query_by_label("Folder name").is_none());
@@ -4058,7 +4119,7 @@ fn the_files_page_selects_several_and_says_what_a_folder_selected_means() {
     egui_pop_test::assert_all_named(&h);
     h.hover_at(egui::pos2(5.0, 5.0));
     settle_picker(&mut h);
-    h.snapshot("files-several-pop-dark");
+    h.page_shot("files-several-pop-dark");
     h.key_press(Key::Escape);
     settle_picker(&mut h);
     h.key_press(Key::Escape);
@@ -4078,7 +4139,7 @@ fn the_files_page_selects_several_and_says_what_a_folder_selected_means() {
     egui_pop_test::assert_all_named(&h);
     h.hover_at(egui::pos2(5.0, 5.0));
     settle_picker(&mut h);
-    h.snapshot("files-folder-pop-dark");
+    h.page_shot("files-folder-pop-dark");
 }
 
 #[test]
@@ -4094,7 +4155,7 @@ fn the_files_page_shows_a_grid_of_thumbnails() {
         h.state().app.handle().debug_snapshot()["files"]["open"][0]["picker"][what].clone()
     };
     assert_eq!(picker(&h, "view"), "thumbnails");
-    h.snapshot("files-grid-pop-dark");
+    h.page_shot("files-grid-pop-dark");
     // In the dialog, Ctrl and + are the thumbnails', not the interface's scale.
     let (size, zoom) = (picker(&h, "thumbnail_size"), h.ctx.zoom_factor());
     h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Plus);
@@ -4117,7 +4178,7 @@ fn the_files_page_sorts_the_picker_by_its_columns() {
     };
     assert_eq!(picker(&h, "sort"), "-size");
     egui_pop_test::assert_all_named(&h);
-    h.snapshot("files-sorted-pop-dark");
+    h.page_shot("files-sorted-pop-dark");
 }
 
 #[test]
@@ -4171,13 +4232,13 @@ fn the_files_page_groups_a_raw_with_its_sidecars() {
         "{stand_in}"
     );
     egui_pop_test::assert_all_named(&h);
-    h.snapshot("files-grouped-pop-dark");
+    h.page_shot("files-grouped-pop-dark");
     h.get_by_label("Thumbnails").click();
     for _ in 0..3 {
         settle_thumbnails(&mut h);
     }
     egui_pop_test::assert_all_named(&h);
-    h.snapshot("files-grouped-grid-pop-dark");
+    h.page_shot("files-grouped-grid-pop-dark");
 }
 
 #[test]
@@ -4195,7 +4256,7 @@ fn the_files_page_previews_the_highlighted_file() {
     assert_eq!(preview()["provider"], "egui_pop.images", "{}", preview());
     assert!(h.query_by_label("240 × 160").is_some(), "{}", preview());
     assert!(h.query_by_label("2026-01-15 10:04 UTC").is_some());
-    h.snapshot("files-preview-pop-dark");
+    h.page_shot("files-preview-pop-dark");
     // Alt+P hides the pane, and the setting remembers; again shows it.
     h.key_press_modifiers(egui::Modifiers::ALT, egui::Key::P);
     settle_picker(&mut h);
@@ -4421,7 +4482,7 @@ fn the_tree_page_loads_lazily_follows_changes_and_vetoes_a_drop() {
     );
     h.remove_cursor();
     h.run();
-    h.snapshot("tree-pop-dark");
+    h.page_shot("tree-pop-dark");
 }
 
 #[test]
@@ -4476,7 +4537,7 @@ fn the_list_items_page_shows_actions_on_hover_and_aligns_properties() {
     h.remove_cursor();
     h.run();
     egui_pop_test::assert_all_named(&h);
-    h.snapshot("list-items-pop-dark");
+    h.page_shot("list-items-pop-dark");
 }
 
 #[test]
@@ -4499,7 +4560,7 @@ fn the_table_page_sorts_through_the_store_and_vetoes_one_sort() {
     h.run();
     assert!(h.query_by_label("Name, sorted descending").is_some());
     // The sort direction is the kit's glyph after the column's title.
-    h.snapshot("table-sorted-pop-dark");
+    h.page_shot("table-sorted-pop-dark");
     let store = h.state().app.handle().store();
     assert_eq!(
         store
@@ -4539,7 +4600,7 @@ fn the_table_page_sorts_through_the_store_and_vetoes_one_sort() {
     assert_eq!(t.args["cursor"], serde_json::json!(23), "snow");
     h.remove_cursor();
     h.run();
-    h.snapshot("table-pop-dark");
+    h.page_shot("table-pop-dark");
 }
 
 #[test]
@@ -4608,7 +4669,7 @@ fn the_table_page_selects_columns_from_their_headers() {
         h.query_by_label_contains("under the pointer: date")
             .is_some()
     );
-    h.snapshot("table-columns-pop-dark");
+    h.page_shot("table-columns-pop-dark");
 }
 
 #[test]
@@ -4620,7 +4681,7 @@ fn the_plot_page_describes_its_plots_and_reports_the_hovered_bar() {
         egui_pop_test::assert_all_named(&h);
         h.remove_cursor();
         h.run();
-        results.add(h.try_snapshot(format!("plot-{theme}")));
+        results.add(h.try_page_shot(format!("plot-{theme}")));
     }
     let mut h = harness(options("pop-dark", Density::Comfortable, "plot"));
     h.run();
@@ -4683,7 +4744,7 @@ fn the_plot_over_time_page_follows_its_timeline_both_ways() {
         egui_pop_test::assert_all_named(&h);
         h.remove_cursor();
         h.run();
-        results.add(h.try_snapshot(format!("plot-time-{theme}")));
+        results.add(h.try_page_shot(format!("plot-time-{theme}")));
     }
     let mut h = harness(options("pop-dark", Density::Comfortable, "plot-time"));
     h.run();
@@ -4753,7 +4814,7 @@ fn the_plot_over_time_page_follows_its_timeline_both_ways() {
     assert_eq!(names, ["Speed", "Target", "Gear"], "{values}");
     assert!(h.query_by_label_contains("Speed: ").is_some());
     assert!(h.query_by_label_contains("Gear: ").is_some());
-    results.add(h.try_snapshot("plot-time-tooltip-pop-dark"));
+    results.add(h.try_page_shot("plot-time-tooltip-pop-dark"));
 }
 
 #[test]
@@ -4769,7 +4830,7 @@ fn the_plot_over_time_page_draws_two_million_samples_decimated() {
     h.remove_cursor();
     h.run();
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("plot-time-large-pop-dark"));
+    results.add(h.try_page_shot("plot-time-large-pop-dark"));
     // Two million and one samples, drawn as at most four a pixel column.
     let p = plot_state(&h, "gallery.plot.time");
     let speed = &p["series"][0];
@@ -4828,7 +4889,7 @@ fn the_text_log_page_follows_its_timeline_and_filters() {
         egui_pop_test::assert_all_named(&h);
         h.remove_cursor();
         h.run();
-        results.add(h.try_snapshot(format!("text-log-{theme}")));
+        results.add(h.try_page_shot(format!("text-log-{theme}")));
     }
     let mut h = harness(options("pop-dark", Density::Comfortable, "text-log"));
     h.run();
@@ -4884,7 +4945,7 @@ fn the_text_log_page_follows_its_timeline_and_filters() {
     h.run();
     h.remove_cursor();
     h.run();
-    results.add(h.try_snapshot("text-log-filtered-pop-dark"));
+    results.add(h.try_page_shot("text-log-filtered-pop-dark"));
 }
 
 #[test]
@@ -4925,7 +4986,7 @@ fn the_text_editor_page_edits_searches_through_the_keymap_and_vetoes_the_title()
     );
     h.remove_cursor();
     h.run();
-    h.snapshot("text-editor-pop-dark");
+    h.page_shot("text-editor-pop-dark");
 }
 
 #[test]
@@ -4969,7 +5030,7 @@ fn the_code_editor_page_marks_completes_saves_and_holds_a_hundred_thousand_lines
     );
     h.remove_cursor();
     h.run();
-    h.snapshot("code-editor-pop-dark");
+    h.page_shot("code-editor-pop-dark");
     h.get_by_label("Load 100 000 lines").click();
     h.run();
     assert!(
@@ -4984,14 +5045,14 @@ fn the_indicators_page_in_every_pop_theme_and_still_under_reduced_motion() {
     for theme in POP_THEMES {
         let mut h = harness(options(theme, Density::Comfortable, "indicators"));
         h.run();
-        results.add(h.try_snapshot(format!("indicators-{theme}")));
+        results.add(h.try_page_shot(format!("indicators-{theme}")));
     }
     let mut h = harness(Options {
         reduced_motion: true,
         ..options("pop-dark", Density::Comfortable, "indicators")
     });
     h.run();
-    results.add(h.try_snapshot("indicators-reduced-pop-dark"));
+    results.add(h.try_page_shot("indicators-reduced-pop-dark"));
     // The busy LED keeps its state, drawn still.
     let node = egui_pop::core::indicator::find(&h.ctx, "led.busy").unwrap();
     assert!(node.pulsing);
@@ -5059,7 +5120,7 @@ fn the_sections_page_in_every_pop_theme() {
     for theme in POP_THEMES {
         let mut h = harness(options(theme, Density::Comfortable, "sections"));
         h.run();
-        results.add(h.try_snapshot(format!("sections-{theme}")));
+        results.add(h.try_page_shot(format!("sections-{theme}")));
     }
 }
 
@@ -5131,7 +5192,7 @@ fn the_sections_page_folds_opens_and_resizes_its_sections() {
         .unwrap()
         .focus();
     h.run();
-    h.snapshot("sections-resized-pop-dark");
+    h.page_shot("sections-resized-pop-dark");
     // A double click on it gives the heights back.
     let line = h
         .get_all_by_role_and_label(Role::Splitter, "Resize Live")
@@ -5444,7 +5505,7 @@ fn the_sections_page_grabs_titles_pulls_them_and_keeps_them_in_place() {
     h.run();
     h.event(egui::Event::ModifiersChanged(egui::Modifiers::NONE));
     h.run();
-    h.snapshot("sections-pulled-pop-dark");
+    h.page_shot("sections-pulled-pop-dark");
     // A click folds the last: its title stays, its room stays empty.
     let builds = laid_out(&h.ctx, GRABBED)[2].band;
     h.get_by_label("Builds, 3").click();
@@ -5543,7 +5604,7 @@ fn the_sections_page_windows_a_long_section_and_a_list_keeps_its_own_scroll() {
     let after = laid_out(&h.ctx, WINDOWED);
     assert_eq!(after[0].scroll, end[0].scroll);
     assert_eq!(after[0].band.top(), top);
-    h.snapshot("sections-scrolled-pop-dark");
+    h.page_shot("sections-scrolled-pop-dark");
 
     // The list below scrolls itself, in a body with no scroll of ours.
     assert!(h.query_by_label("Folders").is_some());
@@ -5591,14 +5652,14 @@ fn the_progress_page_gives_values_and_ranges_and_still_frames() {
     for theme in ["pop-dark", "pop-light"] {
         let mut h = harness(options(theme, Density::Comfortable, "progress"));
         h.run();
-        results.add(h.try_snapshot(format!("progress-{theme}")));
+        results.add(h.try_page_shot(format!("progress-{theme}")));
     }
     let mut h = harness(Options {
         reduced_motion: true,
         ..options("pop-dark", Density::Comfortable, "progress")
     });
     h.run();
-    results.add(h.try_snapshot("progress-reduced-pop-dark"));
+    results.add(h.try_page_shot("progress-reduced-pop-dark"));
     let node = |h: &Harness<'_, Gallery>, role: Role, label: &str| {
         let n = h.get_by_role_and_label(role, label);
         let a = n.accesskit_node();
@@ -5657,7 +5718,7 @@ fn a_command_the_host_answers_later_keeps_its_button_busy() {
     // After the delay, a spinner in the icon's place.
     motion::freeze(&h.ctx, 0.4);
     h.run();
-    h.snapshot("progress-busy-pop-dark");
+    h.page_shot("progress-busy-pop-dark");
     h.get_by_label("Refuse them").click();
     h.run();
     assert!(!app.running(&CMD_SLOW_EXPORT));
@@ -5671,7 +5732,7 @@ fn a_command_the_host_answers_later_keeps_its_button_busy() {
 fn layout_by_role(theme: &str) {
     let mut h = harness(options(theme, Density::Comfortable, "roles"));
     h.run();
-    h.snapshot(format!("roles-{theme}"));
+    h.page_shot(format!("roles-{theme}"));
     assert!(h.query_by_label("Nothing clicked yet.").is_some());
     // Rows and grids: the wide grid keeps headers beside values, the
     // narrow one folds them over their values.
@@ -5707,7 +5768,7 @@ fn the_layout_by_role_page_in_the_light_theme() {
 fn skeletons_are_busy_until_the_content_loads_and_empty_states_act() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "placeholders"));
     h.run();
-    h.snapshot("placeholders-pop-dark");
+    h.page_shot("placeholders-pop-dark");
     let queue = h.get_by_label("Loading the queue");
     assert!(queue.accesskit_node().is_busy());
     h.get_by_label("Import images").click();
@@ -5859,7 +5920,7 @@ fn the_jobs_centre_opens_a_jobs_log_console_in_the_page_and_the_popover() {
     assert!(jobs.expanded("gallery-export"));
     let console = h.get_by_label("Log of Export 12 images");
     assert_eq!(console.accesskit_node().role(), Role::Terminal);
-    h.snapshot("jobs-pop-dark");
+    h.body_shot("jobs-pop-dark");
     // The status bar's item opens the same list; the console is open
     // there too, its state remembered per job.
     h.get_by_label_contains("Jobs: ").click();
@@ -5869,7 +5930,7 @@ fn the_jobs_centre_opens_a_jobs_log_console_in_the_page_and_the_popover() {
             .count(),
         2
     );
-    h.snapshot("jobs-popover-pop-dark");
+    h.body_shot("jobs-popover-pop-dark");
     // Closed from the popover, closed everywhere.
     h.query_all_by_label("Hide the log of Export 12 images")
         .last()
@@ -5906,7 +5967,7 @@ fn the_terminal_page_shows_a_log_and_routes_keys_through_hooks_and_the_keymap() 
     h.run();
     h.remove_cursor();
     h.run();
-    h.snapshot("terminal-pop-dark");
+    h.page_shot("terminal-pop-dark");
     let read = |h: &mut Harness<'_, Gallery>, id: &str| {
         h.state_mut()
             .app
@@ -5992,7 +6053,7 @@ fn the_library_page_culls_filters_and_compares() {
     );
     h.remove_cursor();
     h.run();
-    h.snapshot("library-pop-dark");
+    h.page_shot("library-pop-dark");
     // The comparison: the first three images, one marked the best.
     h.get_by_label("Compare").click();
     h.run();
@@ -6003,7 +6064,7 @@ fn the_library_page_culls_filters_and_compares() {
     h.run();
     h.remove_cursor();
     h.run();
-    h.snapshot("library-compare-pop-dark");
+    h.page_shot("library-compare-pop-dark");
 }
 
 #[test]
@@ -6070,7 +6131,7 @@ fn a_kit_restyles_the_library() {
     h.run();
     h.remove_cursor();
     h.run();
-    h.snapshot("library-kit");
+    h.page_shot("library-kit");
 }
 
 #[test]
@@ -6095,7 +6156,7 @@ fn a_cell_s_stars_preview_a_lower_rating_over_the_current_one() {
     let first = star(&h, "Set 1 of 5");
     h.hover_at(first.center());
     h.run();
-    h.snapshot("library-rating-preview-pop-dark");
+    h.page_shot("library-rating-preview-pop-dark");
 }
 
 #[test]
@@ -6120,7 +6181,7 @@ fn the_theme_editor_page_edits_a_token_measures_it_and_undoes() {
         if token == "blue.9" {
             assert!(h.query_by_label("Generate blue").is_some());
         }
-        results.add(h.try_snapshot(format!("theme-editor-{theme}")));
+        results.add(h.try_page_shot(format!("theme-editor-{theme}")));
     }
     // The fonts tab.
     let mut h = harness(options("pop-dark", Density::Comfortable, "theme-editor"));
@@ -6129,7 +6190,7 @@ fn the_theme_editor_page_edits_a_token_measures_it_and_undoes() {
     h.run();
     egui_pop_test::assert_all_named(&h);
     assert!(h.query_by_label("Apply the fonts").is_some());
-    results.add(h.try_snapshot("theme-editor-fonts-pop-dark"));
+    results.add(h.try_page_shot("theme-editor-fonts-pop-dark"));
 
     let mut h = harness(options("pop-dark", Density::Comfortable, "theme-editor"));
     h.run();
@@ -6184,7 +6245,7 @@ fn the_tips_page_dismisses_a_tip_and_remembers_it_in_the_settings() {
     egui_pop_test::assert_all_named(&h);
     assert!(h.query_by_label("Go through the pages").is_some());
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("tips-pop-dark"));
+    results.add(h.try_page_shot("tips-pop-dark"));
     h.get_by_label("Don't show again").click();
     h.run();
     assert!(h.query_by_label("Go through the pages").is_none());
@@ -6271,7 +6332,7 @@ fn help_says_about_the_gallery_and_links_to_the_repository_and_the_docs() {
     assert!(h.query_by_label("Source code").is_some());
     assert!(h.query_by_label("MIT OR Apache-2.0").is_some());
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("about-pop-dark"));
+    results.add(h.try_page_shot("about-pop-dark"));
     // The dialog.
     h.get_by_label("Open the About dialog").click();
     for _ in 0..4 {
@@ -6280,7 +6341,7 @@ fn help_says_about_the_gallery_and_links_to_the_repository_and_the_docs() {
     assert!(egui_pop::core::overlay::modal_open(&h.ctx));
     assert!(h.query_by_label("About egui-pop gallery").is_some());
     egui_pop_test::assert_all_named(&h);
-    results.add(h.try_snapshot("about-dialog-pop-dark"));
+    results.add(h.try_page_shot("about-dialog-pop-dark"));
     // Agents read the same; the version info names the renderer.
     let read = h
         .state_mut()
@@ -6340,7 +6401,7 @@ fn a_kit_redraws_the_workbench_tabs_from_the_theme_alone() {
     assert!(kit.problems.is_empty(), "{:?}", kit.problems);
     h.run();
     h.run();
-    h.snapshot("workbench-kit-underline");
+    h.body_shot("workbench-kit-underline");
 }
 
 #[test]
@@ -6390,7 +6451,7 @@ fn a_kit_restyles_the_rows_of_a_table() {
     h.run();
     h.remove_cursor();
     h.run();
-    h.snapshot("table-kit-rows");
+    h.page_shot("table-kit-rows");
 }
 
 #[test]
@@ -6418,7 +6479,7 @@ fn a_kit_puts_the_title_at_the_start_of_the_title_bar() {
     assert_eq!(kit.title_bar.data.align, egui_pop::core::kit::Align::Start);
     h.run();
     h.run();
-    h.snapshot("frame-kit-title-start");
+    h.page_shot("frame-kit-title-start");
 }
 
 #[test]
@@ -6444,7 +6505,7 @@ fn a_kit_gives_the_window_buttons_the_macos_flavour() {
     h.get_by_label("Minimize").hover();
     h.run();
     h.run();
-    h.snapshot("frame-kit-macos");
+    h.page_shot("frame-kit-macos");
 }
 
 #[test]
@@ -6484,7 +6545,7 @@ fn a_kit_restyles_a_dialogs_frame_from_the_theme_alone() {
     h.get_by_label("Export settings").click();
     h.run();
     h.run();
-    h.snapshot("dialogs-kit-square");
+    h.page_shot("dialogs-kit-square");
 }
 
 #[test]
@@ -6528,7 +6589,7 @@ fn a_kit_restyles_the_palettes_bands_from_the_theme_alone() {
     h.query_all_by_label("Toolbox").last().unwrap().hover();
     h.run();
     h.run();
-    h.snapshot("palettes-kit-band");
+    h.page_shot("palettes-kit-band");
 }
 
 #[test]
@@ -6565,7 +6626,7 @@ fn a_kit_restyles_menu_items_from_the_theme_alone() {
     h.run();
     topmost(&h, "Zoom").hover();
     h.run();
-    h.snapshot("menus-kit-bar");
+    h.page_shot("menus-kit-bar");
 }
 
 #[test]
@@ -6638,7 +6699,7 @@ fn a_kit_restyles_sliders_from_the_theme_alone() {
     );
     h.remove_cursor();
     h.run();
-    h.snapshot("sliders-kit-flat");
+    h.page_shot("sliders-kit-flat");
 }
 
 #[test]
@@ -6705,14 +6766,14 @@ fn a_kit_restyles_egui_s_small_widgets_from_the_theme_alone() {
     );
     h.remove_cursor();
     h.run();
-    h.snapshot("builtins-kit-toggles");
+    h.page_shot("builtins-kit-toggles");
 }
 
 #[test]
 fn egui_s_widgets_in_a_scope_follow_their_kit_component() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "scoped"));
     h.run();
-    h.snapshot("scoped-pop-dark");
+    h.page_shot("scoped-pop-dark");
     // Below the rows and grids: brought into view first.
     h.get_by_label("danger").scroll_to_me();
     h.run();
@@ -6789,7 +6850,7 @@ fn a_kit_restyles_egui_s_own_widgets_in_a_scope_from_the_theme_alone() {
     h.run();
     h.remove_cursor();
     h.run();
-    h.snapshot("scoped-kit-restyled");
+    h.page_shot("scoped-kit-restyled");
 }
 
 #[test]
@@ -6807,7 +6868,7 @@ fn a_folded_side_area_shows_its_strip_and_a_click_unfolds_it() {
             .folded
             .contains(&egui_pop::model::panels::Area::StartSide)
     );
-    h.snapshot("workbench-folded-pop-dark");
+    h.body_shot("workbench-folded-pop-dark");
     h.get_by_label("Unfold the start side bar").click();
     h.run();
     h.run();
@@ -6895,7 +6956,7 @@ fn a_side_area_lies_over_the_centre_with_its_shadow() {
     assert!(wide.left() < centre.left() - 100.0, "{wide:?} {centre:?}");
     assert!(app.area_rect(Area::StartSide).unwrap().intersects(wide));
     assert!(h.query_by_label("Fold the start side bar").is_some());
-    h.snapshot("workbench-over-pop-dark");
+    h.body_shot("workbench-over-pop-dark");
 }
 
 #[test]
@@ -6918,7 +6979,7 @@ fn the_preview_page_opens_an_image_viewport_in_a_custom_dialog() {
         .expect("the preview's viewport is mounted");
     assert_eq!(m.host, "dialog.custom");
     assert_eq!(m.fit.cell(), "if c3 c9");
-    h.snapshot("preview-dialog-pop-dark");
+    h.page_shot("preview-dialog-pop-dark");
     // Enter exports, with the view the preview was left at.
     h.key_press(egui::Key::Enter);
     let _ = h.run_ok();
@@ -6985,7 +7046,7 @@ fn the_pointer_page_switches_profile_and_lists_its_gestures() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "pointer"));
     h.run();
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("pointer-pop-dark"));
+    results.add(h.try_page_shot("pointer-pop-dark"));
     let app = h.state().app.handle().clone();
     assert_eq!(egui_pop::api::pointer::profile_id(&app), "document");
     h.get_by_label("darktable").click();
@@ -7092,7 +7153,7 @@ fn the_font_pairs_page_compares_each_pair_and_measures_their_digits() {
         13.0
     )));
     assert!(!all_equal(&digit_advances(&h.ctx, family("Inter"), 13.0)));
-    h.snapshot("fonts-pop-dark");
+    h.page_shot("fonts-pop-dark");
 }
 
 /// Zen mode entered from the View menu: its way out is in sight, and
@@ -7231,7 +7292,7 @@ fn the_page_list_draws_its_bar_at_rest_in_a_short_window() {
     let (end, limit) = page_title_room(&h);
     assert!(limit >= end, "{limit}, {end}");
     unveil(&mut h);
-    h.snapshot("pages-short-pop-dark");
+    shot::passed(h.try_shot_of("pages-short-pop-dark", shot::bars(&h).side));
 }
 
 /// Where the page list's text starts and where the longest title ends, in the
@@ -7628,7 +7689,7 @@ fn a_page_scrolls_by_the_wheel_in_a_short_window_and_a_canvas_keeps_it() {
         "{view:?}"
     );
     assert!(!vertical_bars(&h).is_empty());
-    h.snapshot("page-short-pop-dark");
+    h.page_shot("page-short-pop-dark");
     // The wheel over a node graph pans it: its page stays.
     let mut h = short_window("node-graph");
     let over = h.get_by_label("Processing graph").rect().center();
@@ -7871,7 +7932,7 @@ fn the_page_list_folds_its_groups_and_remembers() {
     assert_eq!(titled(&h, "Tokens table"), 1, "the others stay");
     assert_eq!(h.state().page(), StoryId::from_static("overview"));
     unveil(&mut h);
-    h.snapshot("pages-folded-pop-dark");
+    shot::passed(h.try_shot_of("pages-folded-pop-dark", shot::bars(&h).side));
     // With the window's layout: a new window finds it folded...
     let reopened = |page: &str, data: egui::util::IdTypeMap| {
         let options = options("pop-dark", Density::Comfortable, page);
@@ -8046,7 +8107,7 @@ fn the_page_list_filter_finds_a_page_by_its_description() {
     h.run();
     h.run();
     unveil(&mut h);
-    h.snapshot("pages-filtered-pop-dark");
+    shot::passed(h.try_shot_of("pages-filtered-pop-dark", shot::bars(&h).side));
     // Nothing found says so.
     h.event(egui::Event::Text("zzz".into()));
     h.run();
@@ -8161,7 +8222,7 @@ fn the_timeline_page_shows_a_timeline_per_scale_and_takes_its_keys() {
     for theme in ["pop-dark", "pop-light"] {
         let mut h = harness(options(theme, Density::Comfortable, "timeline"));
         h.run();
-        results.add(h.try_snapshot(format!("timeline-{theme}")));
+        results.add(h.try_page_shot(format!("timeline-{theme}")));
     }
     let mut h = harness(options("pop-dark", Density::Comfortable, "timeline"));
     h.run();
@@ -8202,7 +8263,7 @@ fn the_timeline_page_shows_a_timeline_per_scale_and_takes_its_keys() {
         (Some("playing"), Some(2.0))
     );
     assert_eq!(track["selected"], 3);
-    results.add(h.try_snapshot("timeline-keys-pop-dark"));
+    results.add(h.try_page_shot("timeline-keys-pop-dark"));
 }
 
 #[test]
@@ -8212,7 +8273,7 @@ fn the_dj_page_sets_hot_cues_loops_and_syncs_a_deck_from_its_keys() {
     for theme in ["pop-dark", "pop-light"] {
         let mut h = harness(options(theme, Density::Comfortable, "dj"));
         h.run();
-        results.add(h.try_snapshot(format!("dj-{theme}")));
+        results.add(h.try_page_shot(format!("dj-{theme}")));
     }
     let mut h = harness(options("pop-dark", Density::Comfortable, "dj"));
     h.run();
@@ -8264,7 +8325,7 @@ fn the_dj_page_sets_hot_cues_loops_and_syncs_a_deck_from_its_keys() {
     assert_eq!(b["play"], "playing");
     // The song stays one clip, whatever the keys did.
     assert_eq!(b["tracks"][0]["clips"].as_array().unwrap().len(), 1);
-    results.add(h.try_snapshot("dj-keys-pop-dark"));
+    results.add(h.try_page_shot("dj-keys-pop-dark"));
 }
 
 #[test]
@@ -8330,7 +8391,7 @@ fn the_dj_decks_waveform_is_dragged_nudged_and_stepped_by_the_wheel() {
         (deck_b(&h)["play"].as_str(), deck_b(&h)["speed"].as_f64()),
         (Some("playing"), Some(1.0))
     );
-    results.add(h.try_snapshot("dj-drag-pop-dark"));
+    results.add(h.try_page_shot("dj-drag-pop-dark"));
     // Cue while playing: back to the cue point (the start), paused.
     h.query_all_by_label("Cue").nth(1).unwrap().click();
     h.run();
@@ -8375,7 +8436,7 @@ fn the_editor_pages_transport_runs_the_keys_commands() {
         .hover();
     h.run_steps(45);
     assert!(h.query_by_label("Play backward (J)").is_some());
-    results.add(h.try_snapshot("editor-transport-pop-dark"));
+    results.add(h.try_page_shot("editor-transport-pop-dark"));
 }
 
 #[test]
@@ -8386,7 +8447,7 @@ fn the_editor_page_splits_at_the_playhead_and_ripple_deletes() {
     for theme in ["pop-dark", "pop-light"] {
         let mut h = harness(options(theme, Density::Comfortable, "editor"));
         h.run();
-        results.add(h.try_snapshot(format!("editor-{theme}")));
+        results.add(h.try_page_shot(format!("editor-{theme}")));
     }
     let mut h = harness(options("pop-dark", Density::Comfortable, "editor"));
     h.run();
@@ -8475,7 +8536,7 @@ fn the_editor_page_splits_at_the_playhead_and_ripple_deletes() {
         "{s}"
     );
     assert_eq!(s["speed"], 2.0);
-    results.add(h.try_snapshot("editor-keys-pop-dark"));
+    results.add(h.try_page_shot("editor-keys-pop-dark"));
 }
 
 #[test]
@@ -8485,7 +8546,7 @@ fn the_tracks_page_shows_clips_that_the_keys_select_move_and_trim() {
     for theme in ["pop-dark", "pop-light"] {
         let mut h = harness(options(theme, Density::Comfortable, "tracks"));
         h.run();
-        results.add(h.try_snapshot(format!("tracks-{theme}")));
+        results.add(h.try_page_shot(format!("tracks-{theme}")));
     }
     let mut h = harness(options("pop-dark", Density::Comfortable, "tracks"));
     h.run();
@@ -8522,7 +8583,7 @@ fn the_tracks_page_shows_clips_that_the_keys_select_move_and_trim() {
     assert_eq!(v1["clips"][1]["seconds"], 12.04);
     assert_eq!(edit["selected_clips"], serde_json::json!([4]));
     assert!(h.query_by_label("selected: Close-up").is_some());
-    results.add(h.try_snapshot("tracks-keys-pop-dark"));
+    results.add(h.try_page_shot("tracks-keys-pop-dark"));
 }
 
 /// Picks a mode in the file browser's switcher, a menu beyond four modes.
@@ -8544,14 +8605,14 @@ fn the_file_browser_page_shows_the_filmstrip_and_the_columns() {
         settle_thumbnails(&mut h);
     }
     egui_pop_test::assert_all_named(&h);
-    h.snapshot("file-browser-filmstrip-pop-dark");
+    h.page_shot("file-browser-filmstrip-pop-dark");
     pick_browser_mode(&mut h, "Columns");
     // The focus kept: the next column shows its thumbnail.
     for _ in 0..3 {
         settle_thumbnails(&mut h);
     }
     egui_pop_test::assert_all_named(&h);
-    h.snapshot("file-browser-columns-pop-dark");
+    h.page_shot("file-browser-columns-pop-dark");
 }
 
 #[test]
@@ -8565,7 +8626,7 @@ fn the_file_browser_page_shows_the_carousel_and_the_agenda() {
     }
     egui_pop_test::assert_all_named(&h);
     assert!(h.query_by_label("lighthouse.jpg").is_some(), "a neighbour");
-    h.snapshot("file-browser-carousel-pop-dark");
+    h.page_shot("file-browser-carousel-pop-dark");
     pick_browser_mode(&mut h, "Agenda");
     for _ in 0..3 {
         settle_thumbnails(&mut h);
@@ -8576,7 +8637,7 @@ fn the_file_browser_page_shows_the_carousel_and_the_agenda() {
             .is_some(),
         "the folders, without a time"
     );
-    h.snapshot("file-browser-agenda-pop-dark");
+    h.page_shot("file-browser-agenda-pop-dark");
 }
 
 #[test]
@@ -8592,7 +8653,7 @@ fn the_file_browser_page_groups_its_agenda_by_month_and_collapses_a_group() {
         settle_thumbnails(&mut h);
     }
     egui_pop_test::assert_all_named(&h);
-    h.snapshot("file-browser-agenda-months-pop-dark");
+    h.page_shot("file-browser-agenda-months-pop-dark");
 }
 
 #[test]
@@ -8618,7 +8679,7 @@ fn the_file_browser_page_lights_the_folder_a_drag_is_over_and_takes_the_drop() {
         .unwrap_or_default();
     assert!(caption.contains("2026"), "the caption: {caption:?}");
     egui_pop_test::assert_all_named(&h);
-    h.snapshot("file-browser-drop-pop-dark");
+    h.page_shot("file-browser-drop-pop-dark");
     h.event(egui::Event::PointerButton {
         pos: over,
         button: egui::PointerButton::Primary,

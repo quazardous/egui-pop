@@ -125,6 +125,12 @@ Every snapshot the gallery's tests keep, by kind, four to a row. They
 are regenerated with the tests (see [Testing](testing.md)), so they show
 the current state. Click one for its full size.
 
+A picture is cut to what it tests: a page's shows the page and its
+playground, without the gallery's bars; one that drives the side bar,
+the bottom area or the status bar shows everything under the top bar;
+what floats over the window (a dialog, a menu, a toast) is shown whole.
+The bars have [their own pictures](#the-bars).
+
 ### Look and feel
 
 Themes, design tokens, the theme editor, icons and scaling.
@@ -534,6 +540,38 @@ the list, so a page added to the gallery changes only these.
   </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/pages-filtered-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/pages-filtered-pop-dark.png" width="200" alt="pages-filtered-pop-dark"></a><br>pages-filtered-pop-dark</td>
+  </tr>
+</table>
+
+### The bars
+
+The gallery's own bars around a page: the top bar, the side bar (its
+list veiled) and the status bar, per theme and in the compact density,
+and one picture of the whole window. Every other shot is cut to what it
+tests (a page's to the page and its playground), so a change to a bar
+changes only these.
+
+<table>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/chrome-top-bar-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/chrome-top-bar-pop-dark.png" width="200" alt="chrome-top-bar-pop-dark"></a><br>chrome-top-bar-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/chrome-side-bar-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/chrome-side-bar-pop-dark.png" width="200" alt="chrome-side-bar-pop-dark"></a><br>chrome-side-bar-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/chrome-status-bar-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/chrome-status-bar-pop-dark.png" width="200" alt="chrome-status-bar-pop-dark"></a><br>chrome-status-bar-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/chrome-top-bar-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/chrome-top-bar-pop-light.png" width="200" alt="chrome-top-bar-pop-light"></a><br>chrome-top-bar-pop-light</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/chrome-side-bar-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/chrome-side-bar-pop-light.png" width="200" alt="chrome-side-bar-pop-light"></a><br>chrome-side-bar-pop-light</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/chrome-status-bar-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/chrome-status-bar-pop-light.png" width="200" alt="chrome-status-bar-pop-light"></a><br>chrome-status-bar-pop-light</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/chrome-top-bar-pop-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/chrome-top-bar-pop-high-contrast.png" width="200" alt="chrome-top-bar-pop-high-contrast"></a><br>chrome-top-bar-pop-high-contrast</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/chrome-side-bar-pop-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/chrome-side-bar-pop-high-contrast.png" width="200" alt="chrome-side-bar-pop-high-contrast"></a><br>chrome-side-bar-pop-high-contrast</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/chrome-status-bar-pop-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/chrome-status-bar-pop-high-contrast.png" width="200" alt="chrome-status-bar-pop-high-contrast"></a><br>chrome-status-bar-pop-high-contrast</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/chrome-top-bar-pop-dark-compact.png"><img src="../crates/egui-pop-gallery/tests/snapshots/chrome-top-bar-pop-dark-compact.png" width="200" alt="chrome-top-bar-pop-dark-compact"></a><br>chrome-top-bar-pop-dark-compact</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/chrome-side-bar-pop-dark-compact.png"><img src="../crates/egui-pop-gallery/tests/snapshots/chrome-side-bar-pop-dark-compact.png" width="200" alt="chrome-side-bar-pop-dark-compact"></a><br>chrome-side-bar-pop-dark-compact</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/chrome-status-bar-pop-dark-compact.png"><img src="../crates/egui-pop-gallery/tests/snapshots/chrome-status-bar-pop-dark-compact.png" width="200" alt="chrome-status-bar-pop-dark-compact"></a><br>chrome-status-bar-pop-dark-compact</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/chrome-window-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/chrome-window-pop-dark.png" width="200" alt="chrome-window-pop-dark"></a><br>chrome-window-pop-dark</td>
   </tr>
 </table>
 

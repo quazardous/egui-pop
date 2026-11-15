@@ -13,6 +13,8 @@ use egui_pop::theme::Density;
 use egui_pop_gallery::{Gallery, Options};
 use egui_pop_test::SharedGpu as _;
 
+use crate::shot::Shots as _;
+
 fn harness(page: &str) -> Harness<'static, Gallery> {
     let options = Options {
         theme: "pop-dark".to_string(),
@@ -88,7 +90,7 @@ fn a_click_names_the_button_without_pressing_it_and_copy_holds_it() {
     h.get_by_label("Inspected element");
     h.get_by_label("Button \"Announce \\\"Saved\\\"\" (widget)");
     let mut results = egui_kittest::SnapshotResults::new();
-    results.add(h.try_snapshot("inspect-dialog-pop-dark"));
+    results.add(h.try_page_shot("inspect-dialog-pop-dark"));
     h.get_by_role_and_label(Role::Button, "Copy").click();
     h.run();
     h.get_by_label("Copied.");

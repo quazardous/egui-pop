@@ -45,6 +45,10 @@ pub struct Nav {
     list_rect: Mutex<Option<Rect>>,
     /// Whether the list is drawn over with the side bar's fill.
     list_veiled: AtomicBool,
+    /// Where the page's block drew last, and in which frame.
+    block: Mutex<Option<(u64, Rect)>>,
+    /// Where the playground's block drew last, and in which frame.
+    playground_block: Mutex<Option<(u64, Rect)>>,
 }
 
 /// How the page shown, or its playground, was drawn last: for the tests.
@@ -80,6 +84,22 @@ impl Nav {
     /// bar closed.
     pub fn list_rect(&self) -> Option<Rect> {
         *lock(&self.list_rect)
+    }
+
+    /// The page's region as drawn last, in the window's coordinates: the
+    /// main zone's block, heading included, and the playground's beside it
+    /// when the inspector showed in the same frame. Neither the top bar,
+    /// the side bar nor the status bar is in it; `None` before the first
+    /// frame.
+    ///
+    /// For the snapshots of pages, cut to it: a change to the bars around
+    /// the page then leaves the pages' shots alone.
+    pub fn region(&self) -> Option<Rect> {
+        let (frame, page) = (*lock(&self.block))?;
+        Some(match *lock(&self.playground_block) {
+            Some((drawn, playground)) if drawn == frame => page.union(playground),
+            _ => page,
+        })
     }
 
     /// Draws the page list over with the side bar's fill, or no longer.
@@ -180,6 +200,8 @@ impl Plugin for Shell {
                 playground: Mutex::new(None),
                 list_rect: Mutex::new(None),
                 list_veiled: AtomicBool::new(false),
+                block: Mutex::new(None),
+                playground_block: Mutex::new(None),
             },
         )?;
         app.set_context("galleryPage", self.first.as_str());
@@ -569,8 +591,20 @@ fn page_scroll<R>(
     .inner
 }
 
+/// Where a block draws, half of its zone's margin around it, and the frame:
+/// what [`Nav::region`] is made of.
+fn block_drawn(ui: &Ui) -> Option<(u64, Rect)> {
+    let rect = ui
+        .max_rect()
+        .expand(4.0)
+        .intersect(ui.clip_rect())
+        .intersect(ui.ctx().content_rect());
+    Some((ui.ctx().cumulative_frame_nr(), rect))
+}
+
 /// The page shown.
 fn page(ui: &mut Ui, app: &AppHandle) {
+    *lock(&nav(app).block) = block_drawn(ui);
     let id = nav(app).page();
     let Some(info) = app.stories().into_iter().find(|s| s.id == id) else {
         ui.weak(format!("No page `{id}`."));
@@ -604,6 +638,7 @@ fn page(ui: &mut Ui, app: &AppHandle) {
 
 /// The page's playground.
 fn playground(ui: &mut Ui, app: &AppHandle) {
+    *lock(&nav(app).playground_block) = block_drawn(ui);
     ui.heading("Playground");
     ui.separator();
     let id = nav(app).page();
