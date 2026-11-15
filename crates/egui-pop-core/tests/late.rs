@@ -59,10 +59,7 @@ fn harness(
 }
 
 fn value(h: &Harness<'static, Cell>) -> Option<String> {
-    h.get_by_label("Free space")
-        .accesskit_node()
-        .value()
-        .map(String::from)
+    h.get_by_label("Free space").accesskit_node().value()
 }
 
 fn busy(h: &Harness<'static, Cell>) -> bool {
