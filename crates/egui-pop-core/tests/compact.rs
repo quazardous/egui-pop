@@ -2,13 +2,16 @@
 //! whatever the word, is named by its name and valued by its word,
 //! chooses with the arrows, Home and End while its list is closed, and
 //! opens with Space; a menu row fills its room, is a button named by its
-//! text and note, focused by Tab and pressed by Space or Enter.
+//! text and note, focused by Tab and pressed by Space or Enter; a row
+//! button fits a dense row, is a button named by its words, focused by
+//! Tab and pressed by Space or Enter.
 
 use egui::accesskit::Role;
 use egui::{Id, Key, Rect, vec2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
-use egui_pop_core::compact::{ChoiceCell, MenuRow};
+use egui_pop_core::compact::{ChoiceCell, MenuRow, RowButton};
+use egui_pop_core::kit::Tone;
 use egui_pop_core::theme::{self, ThemeSpec};
 
 const MODES: &[&str] = &[
@@ -246,6 +249,109 @@ fn a_disabled_menu_row_says_so_and_takes_no_press() {
     h.state_mut().disabled = true;
     h.run();
     let node = h.get_by_label("Show all");
+    assert!(node.accesskit_node().is_disabled());
+    node.click();
+    h.run();
+    assert!(h.state().clicks.is_empty());
+}
+
+#[derive(Default)]
+struct Buttons {
+    rects: Vec<Rect>,
+    clicks: Vec<&'static str>,
+    text_height: f32,
+    disabled: bool,
+}
+
+fn buttons() -> Harness<'static, Buttons> {
+    let mut h = Harness::builder()
+        .with_size(vec2(300.0, 120.0))
+        .build_ui_state(
+            |ui, s: &mut Buttons| {
+                s.rects.clear();
+                ui.horizontal(|ui| {
+                    s.text_height = ui.label("Import").rect.height();
+                    let buttons = [
+                        ("cancel", RowButton::new("Cancel")),
+                        ("retry", RowButton::new("Retry").tone(Tone::Accent)),
+                        ("tall", RowButton::new("Tall").height(30.0)),
+                    ];
+                    for (key, button) in buttons {
+                        let r = ui.add_enabled(!s.disabled, button);
+                        s.rects.push(r.rect);
+                        if r.clicked() {
+                            s.clicks.push(key);
+                        }
+                    }
+                });
+            },
+            Buttons::default(),
+        );
+    theme::install(&h.ctx, &ThemeSpec::new("pop-dark"));
+    h.run();
+    h
+}
+
+#[test]
+fn a_row_button_is_a_button_named_by_its_words() {
+    let h = buttons();
+    for name in ["Cancel", "Retry", "Tall"] {
+        assert_eq!(h.get_by_label(name).accesskit_node().role(), Role::Button);
+    }
+}
+
+#[test]
+fn a_row_button_fits_a_dense_row() {
+    let h = buttons();
+    let s = h.state();
+    let control = h.ctx.global_style().spacing.interact_size.y;
+    let row = egui_pop_core::theme::Tokens::of(&h.ctx).size.row_height;
+    let cancel = s.rects[0];
+    assert!(
+        cancel.height() < control,
+        "lower than a control ({control}): {cancel:?}"
+    );
+    assert!(
+        cancel.height() <= row,
+        "no taller than a row ({row}): {cancel:?}"
+    );
+    assert!(
+        cancel.height() >= s.text_height,
+        "holds its words ({}): {cancel:?}",
+        s.text_height
+    );
+    assert!(
+        cancel.width() > cancel.height(),
+        "wider than high: {cancel:?}"
+    );
+    assert_eq!(s.rects[1].height(), cancel.height(), "one default height");
+    assert_eq!(s.rects[2].height(), 30.0, "a height given is kept");
+}
+
+#[test]
+fn a_row_button_is_focused_by_tab_and_pressed_by_space_or_enter() {
+    let mut h = buttons();
+    h.key_press(Key::Tab);
+    h.run();
+    assert!(h.get_by_label("Cancel").is_focused());
+    h.key_press(Key::Space);
+    h.run();
+    h.key_press(Key::Tab);
+    h.run();
+    assert!(h.get_by_label("Retry").is_focused());
+    h.key_press(Key::Enter);
+    h.run();
+    h.get_by_label("Tall").click();
+    h.run();
+    assert_eq!(h.state().clicks, ["cancel", "retry", "tall"]);
+}
+
+#[test]
+fn a_disabled_row_button_says_so_and_takes_no_press() {
+    let mut h = buttons();
+    h.state_mut().disabled = true;
+    h.run();
+    let node = h.get_by_label("Cancel");
     assert!(node.accesskit_node().is_disabled());
     node.click();
     h.run();
