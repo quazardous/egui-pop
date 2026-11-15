@@ -67,10 +67,13 @@ fn gone_for_good(m: &mut MultiWindow, how: &str) {
     assert_eq!(ids(m.app()), ["main"], "{how}");
 }
 
+/// A way to close the Settings window.
+type Close = fn(&mut MultiWindow, ViewportId);
+
 #[test]
 fn the_settings_window_closed_by_every_way_is_gone_for_good() {
     let mut m = multi();
-    let ways: [(&str, fn(&mut MultiWindow, ViewportId)); 4] = [
+    let ways: [(&str, Close); 4] = [
         ("close button", |m, v| {
             m.request_close(v);
             m.window_pass(v);
