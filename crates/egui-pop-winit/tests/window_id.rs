@@ -7,7 +7,8 @@
 //! no window to create: the test says so and passes.
 //!
 //! Its own `main` (`harness = false`): macOS creates windows on the main
-//! thread only.
+//! thread only. It answers the slice of libtest's command line
+//! cargo-nextest uses (`--list`, a name filter, `--ignored`).
 
 use raw_window_handle::HasWindowHandle;
 use winit::application::ApplicationHandler;
@@ -69,7 +70,49 @@ fn check(event_loop: &ActiveEventLoop) -> Result<String, String> {
     }
 }
 
+/// The slice of libtest's command line cargo-nextest relies on: it lists
+/// a test binary with `--list --format terse` (and again with
+/// `--ignored`), expecting `name: test` lines, then runs each test by
+/// name. Returns whether the test is to run.
+fn libtest_cli() -> bool {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let ignored = args.iter().any(|a| a == "--ignored");
+    if args.iter().any(|a| a == "--list") {
+        if !ignored {
+            println!("window_id: test");
+        }
+        return false;
+    }
+    // A name filter (an argument that is neither an option nor an
+    // option's value) that does not match this test runs nothing.
+    let mut filters = Vec::new();
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        if matches!(
+            a.as_str(),
+            "--format" | "--test-threads" | "--color" | "--skip" | "-Z"
+        ) {
+            it.next();
+        } else if !a.starts_with('-') {
+            filters.push(a.as_str());
+        }
+    }
+    let exact = args.iter().any(|a| a == "--exact");
+    let matches = filters.is_empty()
+        || filters.iter().any(|f| {
+            if exact {
+                *f == "window_id"
+            } else {
+                "window_id".contains(f)
+            }
+        });
+    !ignored && matches
+}
+
 fn main() {
+    if !libtest_cli() {
+        return;
+    }
     let event_loop = match EventLoop::new() {
         Ok(l) => l,
         Err(e) => {

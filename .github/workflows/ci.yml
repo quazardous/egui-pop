@@ -439,9 +439,9 @@ jobs:
           knope pending-versions
           git status --short
       # A crate not yet on crates.io has no baseline to compare with
-      # (egui-pop-hooks until its first release).
+      # (egui-pop-hooks and egui-pop-winit until their first release).
       - if: vars.UBUNTU_ARCHIVE_DOWN != 'true'
-        run: cargo semver-checks check-release --workspace --exclude egui-pop-agent --exclude egui-pop-hooks
+        run: cargo semver-checks check-release --workspace --exclude egui-pop-agent --exclude egui-pop-hooks --exclude egui-pop-winit
       # Ubuntu's archive down, so no GStreamer or WebKitGTK: every crate
       # whose features need neither as usual, then egui-pop and
       # egui-pop-views with the features cargo-semver-checks would pick
@@ -451,7 +451,7 @@ jobs:
         run: |
           echo "::warning::UBUNTU_ARCHIVE_DOWN is set: semver checks leave out the video and webview features"
           echo "- Semver checks left out the video and webview features (UBUNTU_ARCHIVE_DOWN)" >> "$GITHUB_STEP_SUMMARY"
-          cargo semver-checks check-release --workspace --exclude egui-pop-agent --exclude egui-pop-hooks \
+          cargo semver-checks check-release --workspace --exclude egui-pop-agent --exclude egui-pop-hooks --exclude egui-pop-winit \
             --exclude egui-pop --exclude egui-pop-views
           for crate in egui-pop egui-pop-views; do
             features="$(cargo metadata --no-deps --format-version 1 | jq -r --arg p "$crate" '
