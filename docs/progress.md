@@ -118,7 +118,12 @@ other):
   "running, its plugin x is off" and offers Dismiss on it though it goes
   on (`Jobs::dismiss` accepts an orphaned job). The mark goes when the
   job ends or starts again, or when the plugin reconnects
-  (`job.adopted`).
+  (`job.adopted`). An orphaned job is not waited on: nothing owns it
+  and it may never end, so `Jobs::idle` (and the application's
+  `settled`) leave it out, and `Jobs::orphans` lists it apart. The
+  `jobs` collector says `orphaned` (a count) beside `idle`, and
+  `bridge.wait` answers it too: an agent sees the job without waiting
+  on it.
 
 A child job follows its parent. `plugin.disconnected` counts both ends
 (`jobs_cancelled`, `jobs_orphaned`), and each is an info line in the
@@ -163,8 +168,9 @@ impl Plugin for ScanEstimate {
 ### Agents and tests
 
 The debug bridge's `jobs` collector shows every job (state, fraction,
-counts, time left, the end of its log) and `idle`, what an agent waits
-for; its actions `cancel`, `pause`, `resume`, `retry`, `dismiss` and
+counts, time left, the end of its log), `idle`, what an agent waits
+for (no owned job going on), and `orphaned`, the jobs going on that a
+disconnected plugin left, which it does not wait for; its actions `cancel`, `pause`, `resume`, `retry`, `dismiss` and
 `clear` do what the buttons do, for the user (devtools). They write, so
 the bridge's agent is refused them: it runs the `job.cancel`,
 `job.pause`, `job.resume` and `job.retry` commands instead

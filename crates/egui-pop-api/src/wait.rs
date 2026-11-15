@@ -50,7 +50,7 @@ pub enum WaitFor {
     /// given, following from `cause` (a command's dispatch).
     Event { name: String, cause: Option<Seq> },
     /// The application is settled: no command queued or running, every
-    /// job idle, and no repaint asked for.
+    /// job idle (orphaned jobs aside), and no repaint asked for.
     Settled,
     /// The first of these that holds.
     Any(Vec<WaitFor>),
@@ -140,7 +140,8 @@ pub fn result_schema() -> Json {
             "met": { "type": "boolean" },
             "by": { "enum": ["event", "settled", null] },
             "event": { "type": ["object", "null"] },
-            "last": { "type": "integer", "description": "The journal's last sequence number: the next check's `since`." }
+            "last": { "type": "integer", "description": "The journal's last sequence number: the next check's `since`." },
+            "orphaned": { "type": "integer", "minimum": 0, "description": "Orphaned jobs going on (their plugin is disconnected): not waited on by `settled`." }
         }
     })
 }
@@ -148,12 +149,22 @@ pub fn result_schema() -> Json {
 impl AppHandle {
     /// Whether the application is settled: no command queued for the
     /// next frame or running (a host's later reply), every job idle,
-    /// and no repaint asked for.
+    /// and no repaint asked for. An orphaned job (its plugin is
+    /// disconnected) is not waited on: it may never end;
+    /// [`AppHandle::orphaned_jobs`] counts it.
     pub fn settled(&self) -> bool {
         self.queued_requests() == 0
             && !self.commands().iter().any(|(s, _)| self.running(&s.id))
             && self.service(&crate::jobs::JOBS).is_none_or(|j| j.idle())
             && !self.egui().has_requested_repaint()
+    }
+
+    /// The orphaned jobs still going on: left by a disconnected plugin,
+    /// not waited on by [`AppHandle::settled`]; 0 without the jobs
+    /// plugin. Read from the jobs fold of the journal's `job.*` events.
+    pub fn orphaned_jobs(&self) -> usize {
+        self.service(&crate::jobs::JOBS)
+            .map_or(0, |j| j.orphans().len())
     }
 
     /// Whether `until` holds now, for events after `since`; what made
@@ -170,19 +181,23 @@ impl AppHandle {
         }
     }
 
-    /// `bridge.wait`'s answer: `{ "met", "by", "event", "last" }`.
+    /// `bridge.wait`'s answer: `{ "met", "by", "event", "last",
+    /// "orphaned" }`.
     pub(crate) fn wait_answer(&self, args: &Json) -> Result<Json, String> {
         let until = WaitFor::from_args(args)?;
         let last = self.last_event();
         let since = args.get("since").and_then(Json::as_u64).unwrap_or(last);
+        let orphaned = self.orphaned_jobs();
         Ok(match self.wait_met(&until, since) {
             Some(Waited::Event(e)) => {
-                json!({ "met": true, "by": "event", "event": e, "last": last })
+                json!({ "met": true, "by": "event", "event": e, "last": last, "orphaned": orphaned })
             }
             Some(Waited::Settled) => {
-                json!({ "met": true, "by": "settled", "event": null, "last": last })
+                json!({ "met": true, "by": "settled", "event": null, "last": last, "orphaned": orphaned })
             }
-            None => json!({ "met": false, "by": null, "event": null, "last": last }),
+            None => {
+                json!({ "met": false, "by": null, "event": null, "last": last, "orphaned": orphaned })
+            }
         })
     }
 }

@@ -224,7 +224,9 @@ fn builtins() -> Vec<GeneratedTool> {
         "Waits until a journal event happens (`event`, optionally caused by `cause`), the \
          application is settled (`settled: true`), or the first of several (`any`), after the \
          event numbered `since`; held up to `deadline_ms` (5 s by default, 120 s at most). \
-         Answers `met` and, when met, `by` and the `event`; `last` is the newest event's number.",
+         Answers `met` and, when met, `by` and the `event`; `last` is the newest event's number; \
+         `orphaned` counts the jobs left going on by a disconnected plugin, which `settled` \
+         does not wait on.",
         object(json!({
             "type": "object",
             "properties": {
@@ -244,6 +246,7 @@ fn builtins() -> Vec<GeneratedTool> {
             "by": { "type": ["string", "null"] },
             "event": {},
             "last": { "type": "integer" },
+            "orphaned": { "type": "integer" },
         },
         "required": ["met"],
     })))

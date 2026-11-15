@@ -1143,9 +1143,23 @@ impl Jobs {
         self.all().into_iter().filter(|j| j.active()).collect()
     }
 
-    /// Whether no job goes on (what an agent waits for).
+    /// Whether no job that something still owns goes on (what an agent
+    /// waits for). An orphaned job ([`Job::orphaned`]: its plugin is
+    /// disconnected) may never end and nobody is there to end it, so it
+    /// is not waited on: [`Jobs::orphans`] says it apart.
     pub fn idle(&self) -> bool {
-        self.jobs.values().all(|j| !j.active())
+        self.jobs
+            .values()
+            .all(|j| !j.active() || j.orphaned.is_some())
+    }
+
+    /// The orphaned jobs still going on, in order: left by their
+    /// disconnected plugin, not counted by [`Jobs::idle`].
+    pub fn orphans(&self) -> Vec<&Job> {
+        self.all()
+            .into_iter()
+            .filter(|j| j.active() && j.orphaned.is_some())
+            .collect()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -1178,6 +1192,7 @@ impl Jobs {
     pub fn describe(&self, now: f64) -> Json {
         json!({
             "idle": self.idle(),
+            "orphaned": self.orphans().len(),
             "summary": self.summary(),
             "jobs": self.all().into_iter().map(|j| {
                 let mut v = serde_json::to_value(j).unwrap_or(Json::Null);

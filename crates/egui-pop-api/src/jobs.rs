@@ -29,7 +29,9 @@
 //!   the others, which go on, marked ([`Job::orphaned`]: the jobs centre
 //!   says "its plugin is off") until they end or the plugin is back
 //!   (`job.adopted`). `plugin.disconnected` counts both
-//!   (`jobs_cancelled`, `jobs_orphaned`).
+//!   (`jobs_cancelled`, `jobs_orphaned`). An orphaned job is not waited
+//!   on: [`JobsService::idle`] leaves it out (nothing owns it, it may
+//!   never end) and [`JobsService::orphans`] lists it.
 //! - Time left comes from the plugin's clock ([`JobsPlugin::clock`]),
 //!   the motion clock by default (`egui_pop_core::motion`, frozen in
 //!   tests); tests may give a
@@ -184,9 +186,15 @@ impl JobsService {
         self.with(Jobs::summary)
     }
 
-    /// Whether no job goes on.
+    /// Whether no job that something still owns goes on; orphaned jobs
+    /// are not waited on ([`Jobs::idle`]).
     pub fn idle(&self) -> bool {
         self.with(Jobs::idle)
+    }
+
+    /// The orphaned jobs still going on ([`Jobs::orphans`]).
+    pub fn orphans(&self) -> Vec<Job> {
+        self.with(|j| j.orphans().into_iter().cloned().collect())
     }
 
     /// A job's log from line `from` on, as far as it is kept.

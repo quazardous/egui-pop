@@ -531,6 +531,25 @@ fn a_wait_for_idle_returns_with_an_orphaned_job_going_on() {
         jobs.job("render").unwrap().orphaned.as_deref(),
         Some("worker")
     );
+    // Said apart: the model, the handle, the jobs collector and the
+    // bridge's wait answer count it.
+    assert!(jobs.idle());
+    assert_eq!(jobs.orphans().len(), 1);
+    assert_eq!(h.orphaned_jobs(), 1);
+    let snap = h.debug_snapshot();
+    assert_eq!(snap["jobs"]["idle"], true, "{snap}");
+    assert_eq!(snap["jobs"]["orphaned"], 1, "{snap}");
+    let f = h.debug_call("bridge", "wait", &json!({ "settled": true }));
+    assert!(f.ok, "{}", f.message);
+    assert_eq!(f.data["met"], true);
+    assert_eq!(f.data["orphaned"], 1);
+
+    // Its plugin back, it is owned and waited on again.
+    h.set_plugin_enabled(PluginId::from_static("worker"), true);
+    harness.run_ok();
+    assert_eq!(jobs.job("render").unwrap().orphaned, None);
+    assert!(!jobs.idle());
+    assert_eq!(h.orphaned_jobs(), 0);
 }
 
 const OPEN: CommandId = CommandId::from_static("owned.open");
