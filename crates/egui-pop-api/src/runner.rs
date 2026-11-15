@@ -75,7 +75,8 @@ pub fn screens() -> Vec<Rect> {
 }
 
 /// The raw handle of the window showing `viewport`, once it was painted
-/// and the window ids were verified ([`ids_verified`]); none for an
+/// for a redraw request (eframe paints a window still hidden at start
+/// outside of one) and the window ids were verified ([`ids_verified`]); none for an
 /// immediate viewport, or when egui-pop does not own the event loop.
 pub fn window_handle(viewport: ViewportId) -> Option<RawWindowHandle> {
     native::window_handle(viewport)

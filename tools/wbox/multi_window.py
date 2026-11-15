@@ -257,7 +257,6 @@ def run_backend(cfg: dict, comp_name: str, backend: str, out: Path) -> dict:
                 return {**result, "blocked": "libxkbcommon-x11 is not installed in this image"}
             return {**result, "error": "no ready line"}
         result["ready"] = ready[0]
-        result["runner"] = wait_for(lambda: events(jsonl, "runner"), 5)
         shown = wait_for(lambda: len([w for w in titles(comp) if w["title"] in (TITLES["a"], TITLES["b"])]) == 2, 20)
         result["windows_at_start"] = titles(comp)
         if not shown:
@@ -324,6 +323,9 @@ def run_backend(cfg: dict, comp_name: str, backend: str, out: Path) -> dict:
         time.sleep(1.5)
         result["after_close_a"] = titles(comp)
         result["errors"] = events(jsonl, "error")
+        result["runner"] = events(jsonl, "runner")
+        last = last_counts(jsonl)
+        result["a_handle"] = last.get("handle") if last else None
     finally:
         comp.stop()
 
