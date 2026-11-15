@@ -148,9 +148,13 @@ cross, the image dimmed when rejected) in the top left corner, the
 labels in the top right one, the stars in the bottom left one (empty
 stars as outlines under the pointer, or on every cell with
 `ThumbGrid::empty_stars(EmptyStars::Always)`), the badges (`Badge::new("RAW")`, toned with
-`Tone`) in the bottom right one. Colour labels have a shape each
-(circle, triangle, square, diamond, hexagon), so they never read by
-colour alone.
+`Tone`) in the bottom right one. Colour labels are same-shape
+swatches, as in Lightroom and darktable; `LabelStyle::Shape` gives them
+a shape each (circle, triangle, square, diamond, hexagon), so they
+never read by colour alone, for colour-blind users. The application's
+choice (`LabelStyle::set(ctx, Some(LabelStyle::Shape))`, from a setting
+say) wins over the theme's (`library.label-style`: `swatch` or
+`shape`); the marks bar and the grid's badges both follow it.
 
 A stack's members follow their top image in the application's order,
 each saying `Stack { top, count }`. Collapsed, the top image shows with
@@ -175,7 +179,11 @@ The boxes they sit on are the kit's (`docs/kit.md`): `thumb-cell`,
 `RatingStars`, `ColorLabels` and `FlagToggle` edit one image's marks
 (a metadata panel, a loupe): each takes the current value and returns
 the one asked for in `changed`. Focused, the stars take 0 to 5, the
-arrows, Home and End; each label and flag is a toggle button. The
+arrows, Home and End; each label and flag is a toggle button, named
+for assistive technologies, its tooltip saying what it is ("Red
+label", "Pick"). `keys(&keymap)` adds the key a `CullKeymap` binds to
+it ("Red label (6)", "Pick (P)"); `tooltip(label, text)` puts the
+application's own text instead (its own commands' keys, say). The
 stars are the shared `egui_pop::core::rating::RatingStars`
 ([Rating stars](rating.md)), as on the cells.
 
@@ -219,7 +227,9 @@ Criteria typed in the field (`rating>=3` or `rating:3`, `label:red`,
 `flag:pick`, `tag:beach` or `#beach`, `date:2024-06-01..2024-06-30`,
 `from:…`, `to:…`) filter as they are typed and become chips on Enter;
 the `+` menu adds a rating, a label or a flag; each chip has its remove
-button, and the clear button removes everything. `Filter::matches`
+button, and the clear button removes everything (the `+` button, the
+clear button and each chip's remove button show their name as a
+tooltip). `Filter::matches`
 does the usual matching on a `Candidate` (name, marks, tags, date);
 `Filter::parse`, `chips` and `remove` are there for the application's
 own fields.

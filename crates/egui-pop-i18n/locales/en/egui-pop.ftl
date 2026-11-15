@@ -2613,6 +2613,8 @@ egui-pop-views-loading = Loading…
 
 egui-pop-views-mark-best = Best of the comparison
 
+egui-pop-views-mark-with-key = { $mark } ({ $key })
+
 egui-pop-views-pick = Pick
 
 egui-pop-views-plot = Chart

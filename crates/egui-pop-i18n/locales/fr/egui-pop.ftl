@@ -2093,6 +2093,8 @@ egui-pop-views-loading = Chargement…
 
 egui-pop-views-mark-best = Meilleure de la comparaison
 
+egui-pop-views-mark-with-key = { $mark } ({ $key })
+
 egui-pop-views-pick = Retenue
 
 egui-pop-views-plot = Graphique

@@ -29,6 +29,7 @@ use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::rating;
 use egui_pop_core::strings::{StrKey, tr, tr_args};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::tooltip::TooltipExt as _;
 use serde::{Deserialize, Serialize};
 
 use super::paint::{self, LibraryTokens};
@@ -338,22 +339,46 @@ impl RatingStars {
     }
 }
 
-/// A toggle button per colour label, each its shape in its colour.
+/// A toggle button per colour label, each drawn in its colour (in the
+/// [`LabelStyle`](super::LabelStyle) in force). Each button's tooltip
+/// says what it is ("Red label"), with its key when given
+/// ([`ColorLabels::keys`]: "Red label (6)"), or the application's own
+/// text ([`ColorLabels::tooltip`]).
 #[derive(Clone, Debug)]
 #[must_use = "show it with `show`"]
 pub struct ColorLabels {
     value: Labels,
     size: Option<f32>,
+    keys: Option<CullKeymap>,
+    tips: Vec<(ColorLabel, String)>,
 }
 
 impl ColorLabels {
     pub fn new(value: Labels) -> ColorLabels {
-        ColorLabels { value, size: None }
+        ColorLabels {
+            value,
+            size: None,
+            keys: None,
+            tips: Vec::new(),
+        }
     }
 
     /// One button's size in points.
     pub fn size(mut self, size: f32) -> ColorLabels {
         self.size = Some(size);
+        self
+    }
+
+    /// Names in each tooltip the key `keys` binds to toggling that label.
+    pub fn keys(mut self, keys: &CullKeymap) -> ColorLabels {
+        self.keys = Some(keys.clone());
+        self
+    }
+
+    /// `label`'s tooltip, instead of its name (and key).
+    pub fn tooltip(mut self, label: ColorLabel, text: impl Into<String>) -> ColorLabels {
+        self.tips.retain(|(l, _)| *l != label);
+        self.tips.push((label, text.into()));
         self
     }
 
@@ -380,7 +405,16 @@ impl ColorLabels {
                     &s::LABEL_TOGGLE,
                     &[("label", &label.title(ui.ctx()))],
                 );
+                let tip = tip_text(
+                    ui.ctx(),
+                    &name,
+                    &self.tips,
+                    label,
+                    self.keys.as_ref(),
+                    CullAction::Label(label),
+                );
                 r.widget_info(move || WidgetInfo::selected(Role::CheckBox, true, on, &name));
+                let r = r.tip(tip);
                 if r.clicked() {
                     changed = Some(self.value.toggled(label));
                 }
@@ -394,21 +428,45 @@ impl ColorLabels {
 }
 
 /// Two toggle buttons: pick and reject (a click on the one set unflags).
+/// Each button's tooltip says what it is ("Pick"), with its key when
+/// given ([`FlagToggle::keys`]: "Pick (P)"), or the application's own
+/// text ([`FlagToggle::tooltip`]).
 #[derive(Clone, Debug)]
 #[must_use = "show it with `show`"]
 pub struct FlagToggle {
     value: Flag,
     size: Option<f32>,
+    keys: Option<CullKeymap>,
+    tips: Vec<(Flag, String)>,
 }
 
 impl FlagToggle {
     pub fn new(value: Flag) -> FlagToggle {
-        FlagToggle { value, size: None }
+        FlagToggle {
+            value,
+            size: None,
+            keys: None,
+            tips: Vec::new(),
+        }
     }
 
     /// One button's size in points.
     pub fn size(mut self, size: f32) -> FlagToggle {
         self.size = Some(size);
+        self
+    }
+
+    /// Names in each tooltip the key `keys` binds to that flag.
+    pub fn keys(mut self, keys: &CullKeymap) -> FlagToggle {
+        self.keys = Some(keys.clone());
+        self
+    }
+
+    /// `flag`'s button tooltip (`Flag::Pick` or `Flag::Reject`), instead
+    /// of its name (and key).
+    pub fn tooltip(mut self, flag: Flag, text: impl Into<String>) -> FlagToggle {
+        self.tips.retain(|(f, _)| *f != flag);
+        self.tips.push((flag, text.into()));
         self
     }
 
@@ -433,7 +491,16 @@ impl FlagToggle {
                     }
                 });
                 let name = flag.title(ui.ctx());
+                let tip = tip_text(
+                    ui.ctx(),
+                    &name,
+                    &self.tips,
+                    flag,
+                    self.keys.as_ref(),
+                    CullAction::Flag(flag),
+                );
                 r.widget_info(move || WidgetInfo::selected(Role::CheckBox, true, on, &name));
+                let r = r.tip(tip);
                 if r.clicked() {
                     changed = Some(if on { Flag::None } else { flag });
                 }
@@ -443,6 +510,31 @@ impl FlagToggle {
             response: inner.response,
             changed,
         }
+    }
+}
+
+/// A mark button's tooltip: the application's text for `which`, else
+/// its name, with the first key `keys` binds to `action`.
+fn tip_text<T: PartialEq>(
+    ctx: &egui::Context,
+    name: &str,
+    tips: &[(T, String)],
+    which: T,
+    keys: Option<&CullKeymap>,
+    action: CullAction,
+) -> String {
+    if let Some((_, text)) = tips.iter().find(|(w, _)| *w == which) {
+        return text.clone();
+    }
+    let key = keys.and_then(|k| {
+        k.bindings
+            .iter()
+            .find(|(_, a)| *a == action)
+            .map(|(key, _)| key.symbol_or_name())
+    });
+    match key {
+        Some(key) => tr_args(ctx, &s::MARK_WITH_KEY, &[("mark", name), ("key", key)]),
+        None => name.to_string(),
     }
 }
 

@@ -639,3 +639,126 @@ fn the_registry_says_a_librarys_selection_and_cursor() {
     assert_eq!(reg.cursor("shoot"), Some(json!(4)));
     assert_eq!(reg.cursor("elsewhere"), None);
 }
+
+/// A widget's description: its tooltip's text.
+fn described<T>(h: &Harness<'_, T>, role: Role, label: &str) -> Option<String> {
+    use egui_kittest::kittest::NodeT as _;
+    h.get_by_role_and_label(role, label)
+        .accesskit_node()
+        .description()
+}
+
+/// The text painted with exactly `text`, if any (an open tooltip's).
+fn painted<T>(h: &Harness<'_, T>, text: &str) -> bool {
+    h.output().shapes.iter().any(|c| match &c.shape {
+        egui::Shape::Text(s) => s.galley.job.text == text,
+        _ => false,
+    })
+}
+
+fn hover<T>(h: &mut Harness<'_, T>, at: egui::Pos2) {
+    h.event(egui::Event::PointerMoved(at));
+    for _ in 0..4 {
+        h.run();
+    }
+}
+
+#[test]
+fn mark_buttons_say_what_they_do_and_their_keys_in_tooltips() {
+    use egui_pop_views::library::marks::{ColorLabels, FlagToggle, Labels};
+    let keys = CullKeymap::lightroom();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(400.0, 200.0))
+        .build_ui(move |ui| {
+            let _ = ColorLabels::new(Labels::NONE.with(ColorLabel::Red, true))
+                .keys(&keys)
+                .tooltip(ColorLabel::Purple, "Client's choice")
+                .show(ui);
+            let _ = FlagToggle::new(Flag::Pick).keys(&keys).show(ui);
+            // Without keys: the name alone.
+            ui.push_id("bare", |ui| {
+                let _ = FlagToggle::new(Flag::None).show(ui);
+            });
+        });
+    h.ctx.all_styles_mut(|s| s.interaction.tooltip_delay = 0.0);
+    h.run();
+    let tip = |h: &Harness<'_>, label: &str| described(h, Role::CheckBox, label);
+    assert_eq!(tip(&h, "Red label").as_deref(), Some("Red label (6)"));
+    assert_eq!(tip(&h, "Blue label").as_deref(), Some("Blue label (9)"));
+    // Purple has no key by default, and its own tooltip here.
+    assert_eq!(tip(&h, "Purple label").as_deref(), Some("Client's choice"));
+    let flags = h.get_all_by_role_and_label(Role::CheckBox, "Pick").count();
+    assert_eq!(flags, 2, "two flag toggles");
+    let mut picks = h
+        .get_all_by_role_and_label(Role::CheckBox, "Pick")
+        .map(|n| {
+            use egui_kittest::kittest::NodeT as _;
+            n.accesskit_node().description()
+        })
+        .collect::<Vec<_>>();
+    picks.sort();
+    assert_eq!(picks, [Some("Pick".into()), Some("Pick (P)".into())]);
+    let red = h.get_by_role_and_label(Role::CheckBox, "Red label").rect();
+    assert!(!painted(&h, "Red label (6)"));
+    hover(&mut h, red.center());
+    assert!(painted(&h, "Red label (6)"), "the tooltip shows on hover");
+}
+
+#[test]
+fn the_search_field_s_buttons_have_names_and_tooltips() {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(700.0, 200.0))
+        .build_ui_state(
+            |ui, state: &mut SearchState| {
+                let _ = SearchField::new("shoot").show(ui, state);
+            },
+            SearchState::new(),
+        );
+    h.ctx.all_styles_mut(|s| s.interaction.tooltip_delay = 0.0);
+    h.run();
+    h.get_by_role_and_label(Role::TextInput, "Search").click();
+    h.run();
+    h.event(egui::Event::Text("rating>=3".into()));
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+    for name in ["Add a filter", "Clear the search", "Remove Rating ≥ 3"] {
+        assert_eq!(
+            described(&h, Role::Button, name).as_deref(),
+            Some(name),
+            "{name}"
+        );
+    }
+    let clear = h
+        .get_by_role_and_label(Role::Button, "Clear the search")
+        .rect();
+    hover(&mut h, clear.center());
+    assert!(
+        painted(&h, "Clear the search"),
+        "the tooltip shows on hover"
+    );
+}
+
+#[test]
+fn colour_labels_are_swatches_unless_the_app_or_theme_asks_for_shapes() {
+    use egui_pop_core::theme::{self, ThemeSpec, Themes};
+    use egui_pop_views::library::LabelStyle;
+    let ctx = egui::Context::default();
+    assert_eq!(LabelStyle::of(&ctx), LabelStyle::Swatch);
+    LabelStyle::set(&ctx, Some(LabelStyle::Shape));
+    assert_eq!(LabelStyle::of(&ctx), LabelStyle::Shape);
+    LabelStyle::set(&ctx, None);
+    assert_eq!(LabelStyle::of(&ctx), LabelStyle::Swatch);
+    let mut themes = Themes::default();
+    themes
+        .add_text(
+            "shapes",
+            "$extends: \"pop-dark\"\nlibrary:\n  label-style: {$type: \"string\", $value: \"shape\"}\n",
+        )
+        .expect("the test theme reads");
+    theme::install_with(&ctx, &themes, &ThemeSpec::new("shapes"));
+    assert_eq!(LabelStyle::of(&ctx), LabelStyle::Shape);
+    // The application's choice wins over the theme's.
+    LabelStyle::set(&ctx, Some(LabelStyle::Swatch));
+    assert_eq!(LabelStyle::of(&ctx), LabelStyle::Swatch);
+}

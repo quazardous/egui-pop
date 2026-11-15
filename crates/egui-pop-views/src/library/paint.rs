@@ -1,12 +1,15 @@
 //! The library's colours (from the theme) and the shapes its marks are
-//! drawn with: stars, flags, colour labels (each a shape of its own, so
-//! a label never reads by its colour alone), pills.
+//! drawn with: stars, flags, colour labels (same-shape swatches, as in
+//! Lightroom and darktable, or a shape each so a label never reads by its
+//! colour alone: [`LabelStyle`]), pills.
 
 use std::f32::consts::{PI, TAU};
 
 use egui::{Align2, Color32, CornerRadius, FontId, Painter, Pos2, Rect, Shape, Stroke, pos2, vec2};
 use egui_pop_core::kit::{Component, KitCx, Part, State, Tone};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::tokens::Value;
+use serde_json::Value as Json;
 
 use super::marks::ColorLabel;
 
@@ -126,9 +129,63 @@ pub fn cross(painter: &Painter, rect: Rect, color: Color32) {
     painter.line_segment([r.right_top(), r.left_bottom()], stroke);
 }
 
-/// A colour label's shape: red a circle, yellow a triangle, green a
-/// square, blue a diamond, purple a hexagon.
+/// How colour labels are drawn, wherever they show (the marks bar, the
+/// grid's badges): the application's choice ([`LabelStyle::set`], a
+/// setting for colour-blind users, say), else the theme's
+/// (`library.label-style`: `swatch` or `shape`), else swatches.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum LabelStyle {
+    /// The same rounded square for every label, only its colour
+    /// differing (Lightroom's and darktable's).
+    #[default]
+    Swatch,
+    /// A shape each (red a circle, yellow a triangle, green a square,
+    /// blue a diamond, purple a hexagon), so a label never reads by its
+    /// colour alone.
+    Shape,
+}
+
+impl LabelStyle {
+    fn id() -> egui::Id {
+        egui::Id::unique("egui_pop_views::library::label_style")
+    }
+
+    /// The style in force in `ctx`.
+    pub fn of(ctx: &egui::Context) -> LabelStyle {
+        if let Some(style) = ctx.data(|d| d.get_temp::<LabelStyle>(Self::id())) {
+            return style;
+        }
+        match Tokens::of(ctx).resolved().value("library.label-style") {
+            Some(Value::Other(Json::String(s))) if s == "shape" => LabelStyle::Shape,
+            _ => LabelStyle::Swatch,
+        }
+    }
+
+    /// Sets the application's choice (`None`: back to the theme's).
+    pub fn set(ctx: &egui::Context, style: Option<LabelStyle>) {
+        ctx.data_mut(|d| match style {
+            Some(s) => {
+                d.insert_temp(Self::id(), s);
+            }
+            None => {
+                d.remove::<LabelStyle>(Self::id());
+            }
+        });
+    }
+}
+
+/// A colour label, in the [`LabelStyle`] of the painter's context: a
+/// rounded square swatch, or its own shape (red a circle, yellow a
+/// triangle, green a square, blue a diamond, purple a hexagon).
 pub fn label(painter: &Painter, label: ColorLabel, center: Pos2, radius: f32, color: Color32) {
+    if LabelStyle::of(painter.ctx()) == LabelStyle::Swatch {
+        painter.rect_filled(
+            Rect::from_center_size(center, vec2(radius, radius) * 1.7),
+            CornerRadius::same((radius * 0.4).round() as u8),
+            color,
+        );
+        return;
+    }
     let poly = |n: usize, start: f32, r: f32| -> Vec<Pos2> {
         (0..n)
             .map(|k| {
