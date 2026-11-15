@@ -49,6 +49,118 @@ pub const DEFAULT_DELAY: Duration = Duration::from_secs(2);
 /// a pass or two are empty while a place changes.
 const MIN_PASSES: u32 = 3;
 
+/// An application window's watch (its own passes, see
+/// [`AppHandle::watch_app_window`]).
+#[derive(Debug, Default)]
+pub(crate) struct WindowWatch {
+    /// Since when it paints nothing, and for how many passes.
+    empty: Option<(Instant, u32)>,
+    /// The fallback page is shown in it.
+    shown: bool,
+}
+
+/// An application window closed lately, until the backend lets its
+/// system window go.
+#[derive(Debug)]
+pub(crate) struct Closed {
+    id: String,
+    since: Instant,
+    /// The main window's passes that still saw it listed.
+    seen: u32,
+    /// Its outliving the close was said.
+    said: bool,
+}
+
+/// A window whose system window outlived it: closed, or never opened,
+/// while its viewport still runs passes or is still listed by the
+/// backend ([`orphan_pass`], [`AppHandle::watch_closed_windows`]).
+#[derive(Debug)]
+struct Orphan {
+    since: Instant,
+    passes: u32,
+    said: bool,
+}
+
+thread_local! {
+    /// The viewports whose pass found no application window, by viewport.
+    static ORPHANS: std::cell::RefCell<std::collections::BTreeMap<egui::ViewportId, Orphan>> =
+        const { std::cell::RefCell::new(std::collections::BTreeMap::new()) };
+}
+
+/// Where a window's content starts: each layer's shapes before it.
+pub(crate) struct Mark(Vec<(LayerId, usize)>);
+
+/// Marks where a window's content starts, in every layer of its pass.
+pub(crate) fn mark(ui: &Ui) -> Mark {
+    let ctx = ui.ctx();
+    let mut layers: Vec<LayerId> = ctx.memory(|m| m.layer_ids().collect());
+    for l in [ui.layer_id(), LayerId::background()] {
+        if !layers.contains(&l) {
+            layers.push(l);
+        }
+    }
+    Mark(layers.into_iter().map(|l| (l, shapes(ctx, l))).collect())
+}
+
+/// Whether a text, an image or a drawing was painted since `mark`, in a
+/// layer it knew or in one opened since (an area, a popup).
+pub(crate) fn painted_since(ctx: &egui::Context, mark: &Mark) -> bool {
+    let layers: Vec<LayerId> = ctx.memory(|m| m.layer_ids().collect());
+    let from = |l: LayerId| mark.0.iter().find(|(m, _)| *m == l).map_or(0, |(_, n)| *n);
+    mark.0
+        .iter()
+        .map(|(l, _)| *l)
+        .chain(
+            layers
+                .into_iter()
+                .filter(|l| mark.0.iter().all(|(m, _)| m != l)),
+        )
+        .any(|l| has_content(ctx, l, from(l), None))
+}
+
+/// A pass of a viewport with no application window behind it (closed, or
+/// never opened): it paints nothing, so its system window shows the clear
+/// colour alone. A pass or two run between a close and the main window's
+/// next pass, which drops the viewport; past the delay, an error says
+/// which window it is, once, and the main window is asked to pass (where
+/// a closed window's viewport is dropped).
+pub(crate) fn orphan_pass(ctx: &egui::Context, viewport: egui::ViewportId, why: &str) {
+    let now = Instant::now();
+    let say = ORPHANS.with_borrow_mut(|o| {
+        let e = o.entry(viewport).or_insert(Orphan {
+            since: now,
+            passes: 0,
+            said: false,
+        });
+        e.passes += 1;
+        let due = !e.said && e.passes >= MIN_PASSES && now.duration_since(e.since) >= DEFAULT_DELAY;
+        if due {
+            e.said = true;
+        }
+        due.then_some((e.passes, now.duration_since(e.since)))
+    });
+    if let Some((passes, since)) = say {
+        let title = ctx
+            .input(|i| i.viewport().title.clone())
+            .unwrap_or_default();
+        log::error!(
+            target: "egui_pop",
+            "the window of viewport {viewport:?} (title {title:?}) painted nothing for {passes} \
+             passes ({:.1} s): {why}; it is closed",
+            since.as_secs_f32()
+        );
+    }
+    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    ctx.request_repaint_of(egui::ViewportId::ROOT);
+    ctx.request_repaint_after(DEFAULT_DELAY);
+}
+
+/// A viewport has an application window again (opened): its orphan
+/// passes are forgotten.
+pub(crate) fn forget_orphan(viewport: egui::ViewportId) {
+    ORPHANS.with_borrow_mut(|o| o.remove(&viewport));
+}
+
 /// The guard's state, per application (the main window's).
 #[derive(Debug)]
 pub(crate) struct Guard {
@@ -68,6 +180,10 @@ pub(crate) struct Guard {
     shown: bool,
     /// `None`: the window is not watched.
     delay: Option<Duration>,
+    /// The application windows' watches, by viewport.
+    windows: std::collections::BTreeMap<egui::ViewportId, WindowWatch>,
+    /// The application windows closed lately, by viewport.
+    closed: std::collections::BTreeMap<egui::ViewportId, Closed>,
 }
 
 impl Default for Guard {
@@ -80,6 +196,8 @@ impl Default for Guard {
             empty: None,
             shown: false,
             delay: Some(DEFAULT_DELAY),
+            windows: std::collections::BTreeMap::new(),
+            closed: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -294,6 +412,176 @@ impl AppHandle {
             "root_has_content": self.root_has_content(),
             "areas": areas,
         })
+    }
+
+    /// The end of an application window's pass (a viewport of its own):
+    /// whether its content painted. A window whose passes paint nothing
+    /// (no text, no image, no overlay under its title bar) for longer
+    /// than the delay gets one error naming it and its state,
+    /// `window.painted_nothing` (with `window`), and the fallback page;
+    /// `true` while the page is to be drawn ([`AppHandle::app_window_fallback`]).
+    pub(crate) fn watch_app_window(
+        &self,
+        ctx: &egui::Context,
+        id: &crate::windows::WindowId,
+        painted: bool,
+    ) -> bool {
+        let viewport = ctx.viewport_id();
+        let delay = self.0.paint_guard.borrow().delay;
+        let Some(delay) = delay else {
+            return false;
+        };
+        let painted = painted || !overlay::stack(ctx).is_empty();
+        let now = Instant::now();
+        let (since, passes, shown) = {
+            let mut g = self.0.paint_guard.borrow_mut();
+            let w = g.windows.entry(viewport).or_default();
+            if painted {
+                let was = std::mem::take(&mut w.shown);
+                w.empty = None;
+                drop(g);
+                if was {
+                    log::info!(target: "egui_pop", "the window `{id}` paints again");
+                }
+                return false;
+            }
+            let e = w.empty.get_or_insert((now, 0));
+            e.1 += 1;
+            (e.0, e.1, w.shown)
+        };
+        if shown {
+            return true;
+        }
+        if passes < MIN_PASSES || now.duration_since(since) < delay {
+            // An idle window runs no pass: come back to look.
+            ctx.request_repaint_after(delay.max(Duration::from_millis(50)));
+            return false;
+        }
+        if let Some(w) = self.0.paint_guard.borrow_mut().windows.get_mut(&viewport) {
+            w.shown = true;
+        }
+        let mut state = self.screen_state(ctx);
+        let info = self.windows().into_iter().find(|w| w.viewport == viewport);
+        state["window"] = json!({
+            "id": id,
+            "viewport": format!("{viewport:?}"),
+            "title": info.as_ref().map(|w| w.title.clone()),
+            "focused": info.as_ref().and_then(|w| w.focused),
+            "geometry": info.as_ref().and_then(|w| w.geometry),
+            "minimized": ctx.input(|i| i.viewport().minimized),
+        });
+        log::error!(
+            target: "egui_pop",
+            "the window `{id}` ({viewport:?}) painted nothing for {passes} passes ({:.1} s): the \
+             fallback page is shown; {state}",
+            now.duration_since(since).as_secs_f32()
+        );
+        self.publish("egui_pop", None, "window.painted_nothing", state);
+        true
+    }
+
+    /// The fallback page of an application window that painted nothing:
+    /// what happened, and a button closing the window. `true` when it is
+    /// clicked.
+    pub(crate) fn app_window_fallback(&self, ctx: &egui::Context) -> bool {
+        let mut close = false;
+        egui::Area::new(Id::unique(("egui_pop.empty_app_window", ctx.viewport_id())))
+            .order(Order::Foreground)
+            .anchor(Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.set_max_width(420.0);
+                Kit::of(ctx)
+                    .fault_card
+                    .show(ui, State::REST, egui::Shadow::NONE, |ui| {
+                        close = EmptyState::new(
+                            Icon::Warning,
+                            strings::tr(ctx, &txt::EMPTY_WINDOW_TITLE),
+                        )
+                        .text(strings::tr(ctx, &txt::EMPTY_WINDOW_BODY))
+                        .action(strings::tr(ctx, &strings::CLOSE))
+                        .show(ui);
+                    });
+            });
+        if close {
+            log::info!(target: "egui_pop", "empty window: closed from its fallback page");
+        }
+        close
+    }
+
+    /// An application window is closed: its watch goes, and its system
+    /// window is expected gone by the delay ([`AppHandle::watch_closed_windows`]).
+    pub(crate) fn app_window_closed(&self, viewport: egui::ViewportId, id: &str) {
+        let mut g = self.0.paint_guard.borrow_mut();
+        g.windows.remove(&viewport);
+        g.closed.insert(
+            viewport,
+            Closed {
+                id: id.to_string(),
+                since: Instant::now(),
+                seen: 0,
+                said: false,
+            },
+        );
+    }
+
+    /// An application window opens on a viewport: what was kept of an
+    /// earlier window of it goes.
+    pub(crate) fn app_window_opened(&self, viewport: egui::ViewportId) {
+        let mut g = self.0.paint_guard.borrow_mut();
+        g.windows.remove(&viewport);
+        g.closed.remove(&viewport);
+        drop(g);
+        forget_orphan(viewport);
+    }
+
+    /// From the main window's pass: a closed application window whose
+    /// system window the backend still lists past the delay outlived its
+    /// close (a window nothing draws in shows the clear colour alone: a
+    /// black window). One error names it; the viewports returned are to
+    /// be shown hidden for one pass, then dropped.
+    pub(crate) fn watch_closed_windows(&self, ctx: &egui::Context) -> Vec<egui::ViewportId> {
+        let live: Vec<egui::ViewportId> = ctx.input(|i| i.raw.viewports.keys().copied().collect());
+        let now = Instant::now();
+        let (late, waiting) = {
+            let mut g = self.0.paint_guard.borrow_mut();
+            // Gone from the backend: the close is done.
+            g.closed.retain(|v, _| live.contains(v));
+            let Some(delay) = g.delay else {
+                return Vec::new();
+            };
+            let mut late = Vec::new();
+            for (v, c) in &mut g.closed {
+                c.seen += 1;
+                // The main window's pass right after the close still sees
+                // it: the backend drops it after that pass.
+                if !c.said && c.seen >= 2 && now.duration_since(c.since) >= delay {
+                    late.push((*v, c.id.clone(), now.duration_since(c.since)));
+                    c.said = true;
+                }
+            }
+            (late, g.closed.values().any(|c| !c.said))
+        };
+        if waiting {
+            ctx.request_repaint_after(self.0.paint_guard.borrow().delay.unwrap_or(DEFAULT_DELAY));
+        }
+        late.into_iter()
+            .map(|(v, id, since)| {
+                let state = self.screen_state(ctx);
+                log::error!(
+                    target: "egui_pop",
+                    "the window `{id}` ({v:?}) is closed, yet its system window is still there \
+                     {:.1} s later: it is hidden; {state}",
+                    since.as_secs_f32()
+                );
+                self.publish(
+                    "egui_pop",
+                    None,
+                    "window.outlived",
+                    json!({ "window": id, "viewport": format!("{v:?}") }),
+                );
+                v
+            })
+            .collect()
     }
 
     /// The fallback page, over the empty window: what happened, and two
