@@ -34,7 +34,9 @@ keep both windows painting there.
 The script builds the example itself when `--build` is given (a bench box
 job). One JSON line per backend on stdout and `multi_window.json` in the
 output directory; these are findings, so the exit code is 1 only when the
-harness itself failed (no window ever showed).
+harness itself failed (no window ever showed) or the pacing check failed
+(over a few idle seconds, an idle window drew more than a few frames a
+second, or the animating one more than its screen's refresh).
 """
 
 from __future__ import annotations
@@ -80,6 +82,26 @@ API_VARIANTS = [
     ("default", {}),
     ("fifo", {"MW_PRESENT_MODE": "fifo"}),
 ]
+
+# The pacing check over `IDLE_SECONDS` untouched: the idle windows (B and
+# the main one) draw at most `IDLE_MAX_FPS`, and A, which animates, at most
+# `ANIMATED_MAX_FPS`: the runner paces a window to its screen's refresh
+# (60 Hz on the box's headless outputs), whether or not the present waits
+# for it. A failure fails the job (the API example only: the spike runs
+# eframe's own loop).
+IDLE_SECONDS = 5.0
+IDLE_MAX_FPS = 3.0
+ANIMATED_MAX_FPS = 90.0
+
+
+def pacing_failures(fps: dict) -> list[str]:
+    failed = []
+    for window, rate in fps.items():
+        limit = ANIMATED_MAX_FPS if window == "a" else IDLE_MAX_FPS
+        if rate > limit:
+            failed.append(f"{window} drew {rate} frames per second (at most {limit})")
+    return failed
+
 
 # The example run: `multi_window` (the API) or `multi_window_spike`.
 EXAMPLE = os.environ.get("MW_EXAMPLE", "multi_window")
@@ -267,9 +289,9 @@ def run_backend(cfg: dict, comp_name: str, backend: str, out: Path) -> dict:
         result["root_hide_sent"] = events(jsonl, "root_hide_sent")
         shot(comp, out, f"spike-{comp_name}-{backend}-start.png")
 
-        # Independent repaint: frames per window over three seconds.
+        # Independent repaint: frames per window over a few idle seconds.
         c0 = wait_for(lambda: last_counts(jsonl), 5)
-        time.sleep(3.0)
+        time.sleep(IDLE_SECONDS)
         c1 = last_counts(jsonl)
         if c0 and c1:
             dt = c1["t"] - c0["t"]
@@ -278,7 +300,12 @@ def run_backend(cfg: dict, comp_name: str, backend: str, out: Path) -> dict:
             cpu = None
             if c0.get("cpu_ms") is not None and c1.get("cpu_ms") is not None and dt > 0:
                 cpu = round((c1["cpu_ms"] - c0["cpu_ms"]) / (dt * 1000) * 100, 1)
-            result["repaint"] = {"seconds": round(dt, 2), "frames": delta, "cpu_percent": cpu}
+            fps = {k: round(v / dt, 1) for k, v in delta.items()} if dt > 0 else {}
+            result["repaint"] = {"seconds": round(dt, 2), "frames": delta, "fps": fps, "cpu_percent": cpu}
+            # The spike runs eframe's own loop, without the runner's pacing.
+            failed = pacing_failures(fps) if api() else []
+            if failed:
+                result["pacing_failed"] = failed
         else:
             result["repaint"] = {"error": "no counts lines", "c0": c0, "c1": c1}
 
@@ -381,16 +408,18 @@ def main() -> int:
     backends = (args.backends or ("wayland,x11" if comp_name == "labwc" else "wayland")).split(",")
     results = []
     harness_failed = False
+    checks_failed = False
     for backend in backends:
         try:
             result = run_backend(cfg, comp_name, backend, out)
         except Exception as exc:  # report and go on with the next backend
             result = {"compositor": comp_name, "backend": backend, "error": repr(exc)}
         harness_failed |= "error" in result
+        checks_failed |= bool(result.get("pacing_failed"))
         results.append(result)
         print(json.dumps(result), flush=True)
     (out / "multi_window.json").write_text(json.dumps(results, indent=2))
-    return 1 if harness_failed else 0
+    return 1 if harness_failed or checks_failed else 0
 
 
 if __name__ == "__main__":
