@@ -56,7 +56,7 @@ pub fn show(ui: &mut Ui, state: &mut State) {
     ui.space_role(Space::Section);
     ui.section_title("Code, tones and dividers");
     ui.space_role(Space::Inline);
-    ui.code("12:00:01  import  IMG_0001.raw  read 24 MB");
+    ui.code_text("12:00:01  import  IMG_0001.raw  read 24 MB");
     ui.divider();
     ui.horizontal_wrapped(|ui| {
         for tone in [

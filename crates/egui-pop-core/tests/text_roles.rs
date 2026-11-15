@@ -24,7 +24,7 @@ fn texts() -> Harness<'static, Texts> {
         .build_ui_state(
             |ui, s: &mut Texts| {
                 s.room = ui.available_width();
-                ui.code("12:00:01 import started");
+                ui.code_text("12:00:01 import started");
                 ui.text_tone(Tone::Danger, "Failed: disk full");
                 ui.text_tone(Tone::Success, "Done");
                 ui.text_tone(Tone::Muted, "Skipped");

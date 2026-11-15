@@ -23,7 +23,7 @@ To add an entry, give the item a doc line
 | a label in a named text role (title, section, body, muted, meta) | `ui.text_role(..)`<br>`egui_pop::core::ui::UiPop::text_role` | A label in a text role (`role_text`). |
 | a section title | `ui.section_title(..)`<br>`egui_pop::core::ui::UiPop::section_title` | A section's title (`text-role.section`). |
 | greyed or weak text | `ui.muted(..)`<br>`egui_pop::core::ui::UiPop::muted` | Secondary text: a hint, a description (`text-role.muted`). |
-| monospace text, a log or console line, a path or code | `ui.code(..)`<br>`egui_pop::core::ui::UiPop::code` | Monospace text: a log's or a console's line, a path, a piece of code. |
+| monospace text, a log or console line, a path or code | `ui.code_text(..)`<br>`egui_pop::core::ui::UiPop::code_text` | Monospace text: a log's or a console's line, a path, a piece of code. |
 | secondary text, a hint or a description | `ui.muted(..)`<br>`egui_pop::core::ui::UiPop::muted` | Secondary text: a hint, a description (`text-role.muted`). |
 | small print about an item, a date or a size | `ui.meta(..)`<br>`egui_pop::core::ui::UiPop::meta` | Small print about an item: a date, a size (`text-role.meta`). |
 | text in a tone, a failed state or an error in the danger colour | `ui.text_tone(..)`<br>`egui_pop::core::ui::UiPop::text_tone` | Text in a tone: a failed state, an error, a warning, a success. |

@@ -203,7 +203,7 @@ colours are in the contrast pairs, over panels and the raised surface.
 Beside the roles, three helpers of `UiPop` (experimental) read the same
 tokens for what is not a role of its own:
 
-- `ui.code(text)`: monospace text (a log or console line, a path) in
+- `ui.code_text(text)`: monospace text (a log or console line, a path) in
   egui's monospace style (`font.text-style.monospace`, `font.family.mono`)
   and the body's colour (`text-role.body.color`).
 - `ui.text_tone(tone, text)`: the body role in a tone's colour

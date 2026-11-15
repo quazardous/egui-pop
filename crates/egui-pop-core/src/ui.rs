@@ -240,13 +240,14 @@ pub trait UiPop: sealed::Sealed {
     /// Monospace text: a log's or a console's line, a path, a piece of
     /// code. egui's monospace text style (`font.text-style.monospace`,
     /// in `font.family.mono`) in the body role's colour
-    /// (`text-role.body.color`).
+    /// (`text-role.body.color`), without the box egui's own `code` label
+    /// draws, so a log's lines read as text.
     ///
     /// <div class="warning">Experimental: may change in any release
     /// (docs/stability.md).</div>
     ///
     /// Need (text): monospace text, a log or console line, a path or code.
-    fn code(&mut self, text: impl Into<String>) -> Response;
+    fn code_text(&mut self, text: impl Into<String>) -> Response;
 
     /// Text in a tone: a failed state, an error, a warning, a success.
     /// The body role's size and weight in the tone's colour, from the
@@ -427,7 +428,7 @@ impl UiPop for Ui {
         self.text_role(TextRole::Meta, text)
     }
 
-    fn code(&mut self, text: impl Into<String>) -> Response {
+    fn code_text(&mut self, text: impl Into<String>) -> Response {
         let color = Tokens::of(self.ctx()).text_role.body.color;
         self.label(RichText::new(text).monospace().color(color))
     }
