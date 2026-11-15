@@ -1,0 +1,34 @@
+name: README badges
+
+# The README's badges (crates.io version, docs.rs, CI) are images GitHub
+# serves through its camo cache, so a new release shows the old version
+# for a while. When a release tag is pushed, this asks camo to fetch every
+# badge of the README again, then once more an hour later, after
+# shields.io's own cache (one hour) has expired.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: purge now and after shields.io's cache
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          purge() {
+            gh api "repos/${GITHUB_REPOSITORY}/readme" -H 'Accept: application/vnd.github.html' \
+              | grep -o 'https://camo.githubusercontent.com/[^"]*' | sort -u \
+              | while read -r url; do
+                  curl -s -o /dev/null -w "%{http_code} $url\n" -X PURGE "$url"
+                done
+          }
+          purge
+          sleep 3700
+          purge
