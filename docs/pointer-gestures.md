@@ -333,8 +333,10 @@ and the canvas … profiles of input are not designed yet", [API
 stability](stability.md)). Tests:
 `crates/egui-pop-viewport/tests/canvas_navigation.rs` (the image takes
 the view commands and their keys and is the canvas in use, hand mode,
-each profile's navigation keys) and `navigation.rs`; no test in
-`egui-pop-core` yet.
+each profile's navigation keys) and `navigation.rs`; the module's own
+contract (the canvas in use this frame or the one before, the one marked
+last, commands queued per canvas and taken once, a dropped command, hand
+mode, zoom per canvas) in `crates/egui-pop-core/tests/canvas.rs`.
 
 ## A widget's own secondary button
 
