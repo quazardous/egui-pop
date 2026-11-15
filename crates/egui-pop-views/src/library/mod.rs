@@ -30,7 +30,7 @@ pub use grid::{
     ThumbSource, Tone, change,
 };
 pub use marks::{ColorLabel, CullAction, CullKeymap, Flag, Labels, Marks};
-pub use paint::LibraryTokens;
+pub use paint::{LabelStyle, LibraryTokens};
 pub use plugin::LibraryPlugin;
 
 use egui::{Rect, vec2};

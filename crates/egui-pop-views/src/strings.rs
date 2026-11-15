@@ -100,6 +100,9 @@ pub const BLUE: StrKey = StrKey::new("egui-pop-views-blue", "Blue");
 pub const PURPLE: StrKey = StrKey::new("egui-pop-views-purple", "Purple");
 /// A colour label's toggle button.
 pub const LABEL_TOGGLE: StrKey = StrKey::new("egui-pop-views-label-toggle", "{ $label } label");
+/// A mark toggle's tooltip with the key bound to it: "Red label (6)".
+pub const MARK_WITH_KEY: StrKey =
+    StrKey::new("egui-pop-views-mark-with-key", "{ $mark } ({ $key })");
 /// The filter menu's label entry.
 pub const LABEL: StrKey = StrKey::new("egui-pop-views-label", "Label");
 /// The filter menu's flag entry.
@@ -423,6 +426,7 @@ pub const ALL: &[StrKey] = &[
     BLUE,
     PURPLE,
     LABEL_TOGGLE,
+    MARK_WITH_KEY,
     LABEL,
     FLAG,
     PICK,

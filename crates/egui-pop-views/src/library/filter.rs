@@ -28,6 +28,7 @@ use egui::{Key as EKey, Modifiers, Response, Role, TextEdit, Ui};
 use egui_pop_api::AppHandle;
 use egui_pop_core::strings::{tr, tr_args, tr_with};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::tooltip::TooltipExt as _;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
 
@@ -461,19 +462,16 @@ impl<'a> SearchField<'a> {
                             .desired_width(self.width.unwrap_or(180.0)),
                     );
                     egui_pop_core::a11y::name(&field, Role::TextInput, &label);
+                    // Each button's name is its tooltip too.
                     let add = ui.menu_button("+", |ui| add_menu(ui, &mut state.chips));
-                    egui_pop_core::a11y::name(
-                        &add.response,
-                        Role::Button,
-                        &tr(&ctx, &s::ADD_FILTER),
-                    );
+                    let add_name = tr(&ctx, &s::ADD_FILTER);
+                    egui_pop_core::a11y::name(&add.response, Role::Button, &add_name);
+                    let _ = add.response.tip(add_name);
                     if !state.chips.is_empty() || !state.text.is_empty() {
                         let clear = ui.button("×");
-                        egui_pop_core::a11y::name(
-                            &clear,
-                            Role::Button,
-                            &tr(&ctx, &s::CLEAR_FILTERS),
-                        );
+                        let clear_name = tr(&ctx, &s::CLEAR_FILTERS);
+                        egui_pop_core::a11y::name(&clear, Role::Button, &clear_name);
+                        let clear = clear.tip(clear_name);
                         if clear.clicked() {
                             state.chips = Filter::default();
                             state.text.clear();

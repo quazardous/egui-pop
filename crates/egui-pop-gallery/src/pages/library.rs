@@ -488,6 +488,8 @@ fn library(ui: &mut Ui, app: &AppHandle, p: &mut PageState, thumbs: &Thumbs) {
     let photo = p.photos[cursor as usize].clone();
     let targets = p.targets();
     let mut changes = Vec::new();
+    // The grid's keys, named in the buttons' tooltips.
+    let keys = CullKeymap::lightroom();
     ui.horizontal(|ui| {
         ui.label(&photo.name);
         if let Some(r) = RatingStars::new(photo.marks.rating).show(ui).changed {
@@ -496,7 +498,11 @@ fn library(ui: &mut Ui, app: &AppHandle, p: &mut PageState, thumbs: &Thumbs) {
                 rating: r,
             });
         }
-        if let Some(l) = ColorLabels::new(photo.marks.labels).show(ui).changed {
+        if let Some(l) = ColorLabels::new(photo.marks.labels)
+            .keys(&keys)
+            .show(ui)
+            .changed
+        {
             for label in ColorLabel::ALL {
                 if l.has(label) != photo.marks.labels.has(label) {
                     changes.push(Change::Label {
@@ -507,7 +513,11 @@ fn library(ui: &mut Ui, app: &AppHandle, p: &mut PageState, thumbs: &Thumbs) {
                 }
             }
         }
-        if let Some(f) = FlagToggle::new(photo.marks.flag).show(ui).changed {
+        if let Some(f) = FlagToggle::new(photo.marks.flag)
+            .keys(&keys)
+            .show(ui)
+            .changed
+        {
             changes.push(Change::Flag {
                 keys: targets.clone(),
                 flag: f,

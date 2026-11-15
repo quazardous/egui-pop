@@ -23,6 +23,7 @@ use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::tooltip::TooltipExt as _;
 use egui_pop_core::widgets;
 use egui_pop_model::fuzzy;
 
@@ -104,7 +105,8 @@ impl TagChip {
         self
     }
 
-    /// The remove button's accessible name ("Remove" and its text by default).
+    /// The remove button's accessible name and tooltip ("Remove" and its
+    /// text by default).
     pub fn remove_label(mut self, label: impl Into<String>) -> TagChip {
         self.remove_label = Some(label.into());
         self
@@ -163,8 +165,10 @@ impl TagChip {
                 .remove_label
                 .clone()
                 .unwrap_or_else(|| tr_args(ui.ctx(), &s::REMOVE, &[("item", &self.text)]));
+            // An icon alone: its name is its tooltip too.
+            let tip = name.clone();
             r.widget_info(move || WidgetInfo::labeled(Role::Button, true, &name));
-            removed = r.clicked();
+            removed = r.tip(tip).clicked();
         }
         let text = self.text;
         let selected = self.selected;
