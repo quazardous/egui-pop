@@ -25,9 +25,10 @@ all = { level = "warn", priority = -1 }
 # MIT OR Apache-2.0 OR Zlib: the handles file choosers and surfaces take.
 raw-window-handle = "0.6"
 # Apache-2.0: the window ids and the event loop (eframe 0.37's version).
-winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
-
-[dev-dependencies]
+# Its X11 and Wayland backends are always on, as egui-pop-api turns on
+# eframe's: winit refuses to build on Linux without one, and the crate
+# builds on its own (docs.rs, `cargo check -p`), not only beside eframe.
+# `wayland-dlopen` loads libwayland at run time, as eframe's winit does.
 winit = { version = "0.30", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
 
 # The window test runs on the main thread (macOS creates windows there
