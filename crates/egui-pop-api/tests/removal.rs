@@ -399,10 +399,7 @@ fn what_a_plugin_left_on_screen_is_cancelled_greyed_kept_dormant_or_removed() {
         .collect();
     assert_eq!(
         mounted,
-        [(
-            mounts::JOBS_CENTRE.to_string(),
-            mounts::STATUS_BAR.to_string()
-        )]
+        [(mounts::PROGRESS.to_string(), mounts::PANEL.to_string())]
     );
 
     // The toast's action is greyed, saying why.
