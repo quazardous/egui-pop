@@ -449,6 +449,17 @@ pub const SHORTCUTS_FROM_USER: StrKey = StrKey::new("egui-pop-shortcuts-from-use
 /// A key and where it comes from.
 pub const SHORTCUTS_KEY_FROM: StrKey =
     StrKey::new("egui-pop-shortcuts-key-from", "{ $keys } ({ $source })");
+/// The keys whose command went with a disconnected plugin.
+pub const SHORTCUTS_DORMANT: StrKey = StrKey::new("egui-pop-shortcuts-dormant", "Dormant keys");
+pub const SHORTCUTS_DORMANT_NOTE: StrKey = StrKey::new(
+    "egui-pop-shortcuts-dormant-note",
+    "Their command's plugin is off: these keys do nothing until it is back.",
+);
+/// Why a key is dormant.
+pub const SHORTCUTS_DORMANT_PLUGIN: StrKey = StrKey::new(
+    "egui-pop-shortcuts-dormant-plugin",
+    "dormant: plugin { $plugin } is off",
+);
 /// The layer the keys changed go to.
 pub const SHORTCUTS_TARGET: StrKey =
     StrKey::new("egui-pop-shortcuts-target", "Keys changed here apply to");
@@ -911,6 +922,11 @@ pub const JOB_FAILED: StrKey = StrKey::new("egui-pop-job-failed", "failed");
 pub const JOB_CANCELLED: StrKey = StrKey::new("egui-pop-job-cancelled", "cancelled");
 /// A request sent, not answered yet.
 pub const JOB_ASKED: StrKey = StrKey::new("egui-pop-job-asked", "{ $state }, waiting for the host");
+/// A job left by a plugin now disconnected, still going on.
+pub const JOB_ORPHANED: StrKey = StrKey::new(
+    "egui-pop-job-orphaned",
+    "{ $state }, its plugin { $plugin } is off",
+);
 /// Items done of all.
 pub const JOB_OF: StrKey = StrKey::new("egui-pop-job-of", "{ $done } of { $total }");
 /// Time left.
@@ -1645,6 +1661,9 @@ pub const ALL: &[StrKey] = &[
     SHORTCUTS_FROM_WORKSPACE,
     SHORTCUTS_FROM_USER,
     SHORTCUTS_KEY_FROM,
+    SHORTCUTS_DORMANT,
+    SHORTCUTS_DORMANT_NOTE,
+    SHORTCUTS_DORMANT_PLUGIN,
     SHORTCUTS_TARGET,
     SHORTCUTS_TARGET_USER,
     SHORTCUTS_TARGET_WORKSPACE,
@@ -1778,6 +1797,7 @@ pub const ALL: &[StrKey] = &[
     JOB_FAILED,
     JOB_CANCELLED,
     JOB_ASKED,
+    JOB_ORPHANED,
     JOB_OF,
     JOB_ETA_SECONDS,
     JOB_ETA_MINUTES,

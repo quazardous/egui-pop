@@ -1349,6 +1349,8 @@ egui-pop-job-no-log = Pas encore de journal.
 
 egui-pop-job-of = { $done } sur { $total }
 
+egui-pop-job-orphaned = { $state }, son plugin { $plugin } est désactivé
+
 egui-pop-job-pause = Pause
 
 egui-pop-job-paused = en pause
@@ -1416,6 +1418,12 @@ egui-pop-menu-last-run-failed = Le dernier lancement a échoué : { $error }
 egui-pop-menu-main = Menu principal
 
 egui-pop-menu-more = Autres menus
+
+egui-pop-shortcuts-dormant = Touches en sommeil
+
+egui-pop-shortcuts-dormant-note = Le plugin de leur commande est désactivé : ces touches ne font rien jusqu’à son retour.
+
+egui-pop-shortcuts-dormant-plugin = en sommeil : le plugin { $plugin } est désactivé
 
 egui-pop-toolbar-more = Autres outils
 

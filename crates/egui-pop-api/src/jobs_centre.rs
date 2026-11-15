@@ -96,6 +96,15 @@ pub fn state_text(ctx: &egui::Context, job: &Job) -> String {
     if job.requested.is_some() {
         text = strings::tr_args(ctx, &txt::JOB_ASKED, &[("state", &text)]);
     }
+    // Left by a plugin now disconnected (ADR 0028): it goes on, and
+    // nothing may ever end it.
+    if let Some(plugin) = &job.orphaned {
+        text = strings::tr_args(
+            ctx,
+            &txt::JOB_ORPHANED,
+            &[("state", &text), ("plugin", plugin)],
+        );
+    }
     text
 }
 
@@ -264,6 +273,23 @@ pub fn job_row(ui: &mut Ui, app: &AppHandle, jobs: &JobsService, job: &Job, dept
                 }
                 if job.state == JobState::Paused {
                     ask_button(ui, app, job, Request::Resume);
+                }
+                if job.orphaned.is_some() {
+                    // Nothing may ever end it: it can be forgotten.
+                    let label = strings::tr(&ctx, &txt::JOB_DISMISS);
+                    let r = ui.small_button(&label);
+                    a11y::name(
+                        &r,
+                        egui::Role::Button,
+                        &strings::tr_args(
+                            &ctx,
+                            &txt::JOB_ACTION_NAME,
+                            &[("action", &label), ("job", &job.title)],
+                        ),
+                    );
+                    if r.clicked() {
+                        jobs.dismiss(&job.id);
+                    }
                 }
             } else {
                 let label = strings::tr(&ctx, &txt::JOB_DISMISS);

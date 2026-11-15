@@ -36,6 +36,13 @@ Every resolution can produce a **trace**: each candidate binding with its
 verdict (won, lost to, clause false, removed by, unbound by, prefix),
 which the debug bridge keeps for the last keys pressed.
 
+A binding whose command went with a disconnected plugin is dormant
+([ADR 0028](0028-removed-contributor-work-in-flight.md)): kept in its
+layer, it is no candidate for its keys, which go to the next binding;
+the trace gives it the verdict "lost" with `because` `dormant: its
+command's plugin is disconnected` (`Keymap::set_dormant`,
+`Keymap::dormant`).
+
 ## Consequences
 
 - A user binding meant to beat a focused component's binding uses the

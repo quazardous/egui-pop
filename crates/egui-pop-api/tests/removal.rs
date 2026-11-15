@@ -1,8 +1,10 @@
 //! A removed contributor's work in flight is said (ADR 0028): its
 //! disconnection is a `plugin.disconnected` event and a log line, a run
-//! of its command queued after it went is refused on the journal, a key
-//! still bound to it warns, and the undo steps that went with it are
-//! counted. What it left on screen is closed or kept dormant: its dialog
+//! of its command queued after it went is refused on the journal, and
+//! the undo steps that went with it are counted. A key the user bound to
+//! its command is dormant: it falls through to the next binding and
+//! comes back with the plugin. Its running jobs are cancelled by the
+//! host, or said orphaned. What it left on screen is closed or kept dormant: its dialog
 //! is cancelled with the reason, a toast's action naming its command is
 //! greyed, its panel's place is kept and given back, its components,
 //! hosts and mounts go.
@@ -15,17 +17,21 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_api::dialogs::{Answer, Confirm, DIALOGS, DialogsPlugin, Info};
 use egui_pop_api::host::Event;
+use egui_pop_api::jobs::{JOBS, JobsPlugin};
+use egui_pop_api::jobs_centre;
 use egui_pop_api::mounts;
 use egui_pop_api::toasts::{TOASTS, Toast, ToastsPlugin};
 use egui_pop_api::{App, Ctx, Plugin, PluginError};
 use egui_pop_core::lock;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, OwnerId, PanelId, PluginId};
+use egui_pop_model::jobs::{JobState, Request as JobRequest};
+use egui_pop_model::keymap::{Action, DORMANT, Layer, Verdict};
 use egui_pop_model::layout::{DormantPlace, Layout, Node, SavedLayout, schema};
 use egui_pop_model::mount::{HostOffer, Mountable};
 use egui_pop_model::panels::{Area, PanelSpec};
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
-use serde_json::Value as Json;
+use serde_json::{Value as Json, json};
 
 const ACT: CommandId = CommandId::from_static("doomed.act");
 const LEVEL: &str = "doomed/level";
@@ -246,11 +252,40 @@ fn a_plugin_failing_to_connect_says_so() {
     ));
 }
 
+const FIND: CommandId = CommandId::from_static("base.find");
+
+/// A plugin whose command has the keys the user gives another: what the
+/// key falls through to.
+struct Base {
+    ran: Rc<Cell<u32>>,
+}
+
+impl Plugin for Base {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("base")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        let ran = self.ran.clone();
+        ctx.command(CommandSpec::new(FIND, "Find", "Base"), move |_| {
+            ran.set(ran.get() + 1);
+            Ok(Json::Null)
+        })?;
+        ctx.keybinding("Ctrl+K", FIND, "", Layer::Default)?;
+        Ok(())
+    }
+}
+
 #[test]
-fn a_key_still_bound_to_a_gone_command_warns_and_is_refused() {
+fn a_user_key_bound_to_a_gone_command_is_dormant_falls_through_and_comes_back() {
     capture();
     let (p, ran) = doomed("keyed", u32::MAX);
-    let app = app(p);
+    let found = Rc::new(Cell::new(0));
+    let app = App::builder()
+        .plugin(Base { ran: found.clone() })
+        .plugin(p)
+        .build(&egui::Context::default())
+        .unwrap();
     let h = app.handle().clone();
     h.rebind(ACT, Some("Ctrl+K".into()));
     let mut harness = Harness::builder()
@@ -259,23 +294,203 @@ fn a_key_still_bound_to_a_gone_command_warns_and_is_refused() {
     harness.run();
     harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::K);
     harness.run();
-    assert_eq!(ran.get(), 1, "the key runs it while it is there");
+    assert_eq!(
+        (ran.get(), found.get()),
+        (1, 0),
+        "the user's key wins while its command is there"
+    );
+    assert!(h.dormant_keys().is_empty());
 
     h.set_plugin_enabled(PluginId::from_static("keyed"), false);
     harness.run();
     let before = h.last_event();
     harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::K);
     harness.run();
-    assert_eq!(ran.get(), 1);
+    // The key falls through to the next binding of it; nothing is
+    // refused, the gone command is not asked for.
+    assert_eq!((ran.get(), found.get()), (1, 1));
     let events = h.events_since(before);
-    let refused = event(&events, "command.refused");
-    assert_eq!(refused.source, "user");
-    assert_eq!(refused.data["command"], "doomed.act");
-    assert_eq!(refused.data["reason"], "its plugin `keyed` is disconnected");
+    assert!(
+        !events.iter().any(|e| e.name == "command.refused"),
+        "{events:#?}"
+    );
+    // The shortcuts editor's model: the binding, dormant, with the
+    // plugin; the command shows no key, and the key makes no conflict.
+    let dormant = h.dormant_keys();
+    assert_eq!(dormant.len(), 1, "{dormant:?}");
+    assert_eq!(dormant[0].binding.keys.to_string(), "Ctrl+K");
+    assert_eq!(dormant[0].binding.action, Action::Run(ACT));
+    assert_eq!(dormant[0].binding.layer, Layer::User);
+    assert_eq!(dormant[0].plugin, PluginId::from_static("keyed"));
+    assert_eq!(dormant[0].plugin_title, "keyed");
+    assert!(h.keys_for(&ACT).is_empty());
+    assert_eq!(h.keys_for(&FIND), ["Ctrl+K"]);
+    assert!(h.key_conflicts().is_empty());
+    // It is still the user's, saved with their keymap.
+    assert!(
+        h.export_keymap(Layer::User)
+            .bindings
+            .iter()
+            .any(|b| b.keys == "Ctrl+K" && b.command.as_deref() == Some("doomed.act"))
+    );
+    // The key trace says it.
+    let traces = h.key_traces();
+    assert!(
+        traces.iter().any(|t| t.candidates.iter().any(|c| c.verdict
+            == Verdict::Lost {
+                to: "base.find".into(),
+                because: DORMANT
+            })),
+        "{traces:#?}"
+    );
     assert!(logged(
-        log::Level::Warn,
-        "its plugin `keyed` is disconnected"
+        log::Level::Info,
+        "keys: `Ctrl+K` (User layer) is dormant: its command `doomed.act` went with plugin `keyed`"
     ));
+
+    // Back: the user's key runs its command again.
+    h.set_plugin_enabled(PluginId::from_static("keyed"), true);
+    harness.run();
+    harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::K);
+    harness.run();
+    assert_eq!((ran.get(), found.get()), (2, 1));
+    assert!(h.dormant_keys().is_empty());
+    assert_eq!(h.keys_for(&ACT), ["Ctrl+K"]);
+}
+
+/// The job commands the test's host ran: request, job.
+type Asked = Rc<std::cell::RefCell<Vec<(JobRequest, String)>>>;
+
+/// An application with the jobs plugin, whose host cancels a job when
+/// asked (it publishes `job.cancelled`), and the plugin `worker`.
+fn with_jobs() -> (App, Asked) {
+    let asked = Asked::default();
+    let seen = asked.clone();
+    let (p, _) = doomed("worker", u32::MAX);
+    let mut app = App::builder()
+        .plugin(JobsPlugin::default().run_locally(move |app, request, id| {
+            seen.borrow_mut().push((request, id.to_string()));
+            if request == JobRequest::Cancel {
+                app.publish("host", None, "job.cancelled", json!({ "id": id }));
+            }
+            Ok(Json::Null)
+        }))
+        .plugin(p)
+        .build(&egui::Context::default())
+        .unwrap();
+    app.logic(&egui::Context::default());
+    (app, asked)
+}
+
+#[test]
+fn a_gone_plugins_running_job_is_cancelled_and_one_it_cannot_cancel_is_orphaned() {
+    capture();
+    let (mut app, asked) = with_jobs();
+    let h = app.handle().clone();
+    let start = |source: &str, data: Json| {
+        h.publish(source, None, "job.started", data);
+    };
+    // Run by the host for the plugin: one it can cancel, one it cannot.
+    start(
+        "host",
+        json!({ "id": "export", "title": "Export", "owner": "worker" }),
+    );
+    start(
+        "host",
+        json!({ "id": "render", "title": "Render", "owner": "worker", "cancellable": false }),
+    );
+    // Started by its command.
+    start(
+        "host",
+        json!({ "id": "sync", "title": "Sync", "command": "doomed.act" }),
+    );
+    // One it published itself, naming no owner; and someone else's.
+    start("worker", json!({ "id": "scan", "title": "Scan" }));
+    start(
+        "host",
+        json!({ "id": "other", "title": "Other", "owner": "someone" }),
+    );
+    settle(&mut app);
+    let jobs = h.service(&JOBS).unwrap();
+    assert_eq!(jobs.job("export").unwrap().owner.as_deref(), Some("worker"));
+    // Started since the last pass: it counts too.
+    start(
+        "host",
+        json!({ "id": "late", "title": "Late", "owner": "worker" }),
+    );
+
+    let before = h.last_event();
+    h.set_plugin_enabled(PluginId::from_static("worker"), false);
+    settle(&mut app);
+    let events = h.events_since(before);
+    let reason = "its plugin `worker` is disconnected";
+
+    // Counted on the disconnection.
+    let gone = event(&events, "plugin.disconnected");
+    assert_eq!(gone.data["removed"]["jobs_cancelled"], 3);
+    assert_eq!(gone.data["removed"]["jobs_orphaned"], 2);
+    // The host was asked to cancel those naming the plugin, by the
+    // framework, with the reason; it did.
+    assert_eq!(
+        *asked.borrow(),
+        [
+            (JobRequest::Cancel, "export".to_string()),
+            (JobRequest::Cancel, "sync".to_string()),
+            (JobRequest::Cancel, "late".to_string()),
+        ]
+    );
+    let dispatched: Vec<&Event> = events
+        .iter()
+        .filter(|e| e.name == "command.dispatched" && e.data["command"] == "job.cancel")
+        .collect();
+    assert_eq!(dispatched.len(), 3);
+    assert_eq!(dispatched[0].source, "script:egui_pop");
+    assert_eq!(dispatched[0].data["args"]["id"], "export");
+    assert_eq!(dispatched[0].data["args"]["reason"], reason);
+    for id in ["export", "sync", "late"] {
+        let job = jobs.job(id).unwrap();
+        assert_eq!(job.state, JobState::Cancelled, "{id}");
+        assert_eq!(job.reason.as_deref(), Some(reason), "{id}");
+        assert_eq!(job.orphaned, None, "{id}");
+    }
+    // The others go on, said orphaned on the journal and shown as such.
+    let orphaned: Vec<&Event> = events.iter().filter(|e| e.name == "job.orphaned").collect();
+    assert_eq!(orphaned.len(), 2);
+    assert_eq!(orphaned[0].source, "egui_pop");
+    assert_eq!(orphaned[0].data["id"], "render");
+    assert_eq!(orphaned[0].data["plugin"], "worker");
+    assert_eq!(orphaned[0].data["reason"], reason);
+    assert_eq!(orphaned[1].data["id"], "scan");
+    for id in ["render", "scan"] {
+        let job = jobs.job(id).unwrap();
+        assert_eq!(job.state, JobState::Running, "{id}");
+        assert_eq!(job.orphaned.as_deref(), Some("worker"), "{id}");
+        let said = jobs_centre::state_text(&egui::Context::default(), &job);
+        assert!(said.contains("worker") && said.contains("is off"), "{said}");
+    }
+    let other = jobs.job("other").unwrap();
+    assert_eq!((other.state, other.orphaned), (JobState::Running, None));
+    assert!(logged(
+        log::Level::Info,
+        "job `export`: the host is asked to cancel it: its plugin `worker` is disconnected"
+    ));
+    assert!(logged(
+        log::Level::Info,
+        "job `render` is orphaned: its plugin `worker` is disconnected"
+    ));
+
+    // An orphaned job can be forgotten while it goes on; the plugin
+    // back, the other is its own again.
+    assert!(jobs.dismiss("scan"));
+    assert!(!jobs.dismiss("other"));
+    let before = h.last_event();
+    h.set_plugin_enabled(PluginId::from_static("worker"), true);
+    settle(&mut app);
+    let events = h.events_since(before);
+    let adopted = event(&events, "job.adopted");
+    assert_eq!(adopted.data["plugin"], "worker");
+    assert_eq!(adopted.data["jobs"], json!(["render"]));
+    assert_eq!(jobs.job("render").unwrap().orphaned, None);
 }
 
 const OPEN: CommandId = CommandId::from_static("owned.open");

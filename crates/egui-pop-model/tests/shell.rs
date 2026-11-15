@@ -3,7 +3,8 @@
 use egui_pop_model::commands::{CommandSpec, Commands, Origin};
 use egui_pop_model::ids::{CommandId, MenuId, OwnerId, PanelId};
 use egui_pop_model::keymap::{
-    Action, BindOptions, DocBinding, Keymap, KeymapDoc, Keys, Layer, Resolution, Typing, Verdict,
+    Action, BindOptions, DORMANT, DocBinding, Keymap, KeymapDoc, Keys, Layer, Resolution, Typing,
+    Verdict,
 };
 use egui_pop_model::layout::{
     Anchor, AnchorEdge, Arrangement, Auxiliary, FloatingGroup, Join, Layout, Node, Placement,
@@ -383,6 +384,57 @@ fn null_unbinds_keys_and_minus_removes_a_command_from_the_layers_below() {
     // Removing the user's layer brings the defaults back.
     assert_eq!(k.remove_owner(&OwnerId::USER), 2);
     assert_eq!(k.resolve(&keys("Ctrl+P"), &cx), run("app.print"));
+}
+
+#[test]
+fn a_dormant_binding_leaves_its_keys_to_the_next_and_comes_back() {
+    let mut k = Keymap::new();
+    let fw = OwnerId::FRAMEWORK;
+    k.bind(&fw, Layer::Default, "Ctrl+K", Action::run("app.find"), "")
+        .unwrap();
+    k.rebind(
+        &OwnerId::USER,
+        Layer::User,
+        &cmd("gone.act"),
+        Some("Ctrl+K"),
+    )
+    .unwrap();
+    let cx = WhenContext::new();
+    assert_eq!(k.resolve(&keys("Ctrl+K"), &cx), run("gone.act"));
+    assert_eq!(k.conflicts().len(), 1);
+
+    assert!(k.set_dormant([cmd("gone.act")]));
+    assert!(!k.set_dormant([cmd("gone.act")]), "the same set");
+    assert!(k.is_dormant(&cmd("gone.act")));
+    let (r, trace) = k.resolve_traced(&keys("Ctrl+K"), &cx);
+    assert_eq!(r, run("app.find"), "the key falls through");
+    let asleep = trace
+        .candidates
+        .iter()
+        .find(|c| c.binding.layer == Layer::User)
+        .unwrap();
+    assert_eq!(
+        asleep.verdict,
+        Verdict::Lost {
+            to: "app.find".into(),
+            because: DORMANT
+        }
+    );
+    assert!(trace.to_string().contains("dormant"), "{trace}");
+    // It shows no key and makes no conflict; it is listed apart and
+    // still saved with its layer.
+    assert!(k.keys_for(&cmd("gone.act")).is_empty());
+    assert!(k.conflicts().is_empty());
+    let dormant = k.dormant();
+    assert_eq!(dormant.len(), 1);
+    assert_eq!(dormant[0].keys, keys("Ctrl+K"));
+    assert_eq!(dormant[0].layer, Layer::User);
+    assert_eq!(k.export(&OwnerId::USER, Layer::User).bindings.len(), 2);
+
+    // Its command back: the binding wins its key again.
+    assert!(k.set_dormant([]));
+    assert_eq!(k.resolve(&keys("Ctrl+K"), &cx), run("gone.act"));
+    assert!(k.dormant().is_empty());
 }
 
 fn pid(id: &str) -> PanelId {

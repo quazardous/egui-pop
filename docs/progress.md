@@ -15,13 +15,16 @@ events, nothing is read.
 
 | Event | Data |
 |---|---|
-| `job.started` | `id`, `title`, `kind`, `parent`, `weight`, `total` (none: indeterminate), `steps` (`[{id, title, weight}]`), `cancellable` (true), `pausable` (false), `retryable` (true) |
+| `job.started` | `id`, `title`, `kind`, `parent`, `weight`, `total` (none: indeterminate), `steps` (`[{id, title, weight}]`), `cancellable` (true), `pausable` (false), `retryable` (true), `owner` (the plugin it runs for), `command` (the command that started it) |
 | `job.progress` | `id`, `done`, `total`, `failed`, `skipped`, `item`, `item_progress` (0 to 1), `phase`, `step`, `step_done`, `step_total`, `estimate` (the host's own fraction) |
 | `job.item_failed` | `id`, `item`, `error` (the job goes on) |
-| `job.paused`, `job.resumed`, `job.cancelling` | `id` |
+| `job.paused`, `job.resumed` | `id` |
+| `job.cancelling` | `id`, `reason` (why, when it was not the user) |
 | `job.failed` | `id`, `error` |
 | `job.finished` | `id`, `actions` (`[{title, command, args}]`: "Show in folder") |
-| `job.cancelled` | `id` |
+| `job.cancelled` | `id`, `reason` (why, when it was not the user) |
+| `job.orphaned` | `id`, `plugin`, `reason` (from `egui_pop`, not the host: the job's plugin is disconnected and the job goes on) |
+| `job.adopted` | `plugin`, `jobs` (from `egui_pop`: the plugin is back, these jobs are no longer orphaned) |
 | `job.log` | `id`, `text` (lines of the job's log) |
 
 A `job.started` for a job already known starts it again (a retry): its
@@ -88,6 +91,38 @@ from the moment it was asked until the host publishes `job.cancelled`;
 a refused command leaves the reason in `Job::request_error`. The model
 follows the commands' `command.dispatched` and `command.failed` events,
 so a request from an agent or a script shows the same way.
+
+### A job's owner, and what happens when it goes
+
+A job belongs to a plugin when its `job.started` names it: `owner` (the
+plugin's id) or `command` (a command the plugin declared, the one that
+started the job). A job naming neither belongs to the plugin that
+published it, when the events' source is a plugin's id; a host's job
+naming no one has no owner. `Job::owner` and `Job::command` keep them.
+
+When the plugin is disconnected
+([ADR 0028](adr/0028-removed-contributor-work-in-flight.md)), each of
+its jobs still going on gets one of two ends, both on the journal
+(`Jobs::left_by` decides, the model follows the events as for any
+other):
+
+- a job naming it that is `cancellable` is cancelled by the host: the
+  framework runs `job.cancel` with `{ "id", "reason" }` (source
+  `script:egui_pop`, `reason` "its plugin `x` is disconnected"). The job
+  shows "cancelling" until the host publishes `job.cancelled`, and keeps
+  the reason (`Job::reason`); a host that refuses leaves
+  `Job::request_error` as for any request;
+- any other (not cancellable, or published by the plugin itself, which
+  will never end it) is kept and marked orphaned: `job.orphaned` with the
+  `plugin` and the `reason`, `Job::orphaned`. The jobs centre says
+  "running, its plugin x is off" and offers Dismiss on it though it goes
+  on (`Jobs::dismiss` accepts an orphaned job). The mark goes when the
+  job ends or starts again, or when the plugin reconnects
+  (`job.adopted`).
+
+A child job follows its parent. `plugin.disconnected` counts both ends
+(`jobs_cancelled`, `jobs_orphaned`), and each is an info line in the
+log. Without the jobs plugin nothing is done: nothing follows jobs.
 
 ### The `jobs.estimate` step
 

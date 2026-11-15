@@ -638,12 +638,28 @@ pub(crate) struct Derived {
     pub conflicts: Vec<(Binding, Binding)>,
     /// The live bindings of the system scope (global shortcuts).
     pub system: Vec<Binding>,
+    /// The bindings kept dormant: their command went with a plugin.
+    pub dormant: Vec<DormantKey>,
     /// Each layer's bindings, as saved (what `export_keymap` gives).
     pub layers: BTreeMap<Layer, egui_pop_model::keymap::KeymapDoc>,
     /// Commands whose keys the user changed.
     pub rebound: BTreeSet<CommandId>,
     /// Commands whose keys were changed for the workspace.
     pub rebound_workspace: BTreeSet<CommandId>,
+}
+
+/// A key binding kept dormant (ADR 0028): its command went with a plugin
+/// now disconnected. It stays in its layer, saved, takes no key, and is
+/// live again when the plugin reconnects.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[non_exhaustive]
+pub struct DormantKey {
+    /// The binding: its keys, the command it runs, its layer and owner.
+    pub binding: Binding,
+    /// The disconnected plugin its command went with.
+    pub plugin: PluginId,
+    /// The plugin's title, as a shortcuts editor names it.
+    pub plugin_title: String,
 }
 
 /// What a block or a handler asks of the application, done before the
@@ -2180,6 +2196,15 @@ impl AppHandle {
     /// refused run name.
     pub fn command_gone_with(&self, id: &CommandId) -> Option<PluginId> {
         self.0.gone_commands.borrow().get(id).cloned()
+    }
+
+    /// The key bindings kept dormant (ADR 0028): those of the user, the
+    /// workspace or another plugin whose command went with a plugin now
+    /// disconnected, each with that plugin. They take no key (it goes to
+    /// the next binding of it) and are live again when the plugin
+    /// reconnects; a shortcuts editor lists them apart.
+    pub fn dormant_keys(&self) -> Vec<DormantKey> {
+        self.0.derived.borrow().dormant.clone()
     }
 
     /// A command's declaration.
@@ -4979,11 +5004,11 @@ impl App {
         b.register(
             FnCollector::new(
                 "keys",
-                "The keymap's last resolutions, each binding considered and why it won or lost.",
+                "The keymap's last resolutions, each binding considered and why it won or lost; `dormant` lists the bindings whose command went with a disconnected plugin.",
             )
             .snapshot(move |_| {
                 let Ok(app) = up(&w) else { return Json::Null };
-                json!({ "pending": app.pending_keys(), "traces": app.key_traces() })
+                json!({ "pending": app.pending_keys(), "traces": app.key_traces(), "dormant": app.dormant_keys() })
             }),
         )
         .expect("distinct names");
@@ -5384,14 +5409,18 @@ impl App {
     fn said_gone(&mut self, plugin: &PluginId, owner: &OwnerId, reason: &str, removed: Removed) {
         let steps: usize = removed.undo.iter().map(|d| d.steps).sum();
         let mixed: usize = removed.undo.iter().map(|d| d.mixed).sum();
+        // The jobs it leaves, read before the event that counts them.
+        let jobs = crate::jobs::left_by(&self.handle, plugin, owner, &removed.commands);
         log::info!(
             target: "egui_pop",
-            "plugin `{plugin}` disconnected ({reason}): {} command(s), {} panel(s), {} component(s), {} host(s), {} mount(s), {steps} undo step(s) ({mixed} mixed) removed",
+            "plugin `{plugin}` disconnected ({reason}): {} command(s), {} panel(s), {} component(s), {} host(s), {} mount(s), {steps} undo step(s) ({mixed} mixed) removed; {} job(s) to cancel, {} orphaned",
             removed.commands.len(),
             removed.panels,
             removed.mounts.components,
             removed.mounts.hosts,
             removed.mounts.mounts,
+            jobs.cancel.len(),
+            jobs.orphan.len(),
         );
         let undo: Vec<Json> = removed
             .undo
@@ -5414,6 +5443,8 @@ impl App {
                     "mounts": removed.mounts.mounts,
                     "undo_steps": steps,
                     "mixed_undo_steps": mixed,
+                    "jobs_cancelled": jobs.cancel.len(),
+                    "jobs_orphaned": jobs.orphan.len(),
                 },
                 "undo": undo,
             }),
@@ -5422,6 +5453,9 @@ impl App {
         // dialogs are cancelled; its commands are kept as gone, so a run
         // of one is refused naming it and a toast's action greyed.
         crate::dialogs::owner_gone(&self.handle, plugin, owner, &removed.commands);
+        // Its jobs: the host is asked to cancel those naming it, the
+        // others are said orphaned.
+        crate::jobs::owner_gone(&self.handle, plugin, &jobs);
         let mut gone = self.handle.0.gone_commands.borrow_mut();
         for c in removed.commands {
             gone.insert(c, plugin.clone());
@@ -5523,6 +5557,18 @@ impl App {
     /// never per frame.
     pub fn rebuild(&mut self) {
         let mut d = Diagnostics::new();
+        // Keys bound to a command that went with its plugin are dormant
+        // while it is off (ADR 0028): they stay, and take no key.
+        let gone: BTreeMap<CommandId, PluginId> = self
+            .handle
+            .0
+            .gone_commands
+            .borrow()
+            .iter()
+            .filter(|(c, _)| self.reg.commands.spec(c).is_none())
+            .map(|(c, p)| (c.clone(), p.clone()))
+            .collect();
+        self.reg.keymap.set_dormant(gone.keys().cloned());
         let reg = &self.reg;
         // Hooks in order: `after` constraints, then priority.
         let hooks: Vec<&Hook> = reg.hooks.iter().map(|s| &s.item).collect();
@@ -5697,6 +5743,41 @@ impl App {
             .collect();
         derived.conflicts = reg.keymap.conflicts();
         derived.system = reg.keymap.system_bindings();
+        derived.dormant = reg
+            .keymap
+            .dormant()
+            .into_iter()
+            .filter_map(|binding| {
+                let plugin = match &binding.action {
+                    egui_pop_model::keymap::Action::Run(c) => gone.get(c)?.clone(),
+                    _ => return None,
+                };
+                let plugin_title = self
+                    .plugins
+                    .iter()
+                    .find(|s| s.id == plugin)
+                    .map_or_else(|| plugin.to_string(), |s| s.plugin.title());
+                Some(DormantKey {
+                    binding,
+                    plugin,
+                    plugin_title,
+                })
+            })
+            .collect();
+        // Each is said once, when it falls asleep.
+        let asleep = self.handle.0.derived.borrow().dormant.clone();
+        for k in &derived.dormant {
+            if !asleep.contains(k) {
+                log::info!(
+                    target: "egui_pop",
+                    "keys: `{}` ({:?} layer) is dormant: its command `{}` went with plugin `{}`",
+                    k.binding.keys,
+                    k.binding.layer,
+                    k.binding.action,
+                    k.plugin
+                );
+            }
+        }
         derived.layers = [
             Layer::Suggestion,
             Layer::Default,

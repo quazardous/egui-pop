@@ -1374,7 +1374,65 @@ fn shortcuts_of(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str, poin
         st.pointer_capture = Some((id, None));
         st.capture = None;
     }
+    dormant_keys(ui, app, filter, key_filter.as_deref());
     widget_uses(ui, filter, key_filter.as_deref());
+}
+
+/// The keys kept dormant (ADR 0028): bound by the user, the workspace or
+/// another plugin to a command that went with a plugin now disconnected.
+/// Listed with the plugin's name, not changed here: they are live again
+/// when the plugin is back.
+fn dormant_keys(ui: &mut Ui, app: &AppHandle, filter: &str, key_filter: Option<&str>) {
+    let ctx = ui.ctx().clone();
+    let t = Tokens::of(&ctx);
+    let needle = filter.trim().to_lowercase();
+    let rows: Vec<_> = app
+        .dormant_keys()
+        .into_iter()
+        .filter(|k| key_filter.is_none_or(|f| k.binding.keys.to_string() == f))
+        .filter(|k| {
+            needle.is_empty()
+                || k.binding
+                    .action
+                    .to_string()
+                    .to_lowercase()
+                    .contains(&needle)
+                || k.plugin_title.to_lowercase().contains(&needle)
+                || k.binding.keys.to_string().to_lowercase().contains(&needle)
+        })
+        .collect();
+    if rows.is_empty() {
+        return;
+    }
+    ui.add_space(t.space.m);
+    ui.strong(strings::tr(&ctx, &txt::SHORTCUTS_DORMANT));
+    ui.label(strings::tr(&ctx, &txt::SHORTCUTS_DORMANT_NOTE));
+    egui::Grid::new("egui_pop.shortcuts.dormant")
+        .num_columns(3)
+        .striped(true)
+        .spacing([t.space.m, t.space.xs])
+        .show(ui, |ui| {
+            for k in &rows {
+                // The command is gone with its title: its id names it.
+                let name = ui.label(k.binding.action.to_string());
+                let keys = k.binding.keys.to_string();
+                ui.monospace(match app.key_source_name(&ctx, &k.binding) {
+                    Some(source) => strings::tr_args(
+                        &ctx,
+                        &txt::SHORTCUTS_KEY_FROM,
+                        &[("keys", &keys), ("source", &source)],
+                    ),
+                    None => keys,
+                })
+                .labelled_by(name.id);
+                ui.weak(strings::tr_args(
+                    &ctx,
+                    &txt::SHORTCUTS_DORMANT_PLUGIN,
+                    &[("plugin", &k.plugin_title)],
+                ));
+                ui.end_row();
+            }
+        });
 }
 
 /// The widgets' own uses of the secondary button, seen or declared
