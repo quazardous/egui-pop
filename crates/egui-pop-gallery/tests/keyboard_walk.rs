@@ -1134,8 +1134,11 @@ fn arrows_stay_in_a_menu_opened_from_its_button() {
     let mut h = harness("overview");
     assert_eq!(name(walk::press(&mut h, TAB)), "File");
     walk::press(&mut h, ENTER);
-    assert!(name(walk::press(&mut h, DOWN)).starts_with("Settings"));
-    assert!(name(walk::press(&mut h, DOWN)).starts_with("Quit"));
+    // File: Settings, Quick settings, then Quit.
+    for first in ["Settings", "Quick settings", "Quit"] {
+        let reached = name(walk::press(&mut h, DOWN));
+        assert!(reached.starts_with(first), "{first}: {reached}");
+    }
 }
 
 #[test]

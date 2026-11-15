@@ -309,15 +309,25 @@ fn preview(ui: &mut Ui, app: &AppHandle) {
 /// Where the gallery keeps its settings: a composite store whose handler
 /// keeps the gallery's own (`gallery.*`, the project's size among them)
 /// in memory, every other setting going to a file in a temporary folder
-/// of this process (in memory too on the web, which has no files).
+/// of this gallery (in memory too on the web, which has no files).
+///
+/// The folder is the process's and the gallery's own: a test that builds
+/// a second gallery in its process starts it with the settings it would
+/// have at a launch, not with what the first one saved (the interface
+/// zoom it changed, read back from the file by the second).
 fn gallery_store() -> CompositeStore {
     #[cfg(not(target_arch = "wasm32"))]
-    let default = egui_pop::api::admin::store::FileStore::new().file(
-        ValueScope::App,
-        std::env::temp_dir()
-            .join(format!("egui-pop-gallery-{}", std::process::id()))
-            .join("settings.json"),
-    );
+    let default = {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static GALLERIES: AtomicUsize = AtomicUsize::new(0);
+        let n = GALLERIES.fetch_add(1, Ordering::Relaxed);
+        egui_pop::api::admin::store::FileStore::new().file(
+            ValueScope::App,
+            std::env::temp_dir()
+                .join(format!("egui-pop-gallery-{}-{n}", std::process::id()))
+                .join("settings.json"),
+        )
+    };
     #[cfg(target_arch = "wasm32")]
     let default = MemoryStore::new(&[ValueScope::App]);
     let gallery = MemoryStore::new(&[ValueScope::App, PROJECT.scope])
