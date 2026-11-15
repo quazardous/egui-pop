@@ -7,6 +7,10 @@
 //! need to the call that makes it, from the `/// Need (group): ...` doc
 //! lines of the crates; its test fails when it is stale (`ui_index.rs`).
 //!
+//! `families --check` checks that every public module of every published
+//! crate is in exactly one row of the component families' table, ADR 0027
+//! (`families.rs`).
+//!
 //! `publish` publishes the workspace's crates to crates.io in the order
 //! of their dependencies, skipping what is already there (`publish.rs`).
 //!
@@ -36,6 +40,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 
 mod affected;
+mod families;
 mod gallery;
 mod publish;
 mod release;
@@ -62,6 +67,8 @@ Tasks:
   ui-index [--check]     write docs/ui-index.md, need -> widget, from the
                          `/// Need (group): ...` doc lines of the crates;
                          a test fails when it is stale
+  families --check       every public module of the published crates is
+                         in exactly one family row of ADR 0027
   publish [--dry-run] [--interval SECS]
                          publish the workspace's crates to crates.io in the
                          order of their dependencies, skipping the versions
@@ -329,6 +336,7 @@ fn main() -> ExitCode {
         Some("screenshots") => screenshots(&args[1..]),
         Some("hosts") => hosts(),
         Some("ui-index") => ui_index::ui_index(&args[1..]),
+        Some("families") => families::families(&args[1..]),
         Some("publish") => publish::publish(&args[1..]),
         Some("affected") => affected::affected(&args[1..]),
         Some("changeset-check") => release::check(&args[1..]),

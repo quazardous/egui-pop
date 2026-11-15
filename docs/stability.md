@@ -8,6 +8,8 @@ patch releases only add or fix.
 How long a deprecated item keeps working, and what counts as breaking
 for an extension (tokens, steps, commands, strings, the host contract),
 is in [GOVERNANCE.md](../GOVERNANCE.md).
+What each component family owns and refuses, with the tier this page
+gives it, is in [ADR 0027](adr/0027-component-families.md).
 
 ## Versions of the crates
 

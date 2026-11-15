@@ -120,6 +120,7 @@
   - [0024: Bridge modes and read-only commands](adr/0024-bridge-modes-and-read-only-commands.md)
   - [0025: Application windows](adr/0025-application-windows.md)
   - [0026: Layer ranks](adr/0026-layer-ranks.md)
+  - [0027: Component families](adr/0027-component-families.md)
 - [Micro-indicators, the design](design/indicators.md)
 - [Agent control, the design](design/agent-control.md)
 - [Icons: an inventory](icons.md)
