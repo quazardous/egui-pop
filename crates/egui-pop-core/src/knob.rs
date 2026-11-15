@@ -141,6 +141,8 @@ const TURN: Slot<Turn> = Slot::new("core.knob.turn");
 const UNWRAPPED: Slot<f64> = Slot::new("core.knob.unwrapped");
 
 /// A rotary knob over an `f64`.
+///
+/// Need (input): a rotary knob.
 #[derive(Debug)]
 pub struct Knob<'a> {
     value: &'a mut f64,

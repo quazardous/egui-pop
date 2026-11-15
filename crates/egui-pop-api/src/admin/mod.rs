@@ -183,6 +183,8 @@ struct State {
 
 /// The administration app's state, manifests, hooks, widget kinds and
 /// value layers.
+///
+/// Need (dialog): a settings or admin page declared as a manifest.
 #[derive(Default)]
 pub struct Admin {
     state: Mutex<State>,

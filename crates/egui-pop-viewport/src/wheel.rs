@@ -134,6 +134,9 @@ impl WheelTokens {
 }
 
 /// A colour wheel, with its luminance slider.
+///
+/// Need (image): a colour wheel.
+/// Need (input): a colour picked on a wheel.
 #[derive(Debug)]
 pub struct ColorWheel<'a> {
     value: &'a mut WheelValue,

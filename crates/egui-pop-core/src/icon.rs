@@ -46,6 +46,8 @@ pub const FAMILY: &str = "egui-pop-icons";
 
 /// What an icon means. Each has a glyph in the icon font (with the
 /// `phosphor` feature) and a painted fallback.
+///
+/// Need (icon): an icon by name.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[non_exhaustive]
 pub enum Icon {
@@ -1201,6 +1203,9 @@ impl Tone {
 }
 
 /// An icon as a widget.
+///
+/// Need (icon): an icon as a widget (sized, toned, clickable).
+/// Need (action): an icon button.
 #[derive(Clone, Debug)]
 #[must_use]
 pub struct IconWidget {

@@ -373,6 +373,8 @@ struct State {
 }
 
 /// The queue of toasts.
+///
+/// Need (help): a toast, a short notice that fades.
 #[derive(Clone, Debug, Default)]
 pub struct Toasts(Arc<Mutex<State>>);
 

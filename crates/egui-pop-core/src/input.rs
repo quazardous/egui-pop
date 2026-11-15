@@ -215,22 +215,32 @@ impl<'a> Input<'a> {
 
     /// A text field named `label` (for assistive technologies and
     /// agents; the label itself is drawn by the form around it).
+    ///
+    /// Need (input): a single-line text field.
+    /// Need (input): a text field with a placeholder.
     pub fn text(value: &'a mut String, label: &str) -> Self {
         Self::with(Value::Text(value), Kind::Text, label)
     }
 
     /// A search field: a magnifier before the query, clearable.
+    ///
+    /// Need (input): a search field.
+    /// Need (input): a filter box.
     pub fn search(value: &'a mut String, label: &str) -> Self {
         Self::with(Value::Text(value), Kind::Search, label).leading_icon(Icon::Search)
     }
 
     /// A path field.
+    ///
+    /// Need (input): a file or folder path field.
     pub fn path(value: &'a mut String, label: &str) -> Self {
         Self::with(Value::Text(value), Kind::Path, label)
     }
 
     /// A number field: a number or an expression (`x * 2`, `1,5`),
     /// committed when it loses the focus.
+    ///
+    /// Need (input): a number field with a unit.
     pub fn number(value: &'a mut f64, label: &str) -> Self {
         Self::with(Value::Number(value), Kind::Number, label)
     }
@@ -957,6 +967,8 @@ pub struct SplitOutput {
 
 /// A split button on its own: an action (`text`) and a chevron opening
 /// a menu of `items`. Both parts take the focus and join the Tab order.
+///
+/// Need (action): a button with a menu of alternatives (split button).
 pub fn split_button(ui: &mut Ui, text: &str, items: &[&str]) -> SplitOutput {
     let t = Tokens::of(ui.ctx());
     let h = ui.spacing().interact_size.y;

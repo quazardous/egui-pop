@@ -322,6 +322,8 @@ fn paint_mark(ui: &Ui, kit: &Kit, mark: Glyph, big: Rect, color: Color32) {
 }
 
 /// A checkbox ([`Checkbox`]): `ui.checkbox`, drawn through the kit.
+///
+/// Need (input): a checkbox.
 pub fn checkbox<'a>(ui: &mut Ui, checked: &'a mut bool, atoms: impl IntoAtoms<'a>) -> Response {
     ui.add(Checkbox::new(checked, atoms))
 }
@@ -333,6 +335,8 @@ pub fn radio<'a>(ui: &mut Ui, checked: bool, atoms: impl IntoAtoms<'a>) -> Respo
 
 /// A radio button setting `current` to `alternative` when clicked:
 /// `ui.radio_value`, drawn through the kit.
+///
+/// Need (input): one choice among a few (radio buttons).
 pub fn radio_value<'a, V: PartialEq>(
     ui: &mut Ui,
     current: &mut V,
@@ -352,6 +356,8 @@ pub fn radio_value<'a, V: PartialEq>(
 /// choice stays visible under the pointer), its label in the state's
 /// `text`. egui's `ui.selectable_label` (a selectable [`egui::Button`]),
 /// drawn through the kit, with egui's padding and height.
+///
+/// Need (data): a row picked from a short list.
 #[must_use = "You should put this widget in a ui with `ui.add(widget);`"]
 pub struct SelectableRow<'a> {
     selected: bool,
@@ -420,6 +426,8 @@ impl Widget for SelectableRow<'_> {
 /// checkbox for assistive technology, named by [`ToggleChip::name`]
 /// (else its text). The find bar's case, whole word and regular
 /// expression options.
+///
+/// Need (input): a toggle chip, a filter turned on or off.
 #[must_use = "You should put this widget in a ui with `ui.add(widget);`"]
 pub struct ToggleChip<'a> {
     on: &'a mut bool,
@@ -591,6 +599,8 @@ pub fn selectable_label<'a>(ui: &mut Ui, selected: bool, atoms: impl IntoAtoms<'
 /// `sort-ascending` or `sort-descending` glyph after the title. A button for
 /// assistive technology, a label when it does not sort. The data table's and
 /// the file picker's.
+///
+/// Need (data): a sortable column header.
 #[derive(Clone, Copy, Debug)]
 pub struct SortHeader<'a> {
     /// What it shows.

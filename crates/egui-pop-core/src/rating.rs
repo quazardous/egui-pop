@@ -112,6 +112,8 @@ pub struct RatingResponse {
 }
 
 /// Five stars (see the [module](self)).
+///
+/// Need (input): a star rating.
 #[derive(Clone, Debug)]
 #[must_use = "show it with `show` or `show_at`"]
 pub struct RatingStars {

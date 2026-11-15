@@ -126,6 +126,8 @@ impl HistogramTokens {
 }
 
 /// The histogram widget.
+///
+/// Need (image): a histogram.
 #[derive(Debug)]
 pub struct Histogram<'a> {
     channels: Vec<Channel<'a>>,

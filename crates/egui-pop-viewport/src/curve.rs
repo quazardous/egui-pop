@@ -326,6 +326,8 @@ type Points = Vec<[f32; 2]>;
 static MONOTONE: MonotoneCubic = MonotoneCubic;
 
 /// The curve editor.
+///
+/// Need (image): a curve editor.
 #[derive(Debug)]
 pub struct CurveEditor<'a> {
     points: &'a mut Points,

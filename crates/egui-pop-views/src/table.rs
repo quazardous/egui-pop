@@ -345,6 +345,8 @@ pub fn column_item(column: &str) -> SelectionItem {
 }
 
 /// The data table widget.
+///
+/// Need (data): a table with sortable, resizable columns.
 #[derive(Debug)]
 pub struct DataTable<'a> {
     id: String,

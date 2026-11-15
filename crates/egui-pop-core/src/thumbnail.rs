@@ -223,6 +223,8 @@ pub fn thumbnail_grid(ui: &mut Ui, count: usize, cell: Vec2, item: impl FnMut(&m
 ///     let _ = columns;
 /// }
 /// ```
+///
+/// Need (image): a grid of thumbnails.
 #[derive(Clone, Debug)]
 pub struct ThumbnailGrid {
     count: usize,

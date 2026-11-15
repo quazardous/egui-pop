@@ -3,6 +3,10 @@
 //! `hosts` writes `docs/hosts.md` from the mount declarations (ADR
 //! 0013), through the page's own test.
 //!
+//! `ui-index` writes `docs/ui-index.md`, the "use these" index mapping a
+//! need to the call that makes it, from the `/// Need (group): ...` doc
+//! lines of the crates; its test fails when it is stale (`ui_index.rs`).
+//!
 //! `publish` publishes the workspace's crates to crates.io in the order
 //! of their dependencies, skipping what is already there (`publish.rs`).
 //!
@@ -35,6 +39,7 @@ mod affected;
 mod gallery;
 mod publish;
 mod release;
+mod ui_index;
 
 use ab_glyph::{Font as _, FontRef, PxScale, ScaleFont as _};
 use image::imageops::{self, FilterType as Resize};
@@ -54,6 +59,9 @@ Tasks:
                          name contains it (`--list` prints the names)
   hosts                  write docs/hosts.md from the mount declarations
                          (ADR 0013); a test fails when it is stale
+  ui-index [--check]     write docs/ui-index.md, need -> widget, from the
+                         `/// Need (group): ...` doc lines of the crates;
+                         a test fails when it is stale
   publish [--dry-run] [--interval SECS]
                          publish the workspace's crates to crates.io in the
                          order of their dependencies, skipping the versions
@@ -320,6 +328,7 @@ fn main() -> ExitCode {
     let result = match args.first().map(String::as_str) {
         Some("screenshots") => screenshots(&args[1..]),
         Some("hosts") => hosts(),
+        Some("ui-index") => ui_index::ui_index(&args[1..]),
         Some("publish") => publish::publish(&args[1..]),
         Some("affected") => affected::affected(&args[1..]),
         Some("changeset-check") => release::check(&args[1..]),

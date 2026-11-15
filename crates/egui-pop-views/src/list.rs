@@ -160,6 +160,8 @@ pub struct ListOutput<K> {
 }
 
 /// The list widget.
+///
+/// Need (data): a long list, virtualised.
 #[derive(Debug)]
 pub struct ListView<'a> {
     id: String,

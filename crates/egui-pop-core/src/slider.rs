@@ -618,6 +618,8 @@ macro_rules! spec_builders {
 pub(crate) use spec_builders;
 
 /// A slider over an `f64`.
+///
+/// Need (input): a slider over a number.
 #[derive(Debug)]
 pub struct Slider<'a> {
     value: &'a mut f64,

@@ -597,6 +597,9 @@ enum Kind {
 
 /// A micro-indicator, built then added inline (`ui.add`) or painted on
 /// a widget ([`Indicator::on`], [`Indicator::paint_at`]).
+///
+/// Need (status): a status dot, a LED, a count badge or a flag.
+/// Need (status): a colour swatch.
 #[derive(Clone, Debug, PartialEq)]
 #[must_use = "add it with `ui.add`, or paint it on a widget with `on` or `paint_at`"]
 pub struct Indicator {

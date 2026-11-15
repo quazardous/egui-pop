@@ -69,6 +69,9 @@ enum Shape {
 }
 
 /// Grey shapes standing in for content.
+///
+/// Need (state): a value or a list still loading.
+/// Need (state): placeholder shapes while content loads.
 #[derive(Clone, Debug, PartialEq)]
 #[must_use = "add it with `ui.add`"]
 pub struct Skeleton {
@@ -215,6 +218,9 @@ impl Widget for Skeleton {
 }
 
 /// An empty place: an icon, a title, a sentence, an action.
+///
+/// Need (state): an empty state, nothing here yet.
+/// Need (state): no results for a search or a filter.
 #[derive(Clone, Debug, PartialEq)]
 #[must_use = "show it with `show`"]
 pub struct EmptyState {

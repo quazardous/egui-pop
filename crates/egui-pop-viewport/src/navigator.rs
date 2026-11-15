@@ -115,6 +115,8 @@ fn zoomed(m: Option<Mapping>, f: impl Fn(f64) -> f64) -> Option<View> {
 }
 
 /// The zoom control: zoom out, the zoom, zoom in, fit, 100 %.
+///
+/// Need (image): a zoom control.
 #[derive(Debug)]
 pub struct ZoomControl<'a> {
     state: &'a mut ViewportState,
@@ -248,6 +250,8 @@ pub fn percent_text(ctx: &egui::Context, percent: f64) -> String {
 }
 
 /// The navigator: the whole image and the part in view.
+///
+/// Need (image): an image navigator (overview with the visible area).
 #[derive(Debug)]
 pub struct Navigator<'a> {
     state: &'a mut ViewportState,

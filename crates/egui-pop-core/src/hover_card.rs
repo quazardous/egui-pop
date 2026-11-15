@@ -311,6 +311,8 @@ pub fn is_open(ctx: &Context, id: Id) -> bool {
 }
 
 /// A hover card next to a widget.
+///
+/// Need (help): a hover card, a rich tooltip with rows and links.
 #[derive(Clone, Copy, Debug)]
 #[must_use = "show it with `show`"]
 pub struct HoverCard {
