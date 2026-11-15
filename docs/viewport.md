@@ -428,3 +428,85 @@ session):
    Wide-gamut preview setting on, a test chart with colours outside
    sRGB (a saturated P3 or BT.2020 green) shows them distinct where
    the sRGB preview clips them.
+
+## The contract
+
+The family "Image viewport" ([ADR 0027](adr/0027-component-families.md)).
+
+**Owns**: the view model and mapping, tile sources and the cache, the
+GPU path, the display transform, the Wayland image surface, gestures,
+hooks, cursors, the loupe, overlays in image coordinates, navigation,
+the debug collector, a demo source.
+
+**Refuses**: decoding image formats; colour management beyond the
+display transform; raw development. The source computes pixels, the
+viewport asks and draws.
+
+The modules the sections above do not name:
+
+| Module | What it is |
+|---|---|
+| `egui_pop_viewport::tiles` | The tile cache's limits and counters: `TILE_SIZE`, `DEFAULT_BUDGET`, `DEFAULT_SETTLE`, `UploadBudget`, `UploadReport`, `Transfers`, `Device`, and the scales (`proxy_scale`, `exact_scale`) |
+| `egui_pop_viewport::thumbnail` | A re-export of `egui_pop_core::thumbnail` ([Thumbnails](thumbnails.md)) |
+| `egui_pop_viewport::tokens` | `ViewportTokens`: the `viewport.*` colours of the installed theme (background, frame, grid, guides, handles, cursors) |
+| `egui_pop_viewport::debug` | The `viewport` collector for the debug bridge |
+
+**The tile cache.** Each frame, for each side shown, the cache takes in
+what the source delivered (dropping answers no longer wanted, marking a
+changed region's tiles stale) and uploads it within the upload budget,
+the visible area's tiles first; it wants the proxy (the whole image at a
+power of two at or below the fit scale) and, once the view has been
+still for `DEFAULT_SETTLE` seconds, the exact tiles of what is visible;
+asks for what it lacks and cancels what is no longer wanted; draws the
+proxy, then the exact tiles over it, stale tiles staying until their
+replacements come; and evicts the least recently drawn tiles past the
+texture budget, never one drawn this frame. A tile is never larger than
+the device's largest texture side. The limits are the state's:
+
+```rust
+use egui_pop::viewport::ViewportState;
+use egui_pop::viewport::tiles::UploadBudget;
+
+let mut state = ViewportState::new();
+state.set_texture_budget(128 << 20);
+state.set_upload_budget(UploadBudget::tiles(8));
+state.set_tile_size(512);
+```
+
+**The debug collector.** Register `egui_pop_viewport::debug::collector`
+on the bridge; its `viewport` snapshot lists every viewport drawn (view,
+mapping, hooks set and what they decided, the last signals, the tiles,
+the bytes their uploads copied, the device tiles), and its `set_view`
+action moves a viewport as a command would, through its `before_view`
+hook, on the next frame.
+
+```rust
+use egui_pop::core::debug::DebugBridge;
+
+let mut bridge = DebugBridge::with_core_collectors();
+bridge.register(egui_pop::viewport::debug::collector()).unwrap();
+```
+
+**States and failure**: a source that never answers leaves its
+requests outstanding (the collector's tiles say how many) and nothing
+drawn where its tiles would be; a failed device request falls back to uploaded tiles (see
+Device tiles); a view larger than the texture budget still shows whole,
+the budget only evicting what is not drawn.
+
+**Accessibility**: the viewport is named by `Viewport::label` ("Image
+viewport" by default) and says its zoom as its value ("100 %"); its
+keys follow the pointer profile and the canvas commands
+([Pointer gestures](pointer-gestures.md#the-canvas-in-use)).
+
+**Tier**: **Experimental** ("The image viewport (`egui-pop-viewport`):
+its view model, mapping, signals and hooks may still move while the
+first application adopts it", [API stability](stability.md)).
+
+**Tests**: `crates/egui-pop-viewport/tests/`: `tiles.rs` (proxy then
+exact tiles, cancelling on pan, changed regions, bounded backlog,
+eviction, conversion on the delivering thread, the largest texture
+side, one image pixel per physical pixel at 100 % on both paths),
+`device_tiles.rs`, `view.rs` (the collector and `set_view`),
+`overlays.rs`, `navigation.rs`, `canvas_navigation.rs`, `pointer.rs`,
+`cursor.rs`, `loupe.rs`, `images.rs`. The tokens and the thumbnail
+re-export have no test of their own.

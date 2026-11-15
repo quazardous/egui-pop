@@ -520,3 +520,63 @@ questions:
    strips (and the activity bar) always show icons.
 7. **The command palette shows an icon when the command declares one.**
 8. **egui-pop gets a toolbar component.**
+
+## 8. An application's own icons: the contract
+
+The icon set (`egui_pop_core::icon_set`) is where an application or a
+plugin adds SVG icons to the vocabulary. It belongs to the family
+"Feedback, hints and icons" ([ADR 0027](adr/0027-component-families.md)).
+
+**Owns**: registering SVGs by name, drawing them like egui-pop's own
+(`Icon::Custom`), rasterising them per icon size and pixel density, the
+names agents read.
+
+**Refuses**: an icon font as a default other than the bundled one;
+animated icons; colouring a full-colour icon.
+
+```rust
+use egui_pop_core::icon_set::{self, Paint};
+
+const MASK: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/></svg>"#;
+
+fn setup() {
+    // An application's own name stays bare; a plugin's is prefixed by its id.
+    let icon = icon_set::register("mask-circle", MASK, Paint::Mono);
+    let theirs = icon_set::register_for("my-plugin", "mask-circle", MASK, Paint::Mono);
+    let _ = (icon, theirs, icon_set::by_name("my-plugin:mask-circle"));
+}
+```
+
+A plugin calls `Ctx::icon`, which registers under its id. Once
+registered, the name works everywhere a name does: `CommandSpec::icon`,
+`PanelSpec::icon`, a kit's glyphs (`glyph.<role>: "<name>"`).
+
+- **Paint**: `Paint::Mono` is a white mask tinted at draw with the
+  colour the widget gives (one texture for every colour); `Paint::Colour`
+  is drawn as it is (a logo).
+- **Rasterising**: `egui_pop_core::icon_set::install` (run with the
+  theme) rasterises every icon at the theme's `size.icon.*` and the
+  window's pixels per point; an icon drawn at another size is rasterised
+  once at that size, then kept (a scaled texture would blur).
+- **Registering again** under a name replaces its SVG, in use from the
+  next theme install. A name is kept for the whole process: the set
+  has no removal (see the note in 4.5).
+
+**Failure**: `register` refuses (`IconError`) a name of egui-pop's own
+or in the `phosphor:` name space (`Taken`), an SVG that does not parse
+(`Svg`), and everything without the `svg` feature (`Unsupported`). A
+name nobody registered is reported where it is declared and drawn as a
+placeholder (4.1).
+
+**Accessibility**: an icon is never a name; the widget drawing it takes
+its name from its command or its caller.
+
+**Tier**: **Supported** with the icons, decided in
+[API stability](stability.md) on 2026-11-15 (released since 0.8; the
+names and their prefixes are what declarations and kits store).
+
+**Tests**: unit tests in `crates/egui-pop-core/src/icon_set.rs` (a name
+and a mask, a plugin's prefix, refusals, a kit glyph naming an
+application icon, one texture per size, a size rasterised once);
+commands drawn with their icons in
+`crates/egui-pop-api/tests/command_icons.rs`.

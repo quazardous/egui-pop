@@ -558,6 +558,70 @@ the agent's `origin`: a before-hook there can narrow what an offered
 agent may type (one terminal, a read-only console, an allowed list of
 commands) or veto it.
 
+## The contract
+
+The families "Text and code editors" and "Terminal"
+([ADR 0027](adr/0027-component-families.md)).
+
+**Owns**: the line buffer, selection and history, virtualised drawing,
+search and replace, markers, folding, a pluggable highlighter, code
+assist providers, the editors' steps and tokens; the terminal's drawing
+over vt100's emulator.
+
+**Refuses**: a language server (the assist traits are shaped for a
+client, which is the application's); an IDE's project model; a shell or
+terminal multiplexing.
+
+The modules a reader may not find above:
+
+| Module | What it is |
+|---|---|
+| `egui_pop_editors::text` | `TextSurface`, [the text surface](#the-text-surface) |
+| `egui_pop_editors::code` | `CodeEditor`, [the code editor](#the-code-editor); `HIGHLIGHT_BUDGET` (500 lines a pass) |
+| `egui_pop_editors::search` | Search and replace over a `Buffer`, pure: what the bar and `editor.find`/`editor.replace` run |
+| `egui_pop_editors::tokens` | `EditorTokens`: the `editor.*` and `syntax.*` colours of the installed theme |
+
+`search` is usable without a widget, on a buffer:
+
+```rust
+use egui_pop::editors::buffer::Buffer;
+use egui_pop::editors::search::{self, Query};
+
+let buffer = Buffer::from_text("let a = 1;\nlet b = a;");
+let mut query = Query::new("a");
+query.whole_word = true;
+let found = search::find_all(&buffer, &query).unwrap();
+assert_eq!(found.len(), 2);
+```
+
+A `Query` is its text with `case_sensitive`, `whole_word` and `regex`;
+`search::find_all` lists the matches in order (at most `MAX_MATCHES`,
+an empty query finds nothing, an invalid expression is an error with
+its reason); `next_from` and `previous_from` wrap around;
+`replacement_for` expands `$1` and `${name}`. `EditorTokens::of(ctx)`
+reads the colours of the theme installed in a context, and
+`EditorTokens::kind` the colour of a kind of code; a theme changes them
+through its `editor.*` and `syntax.*` aliases ([Design tokens](tokens.md)).
+
+**States and failure**: an edit vetoed by a before-hook on
+`edit.change` is not applied; a highlighter past its budget leaves the
+rest plain until a later pass; an invalid search expression finds
+nothing and its reason is kept for the bar to show.
+
+**Accessibility**: each editor is a text input named by its `label`
+and follows egui-pop's focus rules for text inputs; the status line
+says the line and column.
+
+**Tier**: **Experimental** ("The text and code editors and the terminal
+(`egui-pop-editors`)", [API stability](stability.md)).
+
+**Tests**: `crates/egui-pop-editors/tests/editors.rs` (typing, moving
+and Escape; the clipboard refused; search and replace from the bar; the
+gutter, folds, markers and virtualisation; steps, veto, save and
+commands; every step declared; assist through its steps; the wheel at
+the end), unit tests in `search.rs` and the other modules;
+`crates/egui-pop-editors/tests/terminal.rs` and `terminal_windows.rs`.
+
 ## Gaps
 
 - **No language server client yet**: the assist traits are shaped for

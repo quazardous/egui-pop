@@ -283,6 +283,59 @@ output (`ViewportOutput::hint`, `GraphOutput::hint`) and for a status
 line (`egui_pop::core::pointer::hint_now`). The viewport shows the hand
 when the keys held make a drag pan where a plain drag would not.
 
+## The canvas in use
+
+`egui_pop_core::canvas` says which canvas (the node graph, the image
+viewport, a plot, an application's own) the navigation commands go to.
+It belongs to the family "Pointer and canvas"
+([ADR 0027](adr/0027-component-families.md)); it owns which canvas is
+in use and the commands waiting for it, and refuses the navigation
+model itself (the viewport crate's `egui_pop_viewport::navigation`).
+
+- A canvas marks itself active each frame the pointer is over it or it
+  has the keyboard (`egui_pop_core::canvas::mark_active`);
+  `egui_pop_core::canvas::active` is the one marked this frame or the
+  one before, `last` the one marked last however long ago.
+- The application's `view.*` commands (`view.fit`,
+  `view.frame_selection`, `view.zoom_in`, …) go through
+  `egui_pop_core::canvas::request` to the canvas in use, else to the one
+  marked last (where an agent's command goes), or to one by id with
+  `request_to`; the canvas takes them at its next frame
+  (`egui_pop_core::canvas::take`). The `canvasActive` context key says
+  whether one is in use, so the commands' keys reach nothing else.
+- A canvas publishes its zoom (`set_zoom`, 1 is 100 %) for a zoom
+  control to show; hand mode (`hand`, `set_hand`: a primary drag pans
+  every canvas, for a pen) is shared by every canvas.
+
+```rust
+use egui_pop::core::canvas;
+use egui_pop::egui;
+
+fn my_canvas(ui: &mut egui::Ui, zoom: &mut f32) {
+    let id = ui.id().with("my_canvas");
+    let response = ui.allocate_response(ui.available_size(), egui::Sense::click_and_drag());
+    if response.hovered() || response.has_focus() {
+        canvas::mark_active(ui.ctx(), id);
+    }
+    for command in canvas::take(ui.ctx(), id) {
+        if command == "view.zoom_in" {
+            *zoom *= 2.0;
+        }
+    }
+    canvas::set_zoom(ui.ctx(), id, *zoom);
+}
+```
+
+A command sent when no canvas was ever marked is dropped (`request`
+answers false); commands a canvas does not know are its to ignore.
+Tier: **Experimental**, with the pointer gestures ("Pointer gestures
+and the canvas … profiles of input are not designed yet", [API
+stability](stability.md)). Tests:
+`crates/egui-pop-viewport/tests/canvas_navigation.rs` (the image takes
+the view commands and their keys and is the canvas in use, hand mode,
+each profile's navigation keys) and `navigation.rs`; no test in
+`egui-pop-core` yet.
+
 ## A widget's own secondary button
 
 The secondary button opens a context menu everywhere by default, and a

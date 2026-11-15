@@ -50,6 +50,9 @@ of every crate with every feature on.
 - [Linked panels](linked-panels.md): a selection in one view driving a
   preview in another panel, what each view says of its selection, panels
   moved, closed or detached, slow previews.
+- [Late values and latest-wins loads](late-values.md): a cell for a
+  value that arrives late, in four states, keeping its size; a slow load
+  following a selection where the latest asked wins.
 - [The context stack](contexts.md): places (a drill-down and its
   breadcrumb) and modes (global states and their chips) owned by the
   kernel and projected by the interface, kernel state and view state,
@@ -87,6 +90,12 @@ of every crate with every feature on.
 - [Hosts and components](hosts.md): what can live where (panels,
   palettes, auxiliary windows, dialogs, overlays, the status bar), and
   why a combination is not supported.
+- [The native runner, reads and waiting](runner.md): the event loop
+  egui-pop owns around eframe, the read kernel (keyed, never waiting,
+  stale while revalidating), waiting on the application.
+- [The hook kernel](hook-kernel.md): typed hook points, ordered
+  listeners, `alter` and `collect`, an error boundary per listener;
+  without egui.
 - [The image viewport](viewport.md): tiles from a source the application
   implements; wide gamut and HDR.
 - [Image tools](image-tools.md): a histogram with clipping markers and
@@ -113,6 +122,8 @@ of every crate with every feature on.
 - [Sliders](sliders.md): darktable-style sliders (soft and hard range,
   typed expressions, fine and coarse, reset, a quad button), logarithmic,
   gradient tracks, range sliders, the `slider.change` step.
+- [Compact controls](compact.md): a choice in a compact cell, a menu
+  row, the scrub field and the input cell, for dense rows.
 - [Inputs, field states and Tab order](inputs.md): the decorated
   input (placeholder, icons, prefix and suffix, a clear button, attached
   and split buttons, a dropdown), the field states every input shows
@@ -138,6 +149,8 @@ of every crate with every feature on.
   timecode, or bars and beats: a playhead to scrub, a range that loops,
   markers and cue points, snapping, the J/K/L transport keys, each change
   a step of the history, driven by agents.
+- [Thumbnails](thumbnails.md): a thumbnail from an image the application
+  supplies, a placeholder colour until it is there, a virtualised grid.
 - [The photo library](library.md): a virtualised thumbnail grid and a
   filmstrip over thumbnails supplied asynchronously, ratings, colour
   labels, flags and stacks, the culling keys, a comparison, tag chips
@@ -162,6 +175,19 @@ of every crate with every feature on.
   each a band (disclosure mark, title, count) over its own scrolling
   body, folded, resized at the line between two and remembered; drawn
   by the kit; the classic apps compared and the crates surveyed.
+- [Overlays, placement, layers and header bands](overlays.md): the
+  overlay stack's rules, placing a floating element, layer ranks, the
+  band a movable surface is dragged by.
+- [Dialogs and the settings window](dialogs.md): confirm, form,
+  choose, info and custom dialogs; the settings window and the pages
+  plugins add to it.
+- [F6 regions](regions.md): F6 between a window's parts, where it
+  lands, what blocks it.
+- [Accessibility](accessibility.md): names for custom widgets, the
+  announcer, the checks.
+- [Containment: fault boundaries and the paint guard](containment.md):
+  a panel that panics stays in its rectangle; a window never stays
+  empty without a word.
 - [Jobs and progress](progress.md): the host's background jobs folded
   from its journal, each with an estimated overall percentage, their
   commands, the `jobs.estimate` step, a fake host for tests.
@@ -172,6 +198,7 @@ of every crate with every feature on.
   [a single instance and deep links](instance.md),
   [notifications](notifications.md), [the tray icon](tray.md),
   [global shortcuts](global-shortcuts.md), [logs and crash reports](logs.md),
+  [the folders an application writes to](dirs.md),
   [the focus mode read in-process](focus-mode.md),
   [the system's text scaling](fonts.md#starting-from-the-systems-text-size).
 - [Tips](tips.md): a tip of the day and contextual hints, registered
