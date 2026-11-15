@@ -116,6 +116,8 @@ Three tiers:
   the zoom control and navigator, their steps in `egui-pop-imaging`),
   the node graph (`egui_pop::viewport::graph`) and its wire router
   (`ortho-router`).
+- The hook kernel (`egui-pop-hooks`): new; its API may move while
+  the first applications move their extension points onto it.
 - The data views (`egui-pop-views`): the tree, the list, the data table,
   the in-app viewer and the photo library.
 - The text and code editors and the terminal (`egui-pop-editors`).

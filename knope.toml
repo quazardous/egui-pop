@@ -32,6 +32,13 @@ versioned_files = [
     { path = "Cargo.lock", dependency = "ortho-router" },
 ]
 
+[packages.egui-pop-hooks]
+versioned_files = [
+    "crates/egui-pop-hooks/Cargo.toml",
+    { path = "Cargo.toml", dependency = "egui-pop-hooks" },
+    { path = "Cargo.lock", dependency = "egui-pop-hooks" },
+]
+
 [packages.egui-pop-win32]
 versioned_files = [
     "crates/egui-pop-win32/Cargo.toml",
