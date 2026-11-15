@@ -140,6 +140,27 @@ jobs:
       - run: cargo clippy -p egui-pop-api -p egui-pop-gallery --all-targets --locked --features egui-pop-api/native-dialogs,egui-pop-gallery/native-dialogs -- -D warnings
       - run: cargo doc --workspace --no-deps --locked
 
+  # Every published crate checked on its own (tools/check-alone.sh), with
+  # and without its default features: a workspace build unifies features
+  # across members, so a crate leaning on one another member turns on
+  # builds there and fails for docs.rs and its users (egui-pop-winit's
+  # winit had no X11 or Wayland backend of its own). Its own cache: each
+  # crate alone resolves other features than the workspace's clippy.
+  alone:
+    name: Crates built alone
+    needs: changes
+    if: needs.changes.outputs.clippy == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: alone
+      - run: tools/check-alone.sh
+
   # The guides compiled as documentation, when only they changed (clippy
   # documents the whole workspace otherwise).
   doc:
@@ -471,7 +492,7 @@ jobs:
   ci:
     name: CI
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository)
-    needs: [changes, fmt, clippy, doc, book, test, video, webview, deny, wasm, package, changeset, semver]
+    needs: [changes, fmt, clippy, alone, doc, book, test, video, webview, deny, wasm, package, changeset, semver]
     runs-on: ubuntu-24.04
     steps:
       - env:

@@ -178,6 +178,7 @@ selected and skipped, the critical tests added) in the run's summary.
 |---|---|
 | `fmt` | a `.rs` file changed |
 | `clippy` (and `cargo doc`) | a crate's file changed, other than a snapshot |
+| `alone` (`tools/check-alone.sh`: every published crate's `cargo check -p`, with and without its default features, outside the workspace's feature unification) | as `clippy` |
 | `doc` (the guides' `cargo doc`) | documentation changed and `clippy` does not run |
 | `book` (the docs site: `mdbook build`, `tools/book/summary.py`, `tools/book/links.py`) | a file under `docs/`, `book.toml` or `tools/book/` changed |
 | `test` | always: the selection above, critical tests at least |
