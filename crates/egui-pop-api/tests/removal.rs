@@ -342,7 +342,7 @@ fn what_a_plugin_left_on_screen_is_cancelled_greyed_kept_dormant_or_removed() {
     h.run_as(OPEN, Json::Null, Origin::User);
     harness.run();
     // A mount of nobody's, which stays.
-    h.mount(mounts::JOBS_CENTRE, mounts::STATUS_BAR).unwrap();
+    h.mount(mounts::PROGRESS, mounts::PANEL).unwrap();
     let dialogs = h.service(&DIALOGS).unwrap();
     dialogs.open(Info::new("Unrelated", "Stays open."));
     assert_eq!(dialogs.len(), 2);
