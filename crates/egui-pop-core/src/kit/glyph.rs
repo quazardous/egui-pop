@@ -11,6 +11,8 @@ macro_rules! glyphs {
     ($($(#[$doc:meta])* $role:ident: $name:literal => $default:ident,)*) => {
         /// What a small mark means. The vocabulary is fixed: a widget
         /// needing a new mark adds a role here, never a shape of its own.
+        ///
+        /// Need (icon): a small mark by meaning (disclosure, sort, check, close).
         #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
         pub enum Glyph {
             $($(#[$doc])* $role,)*

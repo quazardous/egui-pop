@@ -196,6 +196,8 @@ of every crate with every feature on.
   (official, community, featured), the entry format, how to get listed
   and the checks an entry passes; the extension template
   (`templates/extension`).
+- [UI index](ui-index.md): what to use for a need (a search field, an
+  empty state, a section title), generated from the crates' API.
 - [The gallery](gallery.md): the catalogue application and its options.
 - [A Rerun-like viewer](rerun-like.md): an example application with the
   Rerun viewer's look and layout (a kit from Rerun's design tokens, a

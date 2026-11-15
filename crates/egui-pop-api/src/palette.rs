@@ -142,6 +142,8 @@ struct State {
 
 /// The palettes' state, one per window group
 /// (`AppHandle::window_group`): open or not, the query.
+///
+/// Need (dialog): a command palette.
 #[derive(Debug, Default)]
 pub struct Palette(Arc<Mutex<BTreeMap<egui::ViewportId, State>>>);
 

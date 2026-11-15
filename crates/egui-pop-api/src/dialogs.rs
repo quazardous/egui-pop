@@ -193,6 +193,9 @@ const DRAG_DIM: f32 = 0.35;
 const BIG_STEP: f32 = 8.0;
 
 /// A question before an action.
+///
+/// Need (dialog): a confirmation dialog.
+/// Need (dialog): ask before a destructive action.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Confirm {
     pub title: String,

@@ -269,6 +269,8 @@ pub struct SectionsResponse {
 
 /// A stack of collapsible sections filling the room it is given (a
 /// panel's height), named for its memory and for agents.
+///
+/// Need (layout): collapsible sections in a panel.
 #[derive(Clone, Debug)]
 pub struct Sections {
     name: String,

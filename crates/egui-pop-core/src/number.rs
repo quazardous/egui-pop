@@ -64,6 +64,8 @@ pub enum Refusal {
 }
 
 /// A number input; see the [module](self).
+///
+/// Need (input): a number field with steps and limits.
 #[derive(Debug)]
 #[must_use = "call .show(ui)"]
 pub struct NumberInput<'a> {

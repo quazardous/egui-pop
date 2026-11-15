@@ -56,10 +56,14 @@ impl TooltipPlacement {
 pub trait TooltipExt: Sized {
     /// Shows `text` in the kit's tooltip while the widget is hovered and
     /// enabled, as [`Response::on_hover_text`] does with egui's.
+    ///
+    /// Need (help): a tooltip.
     fn tip(self, text: impl Into<WidgetText>) -> Self;
     /// Shows `text` in the kit's tooltip while the widget is hovered and
     /// disabled (the reason it is), as
     /// [`Response::on_disabled_hover_text`].
+    ///
+    /// Need (help): why a control is disabled.
     fn disabled_tip(self, text: impl Into<WidgetText>) -> Self;
     /// Shows `add` in the kit's tooltip while the widget is hovered and
     /// enabled, as [`Response::on_hover_ui`].

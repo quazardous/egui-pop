@@ -60,6 +60,7 @@
 - [The agent socket](agent-socket.md)
 - [Driving the gallery with egui-mcp](inspection.md)
 - [Extensions](extensions.md)
+- [UI index](ui-index.md)
 - [The gallery](gallery.md)
 - [A Rerun-like viewer](rerun-like.md)
 

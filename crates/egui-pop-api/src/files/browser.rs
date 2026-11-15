@@ -3153,6 +3153,8 @@ struct TypeAhead {
 /// The file browser: entries from a [`FileSource`], shown by a
 /// [`ViewMode`] chosen in its toolbar (or with `Ctrl+1` to `Ctrl+9`), kept
 /// per dialog in the host's store when drawn with [`FileBrowser::show_in`].
+///
+/// Need (dialog): a file or folder picker.
 pub struct FileBrowser {
     id: egui::Id,
     source: Arc<dyn FileSource>,

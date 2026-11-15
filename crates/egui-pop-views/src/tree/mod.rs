@@ -665,6 +665,8 @@ enum ContextMenu<'a, K> {
 }
 
 /// The tree widget.
+///
+/// Need (data): a tree, lazy and keyboard-driven.
 pub struct TreeView<'a, K: Key> {
     id: String,
     label: Option<String>,

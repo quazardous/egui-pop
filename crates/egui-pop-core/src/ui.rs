@@ -194,29 +194,45 @@ mod sealed {
 /// over the theme's tokens and kit; see the [module](self).
 pub trait UiPop: sealed::Sealed {
     /// A label in a text role ([`role_text`]).
+    ///
+    /// Need (text): a label in a named text role (body, strong, code...).
     fn text_role(&mut self, role: TextRole, text: impl Into<String>) -> Response;
 
     /// A section's title (`text-role.section`).
+    ///
+    /// Need (text): a section title.
+    /// Need (text): a heading over a group of fields.
     fn section_title(&mut self, text: impl Into<String>) -> Response;
 
     /// Secondary text: a hint, a description (`text-role.muted`).
+    ///
+    /// Need (text): secondary text, a hint or a description.
+    /// Need (text): greyed or weak text.
     fn muted(&mut self, text: impl Into<String>) -> Response;
 
     /// Small print about an item: a date, a size (`text-role.meta`).
+    ///
+    /// Need (text): small print about an item, a date or a size.
     fn meta(&mut self, text: impl Into<String>) -> Response;
 
     /// Space by intent along the layout's direction ([`Space`]); egui's
     /// own `add_space` takes points.
+    ///
+    /// Need (layout): space between blocks, by intent (never a number of points).
     fn space_role(&mut self, space: Space);
 
     /// `add` inside the kit's `card` in a tone ([`Tone::Neutral`] for
     /// the plain card).
+    ///
+    /// Need (layout): a card, a framed group.
     fn card<R>(&mut self, tone: Tone, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R>;
 
     /// egui's button in a tone of the kit's `button` (`button.tone.*`):
     /// a [`Stock::Button`] scope ([`UiPop::scoped`]), so the button keeps
     /// its layout, icon and shortcut text. [`Tone::Neutral`] is the plain
     /// button.
+    ///
+    /// Need (action): a button by tone (primary, danger, quiet).
     fn button_tone(&mut self, tone: Tone, text: impl Into<WidgetText>) -> Response;
 
     /// `add` in a scope where egui's own widgets of a [`Stock`] kind
@@ -225,6 +241,8 @@ pub trait UiPop: sealed::Sealed {
     /// egui's widget visuals, so egui keeps drawing the widget
     /// ([`Kit::scope`]). Visuals compiled with the kit: the scope only
     /// copies them.
+    ///
+    /// Need (layout): one of egui's own widgets, styled by the kit.
     fn scoped<R>(
         &mut self,
         stock: Stock,
@@ -236,6 +254,8 @@ pub trait UiPop: sealed::Sealed {
     /// arrow) with its box drawn from the kit's `combo-box`
     /// ([`Stock::ComboBox`]), `add` its list's content:
     /// `ComboBox::show_ui` in a scope.
+    ///
+    /// Need (input): a drop-down choice (combo box).
     fn combo_box<R>(
         &mut self,
         combo: ComboBox,
@@ -254,6 +274,8 @@ pub trait UiPop: sealed::Sealed {
     /// them, and takes the focus itself when it overflows with nothing focusable
     /// inside. A widget reading those keys without sensing drags says so with
     /// [`focus::takes_keys`](crate::focus::takes_keys).
+    ///
+    /// Need (layout): a scrolling region.
     fn scroll_area<R>(
         &mut self,
         area: ScrollArea,
@@ -277,6 +299,8 @@ pub trait UiPop: sealed::Sealed {
     /// [`UiPop::scroll_area`] for `rows` rows `row_height` high, the `Ui`'s item
     /// spacing apart: egui's `ScrollArea::show_rows`, `add` given the rows in
     /// view.
+    ///
+    /// Need (data): many rows of equal height, only the visible ones drawn.
     fn scroll_area_rows<R>(
         &mut self,
         area: ScrollArea,

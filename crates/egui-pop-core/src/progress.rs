@@ -164,6 +164,8 @@ fn paint_fill(kit: &Kit, cx: &KitCx<'_>, rect: Rect, room: Rect, tone: Tone) {
 }
 
 /// A progress bar.
+///
+/// Need (state): a progress bar.
 #[derive(Clone, Debug)]
 #[must_use = "add it with `ui.add`"]
 pub struct ProgressBar {
@@ -479,6 +481,8 @@ pub fn paint_ring_on(painter: &Painter, rect: Rect, fraction: Option<f32>, color
 
 /// A small circular progress: determinate (an arc from the top) or
 /// indeterminate (a turning arc).
+///
+/// Need (state): a small circular progress.
 #[derive(Clone, Debug)]
 #[must_use = "add it with `ui.add`"]
 pub struct Ring {
@@ -555,6 +559,8 @@ impl Widget for Ring {
 /// A value against thresholds (disk space, memory), not progress: a bar
 /// whose tone follows the highest threshold reached. AccessKit role
 /// `Meter`.
+///
+/// Need (status): a level against thresholds (disk space, memory).
 #[derive(Clone, Debug)]
 #[must_use = "add it with `ui.add`"]
 pub struct Meter {
@@ -678,6 +684,9 @@ impl Widget for Meter {
 
 /// A spinner, with a label after it; [`Spinner::delayed`] shows it only
 /// after `motion.spinner.delay`, and keeps it `motion.spinner.min`.
+///
+/// Need (state): a busy spinner.
+/// Need (state): a value still loading.
 #[derive(Clone, Debug)]
 #[must_use = "add it with `ui.add`"]
 pub struct Spinner {

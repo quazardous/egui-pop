@@ -561,6 +561,8 @@ pub struct ViewportOutput {
 }
 
 /// The viewport widget, built per frame.
+///
+/// Need (image): an image viewport (pan, zoom, tiles).
 pub struct Viewport<'a> {
     source: Option<&'a dyn TileSource>,
     before: Option<&'a dyn TileSource>,
