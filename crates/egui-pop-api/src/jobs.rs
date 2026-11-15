@@ -260,8 +260,9 @@ impl JobsService {
         lock(&self.state).jobs.take_changed()
     }
 
-    /// Folds the journal's new events.
-    fn fold(&self, app: &AppHandle) {
+    /// Folds the journal's new events: a read that must see every job
+    /// event up to the last (a wait, a disconnection) calls it first.
+    pub(crate) fn fold(&self, app: &AppHandle) {
         let time = egui_pop_core::motion::now(&app.egui());
         let seen = {
             let mut s = lock(&self.state);
