@@ -123,7 +123,9 @@ other):
   `settled`) leave it out, and `Jobs::orphans` lists it apart. The
   `jobs` collector says `orphaned` (a count) beside `idle`, and
   `bridge.wait` answers it too: an agent sees the job without waiting
-  on it.
+  on it. With only orphaned jobs going on, the status bar's ring stays
+  still (a spinning ring asks for a repaint each pass, so the
+  application would never settle).
 
 A child job follows its parent. `plugin.disconnected` counts both ends
 (`jobs_cancelled`, `jobs_orphaned`), and each is an info line in the

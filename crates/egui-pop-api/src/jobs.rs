@@ -510,10 +510,20 @@ fn status_item(ui: &mut Ui, app: &AppHandle) {
             // The ring is drawn only: the button's text names the item.
             let side = t.size.icon_inline;
             let (rect, _) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::hover());
+            // Only orphaned jobs going on: nothing owns them and they may
+            // never end, so the ring does not spin for them (a spinning
+            // ring asks for a repaint each pass, and the application
+            // would never settle).
+            let owned = jobs.with(|j| j.roots().iter().any(|r| r.active() && r.orphaned.is_none()));
+            let fraction = summary.fraction.map(|f| f as f32);
             paint_ring(
                 ui,
                 rect,
-                summary.fraction.map(|f| f as f32),
+                if owned {
+                    fraction
+                } else {
+                    Some(fraction.unwrap_or(0.0))
+                },
                 Tone::Accent.color(&ctx),
             );
         } else {
