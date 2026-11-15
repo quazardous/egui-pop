@@ -1048,3 +1048,151 @@ fn without_a_store_the_window_says_the_values_last_the_session() {
     h.get_by_label("Changes made here last this session only: nothing keeps them.");
     egui_pop_test::assert_all_named(&h);
 }
+
+/// A read asked of [`Gated`]: its command, and where its answer goes.
+type Ask = (String, std::sync::mpsc::Sender<Json>);
+
+/// A host's transport whose reads wait for the test to answer them.
+struct Gated {
+    asked: std::sync::Mutex<std::sync::mpsc::Sender<Ask>>,
+}
+
+impl egui_pop_api::reads::ReadTransport for Gated {
+    fn serves(&self, command: &str) -> bool {
+        command.starts_with("disk.")
+    }
+    fn read(&self, command: &str, _: &Json) -> Result<Json, String> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.asked
+            .lock()
+            .unwrap()
+            .send((command.into(), tx))
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(std::time::Duration::from_secs(10))
+            .map_err(|e| e.to_string())
+    }
+}
+
+struct Disks;
+
+impl Plugin for Disks {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("disks")
+    }
+
+    fn title(&self) -> String {
+        "Disks".into()
+    }
+
+    fn requires(&self) -> Vec<PluginId> {
+        vec![PluginId::from_static("egui_pop.admin")]
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        let admin = ctx.app().service(&ADMIN).expect("the admin service");
+        admin.manifest(
+            Manifest::new(FORMAT)
+                .scope("storage", "Storage", "disk")
+                .section("storage/volumes", "Volumes", |s| {
+                    s.status(Status::command("use", "In use", "disk.use", "/summary"))
+                        .table(
+                            Records::command("disks", "Disks", "disk.list", "/disks", "id")
+                                .column("name", "Name")
+                                .column("free", "Free"),
+                        );
+                }),
+        );
+        Ok(())
+    }
+}
+
+type Asked = std::sync::mpsc::Receiver<Ask>;
+
+fn disks() -> (
+    Harness<'static, App>,
+    std::sync::Arc<egui_pop_api::reads::ReadKernel>,
+    Asked,
+) {
+    use egui_pop_api::reads::{ReadKernel, ReadPolicy};
+    let (tx, rx) = std::sync::mpsc::channel();
+    let kernel = std::sync::Arc::new(ReadKernel::new(std::sync::Arc::new(Gated {
+        asked: std::sync::Mutex::new(tx),
+    })));
+    kernel.policy("disk.list", ReadPolicy::new().invalidated_by(&["disk.*"]));
+    let app = App::builder()
+        .plugins(DefaultPlugins)
+        .plugin(AdminPlugin)
+        .plugin(Disks)
+        .build(&egui::Context::default())
+        .unwrap();
+    app.handle()
+        .service(&ADMIN)
+        .unwrap()
+        .attach_reads(kernel.clone());
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1100.0, 720.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.step();
+    (h, kernel, rx)
+}
+
+/// Answers the reads asked of `rx` until both are, with `answer`, and
+/// waits for them to land.
+fn answer_reads(rx: &Asked, k: &egui_pop_api::reads::ReadKernel, answer: impl Fn(&str) -> Json) {
+    while let Ok((command, tx)) = rx.recv_timeout(std::time::Duration::from_millis(200)) {
+        tx.send(answer(&command)).unwrap();
+    }
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while k.in_flight() > 0 {
+        assert!(std::time::Instant::now() < until, "a read never landed");
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+}
+
+fn disk_answer(command: &str, free: &str) -> Json {
+    match command {
+        "disk.use" => json!({ "summary": { "text": "Caches hold 3 GB", "tone": "info" } }),
+        _ => json!({ "disks": [
+            { "id": "a", "name": "Archive", "free": free },
+            { "id": "b", "name": "Scratch", "free": "9 GB" }
+        ] }),
+    }
+}
+
+#[test]
+fn kernel_reads_draw_the_labels_at_once_and_fill_in_without_blanking() {
+    let (mut h, k, rx) = disks();
+    let a = h.state().handle().service(&ADMIN).unwrap();
+    run(&mut h, &CMD_OPEN, json!({ "path": "storage/volumes" }));
+    // Frame 0 of the page: the reads are in flight on the kernel's
+    // threads, the frame did not wait for them: the labels are drawn,
+    // the values not yet.
+    h.get_by_label("In use");
+    h.get_by_label("Disks");
+    assert!(h.query_all_by_label("Archive").next().is_none());
+    assert!(k.in_flight() > 0, "read away from the UI thread");
+    answer_reads(&rx, &k, |c| disk_answer(c, "1 GB"));
+    h.run();
+    h.get_by_label("Caches hold 3 GB");
+    h.get_by_label("Archive");
+    h.get_by_label("1 GB");
+    let before = k.fetches();
+    // A disk event: the list is read again, its rows kept meanwhile.
+    k.event("disk.changed");
+    for _ in 0..4 {
+        h.step();
+        assert!(
+            h.query_all_by_label("Archive").next().is_some(),
+            "a refresh blanked the list"
+        );
+        h.get_by_label("Caches hold 3 GB");
+    }
+    assert!(a.refreshing("disk.list", &Json::Null));
+    h.get_by_label("Refreshing…");
+    answer_reads(&rx, &k, |c| disk_answer(c, "2 GB"));
+    h.run();
+    h.get_by_label("2 GB");
+    assert!(h.query_all_by_label("1 GB").next().is_none());
+    assert!(h.query_all_by_label("Refreshing…").next().is_none());
+    assert_eq!(k.fetches(), before + 1, "only the list was read again");
+}

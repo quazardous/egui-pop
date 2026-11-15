@@ -193,6 +193,9 @@ pub struct Admin {
     searches: Mutex<BTreeMap<String, WidgetSearchFn>>,
     diagnostics: Mutex<Diagnostics>,
     reads: Mutex<Reads>,
+    /// The host's read kernel: the commands its transport serves are read
+    /// through it, away from the UI thread ([`Admin::attach_reads`]).
+    kernel: Mutex<Option<Arc<crate::reads::ReadKernel>>>,
     /// The wizard running, if any.
     wizard: Mutex<Option<wizard::Running>>,
     /// What the last wizard finished ran.
@@ -649,6 +652,10 @@ impl Admin {
         } else {
             args.clone()
         };
+        if let Some(k) = self.kernel_for(command) {
+            k.set_context(&app.egui());
+            return k.read(command, &args).answer();
+        }
         let key = read_key(command, &args);
         let mut r = lock(&self.reads);
         if let Some(a) = r.answers.get(&key) {
@@ -709,9 +716,30 @@ impl Admin {
         } else {
             args.clone()
         };
+        if let Some(k) = self.kernel_for(command) {
+            return k.peek(command, &args).state == crate::reads::ReadState::Refreshing;
+        }
         let key = read_key(command, &args);
         let r = lock(&self.reads);
         r.stale.contains_key(&key) && !r.answers.contains_key(&key)
+    }
+
+    /// Reads the commands `kernel`'s transport serves through it: a
+    /// status or a list shows at once what the kernel holds, read again
+    /// in the background ([`crate::reads`]); the events the page looks at
+    /// reach the kernel's policies, and a refresh makes its values out of
+    /// date without dropping them. Other commands are run as before.
+    pub fn attach_reads(&self, kernel: Arc<crate::reads::ReadKernel>) {
+        *lock(&self.kernel) = Some(kernel);
+    }
+
+    /// The read kernel attached, if any.
+    pub fn reads(&self) -> Option<Arc<crate::reads::ReadKernel>> {
+        lock(&self.kernel).clone()
+    }
+
+    fn kernel_for(&self, command: &str) -> Option<Arc<crate::reads::ReadKernel>> {
+        lock(&self.kernel).clone().filter(|k| k.serves(command))
     }
 
     /// Sets the answers read aside and forgets the reads still in flight
@@ -722,6 +750,10 @@ impl Admin {
         let answers = std::mem::take(&mut r.answers);
         r.stale.extend(answers);
         r.asked.clear();
+        drop(r);
+        if let Some(k) = self.reads() {
+            k.invalidate_all();
+        }
     }
 
     /// Looks at the journal since the last look: a command that changes
@@ -736,6 +768,11 @@ impl Admin {
         lock(&self.reads).seq = Some(last);
         if since.is_none() {
             return;
+        }
+        if let Some(k) = self.reads() {
+            for e in &events {
+                k.event(&e.name);
+            }
         }
         let matches = |name: &str| {
             patterns.iter().any(|p| match p.strip_suffix('*') {
