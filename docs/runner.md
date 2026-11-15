@@ -49,6 +49,17 @@ creates and paints every window; owning the loop adds:
   above. `egui_pop_api::runner::windows` lists the viewports whose
   window is known, the main one first; a closed viewport leaves the list.
 
+- **Paced paints**: a window paints at most once per interval, a little
+  under the fastest screen's refresh period (60 Hz when no screen tells
+  its rate); a redraw that comes sooner is held and painted at its time.
+  Vsync and Wayland's frame callbacks pace a window already; this holds
+  where the present does not wait (an X server without DRI3, Mesa's
+  software rendering), where a window that animates would otherwise draw
+  hundreds of frames a second. The wbox scenario
+  `tools/wbox/multi_window.py` checks it on X11 and Wayland: over a few
+  idle seconds the idle windows draw at most a few frames a second, the
+  animating one at most its screen's refresh.
+
 ```rust
 use egui_pop_api::runner;
 

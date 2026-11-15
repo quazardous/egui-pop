@@ -117,7 +117,7 @@ released").
   is contained, named and logged:
   `crates/egui-pop-api/tests/paint_guard.rs`
   (`a_panel_that_panics_is_contained_and_named`); mounted components in
-  boundaries: `crates/egui-pop-gallery/tests/mounts.rs`.
+  boundaries: `crates/egui-pop-gallery/tests/it/mounts.rs`.
 - The paint guard: `crates/egui-pop-api/tests/paint_guard.rs` (a focus
   screen with and without its page, a window that paints nothing, with
   and without decorations, the watch turned off).

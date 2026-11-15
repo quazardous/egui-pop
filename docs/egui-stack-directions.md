@@ -46,7 +46,7 @@ holds for the other.
 | `workbench.rs:2785-2850` | `paint_tabs`: the kit paints the bars and tabs over what egui_dock laid out. |
 | `workbench.rs:2852-2970` | `TabViewer` for panels: `id`, `title`, `ui`, `on_tab_button`, `tab_style_override`, `context_menu`, `allowed_in_windows`. |
 | `workbench.rs:2972-3093` | `follow_drag`, `drop_hint`: drops between areas, the veto, the hint and the ghost tab, done by egui-pop (gone 2026-11-07: the space's drag, `dock_drop_allowed`). |
-| `crates/egui-pop-api/tests/theme_pairs.rs:183`, `crates/egui-pop-gallery/tests/gallery.rs:1766` | Tests that lean on egui_dock's drag timing. |
+| `crates/egui-pop-api/tests/theme_pairs.rs:183`, `crates/egui-pop-gallery/tests/it/gallery.rs:1766` | Tests that lean on egui_dock's drag timing. |
 
 egui-pop builds egui_dock without features (`Cargo.toml:87`): it never
 serializes a `DockState`.

@@ -6325,7 +6325,7 @@ fn help_says_about_the_gallery_and_links_to_the_repository_and_the_docs() {
 fn a_kit_redraws_the_workbench_tabs_from_the_theme_alone() {
     // A kit folder that only changes the tab component's data and shape:
     // no code, the `underline` handler egui-pop ships.
-    let kit = egui_pop::tokens::kit!("../../../examples/kits/underline-tabs");
+    let kit = egui_pop::tokens::kit!("../../../../examples/kits/underline-tabs");
     assert!(egui_pop::tokens::kit::check(&kit).is_empty());
     let mut themes = egui_pop::tokens::Themes::default();
     themes.add_kit(&kit);
@@ -6425,7 +6425,7 @@ fn a_kit_puts_the_title_at_the_start_of_the_title_bar() {
 fn a_kit_gives_the_window_buttons_the_macos_flavour() {
     // A kit folder, data only: `traffic-light` circles at the start of
     // the bar, every glyph shown while the pointer is over one of them.
-    let kit = egui_pop::tokens::kit!("../../../examples/kits/flavour-macos");
+    let kit = egui_pop::tokens::kit!("../../../../examples/kits/flavour-macos");
     assert!(egui_pop::tokens::kit::check(&kit).is_empty());
     let mut themes = egui_pop::tokens::Themes::default();
     themes.add_kit(&kit);

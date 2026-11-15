@@ -15,7 +15,31 @@ Two levers:
 The integration tests are split into many small binaries
 (`crates/*/tests/*.rs`, one per feature) for that reason: a binary is a
 unit of selection, and editing one test file relinks one small binary.
-Do not merge them back into one.
+Do not merge them back into one, with one exception below.
+
+### One test executable: the gallery
+
+`egui-pop-gallery`'s integration tests are one executable, `it`
+(`crates/egui-pop-gallery/tests/it/main.rs`, one module per feature:
+`gallery`, `keyboard_walk`, `mounts`...). Each of its former binaries
+linked egui, wgpu and the whole gallery: fifteen copies of the stack on
+disk and fifteen links per build. A module is still a unit of selection
+([Selection](#selection) names it `it::mounts` and runs it alone by a
+test name filter); editing one relinks the one executable.
+
+```sh
+cargo nextest run -p egui-pop-gallery --test it -E 'test(/^mounts::/)'   # one module
+cargo test -p egui-pop-gallery --test it keyboard_walk:: -- --ignored     # the same, cargo test
+```
+
+The test names carry their module (`gallery::snapshots_per_theme`).
+Under nextest every test still has a process of its own. Under plain
+`cargo test`, every module's tests now share one process, where before
+each former binary had its own: a test leaning on process-wide state
+(an environment variable, a global installed once) may meet one from
+another module. None does today: every module passed in one `cargo test`
+process when the change was made (the `egui-pop-test-1p` box job,
+`test=it`).
 
 ## The runner: cargo-nextest
 
@@ -147,11 +171,12 @@ The rules, per changed file:
 |---|---|
 | a crate's sources, manifest, build script, data (`crates/<crate>/...`) | every test of the crate, and of every workspace crate depending on it (dev-dependencies included), doctests too |
 | a test binary's file (`crates/<crate>/tests/<binary>.rs`) | that binary alone, unless another test file includes it as a module |
+| a module beside a binary's `main.rs` (`crates/egui-pop-gallery/tests/it/mounts.rs`) | that module alone (`it::mounts`, a test name filter on the binary `it`) |
 | a snapshot (`crates/<crate>/tests/snapshots/...`) | the crate's tests, not its dependents |
 | a crate's `README.md` | as its sources, and `egui-pop::readme_links` |
-| documentation (`docs/**`, `*.md` at the root) | the guides' doctests (`consumer-smoke`), `egui-pop::readme_links`, `egui-pop-gallery::gallery_doc` and `hosts_doc` |
+| documentation (`docs/**`, `*.md` at the root) | the guides' doctests (`consumer-smoke`), `egui-pop::readme_links`, `egui-pop-gallery::it::gallery_doc` and `it::hosts_doc` |
 | the docs site (`book.toml`, `tools/book/**`) | none (the `book` job checks it) |
-| `examples/**` (example kits) | `egui-pop-tokens::kits`, `egui-pop-gallery::gallery` |
+| `examples/**` (example kits) | `egui-pop-tokens::kits`, `egui-pop-gallery::it::gallery` |
 | the workspace (`Cargo.toml`, `Cargo.lock`, `rust-toolchain*`, any root file but Markdown and `book.toml`), `.github/`, `.config/`, `.cargo/`, `xtask/`, the test kit (`egui-pop-test`, `egui-pop-test-macros`), the token files (`crates/egui-pop-tokens/themes/`) | everything |
 | any path no rule names | everything |
 
@@ -323,13 +348,13 @@ assert_eq!(walk::press(&mut h, ESCAPE), None); // nothing holds the focus
 - **`reach`** presses a key until a stop of that name holds the focus: the
   way to a widget in a test about the keyboard.
 
-`crates/egui-pop-gallery/tests/keyboard_walk.rs` walks the gallery for the
+`crates/egui-pop-gallery/tests/it/keyboard_walk.rs` walks the gallery for the
 [keyboard survey](keyboard-survey.md): what holds is pinned, and a gap is an
 ignored test asserting what the survey asks, its reason naming the survey's
 item, so that
 
 ```sh
-cargo test -p egui-pop-gallery --test keyboard_walk -- --ignored
+cargo test -p egui-pop-gallery --test it keyboard_walk:: -- --ignored
 ```
 
 lists what is still open, each failing. The change closing an item removes

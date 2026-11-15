@@ -1,7 +1,10 @@
 //! The event loop's handler (see the parent module).
 
+mod pace;
+
 use std::cell::{Cell, RefCell};
 use std::sync::Arc;
+use std::time::Instant;
 
 use eframe::UserEvent;
 use egui::{Rect, ViewportId};
@@ -9,7 +12,7 @@ use egui_pop_winit::{Display, WindowHandles};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, StartCause, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::platform::run_on_demand::EventLoopExtRunOnDemand;
 use winit::window::WindowId;
 
@@ -196,6 +199,26 @@ fn forget(window: WindowId) {
 /// The loop's handler: egui-pop first, eframe for everything.
 struct Runner<'a> {
     eframe: eframe::EframeWinitApplication<'a>,
+    /// Each window's paints, at most one per interval (see `pace`).
+    pacer: pace::Pacer<WindowId>,
+}
+
+impl Runner<'_> {
+    /// Paints `window` now: eframe runs its pass in `RedrawRequested`.
+    fn paint(&mut self, event_loop: &ActiveEventLoop, window: WindowId) {
+        let previous = PAINTING.replace(Some(window));
+        self.eframe
+            .window_event(event_loop, window, WindowEvent::RedrawRequested);
+        PAINTING.set(previous);
+    }
+
+    /// Paints the windows whose held redraw came due.
+    fn paint_due(&mut self, event_loop: &ActiveEventLoop) {
+        for window in self.pacer.due(Instant::now()) {
+            log::trace!(target: "egui_pop::runner", "held redraw of {window:?} painted");
+            self.paint(event_loop, window);
+        }
+    }
 }
 
 impl ApplicationHandler<UserEvent> for Runner<'_> {
@@ -211,18 +234,26 @@ impl ApplicationHandler<UserEvent> for Runner<'_> {
             .collect();
         log::debug!(target: "egui_pop::runner", "screens before the main window: {screens:?}");
         SCREENS.set(screens);
+        let interval = pace::interval(
+            event_loop
+                .available_monitors()
+                .filter_map(|m| m.refresh_rate_millihertz()),
+        );
+        log::debug!(target: "egui_pop::runner", "frame interval: {interval:?}");
+        self.pacer.set_interval(interval);
         self.eframe.resumed(event_loop);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::RedrawRequested => {
-                let previous = PAINTING.replace(Some(id));
-                self.eframe.window_event(event_loop, id, event);
-                PAINTING.set(previous);
+                if self.pacer.arrive(id, Instant::now()) {
+                    self.paint(event_loop, id);
+                }
             }
             WindowEvent::Destroyed => {
                 forget(id);
+                self.pacer.forget(id);
                 self.eframe.window_event(event_loop, id, event);
             }
             event => self.eframe.window_event(event_loop, id, event),
@@ -231,6 +262,7 @@ impl ApplicationHandler<UserEvent> for Runner<'_> {
 
     fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
         self.eframe.new_events(event_loop, cause);
+        self.paint_due(event_loop);
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
@@ -242,7 +274,19 @@ impl ApplicationHandler<UserEvent> for Runner<'_> {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        self.paint_due(event_loop);
         self.eframe.about_to_wait(event_loop);
+        // Wake for the next held redraw, if eframe would sleep past it.
+        if let Some(at) = self.pacer.next() {
+            let wake = match event_loop.control_flow() {
+                ControlFlow::Wait => Some(at),
+                ControlFlow::WaitUntil(t) if at < t => Some(at),
+                _ => None,
+            };
+            if let Some(at) = wake {
+                event_loop.set_control_flow(ControlFlow::WaitUntil(at));
+            }
+        }
     }
 
     fn suspended(&mut self, event_loop: &ActiveEventLoop) {
@@ -340,7 +384,10 @@ pub(super) fn run(
     let ran = EVENT_LOOP.with_borrow_mut(|slot| -> eframe::Result {
         let event_loop = slot.as_mut().expect("the event loop was built above");
         let app = eframe::create_native(title, options, creator, event_loop);
-        let mut runner = Runner { eframe: app };
+        let mut runner = Runner {
+            eframe: app,
+            pacer: pace::Pacer::new(pace::interval([])),
+        };
         event_loop.run_app_on_demand(&mut runner)?;
         Ok(())
     });
