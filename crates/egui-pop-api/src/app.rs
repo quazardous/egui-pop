@@ -585,8 +585,9 @@ impl Registries {
         }
     }
 
-    fn remove_owner(&mut self, owner: &OwnerId) {
-        self.commands.remove_owner(owner);
+    /// Removes what an owner registered; the commands removed.
+    fn remove_owner(&mut self, owner: &OwnerId) -> Vec<CommandId> {
+        let commands = self.commands.remove_owner(owner);
         self.keymap.remove_owner(owner);
         self.menus.remove_owner(owner);
         self.panels.remove_owner(owner);
@@ -594,6 +595,7 @@ impl Registries {
         self.lifecycle.remove_owner(owner);
         self.settings.remove_owner(owner);
         self.command_icons.remove_owner(owner);
+        commands
     }
 }
 
@@ -3944,6 +3946,7 @@ impl AppBuilder {
             rebuilds: 0,
             pointer: crate::pointer::Sync::default(),
             logic_pass: None,
+            gone_commands: BTreeMap::new(),
         };
         install_pass_marker(ctx);
         *app.handle.0.writer.borrow_mut() = app
@@ -4213,6 +4216,16 @@ pub struct App {
     pointer: crate::pointer::Sync,
     /// The pass the logic last ran in (`App::logic`).
     logic_pass: Option<(egui::ViewportId, u64)>,
+    /// The commands of plugins disconnected, by the plugin that took
+    /// them away: a run of one is refused naming it (ADR 0028).
+    gone_commands: BTreeMap<CommandId, PluginId>,
+}
+
+/// What went with an owner (`App::remove_owner`).
+struct Removed {
+    commands: Vec<CommandId>,
+    panels: usize,
+    undo: Vec<egui_pop_model::values::DroppedSteps>,
 }
 
 /// What the debounced saving of the settings, the keymap and the layout
@@ -5274,6 +5287,7 @@ impl App {
             Ok(()) => {
                 slot.connected = true;
                 slot.reason = None;
+                self.gone_commands.retain(|_, p| *p != id);
                 self.handle.zones_mut().set_rank(&owner, i + 1);
                 self.dirty = true;
                 self.update_plugin_infos();
@@ -5283,7 +5297,8 @@ impl App {
                 Ok(())
             }
             Err(e) => {
-                self.remove_owner(&owner);
+                let removed = self.remove_owner(&owner);
+                self.said_gone(&id, &owner, "failed connect", removed);
                 let slot = &mut self.plugins[i];
                 slot.reason = Some(format!("it failed to connect: {e}"));
                 self.handle.0.diagnostics.borrow_mut().error(
@@ -5298,11 +5313,16 @@ impl App {
         }
     }
 
-    fn remove_owner(&mut self, owner: &OwnerId) {
-        self.reg.remove_owner(owner);
+    fn remove_owner(&mut self, owner: &OwnerId) -> Removed {
+        let commands = self.reg.remove_owner(owner);
         let h = &self.handle.0;
         h.zones.borrow_mut().remove_owner(owner);
-        h.panels.borrow_mut().retain(|_, p| p.owner != *owner);
+        let panels = {
+            let mut panels = h.panels.borrow_mut();
+            let n = panels.len();
+            panels.retain(|_, p| p.owner != *owner);
+            n - panels.len()
+        };
         h.stories.borrow_mut().remove_owner(owner);
         h.steps.borrow_mut().remove_owner(owner);
         h.step_hooks.borrow_mut().remove_owner(owner);
@@ -5311,7 +5331,7 @@ impl App {
         h.indicators.borrow_mut().remove_owner(owner);
         h.workbench.borrow_mut().templates.retain(|t| t.0 != *owner);
         h.services.borrow_mut().remove_owner(owner);
-        lock(&h.store).remove_owner(owner);
+        let undo = lock(&h.store).remove_owner_report(owner).dropped;
         crate::history::remove_owner(&self.handle, owner);
         h.diagnostics.borrow_mut().remove_owner(owner);
         egui_pop_core::icon_set::unregister_owner(owner.as_str());
@@ -5322,6 +5342,51 @@ impl App {
             o != owner
         });
         self.dirty = true;
+        Removed {
+            commands,
+            panels,
+            undo,
+        }
+    }
+
+    /// Says that a plugin went (ADR 0028): a `plugin.disconnected` event
+    /// on the journal, with why and what went by kind, and an info line.
+    /// Its commands are kept as gone, so a run of one is refused naming
+    /// it.
+    fn said_gone(&mut self, plugin: &PluginId, owner: &OwnerId, reason: &str, removed: Removed) {
+        let steps: usize = removed.undo.iter().map(|d| d.steps).sum();
+        let mixed: usize = removed.undo.iter().map(|d| d.mixed).sum();
+        log::info!(
+            target: "egui_pop",
+            "plugin `{plugin}` disconnected ({reason}): {} command(s), {} panel(s), {steps} undo step(s) ({mixed} mixed) removed",
+            removed.commands.len(),
+            removed.panels,
+        );
+        let undo: Vec<Json> = removed
+            .undo
+            .iter()
+            .map(|d| json!({ "history": d.history, "steps": d.steps, "mixed": d.mixed }))
+            .collect();
+        self.handle.publish(
+            "egui_pop",
+            None,
+            "plugin.disconnected",
+            json!({
+                "plugin": plugin,
+                "owner": owner,
+                "reason": reason,
+                "removed": {
+                    "commands": removed.commands.len(),
+                    "panels": removed.panels,
+                    "undo_steps": steps,
+                    "mixed_undo_steps": mixed,
+                },
+                "undo": undo,
+            }),
+        );
+        for c in removed.commands {
+            self.gone_commands.insert(c, plugin.clone());
+        }
     }
 
     fn update_plugin_infos(&self) {
@@ -5341,8 +5406,15 @@ impl App {
 
     /// Disconnects a plugin and those requiring it (dependents first);
     /// everything they registered is removed. Returns the plugins
-    /// disconnected.
+    /// disconnected. Each leaves a `plugin.disconnected` event on the
+    /// journal (ADR 0028).
     pub fn disconnect(&mut self, plugin: &PluginId) -> Vec<PluginId> {
+        self.disconnect_because(plugin, "removed")
+    }
+
+    /// [`App::disconnect`], saying why on the journal: `removed`,
+    /// `disabled`; its dependents say `requirement gone`.
+    fn disconnect_because(&mut self, plugin: &PluginId, reason: &str) -> Vec<PluginId> {
         let mut out = Vec::new();
         let Some(i) = self.plugins.iter().position(|p| p.id == *plugin) else {
             return out;
@@ -5354,7 +5426,7 @@ impl App {
         for j in (i + 1..self.plugins.len()).rev() {
             if self.plugins[j].connected && self.plugins[j].plugin.requires().contains(plugin) {
                 let dep = self.plugins[j].id.clone();
-                out.extend(self.disconnect(&dep));
+                out.extend(self.disconnect_because(&dep, "requirement gone"));
             }
         }
         let handle = self.handle.clone();
@@ -5372,7 +5444,8 @@ impl App {
         slot.plugin.disconnect(&mut ctx);
         slot.connected = false;
         slot.reason = Some("it was disconnected".into());
-        self.remove_owner(&owner);
+        let removed = self.remove_owner(&owner);
+        self.said_gone(plugin, &owner, reason, removed);
         self.update_plugin_infos();
         self.emit(&Lifecycle::Disconnected(plugin.clone()));
         out.push(plugin.clone());
@@ -6273,9 +6346,24 @@ impl App {
             Ok(h) => h.clone(),
             Err(e) => {
                 let msg = e.to_string();
-                if !matches!(e, egui_pop_model::commands::RunRefused::Unknown { .. }) {
-                    self.record(command, &args, &origin, Err(msg.clone()));
+                if matches!(e, egui_pop_model::commands::RunRefused::Unknown { .. }) {
+                    // A run of a command no longer there (queued, a menu,
+                    // a toast's or a job's action, an accepted dialog):
+                    // refused on the journal, naming the plugin that
+                    // took it away (ADR 0028).
+                    let reason = match self.gone_commands.get(command) {
+                        Some(p) => format!("its plugin `{p}` is disconnected"),
+                        None => msg.clone(),
+                    };
+                    self.handle.publish(
+                        &source_of(&origin),
+                        None,
+                        "command.refused",
+                        json!({ "command": command, "origin": source_of(&origin), "reason": reason }),
+                    );
+                    return Reply::Done(Err(reason));
                 }
+                self.record(command, &args, &origin, Err(msg.clone()));
                 return Reply::Done(Err(msg));
             }
         };
@@ -6526,7 +6614,7 @@ impl App {
                         }
                     }
                     Request::Enable(p, false) => {
-                        self.disconnect(&p);
+                        self.disconnect_because(&p, "disabled");
                     }
                     Request::Rebind {
                         command,
@@ -6762,8 +6850,15 @@ impl App {
         *self.handle.0.traces.borrow_mut() = self.dispatcher.traces().cloned().collect();
         *self.handle.0.pending_keys.borrow_mut() = self.dispatcher.pending().map(|k| k.to_string());
         for d in dispatched {
+            // A key bound to a command no longer there is worth a
+            // warning; one whose command is not enabled here is not.
+            let unknown = self.reg.commands.spec(&d.command).is_none();
             if let Reply::Done(Err(e)) = self.run(&d.command, Json::Null, Origin::User) {
-                log::info!(target: "egui_pop", "{}: {e}", d.keys);
+                if unknown {
+                    log::warn!(target: "egui_pop", "{}: {e}", d.keys);
+                } else {
+                    log::info!(target: "egui_pop", "{}: {e}", d.keys);
+                }
             }
         }
     }

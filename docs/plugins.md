@@ -12,6 +12,26 @@ hooks. Whatever it registers is owned by it and removed when it is
 disconnected ([ADR 0004](adr/0004-plugins.md)). Plugins are sorted by
 what they require before they connect.
 
+A plugin's going is said ([ADR 0028](adr/0028-removed-contributor-work-in-flight.md)).
+Its disconnection leaves a `plugin.disconnected` event on the journal
+(source `egui_pop`) and an info line in the log. The event's data: the
+`plugin`, its `owner`, the `reason` (`removed` for `App::disconnect`,
+`disabled` for `AppHandle::set_plugin_enabled`, `requirement gone` for
+a plugin that required it, `failed connect` when its connection failed
+after it registered things), `removed` with counts by kind (`commands`,
+`panels`, `undo_steps`, `mixed_undo_steps`) and `undo`, one entry per
+history that lost steps (`history`, `steps`, `mixed`: those also
+changing other owners' values). The value store logs each such history
+at info level too (`Store::remove_owner_report` gives the counts).
+
+A run of one of its commands asked after it went (queued with
+`AppHandle::run_as`, a menu, a toast's or a finished job's action, an
+accepted dialog, a key still bound to it) does not run: it is a
+`command.refused` event, from the origin that asked, whose `reason` is
+"its plugin `x` is disconnected" (or the registry's refusal for a
+command never declared). A key bound to such a command also logs a
+warning.
+
 `DefaultPlugins` is the paved road: the command palette, dialogs,
 toasts, the settings window, the window's place and saved arrangements.
 `MinimalPlugins` is the bare shell. Both are plugin groups for
