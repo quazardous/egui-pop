@@ -309,7 +309,7 @@ jobs:
       - run: cargo doc -p egui-pop-views -p egui-pop --no-deps --locked --features egui-pop-views/video,egui-pop/views-video
       - run: cargo test -p egui-pop-views --locked --features video --lib -- viewer video
       - run: cargo test -p egui-pop-views --locked --features video --test video --test video_gstreamer --test viewer_video --test viewer_gstreamer
-      - run: cargo test -p egui-pop-gallery --locked --features video --test it viewer_video::
+      - run: 'cargo test -p egui-pop-gallery --locked --features video --test it viewer_video::'
       - name: Upload snapshot differences
         if: failure()
         uses: actions/upload-artifact@v4
