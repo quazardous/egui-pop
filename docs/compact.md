@@ -79,5 +79,7 @@ released").
   (`compact_controls_scrub_choose_mark_and_reveal_from_their_slots`)
   drives the gallery's compact page; its snapshots are
   `compact-pop-dark.png` and `compact-pop-light.png`.
-- No frame test in `egui-pop-core` yet (planned with the core frame
-  tests).
+- `crates/egui-pop-core/tests/compact.rs`: the choice cell keeps its
+  slot whatever the word, its name and value, the arrows, Home and End
+  while closed, Space opening the list, no words; the menu row's name
+  and note, its width and height, Tab, Space and Enter, disabled.

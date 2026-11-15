@@ -394,6 +394,11 @@ fn queue(ui: &mut egui_pop::egui::Ui, rows: Option<&[String]>) -> bool {
 }
 ```
 
+Tests: `crates/egui-pop-core/tests/placeholder.rs` (a skeleton busy and
+named, its height per line or row, a width kept, still under a given
+clock; an empty state's title, sentence and action, an unknown icon
+drawn as the placeholder and reported).
+
 ## Gaps
 
 - A job with no event for a long time is not shown as "not responding"
