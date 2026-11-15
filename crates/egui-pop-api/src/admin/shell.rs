@@ -162,9 +162,16 @@ fn follow_window(app: &AppHandle, admin: &Admin, ctx: &egui::Context, windowed: 
             app.open_window(spec, window_content);
             app.set_window_owner(&id, super::OWNER);
         }
+        // The app closed, or its mode changed to the overlay ("Pop
+        // in": it stays open, over the main window).
         (false, true) => {
             admin.set_window_shown(false);
-            app.close_entry(&id, crate::bus::Reason::OwnerGone);
+            let reason = if admin.is_open() {
+                crate::bus::Reason::Command
+            } else {
+                crate::bus::Reason::OwnerGone
+            };
+            app.close_entry(&id, Some(super::OWNER), reason);
         }
         (false, false) => admin.set_window_shown(false),
         (true, true) => {}
@@ -208,7 +215,7 @@ fn window_content(ui: &mut Ui, window: &mut WindowUi<'_>) {
 /// in the same call, before the focus moves and the registry lets the
 /// window go (ADR 0029).
 pub(super) fn listen_window_close(app: &AppHandle, admin: std::sync::Arc<Admin>) {
-    use crate::bus::{CHILDREN, FOCUS, WindowClose};
+    use crate::bus::{CHILDREN, FOCUS, Reason, WindowClose};
     use egui_pop_hooks::{ListenOpts, Point as _};
     let bus = app.bus();
     // Connected again: its listener is replaced.
@@ -220,7 +227,11 @@ pub(super) fn listen_window_close(app: &AppHandle, admin: std::sync::Arc<Admin>)
             .after(CHILDREN)
             .before(FOCUS),
         move |req, did| {
-            if req.window == super::APP_WINDOW {
+            // The app asked it itself (closed, or popped in): its state is
+            // already what it wants.
+            let itself = req.owner == super::OWNER
+                && matches!(req.reason, Reason::Command | Reason::OwnerGone);
+            if req.window == super::APP_WINDOW && !itself {
                 admin.set_window_shown(false);
                 if admin.is_open() {
                     admin.close();

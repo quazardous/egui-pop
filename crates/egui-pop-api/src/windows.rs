@@ -554,23 +554,27 @@ impl AppHandle {
                 .send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Close);
             return;
         }
-        self.close_entry(id, Reason::Command);
+        self.close_entry(id, Some("app"), Reason::Command);
     }
 
     /// The one way an application window closes, whatever asked (its
     /// close button, its content, [`AppHandle::close_window`], the
-    /// system): the `window.close` request, asked for the window's owner.
+    /// system): the `window.close` request, asked by `owner` (`None`: the
+    /// window's own owner, for what happens in the window itself).
     /// Whether a window was open under that id and closed.
-    pub(crate) fn close_entry(&self, id: &WindowId, reason: Reason) -> bool {
+    pub(crate) fn close_entry(&self, id: &WindowId, owner: Option<&str>, reason: Reason) -> bool {
         if self.windows_ref().entry(id).is_none() {
             return false;
         }
-        let owner = self
-            .windows_list()
-            .into_iter()
-            .find(|r| r.id == id.as_str())
-            .map(|r| r.owner)
-            .unwrap_or_else(|| "app".to_string());
+        let owner = match owner {
+            Some(o) => o.to_string(),
+            None => self
+                .windows_list()
+                .into_iter()
+                .find(|r| r.id == id.as_str())
+                .map(|r| r.owner)
+                .unwrap_or_else(|| "app".to_string()),
+        };
         self.request_window_close(WindowRequest::new(
             id.as_str(),
             WindowKind::App,
@@ -1376,7 +1380,7 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
         } else {
             Reason::User
         };
-        app.close_entry(&id, reason);
+        app.close_entry(&id, None, reason);
         // The page of this pass is the one its passes until the backend
         // drops it draw again (never an empty frame).
         crate::paint_guard::keep_last_page(&ctx, viewport);
