@@ -31,6 +31,7 @@ use egui_pop_model::layout::{DormantPlace, Layout, Node, SavedLayout, schema};
 use egui_pop_model::mount::{HostOffer, Mountable};
 use egui_pop_model::panels::{Area, PanelSpec};
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
+use egui_pop_test::wait::{Deadline, settle as settle_within};
 use serde_json::{Value as Json, json};
 
 const ACT: CommandId = CommandId::from_static("doomed.act");
@@ -491,6 +492,45 @@ fn a_gone_plugins_running_job_is_cancelled_and_one_it_cannot_cancel_is_orphaned(
     assert_eq!(adopted.data["plugin"], "worker");
     assert_eq!(adopted.data["jobs"], json!(["render"]));
     assert_eq!(jobs.job("render").unwrap().orphaned, None);
+}
+
+/// A job left orphaned by its removed plugin goes on, owned by nobody:
+/// a wait for the application to settle does not wait on it (it may
+/// never end), and the reads say it apart.
+#[test]
+fn a_wait_for_idle_returns_with_an_orphaned_job_going_on() {
+    capture();
+    let (p, _) = doomed("worker", u32::MAX);
+    let mut harness = egui_pop_test::app(
+        App::builder()
+            .plugin(JobsPlugin::default().run_locally(|_, _, _| Ok(Json::Null)))
+            .plugin(p),
+        egui::vec2(400.0, 300.0),
+    );
+    harness.run_ok();
+    let h = harness.state().handle().clone();
+    h.publish(
+        "host",
+        None,
+        "job.started",
+        json!({ "id": "render", "title": "Render", "owner": "worker", "cancellable": false }),
+    );
+    let short = Deadline {
+        frames: 10,
+        time: std::time::Duration::from_secs(2),
+    };
+    // Owned, it is waited on.
+    assert!(settle_within(&mut harness, short).is_err());
+
+    h.set_plugin_enabled(PluginId::from_static("worker"), false);
+    let jobs = h.service(&JOBS).unwrap();
+    let r = settle_within(&mut harness, Deadline::default());
+    assert!(r.is_ok(), "{r:?}");
+    assert_eq!(jobs.job("render").unwrap().state, JobState::Running);
+    assert_eq!(
+        jobs.job("render").unwrap().orphaned.as_deref(),
+        Some("worker")
+    );
 }
 
 const OPEN: CommandId = CommandId::from_static("owned.open");
