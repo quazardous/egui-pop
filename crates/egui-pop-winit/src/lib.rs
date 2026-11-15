@@ -17,7 +17,7 @@
 //!
 //! That is an implementation detail of winit, not its API: the crate's
 //! `window_id` test checks it on each system against the handle winit
-//! gives a window, and egui-pop's runner checks it at run time against
+//! gives a window ([`same_window`]: the window, not the extras winit adds), and egui-pop's runner checks it at run time against
 //! the main window's, using the ids only when they agree.
 //!
 //! The crate knows nothing of egui (it sits under every egui-pop layer).
@@ -95,6 +95,19 @@ pub fn raw_window(id: u64, display: RawDisplayHandle) -> Option<RawWindowHandle>
     }
 }
 
+/// Whether two raw handles name the same window: the window itself (the
+/// `HWND`, the X11 id, the `wl_surface`), not the extras winit fills in
+/// (the `HINSTANCE`, the X11 visual) and a handle read from an id lacks.
+pub fn same_window(a: &RawWindowHandle, b: &RawWindowHandle) -> bool {
+    match (a, b) {
+        (RawWindowHandle::Win32(a), RawWindowHandle::Win32(b)) => a.hwnd == b.hwnd,
+        (RawWindowHandle::Xlib(a), RawWindowHandle::Xlib(b)) => a.window == b.window,
+        (RawWindowHandle::Xcb(a), RawWindowHandle::Xcb(b)) => a.window == b.window,
+        (RawWindowHandle::Wayland(a), RawWindowHandle::Wayland(b)) => a.surface == b.surface,
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,6 +140,25 @@ mod tests {
         assert!(matches!(
             raw_window(0x5555_0000, wl),
             Some(RawWindowHandle::Wayland(h)) if h.surface.as_ptr() as usize == 0x5555_0000
+        ));
+    }
+
+    #[test]
+    fn the_same_window_without_its_extras() {
+        let mut from_winit = XlibWindowHandle::new(0x40_0003);
+        from_winit.visual_id = 33;
+        let xlib = RawDisplayHandle::Xlib(XlibDisplayHandle::new(None, 0));
+        let from_id = raw_window(0x40_0003, xlib).unwrap();
+        assert_ne!(from_id, RawWindowHandle::Xlib(from_winit));
+        assert!(same_window(&from_id, &RawWindowHandle::Xlib(from_winit)));
+        let other = raw_window(0x40_0004, xlib).unwrap();
+        assert!(!same_window(&from_id, &other));
+        let mut win = Win32WindowHandle::new(NonZeroIsize::new(0x1234).unwrap());
+        win.hinstance = NonZeroIsize::new(0x40_0000);
+        let windows = RawDisplayHandle::Windows(WindowsDisplayHandle::new());
+        assert!(same_window(
+            &raw_window(0x1234, windows).unwrap(),
+            &RawWindowHandle::Win32(win)
         ));
     }
 

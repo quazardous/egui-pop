@@ -49,13 +49,13 @@ fn check(event_loop: &ActiveEventLoop) -> Result<String, String> {
     let macos = cfg!(target_os = "macos");
     match (from_id, macos) {
         (None, true) => Ok("macOS: no handle from the id, as documented".into()),
-        (Some(h), false) if h == real => {
+        (Some(h), false) if egui_pop_winit::same_window(&h, &real) => {
             let handles = display.window(window.id()).ok_or("no handles")?;
             let borrowed = handles
                 .window_handle()
                 .map_err(|e| format!("handles not borrowed: {e}"))?
                 .as_raw();
-            if borrowed == real {
+            if egui_pop_winit::same_window(&borrowed, &real) {
                 Ok(format!("the id is the window: {real:?}"))
             } else {
                 Err(format!("borrowed {borrowed:?}, winit gives {real:?}"))

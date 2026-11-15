@@ -94,7 +94,10 @@ fn note_viewport(ui: &mut egui::Ui) {
     );
     if viewport == ViewportId::ROOT && VERIFIED.get().is_none() {
         let from_id = display.window_handle(window);
-        let ok = from_id.is_some() && from_id == ROOT.get();
+        let ok = match (from_id, ROOT.get()) {
+            (Some(a), Some(b)) => egui_pop_winit::same_window(&a, &b),
+            _ => false,
+        };
         VERIFIED.set(Some(ok));
         if ok {
             log::debug!(target: "egui_pop::runner", "window ids are the native windows");
