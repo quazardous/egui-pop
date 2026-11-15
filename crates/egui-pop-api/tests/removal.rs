@@ -515,6 +515,8 @@ fn a_wait_for_idle_returns_with_an_orphaned_job_going_on() {
         "job.started",
         json!({ "id": "render", "title": "Render", "owner": "worker", "cancellable": false }),
     );
+    // A pass: the job is followed (the jobs plugin folds the journal).
+    harness.step();
     let short = Deadline {
         frames: 10,
         time: std::time::Duration::from_secs(2),
