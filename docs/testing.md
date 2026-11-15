@@ -37,7 +37,9 @@ Under nextest every test still has a process of its own. Under plain
 `cargo test`, every module's tests now share one process, where before
 each former binary had its own: a test leaning on process-wide state
 (an environment variable, a global installed once) may meet one from
-another module. RESULT_1P
+another module. None does today: every module passed in one `cargo test`
+process when the change was made (the `egui-pop-test-1p` box job,
+`test=it`).
 
 ## The runner: cargo-nextest
 
