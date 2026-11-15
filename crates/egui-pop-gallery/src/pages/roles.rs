@@ -1,5 +1,6 @@
 //! The layout by role page: the `UiPop` helpers (text roles, spacing by
-//! intent, cards and buttons by tone, rows and grids), each with the
+//! intent, code, text in a tone and dividers, cards and buttons by tone,
+//! rows and grids), each with the
 //! tokens it reads.
 
 use egui::Ui;
@@ -51,6 +52,24 @@ pub fn show(ui: &mut Ui, state: &mut State) {
                 ui.end_row();
             }
         });
+
+    ui.space_role(Space::Section);
+    ui.section_title("Code, tones and dividers");
+    ui.space_role(Space::Inline);
+    ui.code("12:00:01  import  IMG_0001.raw  read 24 MB");
+    ui.divider();
+    ui.horizontal_wrapped(|ui| {
+        for tone in [
+            Tone::Danger,
+            Tone::Warning,
+            Tone::Success,
+            Tone::Info,
+            Tone::Muted,
+        ] {
+            ui.text_tone(tone, format!("Text: {}", tone.name()));
+            ui.divider();
+        }
+    });
 
     ui.space_role(Space::Section);
     ui.section_title("Spacing by intent");
