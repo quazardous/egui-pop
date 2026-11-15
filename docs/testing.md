@@ -58,8 +58,10 @@ Pull requests target `next`, a buffer branch between them and `main`:
 - a pull request into `next` runs the quick checks only (format, clippy,
   the guides' documentation, licences, changesets and title), in minutes;
   it merges as soon as they pass;
-- every push to `next` runs everything; a newer push cancels the running
-  run, so a batch of merges is checked once;
+- every push to `next` runs everything; a run is never cancelled: a
+  newer push waits behind the running one (GitHub keeps only the newest
+  waiting), so a batch of merges is checked once and `main` is promoted
+  even while merges keep coming;
 - once that run passes, `main` fast-forwards to the commit it checked
   (`.github/workflows/promote.yml`), and the site is deployed from `main`.
   `main` only ever holds commits that passed everything;
