@@ -40,6 +40,9 @@ pub struct MultiWindow {
     nodes: BTreeMap<ViewportId, Vec<(String, Rect, bool)>>,
     /// Windows the backend keeps listing once no longer declared.
     held: BTreeSet<ViewportId>,
+    /// Whether each window's last pass painted content (a text, an
+    /// image, a drawing; not only backgrounds and lines).
+    painted: BTreeMap<ViewportId, bool>,
     time: f64,
 }
 
@@ -70,6 +73,7 @@ impl MultiWindow {
             names: BTreeMap::new(),
             nodes: BTreeMap::new(),
             held: BTreeSet::new(),
+            painted: BTreeMap::new(),
             time: 0.0,
         }
     }
@@ -227,7 +231,17 @@ impl MultiWindow {
         }
     }
 
+    /// Whether a window's last pass painted content: a text, an image or
+    /// a drawing, not only plain backgrounds and lines. A pass that
+    /// paints nothing shows the clear colour alone on a real backend (a
+    /// black window without its title bar).
+    pub fn painted(&self, viewport: ViewportId) -> bool {
+        self.painted.get(&viewport).copied().unwrap_or(false)
+    }
+
     fn take_output(&mut self, viewport: ViewportId, mut out: egui::FullOutput) {
+        self.painted
+            .insert(viewport, out.shapes.iter().any(|s| is_content(&s.shape)));
         // No painter: the textures are not uploaded anywhere.
         out.textures_delta.clear();
         // A close request is seen by one pass only.
@@ -298,5 +312,17 @@ impl MultiWindow {
         let input = self.input(viewport);
         let out = self.ctx.run_ui(input, |ui| cb(ui));
         self.take_output(viewport, out);
+    }
+}
+
+/// Whether a shape is content: a text, an image, a drawing; plain
+/// rectangles without an image and lines are what an empty window still
+/// paints.
+fn is_content(shape: &egui::Shape) -> bool {
+    match shape {
+        egui::Shape::Noop | egui::Shape::LineSegment { .. } => false,
+        egui::Shape::Rect(r) => r.brush.is_some(),
+        egui::Shape::Vec(v) => v.iter().any(is_content),
+        _ => true,
     }
 }
