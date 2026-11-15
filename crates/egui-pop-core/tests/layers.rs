@@ -61,6 +61,13 @@ fn harness() -> Harness<'static, Stack> {
         )
 }
 
+/// One pass of a context without a renderer.
+fn run_pass(ctx: &egui::Context, f: impl FnMut(&mut egui::Ui)) {
+    let mut out = ctx.run_ui(RawInput::default(), f);
+    // No renderer here: the font atlas's upload is not applied.
+    out.textures_delta.clear();
+}
+
 fn top_at(h: &Harness<'static, Stack>, at: Pos2) -> Option<LayerId> {
     h.ctx.layer_id_at(at)
 }
@@ -107,7 +114,7 @@ fn a_rank_is_remembered_for_the_pass_after_and_no_longer() {
     let ctx = egui::Context::default();
     let card = layer("card");
     let pass = |f: &mut dyn FnMut(&egui::Context)| {
-        let _ = ctx.run_ui(RawInput::default(), |ui| f(ui.ctx()));
+        run_pass(&ctx, |ui| f(ui.ctx()));
     };
     layers::install(&ctx);
     pass(&mut |ctx| {
@@ -131,13 +138,13 @@ fn a_layer_made_a_sublayer_of_a_base_by_its_owner_is_noted_at_that_rank() {
     layers::install(&ctx);
     let zone = layer("lying-over zone");
     let inner = layer("zone's own popup");
-    let _ = ctx.run_ui(RawInput::default(), |ui| {
+    run_pass(&ctx, |ui| {
         let ctx = ui.ctx();
         // egui_stack's lying-over zones do this, not `rank`.
         ctx.set_sublayer(layers::base(ctx, Rank::Over), zone);
         ctx.set_sublayer(zone, inner);
     });
-    let _ = ctx.run_ui(RawInput::default(), |ui| {
+    run_pass(&ctx, |ui| {
         assert_eq!(layers::rank_of(ui.ctx(), zone), Some(Rank::Over));
         assert_eq!(
             layers::rank_of(ui.ctx(), inner),
@@ -155,7 +162,7 @@ fn a_layer_opened_from_above_its_rank_stays_unranked_above_its_opener() {
     let over = layer("lying-over zone");
     let overlay = layer("a card");
     let dialog = layer("a dialog");
-    let _ = ctx.run_ui(RawInput::default(), |ui| {
+    run_pass(&ctx, |ui| {
         let ctx = ui.ctx();
         layers::rank(ctx, over, Rank::Over);
         layers::rank(ctx, overlay, Rank::Overlay);
@@ -187,7 +194,7 @@ fn a_layer_outside_the_foreground_is_left_where_it_is() {
     let ctx = egui::Context::default();
     layers::install(&ctx);
     let window = LayerId::new(Order::Middle, Id::unique("a window"));
-    let _ = ctx.run_ui(RawInput::default(), |ui| {
+    run_pass(&ctx, |ui| {
         // No panic (egui asserts sublayers share an order), no rank.
         layers::rank(ui.ctx(), window, Rank::Overlay);
         assert_eq!(layers::rank_of(ui.ctx(), window), None);

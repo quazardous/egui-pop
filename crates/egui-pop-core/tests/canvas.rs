@@ -9,7 +9,10 @@ use egui_pop_core::canvas;
 
 /// One frame of `ctx`, `f` drawn in it; the frame's output.
 fn frame(ctx: &Context, mut f: impl FnMut(&Context)) -> egui::FullOutput {
-    ctx.run_ui(RawInput::default(), |ui| f(ui.ctx()))
+    let mut out = ctx.run_ui(RawInput::default(), |ui| f(ui.ctx()));
+    // No renderer here: the font atlas's upload is not applied.
+    out.textures_delta.clear();
+    out
 }
 
 #[test]
