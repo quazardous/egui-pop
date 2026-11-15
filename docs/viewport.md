@@ -493,8 +493,9 @@ drawn where its tiles would be; a failed device request falls back to uploaded t
 Device tiles); a view larger than the texture budget still shows whole,
 the budget only evicting what is not drawn.
 
-**Accessibility**: the viewport is named by `Viewport::label` ("Image
-viewport" by default) and says its zoom as its value ("100 %"); its
+**Accessibility**: the viewport is an image node (`Role::Image`, said
+as an image or a graphic), named by `Viewport::label` ("Image
+viewport" by default), and says its zoom as its value ("100 %"); its
 keys follow the pointer profile and the canvas commands
 ([Pointer gestures](pointer-gestures.md#the-canvas-in-use)).
 

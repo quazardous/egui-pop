@@ -9,6 +9,9 @@
 //! An application's names may stay bare (`play-circle`); a plugin's are
 //! prefixed by its id (`my-plugin:mask-circle`, [`register_for`]) so two
 //! plugins never clash. `phosphor:` names belong to the Phosphor set.
+//! A contributor's removal cleans its icons: [`unregister_owner`] (the
+//! application calls it when a plugin is disconnected) or [`unregister`]
+//! for one name.
 //!
 //! [`install`] (run with the theme, `theme::install_tokens`) rasterises
 //! every registered icon at the icon sizes of the theme (`size.icon.*`)
@@ -72,6 +75,9 @@ struct Entry {
     name: &'static str,
     svg: Arc<[u8]>,
     paint: Paint,
+    /// Unregistered: the name no longer resolves; its slot (an icon's id
+    /// is its index) is reused if the name is registered again.
+    removed: bool,
 }
 
 /// The registered icons, for the whole process: an icon's name and id
@@ -80,7 +86,8 @@ static SET: RwLock<Vec<Entry>> = RwLock::new(Vec::new());
 
 /// Registers an SVG icon under a name (kebab case, like `play-circle`),
 /// or replaces the one registered under it. In use from the next theme
-/// install. Each new name is kept for the whole process. A name
+/// install. A name keeps its id for the whole process, even unregistered
+/// ([`unregister`]) and registered again. A name
 /// `<owner>:<name>` is owned by `owner` (see [`register_for`]); egui-pop's
 /// names and the `phosphor:` ones are refused.
 pub fn register(name: &str, svg: impl Into<Arc<[u8]>>, paint: Paint) -> Result<Icon, IconError> {
@@ -96,15 +103,18 @@ pub fn register(name: &str, svg: impl Into<Arc<[u8]>>, paint: Paint) -> Result<I
         if let Some(i) = set.iter().position(|e| e.name == name) {
             set[i].svg = svg;
             set[i].paint = paint;
-            return Ok(Icon::Custom(CustomIcon(i as u16)));
+            set[i].removed = false;
+            Icon::Custom(CustomIcon(i as u16))
+        } else {
+            let id = u16::try_from(set.len()).expect("fewer than 65536 icons");
+            set.push(Entry {
+                name: Box::leak(name.to_string().into_boxed_str()),
+                svg,
+                paint,
+                removed: false,
+            });
+            Icon::Custom(CustomIcon(id))
         }
-        let id = u16::try_from(set.len()).expect("fewer than 65536 icons");
-        set.push(Entry {
-            name: Box::leak(name.to_string().into_boxed_str()),
-            svg,
-            paint,
-        });
-        Icon::Custom(CustomIcon(id))
     };
     // The name may have been looked up, and found unknown, before.
     crate::icon::registry::forget(name);
@@ -122,6 +132,46 @@ pub fn register_for(
     register(&format!("{owner}:{name}"), svg, paint)
 }
 
+/// Unregisters the icon registered under `name`: the name stops
+/// resolving at once, and its textures go at the next theme install.
+/// Returns whether it was registered.
+pub fn unregister(name: &str) -> bool {
+    let found = {
+        let mut set = SET.write().unwrap_or_else(|e| e.into_inner());
+        match set.iter_mut().find(|e| e.name == name && !e.removed) {
+            Some(e) => {
+                e.removed = true;
+                e.svg = Arc::from(&[][..]);
+                true
+            }
+            None => false,
+        }
+    };
+    if found {
+        crate::icon::registry::forget(name);
+    }
+    found
+}
+
+/// Unregisters every icon of an owner (`<owner>:<name>`, see
+/// [`register_for`]), as [`unregister`] does: a contributor's removal
+/// cleans its registrations. The application API calls it when a plugin
+/// is disconnected or fails to connect. Returns how many were removed.
+///
+/// The set is the process's: an owner's icons go for every window and
+/// every application in it.
+pub fn unregister_owner(owner: &str) -> usize {
+    let prefix = format!("{owner}:");
+    let names: Vec<&'static str> = {
+        let set = SET.read().unwrap_or_else(|e| e.into_inner());
+        set.iter()
+            .filter(|e| !e.removed && e.name.starts_with(&prefix))
+            .map(|e| e.name)
+            .collect()
+    };
+    names.into_iter().filter(|n| unregister(n)).count()
+}
+
 /// A registered icon, as agents read it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Registered {
@@ -136,6 +186,7 @@ pub struct Registered {
 pub fn registered() -> Vec<Registered> {
     let set = SET.read().unwrap_or_else(|e| e.into_inner());
     set.iter()
+        .filter(|e| !e.removed)
         .map(|e| Registered {
             name: e.name,
             owner: e.name.split_once(':').map(|(o, _)| o),
@@ -148,14 +199,14 @@ pub fn registered() -> Vec<Registered> {
 pub fn by_name(name: &str) -> Option<Icon> {
     let set = SET.read().unwrap_or_else(|e| e.into_inner());
     set.iter()
-        .position(|e| e.name == name)
+        .position(|e| e.name == name && !e.removed)
         .map(|i| Icon::Custom(CustomIcon(i as u16)))
 }
 
 /// Every registered icon's name, in registration order.
 pub fn names() -> Vec<&'static str> {
     let set = SET.read().unwrap_or_else(|e| e.into_inner());
-    set.iter().map(|e| e.name).collect()
+    set.iter().filter(|e| !e.removed).map(|e| e.name).collect()
 }
 
 pub(crate) fn name(icon: CustomIcon) -> &'static str {
@@ -205,7 +256,7 @@ fn extra(ctx: &Context, icon: CustomIcon, px: u32, paint: Paint) -> Option<Textu
     map.entry((icon.0, px))
         .or_insert_with(|| {
             let set = SET.read().unwrap_or_else(|e| e.into_inner());
-            let e = set.get(usize::from(icon.0))?;
+            let e = set.get(usize::from(icon.0)).filter(|e| !e.removed)?;
             let image = rasterise(&e.svg, px, paint)?;
             let name = format!("egui_pop.icon.{}.{px}", e.name);
             Some(ctx.load_texture(name, image, egui::TextureOptions::LINEAR))
@@ -240,6 +291,7 @@ pub fn install(ctx: &Context, tokens: &Tokens) {
             paint: e.paint,
             sizes: sides
                 .iter()
+                .filter(|_| !e.removed)
                 .filter_map(|&px| {
                     let image = rasterise(&e.svg, px, e.paint)?;
                     let name = format!("egui_pop.icon.{}.{px}", e.name);
@@ -366,6 +418,26 @@ mod tests {
             register("phosphor:ring", RING, Paint::Mono),
             Err(IconError::Taken(_))
         ));
+    }
+
+    #[test]
+    fn a_contributor_removal_unregisters_its_icons_and_keeps_others() {
+        let a = register_for("test-gone", "a", RING, Paint::Mono).unwrap();
+        register_for("test-gone", "b", RING, Paint::Colour).unwrap();
+        let kept = register_for("test-gone-not", "a", RING, Paint::Mono).unwrap();
+        assert_eq!(Icon::by_name("test-gone:a"), Some(a), "looked up, cached");
+        assert_eq!(unregister_owner("test-gone"), 2);
+        assert_eq!(Icon::by_name("test-gone:a"), None);
+        assert_eq!(by_name("test-gone:b"), None);
+        assert!(!names().contains(&"test-gone:a"));
+        assert!(registered().iter().all(|e| e.owner != Some("test-gone")));
+        assert_eq!(Icon::by_name("test-gone-not:a"), Some(kept));
+        assert_eq!(unregister_owner("test-gone"), 0, "nothing left");
+        // Registered again, it takes its old id back.
+        assert_eq!(register_for("test-gone", "a", RING, Paint::Mono), Ok(a));
+        assert_eq!(Icon::by_name("test-gone:a"), Some(a));
+        assert!(unregister("test-gone:a"));
+        assert!(!unregister("test-gone:a"));
     }
 
     #[test]

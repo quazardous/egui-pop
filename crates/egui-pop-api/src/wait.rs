@@ -1,6 +1,6 @@
 //! Waiting on the application: until a journal event matches, or until
 //! the application is settled. The `bridge.wait` capability and the test
-//! kit's frame-stepping wait (`egui_pop_test::wait_until`) share it.
+//! kit's frame-stepping wait (`egui_pop_test::wait::wait_until`) share it.
 //!
 //! <div class="warning">Experimental: may change in any release
 //! (docs/stability.md).</div>

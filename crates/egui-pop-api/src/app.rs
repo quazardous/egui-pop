@@ -5314,6 +5314,7 @@ impl App {
         lock(&h.store).remove_owner(owner);
         crate::history::remove_owner(&self.handle, owner);
         h.diagnostics.borrow_mut().remove_owner(owner);
+        egui_pop_core::icon_set::unregister_owner(owner.as_str());
         h.collectors.borrow_mut().retain(|(o, name)| {
             if o == owner {
                 h.bridge.borrow_mut().unregister(name);

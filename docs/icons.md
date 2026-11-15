@@ -408,6 +408,16 @@ kinds; both are owned by the plugin and removed with it. A plugin's
 own names are prefixed by its id, `plugin-id:name` (`helios:mask-circle`),
 so two plugins never clash; egui-pop's names stay bare.
 
+The contributor's removal cleans its registrations: when the
+application API removes a plugin's registrations (it is disconnected,
+or it failed to connect), it calls
+`egui_pop_core::icon_set::unregister_owner` with the plugin's id. Its
+names stop resolving at once, and their textures go at the next theme
+install. An application registering icons outside a plugin calls
+`egui_pop_core::icon_set::unregister` (one name) or `unregister_owner`
+itself. A name keeps its id: registered again, it resolves to the same
+icon.
+
 The built-in vocabulary is about 57 names. With the `phosphor` feature
 on (the default), every Phosphor glyph is in the font already, and they
 are exposed by name, under the same prefixed form (`phosphor:export`),

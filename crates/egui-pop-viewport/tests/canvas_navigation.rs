@@ -6,7 +6,7 @@
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, TouchDeviceId, TouchId, TouchPhase};
 use egui::{Vec2, vec2};
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable as _;
+use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_core::canvas;
 use egui_pop_core::model::pointer::{self, PointerMap};
 use egui_pop_test::viewport::TestSource;
@@ -131,6 +131,17 @@ fn hand_mode_pans_the_image_from_a_handle_and_shows_itself() {
     press(&mut h, Modifiers::NONE, Key::H);
     assert!(!navigation::hand(&h.ctx));
     assert!(h.query_by_label(HAND).is_none());
+}
+
+#[test]
+fn the_image_is_an_image_node_with_its_name_and_its_zoom() {
+    let mut h = image("document", false);
+    h.run();
+    let node = h.get_by_label("Image viewport");
+    let node = node.accesskit_node();
+    assert_eq!(node.role(), egui::accesskit::Role::Image);
+    assert_eq!(node.value().as_deref(), Some("100 %"));
+    assert_eq!(node.numeric_value(), Some(100.0));
 }
 
 #[test]

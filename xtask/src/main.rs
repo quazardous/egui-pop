@@ -12,7 +12,8 @@
 //! (`families.rs`).
 //!
 //! `doc-paths --check` checks that every Rust path the documentation
-//! names in backticks resolves in the crates' source (`doc_paths.rs`).
+//! names in backticks (in docs/, and in the crates' rustdoc) resolves in
+//! the crates' source (`doc_paths.rs`).
 //!
 //! `experimental --check` checks that the experimental tier is marked in
 //! the code and that no stable or supported item names an experimental
@@ -79,7 +80,8 @@ Tasks:
   families --check       every public module of the published crates is
                          in exactly one family row of ADR 0027
   doc-paths --check      every `egui_pop_*::a::b` path named in docs/
-                         resolves to a module or an item of the crates;
+                         or in rustdoc (//!, ///) resolves to a module or
+                         an item of the crates;
                          exceptions in xtask/doc-paths.allow
   experimental --check | --list
                          the experimental tier is marked in the code, and
