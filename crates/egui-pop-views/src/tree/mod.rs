@@ -64,17 +64,20 @@ pub mod model;
 
 use std::sync::{Arc, Mutex};
 
+use crate::app_link::AppHandle;
+use crate::app_link::Outcome;
+use crate::shared::SelectionService;
 use egui::{
     Context, Id, Modifiers, Rect, Response, Role, TextEdit, Ui, UiBuilder, WidgetInfo, pos2, vec2,
 };
-use egui_pop_api::selection::{SelectionItem, SelectionService};
-use egui_pop_api::steps::Outcome;
-use egui_pop_api::{AppHandle, menus};
+#[cfg(feature = "api")]
+use egui_pop_api::menus;
 use egui_pop_core::icon::Source;
 use egui_pop_core::kit::{KitCx, Part, State, Tone};
 use egui_pop_core::strings::{self, tr, tr_args};
 use egui_pop_core::theme::Tokens;
 use egui_pop_model::ids::{MenuId, StepId};
+use egui_pop_model::selection::SelectionItem;
 use serde_json::{Value as Json, json};
 
 pub use filter::{FilterField, Query};
@@ -662,6 +665,7 @@ type OnActionFn<'a, K> = Box<dyn FnMut(&K, &str) + 'a>;
 /// A row's context menu.
 enum ContextMenu<'a, K> {
     /// Declared, with its commands.
+    #[cfg_attr(not(feature = "api"), allow(dead_code))]
     Declared(&'a AppHandle, MenuId),
     /// Drawn by the application.
     Ui(RowFn<'a, K>),
@@ -750,6 +754,7 @@ impl<'a, K: Key> TreeView<'a, K> {
     }
 
     /// Runs its moments as steps of this application.
+    #[cfg(feature = "api")]
     pub fn app(mut self, app: &'a AppHandle) -> Self {
         self.app = Some(app);
         self
@@ -763,6 +768,7 @@ impl<'a, K: Key> TreeView<'a, K> {
     /// selection, Ctrl changes only the tree's items. The tree is then in
     /// the selection's focus surface, where Alt+Left and Alt+Right walk
     /// its history.
+    #[cfg(feature = "api")]
     pub fn shared(mut self, selection: &'a SelectionService) -> Self {
         self.shared = Some(selection);
         self
@@ -879,6 +885,7 @@ impl<'a, K: Key> TreeView<'a, K> {
     /// into its commands' arguments and seen by their `when` clauses as
     /// `args.key`, whatever is selected. It runs `tree.context`, then
     /// `menu.open`.
+    #[cfg(feature = "api")]
     pub fn context_menu(mut self, app: &'a AppHandle, menu: MenuId) -> Self {
         self.context = Some(ContextMenu::Declared(app, menu));
         self
@@ -1071,6 +1078,9 @@ impl<'a, K: Key> TreeView<'a, K> {
                                 context.as_ref().filter(|(row, _)| *row == key)
                             {
                                 match context_menu.as_mut() {
+                                    #[cfg(not(feature = "api"))]
+                                    Some(ContextMenu::Declared(app, _)) => match **app {},
+                                    #[cfg(feature = "api")]
                                     Some(ContextMenu::Declared(app, menu)) => {
                                         menus::context_menu_opened(
                                             &r,

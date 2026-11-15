@@ -20,7 +20,9 @@ workspace = true
 egui = { workspace = true, features = ["serde"] }
 egui-pop-model.workspace = true
 egui-pop-core.workspace = true
-egui-pop-api.workspace = true
+# The application layer (feature `api`, on by default): the views'
+# `.app()` integration, their steps and plugins, the shared selection.
+egui-pop-api = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 # MIT OR Apache-2.0: Rerun's virtualised table (sticky header, resizable
@@ -66,9 +68,15 @@ gdkx11 = { version = "0.18", optional = true }
 x11rb = { version = "0.13", optional = true }
 
 [features]
+default = ["api"]
+## The application layer: each view's `.app(&AppHandle)` (its moments as
+## steps), `.shared(&SelectionService)`, the plugins (`ViewsPlugin`,
+## the library's, the timeline's, the viewer's). Without it a view is a
+## plain egui widget over core and model (docs/standalone.md).
+api = ["dep:egui-pop-api"]
 ## The in-app viewer (`viewer`): markdown pages, `docs:` pages and images,
 ## with navigation, find in page and zoom.
-markdown = ["dep:egui_commonmark", "dep:pulldown-cmark", "dep:egui_extras", "dep:image", "dep:url", "dep:log"]
+markdown = ["api", "dep:egui_commonmark", "dep:pulldown-cmark", "dep:egui_extras", "dep:image", "dep:url", "dep:log"]
 ## The viewer's safe HTML subset: HTML pages shipped by the application or on
 ## its documentation hosts, parsed by html5ever and mapped to the same blocks
 ## as markdown.

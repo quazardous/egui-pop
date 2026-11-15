@@ -38,6 +38,30 @@ it: with an application its moments run as
 without one, it reports what happened in its output and binds its own
 default keys.
 
+## The lightest set
+
+The facade always brings the application layer (`egui-pop-api`). An
+application that only wants a data view or an editor depends on the
+component crate with its default features off: its `api` feature (the
+`.app(..)` and `.shared(..)` options, the steps' plugins such as
+`ViewsPlugin`, `EditorsPlugin` or `TerminalPlugin`) is then left out, and
+the crate builds on `egui-pop-core`, `egui-pop-model` and
+`egui-pop-tokens` only.
+
+```toml
+[dependencies]
+egui-pop-views = { version = "0.10", default-features = false }
+# Highlighting stays a choice: add `features = ["syntect"]`.
+egui-pop-editors = { version = "0.10", default-features = false }
+```
+
+Each crate's documentation has an example drawn this way. CI keeps it
+so: `tools/check-light-deps.sh` fails when either crate, without its
+default features, depends on `egui-pop-api` or eframe, or holds more
+crates than recorded in `tools/light-deps.txt`. The viewer (`markdown`,
+`html`, `video`, `webview`) is the links service's way inside and turns
+`api` back on.
+
 ## The tokens, without egui
 
 `egui-pop-tokens` has no egui dependency: resolve a theme, read its

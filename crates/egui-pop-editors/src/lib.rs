@@ -26,8 +26,33 @@
 //! (Escape leaves them; plain keys stay with them) and bind their
 //! shortcuts in the keymap on the `editor` surface.
 //!
-//! Layer: a component on the application API (L4, ADR 0001).
+//! ## Without the application
+//!
+//! The `api` feature (on by default) brings the application layer: each
+//! editor's `.app(&AppHandle)` and the plugins. Turned off
+//! (`default-features = false`), an editor or a terminal is a plain egui
+//! widget over egui-pop's core and model; the methods taking an
+//! `Option<&AppHandle>` are given `None`.
+//!
+//! ```
+//! use egui_pop_editors::{CodeEditor, EditorState, Signal};
+//!
+//! let code = EditorState::new("main.rs", "fn main() {}\n");
+//! let ctx = egui::Context::default();
+//! let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+//!     let out = CodeEditor::new().label("main.rs").height(200.0).show(ui, &code);
+//!     for s in out.signals {
+//!         if let Signal::Saved { .. } = s { /* write `code.text()` */ }
+//!     }
+//! });
+//! out.textures_delta.clear();
+//! code.undo(None, "me").unwrap();
+//! ```
+//!
+//! Layer: a component on the application API (L4, ADR 0001); without
+//! `api`, a component on core and model only.
 
+mod app_link;
 pub mod assist;
 mod assist_ui;
 pub mod buffer;
@@ -50,8 +75,17 @@ mod view;
 
 pub use code::CodeEditor;
 pub use model::EditorState;
+#[cfg(feature = "api")]
 pub use steps::EditorsPlugin;
+#[cfg(feature = "api")]
+pub use terminal::TerminalPlugin;
+#[cfg(feature = "api")]
 pub use terminal::jobs::JobConsolesPlugin;
-pub use terminal::{Terminal, TerminalPlugin, TerminalState};
+pub use terminal::{Terminal, TerminalState};
+
+/// Without the `api` feature: the application handle the editors' methods
+/// take as `Option<&AppHandle>`, a type with no value (pass `None`).
+#[cfg(not(feature = "api"))]
+pub use app_link::AppHandle;
 pub use text::TextSurface;
 pub use view::{EditorOutput, Signal};

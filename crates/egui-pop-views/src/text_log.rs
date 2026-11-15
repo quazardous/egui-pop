@@ -58,11 +58,11 @@
 use std::collections::BTreeSet;
 use std::ops::Range;
 
+use crate::app_link::AppHandle;
 use egui::{
     Align, Color32, FontId, Layout, Rect, Response, RichText, Role, TextStyle, Ui, UiBuilder, pos2,
     vec2,
 };
-use egui_pop_api::AppHandle;
 use egui_pop_core::a11y;
 use egui_pop_core::strings::{tr, tr_args, tr_with};
 use egui_pop_core::theme::{LogPalette, Tokens};
@@ -560,6 +560,7 @@ impl<'a> TextLog<'a> {
     }
 
     /// Runs its table's moments as steps of this application.
+    #[cfg(feature = "api")]
     pub fn app(mut self, app: &'a AppHandle) -> Self {
         self.app = Some(app);
         self
@@ -666,9 +667,12 @@ impl<'a> TextLog<'a> {
             .label(label)
             .mode(Mode::Single)
             .stick_to_bottom(state.follow);
+        #[cfg(feature = "api")]
         if let Some(app) = app {
             table = table.app(app);
         }
+        #[cfg(not(feature = "api"))]
+        let _ = app;
         if let Some(h) = height {
             let used = ui.cursor().top() - top;
             table = table.height((h - used).max(row_h * 2.0));

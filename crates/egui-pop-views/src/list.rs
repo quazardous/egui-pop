@@ -31,12 +31,13 @@
 
 use std::collections::HashSet;
 
+use crate::app_link::AppHandle;
+use crate::shared::SelectionService;
 use egui::{Id, Response, Role, Ui, UiBuilder, WidgetInfo};
-use egui_pop_api::AppHandle;
-use egui_pop_api::selection::{SelectionItem, SelectionService};
 use egui_pop_core::icon::Source;
 use egui_pop_core::strings::tr;
 use egui_pop_model::ids::StepId;
+use egui_pop_model::selection::SelectionItem;
 
 use crate::item::{self, Disclosure};
 use crate::nav::{self, TypeAhead};
@@ -202,6 +203,7 @@ impl<'a> ListView<'a> {
     }
 
     /// Runs its moments as steps of this application.
+    #[cfg(feature = "api")]
     pub fn app(mut self, app: &'a AppHandle) -> Self {
         self.app = Some(app);
         self
@@ -227,6 +229,7 @@ impl<'a> ListView<'a> {
     /// Ctrl changes only the list's items. The list is then in the
     /// selection's focus surface, where Alt+Left and Alt+Right walk its
     /// history.
+    #[cfg(feature = "api")]
     pub fn shared(mut self, selection: &'a SelectionService) -> Self {
         self.shared = Some(selection);
         self

@@ -3,9 +3,9 @@
 //! list, the hover card, the signature card, the actions list, ghost
 //! text), themed from the tokens.
 
+use crate::app_link::AppHandle;
 use egui::text::{LayoutJob, TextFormat};
 use egui::{Align2, Id, Key, Order, Pos2, RichText, Stroke, Ui, vec2};
-use egui_pop_api::AppHandle;
 use egui_pop_core::kit::{Kit, State};
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::ui::UiPop as _;
@@ -526,12 +526,12 @@ fn apply_action(
 
 fn finish(
     app: Option<&AppHandle>,
-    outcome: egui_pop_api::steps::Outcome,
+    outcome: crate::app_link::Outcome,
     step: &egui_pop_model::ids::StepId,
     signals: &mut Vec<Signal>,
     then: impl FnOnce(&AppHandle),
 ) {
-    use egui_pop_api::steps::Outcome;
+    use crate::app_link::Outcome;
     match outcome {
         Outcome::Done(Ok(v)) => {
             signals.push(Signal::Changed {

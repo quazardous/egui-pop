@@ -64,22 +64,26 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::app_link::AppHandle;
 use egui::accesskit::Role;
 use egui::load::SizedTexture;
 use egui::{
     Align2, Color32, ColorImage, Key, Modifiers, Rect, Response, Sense, Ui, Vec2, pos2, vec2,
 };
-use egui_pop_api::AppHandle;
+#[cfg(feature = "api")]
 use egui_pop_api::links::{self, How, Request, Source};
-use egui_pop_api::strings as api_txt;
+#[cfg(feature = "api")]
+use egui_pop_api::strings::LINKS_OPEN_OUTSIDE;
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::lock;
 use egui_pop_core::slider::Slider;
+#[cfg(not(feature = "api"))]
+use egui_pop_core::strings::StrKey;
 use egui_pop_core::strings::{tr, tr_args};
 
-pub use plugin::{
-    CMD_MUTE, CMD_PAUSE, CMD_PLAY, CMD_SEEK, CMD_TOGGLE, CMD_VOLUME, PLUGIN, VideoPlugin,
-};
+#[cfg(feature = "api")]
+pub use plugin::VideoPlugin;
+pub use plugin::{CMD_MUTE, CMD_PAUSE, CMD_PLAY, CMD_SEEK, CMD_TOGGLE, CMD_VOLUME, PLUGIN};
 pub use session::Videos;
 
 #[cfg(all(feature = "video", not(target_arch = "wasm32")))]
@@ -269,6 +273,7 @@ pub struct Video<'a> {
     poster: Option<SizedTexture>,
     size: Option<Vec2>,
     backend: Backend,
+    #[cfg_attr(not(feature = "api"), allow(dead_code))]
     app: Option<&'a AppHandle>,
     surface: &'a str,
     take_focus: bool,
@@ -398,6 +403,7 @@ impl<'a> Video<'a> {
     }
 
     /// The application: **Open outside** goes through its links service.
+    #[cfg(feature = "api")]
     pub fn app(mut self, app: &'a AppHandle) -> Self {
         self.app = Some(app);
         self
@@ -480,6 +486,7 @@ impl<'a> Video<'a> {
             reg.focused = Some(name.clone());
         }
         drop(reg);
+        #[cfg(feature = "api")]
         if open_outside && let Some(app) = self.app {
             let url = file_url(&self.source);
             let _ = links::open(
@@ -729,10 +736,14 @@ fn notice(ui: &mut Ui, rect: Rect, title: &str, detail: Option<&str>) -> bool {
     if let Some(detail) = detail {
         child.weak(detail);
     }
-    child
-        .button(tr(&ctx, &api_txt::LINKS_OPEN_OUTSIDE))
-        .clicked()
+    child.button(tr(&ctx, &LINKS_OPEN_OUTSIDE)).clicked()
 }
+
+/// Open outside, the links service's own words (the same catalogue key):
+/// without the application layer the output's `open_outside` says it was
+/// asked for, and the caller opens the file.
+#[cfg(not(feature = "api"))]
+const LINKS_OPEN_OUTSIDE: StrKey = StrKey::new("egui-pop-links-open-outside", "Open outside");
 
 /// Play or Pause, a toolbar button of the kit with its mark painted.
 fn play_button(ui: &mut Ui, playing: bool) -> Response {
@@ -884,6 +895,7 @@ fn compact_controls(ui: &mut Ui, s: &mut Session, picture: &Response, acts: &mut
 }
 
 /// A `file:` URL for a path.
+#[cfg(feature = "api")]
 fn file_url(path: &Path) -> String {
     let path = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
     format!("file://{}", path.display())

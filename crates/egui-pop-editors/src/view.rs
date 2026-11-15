@@ -3,13 +3,13 @@
 
 use std::sync::Arc;
 
+use crate::app_link::AppHandle;
 use egui::accesskit::Role;
 use egui::text::{CCursor, LayoutJob, TextFormat};
 use egui::{
     Align2, Color32, Event, EventFilter, FontId, Galley, Id, ImeEvent, Key, Modifiers, Painter,
     Pos2, Rect, Response, ScrollArea, Sense, Shape, Stroke, StrokeKind, Ui, WidgetInfo, pos2, vec2,
 };
-use egui_pop_api::AppHandle;
 use egui_pop_core::focus;
 use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{Kit, State};
@@ -30,7 +30,7 @@ use crate::markers::{Diff, Severity};
 use crate::model::{EditorState, Model, Why};
 use crate::selection::Selection;
 use crate::steps::{
-    self, EDIT_CHANGE, EDIT_SAVE, EDITORS, EVENT_CURSOR_MOVED, EVENT_SELECTION_CHANGED, SURFACE,
+    self, EDIT_CHANGE, EDIT_SAVE, EVENT_CURSOR_MOVED, EVENT_SELECTION_CHANGED, SURFACE,
 };
 use crate::strings as s;
 use crate::tokens::EditorTokens;
@@ -86,9 +86,7 @@ impl Options<'_> {
 /// Draws an editor.
 pub(crate) fn show(ui: &mut Ui, state: &EditorState, o: &Options<'_>) -> EditorOutput {
     let id = Id::unique(("egui_pop_editors", state.id()));
-    if let Some(app) = o.app
-        && let Some(reg) = app.service(&EDITORS)
-    {
+    if let Some(reg) = steps::registry(o.app) {
         reg.attach(state);
         if ui.memory(|m| m.has_focus(id)) {
             reg.set_focused(&state.id());

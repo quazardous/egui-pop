@@ -33,17 +33,26 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use egui::{Color32, Context};
+#[cfg(feature = "api")]
 use egui_pop_api::{Call, Ctx, Plugin, PluginError};
+#[cfg(feature = "api")]
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::lock;
 use egui_pop_core::state::Slot;
-use egui_pop_model::commands::{CommandSpec, Origin};
+#[cfg(feature = "api")]
+use egui_pop_model::commands::CommandSpec;
+use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::{CommandId, PluginId};
 use serde_json::{Value as Json, json};
 
-use super::state::{Marker, MarkerKind, TimeRange, TimelineState};
+use super::Op;
+#[cfg(feature = "api")]
+use super::apply;
+use super::state::TimelineState;
+#[cfg(feature = "api")]
+use super::state::{Marker, MarkerKind, TimeRange};
+#[cfg(feature = "api")]
 use super::tracks::{Clip, ClipEdge, ClipMove};
-use super::{Op, apply};
 
 /// The plugin's id.
 pub const PLUGIN: PluginId = PluginId::from_static("egui_pop.timeline");
@@ -76,9 +85,11 @@ const GONE_AFTER: u64 = 3;
 /// Declares the `timeline.*` commands and the `timeline` collector. Connect
 /// it when an application's timelines should be read and driven by agents;
 /// the widgets work without it.
+#[cfg(feature = "api")]
 #[derive(Debug, Default)]
 pub struct TimelinePlugin;
 
+#[cfg(feature = "api")]
 impl Plugin for TimelinePlugin {
     fn id(&self) -> PluginId {
         PLUGIN
@@ -224,6 +235,7 @@ impl Timelines {
 
     /// Checks `op` on a timeline's last state, queues it for the widget and
     /// answers what the timeline then holds.
+    #[cfg(feature = "api")]
     pub(super) fn run(
         &self,
         timeline: Option<&str>,
@@ -327,6 +339,7 @@ fn hex(c: Color32) -> String {
     format!("#{:02x}{:02x}{:02x}", c.r(), c.g(), c.b())
 }
 
+#[cfg(feature = "api")]
 fn parse_hex(text: &str) -> Option<Color32> {
     let h = text.trim().strip_prefix('#')?;
     if h.len() != 6 {
@@ -394,17 +407,20 @@ pub fn describe(s: &TimelineState) -> Json {
     })
 }
 
+#[cfg(feature = "api")]
 fn timelines(call: &Call<'_>) -> Timelines {
     Timelines::of(&call.app.egui())
 }
 
 /// The `timeline` argument.
+#[cfg(feature = "api")]
 fn name(args: &Json) -> Option<&str> {
     args.get("timeline").and_then(Json::as_str)
 }
 
 /// A time from `seconds` (a number) or `time` (text in the scale), on the
 /// timeline `name`.
+#[cfg(feature = "api")]
 fn time_of(t: &Timelines, args: &Json) -> Result<Option<f64>, String> {
     if let Some(s) = args.get("seconds") {
         return s
@@ -422,6 +438,7 @@ fn time_of(t: &Timelines, args: &Json) -> Result<Option<f64>, String> {
         .ok_or_else(|| format!("`{text}` is not a time on this timeline"))
 }
 
+#[cfg(feature = "api")]
 fn scale_of(t: &Timelines, timeline: Option<&str>) -> Result<super::TimeScale, String> {
     let pass = t.ctx.cumulative_pass_nr();
     let mut reg = lock(&t.registry);
@@ -430,8 +447,10 @@ fn scale_of(t: &Timelines, timeline: Option<&str>) -> Result<super::TimeScale, S
 
 /// A transport key's command: its id, title, description and op (given
 /// `big`).
+#[cfg(feature = "api")]
 type TransportCommand = (CommandId, &'static str, &'static str, fn(bool) -> Op);
 
+#[cfg(feature = "api")]
 fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     const CAT: &str = "Timeline";
     let timeline = "song (optional: the timeline that last had the focus)";
@@ -718,6 +737,7 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
 }
 
 /// The `id` argument, a clip's.
+#[cfg(feature = "api")]
 fn clip_id(args: &Json) -> Result<u64, String> {
     args.get("id")
         .and_then(Json::as_u64)
@@ -725,6 +745,7 @@ fn clip_id(args: &Json) -> Result<u64, String> {
 }
 
 /// `ids` (a list of clips' ids), else `id`.
+#[cfg(feature = "api")]
 fn clip_ids(args: &Json) -> Result<Vec<u64>, String> {
     match args.get("ids") {
         Some(Json::Array(ids)) => ids
@@ -737,6 +758,7 @@ fn clip_ids(args: &Json) -> Result<Vec<u64>, String> {
 }
 
 /// The playhead of the timeline `timeline`.
+#[cfg(feature = "api")]
 fn playhead_of(t: &Timelines, timeline: Option<&str>) -> Result<f64, String> {
     let pass = t.ctx.cumulative_pass_nr();
     let mut reg = lock(&t.registry);
@@ -744,6 +766,7 @@ fn playhead_of(t: &Timelines, timeline: Option<&str>) -> Result<f64, String> {
 }
 
 /// Clip `id`'s track and start on the timeline `timeline`.
+#[cfg(feature = "api")]
 fn clip_of(t: &Timelines, timeline: Option<&str>, id: u64) -> Result<(u64, f64), String> {
     let pass = t.ctx.cumulative_pass_nr();
     let mut reg = lock(&t.registry);

@@ -31,21 +31,34 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Mutex;
 
+#[cfg(feature = "api")]
 use egui_pop_api::host::source_of;
+#[cfg(feature = "api")]
 use egui_pop_api::services::ServiceToken;
-use egui_pop_api::steps::{Outcome, StepSpec};
-use egui_pop_api::{AppHandle, Call, Ctx, Plugin, PluginError};
+#[cfg(feature = "api")]
+use egui_pop_api::steps::StepSpec;
+#[cfg(feature = "api")]
+use egui_pop_api::{Call, Ctx, Plugin, PluginError};
+
+use crate::app_link::{AppHandle, Outcome};
+#[cfg(feature = "api")]
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::lock;
+#[cfg(feature = "api")]
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PluginId, StepId};
+#[cfg(feature = "api")]
 use egui_pop_model::keymap::BindOptions;
-use serde_json::{Value as Json, json};
+use serde_json::Value as Json;
+#[cfg(feature = "api")]
+use serde_json::json;
 
 use crate::buffer::{Change, Pos};
 use crate::history::EditKind;
+#[cfg(feature = "api")]
 use crate::markers::Diagnostic;
 use crate::model::{EditorState, Why};
+#[cfg(feature = "api")]
 use crate::search::Query;
 use crate::selection::Selection;
 
@@ -108,6 +121,7 @@ struct Inner {
 }
 
 /// The registry, a service of [`EditorsPlugin`].
+#[cfg(feature = "api")]
 pub const EDITORS: ServiceToken<Editors> = ServiceToken::new("egui_pop.editors");
 
 impl Editors {
@@ -153,6 +167,7 @@ impl Editors {
         }
     }
 
+    #[cfg(feature = "api")]
     fn log(&self, saves: bool, entry: Json) {
         let mut i = lock(&self.inner);
         let log = if saves { &mut i.saves } else { &mut i.changes };
@@ -172,6 +187,7 @@ impl Editors {
         lock(&self.inner).saves.iter().cloned().collect()
     }
 
+    #[cfg(feature = "api")]
     fn all(&self) -> Vec<EditorState> {
         lock(&self.inner).editors.values().cloned().collect()
     }
@@ -180,10 +196,12 @@ impl Editors {
 /// Declares the editors' steps, commands and collectors, and provides
 /// the [`Editors`] registry. Connect it when editors run with an
 /// application.
+#[cfg(feature = "api")]
 #[derive(Debug, Default)]
 pub struct EditorsPlugin;
 
 /// Every step the editors declare.
+#[cfg(feature = "api")]
 pub fn specs() -> Vec<StepSpec> {
     vec![
         StepSpec::new(
@@ -233,6 +251,7 @@ pub fn specs() -> Vec<StepSpec> {
 
 /// The editor a command acts on: `editor` in its arguments, else the
 /// one that last had the focus.
+#[cfg(feature = "api")]
 fn target(call: &Call<'_>) -> Result<EditorState, String> {
     let reg = call
         .app
@@ -246,10 +265,12 @@ fn target(call: &Call<'_>) -> Result<EditorState, String> {
     }
 }
 
+#[cfg(feature = "api")]
 fn pos(v: &Json) -> Option<Pos> {
     serde_json::from_value(v.clone()).ok()
 }
 
+#[cfg(feature = "api")]
 fn line_arg(call: &Call<'_>, state: &EditorState) -> usize {
     call.args
         .get("line")
@@ -257,6 +278,7 @@ fn line_arg(call: &Call<'_>, state: &EditorState) -> usize {
         .map_or_else(|| state.selection().head.line, |l| l as usize)
 }
 
+#[cfg(feature = "api")]
 fn query_of(args: &Json, base: &Query) -> Query {
     let flag = |k: &str, d: bool| args.get(k).and_then(Json::as_bool).unwrap_or(d);
     Query {
@@ -370,10 +392,12 @@ pub(crate) fn unfold_at(state: &EditorState, line: usize) -> Option<usize> {
     m.folds.unfold(start).then_some(start)
 }
 
+#[cfg(feature = "api")]
 fn ok(state: &EditorState) -> Json {
     json!({ "editor": state.id(), "selection": state.selection(), "version": state.version() })
 }
 
+#[cfg(feature = "api")]
 impl Plugin for EditorsPlugin {
     fn id(&self) -> PluginId {
         EDITORS_PLUGIN
@@ -461,11 +485,13 @@ impl Plugin for EditorsPlugin {
     }
 }
 
+#[cfg(feature = "api")]
 fn surface() -> BindOptions {
     BindOptions::surface(SURFACE)
 }
 
 /// The editors' commands.
+#[cfg(feature = "api")]
 fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     const CAT: &str = "Editor";
     let editor = json!({ "editor": "notes (optional: the editor that last had the focus)" });
@@ -766,6 +792,18 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     Ok(())
 }
 
+/// The [`Editors`] registry of the application, when there is one and it
+/// connected the plugin.
+pub(crate) fn registry(app: Option<&AppHandle>) -> Option<std::sync::Arc<Editors>> {
+    #[cfg(feature = "api")]
+    return app.and_then(|a| a.service(&EDITORS));
+    #[cfg(not(feature = "api"))]
+    {
+        let _ = app;
+        None
+    }
+}
+
 /// Runs a step through the application when there is one, else its
 /// default directly.
 pub(crate) fn run(
@@ -775,7 +813,13 @@ pub(crate) fn run(
     default: impl FnOnce(&Json) -> Result<Json, String>,
 ) -> Outcome {
     match app {
+        #[cfg(feature = "api")]
         Some(app) => app.step(step, args, |_, args| default(args)),
+        #[cfg(not(feature = "api"))]
+        Some(app) => {
+            let _ = step;
+            match *app {}
+        }
         None => Outcome::Done(default(&args)),
     }
 }

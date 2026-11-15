@@ -51,8 +51,45 @@
 //! application owns its data: the views show it and say what the user
 //! asked for.
 //!
-//! Layer: a component on the application API (L4, ADR 0001).
+//! ## Without the application
+//!
+//! The `api` feature (on by default) brings the application layer: each
+//! view's `.app(&AppHandle)`, `.shared(..)`, and the plugins. Turned off
+//! (`default-features = false`), a view is a plain egui widget over
+//! egui-pop's core and model, for any egui or eframe application; what
+//! the user did comes back in its output.
+//!
+//! ```
+//! use egui_pop_views::list::{ListRows, ListState, ListView};
+//!
+//! struct Files(Vec<String>);
+//!
+//! impl ListRows<usize> for Files {
+//!     fn len(&self) -> usize {
+//!         self.0.len()
+//!     }
+//!     fn key(&self, row: usize) -> usize {
+//!         row
+//!     }
+//!     fn label(&self, row: usize) -> String {
+//!         self.0[row].clone()
+//!     }
+//! }
+//!
+//! let ctx = egui::Context::default();
+//! let mut state = ListState::<usize>::new();
+//! let mut files = Files(vec!["a.txt".into(), "b.txt".into()]);
+//! let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+//!     let out = ListView::new("files").label("Files").show(ui, &mut state, &mut files);
+//!     for _signal in out.signals { /* the user selected or opened a row */ }
+//! });
+//! out.textures_delta.clear();
+//! ```
+//!
+//! Layer: a component on the application API (L4, ADR 0001); without
+//! `api`, a component on core and model only.
 
+mod app_link;
 pub mod item;
 pub mod library;
 pub mod list;
@@ -75,4 +112,5 @@ pub mod viewer;
 
 pub use nav::TYPE_AHEAD_DELAY;
 pub use select::{Mode, Selection};
+#[cfg(feature = "api")]
 pub use steps::ViewsPlugin;

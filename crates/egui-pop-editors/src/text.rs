@@ -13,8 +13,8 @@
 //! }
 //! ```
 
+use crate::app_link::AppHandle;
 use egui::Ui;
-use egui_pop_api::AppHandle;
 
 use crate::model::EditorState;
 use crate::view::{self, EditorOutput, Options};

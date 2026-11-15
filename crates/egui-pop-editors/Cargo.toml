@@ -16,7 +16,13 @@ authors.workspace = true
 workspace = true
 
 [features]
-default = ["syntect"]
+default = ["api", "syntect"]
+## The application layer: each editor's `.app(&AppHandle)` (its edits
+## and session moments as steps), the plugins (`EditorsPlugin`,
+## `TerminalPlugin`, `JobConsolesPlugin`). Without it an editor or a
+## terminal is a plain egui widget over core and model
+## (docs/standalone.md).
+api = ["dep:egui-pop-api"]
 ## Highlighting through syntect's bundled Sublime Text grammars (pure
 ## Rust regular expressions, so it builds for the web).
 syntect = ["dep:syntect"]
@@ -32,7 +38,8 @@ profiling.workspace = true
 egui.workspace = true
 egui-pop-model.workspace = true
 egui-pop-core.workspace = true
-egui-pop-api.workspace = true
+# The application layer (feature `api`, on by default).
+egui-pop-api = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 # MIT OR Apache-2.0: search and replace.
