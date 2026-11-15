@@ -5600,6 +5600,9 @@ fn late_values_keep_their_room_and_a_failed_one_retries() {
     assert!(photos.1 && size.1 && !free.1);
     assert_eq!(free.2.as_deref(), Some("412.7 GB"));
     assert_eq!(backup.2.as_deref(), Some("Not mounted"));
+    // Below the fold: brought into view first.
+    h.get_by_label("Retry Backup disk").scroll_to_me();
+    h.run();
     h.get_by_label("Retry Backup disk").click();
     h.run();
     assert!(h.query_by_label("Late values retried 1 times.").is_some());
