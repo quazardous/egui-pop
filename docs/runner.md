@@ -40,13 +40,34 @@ creates and paints every window; owning the loop adds:
   ids were checked against eframe's own handles for the main window
   (`egui_pop_api::runner::ids_verified`).
 
+- **Each viewport's window, by its id** (`egui_pop_api::runner::window`):
+  a `Window` implementing `HasWindowHandle` and `HasDisplayHandle`,
+  what a file chooser's parent, a Wayland subsurface or a Win32 subclass
+  takes. The main window's is eframe's own window, known as soon as
+  eframe creates it, on every system (macOS included); another deferred
+  viewport's comes from its winit id, once painted and verified as
+  above. `egui_pop_api::runner::windows` lists the viewports whose
+  window is known, the main one first; a closed viewport leaves the list.
+
 ```rust
 use egui_pop_api::runner;
 
 fn diagnostics() -> String {
     format!("screens: {:?}, ids verified: {:?}", runner::screens(), runner::ids_verified())
 }
+
+fn windows_known() -> Vec<(egui::ViewportId, Option<runner::raw_window_handle::RawWindowHandle>)> {
+    runner::windows()
+        .into_iter()
+        .map(|v| (v, runner::window(v).and_then(|w| w.raw_window())))
+        .collect()
+}
 ```
+
+The handles name windows winit keeps: read them on the thread running
+the application's frames (the runner's state is kept there; elsewhere
+the functions answer nothing), and keep them no longer than the viewport
+stays open.
 
 Immediate viewports (painted inside their parent's pass) are not
 paired. On the web, and without the feature, eframe runs as before and
@@ -122,7 +143,8 @@ let _ = app.handle().wait_met(&WaitFor::event("command.done"), since);
 
 - Runner: handles not verified (`ids_verified` false) are never
   recorded, so what reads them (the file chooser's parent, the frame's
-  hit testing) gets nothing for windows other than the main one.
+  hit testing, `runner::window`) gets nothing for windows other than the
+  main one; the main window's stays known, from eframe.
 - Reads: a failed read keeps the value before it, so a page shows the
   value and the error beside it; a command no transport serves is not
   the kernel's (`ReadKernel::serves`) and keeps going through the
@@ -148,9 +170,12 @@ the run loop they share may still move"; "The read kernel
 ## Tests
 
 - Runner: unit tests in `crates/egui-pop-api/src/runner.rs` (a place
-  repaired against screens); the window ids are checked per system by
-  `egui-pop-winit`'s `window_id` test. The run loop itself has no
-  headless test (it needs a display).
+  repaired against screens, no window before the loop runs); the window
+  ids are checked per system by `egui-pop-winit`'s `window_id` test. The
+  run loop itself has no headless test (it needs a display): the
+  gallery's `multi_window` example, run under wbox on the box, reports
+  each viewport's window and display handles (`runner` and `opened`
+  lines).
 - Reads: unit tests in `crates/egui-pop-api/src/reads.rs`; through the
   Settings app in `crates/egui-pop-api/tests/admin.rs`.
 - Waits: `crates/egui-pop-test/tests/wait.rs` and the module's doc test.
