@@ -1049,9 +1049,12 @@ fn without_a_store_the_window_says_the_values_last_the_session() {
     egui_pop_test::assert_all_named(&h);
 }
 
+/// A read asked of [`Gated`]: its command, and where its answer goes.
+type Ask = (String, std::sync::mpsc::Sender<Json>);
+
 /// A host's transport whose reads wait for the test to answer them.
 struct Gated {
-    asked: std::sync::Mutex<std::sync::mpsc::Sender<(String, std::sync::mpsc::Sender<Json>)>>,
+    asked: std::sync::Mutex<std::sync::mpsc::Sender<Ask>>,
 }
 
 impl egui_pop_api::reads::ReadTransport for Gated {
@@ -1103,7 +1106,7 @@ impl Plugin for Disks {
     }
 }
 
-type Asked = std::sync::mpsc::Receiver<(String, std::sync::mpsc::Sender<Json>)>;
+type Asked = std::sync::mpsc::Receiver<Ask>;
 
 fn disks() -> (
     Harness<'static, App>,

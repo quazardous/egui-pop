@@ -432,9 +432,12 @@ mod tests {
     use super::*;
     use std::sync::mpsc::{Receiver, Sender, channel};
 
+    /// A read asked: its command, and where its answer goes.
+    type Ask = (String, Sender<Result<Json, String>>);
+
     /// A transport whose reads wait for the test to answer them.
     struct Gated {
-        asked: Mutex<Sender<(String, Sender<Result<Json, String>>)>>,
+        asked: Mutex<Sender<Ask>>,
     }
 
     impl ReadTransport for Gated {
@@ -449,7 +452,7 @@ mod tests {
         }
     }
 
-    fn kernel() -> (ReadKernel, Receiver<(String, Sender<Result<Json, String>>)>) {
+    fn kernel() -> (ReadKernel, Receiver<Ask>) {
         let (tx, rx) = channel();
         let k = ReadKernel::new(Arc::new(Gated {
             asked: Mutex::new(tx),
@@ -465,9 +468,7 @@ mod tests {
         }
     }
 
-    fn next(
-        rx: &Receiver<(String, Sender<Result<Json, String>>)>,
-    ) -> (String, Sender<Result<Json, String>>) {
+    fn next(rx: &Receiver<Ask>) -> Ask {
         rx.recv_timeout(Duration::from_secs(10))
             .expect("a read asked")
     }
