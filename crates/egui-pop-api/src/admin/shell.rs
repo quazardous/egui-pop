@@ -1347,25 +1347,34 @@ fn cell(ui: &mut Ui, c: &Column, row: &Json, tone: Option<Tone>) -> egui::Respon
 /// row a deep link names (`scope/section/<row key>`) is marked and
 /// scrolled to.
 fn records(ui: &mut Ui, app: &AppHandle, admin: &Admin, r: &Records, values: &Values, table: bool) {
-    let ctx = ui.ctx().clone();
-    let t = Tokens::of(&ctx);
-    // Read again after a change, the list keeps its last rows, marked,
-    // until the new ones come: a refresh never blanks it.
+    records_read(ui, app, admin, r, values, table);
+    // Read again after a change, the list keeps its last rows until the
+    // new ones come: a refresh never blanks it. The mark goes under the
+    // rows, so nothing above them moves.
     let refreshing = match &r.source {
         RecordSource::Command { command, args, .. } => {
             admin.refreshing(command, &template::expand(args, values).0)
         }
         RecordSource::Hook { .. } => false,
     };
-    if !r.meta.title.is_empty() || refreshing {
-        ui.horizontal_wrapped(|ui| {
-            if !r.meta.title.is_empty() {
-                ui.label(egui::RichText::new(&r.meta.title).strong());
-            }
-            if refreshing {
-                ui.weak(strings::tr(&ctx, &txt::ADMIN_REFRESHING));
-            }
-        });
+    if refreshing {
+        ui.weak(strings::tr(ui.ctx(), &txt::ADMIN_REFRESHING));
+    }
+}
+
+/// [`records`]' title and rows, as last read.
+fn records_read(
+    ui: &mut Ui,
+    app: &AppHandle,
+    admin: &Admin,
+    r: &Records,
+    values: &Values,
+    table: bool,
+) {
+    let ctx = ui.ctx().clone();
+    let t = Tokens::of(&ctx);
+    if !r.meta.title.is_empty() {
+        ui.label(egui::RichText::new(&r.meta.title).strong());
     }
     let rows = match &r.source {
         RecordSource::Hook { hook } => admin
