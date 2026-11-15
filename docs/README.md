@@ -247,6 +247,9 @@ of every crate with every feature on.
   requests for comments, what breaks an extension, deprecation windows.
 - [Upstream workarounds](upstream.md): what egui-pop compensates for in
   its dependencies, and how a limit is handled.
+- [eframe and egui-pop](eframe-comparison.md): what eframe gives, what
+  egui-pop adds and works around, and how egui-pop extends eframe
+  rather than replacing it.
 - [egui_stack directions](egui-stack-directions.md): how egui_stack, the
   continuation of egui_dock, could fit egui-pop (theming, drop veto,
   keyboard, accessibility, windows, layout state, sections and toolbars,
