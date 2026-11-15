@@ -16,7 +16,7 @@ authors.workspace = true
 workspace = true
 
 [features]
-default = ["eframe", "phosphor", "theme-zip", "bundled-fonts", "image-previews"]
+default = ["eframe", "create-native", "phosphor", "theme-zip", "bundled-fonts", "image-previews"]
 ## egui-pop's default font pair, Inter for interface text and JetBrains
 ## Mono NL (without ligatures, tabular digits) for values and code,
 ## subset to Latin, Greek and Cyrillic: about 620 KB, under the SIL Open
@@ -25,6 +25,10 @@ default = ["eframe", "phosphor", "theme-zip", "bundled-fonts", "image-previews"]
 bundled-fonts = ["egui-pop-api/bundled-fonts"]
 ## Run applications through eframe (`App::run_native`, `eframe::App`).
 eframe = ["egui-pop-api/eframe"]
+## Native applications run eframe on an event loop egui-pop owns
+## (`eframe::create_native`): screens known before the main window is
+## placed, every window's handles known. Off: plain `eframe::run_native`.
+create-native = ["egui-pop-api/create-native"]
 ## Icons drawn from the Phosphor icon font (MIT, about 480 KB); without
 ## it, icons are painted with lines and fills.
 phosphor = ["egui-pop-api/phosphor"]

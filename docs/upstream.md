@@ -508,7 +508,11 @@ limit.
   (a viewport's native window, or its raw handles, from eframe).
 - **Workaround**: `files::set_parent_window` takes a window's handles
   from an application that has them; `AppBuilder::run_native` records the
-  main window's.
+  main window's, and with the `create-native` feature (default) every
+  other window's too: egui-pop owns the event loop and reads a window's
+  handles from its winit id (`egui-pop-winit`, an implementation detail
+  of winit 0.30 checked by a test per system and, at run time, against
+  the main window's handles). See [eframe-comparison.md](eframe-comparison.md#the-runner-eframe-through-create_native).
 - **Remove when**: eframe gives each viewport's window or raw handles;
   egui-pop then records them as each window opens.
 
@@ -619,8 +623,11 @@ limit.
   (choose the monitor at launch); a request for the screens' rectangles
   in `ViewportInfo` is not filed yet.
 - **Workaround**: `egui_pop_api::window::WindowState::repair` takes the
-  screens when they are known (tested with sample layouts); at start-up
-  only the size is bounded and a position far away is dropped. Sizes are
+  screens when they are known (tested with sample layouts). With the
+  `create-native` feature (default), egui-pop owns the event loop, reads
+  the monitors before eframe creates the main window, and repairs its
+  place against them in the `window_builder` hook; without it, only the
+  size is bounded and a position far away is dropped. Sizes are
   kept under 8192 points per side, past which the surface cannot be
   configured (<https://github.com/emilk/egui/issues/8361>).
 - **Remove when**: eframe tells the screens before the window is placed.

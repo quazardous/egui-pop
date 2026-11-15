@@ -3980,7 +3980,10 @@ impl AppBuilder {
         Ok(app)
     }
 
-    /// Builds and runs the application in a native window.
+    /// Builds and runs the application in a native window. With the
+    /// `create-native` feature (default), eframe runs on an event loop
+    /// egui-pop owns ([`crate::runner`]): the screens are known before the
+    /// main window is placed, and every window's handles once painted.
     #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
     pub fn run_native(mut self, title: &str, mut options: eframe::NativeOptions) -> eframe::Result {
         self.system_focus
@@ -3989,15 +3992,16 @@ impl AppBuilder {
         if self.app_id.is_none() {
             self.app_id.clone_from(&options.viewport.app_id);
         }
-        // The window's place from the last run, repaired (the screens are
-        // not known before the window exists: only bounds are checked).
+        // The window's place from the last run, bounded here; with the
+        // `create-native` feature, repaired against the screens the event
+        // loop reads before the window exists (`runner`).
         if let Some(p) = &self.persist {
             crate::window::restore(p.dir(), &mut options);
         }
         if self.multi_window {
             crate::windows::present_mode(&mut options);
         }
-        eframe::run_native(
+        crate::runner::run(
             title,
             options,
             Box::new(move |cc| {
@@ -4037,7 +4041,7 @@ impl AppBuilder {
         if self.multi_window {
             crate::windows::present_mode(&mut options);
         }
-        eframe::run_native(
+        crate::runner::run(
             title,
             options,
             Box::new(move |cc| {

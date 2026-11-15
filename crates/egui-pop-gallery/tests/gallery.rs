@@ -5544,6 +5544,21 @@ fn layout_by_role(theme: &str) {
     h.run();
     h.snapshot(format!("roles-{theme}"));
     assert!(h.query_by_label("Nothing clicked yet.").is_some());
+    // Rows and grids: the wide grid keeps headers beside values, the
+    // narrow one folds them over their values.
+    let mut kinds: Vec<_> = h.query_all_by_label("Kind").map(|n| n.rect()).collect();
+    let mut raws: Vec<_> = h
+        .query_all_by_label("Raw image")
+        .map(|n| n.rect())
+        .collect();
+    kinds.sort_by(|a, b| a.left().total_cmp(&b.left()));
+    raws.sort_by(|a, b| a.left().total_cmp(&b.left()));
+    assert_eq!((kinds.len(), raws.len()), (2, 2));
+    assert!(raws[0].left() > kinds[0].right(), "wide: beside");
+    assert!(raws[1].top() >= kinds[1].bottom(), "narrow: folded");
+    // Below the rows and grids: brought into view first.
+    h.get_by_label("danger").scroll_to_me();
+    h.run();
     h.get_by_label("danger").click();
     h.run();
     assert!(h.query_by_label("Last clicked: danger").is_some());
@@ -5578,6 +5593,34 @@ fn skeletons_are_busy_until_the_content_loads_and_empty_states_act() {
     h.run();
     assert!(h.query_by_label("Loading the queue").is_none());
     assert!(h.query_by_label("IMG_0001.raw").is_some());
+}
+
+#[test]
+fn late_values_keep_their_room_and_a_failed_one_retries() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "placeholders"));
+    h.run();
+    let cell = |h: &Harness<'_, Gallery>, name: &str| {
+        let node = h.get_by_role_and_label(egui::accesskit::Role::Status, name);
+        let width = node.rect().width().round();
+        let a = node.accesskit_node();
+        (width, a.is_busy(), a.value())
+    };
+    let photos = cell(&h, "Photos");
+    let free = cell(&h, "Free space");
+    let size = cell(&h, "Folder size");
+    let backup = cell(&h, "Backup disk");
+    // Pending, fresh and refreshing take the same room.
+    assert_eq!(photos.0, free.0);
+    assert_eq!(free.0, size.0);
+    assert!(photos.1 && size.1 && !free.1);
+    assert_eq!(free.2.as_deref(), Some("412.7 GB"));
+    assert_eq!(backup.2.as_deref(), Some("Not mounted"));
+    // Below the fold: brought into view first.
+    h.get_by_label("Retry Backup disk").scroll_to_me();
+    h.run();
+    h.get_by_label("Retry Backup disk").click();
+    h.run();
+    assert!(h.query_by_label("Late values retried 1 times.").is_some());
 }
 
 #[test]
@@ -6541,6 +6584,9 @@ fn egui_s_widgets_in_a_scope_follow_their_kit_component() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "scoped"));
     h.run();
     h.snapshot("scoped-pop-dark");
+    // Below the rows and grids: brought into view first.
+    h.get_by_label("danger").scroll_to_me();
+    h.run();
     h.get_by_label("danger").click();
     h.run();
     assert!(h.query_by_label("Last clicked: danger").is_some());

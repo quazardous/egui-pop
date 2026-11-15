@@ -2786,6 +2786,12 @@ command-workbench-layout-panelAlignment =
 menu-app-menu-layout =
     .label = Personnaliser la disposition
 
+egui-pop-late-loading = Chargement de { $name }
+
+egui-pop-late-retry = Réessayer { $name }
+
+egui-pop-late-updating = Mise à jour de { $name }
+
 egui-pop-layout-customize = Personnaliser la disposition
 
 egui-pop-layout-with-key = { $action } ({ $keys })
