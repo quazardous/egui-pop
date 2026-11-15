@@ -787,6 +787,10 @@ pub(crate) struct Shared {
     host: RefCell<Option<Box<dyn Host>>>,
     /// The host's history groups (`Host::groups`) while it dispatches.
     dispatch_groups: RefCell<Option<Rc<dyn crate::host::Groups>>>,
+    /// The commands of plugins disconnected, by the plugin that took
+    /// them away: a run of one is refused naming it, a toast's action
+    /// naming one is greyed (ADR 0028).
+    gone_commands: RefCell<BTreeMap<CommandId, PluginId>>,
     /// Events published while the host was dispatching.
     held: RefCell<Vec<Held>>,
     /// The journal kept for a host that keeps none.
@@ -923,6 +927,7 @@ impl AppHandle {
             pending_keys: RefCell::new(None),
             host: RefCell::new(Some(host)),
             dispatch_groups: RefCell::new(None),
+            gone_commands: RefCell::new(BTreeMap::new()),
             held: RefCell::new(Vec::new()),
             journal: RefCell::new(crate::host::Journal::default()),
             running: RefCell::new(BTreeMap::new()),
@@ -2170,6 +2175,13 @@ impl AppHandle {
         self.0.derived.borrow().settings.clone()
     }
 
+    /// The plugin a command went with, when it was declared by a plugin
+    /// now disconnected (ADR 0028): what a toast's greyed action and a
+    /// refused run name.
+    pub fn command_gone_with(&self, id: &CommandId) -> Option<PluginId> {
+        self.0.gone_commands.borrow().get(id).cloned()
+    }
+
     /// A command's declaration.
     pub fn command(&self, id: &CommandId) -> Option<CommandSpec> {
         self.0
@@ -2902,6 +2914,17 @@ impl AppHandle {
     /// detached panels, closed panels.
     pub fn layout(&self) -> egui_pop_model::layout::Layout {
         self.workbench_mut().layout()
+    }
+
+    /// The layout as saved: [`AppHandle::layout`] and the places kept for
+    /// panels no longer declared, which go back there when declared again
+    /// (ADR 0028).
+    pub fn saved_layout(&self) -> egui_pop_model::layout::SavedLayout {
+        let mut wb = self.workbench_mut();
+        egui_pop_model::layout::SavedLayout {
+            layout: wb.layout(),
+            dormant: wb.dormant.clone(),
+        }
     }
 
     /// Puts in a layout (loaded, or an arrangement), repaired against
@@ -3946,7 +3969,6 @@ impl AppBuilder {
             rebuilds: 0,
             pointer: crate::pointer::Sync::default(),
             logic_pass: None,
-            gone_commands: BTreeMap::new(),
         };
         install_pass_marker(ctx);
         *app.handle.0.writer.borrow_mut() = app
@@ -4216,15 +4238,15 @@ pub struct App {
     pointer: crate::pointer::Sync,
     /// The pass the logic last ran in (`App::logic`).
     logic_pass: Option<(egui::ViewportId, u64)>,
-    /// The commands of plugins disconnected, by the plugin that took
-    /// them away: a run of one is refused naming it (ADR 0028).
-    gone_commands: BTreeMap<CommandId, PluginId>,
 }
 
 /// What went with an owner (`App::remove_owner`).
 struct Removed {
     commands: Vec<CommandId>,
     panels: usize,
+    /// Components and host offers it declared, and the mounts that went
+    /// with it (ADR 0013).
+    mounts: crate::mounts::RemovedMounts,
     undo: Vec<egui_pop_model::values::DroppedSteps>,
 }
 
@@ -5287,7 +5309,11 @@ impl App {
             Ok(()) => {
                 slot.connected = true;
                 slot.reason = None;
-                self.gone_commands.retain(|_, p| *p != id);
+                self.handle
+                    .0
+                    .gone_commands
+                    .borrow_mut()
+                    .retain(|_, p| *p != id);
                 self.handle.zones_mut().set_rank(&owner, i + 1);
                 self.dirty = true;
                 self.update_plugin_infos();
@@ -5331,6 +5357,7 @@ impl App {
         h.indicators.borrow_mut().remove_owner(owner);
         h.workbench.borrow_mut().templates.retain(|t| t.0 != *owner);
         h.services.borrow_mut().remove_owner(owner);
+        let mounts = crate::mounts::remove_owner(&self.handle, owner);
         let undo = lock(&h.store).remove_owner_report(owner).dropped;
         crate::history::remove_owner(&self.handle, owner);
         h.diagnostics.borrow_mut().remove_owner(owner);
@@ -5345,6 +5372,7 @@ impl App {
         Removed {
             commands,
             panels,
+            mounts,
             undo,
         }
     }
@@ -5358,9 +5386,12 @@ impl App {
         let mixed: usize = removed.undo.iter().map(|d| d.mixed).sum();
         log::info!(
             target: "egui_pop",
-            "plugin `{plugin}` disconnected ({reason}): {} command(s), {} panel(s), {steps} undo step(s) ({mixed} mixed) removed",
+            "plugin `{plugin}` disconnected ({reason}): {} command(s), {} panel(s), {} component(s), {} host(s), {} mount(s), {steps} undo step(s) ({mixed} mixed) removed",
             removed.commands.len(),
             removed.panels,
+            removed.mounts.components,
+            removed.mounts.hosts,
+            removed.mounts.mounts,
         );
         let undo: Vec<Json> = removed
             .undo
@@ -5378,14 +5409,22 @@ impl App {
                 "removed": {
                     "commands": removed.commands.len(),
                     "panels": removed.panels,
+                    "components": removed.mounts.components,
+                    "hosts": removed.mounts.hosts,
+                    "mounts": removed.mounts.mounts,
                     "undo_steps": steps,
                     "mixed_undo_steps": mixed,
                 },
                 "undo": undo,
             }),
         );
+        // What it left open is closed, saying why (ADR 0028): its
+        // dialogs are cancelled; its commands are kept as gone, so a run
+        // of one is refused naming it and a toast's action greyed.
+        crate::dialogs::owner_gone(&self.handle, plugin, owner, &removed.commands);
+        let mut gone = self.handle.0.gone_commands.borrow_mut();
         for c in removed.commands {
-            self.gone_commands.insert(c, plugin.clone());
+            gone.insert(c, plugin.clone());
         }
     }
 
@@ -6053,7 +6092,7 @@ impl App {
                     return Ok(json!({ "document": document, "loaded": false }));
                 };
                 let read = p
-                    .load::<egui_pop_model::layout::Layout>(
+                    .load::<egui_pop_model::layout::SavedLayout>(
                         document,
                         &egui_pop_model::layout::schema(),
                     )
@@ -6061,12 +6100,14 @@ impl App {
                 let Some(read) = read else {
                     return Ok(json!({ "document": document, "loaded": false }));
                 };
+                // The places kept in it replace those kept so far.
+                app.workbench_mut().dormant = read.value.dormant;
                 let notes = if started {
-                    app.set_layout(read.value)
+                    app.set_layout(read.value.layout)
                 } else {
                     // Repaired against the panels when the application is
                     // first resolved.
-                    app.workbench_mut().layout = read.value;
+                    app.workbench_mut().layout = read.value.layout;
                     Vec::new()
                 };
                 Ok(json!({ "document": document, "loaded": true, "repaired": notes }))
@@ -6092,8 +6133,12 @@ impl App {
                 let Some(p) = persist else {
                     return Ok(json!({ "document": document, "saved": false }));
                 };
-                p.save(document, &egui_pop_model::layout::schema(), &app.layout())
-                    .map_err(|e| e.to_string())?;
+                p.save(
+                    document,
+                    &egui_pop_model::layout::schema(),
+                    &app.saved_layout(),
+                )
+                .map_err(|e| e.to_string())?;
                 Ok(json!({ "document": document, "saved": true }))
             },
         ))
@@ -6351,7 +6396,7 @@ impl App {
                     // a toast's or a job's action, an accepted dialog):
                     // refused on the journal, naming the plugin that
                     // took it away (ADR 0028).
-                    let reason = match self.gone_commands.get(command) {
+                    let reason = match self.handle.command_gone_with(command) {
                         Some(p) => format!("its plugin `{p}` is disconnected"),
                         None => msg.clone(),
                     };

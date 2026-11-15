@@ -106,6 +106,12 @@
 //! `dialog.cancelled`, `dialog.filtered` as a choice's filter changes,
 //! and `dialog.moved` once a move is done.
 //!
+//! A dialog belongs to the plugin of its command, and a custom one also to
+//! the plugin that opened it (whose command, connection or handler was
+//! running). When that plugin is disconnected, the dialog is cancelled
+//! at once (ADR 0028): `dialog.cancelled` from `egui_pop`, with the reason
+//! ("its plugin `x` is disconnected"), and the next queued one shows.
+//!
 //! ```
 //! use egui_pop_api::dialogs::{self, Confirm};
 //! use egui_pop_api::App;
@@ -1052,6 +1058,8 @@ struct Open {
     values: Map<String, Json>,
     ready: bool,
     body: Json,
+    /// The owner it was opened under (`values::current_scope`), if any.
+    opener: Option<OwnerId>,
 }
 
 #[derive(Debug, Default)]
@@ -1101,6 +1109,7 @@ impl Dialogs {
             values: Map::new(),
             ready: true,
             body: Json::Null,
+            opener: egui_pop_model::values::current_scope(),
         });
         id
     }
@@ -1563,6 +1572,81 @@ fn apply(
         app.run_as(command, args, origin);
     }
     Ok(())
+}
+
+/// The command a dialog runs when accepted, if any.
+fn command_of(dialog: &Dialog) -> Option<&CommandId> {
+    match dialog {
+        Dialog::Confirm(c) => Some(&c.command),
+        Dialog::Form(f) => Some(&f.command),
+        Dialog::Choose(c) => Some(&c.command),
+        Dialog::Custom(c) => c.command.as_ref(),
+        Dialog::Info(_) => None,
+    }
+}
+
+/// A plugin went (ADR 0028): the dialogs open on one of its commands, and
+/// the custom ones it opened, are cancelled at once, `dialog.cancelled`
+/// saying why. No hook may keep them: their owner is gone. Returns how
+/// many.
+pub(crate) fn owner_gone(
+    app: &AppHandle,
+    plugin: &PluginId,
+    owner: &OwnerId,
+    commands: &[CommandId],
+) -> usize {
+    let Some(d) = app.service(&DIALOGS) else {
+        return 0;
+    };
+    let gone: Vec<Open> = {
+        let mut s = lock(&d.0);
+        let (gone, kept): (VecDeque<Open>, VecDeque<Open>) =
+            std::mem::take(&mut s.queue).into_iter().partition(|o| {
+                command_of(&o.dialog).is_some_and(|c| commands.contains(c))
+                    || (matches!(o.dialog, Dialog::Custom(_)) && o.opener.as_ref() == Some(owner))
+            });
+        s.queue = kept;
+        gone.into()
+    };
+    let reason = format!("its plugin `{plugin}` is disconnected");
+    let ctx = app.egui();
+    for open in &gone {
+        // Its overlay leaves the stack now: the next dialog comes up as
+        // the top one, not under a modal no one draws.
+        overlay::close(&ctx, overlay_id(open.id));
+        if let Dialog::Custom(c) = &open.dialog {
+            app.local::<Bodies>().0.borrow_mut().remove(&open.id);
+            if let Some(needs) = &c.needs {
+                app.unmount(&needs.id, crate::mounts::CUSTOM_DIALOG);
+            }
+        }
+        {
+            let mut s = lock(&d.0);
+            if s.answered.len() == ANSWERED {
+                s.answered.pop_front();
+            }
+            s.answered.push_back((
+                open.dialog.title().to_string(),
+                Answer::Cancel,
+                Origin::User,
+            ));
+        }
+        log::info!(
+            target: "egui_pop",
+            "dialog `{}` cancelled: {reason}",
+            open.dialog.title()
+        );
+        app.publish(
+            "egui_pop",
+            None,
+            "dialog.cancelled",
+            json!({ "id": open.id, "title": open.dialog.title(), "reason": reason }),
+        );
+    }
+    if !gone.is_empty() {
+        app.egui().request_repaint();
+    }
+    gone.len()
 }
 
 /// Answers the shown dialog through the [`STEP_ANSWER`] step: hooks may

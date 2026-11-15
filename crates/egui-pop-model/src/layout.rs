@@ -95,6 +95,42 @@ impl Node {
         }
     }
 
+    /// The tabs holding a panel: the other panels there and its index.
+    fn tabs_of(&self, panel: &PanelId) -> Option<(Vec<PanelId>, usize)> {
+        match self {
+            Node::Tabs { panels, .. } => panels.iter().position(|p| p == panel).map(|i| {
+                let others = panels.iter().filter(|p| *p != panel).cloned().collect();
+                (others, i)
+            }),
+            Node::Split { a, b, .. } => a.tabs_of(panel).or_else(|| b.tabs_of(panel)),
+            Node::Grid { children, .. } => children.iter().find_map(|c| c.tabs_of(panel)),
+        }
+    }
+
+    /// Puts a panel back at `index` in the tabs holding one of `beside`,
+    /// the shown tab kept shown; whether some tabs held one.
+    fn insert_beside(&mut self, panel: &PanelId, beside: &[PanelId], index: usize) -> bool {
+        match self {
+            Node::Tabs { panels, active } => {
+                if !panels.iter().any(|p| beside.contains(p)) {
+                    return false;
+                }
+                let at = index.min(panels.len());
+                panels.insert(at, panel.clone());
+                if *active >= at && panels.len() > 1 {
+                    *active += 1;
+                }
+                true
+            }
+            Node::Split { a, b, .. } => {
+                a.insert_beside(panel, beside, index) || b.insert_beside(panel, beside, index)
+            }
+            Node::Grid { children, .. } => children
+                .iter_mut()
+                .any(|c| c.insert_beside(panel, beside, index)),
+        }
+    }
+
     /// Drops panels that are not in `keep`; `None` when nothing is left.
     fn retain(self, keep: &dyn Fn(&PanelId) -> bool) -> Option<Node> {
         match self {
@@ -854,6 +890,65 @@ pub struct Layout {
     pub docked_groups: Vec<FloatingGroup>,
 }
 
+/// A layout as saved: the layout, and the places of panels no longer
+/// declared (their plugin is off, ADR 0028), kept so that a panel
+/// declared again goes back where it was ([`Layout::repair_dormant`]).
+/// Its document is the layout's (`schema`), the places under `dormant`:
+/// a layout saved without them reads as one with none.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SavedLayout {
+    #[serde(flatten)]
+    pub layout: Layout,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dormant: Vec<Dormant>,
+}
+
+/// The place a panel no longer declared had ([`SavedLayout::dormant`]).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Dormant {
+    pub panel: PanelId,
+    pub place: DormantPlace,
+}
+
+/// Where a dormant panel was.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum DormantPlace {
+    /// Docked in an area: at `index` in the tabs it shared with `beside`.
+    Docked {
+        area: Area,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        beside: Vec<PanelId>,
+        #[serde(default)]
+        index: usize,
+    },
+    /// Detached in a window on a screen, at `rect`.
+    Window { screen: String, rect: [f32; 4] },
+    /// Floating over the interface, its group's corner at `pos`.
+    Floating { pos: [f32; 2] },
+    /// Closed by the user.
+    Hidden,
+}
+
+/// Keeps a gone panel's place, once, with its note.
+fn keep_place(
+    dormant: &mut Vec<Dormant>,
+    notes: &mut Vec<String>,
+    panel: &PanelId,
+    place: DormantPlace,
+) {
+    if dormant.iter().any(|d| d.panel == *panel) {
+        return;
+    }
+    notes.push(format!(
+        "panel `{panel}` is not declared: its place is kept"
+    ));
+    dormant.push(Dormant {
+        panel: panel.clone(),
+        place,
+    });
+}
+
 /// The `layout` document. Version 2 named the areas by start and end
 /// (`start_side`) instead of primary and secondary.
 pub fn schema() -> Schema {
@@ -1264,17 +1359,64 @@ impl Layout {
     }
 
     /// Brings a saved layout in line with today's panels and screens:
-    /// panels no longer declared are dropped, new ones go to their default
+    /// panels no longer declared leave it, new ones go to their default
     /// area, so do panels in an area they may no longer be in, a window on
     /// a screen that is gone comes back docked. Says what it changed.
+    /// [`Layout::repair_dormant`] also keeps the places of the panels
+    /// that leave.
     pub fn repair(self, panels: &Panels, screens: &[&str]) -> (Layout, Vec<String>) {
+        let (layout, notes) = self.repair_with(None, panels, screens);
+        (layout.layout, notes)
+    }
+
+    /// [`Layout::repair`], keeping the places of panels no longer declared
+    /// (ADR 0028): `dormant`, the places kept so far, comes back with
+    /// those of the panels leaving now; a panel declared again goes back
+    /// to its place (docked at its index beside the same tabs, detached,
+    /// floating, or closed) instead of to its default area.
+    pub fn repair_dormant(
+        self,
+        dormant: Vec<Dormant>,
+        panels: &Panels,
+        screens: &[&str],
+    ) -> (SavedLayout, Vec<String>) {
+        self.repair_with(Some(dormant), panels, screens)
+    }
+
+    /// The repair, keeping places when given the places kept so far.
+    fn repair_with(
+        self,
+        kept: Option<Vec<Dormant>>,
+        panels: &Panels,
+        screens: &[&str],
+    ) -> (SavedLayout, Vec<String>) {
         let mut notes = Vec::new();
         let known = |id: &PanelId| panels.get(id.as_str()).is_some();
+        let keeping = kept.is_some();
+        // Places kept: those of panels declared again come back below.
+        let (mut back, mut dormant): (Vec<Dormant>, Vec<Dormant>) = kept
+            .unwrap_or_default()
+            .into_iter()
+            .partition(|d| known(&d.panel));
+        let keep_dormant = |dormant: &mut Vec<Dormant>,
+                            notes: &mut Vec<String>,
+                            panel: &PanelId,
+                            place: DormantPlace| {
+            if keeping {
+                keep_place(dormant, notes, panel, place);
+            } else {
+                notes.push(format!("panel `{panel}` no longer exists"));
+            }
+        };
         let mut auxiliary = Vec::new();
         let mut redock = Vec::new();
         for mut a in self.auxiliary {
+            let place = DormantPlace::Window {
+                screen: a.screen.clone(),
+                rect: a.rect,
+            };
             for p in a.panels().filter(|p| !known(p)) {
-                notes.push(format!("panel `{p}` no longer exists"));
+                keep_dormant(&mut dormant, &mut notes, p, place.clone());
             }
             let gone: Vec<PanelId> = a.panels().filter(|p| !known(p)).cloned().collect();
             if gone.len() == a.panels().count() {
@@ -1297,7 +1439,12 @@ impl Layout {
             let mut keep = Vec::new();
             for p in g.panels() {
                 match panels.get(p.as_str()) {
-                    None => notes.push(format!("panel `{p}` no longer exists")),
+                    None => keep_dormant(
+                        &mut dormant,
+                        &mut notes,
+                        p,
+                        DormantPlace::Floating { pos: g.pos },
+                    ),
                     Some(spec) if !spec.floatable => {
                         notes.push(format!(
                             "`{p}` no longer floats: docked in its default area"
@@ -1324,7 +1471,19 @@ impl Layout {
         for (area, node) in self.areas {
             for p in node.panels() {
                 match panels.get(p.as_str()) {
-                    None => notes.push(format!("panel `{p}` no longer exists")),
+                    None => {
+                        let (beside, index) = node.tabs_of(p).unwrap_or_default();
+                        keep_dormant(
+                            &mut dormant,
+                            &mut notes,
+                            p,
+                            DormantPlace::Docked {
+                                area,
+                                beside,
+                                index,
+                            },
+                        );
+                    }
                     Some(spec) if !spec.allows(area) => {
                         notes.push(format!(
                             "`{p}` cannot be in {}: moved to its default area",
@@ -1339,6 +1498,9 @@ impl Layout {
             if let Some(n) = node.retain(&allowed) {
                 areas.push((area, n));
             }
+        }
+        for h in self.hidden.iter().filter(|h| !known(h)) {
+            keep_dormant(&mut dormant, &mut notes, h, DormantPlace::Hidden);
         }
         let hidden: Vec<PanelId> = self.hidden.into_iter().filter(|h| known(h)).collect();
         let mut layout = Layout {
@@ -1369,6 +1531,51 @@ impl Layout {
             if placed.contains(&p.id) || hidden.contains(&p.id) {
                 continue;
             }
+            // Declared again: back in the place it had.
+            let mut area = p.area;
+            if let Some(i) = back.iter().position(|d| d.panel == p.id) {
+                let came_back = || format!("panel `{}` is back in its place", p.id);
+                match back.remove(i).place {
+                    DormantPlace::Hidden => {
+                        notes.push(came_back());
+                        layout.hidden.push(p.id.clone());
+                        continue;
+                    }
+                    DormantPlace::Floating { pos } if p.floatable => {
+                        notes.push(came_back());
+                        layout.float(&p.id, pos);
+                        continue;
+                    }
+                    DormantPlace::Window { screen, rect } if screens.contains(&screen.as_str()) => {
+                        notes.push(came_back());
+                        layout
+                            .auxiliary
+                            .push(Auxiliary::window(p.id.clone(), &screen, rect));
+                        continue;
+                    }
+                    DormantPlace::Docked {
+                        area: was,
+                        beside,
+                        index,
+                    } if p.allows(was) => {
+                        notes.push(came_back());
+                        let beside_one = layout
+                            .areas
+                            .iter_mut()
+                            .any(|(a, n)| *a == was && n.insert_beside(&p.id, &beside, index));
+                        if beside_one {
+                            continue;
+                        }
+                        area = was;
+                    }
+                    _ => notes.push(format!(
+                        "panel `{}` cannot go back to its place: placed in its default area",
+                        p.id
+                    )),
+                }
+                // Not new: docked, open, as it was.
+                redock.push(p.id.clone());
+            }
             if !p.open && !redock.contains(&p.id) {
                 layout.hidden.push(p.id.clone());
                 continue;
@@ -1382,7 +1589,7 @@ impl Layout {
                 }
                 notes.push(format!("new panel `{}` placed in its default area", p.id));
             }
-            match layout.areas.iter_mut().find(|(a, _)| *a == p.area) {
+            match layout.areas.iter_mut().find(|(a, _)| *a == area) {
                 Some((_, Node::Tabs { panels, .. })) => panels.push(p.id.clone()),
                 Some((_, node)) => {
                     let old = std::mem::replace(node, Node::tab(p.id.clone()));
@@ -1393,11 +1600,11 @@ impl Layout {
                         b: Box::new(Node::tab(p.id.clone())),
                     };
                 }
-                None => layout.areas.push((p.area, Node::tab(p.id.clone()))),
+                None => layout.areas.push((area, Node::tab(p.id.clone()))),
             }
         }
         layout.areas.sort_by_key(|(a, _)| *a);
-        (layout, notes)
+        (SavedLayout { layout, dormant }, notes)
     }
 
     /// The document's text.

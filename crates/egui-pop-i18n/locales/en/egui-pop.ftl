@@ -2387,6 +2387,8 @@ egui-pop-tips-state-dismissed = Dismissed
 
 egui-pop-tips-state-used = Its command was used
 
+egui-pop-toast-action-gone = Its plugin { $plugin } is disconnected
+
 egui-pop-toast-close = Close: { $text }
 
 egui-pop-toast-error = Error

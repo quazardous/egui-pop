@@ -697,6 +697,11 @@ pub const TOAST_WARNING: StrKey = StrKey::new("egui-pop-toast-warning", "Warning
 pub const TOAST_ERROR: StrKey = StrKey::new("egui-pop-toast-error", "Error");
 /// A toast's close button, as the screen reader says it.
 pub const TOAST_CLOSE: StrKey = StrKey::new("egui-pop-toast-close", "Close: { $text }");
+/// Why a toast's action is greyed: its command went with its plugin.
+pub const TOAST_ACTION_GONE: StrKey = StrKey::new(
+    "egui-pop-toast-action-gone",
+    "Its plugin { $plugin } is disconnected",
+);
 
 // The window and its frame.
 
@@ -1757,6 +1762,7 @@ pub const ALL: &[StrKey] = &[
     TOAST_WARNING,
     TOAST_ERROR,
     TOAST_CLOSE,
+    TOAST_ACTION_GONE,
     JOBS_ACTIVE,
     JOBS_ACTIVE_PERCENT,
     JOBS_FAILED,

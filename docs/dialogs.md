@@ -64,6 +64,12 @@ assert_eq!(d.len(), 2);
 - **Windows** (ADR 0025): each application window has its own queue and
   a dialog blocks its own window group only; a dialog whose window
   closes is cancelled with it.
+- **Owners** (ADR 0028): a dialog belongs to the plugin of its command,
+  and a custom one also to the plugin that opened it. When that plugin
+  is disconnected the dialog is cancelled at once, whatever the hooks:
+  `dialog.cancelled` from `egui_pop` with a `reason` ("its plugin `x` is
+  disconnected") and an info line; the next queued dialog shows. It does
+  not come back when the plugin reconnects.
 - **Custom bodies** are hosts of the mount contract: drawn every frame
   in a `dialog` focus scope and a [fault boundary](containment.md); keys
   the body claims go to it first (when it claims Enter, Ctrl+Enter

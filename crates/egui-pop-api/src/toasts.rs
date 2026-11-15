@@ -938,11 +938,29 @@ fn live(
                 if close.clicked() {
                     ended.push((shown.id, "closed"));
                 }
-                if let Some(a) = &shown.toast.action
-                    && ui.small_button(&a.label).clicked()
-                {
-                    app.run_as(a.command.clone(), a.args.clone(), Origin::User);
-                    ended.push((shown.id, "action"));
+                if let Some(a) = &shown.toast.action {
+                    // An action whose command went with its plugin is
+                    // greyed, saying why (ADR 0028).
+                    let gone = app.command(&a.command).is_none().then(|| {
+                        match app.command_gone_with(&a.command) {
+                            Some(p) => strings::tr_args(
+                                ui.ctx(),
+                                &txt::TOAST_ACTION_GONE,
+                                &[("plugin", p.as_str())],
+                            ),
+                            None => strings::tr(ui.ctx(), &txt::MENU_NOT_AVAILABLE),
+                        }
+                    });
+                    let button =
+                        ui.add_enabled(gone.is_none(), egui::Button::new(&a.label).small());
+                    let button = match &gone {
+                        Some(why) => button.on_disabled_hover_text(why),
+                        None => button,
+                    };
+                    if button.clicked() {
+                        app.run_as(a.command.clone(), a.args.clone(), Origin::User);
+                        ended.push((shown.id, "action"));
+                    }
                 }
             });
         });
