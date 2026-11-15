@@ -5,7 +5,7 @@
 //! in a compact cell the decorated input's [`cell`](crate::input::Input::cell).
 //!
 //! - [`ChoiceCell`]: one of a few words in a slot, egui-pop's
-//!   [`combo_box`](crate::widgets::combo_box) sized to it. Its name is
+//!   [`combo_box`] sized to it. Its name is
 //!   given to assistive technologies and shown in its tooltip; while it
 //!   has the focus and its list is closed, Up and Down choose the
 //!   previous and next word, Home and End the first and last, as a

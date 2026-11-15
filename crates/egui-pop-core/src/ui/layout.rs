@@ -1,5 +1,5 @@
-//! Rows and grids: [`UiPop::row`](super::UiPop::row) and
-//! [`UiPop::grid`](super::UiPop::grid) place cells on tracks, align them on
+//! Rows and grids: [`UiPop::row`] and
+//! [`UiPop::grid`] place cells on tracks, align them on
 //! their text's baseline, and leave gaps of [`Space`] only.
 //!
 //! A track is sized by its content ([`Track::CONTENT`]), by a share of what
