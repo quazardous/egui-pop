@@ -307,8 +307,20 @@ What breaks: nothing seen. The web build (`cargo check -p egui-pop-gallery
 --target wasm32-unknown-unknown`) and a Windows check of `egui-pop-api`
 with the feature pass; `runner` is native only and the web keeps
 `WebRunner`. kittest never goes through `run_native`. The Wayland image
-subsurface and `egui-pop-win32` take a handle and are unchanged. Box runs:
-see below.
+subsurface and `egui-pop-win32` take a handle and are unchanged.
+
+On the bench box, `tools/wbox/multi_window.py` (the gallery's
+`multi_window` example: a main window and two application windows) in a
+headless labwc, Wayland then X11 through Xwayland, ran every step as on
+eframe's own runner: independent repaint (A animating, B and the main
+window still), focus and raise, closing B, closing the main window (A
+moves into it), quitting with the last window, B's place restored on a
+second start; no error reported. Each of the three viewports was paired
+with its window on both backends (`wl_surface` proxies on Wayland, X11
+ids on Xwayland), and the screens were read before the main window was
+created (one 1280x800 screen). The second run's process dies with a
+broken X11 or Wayland connection when the harness stops the compositor,
+after the checks (not compared with a run on eframe's runner).
 
 Risks: the handles come from an implementation detail of winit 0.30 (a
 winit release can change what `WindowId` holds; a unit test per platform
