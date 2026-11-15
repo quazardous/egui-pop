@@ -20,5 +20,6 @@ mod mounts;
 mod preview;
 mod rerun_like;
 mod scenarios;
+mod shot;
 mod viewer_video;
 mod youtube_referrer;
