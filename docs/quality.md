@@ -83,7 +83,7 @@ The tests job runs, among others:
   they work on crates.io.
 
 `unsafe` is forbidden in the whole workspace by its lints, except in
-the two crates that call the operating system
+the three crates that call the operating system
 ([Unsafe code](https://github.com/quazardous/egui-pop#unsafe-code)).
 
 ### Selection, and what `main` runs

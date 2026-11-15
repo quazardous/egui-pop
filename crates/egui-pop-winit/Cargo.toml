@@ -1,0 +1,37 @@
+[package]
+name = "egui-pop-winit"
+version = "0.1.0"
+description = "The winit layer of egui-pop's runner: a winit 0.30 window id as the window's raw handles (Win32, X11, Wayland), so every window of an event loop is reachable, with no egui dependency"
+readme = "README.md"
+keywords = ["winit", "raw-window-handle", "multi-window", "egui"]
+categories = ["gui"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+# The workspace forbids `unsafe`; this crate borrows raw window handles,
+# so it only denies it and allows it in its `sys` module.
+[lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[dependencies]
+# MIT OR Apache-2.0 OR Zlib: the handles file choosers and surfaces take.
+raw-window-handle = "0.6"
+# Apache-2.0: the window ids and the event loop (eframe 0.37's version).
+winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
+
+[dev-dependencies]
+winit = { version = "0.30", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
+
+# The window test runs on the main thread (macOS creates windows there
+# only), so it is its own `main`.
+[[test]]
+name = "window_id"
+harness = false

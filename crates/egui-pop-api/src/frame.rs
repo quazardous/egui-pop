@@ -670,6 +670,12 @@ pub fn set_native_window(ctx: &Context, viewport: egui::ViewportId, handle: isiz
     NATIVE_WINDOW.keyed(viewport).set(ctx, handle);
 }
 
+/// Forgets the handle recorded for `viewport` ([`set_native_window`]),
+/// once its window is gone.
+pub fn forget_native_window(ctx: &Context, viewport: egui::ViewportId) {
+    NATIVE_WINDOW.keyed(viewport).remove(ctx);
+}
+
 /// Records the main window's X11 id (Linux, the window on X11 or Xwayland):
 /// what a native view inside it, such as the viewer's web view, is made a
 /// child of. `AppBuilder::run_native` does it; an application starting

@@ -290,6 +290,7 @@ of every crate with every feature on.
 |---|---|---|
 | [`egui-pop-tokens`](../crates/egui-pop-tokens) | L0 | DTCG token files: parser, resolver, themes, densities, accents, contrast checks. No egui. |
 | [`egui-pop-win32`](../crates/egui-pop-win32) | L0 | The window frame's Windows layer: subclasses a window to answer `WM_NCHITTEST` (Snap Layouts, Aero Snap). No egui; `unsafe` in one module. |
+| [`egui-pop-winit`](../crates/egui-pop-winit) | L0 | The runner's winit layer: a winit window id as the window's raw handles (Win32, X11, Wayland), checked per system. No egui; `unsafe` in one module. |
 | [`egui-pop-wayland`](../crates/egui-pop-wayland) | L0 | The image viewport's Wayland layer: a subsurface under a window, tagged through `wp_color_management_v1`, and the compositor's preferred image description. No egui; `unsafe` in one module. |
 | [`egui-pop-model`](../crates/egui-pop-model) | L1 | The logic without egui: typed ids, diagnostics, `when` clauses, commands, keymap (layers, chords, focus depth, traces), menus, panels, layouts, the value store, versioned documents, plugin ordering. |
 | [`egui-pop-core`](../crates/egui-pop-core) | L2 | The egui layer: theme, focus scopes, key dispatcher, overlay stack, placement, accessibility, strings, icons, persistence, fault boundaries, value binding, the debug bridge. |

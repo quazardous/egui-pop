@@ -15,6 +15,9 @@ and records, per backend, what the platform does:
 - close A: the process quits by itself (the spike); with the API, close
   the main window instead: A moves into it (a `moved` line, A still
   counting), then close it, the last window: the process quits;
+- the runner (egui-pop's own event loop, `create_native`): the screens
+  read before the main window, whether winit's window ids were verified
+  as the native windows, and each window's handle (`opened` lines);
 - geometry: a second start with B's size and position edited in the state
   file the first run saved; what B reports.
 
@@ -254,6 +257,7 @@ def run_backend(cfg: dict, comp_name: str, backend: str, out: Path) -> dict:
                 return {**result, "blocked": "libxkbcommon-x11 is not installed in this image"}
             return {**result, "error": "no ready line"}
         result["ready"] = ready[0]
+        result["runner"] = wait_for(lambda: events(jsonl, "runner"), 5)
         shown = wait_for(lambda: len([w for w in titles(comp) if w["title"] in (TITLES["a"], TITLES["b"])]) == 2, 20)
         result["windows_at_start"] = titles(comp)
         if not shown:

@@ -77,6 +77,9 @@ fn common(ui: &egui::Ui, win: &WindowUi<'_>, frames: u64, focused: &Cell<Option<
             "window": win.id(),
             "embedded": win.embedded(),
             "geometry": win.app().window_geometry(win.id()),
+            // The window's handle, read by egui-pop's runner from its winit id.
+            "handle": egui_pop::api::runner::window_handle(ui.ctx().viewport_id())
+                .map(|h| format!("{h:?}")),
         }));
     }
     if ui.input(|i| i.key_pressed(egui::Key::W)) {
@@ -194,6 +197,20 @@ impl eframe::App for Demo {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.counts.root.set(self.counts.root.get() + 1);
+        if self.counts.root.get() == 3 {
+            // What egui-pop's runner saw: the screens before the main
+            // window, and whether winit's ids are the native windows.
+            emit(serde_json::json!({
+                "event": "runner",
+                "screens": egui_pop::api::runner::screens()
+                    .iter()
+                    .map(|r| [r.min.x, r.min.y, r.width(), r.height()])
+                    .collect::<Vec<_>>(),
+                "ids_verified": egui_pop::api::runner::ids_verified(),
+                "root_handle": egui_pop::api::runner::window_handle(egui::ViewportId::ROOT)
+                    .map(|h| format!("{h:?}")),
+            }));
+        }
         if ui.input(|i| i.viewport().close_requested())
             && self.app.handle().windows().len() == 1
             && !self.quit_sent
