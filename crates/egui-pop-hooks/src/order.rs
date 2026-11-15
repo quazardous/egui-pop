@@ -102,6 +102,9 @@ pub(crate) fn resolve(nodes: &[Node<'_>]) -> Result<Resolved, Vec<String>> {
 mod tests {
     use super::*;
 
+    /// The ids in order and the missing targets.
+    type Ran = (Vec<&'static str>, Vec<(String, String)>);
+
     struct Spec {
         id: &'static str,
         after: Vec<String>,
@@ -118,7 +121,7 @@ mod tests {
         }
     }
 
-    fn run(specs: &[Spec]) -> Result<(Vec<&'static str>, Vec<(String, String)>), Vec<String>> {
+    fn run(specs: &[Spec]) -> Result<Ran, Vec<String>> {
         let nodes: Vec<Node<'_>> = specs
             .iter()
             .enumerate()
