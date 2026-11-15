@@ -85,6 +85,20 @@ Three tiers:
   `load_keymap`, `export_keymap`, `KeymapDiff`.
 - The debug bridge: collector names and snapshot shapes (agents read
   them).
+- Placement of a floating element next to its anchor
+  (`egui_pop_core::placement`): the geometry every popover, menu and
+  tooltip uses since 0.1.
+- Header bands (`egui_pop_core::band`), the handle movable dialogs and
+  palettes are dragged by: their behaviour is kept, their drawing
+  follows the kit.
+- Fault boundaries around panels (`egui_pop_core::fault`, ADR 0003):
+  a panel that panics is replaced by its fallback, the rest of the
+  window goes on.
+- Accessibility helpers (`egui_pop_core::a11y`): names for custom
+  widgets and the announcer.
+- The mount contract (`egui_pop_model::mount`, ADR 0013): what a
+  component needs and a host offers, the `mounts` declarations of each
+  crate and their check; the host behind it stays experimental.
 
 ## Experimental
 
@@ -127,6 +141,28 @@ Three tiers:
   their backends, services and the system scope's registration state
   (`egui_pop_api::system_keys`) may move while the first applications
   ship them.
+- Compact controls for dense rows (`egui_pop_core::compact`,
+  `Slider::scrub`): new, not yet released.
+- Values worked out late (`egui_pop_core::late`, new, not yet released)
+  and slow loads where the latest asked wins
+  (`egui_pop_core::latest`): no application has adopted them yet.
+- Layer ranks (`egui_pop_core::layers`, ADR 0026): the order between
+  kinds of foreground layers may still gain ranks.
+- Pointer gestures and the canvas (`egui_pop_model::pointer`,
+  `egui_pop_core::pointer`, `egui_pop_core::canvas`,
+  `egui_pop_api::pointer`): profiles of input are not designed yet,
+  as for the slider's gestures.
+- Application windows (`egui_pop_api::windows`) and the native runner
+  (`egui_pop_api::runner`, the `create-native` feature, not yet
+  released): the run loop they share may still move.
+- The read kernel (`egui_pop_api::reads`) and waiting on the
+  application (`egui_pop_api::wait`): their states are kept, their API
+  may move while the first applications adopt them.
+- The main window's paint guard (`egui_pop_api::paint_guard`): new,
+  not yet released.
+- Admin forms (`egui_pop_model::admin`, `egui_pop_api::admin`).
+- Thumbnails and their grid (`egui_pop_core::thumbnail`, re-exported
+  by `egui_pop_viewport::thumbnail`), with the photo library.
 - Anything marked "experimental" in its documentation.
 
 ## Not covered
