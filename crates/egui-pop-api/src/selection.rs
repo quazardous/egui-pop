@@ -55,7 +55,7 @@ use egui::Modifiers;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PluginId};
 use egui_pop_model::keymap::BindOptions;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{Value as Json, json};
 
 use crate::hooks::On;
@@ -105,60 +105,7 @@ pub const HISTORY_CAP: usize = 100;
 /// The source a change made by an agent's command names.
 pub const SOURCE_COMMAND: &str = "command";
 
-/// An item of the selection: a string id the application chooses, the
-/// same in every widget showing the item (a path, `kind:id`, a number).
-///
-/// A string rather than a typed key: widgets with different key types (a
-/// tree by path, a table by row id, a canvas by entity) meet on it, it
-/// goes through the journal, the history and the agents' commands as it
-/// is, and it clones for the cost of a reference count.
-#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct SelectionItem(Arc<str>);
-
-impl SelectionItem {
-    pub fn new(id: impl Into<Arc<str>>) -> Self {
-        Self(id.into())
-    }
-
-    /// The item of a widget's key: a string key as it is, any other its
-    /// JSON text (`12`, `[1,2]`).
-    pub fn from_key<K: Serialize + ?Sized>(key: &K) -> Self {
-        match serde_json::to_value(key) {
-            Ok(Json::String(s)) => Self::new(s),
-            Ok(v) => Self::new(v.to_string()),
-            Err(_) => Self::new(""),
-        }
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Debug for SelectionItem {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&*self.0, f)
-    }
-}
-
-impl fmt::Display for SelectionItem {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-impl From<&str> for SelectionItem {
-    fn from(s: &str) -> Self {
-        Self::new(s)
-    }
-}
-
-impl From<String> for SelectionItem {
-    fn from(s: String) -> Self {
-        Self::new(s)
-    }
-}
+pub use egui_pop_model::selection::SelectionItem;
 
 /// What a click does to the selection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

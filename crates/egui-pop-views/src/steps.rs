@@ -30,13 +30,22 @@
 //! | `table.resize` | `table`, `widths` | writes the widths to the store |
 //! | `table.select_columns` | `table`, `columns` | sets the column selection |
 
-use egui_pop_api::steps::{Outcome, StepSpec};
-use egui_pop_api::{AppHandle, Ctx, Plugin, PluginError};
+#[cfg(feature = "api")]
+use egui_pop_api::steps::StepSpec;
+#[cfg(feature = "api")]
+use egui_pop_api::{Ctx, Plugin, PluginError};
+
+use crate::app_link::{AppHandle, Outcome};
+#[cfg(feature = "api")]
 use egui_pop_core::debug::FnCollector;
+#[cfg(feature = "api")]
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PluginId, StepId};
+#[cfg(feature = "api")]
 use egui_pop_model::keymap::BindOptions;
-use serde_json::{Value as Json, json};
+use serde_json::Value as Json;
+#[cfg(feature = "api")]
+use serde_json::json;
 
 pub const TREE_LOAD: StepId = StepId::from_static("tree.load");
 pub const TREE_EXPAND: StepId = StepId::from_static("tree.expand");
@@ -64,11 +73,13 @@ pub const VIEWS: PluginId = PluginId::from_static("egui_pop.views");
 /// tree's filter and rows shown, [`crate::tree::filter::drawn`]).
 /// Connect it when views run with an [`AppHandle`]: a step nobody
 /// declares is reported.
+#[cfg(feature = "api")]
 #[derive(Debug, Default)]
 pub struct ViewsPlugin;
 
 /// Every step the views declare, with its description and an example of
 /// its arguments.
+#[cfg(feature = "api")]
 pub fn specs() -> Vec<StepSpec> {
     vec![
         StepSpec::new(TREE_LOAD, "A tree asks its source for a branch's children.")
@@ -115,6 +126,7 @@ pub fn specs() -> Vec<StepSpec> {
     ]
 }
 
+#[cfg(feature = "api")]
 impl Plugin for ViewsPlugin {
     fn id(&self) -> PluginId {
         VIEWS
@@ -160,7 +172,13 @@ pub(crate) fn run(
     default: impl FnOnce(&Json) -> Result<Json, String>,
 ) -> Outcome {
     match app {
+        #[cfg(feature = "api")]
         Some(app) => app.step(step, args, |_, args| default(args)),
+        #[cfg(not(feature = "api"))]
+        Some(app) => {
+            let _ = step;
+            match *app {}
+        }
         None => Outcome::Done(default(&args)),
     }
 }

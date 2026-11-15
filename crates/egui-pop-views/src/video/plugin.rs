@@ -13,12 +13,17 @@
 //! focus, else the only one with an id. Each command answers with what the
 //! video then holds, as the collector shows it.
 
+#[cfg(feature = "api")]
 use egui_pop_api::{Call, Ctx, Plugin, PluginError};
+#[cfg(feature = "api")]
 use egui_pop_core::debug::FnCollector;
+#[cfg(feature = "api")]
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PluginId};
+#[cfg(feature = "api")]
 use serde_json::{Value as Json, json};
 
+#[cfg(feature = "api")]
 use super::Videos;
 
 /// The plugin's id.
@@ -34,9 +39,11 @@ pub const CMD_MUTE: CommandId = CommandId::from_static("video.mute");
 /// Declares the `video.*` commands and the `videos` collector. Connect it
 /// when an application's videos should be read and driven by agents; the
 /// widgets play without it.
+#[cfg(feature = "api")]
 #[derive(Debug, Default)]
 pub struct VideoPlugin;
 
+#[cfg(feature = "api")]
 impl Plugin for VideoPlugin {
     fn id(&self) -> PluginId {
         PLUGIN
@@ -61,14 +68,17 @@ impl Plugin for VideoPlugin {
 }
 
 /// The `video` argument.
+#[cfg(feature = "api")]
 fn target(args: &Json) -> Option<&str> {
     args.get("video").and_then(Json::as_str)
 }
 
+#[cfg(feature = "api")]
 fn videos(call: &Call<'_>) -> Videos {
     Videos::of(&call.app.egui())
 }
 
+#[cfg(feature = "api")]
 fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     const CAT: &str = "Video";
     let video = "tour (optional: the video that last had the focus)";

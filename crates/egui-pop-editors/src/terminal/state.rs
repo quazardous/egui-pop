@@ -5,8 +5,8 @@
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use egui_pop_api::AppHandle;
-use egui_pop_api::steps::Outcome;
+use crate::app_link::AppHandle;
+use crate::app_link::Outcome;
 use egui_pop_core::lock;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};

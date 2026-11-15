@@ -31,16 +31,24 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Mutex;
 
+#[cfg(feature = "api")]
 use egui_pop_api::services::ServiceToken;
-use egui_pop_api::steps::{Outcome, StepSpec};
-use egui_pop_api::{AppHandle, Call, Ctx, Plugin, PluginError};
+#[cfg(feature = "api")]
+use egui_pop_api::steps::StepSpec;
+#[cfg(feature = "api")]
+use egui_pop_api::{Call, Ctx, Plugin, PluginError};
+
+use crate::app_link::{AppHandle, Outcome};
+#[cfg(feature = "api")]
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::lock;
+#[cfg(feature = "api")]
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PluginId, StepId};
 use serde::de::DeserializeOwned;
 use serde_json::{Value as Json, json};
 
+#[cfg(feature = "api")]
 use super::marks::{ColorLabel, Flag, MAX_RATING};
 
 pub const LIBRARY_SELECT: StepId = StepId::from_static("library.select");
@@ -100,6 +108,7 @@ pub struct Libraries {
 }
 
 /// The registry, a service of [`LibraryPlugin`].
+#[cfg(feature = "api")]
 pub const LIBRARIES: ServiceToken<Libraries> = ServiceToken::new("egui_pop.library");
 
 impl Libraries {
@@ -201,6 +210,7 @@ impl Libraries {
     }
 
     /// The library a command acts on.
+    #[cfg(feature = "api")]
     fn target(&self, args: &Json) -> Result<String, String> {
         let i = lock(&self.inner);
         match args.get("library").and_then(Json::as_str) {
@@ -213,6 +223,7 @@ impl Libraries {
         }
     }
 
+    #[cfg(feature = "api")]
     fn push(&self, id: &str, request: Request) {
         let mut i = lock(&self.inner);
         let e = i.entries.entry(id.to_string()).or_default();
@@ -231,10 +242,12 @@ impl Libraries {
 /// Declares the library's steps, its commands and its collector, and
 /// provides the [`Libraries`] registry. Connect it when library views
 /// run with an application.
+#[cfg(feature = "api")]
 #[derive(Debug, Default)]
 pub struct LibraryPlugin;
 
 /// Every step the library declares.
+#[cfg(feature = "api")]
 pub fn specs() -> Vec<StepSpec> {
     vec![
         StepSpec::new(LIBRARY_SELECT, "A library's selection changes (a click, the keyboard, a rubber band, a command).")
@@ -254,6 +267,7 @@ pub fn specs() -> Vec<StepSpec> {
     ]
 }
 
+#[cfg(feature = "api")]
 impl Plugin for LibraryPlugin {
     fn id(&self) -> PluginId {
         LIBRARY
@@ -283,6 +297,7 @@ impl Plugin for LibraryPlugin {
 
 /// Queues `step` for the library a command names; `fill` checks and
 /// completes the arguments.
+#[cfg(feature = "api")]
 fn queue(
     call: &Call<'_>,
     step: StepId,
@@ -306,6 +321,7 @@ fn queue(
 }
 
 /// Copies `keys` when given.
+#[cfg(feature = "api")]
 fn with_keys(args: &Json, mut out: Json) -> Json {
     if let Some(k) = args.get("keys") {
         out["keys"] = k.clone();
@@ -313,6 +329,7 @@ fn with_keys(args: &Json, mut out: Json) -> Json {
     out
 }
 
+#[cfg(feature = "api")]
 fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     const CAT: &str = "Library";
     ctx.command(
@@ -413,6 +430,18 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         },
     )?;
     Ok(())
+}
+
+/// The [`Libraries`] registry of the application, when there is one
+/// and it connected [`LibraryPlugin`].
+pub(crate) fn registry(app: Option<&AppHandle>) -> Option<std::sync::Arc<Libraries>> {
+    #[cfg(feature = "api")]
+    return app.and_then(|a| a.service(&LIBRARIES));
+    #[cfg(not(feature = "api"))]
+    {
+        let _ = app;
+        None
+    }
 }
 
 /// A field of step arguments, typed.

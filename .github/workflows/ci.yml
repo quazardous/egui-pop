@@ -160,6 +160,9 @@ jobs:
         with:
           shared-key: alone
       - run: tools/check-alone.sh
+      # Views and editors without the application layer: no egui-pop-api
+      # or eframe in their tree, and no more crates than recorded.
+      - run: tools/check-light-deps.sh
 
   # The guides compiled as documentation, when only they changed (clippy
   # documents the whole workspace otherwise).

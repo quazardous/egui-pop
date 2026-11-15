@@ -2,13 +2,13 @@
 //! routes the keyboard to the program, selects, copies, scrolls back,
 //! opens links, and gives the program its size.
 
+use crate::app_link::AppHandle;
 use egui::accesskit::Role;
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
     Color32, CursorIcon, Event, EventFilter, FontId, Id, ImeEvent, Key, Pos2, Rect, Response,
     Sense, Stroke, StrokeKind, Ui, WidgetInfo, pos2, vec2,
 };
-use egui_pop_api::AppHandle;
 use egui_pop_core::focus;
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::strings::tr;
@@ -18,7 +18,7 @@ use super::keys;
 use super::links::{self, Link};
 use super::source::Size;
 use super::state::{Cell, InputKind, TerminalState};
-use super::steps::{SURFACE, TERMINAL_INPUT, TERMINAL_SPAWN, TERMINALS};
+use super::steps::{SURFACE, TERMINAL_INPUT, TERMINAL_SPAWN};
 use super::tokens::{TerminalTokens, mix};
 use crate::strings as s;
 
@@ -144,9 +144,7 @@ impl<'a> Terminal<'a> {
         let ctx = ui.ctx().clone();
         state.set_ctx(&ctx);
         keys::register(&ctx, id);
-        if let Some(app) = self.app
-            && let Some(reg) = app.service(&TERMINALS)
-        {
+        if let Some(reg) = super::steps::registry(self.app) {
             reg.attach(state);
             if ctx.memory(|m| m.has_focus(id)) {
                 reg.set_focused(&state.id());
@@ -420,6 +418,9 @@ impl<'a> Terminal<'a> {
                     // through the links service's policy (a `file://`
                     // link is a confirmed open, never a browser's).
                     match self.app {
+                        #[cfg(not(feature = "api"))]
+                        Some(app) => match *app {},
+                        #[cfg(feature = "api")]
                         Some(app) => {
                             egui_pop_api::links::open(
                                 app,

@@ -1,0 +1,8 @@
+# The light dependency sets (tools/check-light-deps.sh): a crate built
+# without its default features, the application layer (egui-pop-api)
+# included, and the most crates its tree may hold (itself and every normal
+# dependency, each name and version once). A number only goes down: when
+# the check says the tree shrank, lower it here in the same change.
+# crate             crates
+egui-pop-views      111
+egui-pop-editors    114

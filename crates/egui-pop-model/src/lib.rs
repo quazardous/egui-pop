@@ -68,6 +68,7 @@ pub mod registry;
             egui_pop_core::sections::plan; this copy goes in the next release"
 )]
 pub mod sections;
+pub mod selection;
 pub mod tab;
 pub mod values;
 pub mod when;

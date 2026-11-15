@@ -311,7 +311,7 @@ impl<K: Key> Selection<K> {
 /// applies the proposal, or what a before-hook redirected it to.
 /// Returns the selection made, or why there was none.
 pub(crate) fn run<K: Key>(
-    app: Option<&egui_pop_api::AppHandle>,
+    app: Option<&crate::app_link::AppHandle>,
     step: &egui_pop_model::ids::StepId,
     field: &str,
     view: &str,
@@ -325,9 +325,9 @@ pub(crate) fn run<K: Key>(
         Ok(json!(done.keys.len()))
     });
     match outcome {
-        egui_pop_api::steps::Outcome::Done(Ok(_)) => Ok(done),
-        egui_pop_api::steps::Outcome::Done(Err(reason))
-        | egui_pop_api::steps::Outcome::Vetoed { reason, .. } => Err(reason),
+        crate::app_link::Outcome::Done(Ok(_)) => Ok(done),
+        crate::app_link::Outcome::Done(Err(reason))
+        | crate::app_link::Outcome::Vetoed { reason, .. } => Err(reason),
     }
 }
 

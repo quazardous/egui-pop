@@ -8,7 +8,13 @@
 
 use std::collections::HashSet;
 
-use egui_pop_api::selection::{self, SelectionItem, SelectionService};
+#[cfg(feature = "api")]
+use egui_pop_api::selection;
+#[cfg(feature = "api")]
+pub(crate) use egui_pop_api::selection::SelectionService;
+use egui_pop_model::selection::SelectionItem;
+#[cfg(not(feature = "api"))]
+pub(crate) use stand_in::SelectionService;
 
 use crate::select::{Key, Selection};
 
@@ -19,11 +25,13 @@ pub(crate) fn surface<R>(
     shared: bool,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
+    #[cfg(feature = "api")]
     if shared {
-        selection::surface(ui, add)
-    } else {
-        add(ui)
+        return selection::surface(ui, add);
     }
+    #[cfg(not(feature = "api"))]
+    let _ = shared;
+    add(ui)
 }
 
 /// Brings the mirror in line with the service when its revision (or the
@@ -77,5 +85,46 @@ pub(crate) fn write<K: Key>(
         service.apply(add, remove, source);
     } else {
         service.set(done.iter().map(item_of), source);
+    }
+}
+
+/// Without the application layer there is no shared selection: no value
+/// of this type exists, so a view's `shared` is always `None`.
+#[cfg(not(feature = "api"))]
+mod stand_in {
+    use egui_pop_model::selection::SelectionItem;
+
+    #[derive(Debug)]
+    pub(crate) enum SelectionService {}
+
+    impl SelectionService {
+        pub(crate) fn revision(&self) -> u64 {
+            match *self {}
+        }
+
+        pub(crate) fn items(&self) -> Vec<SelectionItem> {
+            match *self {}
+        }
+
+        pub(crate) fn apply(
+            &self,
+            _: impl IntoIterator<Item = SelectionItem>,
+            _: Vec<SelectionItem>,
+            _: &str,
+        ) {
+            match *self {}
+        }
+
+        pub(crate) fn is_hovered(&self, _: &SelectionItem) -> bool {
+            match *self {}
+        }
+
+        pub(crate) fn hover(&self, _: &str, _: Option<&SelectionItem>) {
+            match *self {}
+        }
+
+        pub(crate) fn set(&self, _: impl IntoIterator<Item = SelectionItem>, _: &str) {
+            match *self {}
+        }
     }
 }

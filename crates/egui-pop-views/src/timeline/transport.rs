@@ -6,11 +6,11 @@
 //! the history and agents see one thing), else it changes the state
 //! directly.
 
+use crate::app_link::AppHandle;
 use egui::accesskit::Role;
 use egui::{
     Color32, Painter, Pos2, Rect, Response, Sense, Shape, Stroke, Ui, WidgetInfo, pos2, vec2,
 };
-use egui_pop_api::AppHandle;
 use egui_pop_core::strings::{StrKey, tr, tr_args};
 use egui_pop_model::ids::CommandId;
 use serde_json::json;
@@ -162,6 +162,7 @@ impl<'a> Transport<'a> {
     /// The application whose `timeline.*` commands the buttons run (with
     /// [`timeline`](Self::timeline)): each click is then the command, a
     /// step of the history where the key's is.
+    #[cfg(feature = "api")]
     pub fn app(mut self, app: &'a AppHandle) -> Self {
         self.app = Some(app);
         self

@@ -25,12 +25,15 @@ mod paint;
 pub mod plugin;
 pub mod tags;
 
+#[cfg(feature = "api")]
+pub use grid::change;
 pub use grid::{
     Badge, Change, LibraryItems, LibraryOutput, LibraryState, Signal, Stack, Thumb, ThumbGrid,
-    ThumbSource, Tone, change,
+    ThumbSource, Tone,
 };
 pub use marks::{ColorLabel, CullAction, CullKeymap, Flag, Labels, Marks};
 pub use paint::{LabelStyle, LibraryTokens};
+#[cfg(feature = "api")]
 pub use plugin::LibraryPlugin;
 
 use egui::{Rect, vec2};

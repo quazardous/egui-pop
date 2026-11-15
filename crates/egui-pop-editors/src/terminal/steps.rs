@@ -13,19 +13,32 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Mutex;
 
+use crate::app_link::AppHandle;
+#[cfg(feature = "api")]
 use egui_pop_api::hooks::On;
+#[cfg(feature = "api")]
 use egui_pop_api::host::source_of;
+#[cfg(feature = "api")]
 use egui_pop_api::services::ServiceToken;
+#[cfg(feature = "api")]
 use egui_pop_api::steps::StepSpec;
+#[cfg(feature = "api")]
 use egui_pop_api::{Call, Ctx, Plugin, PluginError};
+#[cfg(feature = "api")]
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::lock;
+#[cfg(feature = "api")]
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PluginId, StepId};
+#[cfg(feature = "api")]
 use egui_pop_model::keymap::BindOptions;
-use serde_json::{Value as Json, json};
+use serde_json::Value as Json;
+#[cfg(feature = "api")]
+use serde_json::json;
 
-use super::state::{InputKind, TerminalState};
+#[cfg(feature = "api")]
+use super::state::InputKind;
+use super::state::TerminalState;
 
 pub const TERMINAL_SPAWN: StepId = StepId::from_static("terminal.spawn");
 pub const TERMINAL_INPUT: StepId = StepId::from_static("terminal.input");
@@ -64,6 +77,7 @@ struct Inner {
 }
 
 /// The registry, a service of [`TerminalPlugin`].
+#[cfg(feature = "api")]
 pub const TERMINALS: ServiceToken<Terminals> = ServiceToken::new("egui_pop.terminals");
 
 impl Terminals {
@@ -114,6 +128,7 @@ impl Terminals {
         lock(&self.inner).log.iter().cloned().collect()
     }
 
+    #[cfg(feature = "api")]
     fn push(&self, entry: Json) {
         let mut i = lock(&self.inner);
         i.log.push_back(entry);
@@ -122,6 +137,7 @@ impl Terminals {
         }
     }
 
+    #[cfg(feature = "api")]
     fn all(&self) -> Vec<TerminalState> {
         lock(&self.inner).terminals.values().cloned().collect()
     }
@@ -131,10 +147,12 @@ impl Terminals {
 /// [`Terminals`] registry, and runs `terminal.exit` for programs that
 /// ended, even in terminals not drawn. Connect it when terminals run with
 /// an application.
+#[cfg(feature = "api")]
 #[derive(Debug, Default)]
 pub struct TerminalPlugin;
 
 /// Every step the terminal declares.
+#[cfg(feature = "api")]
 pub fn specs() -> Vec<StepSpec> {
     vec![
         StepSpec::new(
@@ -171,6 +189,7 @@ pub fn specs() -> Vec<StepSpec> {
 
 /// The terminal a command acts on: `terminal` in its arguments, else the
 /// one that last had the focus.
+#[cfg(feature = "api")]
 fn target(call: &Call<'_>) -> Result<TerminalState, String> {
     let reg = call
         .app
@@ -184,6 +203,7 @@ fn target(call: &Call<'_>) -> Result<TerminalState, String> {
     }
 }
 
+#[cfg(feature = "api")]
 impl Plugin for TerminalPlugin {
     fn id(&self) -> PluginId {
         TERMINAL_PLUGIN
@@ -259,11 +279,13 @@ impl Plugin for TerminalPlugin {
     }
 }
 
+#[cfg(feature = "api")]
 fn surface() -> BindOptions {
     BindOptions::surface(SURFACE)
 }
 
 /// The terminal's commands.
+#[cfg(feature = "api")]
 fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     const CAT: &str = "Terminal";
     let terminal = json!({ "terminal": "shell (optional: the terminal that last had the focus)" });
@@ -358,4 +380,16 @@ fn commands(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         },
     )?;
     Ok(())
+}
+
+/// The [`Terminals`] registry of the application, when there is one and it
+/// connected the plugin.
+pub(crate) fn registry(app: Option<&AppHandle>) -> Option<std::sync::Arc<Terminals>> {
+    #[cfg(feature = "api")]
+    return app.and_then(|a| a.service(&TERMINALS));
+    #[cfg(not(feature = "api"))]
+    {
+        let _ = app;
+        None
+    }
 }

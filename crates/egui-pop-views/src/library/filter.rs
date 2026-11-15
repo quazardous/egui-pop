@@ -24,8 +24,8 @@
 //! }
 //! ```
 
+use crate::app_link::AppHandle;
 use egui::{Key as EKey, Modifiers, Response, Role, TextEdit, Ui};
-use egui_pop_api::AppHandle;
 use egui_pop_core::strings::{tr, tr_args, tr_with};
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::tooltip::TooltipExt as _;
@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
 
 use super::marks::{ColorLabel, Flag, MAX_RATING, Marks};
-use super::plugin::{self as lib, LIBRARIES};
+use super::plugin as lib;
 use super::tags::TagChip;
 use crate::strings as s;
 
@@ -374,6 +374,7 @@ impl<'a> SearchField<'a> {
 
     /// Runs its changes as steps of this application, and takes the
     /// `library.filter` command.
+    #[cfg(feature = "api")]
     pub fn app(mut self, app: &'a AppHandle) -> Self {
         self.app = Some(app);
         self
@@ -396,7 +397,7 @@ impl<'a> SearchField<'a> {
         let ctx = ui.ctx().clone();
         let text_id = egui::Id::unique(("egui_pop_views::search", &self.library));
         let label = self.label.clone().unwrap_or_else(|| tr(&ctx, &s::SEARCH));
-        let registry = self.app.and_then(|a| a.service(&LIBRARIES));
+        let registry = lib::registry(self.app);
         let mut proposed: Option<Filter> = None;
         if let Some(reg) = &registry
             && let Some(f) = reg.take_filter(&self.library)

@@ -60,11 +60,11 @@
 
 use std::collections::{HashMap, HashSet};
 
+use crate::app_link::AppHandle;
 use egui::{
     Align2, Color32, Event, EventFilter, Id, Key as EKey, Modifiers, Rect, Response, Role,
     ScrollArea, Sense, Stroke, StrokeKind, TextStyle, TextureId, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
-use egui_pop_api::AppHandle;
 use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{self, BoxStyle, Corners, Kit, KitCx, Part, Side, State};
 use egui_pop_core::placeholder::SkeletonTokens;
@@ -77,7 +77,7 @@ use serde_json::{Value as Json, json};
 
 use super::marks::{ColorLabel, CullAction, CullKeymap, EmptyStars, Flag, MAX_RATING, Marks};
 use super::paint::{self, LibraryTokens};
-use super::plugin::{self as lib, LIBRARIES, Request};
+use super::plugin::{self as lib, Request};
 use crate::select::{self, Key, Mode, Proposal, Selection};
 use crate::strings as s;
 use crate::{nav, rows};
@@ -478,6 +478,7 @@ impl<'a> ThumbGrid<'a> {
 
     /// Runs its moments as steps of this application, and registers the
     /// library for commands.
+    #[cfg(feature = "api")]
     pub fn app(mut self, app: &'a AppHandle) -> Self {
         self.app = Some(app);
         self
@@ -580,7 +581,7 @@ impl<'a> ThumbGrid<'a> {
         let mut ops: Vec<Op<K>> = Vec::new();
 
         // Requests from commands, before the user's keys.
-        let registry = self.app.and_then(|a| a.service(&LIBRARIES));
+        let registry = lib::registry(self.app);
         if let Some(reg) = &registry {
             reg.touch(&state.id);
             for r in reg.take(&state.id) {
@@ -1254,6 +1255,7 @@ pub enum Change<K> {
 /// `library.flag`, `library.tag`) for library `library`, as the grid
 /// does: the signal to apply (with what a before-hook redirected it
 /// to), or [`Signal::Vetoed`].
+#[cfg(feature = "api")]
 pub fn change<K: Key>(app: Option<&AppHandle>, library: &str, change: Change<K>) -> Signal<K> {
     let (step, mut args) = match change {
         Change::Rate { keys, rating } => (

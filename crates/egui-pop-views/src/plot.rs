@@ -83,7 +83,9 @@ use egui_plot::{
     AxisHints, Bar, BarChart, Corner, FilledArea, GridInput, GridMark, Legend, Line, PlotMemory,
     PlotPoint, PlotTransform, Points, Span,
 };
+#[cfg(feature = "api")]
 use egui_pop_api::{Ctx, Plugin, PluginError};
+#[cfg(feature = "api")]
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::lock;
@@ -1589,9 +1591,11 @@ pub const PLUGIN: PluginId = PluginId::from_static("egui_pop.plot");
 
 /// Declares the `plots` collector. Connect it when an application's
 /// plots should be read by agents; the widgets draw without it.
+#[cfg(feature = "api")]
 #[derive(Debug, Default)]
 pub struct PlotPlugin;
 
+#[cfg(feature = "api")]
 impl Plugin for PlotPlugin {
     fn id(&self) -> PluginId {
         PLUGIN

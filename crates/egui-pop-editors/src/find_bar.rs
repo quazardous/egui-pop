@@ -1,8 +1,8 @@
 //! The search bar above an editor: find (case, whole word, regular
 //! expression), replace one or all, or go to a line.
 
+use crate::app_link::AppHandle;
 use egui::{Id, Key, Ui};
-use egui_pop_api::AppHandle;
 use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{Glyph, Kit, KitCx, Part, State};
 use egui_pop_core::strings::{tr, tr_with};

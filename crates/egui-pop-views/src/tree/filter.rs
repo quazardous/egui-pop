@@ -259,6 +259,7 @@ fn request_id() -> Id {
 }
 
 /// Asks the focused tree's filter field for the focus (`tree.filter`).
+#[cfg(feature = "api")]
 pub(crate) fn request(ctx: &Context) {
     let now = ctx.cumulative_pass_nr();
     ctx.data_mut(|d| d.insert_temp(request_id(), now));

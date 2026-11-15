@@ -85,7 +85,7 @@ views-video = ["views-markdown", "egui-pop-views/video"]
 views-webview = ["views-markdown", "egui-pop-views/webview"]
 ## Text and code editors, with syntect highlighting (`egui-pop-editors`,
 ## re-exported as `egui_pop::editors`).
-editors = ["dep:egui-pop-editors", "egui-pop-editors/syntect"]
+editors = ["dep:egui-pop-editors", "egui-pop-editors/api", "egui-pop-editors/syntect"]
 ## The code editor's tree-sitter highlighter (compiles C).
 editors-tree-sitter = ["editors", "egui-pop-editors/tree-sitter"]
 ## The terminal's pseudo-terminal source (a real shell; Unix PTYs,

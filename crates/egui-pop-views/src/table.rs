@@ -49,16 +49,17 @@
 //! }
 //! ```
 
+use crate::app_link::AppHandle;
+use crate::app_link::Outcome;
+use crate::shared::SelectionService;
 use egui::{Id, Response, Role, Sense, Ui, WidgetInfo};
-use egui_pop_api::AppHandle;
-use egui_pop_api::selection::{SelectionItem, SelectionService};
-use egui_pop_api::steps::Outcome;
 use egui_pop_core::binding::SharedStore;
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
 use egui_pop_core::strings::{tr, tr_args};
 use egui_pop_core::widgets::SortHeader;
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::OwnerId;
+use egui_pop_model::selection::SelectionItem;
 use egui_pop_model::values::{Change, DeclareError, Descriptor, Set, Value};
 use egui_table::{CellInfo, HeaderCellInfo, HeaderRow, PrefetchInfo, TableDelegate};
 use serde_json::{Value as Json, json};
@@ -417,6 +418,7 @@ impl<'a> DataTable<'a> {
     /// tinted, and what is selected here goes there (Ctrl changes only
     /// this table's columns). Needs [`DataTable::select_columns`] to
     /// select from the headers.
+    #[cfg(feature = "api")]
     pub fn shared_columns(mut self, selection: &'a SelectionService) -> Self {
         self.shared_columns = Some(selection);
         self
@@ -434,6 +436,7 @@ impl<'a> DataTable<'a> {
     }
 
     /// Runs its moments as steps of this application.
+    #[cfg(feature = "api")]
     pub fn app(mut self, app: &'a AppHandle) -> Self {
         self.app = Some(app);
         self

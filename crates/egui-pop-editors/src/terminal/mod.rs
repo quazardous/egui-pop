@@ -22,6 +22,7 @@
 //! - each job's log console in the jobs centre, as a terminal
 //!   ([`jobs::JobConsolesPlugin`]).
 
+#[cfg(feature = "api")]
 pub mod jobs;
 mod keys;
 pub mod links;
@@ -37,5 +38,7 @@ mod view;
 pub use pty::PtySource;
 pub use source::{CONSOLE_PENDING, CommandLine, Console, Sink, Size, Spawn, TerminalSource};
 pub use state::{Cell, InputKind, TerminalState};
-pub use steps::{TERMINALS, TerminalPlugin, Terminals};
+pub use steps::Terminals;
+#[cfg(feature = "api")]
+pub use steps::{TERMINALS, TerminalPlugin};
 pub use view::{Terminal, TerminalOutput, TerminalSignal};

@@ -76,12 +76,12 @@ mod tokens;
 mod tracks;
 mod transport;
 
+use crate::app_link::AppHandle;
 use egui::accesskit::{Action, ActionData, Role};
 use egui::{
     Color32, Event, EventFilter, FontId, Id, Key, Modifiers, PointerButton, Pos2, Rect, Response,
     Sense, Shape, Stroke, StrokeKind, Ui, UiBuilder, pos2, vec2,
 };
-use egui_pop_api::AppHandle;
 use egui_pop_core::a11y::{self, Politeness};
 use egui_pop_core::lock;
 use egui_pop_core::pointer::{self, DragKind};
@@ -90,12 +90,14 @@ use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::OwnerId;
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
 
+#[cfg(feature = "api")]
+pub use plugin::TimelinePlugin;
 pub use plugin::{
     CMD_ADD_CLIP, CMD_ADD_MARKER, CMD_GO_TO_END, CMD_GO_TO_START, CMD_MOVE_CLIP, CMD_PAUSE,
     CMD_PLAY, CMD_REMOVE_CLIP, CMD_REMOVE_MARKER, CMD_RIPPLE_DELETE, CMD_SELECT_CLIPS,
     CMD_SET_RANGE, CMD_SET_TIME, CMD_SHUTTLE_BACKWARD, CMD_SHUTTLE_FORWARD, CMD_SPLIT_CLIP,
     CMD_STEP_BACKWARD, CMD_STEP_FORWARD, CMD_TOGGLE_LOOP, CMD_TOGGLE_PLAY, CMD_TRIM_CLIP, PLUGIN,
-    TimelinePlugin, Timelines, describe,
+    Timelines, describe,
 };
 pub use ruler::{Snapped, Ticks};
 pub use scale::{FrameRate, Tempo, TimeScale};
@@ -179,6 +181,7 @@ impl Snap {
 
 /// What a user, a key or an agent asks of a timeline.
 #[derive(Clone, Debug)]
+#[cfg_attr(not(feature = "api"), allow(dead_code))]
 enum Op {
     SetTime(f64),
     /// From the keys: a step, which pauses.
@@ -666,6 +669,7 @@ impl<'a> Timeline<'a> {
     }
 
     /// The application, for [`history`](Self::history).
+    #[cfg(feature = "api")]
     pub fn app(mut self, app: &'a AppHandle) -> Self {
         self.app = Some(app);
         self
