@@ -386,7 +386,7 @@ fn a_profile_changes_when_the_hover_cursor_shows() {
 }
 
 #[test]
-fn every_shipped_profile_drags_knobs_vertically() {
+fn every_shipped_profile_drags_knobs_on_both_axes() {
     for id in pointer::ids() {
         let p = pointer::profile(id).unwrap();
         assert_eq!(p.options.knob_drag, KnobDrag::Both, "{id}");
@@ -394,9 +394,9 @@ fn every_shipped_profile_drags_knobs_vertically() {
     for choice in KnobDrag::CHOICES {
         assert_eq!(KnobDrag::parse(choice).unwrap().as_str(), choice);
     }
-    // A profile that does not say drags vertically.
+    // A profile that does not say drags on both axes.
     let options: pointer::Options = serde_json::from_str("{}").unwrap();
-    assert_eq!(options.knob_drag, KnobDrag::Vertical);
+    assert_eq!(options.knob_drag, KnobDrag::Both);
     let options: pointer::Options = serde_json::from_str(r#"{"knob_drag": "circular"}"#).unwrap();
     assert_eq!(options.knob_drag, KnobDrag::Circular);
 }
