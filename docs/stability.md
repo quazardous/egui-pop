@@ -99,6 +99,23 @@ Three tiers:
 - The mount contract (`egui_pop_model::mount`, ADR 0013): what a
   component needs and a host offers, the `mounts` declarations of each
   crate and their check; the host behind it stays experimental.
+- Placeholders (`egui_pop_core::placeholder`: skeletons and empty
+  states), released since 0.8: their states and names are kept, their
+  drawing follows the kit.
+- F6 regions (`egui_pop_core::regions`, `egui_pop_core::focus::region`),
+  released since 0.8: the order and where a hop lands are kept; the
+  commands binding F6 follow the workbench's tier.
+- The icon set (`egui_pop_core::icon_set`), with the icons: the names,
+  their `owner:` prefix and the refusals are kept, as declarations and
+  kits store them.
+- The scroll-bar setting (`egui_pop_api::scroll_bars`): the
+  `appearance.scroll_bars` key and its values (`auto`, `always`,
+  `hover`), which users' settings files store.
+- Busy state on command-bound controls (`egui_pop_api::busy`,
+  `CommandButton`): greyed, a delayed spinner, the width and name kept;
+  the host's later replies behind it stay experimental.
+- The configuration folder (`egui_pop_api::dirs`): where users'
+  settings are kept, per platform.
 
 ## Experimental
 
@@ -161,6 +178,12 @@ Three tiers:
 - The main window's paint guard (`egui_pop_api::paint_guard`): new,
   not yet released.
 - Admin forms (`egui_pop_model::admin`, `egui_pop_api::admin`).
+- Tooltips (`egui_pop_core::tooltip`) and hover cards
+  (`egui_pop_core::hover_card`): their timing and contents are still
+  being refined.
+- The knob (`egui_pop_core::knob`), changed since 0.11 (both axes);
+  rating stars (`egui_pop_core::rating`), with the photo library; the
+  number field (`egui_pop_core::number`), new in 0.11.
 - Thumbnails and their grid (`egui_pop_core::thumbnail`, re-exported
   by `egui_pop_viewport::thumbnail`), with the photo library.
 - Anything marked "experimental" in its documentation.
