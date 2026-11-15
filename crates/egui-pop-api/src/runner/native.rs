@@ -230,10 +230,10 @@ impl ApplicationHandler<UserEvent> for Runner<'_> {
 /// What became of the application's creation, for the run's result:
 /// eframe keeps its own error inside the handler `create_native` returns.
 #[derive(Default)]
-enum Made {
+enum Creation {
     #[default]
-    NotCalled,
-    Made,
+    Pending,
+    Done,
     Failed(eframe::Error),
 }
 
@@ -279,7 +279,7 @@ pub(super) fn run(
         };
         super::repair_place(vb, &screens())
     }));
-    let made = std::rc::Rc::new(RefCell::new(Made::default()));
+    let made = std::rc::Rc::new(RefCell::new(Creation::default()));
     let made_in = made.clone();
     let creator: eframe::AppCreator<'_> = Box::new(move |cc| {
         if let Ok(h) = cc.window_handle() {
@@ -290,13 +290,13 @@ pub(super) fn run(
             .on_begin_pass("egui_pop::runner", Arc::new(note_viewport));
         match creator(cc) {
             Ok(app) => {
-                *made_in.borrow_mut() = Made::Made;
+                *made_in.borrow_mut() = Creation::Done;
                 Ok(app)
             }
             Err(e) => {
                 let told: Box<dyn std::error::Error + Send + Sync> =
                     Box::new(Reported(e.to_string()));
-                *made_in.borrow_mut() = Made::Failed(eframe::Error::AppCreation(e));
+                *made_in.borrow_mut() = Creation::Failed(eframe::Error::AppCreation(e));
                 Err(told)
             }
         }
@@ -312,9 +312,9 @@ pub(super) fn run(
     WINDOWS.with_borrow_mut(Vec::clear);
     ran?;
     match std::mem::take(&mut *made.borrow_mut()) {
-        Made::Made => Ok(()),
-        Made::Failed(e) => Err(e),
-        Made::NotCalled => Err(eframe::Error::AppCreation(Box::new(Reported(
+        Creation::Done => Ok(()),
+        Creation::Failed(e) => Err(e),
+        Creation::Pending => Err(eframe::Error::AppCreation(Box::new(Reported(
             "eframe stopped before the application was made (its window or renderer could not start; see the log)".into(),
         )))),
     }
