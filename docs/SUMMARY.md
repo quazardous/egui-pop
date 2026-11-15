@@ -132,6 +132,7 @@
   - [0025: Application windows](adr/0025-application-windows.md)
   - [0026: Layer ranks](adr/0026-layer-ranks.md)
   - [0027: Component families](adr/0027-component-families.md)
+  - [0028: A removed contributor's work in flight](adr/0028-removed-contributor-work-in-flight.md)
 - [Micro-indicators, the design](design/indicators.md)
 - [Agent control, the design](design/agent-control.md)
 - [Icons: an inventory](icons.md)
