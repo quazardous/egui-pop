@@ -118,8 +118,15 @@ fn rows_and_grids(ui: &mut Ui, state: &mut State) {
     let field = Track::fr(1.0).min(Length::Em(8.0)).max(Length::Em(24.0));
     let tracks = [Track::CONTENT, field, Track::CONTENT, Track::CONTENT];
     ui.row(Row::new(tracks), |r| {
-        r.cell(|ui| ui.section_title("Name"));
-        r.cell(|ui| ui.text_edit_singleline(&mut state.name));
+        let title = r.cell(|ui| ui.section_title("Name")).id;
+        r.cell(|ui| {
+            egui::TextEdit::singleline(&mut state.name)
+                .desired_width(f32::INFINITY)
+                .show(ui)
+                .response
+                .response
+                .labelled_by(title)
+        });
         r.cell(|ui| ui.button("Rename"));
         r.cell(|ui| ui.meta("24 MB"));
     });
