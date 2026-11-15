@@ -41,6 +41,9 @@ clip-application-x-egui-pop-inspect-json =
 command-admin-close =
     .title = Fermer les réglages
 
+command-admin-focus =
+    .title = Réglages : modifier un focus
+
 command-admin-open =
     .description = Tous les réglages en pages entières : les familles et leurs sections en arbre sur le côté, une seule recherche.
     .title = Réglages
@@ -48,6 +51,10 @@ command-admin-open =
 command-admin-popOut =
     .description = Déplace les réglages entre la fenêtre principale et une fenêtre à eux.
     .title = Réglages : détacher
+
+command-admin-quick =
+    .description = Les réglages souvent changés et ceux changés récemment, modifiés sans ouvrir les Réglages.
+    .title = Réglages rapides
 
 command-admin-reset =
     .title = Rétablir un réglage dans une portée de valeurs
