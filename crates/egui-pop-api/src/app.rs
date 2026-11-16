@@ -5086,7 +5086,7 @@ impl App {
             .snapshot(move |_| {
                 let Ok(app) = up(&w) else { return Json::Null };
                 let kernel = app.bus();
-                let points: Vec<Json> = crate::bus::WINDOW_POINTS
+                let points: Vec<Json> = crate::bus::POINTS
                     .iter()
                     .map(|p| {
                         let listeners: Vec<Json> = kernel
@@ -5110,7 +5110,7 @@ impl App {
                         json!({ "point": p, "listeners": listeners })
                     })
                     .collect();
-                json!({ "points": points, "order": app.bus_order(), "windows": app.windows_list() })
+                json!({ "points": points, "order": app.bus_order_of(&crate::bus::POINTS), "windows": app.windows_list() })
             }),
         )
         .expect("distinct names");
@@ -5385,6 +5385,12 @@ impl App {
                 self.dirty = true;
                 self.update_plugin_infos();
                 if self.started {
+                    // Its listeners take back what it had left (ADR 0029).
+                    self.handle.plugin_connected(crate::bus::PluginChange::new(
+                        id.as_str(),
+                        owner.as_str(),
+                        "connected",
+                    ));
                     self.emit(&Lifecycle::Connected(id));
                 }
                 Ok(())
@@ -5424,6 +5430,8 @@ impl App {
         h.indicators.borrow_mut().remove_owner(owner);
         h.workbench.borrow_mut().templates.retain(|t| t.0 != *owner);
         h.services.borrow_mut().remove_owner(owner);
+        // Its listeners on the bus go with it (ADR 0029).
+        h.bus.kernel.forget(owner.as_str());
         let mounts = crate::mounts::remove_owner(&self.handle, owner);
         let undo = lock(&h.store).remove_owner_report(owner).dropped;
         crate::history::remove_owner(&self.handle, owner);
@@ -5451,24 +5459,49 @@ impl App {
     fn said_gone(&mut self, plugin: &PluginId, owner: &OwnerId, reason: &str, removed: Removed) {
         let steps: usize = removed.undo.iter().map(|d| d.steps).sum();
         let mixed: usize = removed.undo.iter().map(|d| d.mixed).sum();
-        // The jobs it leaves, read before the event that counts them.
-        let jobs = crate::jobs::left_by(&self.handle, plugin, owner, &removed.commands);
+        // The bus is asked first: its listeners close or mark what the
+        // plugin leaves (its jobs), each counting what it did, before the
+        // event that counts them (ADR 0029).
+        let did = self.handle.plugin_disconnected(
+            crate::bus::PluginChange::new(plugin.as_str(), owner.as_str(), reason).commands(
+                removed
+                    .commands
+                    .iter()
+                    .map(|c| c.as_str().to_string())
+                    .collect(),
+            ),
+        );
+        let count = |key: &str| did.get(key).and_then(Json::as_u64).unwrap_or(0);
+        let (jobs_cancelled, jobs_orphaned) = (count("jobs_cancelled"), count("jobs_orphaned"));
         log::info!(
             target: "egui_pop",
-            "plugin `{plugin}` disconnected ({reason}): {} command(s), {} panel(s), {} component(s), {} host(s), {} mount(s), {steps} undo step(s) ({mixed} mixed) removed; {} job(s) to cancel, {} orphaned",
+            "plugin `{plugin}` disconnected ({reason}): {} command(s), {} panel(s), {} component(s), {} host(s), {} mount(s), {steps} undo step(s) ({mixed} mixed) removed; {jobs_cancelled} job(s) to cancel, {jobs_orphaned} orphaned",
             removed.commands.len(),
             removed.panels,
             removed.mounts.components,
             removed.mounts.hosts,
             removed.mounts.mounts,
-            jobs.cancel.len(),
-            jobs.orphan.len(),
         );
         let undo: Vec<Json> = removed
             .undo
             .iter()
             .map(|d| json!({ "history": d.history, "steps": d.steps, "mixed": d.mixed }))
             .collect();
+        let mut counted = json!({
+            "commands": removed.commands.len(),
+            "panels": removed.panels,
+            "components": removed.mounts.components,
+            "hosts": removed.mounts.hosts,
+            "mounts": removed.mounts.mounts,
+            "undo_steps": steps,
+            "mixed_undo_steps": mixed,
+            // Said without the jobs plugin too: the event keeps its shape.
+            "jobs_cancelled": jobs_cancelled,
+            "jobs_orphaned": jobs_orphaned,
+        });
+        for (key, value) in did {
+            counted[key] = value;
+        }
         self.handle.publish(
             "egui_pop",
             None,
@@ -5477,17 +5510,7 @@ impl App {
                 "plugin": plugin,
                 "owner": owner,
                 "reason": reason,
-                "removed": {
-                    "commands": removed.commands.len(),
-                    "panels": removed.panels,
-                    "components": removed.mounts.components,
-                    "hosts": removed.mounts.hosts,
-                    "mounts": removed.mounts.mounts,
-                    "undo_steps": steps,
-                    "mixed_undo_steps": mixed,
-                    "jobs_cancelled": jobs.cancel.len(),
-                    "jobs_orphaned": jobs.orphan.len(),
-                },
+                "removed": counted,
                 "undo": undo,
             }),
         );
@@ -5495,9 +5518,6 @@ impl App {
         // dialogs are cancelled; its commands are kept as gone, so a run
         // of one is refused naming it and a toast's action greyed.
         crate::dialogs::owner_gone(&self.handle, plugin, owner, &removed.commands);
-        // Its jobs: the host is asked to cancel those naming it, the
-        // others are said orphaned.
-        crate::jobs::owner_gone(&self.handle, plugin, &jobs);
         let mut gone = self.handle.0.gone_commands.borrow_mut();
         for c in removed.commands {
             gone.insert(c, plugin.clone());
@@ -6859,6 +6879,9 @@ impl App {
         self.install_theme();
         self.settle();
         self.handle.feed_indicators();
+        // The journal's new events to their listeners on the bus, before
+        // the pass's handlers read what follows them.
+        self.handle.deliver_events();
         if !again {
             self.emit(&Lifecycle::Pass);
         }

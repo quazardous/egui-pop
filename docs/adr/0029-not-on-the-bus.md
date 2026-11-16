@@ -371,8 +371,15 @@ application's bugs ask for:
   ([ADR 0028](0028-removed-contributor-work-in-flight.md) already
   journals `plugin.disconnected`): `remove_owner` on every registry is
   the same remembering function; each registry becomes a listener.
-- **Jobs**: `job.*` events exist; their owner and cancel-on-disconnect
-  are ADR 0028's open lines.
+- **Jobs**: moved (2026-11-16). `job.cancel`, `job.pause`,
+  `job.resume` and `job.retry` are requests whose listeners are
+  `jobs.model` then `jobs.host`; the jobs model is the `jobs.model`
+  listener of the `job.*` events, which the bus delivers once each, in
+  journal order; cancel-on-disconnect and the return of a plugin's
+  jobs are listeners of `plugin.disconnect` (asked before
+  `plugin.disconnected` is said) and `plugin.connect`. Forgetting a
+  finished or orphaned job (`JobsService::dismiss`, `clear_finished`)
+  is still a direct call, the jobs view's own list.
 - **Panels and layout**: the workbench's changes are steps already;
   their followers (layout repair, persistence, focus) are calls.
 - **Selection**: has subscribers of its own (`selection.rs`), beside

@@ -18,6 +18,7 @@
 //! | `job.finished` | `id`, `actions` (`[{title, command, args}]`) |
 //! | `job.cancelled` | `id`, `reason` (why, when it was not the user) |
 //! | `job.orphaned` | `id`, `plugin`, `reason` (published by egui-pop: the job's plugin is disconnected and the job goes on) |
+//! | `job.adopted` | `plugin`, `jobs` (their ids; published by egui-pop: the plugin is back and its orphaned jobs are its own again) |
 //! | `job.log` | `id`, `text` (lines of the job's log) |
 //!
 //! **A job has an owner** when its `job.started` names one: `owner`, the
@@ -99,6 +100,9 @@ pub const CANCELLED: &str = "job.cancelled";
 /// The job's plugin is disconnected and the job goes on (published by
 /// egui-pop, not by the host).
 pub const ORPHANED: &str = "job.orphaned";
+/// The plugin of orphaned jobs is back: `{ "plugin", "jobs": [ids] }`
+/// (published by egui-pop, not by the host).
+pub const ADOPTED: &str = "job.adopted";
 /// Lines of a job's log.
 pub const LOG: &str = "job.log";
 
@@ -550,6 +554,9 @@ impl Jobs {
             return false;
         }
         let d = e.data;
+        if e.name == ADOPTED {
+            return self.adopted(d);
+        }
         let Some(id) = text(d, "id") else {
             return false;
         };
@@ -1027,8 +1034,41 @@ impl Jobs {
         left
     }
 
+    /// Folds `job.adopted`: the jobs it names, orphaned by its plugin,
+    /// are its own again.
+    fn adopted(&mut self, d: &Json) -> bool {
+        let Some(plugin) = text(d, "plugin") else {
+            return false;
+        };
+        let named: BTreeSet<&str> = d["jobs"]
+            .as_array()
+            .map(|a| a.iter().filter_map(Json::as_str).collect())
+            .unwrap_or_default();
+        let mut back = Vec::new();
+        for job in self.jobs.values_mut() {
+            if named.contains(job.id.as_str()) && job.orphaned.as_deref() == Some(plugin.as_str()) {
+                job.orphaned = None;
+                back.push(job.id.clone());
+            }
+        }
+        let changed = !back.is_empty();
+        self.changed.extend(back);
+        changed
+    }
+
+    /// The jobs marked orphaned by `plugin`, in id order: those its
+    /// return takes back (`job.adopted`).
+    pub fn orphaned_by(&self, plugin: &str) -> Vec<String> {
+        self.jobs
+            .values()
+            .filter(|j| j.orphaned.as_deref() == Some(plugin))
+            .map(|j| j.id.clone())
+            .collect()
+    }
+
     /// Takes the orphaned mark off the jobs a plugin left: it is back.
-    /// Returns the jobs it took it off.
+    /// Returns the jobs it took it off; the same as folding the
+    /// `job.adopted` event naming them.
     pub fn adopt(&mut self, plugin: &str) -> Vec<String> {
         let mut back = Vec::new();
         for job in self.jobs.values_mut() {

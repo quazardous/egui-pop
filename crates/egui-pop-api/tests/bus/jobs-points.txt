@@ -1,0 +1,18 @@
+job.cancel
+  1. jobs.model (owner egui_pop.jobs): before jobs.host
+  2. jobs.host (owner egui_pop.jobs): after jobs.model
+job.pause
+  1. jobs.model (owner egui_pop.jobs): before jobs.host
+  2. jobs.host (owner egui_pop.jobs): after jobs.model
+job.resume
+  1. jobs.model (owner egui_pop.jobs): before jobs.host
+  2. jobs.host (owner egui_pop.jobs): after jobs.model
+job.retry
+  1. jobs.model (owner egui_pop.jobs): before jobs.host
+  2. jobs.host (owner egui_pop.jobs): after jobs.model
+job.*
+  1. jobs.model (owner egui_pop.jobs): nothing
+plugin.connect
+  1. jobs.adopt-on-connect (owner egui_pop.jobs): nothing
+plugin.disconnect
+  1. jobs.cancel-on-disconnect (owner egui_pop.jobs): nothing
