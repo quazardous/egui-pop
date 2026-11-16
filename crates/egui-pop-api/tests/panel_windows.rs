@@ -291,3 +291,64 @@ fn a_layout_put_in_again_keeps_the_detached_window() {
     assert_eq!(events(m.app(), "window.moved").len(), 1);
     assert_docked(&mut m, v);
 }
+
+/// Where the system hides window positions (Wayland), no window sees a
+/// tab dragged from the main one while the drag holds the pointer: let go
+/// outside the main window, the tab is taken by the detached window that
+/// sees the pointer once the drag lets it go, and joins its tabs.
+#[test]
+fn a_tab_let_go_over_a_detached_window_joins_it_where_positions_are_hidden() {
+    let mut m = multi();
+    m.hide_positions();
+    let v = detach_log(&mut m);
+    let (from, _) = m
+        .node(ViewportId::ROOT, "Tree")
+        .expect("the tree's tab in the main window");
+    let from = from.center();
+    // Past the main window's right edge (640 points wide): the drag's
+    // grab keeps the main window's pointer going there.
+    let to = egui::pos2(700.0, from.y);
+    let send = |m: &mut MultiWindow, e: egui::Event| {
+        m.queue(ViewportId::ROOT, e);
+        m.root_pass();
+    };
+    send(&mut m, egui::Event::PointerMoved(from));
+    send(
+        &mut m,
+        egui::Event::PointerButton {
+            pos: from,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        },
+    );
+    for i in 1..=8 {
+        send(
+            &mut m,
+            egui::Event::PointerMoved(from + (to - from) * (i as f32 / 8.0)),
+        );
+    }
+    assert!(
+        m.app().window_drop().is_none(),
+        "no window can tell the pointer is over it"
+    );
+    send(
+        &mut m,
+        egui::Event::PointerButton {
+            pos: to,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        },
+    );
+    send(&mut m, egui::Event::PointerGone);
+    // The grab ends: the system gives the pointer to the window under it.
+    m.queue(v, egui::Event::PointerMoved(egui::pos2(120.0, 200.0)));
+    m.root_pass();
+    m.root_pass();
+    let layout = m.app().layout();
+    let window = layout.window_of(&TREE).expect("the tree joined the window");
+    assert_eq!(window.panel, LOG);
+    assert_eq!(layout.area_of(&TREE), None);
+    assert_eq!(layout.auxiliary.len(), 1);
+}

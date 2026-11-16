@@ -115,6 +115,9 @@ pub struct MultiWindow {
     painted: BTreeMap<ViewportId, bool>,
     /// The window invariants a test breaks on purpose.
     allowed: BTreeSet<String>,
+    /// The system tells no window's position (Wayland): no inner or
+    /// outer rectangle in the windows' input.
+    positions_hidden: bool,
     /// The broken invariants already looked at.
     seen_broken: usize,
     time: f64,
@@ -161,6 +164,7 @@ impl MultiWindow {
             held: BTreeSet::new(),
             painted: BTreeMap::new(),
             allowed: BTreeSet::new(),
+            positions_hidden: false,
             seen_broken: 0,
             time: 0.0,
         }
@@ -260,6 +264,13 @@ impl MultiWindow {
         info.outer_rect = Some(Rect::from_min_size(Pos2::from(at), size));
     }
 
+    /// The system tells no window's position from now on, as Wayland:
+    /// each window knows its size only (no inner or outer rectangle in
+    /// its input).
+    pub fn hide_positions(&mut self) {
+        self.positions_hidden = true;
+    }
+
     /// Queues an event (a pointer's move or button) for a window's next
     /// pass.
     pub fn queue(&mut self, viewport: ViewportId, event: Event) {
@@ -330,7 +341,19 @@ impl MultiWindow {
             .inner_rect
             .map(|r| Rect::from_min_size(Pos2::ZERO, r.size()))
             .unwrap_or(Rect::from_min_size(Pos2::ZERO, SIZE));
-        let viewports = self.info.iter().map(|(v, i)| (*v, i.clone())).collect();
+        let hidden = self.positions_hidden;
+        let viewports = self
+            .info
+            .iter()
+            .map(|(v, i)| {
+                let mut i = i.clone();
+                if hidden {
+                    i.inner_rect = None;
+                    i.outer_rect = None;
+                }
+                (*v, i)
+            })
+            .collect();
         RawInput {
             viewport_id: viewport,
             viewports,

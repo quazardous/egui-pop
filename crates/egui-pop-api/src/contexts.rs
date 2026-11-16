@@ -420,7 +420,8 @@ struct Projection {
     applied: Option<State>,
     /// The frames, as the owner had them then.
     registry: FrameRegistry,
-    /// The layouts of the projection keys not shown now.
+    /// The layouts of the places not shown now, by layout key
+    /// (`State::layout_key`).
     layouts: BTreeMap<String, Layout>,
     /// The view states, by projection key.
     views: BTreeMap<String, ViewState>,
@@ -934,7 +935,16 @@ fn derive(
     registry: &FrameRegistry,
     current: &Layout,
 ) -> Layout {
-    let same_place = old.is_some_and(|o| o.path_key() == new.path_key());
+    // Another payload of the same places is the same place for the
+    // layout, unless the payload chooses the arrangement.
+    let without_modes = |s: &State| {
+        State {
+            modes: Vec::new(),
+            ..s.clone()
+        }
+        .layout_key(registry)
+    };
+    let same_place = old.is_some_and(|o| without_modes(o) == without_modes(new));
     let arranged = crate::arrangements::arranged_in(new, registry);
     let was_arranged = old.and_then(|o| crate::arrangements::arranged_in(o, registry));
     let arrangement = |frame: &FrameId, declared: Option<String>| {
@@ -973,12 +983,12 @@ fn derive(
                 // last), whichever place the user came from.
                 Some((frame, declared)) => p
                     .layouts
-                    .get(&base.projection_key())
+                    .get(&base.layout_key(registry))
                     .cloned()
                     .or_else(|| arrangement(&frame, declared))
                     .or_else(|| enclosing_layout(p, new, &frame, registry, &arrangement)),
                 // The root, as it was left.
-                None => p.layouts.get(&base.projection_key()).cloned(),
+                None => p.layouts.get(&base.layout_key(registry)).cloned(),
             }
             // Nothing remembered at all: the layout shown.
             .unwrap_or_else(|| current.clone())
@@ -1019,12 +1029,12 @@ fn enclosing_layout(
             modes: new.modes.clone(),
             ..outer.clone()
         };
-        [outer.projection_key(), with_modes.projection_key()]
+        [outer.layout_key(registry), with_modes.layout_key(registry)]
             .into_iter()
             .find_map(|key| p.layouts.get(&key).cloned().map(|l| (key, l)))
             .or_else(|| {
                 let (f, declared) = crate::arrangements::arranged_in(&outer, registry)?;
-                arrangement(&f, declared).map(|l| (outer.projection_key(), l))
+                arrangement(&f, declared).map(|l| (outer.layout_key(registry), l))
             })
     });
     #[cfg(debug_assertions)]
@@ -1055,21 +1065,27 @@ fn project(app: &AppHandle, svc: &ContextService, new: State, registry: FrameReg
     let old_key = old.as_ref().map(State::projection_key);
     let new_key = new.projection_key();
     let moved = old_key.as_deref() != Some(new_key.as_str());
+    // The layout's own key: another photo in the same place keeps the
+    // layout shown (a detached panel stays in its window).
+    let old_layout = old.as_ref().map(|o| o.layout_key(&p.registry));
+    let new_layout = new.layout_key(&registry);
     let mut target: Option<Layout> = None;
     let mut focus: Option<PanelId> = None;
     if moved {
         if let Some(k) = &old_key {
-            p.layouts.insert(k.clone(), current.clone());
             p.views.entry(k.clone()).or_default().focus = focused;
-            let kept = p.layouts.remove(&new_key);
+        }
+        if let Some(k) = old_layout.as_ref().filter(|k| **k != new_layout) {
+            p.layouts.insert(k.clone(), current.clone());
+            let kept = p.layouts.remove(&new_layout);
             target = Some(match kept {
                 Some(l) => l,
                 None => derive(app, &p, old.as_ref(), &new, &registry, &current),
             });
-        } else {
+        } else if old_key.is_none() {
             // At start the layout loaded is the shown key's, unless the
             // restore dropped frames and the key shown is another one.
-            target = p.layouts.remove(&new_key);
+            target = p.layouts.remove(&new_layout);
         }
         focus = p.views.get(&new_key).and_then(|v| v.focus.clone());
         p.generation += 1;

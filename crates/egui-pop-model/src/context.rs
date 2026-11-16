@@ -494,11 +494,17 @@ impl State {
     /// The place path as a key: `root/demo.album/demo.photo`, payloads
     /// included when they are not null (`demo.album=3`).
     pub fn path_key(&self) -> String {
+        self.path_key_with(|_| true)
+    }
+
+    /// The place path as a key, a place's payload included when `payload`
+    /// says so for its frame (and it is not null).
+    fn path_key_with(&self, payload: impl Fn(&FrameId) -> bool) -> String {
         let mut key = ROOT.to_string();
         for e in &self.places {
             key.push('/');
             key.push_str(e.frame.as_str());
-            if !e.payload.is_null() {
+            if !e.payload.is_null() && payload(&e.frame) {
                 key.push('=');
                 key.push_str(&e.payload.to_string());
             }
@@ -510,13 +516,32 @@ impl State {
     /// (`root/demo.album|orientation=demo.culling`). A layout change made
     /// in a mode belongs to this key, so leaving the mode reverts it.
     pub fn projection_key(&self) -> String {
+        self.with_modes(self.path_key())
+    }
+
+    /// The key a layout is kept under: the projection's key, a place's
+    /// payload left out unless its frame chooses its arrangement from it
+    /// ([`FrameSpec::arrangement_for`]). Another photo in the darkroom is
+    /// the same place for the layout (a panel detached there stays in its
+    /// window); a space whose payload picks its arrangement keeps one
+    /// layout per payload.
+    pub fn layout_key(&self, registry: &FrameRegistry) -> String {
+        let chooses = |f: &FrameId| {
+            registry
+                .get(f)
+                .is_some_and(|spec| spec.arrangement_for.is_some())
+        };
+        self.with_modes(self.path_key_with(chooses))
+    }
+
+    /// `key` followed by the active modes by group.
+    fn with_modes(&self, mut key: String) -> String {
         let mut modes: Vec<(&str, &str)> = self
             .modes
             .iter()
             .map(|m| (m.group.as_str(), m.frame.as_str()))
             .collect();
         modes.sort();
-        let mut key = self.path_key();
         for (g, f) in modes {
             key.push('|');
             key.push_str(g);
