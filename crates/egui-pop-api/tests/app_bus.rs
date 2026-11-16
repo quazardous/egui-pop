@@ -317,7 +317,9 @@ fn a_local_listener_on_a_window_point_runs_in_order_on_the_interface_thread() {
     let shared: Arc<dyn Bus> = Arc::new(Kernel::new());
     let mut m = multi(shared.clone());
     let app = m.app().clone();
-    let heard: Rc<RefCell<Vec<(String, Vec<String>)>>> = Rc::default();
+    // Each request heard: its window and what the listeners before did.
+    type Heard = Rc<RefCell<Vec<(String, Vec<String>)>>>;
+    let heard: Heard = Rc::default();
     let mine = heard.clone();
     shared
         .listen_local::<WindowClose>(
