@@ -1829,9 +1829,7 @@ pub(crate) fn windows(
             if own_window {
                 app.note_window(&vctx);
                 crate::bus::files::begin_pass(&vctx, &crate::bus::panels::window_of_panel(&panel));
-                egui_pop_core::overlay::block_window_among(&vctx, &|v| {
-                    !crate::windows::is_app_window(app, v)
-                });
+                app.block_window(&vctx, &|v| !crate::windows::is_app_window(app, v));
                 egui_pop_core::overlay::begin_pass(&vctx);
                 keys(&vctx);
             }

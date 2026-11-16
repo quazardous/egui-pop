@@ -615,6 +615,17 @@ Settings, the Settings app (generated pages, a manifest's section, value scopes,
   </tr>
 </table>
 
+### Drops on a detached window
+
+A tab dragged over a detached panel's window: its drop frame where the window sees the pointer, and the outline every window that may take the tab gets where the system hides window positions (Wayland).
+
+<table>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/window-drop-frame-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/window-drop-frame-pop-dark.png" width="200" alt="window-drop-frame-pop-dark"></a><br>window-drop-frame-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/window-drop-outline-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/window-drop-outline-pop-dark.png" width="200" alt="window-drop-outline-pop-dark"></a><br>window-drop-outline-pop-dark</td>
+  </tr>
+</table>
+
 ### Examples
 
 The `rerun_like` example, a whole application ([A Rerun-like viewer](rerun-like.md)), in its two kits.

@@ -70,6 +70,15 @@
 //! still do their work themselves; they move onto their requests one by
 //! one (the ADR's slices).
 //!
+//! The active window, the one the person works in, is the registry's too
+//! ([`WindowActivate`], [`AppHandle::request_window_activate`]): a press
+//! or a key in a window asks it (`user`), a window gaining the system's
+//! focus asks it (`system`), the application asking a window to the
+//! front asks it (`command`, raised by [`RAISE`], the one place egui-pop
+//! sends `ViewportCommand::Focus`); `window.activated` is said when it
+//! changed, and a window closing while active hands it to the window
+//! worked in before it.
+//!
 //! The job lifecycle is the second family. Asking about a job is a
 //! request ([`JobCancel`], [`JobPause`], [`JobResume`], [`JobRetry`], each
 //! a [`JobAsk`], asked by [`AppHandle::request_job`]); whoever runs the
@@ -106,6 +115,8 @@ pub use bus_contract;
 pub use bus_contract::{missing_targets, order_dump};
 pub use egui_pop_hooks;
 
+mod activate;
+pub use activate::raise_main_window;
 pub(crate) mod files;
 pub use files::{BROWSER as FILES_BROWSER, FILES_POINTS, FileDrop, FilesDrop};
 mod owners;
@@ -270,11 +281,25 @@ impl Point for PopupClose {
     type Value = Vec<String>;
 }
 
+/// A window becomes the active one, the window worked in (`window.activate`):
+/// the person pressed or typed in it (`user`), the system gave it the
+/// focus (`system`), or the application asks it to the front (`command`,
+/// raised by [`RAISE`]).
+#[derive(Debug)]
+pub struct WindowActivate;
+impl Point for WindowActivate {
+    const KIND: PointKind = PointKind::Request;
+    const ID: &'static str = "window.activate";
+    type Input = WindowRequest;
+    type Value = Vec<String>;
+}
+
 /// The window and popup points, in the order [`order_dump`] prints them.
-pub const WINDOW_POINTS: [&str; 5] = [
+pub const WINDOW_POINTS: [&str; 6] = [
     WindowOpen::ID,
     WindowClose::ID,
     WindowReparent::ID,
+    WindowActivate::ID,
     PopupOpen::ID,
     PopupClose::ID,
 ];
@@ -456,10 +481,11 @@ pub const PLUGIN_POINTS: [&str; 2] = [PluginConnect::ID, PluginDisconnect::ID];
 
 /// Every point egui-pop declares: the window, job, plugin and files
 /// points.
-pub const POINTS: [&str; 13] = [
+pub const POINTS: [&str; 14] = [
     WindowOpen::ID,
     WindowClose::ID,
     WindowReparent::ID,
+    WindowActivate::ID,
     PopupOpen::ID,
     PopupClose::ID,
     JobCancel::ID,
@@ -482,6 +508,9 @@ pub const CONTRACT: &[PointDecl] = &[
     ),
     PointDecl::of::<WindowReparent>(
         "A window's content moves to another window (into the main window and back).",
+    ),
+    PointDecl::of::<WindowActivate>(
+        "A window becomes the active one (the person worked in it, the system focused it, or a command asks it to the front): the registry holds it as active, a command's raises it; `window.activated` follows when it changed.",
     ),
     PointDecl::of::<PopupOpen>("A popup opens in a window."),
     PointDecl::of::<PopupClose>("A popup closes."),
@@ -509,6 +538,10 @@ pub const OWNER: &str = "egui_pop";
 pub const CHILDREN: &str = "window.children";
 /// The window worked in before a closing one becomes the active one.
 pub const FOCUS: &str = "window.focus";
+/// A window asked to the front by a command (`window.activate`, reason
+/// `command`) is shown, restored and given the system's focus: the one
+/// place egui-pop sends `ViewportCommand::Focus`.
+pub const RAISE: &str = "window.raise";
 /// The one list of windows and popups ([`AppHandle::windows_list`]).
 pub const REGISTRY: &str = "window.registry";
 /// A window's place, kept when it closes.
@@ -531,6 +564,9 @@ pub struct WindowRecord {
     pub viewport: Option<String>,
     /// The reason of the request that opened it.
     pub opened_because: Reason,
+    /// Whether it is the active window, the one worked in
+    /// (`window.activate`): one window of the list is.
+    pub active: bool,
 }
 
 /// The registry's state: the windows and popups open, the main window
@@ -538,6 +574,8 @@ pub struct WindowRecord {
 #[derive(Debug, Default)]
 pub(crate) struct Registry {
     records: Vec<WindowRecord>,
+    /// The windows activated (`window.activate`), the active one last.
+    activated: Vec<String>,
 }
 
 impl Registry {
@@ -550,13 +588,39 @@ impl Registry {
             parent: req.parent.clone(),
             viewport: viewport.map(|v| format!("{v:?}")),
             opened_because: req.reason,
+            active: false,
         });
     }
 
     fn close(&mut self, id: &str) -> bool {
         let before = self.records.len();
         self.records.retain(|r| r.id != id);
+        self.activated.retain(|a| a != id);
         before != self.records.len()
+    }
+
+    fn record(&self, id: &str) -> Option<&WindowRecord> {
+        self.records.iter().find(|r| r.id == id)
+    }
+
+    /// `id` is the active window.
+    fn activate(&mut self, id: &str) {
+        self.activated.retain(|a| a != id);
+        self.activated.push(id.to_string());
+    }
+
+    /// The windows activated still held, the active one first.
+    fn by_recency(&self) -> impl Iterator<Item = &WindowRecord> {
+        self.activated.iter().rev().filter_map(|a| self.record(a))
+    }
+
+    /// The active window: the last activated still held, else the main
+    /// window.
+    pub(crate) fn active(&self) -> (String, WindowKind) {
+        self.by_recency()
+            .next()
+            .map(|r| (r.id.clone(), r.kind))
+            .unwrap_or_else(|| (WindowId::MAIN.to_string(), WindowKind::Main))
     }
 
     fn holds(&self, id: &str) -> bool {
@@ -585,6 +649,12 @@ pub(crate) struct Bus {
     /// What the window invariants remember between passes
     /// ([`crate::window_invariants`]).
     pub(crate) invariants: Mutex<crate::window_invariants::State>,
+    /// Whether each window had the system's focus at its last pass: a
+    /// window gaining it asks `window.activate` (`system`) once.
+    focus_seen: RefCell<std::collections::BTreeMap<ViewportId, bool>>,
+    /// Application windows raised by a command, asked the focus again
+    /// from their own next pass (one not drawn yet has no system window).
+    raise_pending: RefCell<std::collections::BTreeSet<ViewportId>>,
     /// The last journal event delivered to the event points' listeners.
     delivered: Cell<Seq>,
     /// A delivery runs: one asked from inside it is left to it.
@@ -614,12 +684,15 @@ impl Bus {
             &WindowRequest::new(WindowId::MAIN, WindowKind::Main, "app", Reason::System),
             Some(ViewportId::ROOT),
         );
+        main.activate(WindowId::MAIN);
         let registry = Arc::new(Mutex::new(main));
         install(&*kernel, &registry);
         Bus {
             kernel,
             registry,
             invariants: Mutex::default(),
+            focus_seen: RefCell::default(),
+            raise_pending: RefCell::default(),
             delivered: Cell::new(0),
             delivering: Cell::new(false),
         }
@@ -715,7 +788,8 @@ fn install(kernel: &dyn bus_contract::Bus, registry: &Arc<Mutex<Registry>>) {
         }),
         kernel.listen::<WindowClose>(FOCUS, mine().before(REGISTRY), |req, did| {
             let Some(app) = asking() else { return Ok(()) };
-            if req.kind == WindowKind::App && app.focus_before_close(&WindowId::new(&req.window)) {
+            app.forget_focus(req);
+            if app.focus_before_close(&req.window).is_some() {
                 did.push(format!("{FOCUS}: the window worked in before is active"));
             }
             Ok(())
@@ -791,6 +865,7 @@ fn install(kernel: &dyn bus_contract::Bus, registry: &Arc<Mutex<Registry>>) {
         });
     }
     shell::install(kernel, registry);
+    activate::install(kernel, registry);
     panels::install(kernel);
     owners::install(kernel);
     files::install(kernel);
@@ -808,6 +883,7 @@ fn install(kernel: &dyn bus_contract::Bus, registry: &Arc<Mutex<Registry>>) {
     let others = [
         kernel.listen::<WindowOpen>(INVARIANTS, mine().last(), check),
         kernel.listen::<WindowReparent>(INVARIANTS, mine().last(), check),
+        kernel.listen::<WindowActivate>(INVARIANTS, mine().last(), check),
         kernel.listen::<PopupOpen>(INVARIANTS, mine().last(), check),
         kernel.listen::<PopupClose>(INVARIANTS, mine().last(), check),
     ];
@@ -835,7 +911,13 @@ impl AppHandle {
     /// <div class="warning">Experimental: may change in any release
     /// (docs/stability.md).</div>
     pub fn windows_list(&self) -> Vec<WindowRecord> {
-        lock(&self.0.bus.registry).records.clone()
+        let r = lock(&self.0.bus.registry);
+        let (active, _) = r.active();
+        let mut list = r.records.clone();
+        for w in &mut list {
+            w.active = w.id == active;
+        }
+        list
     }
 
     /// The order the listeners of the window and popup points run in

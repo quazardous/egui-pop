@@ -1,26 +1,41 @@
 //! The main window brought to the front, as the platform services do
 //! when a second launch, a tray click or a notification asks for the
-//! application.
+//! application. In an application it is the bus's `window.activate` of
+//! the main window ([`raise_app`]): the registry holds it as the active
+//! window and its `window.raise` listener brings it forward.
 //!
 //! <div class="warning">Experimental: may change in any release
 //! (docs/stability.md).</div>
 
-use egui::{Context, UserAttentionType, ViewportCommand};
+use egui::Context;
+use egui_pop_api::AppHandle;
+use egui_pop_api::bus::{Reason, WindowKind, WindowRequest};
+use egui_pop_api::windows::WindowId;
 
-/// Shows the main window, restores it when minimized and asks for the
-/// focus. On Wayland a window cannot take the focus by itself (the
-/// compositor needs an activation token, which egui does not pass on):
-/// the window asks for attention instead, and the desktop says so.
+/// Who asks the main window to the front: the platform services.
+pub const OWNER: &str = "egui_pop.platform";
+
+/// Asks the application's main window to the front: its
+/// `window.activate` with the reason `command`, owned by [`OWNER`]. The
+/// window is shown, restored when minimized and asked for the focus. On
+/// Wayland a window cannot take the focus by itself (the compositor needs
+/// an activation token, which egui does not pass on): the window asks
+/// for attention instead, and the desktop says so.
+pub fn raise_app(app: &AppHandle) {
+    app.request_window_activate(WindowRequest::new(
+        WindowId::MAIN,
+        WindowKind::Main,
+        OWNER,
+        Reason::Command,
+    ));
+}
+
+/// The same for a program without an egui-pop application (the platform
+/// readers used standalone): the main window shown, restored and asked
+/// for the focus, attention asked on Wayland. An application uses
+/// [`raise_app`], so the bus knows the active window.
 pub fn raise(ctx: &Context) {
-    ctx.send_viewport_cmd(ViewportCommand::Visible(true));
-    ctx.send_viewport_cmd(ViewportCommand::Minimized(false));
-    ctx.send_viewport_cmd(ViewportCommand::Focus);
-    if wayland() {
-        ctx.send_viewport_cmd(ViewportCommand::RequestUserAttention(
-            UserAttentionType::Informational,
-        ));
-    }
-    ctx.request_repaint();
+    egui_pop_api::bus::raise_main_window(ctx);
 }
 
 /// Whether the session is a Wayland one.
