@@ -1015,7 +1015,12 @@ fn put_text(
     if !multiline {
         return ui.put(rect, text);
     }
-    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+    // From the top-left of its place, whatever the layout around (a
+    // grid's cell centres its content).
+    let builder = egui::UiBuilder::new()
+        .max_rect(rect)
+        .layout(egui::Layout::top_down(egui::Align::Min));
+    ui.scope_builder(builder, |ui| {
         egui::ScrollArea::vertical()
             .id_salt(base.with("scroll"))
             .max_height(rect.height())
