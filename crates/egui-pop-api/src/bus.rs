@@ -220,7 +220,7 @@ pub const FOCUS: &str = "window.focus";
 pub const REGISTRY: &str = "window.registry";
 /// A window's place, kept when it closes.
 pub const PLACE: &str = "window.place";
-/// Checks, last, that the registry agrees with what was asked.
+/// Checks, last, the window invariants ([`crate::window_invariants`]).
 pub const INVARIANTS: &str = "window.invariants";
 
 /// A window or popup as the registry holds it.
@@ -281,6 +281,9 @@ impl Registry {
 pub(crate) struct Bus {
     pub(crate) kernel: Arc<Kernel>,
     pub(crate) registry: Arc<Mutex<Registry>>,
+    /// What the window invariants remember between passes
+    /// ([`crate::window_invariants`]).
+    pub(crate) invariants: Mutex<crate::window_invariants::State>,
 }
 
 impl std::fmt::Debug for Bus {
@@ -299,7 +302,11 @@ impl Default for Bus {
         );
         let registry = Arc::new(Mutex::new(main));
         install(&kernel, &registry);
-        Bus { kernel, registry }
+        Bus {
+            kernel,
+            registry,
+            invariants: Mutex::default(),
+        }
     }
 }
 
@@ -413,10 +420,14 @@ fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
         {
             let registry = registry.clone();
             kernel.listen::<WindowClose>(INVARIANTS, mine().last(), move |req, did| {
-                if lock(&registry).holds(&req.window) {
-                    if let Some(app) = asking() {
-                        app.invariant("closed-left-registry", req);
+                let held = lock(&registry).holds(&req.window);
+                if let Some(app) = asking() {
+                    if held {
+                        app.invariant_broken(crate::window_invariants::closed_left(req));
                     }
+                    app.check_invariants_after_request();
+                }
+                if held {
                     return Err(format!("`{}` is still in the registry", req.window).into());
                 }
                 did.push(format!("{INVARIANTS}: held"));
@@ -430,12 +441,7 @@ fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
     // The paths not moved yet report to the registry through their points.
     let registry_open = |registry: Arc<Mutex<Registry>>| {
         move |req: &WindowRequest, did: &mut Vec<String>| {
-            let viewport = (req.kind == WindowKind::App)
-                .then(|| WindowId::new(&req.window).deferred_viewport());
-            let viewport = match req.kind {
-                WindowKind::Main => Some(ViewportId::ROOT),
-                _ => viewport,
-            };
+            let viewport = crate::window_invariants::viewport_of(req.kind, &req.window);
             lock(&registry).open(req, viewport);
             did.push(format!("{REGISTRY}: holds it"));
             Ok(())
@@ -468,21 +474,24 @@ fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
             Ok(())
         });
     }
-    // The invariants check runs last on every window point.
-    for point in [WindowOpen::ID, WindowReparent::ID] {
-        let registry = registry.clone();
-        let check = move |req: &WindowRequest, did: &mut Vec<String>| {
-            let r = lock(&registry);
-            if req.kind != WindowKind::Popup && r.records.iter().any(|w| w.owner.is_empty()) {
-                return Err("a window without an owner".to_string().into());
-            }
-            did.push(format!("{INVARIANTS}: held"));
-            Ok(())
-        };
-        let _ = match point {
-            WindowOpen::ID => kernel.listen::<WindowOpen>(INVARIANTS, mine().last(), check),
-            _ => kernel.listen::<WindowReparent>(INVARIANTS, mine().last(), check),
-        };
+    // The invariants check runs last on every other window point: the
+    // rules the registry alone answers (the backend's and the paint
+    // guard's are checked in the main window's pass).
+    let check = |_: &WindowRequest, did: &mut Vec<String>| {
+        if let Some(app) = asking() {
+            app.check_invariants_after_request();
+        }
+        did.push(format!("{INVARIANTS}: checked"));
+        Ok(())
+    };
+    let others = [
+        kernel.listen::<WindowOpen>(INVARIANTS, mine().last(), check),
+        kernel.listen::<WindowReparent>(INVARIANTS, mine().last(), check),
+        kernel.listen::<PopupOpen>(INVARIANTS, mine().last(), check),
+        kernel.listen::<PopupClose>(INVARIANTS, mine().last(), check),
+    ];
+    for l in others {
+        debug_assert!(l.is_ok(), "{l:?}");
     }
 }
 
@@ -677,24 +686,6 @@ impl AppHandle {
     /// its owner could say so.
     pub(crate) fn set_window_owner(&self, id: &WindowId, owner: &str) {
         lock(&self.0.bus.registry).set_owner(id.as_str(), owner);
-    }
-
-    /// An invariant does not hold: said once on the journal and in the
-    /// log, naming the window and its owner.
-    pub(crate) fn invariant(&self, rule: &str, req: &WindowRequest) {
-        log::error!(
-            target: "egui_pop",
-            "window invariant `{rule}` broken by `{}` (owner {}, reason {})",
-            req.window,
-            req.owner,
-            req.reason.as_str(),
-        );
-        self.publish(
-            "egui_pop",
-            None,
-            "window.invariant",
-            json!({ "rule": rule, "window": req.window, "owner": req.owner, "reason": req.reason }),
-        );
     }
 
     /// `window.registry`'s part on an application window: marked closed,

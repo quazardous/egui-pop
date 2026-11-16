@@ -120,6 +120,7 @@ Checked after every step, in this order, unless `allow` lifts them:
 |---|---|
 | `NoErrorToast` | an error toast shows |
 | `NoFailedCommand` | `command.failed` is on the journal during the step |
+| `WindowInvariants` | `window.invariant` is on the journal during the step: the window registry disagrees with what is on screen ([ADR 0029](adr/0029-not-on-the-bus.md)) |
 | `NoUnknownCommand` | a `Call` names a capability, or `commands.run` a command, that is not registered |
 | `NoPanic` | the step panics |
 | `StableWindows` | an area (window, popup, modal) moves or resizes in the frames after a `Wait(Settled)` |
@@ -176,7 +177,8 @@ $ egui-pop-scenario --socket "$XDG_RUNTIME_DIR/egui-pop-agent-my-app.sock" \
 - **Invariants.** `NoErrorToast`, `NoFailedCommand`, `NoUnknownCommand`
   and `NoMissingText` as in-process; `NoPanic` breaks when the
   application is gone (it crashed or exited). `StableWindows` and
-  `FrameBudget` need the frames: in-process only.
+  `FrameBudget` need the frames, and `WindowInvariants` is not checked
+  live yet: in-process only.
 - **Shots.** A shot keeps every collector's snapshot as
   `<scenario>-<name>.json` in `--out`. With `--shot CAPABILITY ARGS`
   (`LiveRunner::shot`), it also calls the application's own screenshot

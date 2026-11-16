@@ -118,6 +118,8 @@ fn a_pass_of_a_closed_window_asks_for_its_close_and_the_main_pass() {
 #[test]
 fn a_window_painting_nothing_gets_an_error_and_the_fallback_page() {
     let mut m = multi();
+    // It breaks the paint invariant on purpose (ADR 0029, rule 2).
+    m.allow_broken(egui_pop_api::window_invariants::PAINTS);
     m.app().set_empty_window_delay(Some(Duration::ZERO));
     m.app()
         .open_window(WindowSpec::new("blank", "Blank"), |_ui, _win| {});
@@ -177,6 +179,8 @@ fn a_window_with_content_is_left_alone() {
 #[test]
 fn a_closed_window_its_backend_keeps_is_said_and_hidden() {
     let mut m = multi();
+    // A backend keeping a window breaks rule 1 of ADR 0029 on purpose.
+    m.allow_broken(egui_pop_api::window_invariants::BACKEND);
     m.app().set_empty_window_delay(Some(Duration::ZERO));
     let v = open_settings(&mut m);
     m.hold_listed(v);
@@ -196,4 +200,9 @@ fn a_closed_window_its_backend_keeps_is_said_and_hidden() {
     m.root_pass();
     assert!(m.declared().is_empty(), "then dropped");
     assert_eq!(events(m.app(), "window.outlived").len(), 1, "said once");
+    // The registry and the backend disagree: rule 1, said once.
+    let broken = events(m.app(), "window.invariant");
+    assert_eq!(broken.len(), 1, "{broken:?}");
+    assert_eq!(broken[0]["rule"], "registry-is-backend");
+    assert_eq!(broken[0]["window"], APP_WINDOW);
 }
