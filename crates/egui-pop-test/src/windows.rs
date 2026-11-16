@@ -574,6 +574,8 @@ impl MultiWindow {
 impl Drop for MultiWindow {
     fn drop(&mut self) {
         HARNESSES.with_borrow_mut(|h| h.remove(&self.token));
+        // Kept for pictures only: never uploaded, nothing to free.
+        self.textures.clear();
     }
 }
 
