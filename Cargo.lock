@@ -1492,6 +1492,7 @@ name = "egui-pop-hooks"
 version = "0.1.0"
 dependencies = [
  "bus-contract",
+ "web-time",
 ]
 
 [[package]]
