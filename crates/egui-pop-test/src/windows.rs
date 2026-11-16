@@ -117,6 +117,8 @@ pub struct MultiWindow {
     /// Whether each window's last pass painted content (a text, an
     /// image, a drawing; not only backgrounds and lines).
     painted: BTreeMap<ViewportId, bool>,
+    /// The shapes each window's last pass painted.
+    shapes: BTreeMap<ViewportId, Vec<egui::epaint::ClippedShape>>,
     /// The window invariants a test breaks on purpose.
     allowed: BTreeSet<String>,
     /// The system tells no window's position (Wayland): no inner or
@@ -168,6 +170,7 @@ impl MultiWindow {
             nodes: BTreeMap::new(),
             held: BTreeSet::new(),
             painted: BTreeMap::new(),
+            shapes: BTreeMap::new(),
             allowed: BTreeSet::new(),
             positions_hidden: false,
             seen_broken: 0,
@@ -255,18 +258,24 @@ impl MultiWindow {
             .focused = Some(true);
     }
 
-    /// Sets a window's inner size, as the system would after a resize.
+    /// Sets a window's inner size, as the system would after a resize; it
+    /// keeps its place.
     pub fn set_inner_size(&mut self, viewport: ViewportId, size: [f32; 2]) {
         let info = self.info.entry(viewport).or_insert_with(Self::fresh_info);
-        info.inner_rect = Some(Rect::from_min_size(Pos2::ZERO, Vec2::from(size)));
+        let at = info.inner_rect.map_or(Pos2::ZERO, |r| r.min);
+        info.inner_rect = Some(Rect::from_min_size(at, Vec2::from(size)));
     }
 
-    /// Sets a window's outer position, as a platform telling positions
-    /// would (Wayland tells none).
+    /// Sets a window's position on the screen, as a platform telling
+    /// positions would (Wayland tells none): its outer and inner
+    /// rectangles both start there, as a window without the system's
+    /// decorations.
     pub fn set_outer_position(&mut self, viewport: ViewportId, at: [f32; 2]) {
         let info = self.info.entry(viewport).or_insert_with(Self::fresh_info);
         let size = info.inner_rect.map_or(SIZE, |r| r.size());
-        info.outer_rect = Some(Rect::from_min_size(Pos2::from(at), size));
+        let rect = Rect::from_min_size(Pos2::from(at), size);
+        info.outer_rect = Some(rect);
+        info.inner_rect = Some(rect);
     }
 
     /// The system tells no window's position from now on, as Wayland:
@@ -412,9 +421,16 @@ impl MultiWindow {
         self.painted.get(&viewport).copied().unwrap_or(false)
     }
 
+    /// The shapes a window's last pass painted, in paint order.
+    pub fn shapes(&self, viewport: ViewportId) -> &[egui::epaint::ClippedShape] {
+        self.shapes.get(&viewport).map_or(&[], Vec::as_slice)
+    }
+
     fn take_output(&mut self, viewport: ViewportId, mut out: egui::FullOutput) {
         self.painted
             .insert(viewport, out.shapes.iter().any(|s| is_content(&s.shape)));
+        self.shapes
+            .insert(viewport, std::mem::take(&mut out.shapes));
         // No painter: the textures are not uploaded anywhere.
         out.textures_delta.clear();
         // A close request is seen by one pass only.
