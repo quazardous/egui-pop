@@ -2869,9 +2869,13 @@ egui-pop-workbench-flyout-pin = Pin { $panel }
 
 egui-pop-workbench-fold = Fold { $area }
 
+egui-pop-workbench-move-group-to-window = Move group to window
+
 egui-pop-workbench-move-to = Move to { $area }
 
 egui-pop-workbench-move-to-window = Move to window
+
+egui-pop-workbench-new-window = New window
 
 egui-pop-workbench-stays-docked = { $panel } cannot go into a window
 

@@ -8,18 +8,61 @@
 //! dragged panel, the source window's pointer, whether it left the source
 //! window, and the source's place on the screen when the system tells it.
 //!
-//! This is the panel tabs' case of a drag across windows; a drag of any
-//! payload across windows can take the same shape.
+//! A session carries a tab or a whole tab group (all its tabs, dragged
+//! by the empty part of its tab bar, its shown tab kept). This is the
+//! panels' case of a drag across windows; a drag of any payload across
+//! windows can take the same shape.
 
 use egui::{Pos2, Vec2};
 use egui_pop_model::ids::PanelId;
 
-/// A tab being dragged in the main window, as the other windows see it
-/// in one pass of the main window.
+/// What a drag in the main window carries: one tab, or a whole tab
+/// group.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum Dragged {
+    /// One tab.
+    Tab(PanelId),
+    /// A tab group, all its tabs in order and the one it shows.
+    Group {
+        panels: Vec<PanelId>,
+        shown: PanelId,
+    },
+}
+
+impl Dragged {
+    /// The panel that names the drag: the tab, or the group's shown one.
+    pub(crate) fn lead(&self) -> &PanelId {
+        match self {
+            Dragged::Tab(p) => p,
+            Dragged::Group { shown, .. } => shown,
+        }
+    }
+
+    /// The panels it moves, in order.
+    pub(crate) fn panels(&self) -> &[PanelId] {
+        match self {
+            Dragged::Tab(p) => std::slice::from_ref(p),
+            Dragged::Group { panels, .. } => panels,
+        }
+    }
+
+    /// Whether it moves a whole group.
+    pub(crate) fn is_group(&self) -> bool {
+        matches!(self, Dragged::Group { .. })
+    }
+
+    /// Whether it moves `panel`.
+    pub(crate) fn holds(&self, panel: &PanelId) -> bool {
+        self.panels().contains(panel)
+    }
+}
+
+/// A tab or a tab group being dragged in the main window, as the other
+/// windows see it in one pass of the main window.
 #[derive(Clone, Debug)]
 pub(crate) struct DragSession {
-    /// The dragged panel.
-    pub(crate) panel: PanelId,
+    /// What is dragged.
+    pub(crate) dragged: Dragged,
     /// The source window's pointer, in its points.
     at: Pos2,
     /// The pointer left the source window.
@@ -30,9 +73,9 @@ pub(crate) struct DragSession {
 }
 
 impl DragSession {
-    /// The session of a tab dragged in the main window (`ctx`), with the
-    /// main window's pointer `at`.
-    pub(crate) fn of(ctx: &egui::Context, panel: PanelId, at: Pos2) -> Self {
+    /// The session of a tab or a group dragged in the main window
+    /// (`ctx`), with the main window's pointer `at`.
+    pub(crate) fn of(ctx: &egui::Context, dragged: Dragged, at: Pos2) -> Self {
         let outside = !ctx.input(|i| i.viewport_rect()).contains(at);
         let origin = ctx.input(|i| i.viewport().inner_rect).map(|r| {
             (
@@ -41,7 +84,7 @@ impl DragSession {
             )
         });
         Self {
-            panel,
+            dragged,
             at,
             outside,
             origin,
@@ -83,7 +126,7 @@ impl DragSession {
     }
 }
 
-/// Where a dragged tab is for a window it did not begin in.
+/// Where a dragged tab or group is for a window it did not begin in.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Over {
     /// Over its body, at this point.

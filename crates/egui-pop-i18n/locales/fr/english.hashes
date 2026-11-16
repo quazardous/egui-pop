@@ -1426,8 +1426,10 @@ egui-pop-workbench-detach f12827392b3d10f9
 egui-pop-workbench-float eb7e945b1415bcc5
 egui-pop-workbench-flyout-pin 4ebe2494b850fd48
 egui-pop-workbench-fold 873472b4101d195d
+egui-pop-workbench-move-group-to-window 7e8a4b95b854a83e
 egui-pop-workbench-move-to 1e7c641863b609f0
 egui-pop-workbench-move-to-window c3ca169431886fd7
+egui-pop-workbench-new-window 2d42883410626b5b
 egui-pop-workbench-stays-docked b822e29e5d487cff
 egui-pop-workbench-stays-out 7973c10990577019
 egui-pop-workbench-unfold 4f6622581c6e6904

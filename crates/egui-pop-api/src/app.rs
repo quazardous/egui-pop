@@ -5287,8 +5287,9 @@ impl App {
                     )).collect::<BTreeMap<_, _>>(),
                     "focused": wb.focused,
                     "zen": wb.zen,
-                    "dragging": wb.dragging.as_ref().map(|(p, a, _)| json!({
-                        "panel": p,
+                    "dragging": wb.dragging.as_ref().map(|(d, a, _)| json!({
+                        "panel": d.lead(),
+                        "group": d.is_group().then(|| d.panels()),
                         "from": crate::workbench::area_name(*a),
                     })),
                     "window_outlines": wb.window_outlines(),
