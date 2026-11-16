@@ -1170,6 +1170,7 @@ fn status_context(ui: &mut Ui, app: &AppHandle) {
                         }
                     }
                 });
+                egui_pop_core::overlay::follow_menu(&r.response, "breadcrumb overflow");
                 a11y::name(&r.response, Role::Button, &name);
                 r.response.on_hover_text(name);
             }
@@ -1400,6 +1401,7 @@ fn overflow(ui: &mut Ui, app: &AppHandle, gave_way: &[&(Indicator, IndicatorStat
             }
         }
     });
+    egui_pop_core::overlay::follow_menu(&r.response, "status overflow");
     a11y::name(&r.response, Role::Button, &name);
     let rect = r.response.rect;
     r.response.on_hover_text(name);

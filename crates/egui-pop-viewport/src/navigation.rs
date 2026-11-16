@@ -648,6 +648,7 @@ impl CanvasZoom {
                         );
                     }
                 });
+                egui_pop_core::overlay::follow_menu(&menu.response, "zoom menu");
                 let r = menu.response.on_hover_text(level.clone());
                 ctx.accesskit_node_builder(r.id, |node| {
                     node.set_label(level.clone());
