@@ -1,5 +1,13 @@
 ---
-egui-pop-api: minor
+egui-pop-api: major
+egui-pop: major
+egui-pop-agent: major
+egui-pop-editors: major
+egui-pop-i18n: major
+egui-pop-imaging: major
+egui-pop-platform: major
+egui-pop-test: major
+egui-pop-views: major
 ---
 
 The Settings app's window is on the bus (ADR 0029, slice 3). The app is the owner of its window and asks for it in the call that changed what it wants: `window.open` when it opens in its window mode, pops out or a focus-screen wizard ends (an open window is brought to the front), `window.close` when it closes, pops in or a focus-screen wizard starts. Its listener `admin.window` runs first on `window.open` and after `window.children`, before `window.focus`, on `window.close`, so every way of closing it (its title bar or the system, the page's Close, Escape, `window.close`, `admin.close`, `app.settings`) closes the app in the same call, in the same order; nothing follows the app from the main window's pass any more. A disconnected plugin's application windows are closed before `plugin.disconnected` is said (`bus::OWNER_GONE`, `window.owner-gone`, reason `owner-gone`, counted as `windows_closed`). `window.opened` of a window asked by its owner carries `owner`, `reason` and what the listeners did, and is said after them. Experimental change: `Admin::close` takes the application (`close(&app)`).
