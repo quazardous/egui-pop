@@ -9,8 +9,8 @@
 
 use std::sync::Arc;
 
+use bus_contract::{ListenOpts, Point as _};
 use egui_pop_core::lock;
-use egui_pop_hooks::{ListenOpts, Point as _};
 
 use super::{APP_WINDOW, Admin, OWNER, WINDOW_LISTENER, in_window};
 use crate::app::AppHandle;

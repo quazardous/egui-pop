@@ -171,11 +171,9 @@ The bus is an `Arc<dyn Bus>`, not a type parameter:
 
 ### Migration and versions
 
-- `bus-contract`: a new crate, `0.1.0`, in its own repository and
-  released on its own. Until it is on crates.io, egui-pop's workspace
-  takes it from its repository at a pinned commit
-  (`[patch.crates-io]`, removed once it is published); egui-pop's crates
-  that depend on it are not published before it is.
+- `bus-contract`: a new crate in its own repository, released on its
+  own; egui-pop depends on `0.1.0` from crates.io (published
+  2026-11-16).
 - `egui-pop-hooks`: **major** (0.x). The types move to `bus-contract`
   and are re-exported; `PointInfo` gains `kind` (a struct literal or
   pattern without it no longer builds); `Point` gains `KIND` with a

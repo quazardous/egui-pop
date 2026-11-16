@@ -905,7 +905,11 @@ impl AppHandle {
         WeakApp(self.weak())
     }
 
-    fn new(ctx: &Context, host: Box<dyn Host>) -> Self {
+    fn new(
+        ctx: &Context,
+        host: Box<dyn Host>,
+        bus: Option<Arc<dyn crate::bus::bus_contract::Bus>>,
+    ) -> Self {
         let store = host.store();
         AppHandle(Rc::new(Shared {
             ctx: RefCell::new(ctx.clone()),
@@ -967,7 +971,7 @@ impl AppHandle {
             stack_writing: std::cell::Cell::new(false),
             running_commands: RefCell::new(Vec::new()),
             windows: RefCell::default(),
-            bus: crate::bus::Bus::default(),
+            bus: crate::bus::Bus::new(bus),
             keymap: RefCell::default(),
         }))
     }
@@ -3271,6 +3275,8 @@ pub struct AppBuilder {
     persist: Option<Persist>,
     store: Option<SharedStore>,
     host: Option<Box<dyn Host>>,
+    /// The bus the application supplies (`AppBuilder::bus`).
+    bus: Option<Arc<dyn crate::bus::bus_contract::Bus>>,
     system_focus: Option<SystemFocus>,
     /// The application opens windows of its own (`AppBuilder::multi_window`).
     multi_window: bool,
@@ -3375,6 +3381,7 @@ impl AppBuilder {
             offered_commands: Vec::new(),
             bridge_mode: None,
             host: None,
+            bus: None,
             system_focus: None,
             multi_window: false,
             system_text_scale: crate::text::SystemTextScale::default(),
@@ -3837,6 +3844,24 @@ impl AppBuilder {
         self
     }
 
+    /// The bus egui-pop publishes on and listens to (ADR 0030): the
+    /// application's, shared with its other libraries if it chooses one
+    /// bus, or one of several. egui-pop declares its points on it
+    /// ([`crate::bus::CONTRACT`]) and registers its listeners; it never
+    /// constructs a bus when one is given. Without it, the default: an
+    /// `egui_pop_hooks::Kernel` of its own.
+    ///
+    /// One egui-pop application per bus: its listeners hold that
+    /// application's window registry, and a second application on the
+    /// same bus finds its points declared (logged as an error).
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn bus(mut self, bus: Arc<dyn crate::bus::bus_contract::Bus>) -> Self {
+        self.bus = Some(bus);
+        self
+    }
+
     /// Shares an existing store instead of a new one (with the default
     /// host; a host given to `host` brings its own).
     pub fn store(mut self, store: SharedStore) -> Self {
@@ -3951,6 +3976,17 @@ impl AppBuilder {
     /// Sorts the plugins, connects them, installs the theme and resolves
     /// the declarations, on a context.
     pub fn build(self, ctx: &Context) -> Result<App, BuildError> {
+        if let Some(bus) = &self.bus {
+            let declared = bus.points();
+            if let Some(taken) = crate::bus::CONTRACT
+                .iter()
+                .find(|d| declared.iter().any(|p| p.id == d.id && p.declared))
+            {
+                return Err(BuildError::Bus(
+                    crate::bus::bus_contract::Refused::AlreadyDeclared { point: taken.id },
+                ));
+            }
+        }
         let nodes: Vec<Node> = self
             .plugins
             .iter()
@@ -3983,7 +4019,7 @@ impl AppBuilder {
                     .unwrap_or_else(|| Arc::new(Mutex::new(Store::new()))),
             ))
         });
-        let handle = AppHandle::new(ctx, host);
+        let handle = AppHandle::new(ctx, host, self.bus);
         if let Some(check) = self.writer_check {
             lock(&handle.store()).set_writer_check(check);
         }

@@ -88,7 +88,6 @@ use egui_pop_model::panels::{Area, PanelSpec};
 use serde_json::{Value as Json, json};
 
 use crate::app::AppHandle;
-use crate::bus::egui_pop_hooks::{Kernel, ListenOpts, Point};
 use crate::bus::{
     self, JobAsk, JobCancel, JobEvents, JobPause, JobResume, JobRetry, PluginConnect,
     PluginDisconnect,
@@ -100,6 +99,7 @@ use crate::steps::StepSpec;
 use crate::strings as txt;
 use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
+use bus_contract::{Bus, ListenOpts, Point};
 
 /// The jobs, as a service.
 pub const JOBS: ServiceToken<JobsService> = ServiceToken::new("egui_pop.jobs");
@@ -351,9 +351,9 @@ pub fn ask(app: &AppHandle, id: &str, request: Request) {
 /// Registers `request`'s listeners: [`MODEL`] marks the job, then
 /// [`HOST`] runs its command.
 fn listen_request<P: Point<Input = JobAsk, Value = Vec<String>>>(
-    kernel: &Kernel,
+    kernel: &dyn Bus,
     owner: &str,
-) -> Vec<Result<(), egui_pop_hooks::Refused>> {
+) -> Vec<Result<(), bus_contract::Refused>> {
     let mine = || ListenOpts::new().owner(owner);
     vec![
         kernel.listen::<P>(MODEL, mine().before(HOST), |ask, did| {
@@ -400,10 +400,10 @@ fn listen(app: &AppHandle, owner: &str) {
     }
     let mine = || ListenOpts::new().owner(owner);
     let mut listened = Vec::new();
-    listened.extend(listen_request::<JobCancel>(&kernel, owner));
-    listened.extend(listen_request::<JobPause>(&kernel, owner));
-    listened.extend(listen_request::<JobResume>(&kernel, owner));
-    listened.extend(listen_request::<JobRetry>(&kernel, owner));
+    listened.extend(listen_request::<JobCancel>(&*kernel, owner));
+    listened.extend(listen_request::<JobPause>(&*kernel, owner));
+    listened.extend(listen_request::<JobResume>(&*kernel, owner));
+    listened.extend(listen_request::<JobRetry>(&*kernel, owner));
     listened.push(kernel.listen::<JobEvents>(MODEL, mine(), |e, _| {
         if let Some(app) = bus::asking()
             && let Some(jobs) = app.service(&JOBS)

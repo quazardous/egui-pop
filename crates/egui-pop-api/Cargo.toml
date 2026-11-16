@@ -58,6 +58,7 @@ svg = ["egui-pop-core/svg"]
 theme-zip = ["egui-pop-core/theme-zip"]
 
 [dependencies]
+bus-contract.workspace = true
 egui-pop-hooks.workspace = true
 profiling.workspace = true
 egui.workspace = true

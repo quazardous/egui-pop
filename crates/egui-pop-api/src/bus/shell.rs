@@ -30,9 +30,9 @@
 
 use std::sync::{Arc, Mutex};
 
+use bus_contract::{Bus, ListenOpts, Point as _};
 use egui::{Context, ViewportCommand, ViewportId};
 use egui_pop_core::lock;
-use egui_pop_hooks::{Kernel, ListenOpts, Point as _};
 use serde_json::json;
 
 use super::{
@@ -64,7 +64,7 @@ pub(super) fn declare(ctx: &mut crate::Ctx<'_>) -> Result<(), crate::ctx::CtxErr
 
 /// Registers the listeners of `window.reparent`: the registry, the place,
 /// the focus (the invariants, last, are the bus's).
-pub(super) fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
+pub(super) fn install(kernel: &dyn Bus, registry: &Arc<Mutex<Registry>>) {
     let mine = || ListenOpts::new().owner(OWNER);
     let registry = registry.clone();
     let listened = [

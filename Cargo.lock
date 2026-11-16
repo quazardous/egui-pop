@@ -618,6 +618,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
+name = "bus-contract"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45613dcd4f04f7b407c41d92bd2d3484cb04873c76d35609bdfc57d9ab09c682"
+
+[[package]]
 name = "bytemuck"
 version = "1.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1381,6 +1387,7 @@ dependencies = [
 name = "egui-pop-api"
 version = "0.10.0"
 dependencies = [
+ "bus-contract",
  "eframe",
  "egui",
  "egui-pop-core",
@@ -1483,6 +1490,9 @@ dependencies = [
 [[package]]
 name = "egui-pop-hooks"
 version = "0.1.0"
+dependencies = [
+ "bus-contract",
+]
 
 [[package]]
 name = "egui-pop-i18n"

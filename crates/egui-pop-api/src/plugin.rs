@@ -81,6 +81,9 @@ pub enum BuildError {
         plugin: PluginId,
         error: PluginError,
     },
+    /// The bus given to the builder already holds egui-pop's points: one
+    /// egui-pop application per bus (ADR 0030).
+    Bus(bus_contract::Refused),
 }
 
 impl fmt::Display for BuildError {
@@ -90,6 +93,7 @@ impl fmt::Display for BuildError {
             BuildError::Connect { plugin, error } => {
                 write!(f, "plugin `{plugin}` failed to connect: {error}")
             }
+            BuildError::Bus(e) => write!(f, "{e}: one egui-pop application per bus"),
         }
     }
 }
