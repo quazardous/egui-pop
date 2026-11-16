@@ -34,12 +34,23 @@
 //! - **Stopping**: leaving the page closes the web view. So does a panel no
 //!   longer drawn (closed, or a tab behind another), or the user closing its own
 //!   window: drawing the page again opens it again, from the start.
+//! - **On the bus** (ADR 0029): the web view is a native window of the
+//!   registry (`web-view:<n>`, [`WEB_VIEW_PREFIX`]), owned by the viewer, a
+//!   child of the window its page is drawn in. It opens by its `window.open`
+//!   (`AppHandle::request_native_open`), asked before the backend is, and each
+//!   place it is dropped (its page left or hidden, a panel too small, a
+//!   failure, its own window closed, its page drawn in another window) asks
+//!   its `window.close`. The viewer's local listener on `window.close`
+//!   ([`WEB_VIEW_LISTENER`]) drops it in that call, on the interface's thread:
+//!   its window closing closes it first (`parent-closed`), none left behind.
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use egui::{Align2, Rect, Sense, Ui, vec2};
 use egui_pop_api::AppHandle;
+use egui_pop_api::bus::bus_contract::{ListenOpts, Point as _};
+use egui_pop_api::bus::{CHILDREN, FOCUS, Reason, WindowClose, WindowKind, WindowRequest};
 use egui_pop_api::links::{self, How, Request, Source};
 use egui_pop_api::strings as api_txt;
 use egui_pop_core::icon::{Icon, Size, Tone};
@@ -62,6 +73,12 @@ pub const DEFAULT_REFERRER: &str = "https://localhost/";
 pub const MIN_PLAYER: f32 = 200.0;
 /// How often the web view's loop is turned while it is open.
 pub const PUMP: Duration = Duration::from_millis(15);
+/// The viewer's local listener on `window.close`: the web view of that
+/// native window is dropped, whoever asked (its page left, its window
+/// closing, among others).
+pub const WEB_VIEW_LISTENER: &str = "viewer.web_view";
+/// A web view's id in the registry: `web-view:<n>`.
+pub const WEB_VIEW_PREFIX: &str = "web-view:";
 /// The application's passes without the page before its panel counts as
 /// hidden: a pass may run before the panel is drawn in it.
 const HIDDEN_PASSES: u32 = 3;
@@ -175,6 +192,11 @@ struct Session {
     own_window: bool,
     /// The user closed its own window: it opens again on a click only.
     closed: bool,
+    /// Its native window's registry id, from its `window.open` until its
+    /// `window.close`.
+    bus: Option<String>,
+    /// The registry window it is a child of.
+    parent: Option<String>,
     /// Passes since the page was last drawn.
     unseen: u32,
     /// The panel is too small for the player: the card shows.
@@ -187,6 +209,8 @@ pub(super) struct Embed {
     /// None: the application has no id, YouTube links open outside.
     referrer: Option<String>,
     session: Option<Session>,
+    /// The last web view's number in the registry.
+    opened: u64,
 }
 
 impl Embed {
@@ -195,6 +219,7 @@ impl Embed {
             backend,
             referrer: None,
             session: None,
+            opened: 0,
         }
     }
 
@@ -233,6 +258,8 @@ impl Viewer {
             view: None,
             own_window: false,
             closed: false,
+            bus: None,
+            parent: None,
             unseen: 0,
             small: false,
         });
@@ -258,22 +285,71 @@ impl Viewer {
         );
     }
 
-    /// Leaves the YouTube page: the web view closes.
-    pub(super) fn stop_embed(&self) {
+    /// Leaves the YouTube page: the web view closes, by its `window.close`
+    /// for `reason`.
+    pub(super) fn stop_embed(&self, app: &AppHandle, reason: Reason) {
+        self.close_web_view(app, reason);
         let session = lock(&self.embed).session.take();
         drop(session);
     }
 
     fn embed_failed(&self, app: &AppHandle, target: &str, detail: &str) {
-        self.stop_embed();
+        self.stop_embed(app, Reason::System);
         self.fail(app, target, Failure::Playback, detail);
+    }
+
+    /// Asks the `window.close` of the web view's native window, if one is
+    /// open: the viewer's listener drops the view in that call. Whether a
+    /// view was open.
+    fn close_web_view(&self, app: &AppHandle, reason: Reason) -> bool {
+        let (window, parent, had) = {
+            let e = lock(&self.embed);
+            let Some(s) = e.session.as_ref() else {
+                return false;
+            };
+            let Some(window) = s.bus.clone() else {
+                return false;
+            };
+            (window, s.parent.clone(), s.view.is_some())
+        };
+        let mut req = WindowRequest::new(window, WindowKind::Native, PLUGIN.as_str(), reason);
+        req.parent = parent;
+        if !app.request_window_close(req) {
+            log::warn!(target: "egui_pop", "viewer: the web view's `window.close` did not close it");
+        }
+        had
+    }
+
+    /// [`WEB_VIEW_LISTENER`] on a native window closing: the web view of that
+    /// window, if it is this page's, is dropped in this call.
+    fn drop_on_close(&self, req: &WindowRequest, did: &mut Vec<String>) {
+        let dropped = {
+            let mut e = lock(&self.embed);
+            let Some(s) = e.session.as_mut() else {
+                return;
+            };
+            if s.bus.as_deref() != Some(req.window.as_str()) {
+                return;
+            }
+            s.bus = None;
+            s.parent = None;
+            s.view.take()
+        };
+        let had = dropped.is_some();
+        drop(dropped);
+        if had {
+            did.push(format!(
+                "{WEB_VIEW_LISTENER}: web view closed ({})",
+                req.reason.as_str()
+            ));
+        }
     }
 
     /// Once per pass of the application: turns the web view's loop, opens
     /// outside what it was asked to go to, closes it when its page is no
     /// longer drawn.
     pub(super) fn embed_pass(&self, app: &AppHandle) {
-        let (failed, links, hidden) = {
+        let (failed, links, hidden, user_closed) = {
             let mut e = lock(&self.embed);
             let Some(s) = e.session.as_mut() else {
                 return;
@@ -283,21 +359,24 @@ impl Viewer {
             };
             s.unseen += 1;
             if s.unseen >= HIDDEN_PASSES {
-                (None, Vec::new(), s.view.take())
+                (None, Vec::new(), true, false)
             } else {
                 let failed = view.pump().err().map(|e| (s.target.clone(), e));
                 let links = view.take_links();
-                if failed.is_none() && view.closed() {
+                let user_closed = failed.is_none() && view.closed();
+                if user_closed {
                     s.closed = true;
-                    s.view = None;
                 }
-                (failed, links, None)
+                (failed, links, false, user_closed)
             }
         };
-        if hidden.is_some() {
-            drop(hidden);
+        if hidden {
+            self.close_web_view(app, Reason::Command);
             app.publish(PLUGIN.as_str(), None, "viewer.embed_stopped", json!({}));
             return;
+        }
+        if user_closed {
+            self.close_web_view(app, Reason::User);
         }
         for url in links {
             links::open(
@@ -320,7 +399,21 @@ impl Viewer {
     /// The page is drawn at `place`: its web view opened (again) or moved
     /// there. False: the panel is too small for the player (the card shows,
     /// the web view is closed).
-    fn embed_in_view(&self, app: &AppHandle, place: Placement, native_ppp: f32) -> bool {
+    fn embed_in_view(
+        &self,
+        app: &AppHandle,
+        place: Placement,
+        parent: String,
+        native_ppp: f32,
+    ) -> bool {
+        // Drawn in another window: closed there, opened again in this one.
+        let moved = lock(&self.embed)
+            .session
+            .as_ref()
+            .is_some_and(|s| s.bus.is_some() && s.parent.as_deref() != Some(parent.as_str()));
+        if moved {
+            self.close_web_view(app, Reason::Command);
+        }
         let open = {
             let mut e = lock(&self.embed);
             let referrer = e.referrer.clone();
@@ -333,11 +426,9 @@ impl Viewer {
             let small = in_panel && !fits_player(place.rect.size(), native_ppp);
             let was_small = std::mem::replace(&mut s.small, small);
             if small {
-                let dropped = s.view.take();
                 let target = s.target.clone();
                 drop(e);
-                let had = dropped.is_some();
-                drop(dropped);
+                let had = self.close_web_view(app, Reason::Command);
                 if !was_small {
                     app.publish(
                         PLUGIN.as_str(),
@@ -372,6 +463,28 @@ impl Viewer {
                     self.embed_failed(app, &target, "this application has no id to give YouTube");
                     return true;
                 };
+                // Its native window first: the registry holds it before the
+                // backend is asked.
+                let window = {
+                    let mut e = lock(&self.embed);
+                    e.opened += 1;
+                    format!("{WEB_VIEW_PREFIX}{}", e.opened)
+                };
+                let req = WindowRequest::new(
+                    window.clone(),
+                    WindowKind::Native,
+                    PLUGIN.as_str(),
+                    Reason::Command,
+                )
+                .parent(parent.clone());
+                if !app.request_native_open(req) {
+                    self.embed_failed(app, &target, "its window could not open");
+                    return true;
+                }
+                if let Some(s) = lock(&self.embed).session.as_mut() {
+                    s.bus = Some(window);
+                    s.parent = Some(parent);
+                }
                 let request = EmbedRequest {
                     url: embed_url(&id),
                     referrer,
@@ -381,10 +494,18 @@ impl Viewer {
                 };
                 match backend.open(&request) {
                     Ok(view) => {
-                        if let Some(s) = lock(&self.embed).session.as_mut() {
-                            s.own_window = view.own_window();
-                            s.view = Some(view);
-                        }
+                        let mut e = lock(&self.embed);
+                        let kept = match e.session.as_mut() {
+                            Some(s) if s.bus.is_some() => {
+                                s.own_window = view.own_window();
+                                s.view = Some(view);
+                                None
+                            }
+                            // Closed while it opened: it goes.
+                            _ => Some(view),
+                        };
+                        drop(e);
+                        drop(kept);
                         app.publish(
                             PLUGIN.as_str(),
                             None,
@@ -462,7 +583,8 @@ pub(super) fn draw(ui: &mut Ui, app: &AppHandle, v: &Viewer) -> bool {
             .flatten(),
     };
     let native = ctx.native_pixels_per_point().unwrap_or(1.0);
-    if !v.embed_in_view(app, place, native) {
+    let parent = app.registry_window_of(ctx.viewport_id());
+    if !v.embed_in_view(app, place, parent, native) {
         return too_small(ui, &place, native);
     }
     let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
@@ -518,4 +640,37 @@ fn too_small(ui: &mut Ui, place: &Placement, native: f32) -> bool {
     ));
     ui.add_space(t.space.s);
     ui.button(tr(&ctx, &api_txt::LINKS_OPEN_OUTSIDE)).clicked()
+}
+
+/// Registers the viewer's [`WEB_VIEW_LISTENER`] on `window.close`, replacing
+/// that of an earlier connection: a local listener, run on this (the
+/// interface's) thread, as a web view is dropped on the thread it was made
+/// on.
+pub(super) fn listen(app: &AppHandle, viewer: &Arc<Viewer>) {
+    let bus = app.bus();
+    bus.unlisten(WindowClose::ID, WEB_VIEW_LISTENER);
+    let weak = Arc::downgrade(viewer);
+    let listened = bus.listen_local::<WindowClose>(
+        WEB_VIEW_LISTENER,
+        ListenOpts::new()
+            .owner(PLUGIN.as_str())
+            .after(CHILDREN)
+            .before(FOCUS),
+        move |req, did| {
+            if req.window.starts_with(WEB_VIEW_PREFIX)
+                && let Some(v) = weak.upgrade()
+            {
+                v.drop_on_close(req, did);
+            }
+            Ok(())
+        },
+    );
+    if let Err(e) = listened {
+        log::error!(target: "egui_pop", "{e}");
+    }
+}
+
+/// Takes the viewer's listener off the bus.
+pub(super) fn unlisten(app: &AppHandle) {
+    app.bus().unlisten(WindowClose::ID, WEB_VIEW_LISTENER);
 }

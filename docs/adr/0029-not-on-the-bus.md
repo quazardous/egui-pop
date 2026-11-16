@@ -410,7 +410,14 @@ test and leaves `next` green. Slices 1 and 2 come first; the paths of
    that call; `dialogs.cancel-on-close` cancels the dialogs still waiting
    in its queue. A window's content moving into the main window takes its
    popups with it. The dialogs' deferred cancel and the files' per-pass
-   check of the asking window are gone. Left: the viewer's web view.
+   check of the asking window are gone.
+   Second part done (2026-11-16): the viewer's web view is a native
+   window (`web-view:<n>`, owned by `egui_pop.viewer`, its parent the
+   window its page is drawn in), its `window.open` asked before the
+   backend; each place it is dropped (page left or hidden, too small,
+   failed, its own window closed, drawn in another window) asks its
+   `window.close`, and the viewer's local listener (`viewer.web_view`)
+   drops it in that call, on the interface's thread. Slice 5 is done.
 6. **Popups, menus and tooltips.** The overlay stack's opens and closes,
    popup menus, the palette, flyouts, popovers, hover cards; tooltips and
    field-bound lists declared as exceptions. *Test:* every overlay of
