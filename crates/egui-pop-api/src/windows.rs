@@ -184,6 +184,28 @@ pub struct Geometry {
     pub position: Option<[f32; 2]>,
     #[serde(default)]
     pub maximized: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fullscreen: bool,
+}
+
+impl Geometry {
+    /// The geometry kept once a pass saw `seen`: the states as seen; the
+    /// normal size and position only out of maximized and full screen
+    /// (a maximized window's size is its screen's); the position only
+    /// where the platform tells it, else the one kept earlier stays (a
+    /// run on Wayland keeps the place an X11 or Windows run saw).
+    pub fn follow(kept: Option<Geometry>, seen: Geometry) -> Geometry {
+        let Some(mut g) = kept else { return seen };
+        g.maximized = seen.maximized;
+        g.fullscreen = seen.fullscreen;
+        if !seen.maximized && !seen.fullscreen {
+            g.size = seen.size;
+            if seen.position.is_some() {
+                g.position = seen.position;
+            }
+        }
+        g
+    }
 }
 
 /// An open window, as [`AppHandle::windows`] lists it.
@@ -280,7 +302,7 @@ pub(crate) struct Entry {
     content: Option<Content>,
     /// The builder's first geometry, kept as is: a builder changed later
     /// would move the window.
-    first: (Option<Vec2>, Option<[f32; 2]>, bool),
+    first: (Option<Vec2>, Option<[f32; 2]>, bool, bool),
     min_size: Option<Vec2>,
     /// [`WindowSpec::shell_bars`].
     shell_bars: bool,
@@ -503,8 +525,13 @@ impl AppHandle {
                 self.load_geometry(&mut w);
                 let saved = w.saved.as_ref().and_then(|s| s.get(id.as_str()).copied());
                 let first = match saved {
-                    Some(g) => (Some(Vec2::from(g.size)), g.position, g.maximized),
-                    None => (spec.size, None, false),
+                    Some(g) => (
+                        Some(Vec2::from(g.size)),
+                        g.position,
+                        g.maximized,
+                        g.fullscreen,
+                    ),
+                    None => (spec.size, None, false, false),
                 };
                 // A window of this id closed earlier is forgotten.
                 w.entries.retain(|e| e.id != id);
@@ -866,11 +893,12 @@ impl AppHandle {
             // The main window takes the moved window's geometry: as last
             // seen, else as it opened.
             let geometry = e.geometry.or_else(|| {
-                let (size, position, maximized) = e.first;
+                let (size, position, maximized, fullscreen) = e.first;
                 size.map(|s| Geometry {
                     size: [s.x, s.y],
                     position,
                     maximized,
+                    fullscreen,
                 })
             });
             let left = std::mem::replace(&mut w.root.id, e.id.clone());
@@ -921,6 +949,11 @@ impl AppHandle {
     fn apply_root_geometry(&self, g: Geometry) {
         let ctx = self.egui();
         let root = ViewportId::ROOT;
+        if g.fullscreen {
+            ctx.send_viewport_cmd_to(root, ViewportCommand::Fullscreen(true));
+            return;
+        }
+        ctx.send_viewport_cmd_to(root, ViewportCommand::Fullscreen(false));
         if g.maximized {
             ctx.send_viewport_cmd_to(root, ViewportCommand::Maximized(true));
             return;
@@ -1001,8 +1034,13 @@ impl AppHandle {
             let saved = w.saved.as_ref().and_then(|s| s.get(id.as_str()).copied());
             let home_geometry = w.saved.as_ref().and_then(|s| s.get(home.as_str()).copied());
             let first = match saved {
-                Some(g) => (Some(Vec2::from(g.size)), g.position, g.maximized),
-                None => (None, None, false),
+                Some(g) => (
+                    Some(Vec2::from(g.size)),
+                    g.position,
+                    g.maximized,
+                    g.fullscreen,
+                ),
+                None => (None, None, false, false),
             };
             w.entries.retain(|e| e.id != id);
             w.entries.push(Entry {
@@ -1053,15 +1091,19 @@ impl AppHandle {
     /// shell is to be drawn).
     pub(crate) fn root_pass(&self, ui: &mut Ui) -> bool {
         let ctx = ui.ctx().clone();
-        if let Some(g) = read_geometry(&ctx) {
+        if let Some(seen) = read_geometry(&ctx) {
             // While a window's content holds it, the geometry is that
             // window's: the main window's own stays as it was.
-            let id = {
+            let (id, g) = {
                 let mut w = self.windows_mut();
-                if w.root.id == w.root.home {
+                let g = if w.root.id == w.root.home {
+                    let g = Geometry::follow(w.root.geometry, seen);
                     w.root.geometry = Some(g);
-                }
-                w.root.id.clone()
+                    g
+                } else {
+                    seen
+                };
+                (w.root.id.clone(), g)
             };
             if ctx.input(|i| i.viewport().close_requested()) {
                 self.keep_geometry(&id, g);
@@ -1134,6 +1176,7 @@ impl AppHandle {
         // The application draws each window's frame as the main window's
         // (`frame::window_frame`), or the system draws them all.
         let own = crate::frame::own_frame(self);
+        let screens = crate::window::screens();
         let builders: Vec<(ViewportId, ViewportBuilder)> = {
             let mut w = self.windows_mut();
             // Not declared from this pass: the backend lets their system
@@ -1151,15 +1194,28 @@ impl AppHandle {
                     if !app_id.is_empty() {
                         b = b.with_app_id(app_id.clone());
                     }
-                    let (size, pos, maximized) = e.first;
-                    if let Some(s) = size {
-                        b = b.with_inner_size(s);
-                    }
-                    if let Some(p) = pos {
-                        b = b.with_position(p);
+                    let (size, pos, maximized, fullscreen) = e.first;
+                    // A kept place off every screen comes back onto one.
+                    let place = size.map(|s| {
+                        crate::window::WindowState {
+                            position: pos.map(egui::Pos2::from),
+                            size: s,
+                            maximized,
+                            fullscreen,
+                        }
+                        .repair(&screens)
+                    });
+                    if let Some(p) = place {
+                        b = b.with_inner_size(p.size);
+                        if let Some(at) = p.position {
+                            b = b.with_position(at);
+                        }
                     }
                     if maximized {
                         b = b.with_maximized(true);
+                    }
+                    if fullscreen {
+                        b = b.with_fullscreen(true);
                     }
                     if let Some(m) = e.min_size {
                         b = b.with_min_inner_size(m);
@@ -1257,6 +1313,7 @@ fn read_geometry(ctx: &Context) -> Option<Geometry> {
             size: [size.x, size.y],
             position: v.outer_rect.map(|r| [r.min.x, r.min.y]),
             maximized: v.maximized.unwrap_or(false),
+            fullscreen: v.fullscreen.unwrap_or(false),
         })
     })
 }
@@ -1296,7 +1353,7 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
         if own_window {
             e.focused = ctx.input(|i| i.viewport().focused);
             if let Some(g) = read_geometry(&ctx) {
-                e.geometry = Some(g);
+                e.geometry = Some(Geometry::follow(e.geometry, g));
             }
         }
         (content, e.title.clone(), e.shell_bars)

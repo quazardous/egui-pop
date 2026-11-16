@@ -222,6 +222,12 @@ pub struct Auxiliary {
     /// The shown tab: 0 for `panel`, `n` for `tabs[n - 1]`.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub shown: usize,
+    /// Maximized: it opens so again, `rect` keeping its normal size.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub maximized: bool,
+    /// In full screen: it opens so again.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fullscreen: bool,
 }
 
 impl Auxiliary {
@@ -233,6 +239,8 @@ impl Auxiliary {
             rect,
             tabs: Vec::new(),
             shown: 0,
+            maximized: false,
+            fullscreen: false,
         }
     }
 

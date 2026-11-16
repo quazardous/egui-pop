@@ -995,6 +995,9 @@ pub(crate) struct Workbench {
     /// the main window may go but no window can tell the pointer is over
     /// it (`window_outline`).
     window_outlines: Vec<PanelId>,
+    /// The place of each panel's detached window when it closed: the
+    /// panel detached again opens its window there, as it was.
+    closed_windows: BTreeMap<PanelId, Auxiliary>,
     /// The panel the keys obey: see [`Workbench::follow_focus`].
     pub focused: Option<PanelId>,
     /// The last panel to be `focused` that lives in the layout proper: where
@@ -1063,6 +1066,7 @@ impl Default for Workbench {
             window_drop: None,
             released_outside: None,
             window_outlines: Vec::new(),
+            closed_windows: BTreeMap::new(),
             hint: None,
             focused: None,
             settled: None,
@@ -1131,6 +1135,15 @@ impl Workbench {
         self.dormant = saved.dormant;
         self.stale = true;
         notes
+    }
+
+    /// Keeps the place of the detached window `panel` leaves, for when
+    /// it is detached again.
+    fn keep_closed_window(&mut self, panel: &PanelId) {
+        if let Some(a) = self.layout.window_of(panel) {
+            let kept = a.clone();
+            self.closed_windows.insert(panel.clone(), kept);
+        }
     }
 
     /// The layout as it stands (the space read back).
@@ -1385,17 +1398,26 @@ impl Workbench {
                 });
                 self.layout.remove(p);
                 self.layout.hidden.retain(|h| h != p);
-                self.layout
-                    .auxiliary
-                    .push(egui_pop_model::layout::Auxiliary::window(
-                        p.clone(),
-                        crate::app::SCREENS[0],
-                        rect,
-                    ));
+                // Its window closed earlier: where and as it was.
+                let mut window = egui_pop_model::layout::Auxiliary::window(
+                    p.clone(),
+                    crate::app::SCREENS[0],
+                    rect,
+                );
+                if beside.is_none()
+                    && let Some(closed) = self.closed_windows.get(p)
+                {
+                    window.screen.clone_from(&closed.screen);
+                    window.rect = closed.rect;
+                    window.maximized = closed.maximized;
+                    window.fullscreen = closed.fullscreen;
+                }
+                self.layout.auxiliary.push(window);
                 json!({ "panel": p, "detached": true })
             }
             Change::Attach(p) => {
                 let spec = spec_of(p)?;
+                self.keep_closed_window(p);
                 self.layout.place(p, spec.area);
                 json!({ "panel": p, "detached": false })
             }
@@ -1409,6 +1431,9 @@ impl Workbench {
                 let homes: Vec<(PanelId, Area)> = (panels.iter())
                     .filter_map(|q| spec_of(q).ok().map(|s| (q.clone(), s.area)))
                     .collect();
+                for q in &panels {
+                    self.keep_closed_window(q);
+                }
                 for (q, area) in &homes {
                     self.layout.place(q, *area);
                 }
@@ -1828,19 +1853,21 @@ pub(crate) fn windows(
     // The drag as the detached windows see it: they do not see a drag
     // begun in the main window.
     let session = dragging.map(|(dragged, _, at)| DragSession::of(ctx, dragged, at));
+    let screens = crate::window::screens();
     for aux in auxiliary {
         // Titled after the panel it shows.
         let Some(spec) = app.workbench_mut().spec(aux.shown()).cloned() else {
             continue;
         };
         let [x, y, w, h] = aux.rect;
+        // A place off every screen comes back onto one.
         let state = WindowState {
             position: Some(egui::pos2(x, y)),
             size: egui::vec2(w, h),
-            maximized: false,
-            fullscreen: false,
+            maximized: aux.maximized,
+            fullscreen: aux.fullscreen,
         }
-        .repair(&[]);
+        .repair(&screens);
         let own = crate::frame::own_frame(app);
         let panel_title = strings::panel_title(ctx, spec.id.as_str(), &spec.title);
         let title = if app_name.is_empty() {
@@ -1858,6 +1885,12 @@ pub(crate) fn windows(
             .with_decorations(!own);
         if let Some(p) = state.position {
             builder = builder.with_position(p);
+        }
+        if aux.maximized {
+            builder = builder.with_maximized(true);
+        }
+        if aux.fullscreen {
+            builder = builder.with_fullscreen(true);
         }
         let panel = aux.panel.clone();
         crate::bus::panels::show_window(ctx, window_id(&panel), builder, |ui, class| {
@@ -1953,17 +1986,40 @@ pub(crate) fn windows(
                 }
             }
             // Its place, kept in the layout.
-            let info = vctx.input(|i| i.viewport().clone());
-            if let (Some(outer), Some(inner)) = (info.outer_rect, info.inner_rect) {
-                let rect = [outer.min.x, outer.min.y, inner.width(), inner.height()];
-                let mut wb = app.workbench_mut();
-                if let Some(a) = wb.layout.auxiliary.iter_mut().find(|a| a.panel == panel)
-                    && a.rect != rect
-                {
-                    a.rect = rect;
-                }
+            if own_window {
+                keep_window_place(app, &vctx, &panel);
             }
         });
+    }
+}
+
+/// Follows a detached window's place into the layout: maximized and
+/// full screen as they are; its normal size and position only out of
+/// them; the position only where the system tells it (not on Wayland,
+/// where the one kept stays: never a made-up one).
+fn keep_window_place(app: &AppHandle, vctx: &egui::Context, panel: &PanelId) {
+    let (info, size) = vctx.input(|i| (i.viewport().clone(), i.viewport_rect().size()));
+    let maximized = info.maximized.unwrap_or(false);
+    let fullscreen = info.fullscreen.unwrap_or(false);
+    let size = info.inner_rect.map_or(size, |r| r.size());
+    let mut wb = app.workbench_mut();
+    let Some(a) = wb.layout.auxiliary.iter_mut().find(|a| a.panel == *panel) else {
+        return;
+    };
+    if a.maximized != maximized {
+        a.maximized = maximized;
+    }
+    if a.fullscreen != fullscreen {
+        a.fullscreen = fullscreen;
+    }
+    if maximized || fullscreen || info.minimized == Some(true) || size.x <= 0.0 || size.y <= 0.0 {
+        return;
+    }
+    let [x, y, ..] = a.rect;
+    let (x, y) = info.outer_rect.map_or((x, y), |r| (r.min.x, r.min.y));
+    let rect = [x, y, size.x, size.y];
+    if a.rect != rect {
+        a.rect = rect;
     }
 }
 
