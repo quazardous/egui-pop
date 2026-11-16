@@ -134,6 +134,7 @@
   - [0027: Component families](adr/0027-component-families.md)
   - [0028: A removed contributor's work in flight](adr/0028-removed-contributor-work-in-flight.md)
   - [0029: Not on the bus, it does not exist](adr/0029-not-on-the-bus.md)
+  - [0030: The bus is a contract the application supplies](adr/0030-the-bus-is-a-contract.md)
 - [Micro-indicators, the design](design/indicators.md)
 - [Agent control, the design](design/agent-control.md)
 - [Icons: an inventory](icons.md)
