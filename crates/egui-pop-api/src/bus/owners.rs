@@ -1,7 +1,7 @@
 //! A window's owner on the bus: the `window.open` an owner asks, and the
 //! windows a plugin leaves when it goes (ADR 0029, slice 3).
 
-use egui_pop_hooks::{Kernel, ListenOpts};
+use bus_contract::{Bus, ListenOpts};
 use serde_json::json;
 
 use super::{OWNER, PluginDisconnect, Reason, WindowKind, WindowOpen, WindowRequest, asking, emit};
@@ -13,7 +13,7 @@ use crate::app::AppHandle;
 pub const OWNER_GONE: &str = "window.owner-gone";
 
 /// Registers egui-pop's listeners of a window's owner.
-pub(super) fn install(kernel: &Kernel) {
+pub(super) fn install(kernel: &dyn Bus) {
     let listened = kernel.listen::<PluginDisconnect>(
         OWNER_GONE,
         ListenOpts::new().owner(OWNER),

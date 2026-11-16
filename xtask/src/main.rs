@@ -48,6 +48,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 
 mod affected;
+mod bus;
 mod doc_paths;
 mod experimental;
 mod families;
@@ -79,6 +80,8 @@ Tasks:
                          a test fails when it is stale
   families --check       every public module of the published crates is
                          in exactly one family row of ADR 0027
+  bus --check            no library crate constructs the bus it publishes
+                         on: the application supplies it (ADR 0030)
   doc-paths --check      every `egui_pop_*::a::b` path named in docs/
                          or in rustdoc (//!, ///) resolves to a module or
                          an item of the crates;
@@ -356,6 +359,7 @@ fn main() -> ExitCode {
         Some("hosts") => hosts(),
         Some("ui-index") => ui_index::ui_index(&args[1..]),
         Some("families") => families::families(&args[1..]),
+        Some("bus") => bus::bus(&args[1..]),
         Some("doc-paths") => doc_paths::doc_paths(&args[1..]),
         Some("experimental") => experimental::experimental(&args[1..]),
         Some("publish") => publish::publish(&args[1..]),

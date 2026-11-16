@@ -77,6 +77,10 @@ jobs:
       - name: Every public module in one family
         if: ${{ !cancelled() }}
         run: cargo xtask families --check
+      # Libraries take the bus from the application (ADR 0030).
+      - name: No library constructs the bus
+        if: ${{ !cancelled() }}
+        run: cargo xtask bus --check
       # The experimental tier is marked in the code, and stable or
       # supported items do not expose it (docs/stability.md).
       - name: Experimental API marked and contained

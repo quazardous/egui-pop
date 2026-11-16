@@ -2,7 +2,9 @@
 
 The contract of the family "Hook kernel"
 ([ADR 0027](adr/0027-component-families.md)): `egui-pop-hooks`, a small
-crate without dependencies and without egui, for named points where
+crate without egui whose only dependency is the bus contract
+([`bus-contract`](https://github.com/quazardous/bus-contract), no
+dependencies of its own), for named points where
 several parts of a program contribute to one result, in an order they
 declare, and where one failing contribution never breaks the others.
 Its README has the full examples; this page is its contract.
@@ -21,6 +23,14 @@ holds a kernel (`AppHandle::bus`) where the window points
 no bus: it carries nothing and keeps no record. That ADR added one
 constraint to it, "last" (an invariants listener after every other of
 its point).
+
+[ADR 0030](adr/0030-the-bus-is-a-contract.md) makes the bus a contract
+the application supplies: the traits and types live in the external
+`bus-contract` crate (re-exported here), and `Kernel` is its default
+implementation, the one `egui-pop-api` builds when the application gives
+it no bus (`AppBuilder::bus`). A library never constructs a kernel
+(`cargo xtask bus --check`); an application may, or write its own
+implementation of `bus_contract::Bus`.
 
 **Owns**: typed hook points, listeners with ids ordered by
 `after`/`before` and priority, `alter` and `collect` emits, a

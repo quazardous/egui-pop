@@ -14,378 +14,25 @@ use std::sync::mpsc::{RecvTimeoutError, sync_channel};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 
-/// The deadline of an in-process listener when neither the listener nor
-/// its point sets one.
-pub const DEFAULT_DEADLINE: Duration = Duration::from_secs(1);
+/// The bus contract this kernel implements; its types are re-exported
+/// below under their old paths.
+pub use bus_contract;
+pub use bus_contract::{
+    Altered, Collected, DEFAULT_DEADLINE, FAILED_FACT, Failure, FailureKind, HookError, LAST,
+    ListenOpts, ListenerInfo, PLUGIN_DEADLINE, Point, PointDecl, PointInfo, PointKind, PointSpec,
+    Refused, declare_all, missing_targets, order_dump,
+};
+use bus_contract::{AnyInput, AnyListener, AnyValue, Bus, CloneFn, FailureSink, FreshFn, PointKey};
 
-/// The deadline meant for listeners that answer from another process (a
-/// plugin over RPC): give it with [`ListenOpts::deadline`] or
-/// [`PointSpec::deadline`].
-pub const PLUGIN_DEADLINE: Duration = Duration::from_secs(5);
-
-/// The `after` target that places a listener after every other listener
-/// of its point ([`ListenOpts::last`]): one per point, a second is
-/// refused as a [`Refused::Cycle`] (each would run after the other).
-pub const LAST: &str = "*";
-
-/// The name a host gives the fact it publishes for each [`Failure`] its
-/// sinks receive ([`Kernel::on_failure`]).
-pub const FAILED_FACT: &str = "hook.failed";
-
-/// A hook point: one type per point, so its input and value are checked
-/// at compile time. Declared by the crate that owns the result.
-///
-/// Every listener of a point has the same shape: it reads the emit's
-/// [`Input`](Point::Input) and edits a [`Value`](Point::Value). An
-/// [`alter`](Kernel::alter) emit passes one value through the listeners
-/// in order; a [`collect`](Kernel::collect) emit gives each listener a
-/// fresh value and gathers them in a list.
-pub trait Point: 'static {
-    /// The point's id, dotted by convention (`health.report`).
-    const ID: &'static str;
-    /// What every listener reads: shared, never changed by a listener.
-    type Input: Send + Sync + 'static;
-    /// What a listener edits: the value altered in turn, or one
-    /// listener's contribution to a collect.
-    type Value: Send + 'static;
-}
-
-/// A point's declaration: its description and limits, for introspection.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct PointSpec {
-    /// What the point builds, for people and agents reading
-    /// [`Kernel::points`].
-    pub description: String,
-    /// The deadline of the point's listeners that set none themselves;
-    /// `None` takes the kernel's default.
-    pub deadline: Option<Duration>,
-}
-
-impl PointSpec {
-    /// A point described by `description`, with the kernel's deadline.
-    pub fn new(description: impl Into<String>) -> PointSpec {
-        PointSpec {
-            description: description.into(),
-            deadline: None,
-        }
-    }
-
-    /// The deadline of the point's listeners that set none themselves.
-    pub fn deadline(mut self, deadline: Duration) -> PointSpec {
-        self.deadline = Some(deadline);
-        self
-    }
-}
-
-/// How a listener is placed and limited.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct ListenOpts {
-    /// Listeners this one runs after.
-    pub after: Vec<String>,
-    /// Listeners this one runs before.
-    pub before: Vec<String>,
-    /// Among listeners `after`/`before` leave free, higher runs first;
-    /// ties run in registration order.
-    pub priority: i32,
-    /// Overrides the point's deadline.
-    pub deadline: Option<Duration>,
-    /// Who registered it (a module, a plugin), for [`Kernel::forget`] and
-    /// introspection.
-    pub owner: Option<String>,
-    /// Runs on a thread of its own, so the emit stops waiting at the
-    /// deadline. An inline listener (the default) runs on the emitting
-    /// thread: it cannot be stopped, and only counts as late once it
-    /// returns.
-    pub threaded: bool,
-}
-
-impl ListenOpts {
-    /// No constraint, priority 0, the point's deadline, inline.
-    pub fn new() -> ListenOpts {
-        ListenOpts::default()
-    }
-
-    /// Runs after the listener `id` (a missing one is reported and
-    /// ignored).
-    pub fn after(mut self, id: impl Into<String>) -> ListenOpts {
-        self.after.push(id.into());
-        self
-    }
-
-    /// Runs before the listener `id` (a missing one is reported and
-    /// ignored).
-    pub fn before(mut self, id: impl Into<String>) -> ListenOpts {
-        self.before.push(id.into());
-        self
-    }
-
-    /// Runs after every other listener of its point, whatever they
-    /// declare: an invariants check, a listener that reads what all the
-    /// others left. One per point: a second one closes a cycle and is
-    /// refused ([`Refused::Cycle`]). Kept in [`ListenOpts::after`] as
-    /// [`LAST`].
-    pub fn last(mut self) -> ListenOpts {
-        if !self.after.iter().any(|a| a == LAST) {
-            self.after.push(LAST.to_owned());
-        }
-        self
-    }
-
-    /// Whether the listener runs after every other one of its point
-    /// ([`ListenOpts::last`]).
-    pub fn is_last(&self) -> bool {
-        self.after.iter().any(|a| a == LAST)
-    }
-
-    /// Higher runs first among listeners left free by `after`/`before`.
-    pub fn priority(mut self, priority: i32) -> ListenOpts {
-        self.priority = priority;
-        self
-    }
-
-    /// Overrides the point's deadline.
-    pub fn deadline(mut self, deadline: Duration) -> ListenOpts {
-        self.deadline = Some(deadline);
-        self
-    }
-
-    /// Who registered the listener.
-    pub fn owner(mut self, owner: impl Into<String>) -> ListenOpts {
-        self.owner = Some(owner.into());
-        self
-    }
-
-    /// Runs on a thread of its own, so a slow listener cannot hold the
-    /// emit past its deadline.
-    pub fn threaded(mut self) -> ListenOpts {
-        self.threaded = true;
-        self
-    }
-}
-
-/// The error a listener returns.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct HookError(pub String);
-
-impl fmt::Display for HookError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-impl std::error::Error for HookError {}
-
-impl From<String> for HookError {
-    fn from(message: String) -> HookError {
-        HookError(message)
-    }
-}
-
-impl From<&str> for HookError {
-    fn from(message: &str) -> HookError {
-        HookError(message.to_owned())
-    }
-}
-
-/// What went wrong with one listener during an emit.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum FailureKind {
-    /// The listener returned an error.
-    Error(String),
-    /// The listener panicked; the panic's message.
-    Panic(String),
-    /// The listener missed its deadline. `took` is its time when it
-    /// returned late (inline); `None` when the emit stopped waiting
-    /// (threaded).
-    Late {
-        /// The deadline it had.
-        deadline: Duration,
-        /// How long it ran, when it returned.
-        took: Option<Duration>,
-    },
-    /// An `after` or `before` constraint names a listener that is not
-    /// registered. The listener still ran and its contribution counts;
-    /// only the constraint was ignored. Not sent to the failure sinks.
-    MissingTarget(String),
-    /// The point id is registered with another [`Point`] type; no
-    /// listener ran. `listener` is `*`.
-    TypeMismatch,
-}
-
-/// One listener's failure: its contribution was dropped (except for a
-/// [`FailureKind::MissingTarget`]), the other listeners ran.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Failure {
-    /// The point emitted.
-    pub point: &'static str,
-    /// The listener's id.
-    pub listener: String,
-    /// The listener's owner.
-    pub owner: Option<String>,
-    /// What went wrong.
-    pub kind: FailureKind,
-}
-
-impl Failure {
-    /// Whether the failure dropped a contribution: everything but a
-    /// missing ordering target. Only these reach the failure sinks.
-    pub fn dropped(&self) -> bool {
-        !matches!(self.kind, FailureKind::MissingTarget(_))
-    }
-}
-
-impl fmt::Display for Failure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "hook `{}`, listener `{}`: ", self.point, self.listener)?;
-        match &self.kind {
-            FailureKind::Error(m) => write!(f, "failed: {m}"),
-            FailureKind::Panic(m) => write!(f, "panicked: {m}"),
-            FailureKind::Late {
-                deadline,
-                took: Some(t),
-            } => write!(f, "took {t:?}, past its deadline of {deadline:?}"),
-            FailureKind::Late { deadline, .. } => {
-                write!(f, "no answer within its deadline of {deadline:?}")
-            }
-            FailureKind::MissingTarget(t) => {
-                write!(f, "orders itself against `{t}`, which is not there")
-            }
-            FailureKind::TypeMismatch => write!(f, "the point is registered with another type"),
-        }
-    }
-}
-
-/// Why a declaration or a listener was refused. Nothing was changed.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Refused {
-    /// The point already has a listener with this id.
-    Duplicate {
-        /// The point.
-        point: &'static str,
-        /// The id taken.
-        listener: String,
-    },
-    /// The listener's `after`/`before` would close a cycle: these
-    /// listeners, each to run before the next, the first again at the
-    /// end.
-    Cycle {
-        /// The point.
-        point: &'static str,
-        /// The listeners in the cycle.
-        path: Vec<String>,
-    },
-    /// The point id is already registered with another [`Point`] type.
-    TypeMismatch {
-        /// The point.
-        point: &'static str,
-    },
-    /// The point was already declared.
-    AlreadyDeclared {
-        /// The point.
-        point: &'static str,
-    },
-}
-
-impl fmt::Display for Refused {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Refused::Duplicate { point, listener } => {
-                write!(f, "hook `{point}` already has a listener `{listener}`")
-            }
-            Refused::Cycle { point, path } => {
-                write!(
-                    f,
-                    "hook `{point}`: listeners order each other in a cycle: {}",
-                    path.join(" -> ")
-                )
-            }
-            Refused::TypeMismatch { point } => {
-                write!(f, "hook `{point}` is registered with another type")
-            }
-            Refused::AlreadyDeclared { point } => write!(f, "hook `{point}` is already declared"),
-        }
-    }
-}
-
-impl std::error::Error for Refused {}
-
-/// The result of an [`alter`](Kernel::alter) emit.
-#[derive(Debug)]
-pub struct Altered<V> {
-    /// The value after every listener that succeeded.
-    pub value: V,
-    /// Every failure, in listener order.
-    pub failures: Vec<Failure>,
-}
-
-/// The result of a [`collect`](Kernel::collect) emit.
-#[derive(Debug)]
-pub struct Collected<V> {
-    /// Each successful listener's value, in listener order, with its id.
-    pub parts: Vec<(String, V)>,
-    /// Every failure, in listener order.
-    pub failures: Vec<Failure>,
-}
-
-/// A listener as introspection shows it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ListenerInfo {
-    /// Its id.
-    pub id: String,
-    /// Its owner.
-    pub owner: Option<String>,
-    /// The listeners it runs after.
-    pub after: Vec<String>,
-    /// The listeners it runs before.
-    pub before: Vec<String>,
-    /// Its priority.
-    pub priority: i32,
-    /// The deadline it gets: its own, else its point's, else the kernel's.
-    pub deadline: Duration,
-    /// Whether it runs on a thread of its own.
-    pub threaded: bool,
-    /// The `after`/`before` targets that are not registered.
-    pub missing: Vec<String>,
-    /// How many times it ran.
-    pub runs: u64,
-    /// How many of those runs failed (contribution dropped).
-    pub failures: u64,
-    /// The last failure, as text.
-    pub last_failure: Option<String>,
-}
-
-/// A point as introspection shows it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PointInfo {
-    /// Its id.
-    pub id: &'static str,
-    /// Its description; empty until declared.
-    pub description: String,
-    /// Whether its owner declared it ([`Kernel::declare`]); a point
-    /// listened to before that is not.
-    pub declared: bool,
-    /// The deadline of its listeners that set none.
-    pub deadline: Duration,
-    /// Its listeners, in the order they run.
-    pub listeners: Vec<ListenerInfo>,
-}
-
-type ListenerFn<P> = Arc<
-    dyn Fn(&<P as Point>::Input, &mut <P as Point>::Value) -> Result<(), HookError> + Send + Sync,
->;
-
-/// A point's listeners in order with their functions, the point's
-/// deadline, and the failures known before running.
-type Snapshot<P> = (Vec<(Arc<Entry>, ListenerFn<P>)>, Duration, Vec<Failure>);
-
-type Sink = Arc<dyn Fn(&Failure) + Send + Sync>;
+/// A point's listeners in order, the point's deadline, and the failures
+/// known before running.
+type Snapshot = (Vec<Arc<Entry>>, Duration, Vec<Failure>);
 
 struct Entry {
     id: String,
     opts: ListenOpts,
     seq: u64,
-    /// A `ListenerFn<P>` of the point's type.
-    run: Box<dyn Any + Send + Sync>,
+    run: AnyListener,
     runs: AtomicU64,
     failures: AtomicU64,
     last_failure: Mutex<Option<String>>,
@@ -403,6 +50,7 @@ impl fmt::Debug for Entry {
 #[derive(Debug)]
 struct Slot {
     type_id: TypeId,
+    kind: PointKind,
     spec: Option<PointSpec>,
     /// In the order they run.
     ordered: Vec<Arc<Entry>>,
@@ -411,9 +59,10 @@ struct Slot {
 }
 
 impl Slot {
-    fn new(type_id: TypeId) -> Slot {
+    fn new(key: &PointKey) -> Slot {
         Slot {
-            type_id,
+            type_id: key.type_id,
+            kind: key.kind,
             spec: None,
             ordered: Vec::new(),
             missing: Vec::new(),
@@ -444,7 +93,7 @@ impl Slot {
 /// no lock held, so a listener may emit or listen itself.
 pub struct Kernel {
     points: RwLock<BTreeMap<&'static str, Slot>>,
-    sinks: RwLock<Vec<Sink>>,
+    sinks: RwLock<Vec<FailureSink>>,
     default_deadline: Duration,
     seq: AtomicU64,
 }
@@ -490,18 +139,21 @@ impl Kernel {
         self.points.write().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Declares the point `P`: its description and deadline. Listeners
-    /// may register before or after; declaring twice is refused.
+    /// Declares the point `P`: its description and deadline. Listeners may
+    /// register before or after; declaring twice is refused.
     pub fn declare<P: Point>(&self, spec: PointSpec) -> Result<(), Refused> {
+        self.declare_point(PointKey::of::<P>(), spec)
+    }
+
+    /// Declares a point by its key ([`Bus::declare_point`]).
+    pub fn declare_point(&self, key: PointKey, spec: PointSpec) -> Result<(), Refused> {
         let mut points = self.write();
-        let slot = points
-            .entry(P::ID)
-            .or_insert_with(|| Slot::new(TypeId::of::<P>()));
-        if slot.type_id != TypeId::of::<P>() {
-            return Err(Refused::TypeMismatch { point: P::ID });
+        let slot = points.entry(key.id).or_insert_with(|| Slot::new(&key));
+        if slot.type_id != key.type_id {
+            return Err(Refused::TypeMismatch { point: key.id });
         }
         if slot.spec.is_some() {
-            return Err(Refused::AlreadyDeclared { point: P::ID });
+            return Err(Refused::AlreadyDeclared { point: key.id });
         }
         slot.spec = Some(spec);
         Ok(())
@@ -521,18 +173,31 @@ impl Kernel {
         opts: ListenOpts,
         run: impl Fn(&P::Input, &mut P::Value) -> Result<(), HookError> + Send + Sync + 'static,
     ) -> Result<(), Refused> {
-        let id = id.into();
-        let run: ListenerFn<P> = Arc::new(run);
+        self.listen_any(
+            PointKey::of::<P>(),
+            id.into(),
+            opts,
+            bus_contract::erase::<P>(run),
+        )
+    }
+
+    /// Registers an erased listener by its point's key
+    /// ([`Bus::listen_any`]).
+    pub fn listen_any(
+        &self,
+        key: PointKey,
+        id: String,
+        opts: ListenOpts,
+        run: AnyListener,
+    ) -> Result<(), Refused> {
         let mut points = self.write();
-        let slot = points
-            .entry(P::ID)
-            .or_insert_with(|| Slot::new(TypeId::of::<P>()));
-        if slot.type_id != TypeId::of::<P>() {
-            return Err(Refused::TypeMismatch { point: P::ID });
+        let slot = points.entry(key.id).or_insert_with(|| Slot::new(&key));
+        if slot.type_id != key.type_id {
+            return Err(Refused::TypeMismatch { point: key.id });
         }
         if slot.ordered.iter().any(|e| e.id == id) {
             return Err(Refused::Duplicate {
-                point: P::ID,
+                point: key.id,
                 listener: id,
             });
         }
@@ -541,13 +206,15 @@ impl Kernel {
             id,
             opts,
             seq: self.seq.fetch_add(1, Ordering::Relaxed),
-            run: Box::new(run),
+            run,
             runs: AtomicU64::new(0),
             failures: AtomicU64::new(0),
             last_failure: Mutex::new(None),
         }));
-        slot.set(entries)
-            .map_err(|path| Refused::Cycle { point: P::ID, path })
+        slot.set(entries).map_err(|path| Refused::Cycle {
+            point: key.id,
+            path,
+        })
     }
 
     /// Removes the listener `id` of the point `point`; whether it was
@@ -593,10 +260,14 @@ impl Kernel {
     /// ([`Failure::dropped`]), as it happens: where the host publishes
     /// its [`FAILED_FACT`] fact or logs. A sink that panics is ignored.
     pub fn on_failure(&self, sink: impl Fn(&Failure) + Send + Sync + 'static) {
+        self.add_failure_sink(Arc::new(sink));
+    }
+
+    fn add_failure_sink(&self, sink: FailureSink) {
         self.sinks
             .write()
             .unwrap_or_else(PoisonError::into_inner)
-            .push(Arc::new(sink));
+            .push(sink);
     }
 
     /// Passes `value` through `P`'s listeners in order: each edits the
@@ -606,22 +277,7 @@ impl Kernel {
     where
         P::Value: Clone,
     {
-        let (entries, deadline, mut failures) = self.snapshot::<P>();
-        let input = Arc::new(input);
-        let mut value = value;
-        for (entry, run) in &entries {
-            match call::<P>(
-                entry,
-                run,
-                &input,
-                value.clone(),
-                entry.opts.deadline.unwrap_or(deadline),
-            ) {
-                Ok(v) => value = v,
-                Err(kind) => failures.push(self.failed::<P>(entry, kind)),
-            }
-        }
-        Altered { value, failures }
+        (self as &dyn Bus).alter::<P>(input, value)
     }
 
     /// Gives each of `P`'s listeners, in order, a fresh default value to
@@ -630,36 +286,68 @@ impl Kernel {
     where
         P::Value: Default,
     {
-        let (entries, deadline, mut failures) = self.snapshot::<P>();
-        let input = Arc::new(input);
-        let mut parts = Vec::with_capacity(entries.len());
-        for (entry, run) in &entries {
-            match call::<P>(
+        (self as &dyn Bus).collect::<P>(input)
+    }
+
+    fn alter_erased(
+        &self,
+        key: PointKey,
+        input: AnyInput,
+        value: AnyValue,
+        clone: CloneFn,
+    ) -> Altered<AnyValue> {
+        let (entries, deadline, mut failures) = self.snapshot(&key);
+        let mut value = value;
+        for entry in &entries {
+            match call(
+                key.id,
                 entry,
-                run,
                 &input,
-                P::Value::default(),
+                clone(&*value),
+                entry.opts.deadline.unwrap_or(deadline),
+            ) {
+                Ok(v) => value = v,
+                Err(kind) => failures.push(self.failed(key.id, entry, kind)),
+            }
+        }
+        Altered { value, failures }
+    }
+
+    fn collect_erased(
+        &self,
+        key: PointKey,
+        input: AnyInput,
+        fresh: FreshFn,
+    ) -> Collected<AnyValue> {
+        let (entries, deadline, mut failures) = self.snapshot(&key);
+        let mut parts = Vec::with_capacity(entries.len());
+        for entry in &entries {
+            match call(
+                key.id,
+                entry,
+                &input,
+                fresh(),
                 entry.opts.deadline.unwrap_or(deadline),
             ) {
                 Ok(v) => parts.push((entry.id.clone(), v)),
-                Err(kind) => failures.push(self.failed::<P>(entry, kind)),
+                Err(kind) => failures.push(self.failed(key.id, entry, kind)),
             }
         }
         Collected { parts, failures }
     }
 
-    /// The listeners of `P` in order with their functions, the point's
-    /// deadline, and the failures known before running (missing targets,
-    /// a type mismatch). Taken under the lock, used without it.
-    fn snapshot<P: Point>(&self) -> Snapshot<P> {
+    /// The listeners of a point in order, the point's deadline, and the
+    /// failures known before running (missing targets, a type mismatch).
+    /// Taken under the lock, used without it.
+    fn snapshot(&self, key: &PointKey) -> Snapshot {
         let points = self.read();
         let default = self.default_deadline;
-        let Some(slot) = points.get(P::ID) else {
+        let Some(slot) = points.get(key.id) else {
             return (Vec::new(), default, Vec::new());
         };
-        if slot.type_id != TypeId::of::<P>() {
+        if slot.type_id != key.type_id {
             let failure = Failure {
-                point: P::ID,
+                point: key.id,
                 listener: "*".to_owned(),
                 owner: None,
                 kind: FailureKind::TypeMismatch,
@@ -671,19 +359,11 @@ impl Kernel {
             .as_ref()
             .and_then(|s| s.deadline)
             .unwrap_or(default);
-        let entries = slot
-            .ordered
-            .iter()
-            .filter_map(|e| {
-                let run = e.run.downcast_ref::<ListenerFn<P>>()?.clone();
-                Some((e.clone(), run))
-            })
-            .collect();
         let failures = slot
             .missing
             .iter()
             .map(|(listener, target)| Failure {
-                point: P::ID,
+                point: key.id,
                 listener: listener.clone(),
                 owner: slot
                     .ordered
@@ -693,12 +373,12 @@ impl Kernel {
                 kind: FailureKind::MissingTarget(target.clone()),
             })
             .collect();
-        (entries, point_deadline, failures)
+        (slot.ordered.clone(), point_deadline, failures)
     }
 
-    fn failed<P: Point>(&self, entry: &Entry, kind: FailureKind) -> Failure {
+    fn failed(&self, point: &'static str, entry: &Entry, kind: FailureKind) -> Failure {
         let failure = Failure {
-            point: P::ID,
+            point,
             listener: entry.id.clone(),
             owner: entry.opts.owner.clone(),
             kind,
@@ -708,7 +388,7 @@ impl Kernel {
             .last_failure
             .lock()
             .unwrap_or_else(PoisonError::into_inner) = Some(failure.to_string());
-        let sinks: Vec<Sink> = self
+        let sinks: Vec<FailureSink> = self
             .sinks
             .read()
             .unwrap_or_else(PoisonError::into_inner)
@@ -744,6 +424,7 @@ impl Kernel {
             .unwrap_or(self.default_deadline);
         PointInfo {
             id,
+            kind: slot.kind,
             description: slot
                 .spec
                 .as_ref()
@@ -783,17 +464,17 @@ impl Kernel {
 
 /// Runs one listener on `value`, inline or on its own thread, within its
 /// deadline, panics caught.
-fn call<P: Point>(
+fn call(
+    point: &'static str,
     entry: &Entry,
-    run: &ListenerFn<P>,
-    input: &Arc<P::Input>,
-    value: P::Value,
+    input: &AnyInput,
+    value: AnyValue,
     deadline: Duration,
-) -> Result<P::Value, FailureKind> {
+) -> Result<AnyValue, FailureKind> {
     entry.runs.fetch_add(1, Ordering::Relaxed);
     if !entry.opts.threaded {
         let start = Instant::now();
-        let result = guarded::<P>(run, input, value);
+        let result = guarded(&entry.run, &**input, value);
         let took = start.elapsed();
         return match result {
             Ok(_) if took > deadline => Err(FailureKind::Late {
@@ -804,13 +485,13 @@ fn call<P: Point>(
         };
     }
     let (tx, rx) = sync_channel(1);
-    let run = run.clone();
+    let run = entry.run.clone();
     let input = input.clone();
     let spawned = std::thread::Builder::new()
-        .name(format!("hook {} {}", P::ID, entry.id))
+        .name(format!("hook {point} {}", entry.id))
         .spawn(move || {
             // The emit may have stopped waiting: then nobody receives.
-            let _ = tx.send(guarded::<P>(&run, &input, value));
+            let _ = tx.send(guarded(&run, &*input, value));
         });
     if let Err(e) = spawned {
         return Err(FailureKind::Error(format!(
@@ -829,12 +510,12 @@ fn call<P: Point>(
     }
 }
 
-fn guarded<P: Point>(
-    run: &ListenerFn<P>,
-    input: &P::Input,
-    mut value: P::Value,
-) -> Result<P::Value, FailureKind> {
-    match catch_unwind(AssertUnwindSafe(|| run(input, &mut value))) {
+fn guarded(
+    run: &AnyListener,
+    input: &(dyn Any + Send + Sync),
+    mut value: AnyValue,
+) -> Result<AnyValue, FailureKind> {
+    match catch_unwind(AssertUnwindSafe(|| run(input, &mut *value))) {
         Ok(Ok(())) => Ok(value),
         Ok(Err(e)) => Err(FailureKind::Error(e.0)),
         Err(payload) => Err(FailureKind::Panic(panic_message(payload.as_ref()))),
@@ -848,5 +529,55 @@ fn panic_message(payload: &(dyn Any + Send)) -> String {
         s.clone()
     } else {
         "a panic without a message".to_owned()
+    }
+}
+
+impl Bus for Kernel {
+    fn declare_point(&self, point: PointKey, spec: PointSpec) -> Result<(), Refused> {
+        Kernel::declare_point(self, point, spec)
+    }
+
+    fn listen_any(
+        &self,
+        point: PointKey,
+        id: String,
+        opts: ListenOpts,
+        run: AnyListener,
+    ) -> Result<(), Refused> {
+        Kernel::listen_any(self, point, id, opts, run)
+    }
+
+    fn unlisten(&self, point: &str, id: &str) -> bool {
+        Kernel::unlisten(self, point, id)
+    }
+
+    fn forget(&self, owner: &str) -> usize {
+        Kernel::forget(self, owner)
+    }
+
+    fn alter_any(
+        &self,
+        point: PointKey,
+        input: AnyInput,
+        value: AnyValue,
+        clone: CloneFn,
+    ) -> Altered<AnyValue> {
+        self.alter_erased(point, input, value, clone)
+    }
+
+    fn collect_any(&self, point: PointKey, input: AnyInput, fresh: FreshFn) -> Collected<AnyValue> {
+        self.collect_erased(point, input, fresh)
+    }
+
+    fn add_failure_sink(&self, sink: FailureSink) {
+        Kernel::add_failure_sink(self, sink)
+    }
+
+    fn points(&self) -> Vec<PointInfo> {
+        Kernel::points(self)
+    }
+
+    fn listeners(&self, point: &str) -> Option<Vec<ListenerInfo>> {
+        Kernel::listeners(self, point)
     }
 }

@@ -408,3 +408,56 @@ fn a_last_listener_runs_after_every_other_one_and_is_alone() {
     assert!(matches!(refused, Refused::Cycle { .. }), "{refused:?}");
     assert_eq!(kernel.listeners(Trail::ID).unwrap().len(), 3);
 }
+
+/// The kernel as an application hands it to a library: an
+/// `Arc<dyn Bus>` (ADR 0030). Threaded deadlines, the error boundary and
+/// type checks hold through the contract's erased methods.
+#[test]
+fn the_kernel_through_the_contract() {
+    use egui_pop_hooks::bus_contract::{Bus, PointKind};
+    let bus: Arc<dyn Bus> = Arc::new(Kernel::new());
+    bus.declare::<Trail>(PointSpec::new("a trail")).unwrap();
+    bus.listen::<Trail>("b", ListenOpts::new().after("a"), |_, v| {
+        v.push("b".into());
+        Ok(())
+    })
+    .unwrap();
+    bus.listen::<Trail>("a", ListenOpts::new(), |_, v| {
+        v.push("a".into());
+        Ok(())
+    })
+    .unwrap();
+    bus.listen::<Trail>(
+        "slow",
+        ListenOpts::new()
+            .last()
+            .threaded()
+            .deadline(Duration::from_millis(20)),
+        |_, v| {
+            thread::sleep(Duration::from_millis(500));
+            v.push("slow".into());
+            Ok(())
+        },
+    )
+    .unwrap();
+    let out = bus.alter::<Trail>((), vec![]);
+    assert_eq!(out.value, ["a", "b"]);
+    assert!(matches!(
+        out.failures[0].kind,
+        FailureKind::Late { took: None, .. }
+    ));
+    assert_eq!(bus.points()[0].kind, PointKind::Alter);
+    assert!(matches!(
+        bus.listen::<Impostor>("x", ListenOpts::new(), |_, _| Ok(())),
+        Err(Refused::TypeMismatch { .. })
+    ));
+    bus.listen::<Parts>("double", ListenOpts::new(), |n, v| {
+        v.push(n * 2);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(
+        bus.collect::<Parts>(4).parts,
+        [("double".to_string(), vec![8])]
+    );
+}

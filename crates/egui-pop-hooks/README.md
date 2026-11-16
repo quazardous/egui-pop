@@ -28,7 +28,12 @@ one failing contribution never breaks the others.
   the order they run, with their owners, constraints, deadlines, missing
   targets and counters (runs, failures, the last failure), for people,
   agents and inspection endpoints.
-- No dependencies, no `unsafe`, no GUI toolkit, no async runtime: the
+- **An implementation of [`bus-contract`](https://github.com/quazardous/bus-contract).**
+  The kernel is a `bus_contract::Bus`: a library that takes an
+  `Arc<dyn Bus>` from its application runs on it, or on any other
+  implementation the application prefers. The contract's types
+  (`Point`, `ListenOpts`, `PointSpec`…) are re-exported here.
+- One dependency (`bus-contract`, itself without any), no `unsafe`, no GUI toolkit, no async runtime: the
   kernel is `Send + Sync`, listeners are `Send + Sync` closures.
 
 It was written for [egui-pop](https://github.com/quazardous/egui-pop)

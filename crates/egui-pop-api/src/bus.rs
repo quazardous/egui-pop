@@ -8,9 +8,15 @@
 //! part may care about is a **request**, asked with who asks and why (a
 //! step, ADR 0011, named `<noun>.<verb>`), and an **event** said once it
 //! is done or refused (the journal, `<noun>.<past>`). Whoever cares
-//! listens, under a name and at a place it declares, in the hook kernel
-//! the application holds ([`AppHandle::bus`]); nobody calls a neighbour to
+//! listens, under a name and at a place it declares, on the bus the
+//! application holds ([`AppHandle::bus`]); nobody calls a neighbour to
 //! tell it.
+//!
+//! The bus is a contract ([ADR 0030](https://github.com/quazardous/egui-pop/blob/main/docs/adr/0030-the-bus-is-a-contract.md),
+//! the `bus-contract` crate): the application supplies it
+//! (`AppBuilder::bus`), or egui-pop makes a hook kernel of its own.
+//! egui-pop declares its points from [`CONTRACT`] and registers its
+//! listeners on it; it never constructs a bus it is given.
 //!
 //! The window lifecycle is the first family on it. Its points
 //! ([`WindowOpen`], [`WindowClose`], [`WindowReparent`], [`PopupOpen`],
@@ -73,9 +79,9 @@
 use std::cell::{Cell, RefCell};
 use std::sync::{Arc, Mutex};
 
+use bus_contract::{ListenOpts, Point, PointDecl, PointKind};
 use egui::{ViewportCommand, ViewportId};
 use egui_pop_core::lock;
-use egui_pop_hooks::{Kernel, ListenOpts, Point, PointSpec};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -83,6 +89,8 @@ use crate::app::{AppHandle, WeakApp};
 use crate::host::{Event, Seq};
 use crate::windows::WindowId;
 
+pub use bus_contract;
+pub use bus_contract::{missing_targets, order_dump};
 pub use egui_pop_hooks;
 
 mod owners;
@@ -200,6 +208,7 @@ impl WindowRequest {
 #[derive(Debug)]
 pub struct WindowOpen;
 impl Point for WindowOpen {
+    const KIND: PointKind = PointKind::Request;
     const ID: &'static str = "window.open";
     type Input = WindowRequest;
     type Value = Vec<String>;
@@ -209,6 +218,7 @@ impl Point for WindowOpen {
 #[derive(Debug)]
 pub struct WindowClose;
 impl Point for WindowClose {
+    const KIND: PointKind = PointKind::Request;
     const ID: &'static str = "window.close";
     type Input = WindowRequest;
     type Value = Vec<String>;
@@ -218,6 +228,7 @@ impl Point for WindowClose {
 #[derive(Debug)]
 pub struct WindowReparent;
 impl Point for WindowReparent {
+    const KIND: PointKind = PointKind::Request;
     const ID: &'static str = "window.reparent";
     type Input = WindowRequest;
     type Value = Vec<String>;
@@ -227,6 +238,7 @@ impl Point for WindowReparent {
 #[derive(Debug)]
 pub struct PopupOpen;
 impl Point for PopupOpen {
+    const KIND: PointKind = PointKind::Request;
     const ID: &'static str = "popup.open";
     type Input = WindowRequest;
     type Value = Vec<String>;
@@ -236,6 +248,7 @@ impl Point for PopupOpen {
 #[derive(Debug)]
 pub struct PopupClose;
 impl Point for PopupClose {
+    const KIND: PointKind = PointKind::Request;
     const ID: &'static str = "popup.close";
     type Input = WindowRequest;
     type Value = Vec<String>;
@@ -308,6 +321,7 @@ impl JobAsk {
 #[derive(Debug)]
 pub struct JobCancel;
 impl Point for JobCancel {
+    const KIND: PointKind = PointKind::Request;
     const ID: &'static str = "job.cancel";
     type Input = JobAsk;
     type Value = Vec<String>;
@@ -317,6 +331,7 @@ impl Point for JobCancel {
 #[derive(Debug)]
 pub struct JobPause;
 impl Point for JobPause {
+    const KIND: PointKind = PointKind::Request;
     const ID: &'static str = "job.pause";
     type Input = JobAsk;
     type Value = Vec<String>;
@@ -326,6 +341,7 @@ impl Point for JobPause {
 #[derive(Debug)]
 pub struct JobResume;
 impl Point for JobResume {
+    const KIND: PointKind = PointKind::Request;
     const ID: &'static str = "job.resume";
     type Input = JobAsk;
     type Value = Vec<String>;
@@ -335,6 +351,7 @@ impl Point for JobResume {
 #[derive(Debug)]
 pub struct JobRetry;
 impl Point for JobRetry {
+    const KIND: PointKind = PointKind::Request;
     const ID: &'static str = "job.retry";
     type Input = JobAsk;
     type Value = Vec<String>;
@@ -346,6 +363,7 @@ impl Point for JobRetry {
 #[derive(Debug)]
 pub struct JobEvents;
 impl Point for JobEvents {
+    const KIND: PointKind = PointKind::Event;
     const ID: &'static str = "job.*";
     type Input = Event;
     type Value = ();
@@ -389,6 +407,7 @@ impl PluginChange {
 #[derive(Debug)]
 pub struct PluginConnect;
 impl Point for PluginConnect {
+    const KIND: PointKind = PointKind::Request;
     const ID: &'static str = "plugin.connect";
     type Input = PluginChange;
     type Value = Vec<String>;
@@ -401,6 +420,7 @@ impl Point for PluginConnect {
 #[derive(Debug)]
 pub struct PluginDisconnect;
 impl Point for PluginDisconnect {
+    const KIND: PointKind = PointKind::Request;
     const ID: &'static str = "plugin.disconnect";
     type Input = PluginChange;
     type Value = serde_json::Map<String, serde_json::Value>;
@@ -432,6 +452,34 @@ pub const POINTS: [&str; 12] = [
     JobEvents::ID,
     PluginConnect::ID,
     PluginDisconnect::ID,
+];
+
+/// egui-pop's contract table (ADR 0030): every point it declares on the
+/// bus it is given, with its kind and description, readable before an
+/// application is built.
+pub const CONTRACT: &[PointDecl] = &[
+    PointDecl::of::<WindowOpen>("A window opens: its id, kind, owner, parent."),
+    PointDecl::of::<WindowClose>(
+        "A window closes, whoever asked: its children, its owner's state, the focus, the registry and its place follow, in one call.",
+    ),
+    PointDecl::of::<WindowReparent>(
+        "A window's content moves to another window (into the main window and back).",
+    ),
+    PointDecl::of::<PopupOpen>("A popup opens in a window."),
+    PointDecl::of::<PopupClose>("A popup closes."),
+    PointDecl::of::<JobCancel>(
+        "A job is asked to stop: whoever runs it is asked, and the job shows as asked until it answers.",
+    ),
+    PointDecl::of::<JobPause>("A job is asked to pause."),
+    PointDecl::of::<JobResume>("A paused job is asked to go on."),
+    PointDecl::of::<JobRetry>("A failed or cancelled job is asked to run again."),
+    PointDecl::of::<JobEvents>(
+        "A `job.*` event, or a job command's `command.*` event, was said: delivered once each, in journal order.",
+    ),
+    PointDecl::of::<PluginConnect>("A plugin is connected: what it had left is taken back."),
+    PointDecl::of::<PluginDisconnect>(
+        "A plugin is disconnected, before `plugin.disconnected` is said: what it leaves is closed or marked, each listener counting what it did.",
+    ),
 ];
 
 /// What owns egui-pop's own listeners.
@@ -495,9 +543,10 @@ impl Registry {
     }
 }
 
-/// The bus an application holds: the kernel and the window registry.
+/// The bus an application holds: the bus it was given (or the default
+/// kernel) and the window registry.
 pub(crate) struct Bus {
-    pub(crate) kernel: Arc<Kernel>,
+    pub(crate) kernel: Arc<dyn bus_contract::Bus>,
     pub(crate) registry: Arc<Mutex<Registry>>,
     /// What the window invariants remember between passes
     /// ([`crate::window_invariants`]).
@@ -516,14 +565,23 @@ impl std::fmt::Debug for Bus {
 
 impl Default for Bus {
     fn default() -> Self {
-        let kernel = Arc::new(Kernel::new());
+        Bus::new(None)
+    }
+}
+
+impl Bus {
+    /// On the bus the application supplies (`AppBuilder::bus`), or on
+    /// the default kernel: egui-pop's points declared, its listeners
+    /// registered.
+    pub(crate) fn new(supplied: Option<Arc<dyn bus_contract::Bus>>) -> Self {
+        let kernel = supplied.unwrap_or_else(|| Arc::new(egui_pop_hooks::Kernel::new()));
         let mut main = Registry::default();
         main.open(
             &WindowRequest::new(WindowId::MAIN, WindowKind::Main, "app", Reason::System),
             Some(ViewportId::ROOT),
         );
         let registry = Arc::new(Mutex::new(main));
-        install(&kernel, &registry);
+        install(&*kernel, &registry);
         Bus {
             kernel,
             registry,
@@ -600,55 +658,11 @@ impl Drop for Delivering<'_> {
 }
 
 /// Declares the window points and registers egui-pop's listeners.
-fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
-    let declare = [
-        (
-            WindowOpen::ID,
-            "A window opens: its id, kind, owner, parent.",
-        ),
-        (
-            WindowClose::ID,
-            "A window closes, whoever asked: its children, its owner's state, the focus, the registry and its place follow, in one call.",
-        ),
-        (
-            WindowReparent::ID,
-            "A window's content moves to another window (into the main window and back).",
-        ),
-        (PopupOpen::ID, "A popup opens in a window."),
-        (PopupClose::ID, "A popup closes."),
-    ];
-    for (id, description) in declare {
-        let spec = PointSpec::new(description);
-        let done = match id {
-            WindowOpen::ID => kernel.declare::<WindowOpen>(spec),
-            WindowClose::ID => kernel.declare::<WindowClose>(spec),
-            WindowReparent::ID => kernel.declare::<WindowReparent>(spec),
-            PopupOpen::ID => kernel.declare::<PopupOpen>(spec),
-            _ => kernel.declare::<PopupClose>(spec),
-        };
-        debug_assert!(done.is_ok(), "{id} declared once");
-    }
-    let declared = [
-        kernel.declare::<JobCancel>(PointSpec::new(
-            "A job is asked to stop: whoever runs it is asked, and the job shows as asked until it answers.",
-        )),
-        kernel.declare::<JobPause>(PointSpec::new("A job is asked to pause.")),
-        kernel.declare::<JobResume>(PointSpec::new("A paused job is asked to go on.")),
-        kernel.declare::<JobRetry>(PointSpec::new(
-            "A failed or cancelled job is asked to run again.",
-        )),
-        kernel.declare::<JobEvents>(PointSpec::new(
-            "A `job.*` event, or a job command's `command.*` event, was said: delivered once each, in journal order.",
-        )),
-        kernel.declare::<PluginConnect>(PointSpec::new(
-            "A plugin is connected: what it had left is taken back.",
-        )),
-        kernel.declare::<PluginDisconnect>(PointSpec::new(
-            "A plugin is disconnected, before `plugin.disconnected` is said: what it leaves is closed or marked, each listener counting what it did.",
-        )),
-    ];
-    for d in declared {
-        debug_assert!(d.is_ok(), "{d:?}");
+fn install(kernel: &dyn bus_contract::Bus, registry: &Arc<Mutex<Registry>>) {
+    // A second application on the same bus finds its points declared
+    // (ADR 0030: one egui-pop application per bus).
+    for refused in bus_contract::declare_all(kernel, CONTRACT) {
+        log::error!(target: "egui_pop", "{refused}: one egui-pop application per bus");
     }
     let mine = || ListenOpts::new().owner(OWNER);
     // `window.close`, in the ADR's order.
@@ -767,87 +781,16 @@ fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
     }
 }
 
-/// The order the listeners of `points` run in, one point after the other,
-/// each listener with its owner and what it declares: "who runs when",
-/// read rather than remembered.
-pub fn order_dump(kernel: &Kernel, points: &[&str]) -> String {
-    let mut out = String::new();
-    for point in points {
-        out.push_str(point);
-        out.push('\n');
-        for (n, l) in kernel
-            .listeners(point)
-            .unwrap_or_default()
-            .iter()
-            .enumerate()
-        {
-            let mut declares: Vec<String> = Vec::new();
-            if l.after.iter().any(|a| a == egui_pop_hooks::LAST) {
-                declares.push("last".into());
-            }
-            let after: Vec<&str> = l
-                .after
-                .iter()
-                .filter(|a| *a != egui_pop_hooks::LAST)
-                .map(String::as_str)
-                .collect();
-            if !after.is_empty() {
-                declares.push(format!("after {}", after.join(", ")));
-            }
-            if !l.before.is_empty() {
-                declares.push(format!("before {}", l.before.join(", ")));
-            }
-            if l.priority != 0 {
-                declares.push(format!("priority {}", l.priority));
-            }
-            if !l.missing.is_empty() {
-                declares.push(format!("MISSING {}", l.missing.join(", ")));
-            }
-            let declares = if declares.is_empty() {
-                "nothing".to_string()
-            } else {
-                declares.join("; ")
-            };
-            out.push_str(&format!(
-                "  {}. {} (owner {}): {declares}\n",
-                n + 1,
-                l.id,
-                l.owner.as_deref().unwrap_or("-"),
-            ));
-        }
-    }
-    out
-}
-
-/// The ordering constraints of `points` that name a listener not there:
-/// `point: listener -> target`. A test ends with none.
-pub fn missing_targets(kernel: &Kernel, points: &[&str]) -> Vec<String> {
-    points
-        .iter()
-        .flat_map(|p| {
-            kernel
-                .listeners(p)
-                .unwrap_or_default()
-                .into_iter()
-                .flat_map(move |l| {
-                    l.missing
-                        .iter()
-                        .map(|t| format!("{p}: {} -> {t}", l.id))
-                        .collect::<Vec<_>>()
-                })
-        })
-        .collect()
-}
-
 impl AppHandle {
-    /// The application's bus: the hook kernel its requests' listeners are
-    /// registered in (ADR 0029). A part that cares about a window closing
+    /// The application's bus: the one given to `AppBuilder::bus`, or the
+    /// hook kernel egui-pop made, where its requests' listeners are
+    /// registered (ADR 0029, ADR 0030). A part that cares about a window closing
     /// listens to [`WindowClose`] under a name of its own, declaring its
     /// place (`after` / `before` the listeners of this module).
     ///
     /// <div class="warning">Experimental: may change in any release
     /// (docs/stability.md).</div>
-    pub fn bus(&self) -> Arc<Kernel> {
+    pub fn bus(&self) -> Arc<dyn bus_contract::Bus> {
         self.0.bus.kernel.clone()
     }
 
@@ -866,7 +809,7 @@ impl AppHandle {
     /// <div class="warning">Experimental: may change in any release
     /// (docs/stability.md).</div>
     pub fn bus_order(&self) -> String {
-        order_dump(&self.0.bus.kernel, &WINDOW_POINTS)
+        order_dump(&*self.0.bus.kernel, &WINDOW_POINTS)
     }
 
     /// Asks for an application window's close (`window.close`): its
@@ -951,7 +894,7 @@ impl AppHandle {
     /// <div class="warning">Experimental: may change in any release
     /// (docs/stability.md).</div>
     pub fn bus_order_of(&self, points: &[&str]) -> String {
-        order_dump(&self.0.bus.kernel, points)
+        order_dump(&*self.0.bus.kernel, points)
     }
 
     /// Asks about a job (`job.cancel`, `job.pause`, `job.resume`,

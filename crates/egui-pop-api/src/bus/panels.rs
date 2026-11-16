@@ -24,8 +24,8 @@
 //! The raw viewport calls of the detached panels' windows are here, and
 //! nowhere in the workbench.
 
+use bus_contract::{Bus, ListenOpts};
 use egui::{Context, ViewportBuilder, ViewportClass, ViewportCommand, ViewportId};
-use egui_pop_hooks::{Kernel, ListenOpts};
 use egui_pop_model::ids::PanelId;
 use egui_pop_model::layout::Auxiliary;
 use serde_json::json;
@@ -62,7 +62,7 @@ fn request(id: &str, reason: Reason) -> WindowRequest {
 
 /// Registers the workbench's listener on `window.open`, `window.close`
 /// and `window.reparent`.
-pub(super) fn install(kernel: &Kernel) {
+pub(super) fn install(kernel: &dyn Bus) {
     let mine = || ListenOpts::new().owner(WORKBENCH_OWNER);
     let listened = [
         kernel.listen::<WindowOpen>(WORKBENCH_WINDOW, mine().before(REGISTRY), |req, did| {
@@ -116,7 +116,7 @@ fn dock_back(
     req: &WindowRequest,
     did: &mut Vec<String>,
     how: &str,
-) -> Result<(), egui_pop_hooks::HookError> {
+) -> Result<(), bus_contract::HookError> {
     let Some((app, panel)) = panel_request(req) else {
         return Ok(());
     };
