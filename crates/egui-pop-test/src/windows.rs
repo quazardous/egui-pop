@@ -75,6 +75,8 @@ fn render_immediate(ctx: &Context, viewport: ImmediateViewport<'_>) {
         .and_then(|h| h.borrow_mut().inputs.remove(&ids.this))
         .unwrap_or_else(|| RawInput {
             viewport_id: ids.this,
+            // A window shown for the first time: the backend makes it now.
+            viewports: std::iter::once((ids.this, MultiWindow::fresh_info())).collect(),
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SIZE)),
             ..Default::default()
         });
