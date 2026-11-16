@@ -645,7 +645,7 @@ fn picked(app: &AppHandle, notifier: &Notifier, id: u64, action: &str) -> Outcom
         json!({ "id": id, "action": action, "command": command, "args": args }),
         |app, args| {
             if args["action"] == "default" {
-                crate::window::raise(&app.egui());
+                crate::window::raise_app(app);
             }
             let Some(command) = args["command"]
                 .as_str()

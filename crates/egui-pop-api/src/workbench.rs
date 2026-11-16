@@ -1786,9 +1786,7 @@ pub(crate) fn windows(
             let own_window = class != egui::ViewportClass::EmbeddedWindow;
             if own_window {
                 app.note_window(&vctx);
-                egui_pop_core::overlay::block_window_among(&vctx, &|v| {
-                    !crate::windows::is_app_window(app, v)
-                });
+                app.block_window(&vctx, &|v| !crate::windows::is_app_window(app, v));
                 egui_pop_core::overlay::begin_pass(&vctx);
                 keys(&vctx);
             }

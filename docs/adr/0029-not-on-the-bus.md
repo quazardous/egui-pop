@@ -184,6 +184,7 @@ parent window), `reason` (`user`, `command`, `parent-closed`,
 | `window.open` | A window of a kind, with its id, title, parent if any |
 | `window.close` | A window closed; the main window: the application's close ([ADR 0025](0025-application-windows.md)'s move-in rule is a listener's answer) |
 | `window.reparent` | A window's content moved to another window (into the main window and back; a panel docked back or detached) |
+| `window.activate` | A window becomes the active one, the window worked in: the person pressed or typed in it (`user`), the system gave it the focus (`system`), the application asks it to the front (`command`) |
 | `popup.open` | A popup in a window, with its parent (a window, or the popup under it) |
 | `popup.close` | A popup closed |
 
@@ -195,6 +196,7 @@ parent window), `reason` (`user`, `command`, `parent-closed`,
 | `window.closed` | It left the registry: who asked, why |
 | `window.painted` | Its first paint; then each change between painted and painted nothing |
 | `window.orphaned` | Its owner or parent went and it is still there (then closed by the children listener, or kept and marked, per ADR 0028) |
+| `window.activated` | The active window changed: which, from which, who asked and why |
 | `window.refused` | A request not done: vetoed, unknown id, no owner, a parent that does not exist |
 | `window.invariant` | An invariant below does not hold: its `rule`, the window, its owner and state |
 
@@ -213,6 +215,23 @@ workbench's auxiliary list read it or are derived from it. It is read
 as `windows.list` (the application, the debug bridge, tests), and
 because every change is a journal event, "what was on screen and why"
 can be replayed after the fact.
+
+**The active window is the registry's** (amended 2026-11-16). Which
+window the person works in (where a dialog, a toast or the palette opens,
+which window a close hands the focus back to) is asked with
+`window.activate`, not polled: a press, a key or text in a window asks it
+(`user`), a window gaining the system's focus asks it once (`system`), the
+application asking a window to the front asks it (`command`). Its
+listeners: `window.registry` holds it as active (with the order windows
+were worked in), `window.raise` brings a window asked by a command to the
+front (shown, restored, focused; on Wayland the main window asks for
+attention), the one place `ViewportCommand::Focus` is sent;
+`window.invariants` last. `window.activated` is said after them when the
+active window changed. `windows.list` marks the active window. On
+`window.close`, `window.focus` hands the activation to the window worked
+in before the closing one, whatever its kind (main, application, detached
+panel), by its own `window.activate` (`system`); `window.reparent`'s
+`window.focus` activates the main window the same way.
 
 **Invariants**, checked by `window.invariants` at the end of every pass
 of the main window and after every window request:
@@ -272,7 +291,7 @@ a popup (egui-pop `next`, 2026-11-15).
 | `egui-pop-api/src/jobs_centre.rs`, `toolbars.rs`, `palettes.rs`, `egui-pop-core/src/input.rs`, `egui-pop-editors/src/assist_ui.rs`, `egui-pop-views/src/library/tags.rs` | `egui::Popup` and bare `egui::Area` popovers (the jobs popover, a toolbar's overflow, choice lists, completions) | Popovers with a life (opened, closed by rules) are popups; a list drawn only while its field is focused is per-frame painting, declared |
 | `egui-pop-core/src/hover_card.rs`, `tooltip.rs` | A hover card has `open` / `close` and an area; a tooltip is egui's | Hover cards are popups; tooltips are the per-frame exception |
 | `egui-pop-api/src/toasts.rs`, `tips/screen.rs`, `zen.rs`, `window.rs`, `egui-pop-viewport/src/navigation.rs` | Areas drawn each pass from a state (toasts per window group, the tips card, zen's reveal bar, floating panels, the navigator) | Not windows; toasts already journal; reviewed in the popups slice and declared where they stay off |
-| `egui-pop-platform/src/window.rs` | `raise` sends `Visible(true)`, `Minimized(false)`, `Focus` to the main window | A request on the bus (`window.raise`, with the existing `window.switch`) |
+| `egui-pop-platform/src/window.rs` | `raise` sends `Visible(true)`, `Minimized(false)`, `Focus` to the main window | `window.activate` of the main window (`command`); `window.raise` is its listener (done, 2026-11-16) |
 | `egui-pop-test/src/windows.rs` | `MultiWindow` plays the backend: declared viewports, their commands | The "backend" side of invariant 1 in tests |
 | `egui-pop-gallery/src/lib.rs`, `examples/multi_window*.rs` | Raw `ViewportCommand::Close` and `show_viewport_deferred` in the smoke exit and the spike | The gallery asks `window.close`; the spike is an example, declared |
 
