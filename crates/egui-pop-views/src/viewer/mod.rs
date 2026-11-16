@@ -100,8 +100,8 @@ use serde_json::{Value as Json, json};
 #[allow(deprecated)]
 pub use embed::DEFAULT_REFERRER;
 pub use embed::{
-    EmbedBackend, EmbedRequest, Embedded, MIN_PLAYER, PUMP, Placement, embed_url, fits_player,
-    referrer_for,
+    EmbedBackend, EmbedRequest, Embedded, MIN_PLAYER, PUMP, Placement, WEB_VIEW_LISTENER,
+    WEB_VIEW_PREFIX, embed_url, fits_player, referrer_for,
 };
 pub use page::{Block, ImageRef, Markdown, has_scheme, resolve, slug};
 pub use video::{VIDEO_CONTEXT, VIDEO_ID, VIDEO_SURFACE};
@@ -546,7 +546,7 @@ impl Viewer {
     fn load(&self, app: &AppHandle, target: &str, fragment: Option<&str>) {
         // Whatever comes next, a video playing stops here.
         self.stop_video(app);
-        self.stop_embed();
+        self.stop_embed(app, egui_pop_api::bus::Reason::Command);
         let generation = {
             let mut i = lock(&self.inner);
             i.generation += 1;
@@ -1377,6 +1377,7 @@ impl Plugin for ViewerPlugin {
             );
         }
         lock(&v.embed).set_referrer(referrer);
+        embed::listen(&app, &v);
         if let Some(l) = links::links(&app) {
             l.set_inside(Some(Arc::new(Shows(v.clone()))));
         }
@@ -1424,8 +1425,9 @@ impl Plugin for ViewerPlugin {
         let app = ctx.app();
         if let Ok(v) = viewer(&app) {
             v.stop_video(&app);
-            v.stop_embed();
+            v.stop_embed(&app, egui_pop_api::bus::Reason::OwnerGone);
         }
+        embed::unlisten(&app);
         if let Some(l) = links::links(&app) {
             l.set_inside(None);
         }

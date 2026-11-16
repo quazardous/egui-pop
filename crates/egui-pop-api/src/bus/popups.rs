@@ -183,8 +183,12 @@ impl AppHandle {
 
     /// The registry id of the window a viewport shows: the main window,
     /// an application window, a detached panel's window; the main
-    /// window's when none is held for it.
-    pub(crate) fn registry_window_of(&self, viewport: egui::ViewportId) -> String {
+    /// window's when none is held for it. The parent to name for a popup
+    /// or a native window opened from a pass of that viewport.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn registry_window_of(&self, viewport: egui::ViewportId) -> String {
         let shown = format!("{viewport:?}");
         lock(&self.0.bus.registry)
             .records
