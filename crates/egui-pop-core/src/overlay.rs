@@ -1053,8 +1053,22 @@ pub fn closing_seen(ctx: &Context, id: Id) -> Closing {
 /// overlays above it are told closed ([`Closing::Below`]); it is not
 /// (the caller is closing it). Whether it was open.
 pub fn close_anywhere(ctx: &Context, id: Id) -> bool {
+    close_where(ctx, id, None)
+}
+
+/// As [`close_anywhere`], in `window` first (an overlay may be open in
+/// several windows: the palette of each), else in whichever holds it.
+pub fn close_in_window(ctx: &Context, window: ViewportId, id: Id) -> bool {
+    close_where(ctx, id, Some(window))
+}
+
+fn close_where(ctx: &Context, id: Id, first: Option<ViewportId>) -> bool {
     let here = ctx.viewport_id();
-    for (window, st) in all(ctx) {
+    let mut windows = all(ctx);
+    if let Some(w) = first {
+        windows.sort_by_key(|(v, _)| *v != w);
+    }
+    for (window, st) in windows {
         let mut s = lock(&st);
         if s.stack.contains(id) {
             let closed = s.stack.close(id);

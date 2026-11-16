@@ -47,7 +47,7 @@ pub(crate) struct Overlays {
     /// Asking their own requests (dialogs, file choices).
     own: HashSet<Id>,
     /// Open: popup id → the overlay.
-    open: HashMap<String, Id>,
+    open: HashMap<String, (Id, ViewportId)>,
 }
 
 thread_local! {
@@ -85,10 +85,11 @@ pub(super) fn install(kernel: &dyn bus_contract::Bus) {
         |req, did| {
             let Some(app) = asking() else { return Ok(()) };
             // Not open, or the stack itself telling of its close.
-            let Some(id) = app.0.bus.overlays.borrow_mut().open.remove(&req.window) else {
+            let Some((id, window)) = app.0.bus.overlays.borrow_mut().open.remove(&req.window)
+            else {
                 return Ok(());
             };
-            if overlay::close_anywhere(&app.egui(), id) {
+            if overlay::close_in_window(&app.egui(), window, id) {
                 did.push(format!("{STACK}: closed"));
             }
             Ok(())
@@ -146,13 +147,7 @@ impl AppHandle {
     /// closed it (`how`: Escape, an item chosen), or by itself when the
     /// registry does not hold it. Whether the request closed it.
     pub(crate) fn close_overlay(&self, ctx: &egui::Context, id: Id, how: Closing) -> bool {
-        let popup = {
-            let o = self.0.bus.overlays.borrow();
-            o.open
-                .iter()
-                .find(|(_, i)| **i == id)
-                .map(|(p, _)| p.clone())
-        };
+        let popup = self.open_popup_of(&self.0.bus.overlays.borrow(), id, ctx.viewport_id());
         let Some(popup) = popup else {
             overlay::close(ctx, id);
             return false;
@@ -167,6 +162,24 @@ impl AppHandle {
             .how(how.as_str());
         req.parent = record.parent;
         self.request_popup_close(req)
+    }
+
+    /// The open popup of an overlay shown in `window` (one overlay may be
+    /// open in several windows: the palette), else any of that overlay.
+    fn open_popup_of(&self, o: &Overlays, id: Id, window: ViewportId) -> Option<String> {
+        let named = o.named.get(&(id, window)).map(|n| n.0.clone());
+        named
+            .filter(|p| o.open.contains_key(p))
+            .or_else(|| {
+                let here = format!("{POPUP_PREFIX}{id:?}@{}", self.registry_window_of(window));
+                o.open.contains_key(&here).then_some(here)
+            })
+            .or_else(|| {
+                o.open
+                    .iter()
+                    .find(|(_, (i, _))| *i == id)
+                    .map(|(p, _)| p.clone())
+            })
     }
 
     /// The popup id and owner of an overlay shown in `window`, unless it
@@ -195,7 +208,7 @@ impl AppHandle {
                 .overlays
                 .borrow_mut()
                 .open
-                .insert(popup.clone(), change.id);
+                .insert(popup.clone(), (change.id, change.window));
             let req = WindowRequest::new(popup.clone(), WindowKind::Popup, owner, Reason::User)
                 .parent(self.registry_window_of(change.window));
             if !self.request_popup_open(req) {
@@ -209,27 +222,7 @@ impl AppHandle {
             if o.own.contains(&change.id) {
                 return;
             }
-            // The popup of that window, else any of that overlay.
-            let named = o
-                .named
-                .get(&(change.id, change.window))
-                .map(|n| n.0.clone());
-            let popup = named
-                .filter(|p| o.open.contains_key(p))
-                .or_else(|| {
-                    let here = format!(
-                        "{POPUP_PREFIX}{:?}@{}",
-                        change.id,
-                        self.registry_window_of(change.window)
-                    );
-                    o.open.contains_key(&here).then_some(here)
-                })
-                .or_else(|| {
-                    o.open
-                        .iter()
-                        .find(|(_, i)| **i == change.id)
-                        .map(|(p, _)| p.clone())
-                });
+            let popup = self.open_popup_of(&o, change.id, change.window);
             if let Some(p) = &popup {
                 o.open.remove(p);
             }
