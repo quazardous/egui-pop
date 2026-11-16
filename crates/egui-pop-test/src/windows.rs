@@ -556,6 +556,9 @@ impl MultiWindow {
                     || immediate.contains(v)
                     || held.contains(v)
             });
+            // A window gone: the builder it was given goes with it.
+            let info = &self.info;
+            self.builders.retain(|v, _| info.contains_key(v));
         }
     }
 

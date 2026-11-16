@@ -111,6 +111,16 @@ fn detach_log(m: &mut MultiWindow) -> ViewportId {
     v
 }
 
+/// Detaches the log again: the builder its new window opens with, from
+/// the main pass that shows it first (the system then tells the window's
+/// own place from the next one).
+fn reopen_log(m: &mut MultiWindow) -> ViewportBuilder {
+    assert!(m.app().detach_panel(&LOG).unwrap().ok());
+    m.root_pass();
+    let v = workbench::window_id(&LOG);
+    builder(m, v)
+}
+
 fn log_rect(app: &AppHandle) -> [f32; 4] {
     app.layout()
         .window_of(&LOG)
@@ -287,10 +297,9 @@ fn a_detached_window_keeps_its_size_and_maximized_where_positions_are_hidden() {
     m.root_pass();
     assert_eq!(log_rect(m.app())[2..], [500.0, 300.0], "its normal size");
     assert_eq!(builder(&m, v).maximized, Some(true));
-    // Closed and detached again: as it was.
+    // Closed and detached again: its window opens as it was.
     close_log(&mut m, v);
-    let v = detach_log(&mut m);
-    let b = builder(&m, v);
+    let b = reopen_log(&mut m);
     assert_eq!(b.inner_size, Some(vec2(500.0, 300.0)));
     assert_eq!(b.maximized, Some(true));
     let _ = std::fs::remove_dir_all(&dir);
@@ -305,8 +314,7 @@ fn a_detached_window_comes_back_where_it_was_moved() {
     m.root_pass();
     assert_eq!(log_rect(m.app())[..2], [700.0, 50.0]);
     close_log(&mut m, v);
-    let v = detach_log(&mut m);
-    assert_eq!(builder(&m, v).position, Some(pos2(700.0, 50.0)));
+    assert_eq!(reopen_log(&mut m).position, Some(pos2(700.0, 50.0)));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
