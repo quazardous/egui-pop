@@ -26,12 +26,13 @@
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
 use egui::{
-    Context, DeferredViewportUiCallback, Event, Id, ImmediateViewport, Key, Modifiers, Pos2,
-    RawInput, Rect, Vec2, ViewportCommand, ViewportEvent, ViewportId, ViewportInfo,
+    Context, DeferredViewportUiCallback, Event, HoveredFile, Id, ImmediateViewport, Key, Modifiers,
+    Pos2, RawInput, Rect, Vec2, ViewportCommand, ViewportEvent, ViewportId, ViewportInfo,
 };
 use egui_pop_api::{App, AppHandle};
 
@@ -101,6 +102,9 @@ pub struct MultiWindow {
     declared: BTreeMap<ViewportId, Arc<DeferredViewportUiCallback>>,
     info: BTreeMap<ViewportId, ViewportInfo>,
     queued: BTreeMap<ViewportId, Vec<Event>>,
+    /// Files from another program over each window (hovering) or
+    /// dropped on it, for its next pass.
+    files: BTreeMap<ViewportId, Files>,
     /// The commands each window's last pass sent.
     commands: BTreeMap<ViewportId, Vec<ViewportCommand>>,
     /// The accessible names each window's last pass gave.
@@ -158,6 +162,7 @@ impl MultiWindow {
             declared: BTreeMap::new(),
             info,
             queued: BTreeMap::new(),
+            files: BTreeMap::new(),
             commands: BTreeMap::new(),
             names: BTreeMap::new(),
             nodes: BTreeMap::new(),
@@ -277,6 +282,20 @@ impl MultiWindow {
         self.queued.entry(viewport).or_default().push(event);
     }
 
+    /// Files from another program dragged over a window, as the system
+    /// says them: its next pass sees them hovering (`hovered_files`).
+    pub fn hover_files(&mut self, viewport: ViewportId, paths: &[&str]) {
+        self.files.entry(viewport).or_default().hovered = paths.iter().map(PathBuf::from).collect();
+    }
+
+    /// Files from another program dropped on a window: its next pass sees
+    /// them dropped (`dropped_files`), and no longer hovering.
+    pub fn drop_files(&mut self, viewport: ViewportId, paths: &[&str]) {
+        let files = self.files.entry(viewport).or_default();
+        files.hovered.clear();
+        files.dropped = paths.iter().map(PathBuf::from).collect();
+    }
+
     /// Clicks a point of a window (in points): the pointer moves there and
     /// presses in one pass, releases in the next.
     pub fn click(&mut self, viewport: ViewportId, at: Pos2) {
@@ -354,9 +373,25 @@ impl MultiWindow {
                 (*v, i)
             })
             .collect();
+        // Dropped files are said once; hovering ones while they hover.
+        let (hovered, dropped) = match self.files.get_mut(&viewport) {
+            Some(f) => (f.hovered.clone(), std::mem::take(&mut f.dropped)),
+            None => (Vec::new(), Vec::new()),
+        };
         RawInput {
             viewport_id: viewport,
             viewports,
+            hovered_files: hovered
+                .into_iter()
+                .map(|path| HoveredFile {
+                    path: Some(path),
+                    ..Default::default()
+                })
+                .collect(),
+            dropped_files: dropped
+                .into_iter()
+                .map(|p| Arc::new(SystemFile(p)) as egui::DroppedFileHandle)
+                .collect(),
             screen_rect: Some(rect),
             time: Some(self.time),
             focused: self
@@ -499,6 +534,36 @@ impl MultiWindow {
 impl Drop for MultiWindow {
     fn drop(&mut self) {
         HARNESSES.with_borrow_mut(|h| h.remove(&self.token));
+    }
+}
+
+/// The files over a window, or dropped on it.
+#[derive(Debug, Default)]
+struct Files {
+    hovered: Vec<PathBuf>,
+    dropped: Vec<PathBuf>,
+}
+
+/// A file dropped from another program, as an integration gives it: its
+/// path; its content is empty.
+#[derive(Debug)]
+struct SystemFile(PathBuf);
+
+impl egui::DroppedFile for SystemFile {
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn bytes(&self) -> Result<Vec<u8>, String> {
+        Ok(Vec::new())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn bytes_async(
+        &self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<u8>, String>> + '_>> {
+        Box::pin(async { Ok(Vec::new()) })
     }
 }
 

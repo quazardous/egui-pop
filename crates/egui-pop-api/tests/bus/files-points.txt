@@ -1,0 +1,2 @@
+files.drop
+  1. files.browser (owner egui_pop): priority 1000

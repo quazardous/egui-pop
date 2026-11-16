@@ -436,6 +436,17 @@ application's bugs ask for:
   `plugin.disconnected` is said) and `plugin.connect`. Forgetting a
   finished or orphaned job (`JobsService::dismiss`, `clear_finished`)
   is still a direct call, the jobs view's own list.
+- **Files dropped from another program**: moved (2026-11-16). Every
+  window's pass (the main window, an application window, a detached
+  panel's window) reads the files the system says over it or dropped on
+  it once, in `bus::files`, the one reader of egui's `hovered_files` and
+  `dropped_files` (a test scans for any other). Files dropped are that
+  window's `files.drop` request (`FileDrop`: the window, the paths, the
+  pointer), asked at the end of its pass; whoever takes them is a
+  listener and says so; `files.dropped` follows, or `files.refused` when
+  nobody took them or the window is not open. The file browser's part is
+  `files.browser`, first. While files hover a window and no widget shows
+  where they would go, the window says whether anything takes files.
 - **Panels and layout**: the workbench's changes are steps already;
   their followers (layout repair, persistence, focus) are calls.
 - **Selection**: has subscribers of its own (`selection.rs`), beside
