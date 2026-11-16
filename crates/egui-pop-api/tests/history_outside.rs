@@ -182,3 +182,77 @@ fn an_agents_dry_run_answers_as_its_undo_would() {
     assert_eq!(dry.result().unwrap().clone().unwrap()["dry_run"], true);
     assert_eq!(int(&a, Y), Value::Int(4));
 }
+
+#[test]
+fn an_undo_keeps_a_value_read_back_from_a_file_and_says_so() {
+    let app = app();
+    let a = app.handle().clone();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(400.0, 300.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    user(&a, X, 1);
+    user(&a, Y, 1);
+    h.run();
+    // A settings file read back changes `doc/x`: no step.
+    let doc = egui_pop_model::values::SettingsDoc {
+        values: [(X.to_string(), json!(5))].into(),
+    };
+    lock(&a.store()).import(&doc, &Origin::Remote("file".into()));
+    h.run();
+    let before = a.last_event();
+    let out = history::ask(&a, Walk::Jump(0), Some(&APP), None, false, &Origin::User);
+    let r = out.result().unwrap().clone().unwrap();
+    assert_eq!(r["skipped"], json!([X]));
+    assert_eq!((int(&a, X), int(&a, Y)), (Value::Int(5), Value::Int(0)));
+    let changed = events(&a, before, "history.changed");
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0]["skipped"], json!([X]));
+    // Redone, `doc/x`'s step is skipped again: the file's value stays.
+    let before = a.last_event();
+    h.key_press_modifiers(Modifiers::COMMAND | Modifiers::SHIFT, Key::Z);
+    h.run();
+    assert_eq!((int(&a, X), int(&a, Y)), (Value::Int(5), Value::Int(0)));
+    let changed = events(&a, before, "history.changed");
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0]["skipped"], json!([X]));
+    // Nothing skipped: the event has no `skipped`.
+    let before = a.last_event();
+    h.key_press_modifiers(Modifiers::COMMAND | Modifiers::SHIFT, Key::Z);
+    h.run();
+    assert_eq!(int(&a, Y), Value::Int(1));
+    let changed = events(&a, before, "history.changed");
+    assert_eq!(changed.len(), 1);
+    assert!(changed[0].get("skipped").is_none(), "{changed:?}");
+}
+
+#[test]
+fn a_group_cancelled_keeps_an_outside_change_and_the_next_pass_says_so() {
+    let app = app();
+    let a = app.handle().clone();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(400.0, 300.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    let before = a.last_event();
+    // An agent's group fails after the user changed the same value.
+    let r: Result<(), String> = a.group(&agent(), "agent edit", |g| {
+        g.write(Set::new(X, Change::To(Value::Int(1)), agent()).by(&agent().writer()))
+            .unwrap();
+        user(&a, X, 2);
+        Err("the agent gave up".into())
+    });
+    assert!(r.is_err());
+    assert_eq!(int(&a, X), Value::Int(2), "the user's change stays");
+    h.run();
+    let changed = events(&a, before, "history.changed");
+    assert!(
+        changed
+            .iter()
+            .any(|c| c["scope"] == "app" && c["skipped"] == json!([X])),
+        "{changed:?}"
+    );
+    // The user's step undoes to the start, never to the agent's 1.
+    assert!(a.undo(&Origin::User).ok());
+    assert_eq!(int(&a, X), Value::Int(0));
+}

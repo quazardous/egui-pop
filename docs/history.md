@@ -53,6 +53,37 @@ going in the scope refuses them. Each answer is published on the
 journal: `history.changed` (the scope, its revision and head) or
 `history.refused` (the scope, the kind and the reason).
 
+## Changes made outside a history
+
+A value can change outside the history that will undo it: a write that
+is not a step (state the application keeps, a settings file read back
+with `Store::import`), a step in another history (the settings
+window's), a step dropped with the plugin that owned one of its values
+(ADR 0028). The value store keeps that change:
+
+- an undo, a redo or a jump writes a value back only when it is still
+  what the step left (for a redo: what the step found). A value changed
+  since keeps the outside change and is **skipped**: the answer names it
+  (`skipped`, with the paths) and so does `history.changed`;
+- undoing one step out of order skips the same way, and is refused
+  when every value it changed was changed outside since;
+- a group or a gesture cancelled puts back only the values still as it
+  left them. A value changed meanwhile keeps that change, and the first
+  step made on it since then starts from the value before the group, so
+  undoing it comes back there. The next pass publishes
+  `history.changed` with the skipped paths;
+- a group or a gesture's step goes before the steps made after its
+  first write, not after them: undoing everything comes back to where
+  it began.
+
+An agent's request is a step like the user's (named by its origin), so
+it is never skipped: Ctrl+Z takes the newest step back, whoever made
+it. A request read before such a step is refused as stale (`if_rev`).
+An agent walks the history as its own writer: undo, redo, jump, undo
+this step and restore are refused (dry runs too) when a value they
+would write is not one the agent may write. `Store::take_skipped` lists
+what was skipped for code that walks the store directly.
+
 ## Undone out of sight: "Go there"
 
 With the context stack (`ContextsPlugin`, [contexts.md](contexts.md)),
@@ -190,7 +221,9 @@ store:
 ## Not yet
 
 - Undo across processes is the owner's: it refuses with a reason, and
-  the interface shows it.
+  the interface shows it. A host owning its histories has no field yet
+  to report skipped values in its answer (`Walked`); the value store's
+  are published.
 - Comparing two states side by side (a snapshot against now) is the
   owner's view; the panel has no compare toggle yet.
 - Agents have no command for the preview: it follows the pointer.
