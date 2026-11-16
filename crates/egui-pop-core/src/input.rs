@@ -1016,19 +1016,20 @@ fn put_text(
         return ui.put(rect, text);
     }
     // From the top-left of its place, whatever the layout around (a
-    // grid's cell centres its content).
+    // grid's cell centres its content), in a child that takes no room of
+    // its own: the field's row is allocated already.
     let builder = egui::UiBuilder::new()
+        .id_salt(base.with("area"))
         .max_rect(rect)
         .layout(egui::Layout::top_down(egui::Align::Min));
-    ui.scope_builder(builder, |ui| {
-        egui::ScrollArea::vertical()
-            .id_salt(base.with("scroll"))
-            .max_height(rect.height())
-            .auto_shrink([false, true])
-            .show(ui, |ui| ui.add(text))
-            .inner
-    })
-    .inner
+    let mut child = ui.new_child(builder);
+    child.set_clip_rect(rect.intersect(ui.clip_rect()));
+    egui::ScrollArea::vertical()
+        .id_salt(base.with("scroll"))
+        .max_height(rect.height())
+        .auto_shrink([false, true])
+        .show(&mut child, |ui| ui.add(text))
+        .inner
 }
 
 fn format_number(ctx: &egui::Context, v: f64, precision: Option<usize>) -> String {
