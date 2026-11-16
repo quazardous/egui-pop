@@ -6531,6 +6531,7 @@ impl App {
         if self.waking.as_ref() != Some(ctx) {
             self.waking = Some(ctx.clone());
             self.handle.theme().follow(ctx);
+            self.handle.0.bus.wake_with(ctx);
             let c = ctx.clone();
             if let Some(h) = self.handle.0.host.borrow_mut().as_mut() {
                 h.set_waker(Waker::new(move || c.request_repaint()));
@@ -6944,6 +6945,9 @@ impl App {
         // the pass's handlers read what follows them.
         self.handle.deliver_events();
         if !again {
+            // Local listeners queued by emits on other threads, in their
+            // order, before the pass's handlers.
+            self.handle.run_pending();
             self.emit(&Lifecycle::Pass);
         }
         self.load_pointer_profile();

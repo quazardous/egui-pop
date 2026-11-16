@@ -24,6 +24,10 @@ one failing contribution never breaks the others.
   from another process). An inline listener runs on the emitting thread
   and counts as late once it returns; a threaded one runs on a thread of
   its own and the emit stops waiting at the deadline.
+- **Local listeners.** `listen_local` registers a listener that is not
+  `Send`, bound to the calling thread and ordered with the others. An
+  emit from another thread queues it; the thread runs the queue with
+  `run_pending()`, and `on_pending` wakers say when there is one.
 - **Introspection.** `points()` lists every point and its listeners in
   the order they run, with their owners, constraints, deadlines, missing
   targets and counters (runs, failures, the last failure), for people,
@@ -34,7 +38,8 @@ one failing contribution never breaks the others.
   implementation the application prefers. The contract's types
   (`Point`, `ListenOpts`, `PointSpec`…) are re-exported here.
 - One dependency (`bus-contract`, itself without any), no `unsafe`, no GUI toolkit, no async runtime: the
-  kernel is `Send + Sync`, listeners are `Send + Sync` closures.
+  kernel is `Send + Sync`, listeners are `Send + Sync` closures, local
+  ones excepted.
 
 It was written for [egui-pop](https://github.com/quazardous/egui-pop)
 and the applications built on it, and works in any Rust program. Its
