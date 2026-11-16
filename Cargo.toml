@@ -116,7 +116,7 @@ image = { version = "0.25", default-features = false }
 # and the resize edge of a zone lying over; 0.25.7 title drags in sections
 # sized by their content (`Sections::fill(false)`).
 # Until the next release: the tab group dragged whole (`DockArea::dragged_node`).
-egui_stack = { git = "https://github.com/quazardous/egui_stack", rev = "b2c1bb01fd6ecae6b15fa5cd00ec67b43ae7887e", default-features = false }
+egui_stack = { git = "https://github.com/quazardous/egui_stack", rev = "91904bb716d5874af2a61e74989b652d2e817cf9", default-features = false }
 egui-pop = { version = "0.11.0", path = "crates/egui-pop" }
 
 [workspace.lints.rust]
