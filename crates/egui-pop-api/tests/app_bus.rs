@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use egui_pop_api::admin::AdminPlugin;
 use egui_pop_api::bus::bus_contract::{
     Altered, AnyInput, AnyListener, AnyValue, Bus, CloneFn, Collected, FailureSink, FreshFn,
-    ListenOpts, ListenerInfo, Point as _, PointInfo, PointKey, PointKind, PointSpec, Refused,
+    ListenOpts, ListenerInfo, Point, PointInfo, PointKey, PointKind, PointSpec, Refused,
 };
 use egui_pop_api::bus::egui_pop_hooks::Kernel;
 use egui_pop_api::bus::{self, CONTRACT, WINDOW_POINTS, WindowClose};
@@ -187,5 +187,97 @@ fn a_second_application_on_one_bus_is_refused() {
             Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/bus/window-points.txt")
         )
         .unwrap()
+    );
+}
+
+/// A point the application declares on the bus it gives egui-pop.
+struct HealthReport;
+
+impl Point for HealthReport {
+    const ID: &'static str = "health.report";
+    type Input = ();
+    type Value = Vec<String>;
+    const KIND: PointKind = PointKind::Collect;
+}
+
+#[test]
+fn the_debug_bus_collector_lists_every_point_on_the_bus() {
+    let shared: Arc<dyn Bus> = Arc::new(Kernel::new());
+    shared
+        .declare::<HealthReport>(PointSpec::new("The application's health checks."))
+        .unwrap();
+    // Registered out of order: `app.disks` asks to run after `app.library`.
+    shared
+        .listen::<HealthReport>(
+            "app.disks",
+            ListenOpts::new().after("app.library"),
+            |_, _| Ok(()),
+        )
+        .unwrap();
+    shared
+        .listen::<HealthReport>("app.library", ListenOpts::new(), |_, _| Ok(()))
+        .unwrap();
+    shared
+        .listen::<HealthReport>(
+            "app.backups",
+            ListenOpts::new().after("app.nobody"),
+            |_, _| Ok(()),
+        )
+        .unwrap();
+    let m = multi(shared.clone());
+    let snapshot = m.app().debug_snapshot()["bus"].clone();
+    let points = snapshot["points"].as_array().unwrap();
+
+    // Every point on the bus shows, egui-pop's and the application's.
+    let ids: Vec<&str> = points
+        .iter()
+        .map(|p| p["point"].as_str().unwrap())
+        .collect();
+    let on_bus: Vec<&str> = shared.points().iter().map(|p| p.id).collect();
+    assert_eq!(ids, on_bus);
+    for decl in CONTRACT {
+        let p = points.iter().find(|p| p["point"] == decl.id).unwrap();
+        assert_eq!(p["by"], "egui_pop", "{}", decl.id);
+        assert_eq!(p["kind"], decl.kind.as_str());
+    }
+    let health = points
+        .iter()
+        .find(|p| p["point"] == "health.report")
+        .unwrap();
+    assert_eq!(health["by"], "application");
+    assert_eq!(health["kind"], "collect");
+    assert_eq!(health["declared"], true);
+    assert_eq!(health["description"], "The application's health checks.");
+    // Its listeners, in the order they run.
+    let listeners: Vec<&str> = health["listeners"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| l["id"].as_str().unwrap())
+        .collect();
+    let running: Vec<String> = shared
+        .listeners(HealthReport::ID)
+        .unwrap()
+        .into_iter()
+        .map(|l| l.id)
+        .collect();
+    assert_eq!(listeners, running);
+    let library = listeners.iter().position(|l| *l == "app.library").unwrap();
+    let disks = listeners.iter().position(|l| *l == "app.disks").unwrap();
+    assert!(library < disks, "{listeners:?}");
+    // The missing target is said, and the order text names the point.
+    let missing: Vec<&str> = snapshot["missing_targets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t.as_str().unwrap())
+        .filter(|t| t.starts_with("health."))
+        .collect();
+    assert_eq!(missing, ["health.report: app.backups -> app.nobody"]);
+    assert!(
+        snapshot["order"]
+            .as_str()
+            .unwrap()
+            .contains("health.report\n"),
     );
 }

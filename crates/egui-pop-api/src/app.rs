@@ -5129,18 +5129,19 @@ impl App {
         b.register(
             FnCollector::new(
                 "bus",
-                "The bus (ADR 0029): each window and popup point with its listeners in the order they run (owner, after, before, priority, missing targets, runs, failures), the order as text, the window registry (`windows.list`), and the window invariants broken now and said.",
+                "The bus (ADR 0029): every point on it, egui-pop's and the application's (`by`), with its kind and its listeners in the order they run (owner, after, before, priority, missing targets, runs, failures), the ordering constraints naming a listener not there, the order as text, the window registry (`windows.list`), and the window invariants broken now and said.",
             )
             .snapshot(move |_| {
                 let Ok(app) = up(&w) else { return Json::Null };
                 let kernel = app.bus();
-                let points: Vec<Json> = crate::bus::POINTS
+                let infos = kernel.points();
+                let ids: Vec<&str> = infos.iter().map(|p| p.id).collect();
+                let points: Vec<Json> = infos
                     .iter()
                     .map(|p| {
-                        let listeners: Vec<Json> = kernel
-                            .listeners(p)
-                            .unwrap_or_default()
-                            .into_iter()
+                        let listeners: Vec<Json> = p
+                            .listeners
+                            .iter()
                             .map(|l| {
                                 json!({
                                     "id": l.id,
@@ -5155,10 +5156,28 @@ impl App {
                                 })
                             })
                             .collect();
-                        json!({ "point": p, "listeners": listeners })
+                        let by = if crate::bus::CONTRACT.iter().any(|d| d.id == p.id) {
+                            "egui_pop"
+                        } else {
+                            "application"
+                        };
+                        json!({
+                            "point": p.id,
+                            "kind": p.kind.as_str(),
+                            "by": by,
+                            "declared": p.declared,
+                            "description": p.description,
+                            "listeners": listeners,
+                        })
                     })
                     .collect();
-                json!({ "points": points, "order": app.bus_order_of(&crate::bus::POINTS), "windows": app.windows_list(), "invariants": { "broken_now": app.invariants_broken_now(), "said": app.broken_invariants() } })
+                json!({
+                    "points": points,
+                    "missing_targets": crate::bus::missing_targets(&*kernel, &ids),
+                    "order": app.bus_order_of(&ids),
+                    "windows": app.windows_list(),
+                    "invariants": { "broken_now": app.invariants_broken_now(), "said": app.broken_invariants() },
+                })
             }),
         )
         .expect("distinct names");
