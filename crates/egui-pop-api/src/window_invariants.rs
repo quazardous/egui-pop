@@ -106,8 +106,10 @@ pub(crate) struct State {
     /// Broken now, by rule and window: said once, until it holds again.
     open: BTreeSet<(String, String)>,
     /// The main window's passes in a row each viewport disagreed with
-    /// the backend in.
-    mismatch: BTreeMap<ViewportId, u32>,
+    /// the backend in, and how: `true` registered without a viewport,
+    /// `false` a viewport not registered (a window closed then opened
+    /// again in the next pass is two mismatches, each with its grace).
+    mismatch: BTreeMap<(ViewportId, bool), u32>,
     /// Every one said, oldest first, at most [`KEPT`].
     said: Vec<Broken>,
 }
@@ -298,11 +300,11 @@ impl AppHandle {
             .collect();
         let live: BTreeSet<ViewportId> = ctx.input(|i| i.raw.viewports.keys().copied().collect());
         // The main window is the backend's own: always there.
-        let mut off: Vec<(ViewportId, Broken)> = Vec::new();
+        let mut off: Vec<((ViewportId, bool), Broken)> = Vec::new();
         for (v, r) in &expected {
             if *v != ViewportId::ROOT && !live.contains(v) {
                 off.push((
-                    *v,
+                    (*v, true),
                     Broken::new(
                         BACKEND,
                         &r.id,
@@ -324,7 +326,7 @@ impl AppHandle {
                     .or_else(|| self.closed_window_id(*v))
                     .unwrap_or_else(|| format!("viewport {v:?}"));
                 off.push((
-                    *v,
+                    (*v, false),
                     Broken::new(
                         BACKEND,
                         &window,
