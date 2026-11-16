@@ -35,17 +35,23 @@ never installed globally.
 
 ## Decision
 
-### A contract crate: `egui-pop-bus`
+### A contract crate: `bus-contract`, outside egui-pop
 
-A new crate, `egui-pop-bus`, layer L0, **without dependencies** (std
-only) and without egui. It holds the contract and nothing that runs:
+The contract is **its own crate in its own repository**,
+[`bus-contract`](https://github.com/quazardous/bus-contract) (decided by
+the maintainer, 2026-11-16), MIT OR Apache-2.0 like egui-pop, so any
+Rust library or application can take it without taking egui-pop.
+It has **no dependencies** (std only), no egui and no egui-pop
+vocabulary: points, listeners, requests, events, alter, collect, the
+order dump. It holds the contract and nothing that runs; egui-pop
+depends on it like on any external crate:
 
 - **`Point`**: a hook point is a type: its `ID` (dotted,
-  `window.close`), the `Input` every listener reads, the `Value` a
+  `doc.close`), the `Input` every listener reads, the `Value` a
   listener edits, and its `KIND` (below). Moved from `egui-pop-hooks`
   unchanged, plus `KIND` with a default.
 - **`PointKind`**: what a point is for, for introspection and review:
-  - `Request`: a request (`<noun>.<verb>`, ADR 0029): its listeners do
+  - `Request`: a request (`<noun>.<verb>`, egui-pop's ADR 0029): its listeners do
     the work in a declared order; the value is what each did.
   - `Event`: an event's listeners, each event delivered once, in
     journal order.
@@ -71,15 +77,16 @@ only) and without egui. It holds the contract and nothing that runs:
   | `forget(owner)` | Removes every listener of an owner, on every point ([ADR 0028](0028-removed-contributor-work-in-flight.md)) |
   | `alter_any(key, input, value, clone)` | Passes the value through the listeners in order (requests, events, alter points) |
   | `collect_any(key, input, fresh)` | Gives each listener a fresh value, gathers the parts |
-  | `on_failure(sink)` | Receives each dropped contribution (an error, a panic, a missed deadline) |
+  | `add_failure_sink(sink)` | Receives each dropped contribution (an error, a panic, a missed deadline) |
   | `points()`, `listeners(point)` | Introspection: points, listeners in run order, owners, constraints, missing targets, counters |
 
   A `PointKey` (`ID`, kind, `TypeId`, type name) names a point to the
   erased methods, so an implementation refuses an id registered with two
-  types.
+  types. `Arc<B>` is a `Bus` when `B` is, so `&Arc<dyn Bus>` goes where
+  `&dyn Bus` is asked.
 - **The typed calls** (`declare::<P>`, `listen::<P>`, `alter::<P>`,
-  `collect::<P>`) are methods on `dyn Bus` itself, written once in the
-  contract crate over the erased ones. Code that holds an
+  `collect::<P>`, `on_failure`) are methods on `dyn Bus` itself,
+  written once in the contract crate over the erased ones. Code that holds an
   `Arc<dyn Bus>` calls `bus.listen::<WindowClose>(…)` exactly as it
   called the kernel; no implementation writes them again.
 - **Tools on the contract**: `order_dump(bus, points)` and
@@ -94,7 +101,7 @@ only) and without egui. It holds the contract and nothing that runs:
   table to know what it will host before building anything; the
   listeners a library registers are its other half, read after
   installation with `order_dump` and kept as reviewed files
-  (`crates/egui-pop-api/tests/bus/*.txt`).
+  (in egui-pop, `crates/egui-pop-api/tests/bus/*.txt`).
 
 What the contract does not hold, and why:
 
@@ -119,7 +126,7 @@ inline and threaded deadlines, sinks, counters). It re-exports the
 contract's types, so `egui_pop_hooks::{ListenOpts, Point, PointSpec,
 LAST}` keep their paths; `Kernel` keeps its typed methods as inherent
 ones for code that holds a `Kernel` and not a `dyn Bus`. It depends on
-`egui-pop-bus` and on nothing else.
+`bus-contract` and on nothing else.
 
 ### How a library receives the bus
 
@@ -133,7 +140,7 @@ ones for code that holds a `Kernel` and not a `dyn Bus`. It depends on
 - **One egui-pop application per bus.** egui-pop's listeners hold that
   application's window registry; a second application on the same bus
   would find its points declared and its listener ids taken. The
-  builder refuses it (logged as an error naming the point), and the
+  builder refuses it (`BuildError::Bus`, naming the point), and the
   application gives each egui-pop application its own bus or one bus
   per subsystem, as it chooses.
 - A check keeps the rule: `cargo xtask bus --check` fails when a
@@ -164,8 +171,12 @@ The bus is an `Arc<dyn Bus>`, not a type parameter:
 
 ### Migration and versions
 
-- `egui-pop-bus`: a new crate, `0.1.0`, Experimental.
-- `egui-pop-hooks`: **major** (0.x). The types move to `egui-pop-bus`
+- `bus-contract`: a new crate, `0.1.0`, in its own repository and
+  released on its own. Until it is on crates.io, egui-pop's workspace
+  takes it from its repository at a pinned commit
+  (`[patch.crates-io]`, removed once it is published); egui-pop's crates
+  that depend on it are not published before it is.
+- `egui-pop-hooks`: **major** (0.x). The types move to `bus-contract`
   and are re-exported; `PointInfo` gains `kind` (a struct literal or
   pattern without it no longer builds); `Point` gains `KIND` with a
   default (no change for implementors).
@@ -204,7 +215,7 @@ Helios is the application, so the choice is its own. Its intent is
 ## Survey: crates that already do this
 
 Checked on crates.io on 2026-11-16 (version, licence, last release).
-egui-pop is MIT OR Apache-2.0 and the contract crate takes no
+`bus-contract` and egui-pop are MIT OR Apache-2.0 and the contract takes no
 dependency; Helios (GPLv3) takes only permissive ones. What we need:
 listeners ordered by name (`after`, `before`, `last`), owners and
 `forget`, requests with a veto (steps, ADR 0011), `alter` and `collect`
@@ -222,7 +233,7 @@ a journal with catch-up.
 | `bus` | 2.4.1, MIT OR Apache-2.0, 2023-08 | Lock-free single-producer broadcast channel | A channel: one producer, no ordering, no answer. **Not used** |
 | `eventbus` | 0.5.1, AGPL-3.0+, 2018-12 | Event bus with priorities | Licence excluded, unmaintained. **Excluded** |
 | `pharos` | 0.5.3, Unlicense, 2021-10 | Observer pattern over async streams | Fan-out, asynchronous, no order or result. **Not used** |
-| `bevy_ecs` events and observers | 0.20.1, MIT OR Apache-2.0, 2026-10 | Events read by systems; observers triggered on entities | Tied to the ECS world and its schedule; ordering by system sets, not per listener; far too large a dependency for L0. **Not used** |
+| `bevy_ecs` events and observers | 0.20.1, MIT OR Apache-2.0, 2026-10 | Events read by systems; observers triggered on entities | Tied to the ECS world and its schedule; ordering by system sets, not per listener; far too large a dependency for a contract. **Not used** |
 | `qubit-event-bus` | 0.21.3, Apache-2.0, 2026-11 | Typed sync and async event-bus facades with pluggable providers | The same idea (a facade, providers plugged in), but young (≈800 downloads), five dependencies of its own family, no ordering by name or deadlines. **Not used**; noted as prior art for the facade |
 | `typed-emitter`, `event-emitter-rs`, `omnibus` | 0.2.0 MIT 2026-10; 0.1.4 MIT OR Apache-2.0 2020-08; 0.1.0 MIT 2026-03 | Node-style emitters, a small pub/sub | Fan-out without order or result. **Not used** |
 | `log`, `tracing` | MIT OR Apache-2.0 | Facade crates: a contract, the application installs the implementation | The **shape** we adopt (a contract crate, the implementation chosen by the application), not the global install |
@@ -236,8 +247,8 @@ contract.
 
 ## Slices
 
-1. **The contract crate and the kernel on it** (egui-pop): `egui-pop-bus`
-   with the traits, the typed calls on `dyn Bus`, `PointDecl` and
+1. **The contract crate and the kernel on it**: `bus-contract` (its own
+   repository) with the traits, the typed calls on `dyn Bus`, `PointDecl` and
    `declare_all`, `order_dump`, `missing_targets`; `egui-pop-hooks`'s
    `Kernel` implements `Bus` and re-exports the types. *Test:* the
    kernel's suite unchanged, run through `Arc<dyn Bus>` as well; a
@@ -250,7 +261,7 @@ contract.
    application-supplied bus (a test implementation recording each call)
    receives egui-pop's points and listeners, in their order, and the
    requests asked on it.
-3. **The journal contract**: `Journal` in `egui-pop-bus`, the host's
+3. **The journal contract**: `Journal` in `bus-contract`, the host's
    journal implementing it, `AppBuilder::journal`; cut against Helios's
    journal as the second implementation.
 4. **Helios** (its own pull requests): one bus built in `main.rs`, given
@@ -269,4 +280,4 @@ ADR 0029's slices 5 to 11 continue after slice 2, on the contract.
   calls `bus()` and the typed methods compiles unchanged.
 - The kernel's contract page ([The hook kernel](../hook-kernel.md))
   describes the default implementation; the contract is described by
-  `egui-pop-bus`'s documentation.
+  `bus-contract`'s documentation.
