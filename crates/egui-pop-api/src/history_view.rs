@@ -39,7 +39,10 @@
 //! let mut app = App::builder().plugin(HistoryPlugin::default())
 //!     .build(&egui::Context::default()).unwrap();
 //! let store = app.handle().store();
-//! lock(&store).declare(&OwnerId::USER, "doc/n", Descriptor::int("N", 0, 9, 0)).unwrap();
+//! // The agent may write `doc/n`: it may then undo (and dry-run) its steps.
+//! let agent = Origin::Agent("a".into());
+//! let n = Descriptor::int("N", 0, 9, 0).writers(&[agent.writer()]);
+//! lock(&store).declare(&OwnerId::USER, "doc/n", n).unwrap();
 //! lock(&store).set(Set::new("doc/n", Change::To(Value::Int(3)), Origin::User)).unwrap();
 //! let read = app
 //!     .run(&CommandId::from_static("history.read"), json!({ "scope": "app" }), Origin::Agent("a".into()))
