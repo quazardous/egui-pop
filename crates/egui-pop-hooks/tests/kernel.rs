@@ -461,3 +461,162 @@ fn the_kernel_through_the_contract() {
         [("double".to_string(), vec![8])]
     );
 }
+
+/// A local listener (state that is not `Send`) takes its place among the
+/// others: run inline on its thread, queued by an emit from another
+/// thread and run in its order at the thread's `run_pending`.
+#[test]
+fn local_listeners_run_in_order_on_their_thread() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let k = Arc::new(Kernel::new());
+    let seen: Rc<RefCell<Vec<Vec<String>>>> = Rc::default();
+    push(&k, "core", ListenOpts::new());
+    let mine = seen.clone();
+    k.listen_local::<Trail>(
+        "ui.panel",
+        ListenOpts::new().owner("ui").after("core"),
+        move |_, v| {
+            mine.borrow_mut().push(v.clone());
+            v.push("ui.panel".into());
+            Ok(())
+        },
+    )
+    .unwrap();
+    push(&k, "tail", ListenOpts::new().after("ui.panel"));
+    let woken = Arc::new(Mutex::new(Vec::new()));
+    let w = woken.clone();
+    k.on_pending(move |t| w.lock().unwrap().push(t));
+
+    let out = k.alter::<Trail>((), Vec::new());
+    assert_eq!(out.value, ["core", "ui.panel", "tail"]);
+    assert!(out.deferred.is_empty());
+    assert!(k.run_pending().is_empty());
+
+    let other = k.clone();
+    let out = thread::spawn(move || other.alter::<Trail>((), Vec::new()))
+        .join()
+        .unwrap();
+    assert_eq!(out.value, ["core", "tail"]);
+    assert_eq!(out.deferred, ["ui.panel"]);
+    assert_eq!(*woken.lock().unwrap(), [thread::current().id()]);
+    assert_eq!(seen.borrow().len(), 1);
+
+    let ran = k.run_pending();
+    assert_eq!(ran.len(), 1);
+    assert_eq!(ran[0].ran, ["ui.panel"]);
+    assert!(ran[0].failures.is_empty());
+    assert_eq!(seen.borrow()[1], ["core", "tail"]);
+    assert!(k.run_pending().is_empty());
+
+    let infos = k.listeners(Trail::ID).unwrap();
+    assert!(infos[1].local && infos[1].runs == 2);
+    assert!(
+        egui_pop_hooks::order_dump(&*k, &[Trail::ID])
+            .contains("ui.panel (owner ui): local; after core")
+    );
+    assert_eq!(
+        k.listen_local::<Trail>("ui.slow", ListenOpts::new().threaded(), |_, _| Ok(())),
+        Err(Refused::Threaded {
+            point: Trail::ID,
+            listener: "ui.slow".into()
+        })
+    );
+}
+
+/// A failing or panicking local listener is dropped like any other, on
+/// its thread and when run from the queue.
+#[test]
+fn local_listeners_keep_the_error_boundary() {
+    let k = Arc::new(Kernel::new());
+    k.listen_local::<Trail>("ui.broken", ListenOpts::new(), |_, v| {
+        v.push("half".into());
+        panic!("boom")
+    })
+    .unwrap();
+    push(&k, "core", ListenOpts::new());
+    let out = k.alter::<Trail>((), Vec::new());
+    assert_eq!(out.value, ["core"]);
+    assert!(matches!(&out.failures[0].kind, FailureKind::Panic(m) if m == "boom"));
+
+    let other = k.clone();
+    thread::spawn(move || other.alter::<Trail>((), Vec::new()))
+        .join()
+        .unwrap();
+    let ran = k.run_pending();
+    assert_eq!(ran[0].ran, ["ui.broken"]);
+    assert_eq!(ran[0].failures.len(), 1);
+}
+
+/// `forget`, from any thread, removes local listeners, queued runs
+/// included; their closures are dropped on their thread.
+#[test]
+fn forget_removes_local_listeners_from_any_thread() {
+    use std::rc::Rc;
+
+    let k = Arc::new(Kernel::new());
+    let held = Rc::new(());
+    let mine = held.clone();
+    k.listen_local::<Trail>("ui.panel", ListenOpts::new().owner("ui"), move |_, v| {
+        let _ = &mine;
+        v.push("ui.panel".into());
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(Rc::strong_count(&held), 2);
+    let other = k.clone();
+    let (deferred, forgot) = thread::spawn(move || {
+        let out = other.alter::<Trail>((), Vec::new());
+        (out.deferred, other.forget("ui"))
+    })
+    .join()
+    .unwrap();
+    assert_eq!(deferred, ["ui.panel"]);
+    assert_eq!(forgot, 1);
+    let ran = k.run_pending();
+    assert!(ran[0].ran.is_empty(), "removed since the emit: not run");
+    assert_eq!(Rc::strong_count(&held), 1, "its closure dropped here");
+    assert!(k.listeners(Trail::ID).unwrap().is_empty());
+
+    // Removed on its own thread: dropped at once.
+    let mine = held.clone();
+    k.listen_local::<Trail>("ui.again", ListenOpts::new(), move |_, _| {
+        let _ = &mine;
+        Ok(())
+    })
+    .unwrap();
+    assert!(k.unlisten(Trail::ID, "ui.again"));
+    assert_eq!(Rc::strong_count(&held), 1);
+}
+
+/// A collect from another thread: each queued local listener fills a
+/// fresh value on its thread.
+#[test]
+fn a_deferred_collect_fills_fresh_values() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let k = Arc::new(Kernel::new());
+    let got: Rc<RefCell<Vec<Vec<u32>>>> = Rc::default();
+    let mine = got.clone();
+    k.listen_local::<Parts>("ui.badge", ListenOpts::new(), move |n, out| {
+        out.push(*n);
+        mine.borrow_mut().push(out.clone());
+        Ok(())
+    })
+    .unwrap();
+    k.listen::<Parts>("disk", ListenOpts::new(), |n, out| {
+        out.push(n + 1);
+        Ok(())
+    })
+    .unwrap();
+    let other = k.clone();
+    let out = thread::spawn(move || other.collect::<Parts>(7))
+        .join()
+        .unwrap();
+    assert_eq!(out.parts, [("disk".to_string(), vec![8])]);
+    assert_eq!(out.deferred, ["ui.badge"]);
+    assert_eq!(k.run_pending()[0].ran, ["ui.badge"]);
+    assert_eq!(*got.borrow(), [vec![7]]);
+}

@@ -659,6 +659,9 @@ pub(crate) struct Bus {
     delivered: Cell<Seq>,
     /// A delivery runs: one asked from inside it is left to it.
     delivering: Cell<bool>,
+    /// The context a pass is asked of when an emit on another thread
+    /// queues local listeners ([`AppHandle::run_pending`]).
+    wake: Arc<Mutex<Option<egui::Context>>>,
 }
 
 impl std::fmt::Debug for Bus {
@@ -687,6 +690,15 @@ impl Bus {
         main.activate(WindowId::MAIN);
         let registry = Arc::new(Mutex::new(main));
         install(&*kernel, &registry);
+        let wake: Arc<Mutex<Option<egui::Context>>> = Arc::default();
+        {
+            let wake = wake.clone();
+            kernel.on_pending(move |_| {
+                if let Some(ctx) = lock(&wake).as_ref() {
+                    ctx.request_repaint();
+                }
+            });
+        }
         Bus {
             kernel,
             registry,
@@ -695,6 +707,16 @@ impl Bus {
             raise_pending: RefCell::default(),
             delivered: Cell::new(0),
             delivering: Cell::new(false),
+            wake,
+        }
+    }
+
+    /// The context to wake when local listeners are queued for the
+    /// interface's thread.
+    pub(crate) fn wake_with(&self, ctx: &egui::Context) {
+        let mut wake = lock(&self.wake);
+        if wake.as_ref() != Some(ctx) {
+            *wake = Some(ctx.clone());
         }
     }
 }
@@ -893,6 +915,24 @@ fn install(kernel: &dyn bus_contract::Bus, registry: &Arc<Mutex<Registry>>) {
 }
 
 impl AppHandle {
+    /// Runs the local listeners ([`bus_contract::Bus::listen_local_any`])
+    /// that emits on other threads queued for this thread, in their
+    /// order, with this application as [`asking`]; their failures
+    /// logged. The application calls it once per pass, before the
+    /// `On::Pass` handlers; an emit that queues some asks for a pass.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn run_pending(&self) -> Vec<bus_contract::PendingRun> {
+        ASKING.with_borrow_mut(|a| a.push(self.downgrade()));
+        let _asking = Asking;
+        let ran = self.0.bus.kernel.run_pending();
+        for f in ran.iter().flat_map(|r| &r.failures) {
+            log::error!(target: "egui_pop", "{f}");
+        }
+        ran
+    }
+
     /// The application's bus: the one given to `AppBuilder::bus`, or the
     /// hook kernel egui-pop made, where its requests' listeners are
     /// registered (ADR 0029, ADR 0030). A part that cares about a window closing

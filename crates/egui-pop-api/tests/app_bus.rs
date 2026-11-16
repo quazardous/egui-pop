@@ -9,11 +9,14 @@ use std::sync::{Arc, Mutex};
 
 use egui_pop_api::admin::AdminPlugin;
 use egui_pop_api::bus::bus_contract::{
-    Altered, AnyInput, AnyListener, AnyValue, Bus, CloneFn, Collected, FailureSink, FreshFn,
-    ListenOpts, ListenerInfo, Point, PointInfo, PointKey, PointKind, PointSpec, Refused,
+    Altered, AnyInput, AnyListener, AnyLocalListener, AnyValue, Bus, CloneFn, Collected,
+    FailureSink, FreshFn, ListenOpts, ListenerInfo, PendingRun, PendingWaker, Point, PointInfo,
+    PointKey, PointKind, PointSpec, Refused,
 };
 use egui_pop_api::bus::egui_pop_hooks::Kernel;
-use egui_pop_api::bus::{self, CONTRACT, WINDOW_POINTS, WindowClose};
+use egui_pop_api::bus::{
+    self, CONTRACT, PLACE, REGISTRY, Reason, WINDOW_POINTS, WindowClose, WindowKind, WindowRequest,
+};
 use egui_pop_api::windows::{WindowId, WindowSpec, WindowsPlugin};
 use egui_pop_api::{App, DefaultPlugins};
 use egui_pop_test::windows::MultiWindow;
@@ -56,6 +59,25 @@ impl Bus for Recording {
     ) -> Result<(), Refused> {
         self.record(format!("listen {} {id}", point.id));
         self.kernel.listen_any(point, id, opts, run)
+    }
+
+    fn listen_local_any(
+        &self,
+        point: PointKey,
+        id: String,
+        opts: ListenOpts,
+        run: AnyLocalListener,
+    ) -> Result<(), Refused> {
+        self.record(format!("listen local {} {id}", point.id));
+        self.kernel.listen_local_any(point, id, opts, run)
+    }
+
+    fn run_pending(&self) -> Vec<PendingRun> {
+        self.kernel.run_pending()
+    }
+
+    fn add_pending_waker(&self, wake: PendingWaker) {
+        Bus::add_pending_waker(&self.kernel, wake);
     }
 
     fn unlisten(&self, point: &str, id: &str) -> bool {
@@ -280,4 +302,78 @@ fn the_debug_bus_collector_lists_every_point_on_the_bus() {
             .unwrap()
             .contains("health.report\n"),
     );
+}
+
+/// A local listener (state that is not `Send`, as an interface's is)
+/// on a window point takes its place in the declared order: run inline
+/// when the request is asked on the interface's thread; queued when it
+/// is asked from a worker, and run at the next pass, before its
+/// `On::Pass` handlers.
+#[test]
+fn a_local_listener_on_a_window_point_runs_in_order_on_the_interface_thread() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let shared: Arc<dyn Bus> = Arc::new(Kernel::new());
+    let mut m = multi(shared.clone());
+    let app = m.app().clone();
+    // Each request heard: its window and what the listeners before did.
+    type Heard = Rc<RefCell<Vec<(String, Vec<String>)>>>;
+    let heard: Heard = Rc::default();
+    let mine = heard.clone();
+    shared
+        .listen_local::<WindowClose>(
+            "app.panel",
+            ListenOpts::new().owner("app").after(REGISTRY).before(PLACE),
+            move |req, did| {
+                mine.borrow_mut().push((req.window.clone(), did.clone()));
+                did.push("app.panel: heard".into());
+                Ok(())
+            },
+        )
+        .unwrap();
+    let order: Vec<(String, bool)> = shared
+        .listeners(WindowClose::ID)
+        .unwrap()
+        .into_iter()
+        .map(|l| (l.id, l.local))
+        .collect();
+    let at = order.iter().position(|(id, _)| id == "app.panel").unwrap();
+    assert!(order[at].1, "shown as local");
+    assert_eq!(order[at - 1].0, REGISTRY);
+    assert_eq!(order[at + 1].0, PLACE);
+
+    // Asked on the interface's thread: in its place, in the same call.
+    app.open_window(WindowSpec::new("import", "Import"), |ui, _| {
+        ui.label("cards");
+    });
+    m.root_pass();
+    app.close_window(&WindowId::new("import"));
+    {
+        let heard = heard.borrow();
+        assert_eq!(heard.len(), 1);
+        assert_eq!(heard[0].0, "import");
+        let did = &heard[0].1;
+        assert!(did.iter().any(|d| d.starts_with(REGISTRY)), "{did:?}");
+        assert!(!did.iter().any(|d| d.starts_with(PLACE)), "{did:?}");
+    }
+
+    // Asked from a worker: the others run there, this one waits for the
+    // interface's next pass.
+    let worker = shared.clone();
+    let out = std::thread::spawn(move || {
+        worker.alter::<WindowClose>(
+            WindowRequest::new("nowhere", WindowKind::App, "worker", Reason::Command),
+            Vec::new(),
+        )
+    })
+    .join()
+    .unwrap();
+    assert_eq!(out.deferred, ["app.panel"]);
+    assert_eq!(heard.borrow().len(), 1, "not run on the worker");
+    m.root_pass();
+    let heard = heard.borrow();
+    assert_eq!(heard.len(), 2, "run at the next pass");
+    assert_eq!(heard[1].0, "nowhere");
+    assert!(app.run_pending().is_empty(), "run once");
 }
