@@ -2193,6 +2193,8 @@ egui-pop-views-yellow = Jaune
 
 egui-pop-window-exit-fullscreen = Quitter le plein écran (F11)
 
+egui-pop-window-placed-by-system = Sous Wayland, le système place les fenêtres : leur taille est gardée, pas leur position
+
 egui-pop-workbench-close-panel = Fermer { $panel }
 
 egui-pop-workbench-detach = Détacher dans une fenêtre

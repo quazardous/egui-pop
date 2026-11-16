@@ -724,6 +724,10 @@ pub const TOAST_ACTION_GONE: StrKey = StrKey::new(
 pub const FRAME_WINDOW_MENU: StrKey = StrKey::new("egui-pop-frame-window-menu", "Window menu");
 pub const WINDOW_EXIT_FULLSCREEN: StrKey =
     StrKey::new("egui-pop-window-exit-fullscreen", "Exit full screen (F11)");
+pub const WINDOW_PLACED_BY_SYSTEM: StrKey = StrKey::new(
+    "egui-pop-window-placed-by-system",
+    "On Wayland the system places windows: their size is kept, not their position",
+);
 
 // The workbench.
 
@@ -1818,6 +1822,7 @@ pub const ALL: &[StrKey] = &[
     JOB_NO_LOG,
     FRAME_WINDOW_MENU,
     WINDOW_EXIT_FULLSCREEN,
+    WINDOW_PLACED_BY_SYSTEM,
     AREA_CENTER,
     AREA_START_SIDE,
     AREA_END_SIDE,
