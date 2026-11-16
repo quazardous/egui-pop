@@ -233,9 +233,17 @@ fn held(app: &AppHandle) -> bool {
     app.windows_list().iter().any(|w| w.id == APP_WINDOW)
 }
 
-/// Closed in the call (no pass of the main window yet): the app closed,
-/// the registry let the window go, said once with `reason`; then the
-/// main window's pass no longer declares it.
+/// Runs a command as the person would: before the main window's next
+/// pass, in it.
+fn run(m: &mut MultiWindow, command: egui_pop_model::ids::CommandId, args: serde_json::Value) {
+    m.app().run(command, args);
+    m.root_pass();
+}
+
+/// Closed in the call that asked (the window's own pass, or the main
+/// window's pass running the command): the app closed, the registry let
+/// the window go, said once with `reason`; the main window's pass no
+/// longer declares it.
 fn closed_in_the_call(m: &mut MultiWindow, closes: usize, reason: &str) {
     let app = m.app().clone();
     assert!(!admin::is_open(&app), "the app closed in the same call");
@@ -249,9 +257,9 @@ fn closed_in_the_call(m: &mut MultiWindow, closes: usize, reason: &str) {
     assert!(m.declared().is_empty(), "the backend agrees: no window");
 }
 
-/// Opened in the call that opened the app, before any pass: the
-/// registry holds it with the app as owner, and the next main pass
-/// declares it.
+/// Opened in the call that opened the app (the main window's pass
+/// running the command): the registry holds it with the app as owner,
+/// and that pass declares it.
 fn opened_in_the_call(m: &mut MultiWindow, opens: usize) {
     let app = m.app().clone();
     assert!(admin::is_open(&app));
@@ -266,7 +274,6 @@ fn opened_in_the_call(m: &mut MultiWindow, opens: usize) {
         "the registry holds it"
     );
     assert_eq!(opened(&app), (OPENED.map(String::from).to_vec(), opens));
-    m.root_pass();
     let v = app.window_viewport(&WindowId::new(APP_WINDOW)).unwrap();
     assert_eq!(
         m.declared(),
@@ -279,22 +286,25 @@ fn opened_in_the_call(m: &mut MultiWindow, opens: usize) {
 fn every_way_of_opening_is_one_window_open_in_the_same_call() {
     let mut m = multi();
     // `admin.open` in the window mode.
-    m.app().run(CMD_OPEN, json!({ "mode": "window" }));
+    run(&mut m, CMD_OPEN, json!({ "mode": "window" }));
     opened_in_the_call(&mut m, 1);
     // Opened again: brought to the front, not opened twice.
-    m.app().run(CMD_OPEN, json!({}));
+    run(&mut m, CMD_OPEN, json!({}));
     assert_eq!(opened(m.app()).1, 1);
     assert_eq!(m.app().windows_list().len(), 2);
-    m.app().run(CMD_CLOSE, json!({}));
+    run(&mut m, CMD_CLOSE, json!({}));
     // `app.settings` (Ctrl+,), the mode kept.
-    m.app()
-        .run(egui_pop_api::settings_window::CMD_SETTINGS, json!({}));
+    run(
+        &mut m,
+        egui_pop_api::settings_window::CMD_SETTINGS,
+        json!({}),
+    );
     opened_in_the_call(&mut m, 2);
-    m.app().run(CMD_CLOSE, json!({}));
+    run(&mut m, CMD_CLOSE, json!({}));
     // Over the main window, then "Pop out".
-    m.app().run(CMD_OPEN, json!({ "mode": "overlay" }));
+    run(&mut m, CMD_OPEN, json!({ "mode": "overlay" }));
     assert!(!held(m.app()));
-    m.app().run(CMD_POP_OUT, json!({}));
+    run(&mut m, CMD_POP_OUT, json!({}));
     opened_in_the_call(&mut m, 3);
 }
 
@@ -329,8 +339,7 @@ fn closed_by_escape() {
 fn closed_by_the_window_close_command() {
     let mut m = multi();
     open_in_window(&mut m);
-    m.app()
-        .run(windows::CMD_CLOSE, json!({ "window": APP_WINDOW }));
+    run(&mut m, windows::CMD_CLOSE, json!({ "window": APP_WINDOW }));
     closed_in_the_call(&mut m, 1, "command");
 }
 
@@ -338,11 +347,14 @@ fn closed_by_the_window_close_command() {
 fn closed_by_admin_close_and_ctrl_comma() {
     let mut m = multi();
     open_in_window(&mut m);
-    m.app().run(CMD_CLOSE, json!({}));
+    run(&mut m, CMD_CLOSE, json!({}));
     closed_in_the_call(&mut m, 1, "command");
     open_in_window(&mut m);
-    m.app()
-        .run(egui_pop_api::settings_window::CMD_SETTINGS, json!({}));
+    run(
+        &mut m,
+        egui_pop_api::settings_window::CMD_SETTINGS,
+        json!({}),
+    );
     closed_in_the_call(&mut m, 2, "command");
 }
 
@@ -351,7 +363,7 @@ fn closed_by_admin_close_and_ctrl_comma() {
 fn pop_in_is_a_close_the_app_survives() {
     let mut m = multi();
     open_in_window(&mut m);
-    m.app().run(CMD_POP_OUT, json!({}));
+    run(&mut m, CMD_POP_OUT, json!({}));
     assert!(admin::is_open(m.app()));
     assert!(!held(m.app()));
     let mut moved = CLOSED.map(String::from).to_vec();
@@ -377,8 +389,14 @@ fn its_plugin_disconnected_closes_its_window() {
     let closed = events(m.app(), "window.closed");
     assert_eq!(closed.last().unwrap().data["reason"], "owner-gone");
     let all = m.app().events_since(Default::default());
-    let at = |name: &str| all.iter().position(|e| e.name == name).unwrap();
-    assert!(at("window.closed") < at("plugin.disconnected"));
+    let closed = all.iter().position(|e| e.name == "window.closed");
+    let gone = all
+        .iter()
+        .position(|e| e.name == "plugin.disconnected" && e.data["plugin"] == "egui_pop.admin");
+    assert!(
+        closed.unwrap() < gone.unwrap(),
+        "closed before it is said gone"
+    );
     m.root_pass();
     assert!(m.declared().is_empty());
 }
