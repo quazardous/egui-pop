@@ -415,6 +415,9 @@ impl AppHandle {
             log::info!(target: "egui_pop", "the focus screen's hole is closed");
         }
         self.watch_empty(ui, page);
+        // The registry against the backend, at the end of every pass of
+        // the main window (ADR 0029, invariant 1, and 3 to 5).
+        self.check_invariants_in_pass(ctx);
     }
 
     fn watch_empty(&self, ui: &Ui, page: bool) {
@@ -454,7 +457,12 @@ impl AppHandle {
             g.empty = None;
             if shown {
                 g.shown = false;
+                drop(g);
                 log::info!(target: "egui_pop", "the main window paints again");
+                self.invariant_holds(
+                    crate::window_invariants::PAINTS,
+                    crate::windows::WindowId::MAIN,
+                );
             }
             return;
         }
@@ -483,6 +491,11 @@ impl AppHandle {
                 now.duration_since(since).as_secs_f32()
             );
             self.publish("egui_pop", None, "window.painted_nothing", state);
+            self.painted_nothing(
+                crate::windows::WindowId::MAIN,
+                passes,
+                now.duration_since(since),
+            );
         }
         self.fallback_page(ctx);
     }
@@ -558,6 +571,7 @@ impl AppHandle {
                 drop(g);
                 if was {
                     log::info!(target: "egui_pop", "the window `{id}` paints again");
+                    self.invariant_holds(crate::window_invariants::PAINTS, id.as_str());
                 }
                 return false;
             }
@@ -593,7 +607,27 @@ impl AppHandle {
             now.duration_since(since).as_secs_f32()
         );
         self.publish("egui_pop", None, "window.painted_nothing", state);
+        self.painted_nothing(id.as_str(), passes, now.duration_since(since));
         true
+    }
+
+    /// Invariant 2 broken: a shown window painted nothing past the
+    /// guard's passes and delay.
+    fn painted_nothing(&self, window: &str, passes: u32, since: Duration) {
+        let owner = self
+            .windows_list()
+            .into_iter()
+            .find(|w| w.id == window)
+            .map(|w| w.owner)
+            .unwrap_or_default();
+        self.invariant_broken(crate::window_invariants::painted_nothing(
+            window,
+            &owner,
+            format!(
+                "shown, painted nothing for {passes} passes ({:.1} s)",
+                since.as_secs_f32()
+            ),
+        ));
     }
 
     /// The fallback page of an application window that painted nothing:
@@ -638,6 +672,20 @@ impl AppHandle {
                 said: false,
             },
         );
+        drop(g);
+        // Closed, it is no longer a shown window that paints nothing.
+        self.invariant_holds(crate::window_invariants::PAINTS, id);
+    }
+
+    /// The id of the application window closed lately on `viewport`,
+    /// while the backend may still list it.
+    pub(crate) fn closed_window_id(&self, viewport: egui::ViewportId) -> Option<String> {
+        self.0
+            .paint_guard
+            .borrow()
+            .closed
+            .get(&viewport)
+            .map(|c| c.id.clone())
     }
 
     /// An application window opens on a viewport: what was kept of an

@@ -1996,6 +1996,7 @@ const WINDOW_EDGE_COVERAGE: f32 = 0.25;
 /// they showed is gone with them (a dialog shown there comes to the main
 /// window).
 pub(crate) fn forget_closed_windows(app: &AppHandle, ctx: &egui::Context) {
+    report_panel_windows(app);
     let mut open: Vec<ViewportId> = app
         .workbench_mut()
         .layout
@@ -2010,7 +2011,60 @@ pub(crate) fn forget_closed_windows(app: &AppHandle, ctx: &egui::Context) {
 
 /// A detached panel's window id.
 pub fn window_id(panel: &PanelId) -> ViewportId {
-    ViewportId::from_hash_of(("egui_pop.aux", panel.as_str()))
+    panel_viewport(panel.as_str())
+}
+
+/// A detached panel's window id, from the panel's id.
+pub(crate) fn panel_viewport(panel: &str) -> ViewportId {
+    ViewportId::from_hash_of(("egui_pop.aux", panel))
+}
+
+/// The detached panels' windows the main window shows this pass are the
+/// registry's panel windows: the ones gone reported closed, the new ones
+/// opened (ADR 0029: their path is not on its requests yet, slice 4). The
+/// panels are not drawn while a window's content holds the main window.
+fn report_panel_windows(app: &AppHandle) {
+    use crate::bus::{Reason, WindowKind, WindowRequest};
+    use crate::window_invariants::PANEL_PREFIX;
+    use egui_pop_hooks::Point as _;
+    let shown: Vec<String> = if app.root_has_content() {
+        Vec::new()
+    } else {
+        app.workbench_mut()
+            .layout
+            .auxiliary
+            .iter()
+            .map(|a| format!("{PANEL_PREFIX}{}", a.panel.as_str()))
+            .collect()
+    };
+    let held: Vec<String> = app
+        .windows_list()
+        .into_iter()
+        .filter(|w| w.kind == WindowKind::Panel)
+        .map(|w| w.id)
+        .collect();
+    for id in held.iter().filter(|id| !shown.contains(id)) {
+        app.report_window(
+            crate::bus::WindowClose::ID,
+            WindowRequest::new(
+                id.as_str(),
+                WindowKind::Panel,
+                "egui_pop.workbench",
+                Reason::Command,
+            ),
+        );
+    }
+    for id in shown.iter().filter(|id| !held.contains(id)) {
+        app.report_window(
+            crate::bus::WindowOpen::ID,
+            WindowRequest::new(
+                id.as_str(),
+                WindowKind::Panel,
+                "egui_pop.workbench",
+                Reason::Command,
+            ),
+        );
+    }
 }
 
 /// An area's id: its egui panel's, and its tabs' cache key.

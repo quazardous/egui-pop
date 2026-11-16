@@ -9,6 +9,13 @@
 //! in a pass of its own, with that window's input. Each window keeps its
 //! own queued events, focus, size and close request; the commands each
 //! pass sent to the system (`ViewportCommand`) are kept for the test.
+//!
+//! It is the backend of the window invariants (ADR 0029): a window the
+//! main pass declares is listed in the input of every later pass, as a
+//! system window that exists. After each pass, a window invariant broken
+//! fails the test (a panic naming the rule and the window), unless the
+//! test allows that rule ([`MultiWindow::allow_broken`]) because it
+//! breaks it on purpose.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -43,6 +50,10 @@ pub struct MultiWindow {
     /// Whether each window's last pass painted content (a text, an
     /// image, a drawing; not only backgrounds and lines).
     painted: BTreeMap<ViewportId, bool>,
+    /// The window invariants a test breaks on purpose.
+    allowed: BTreeSet<String>,
+    /// The broken invariants already looked at.
+    seen_broken: usize,
     time: f64,
 }
 
@@ -74,6 +85,8 @@ impl MultiWindow {
             nodes: BTreeMap::new(),
             held: BTreeSet::new(),
             painted: BTreeMap::new(),
+            allowed: BTreeSet::new(),
+            seen_broken: 0,
             time: 0.0,
         }
     }
@@ -92,6 +105,32 @@ impl MultiWindow {
 
     pub fn ctx(&self) -> &Context {
         &self.ctx
+    }
+
+    /// Lets the window invariant `rule` break without failing the test
+    /// (`egui_pop_api::window_invariants::RULES`): a test that breaks it
+    /// on purpose, and asserts its `window.invariant` itself.
+    pub fn allow_broken(&mut self, rule: &str) {
+        self.allowed.insert(rule.to_string());
+    }
+
+    /// Panics when a window invariant broke since the last look and the
+    /// test did not allow its rule.
+    fn assert_invariants(&mut self) {
+        let broken = self.app.handle().broken_invariants();
+        let new = broken.get(self.seen_broken..).unwrap_or_default().to_vec();
+        self.seen_broken = broken.len();
+        let failing: Vec<String> = new
+            .iter()
+            .filter(|b| !self.allowed.contains(&b.rule))
+            .map(|b| {
+                format!(
+                    "`{}` broken by `{}` (owner {:?}): {}",
+                    b.rule, b.window, b.owner, b.state
+                )
+            })
+            .collect();
+        assert!(failing.is_empty(), "window invariants broken: {failing:#?}");
     }
 
     /// The deferred windows the last main pass declared.
@@ -286,6 +325,11 @@ impl MultiWindow {
                 .filter_map(|(v, o)| o.viewport_ui_cb.map(|cb| (v, cb)))
                 .collect();
             let declared = self.declared.clone();
+            // The backend makes a system window for each declared one:
+            // listed from the next pass on.
+            for v in declared.keys() {
+                self.info.entry(*v).or_insert_with(Self::fresh_info);
+            }
             let held = &self.held;
             self.info.retain(|v, _| {
                 *v == ViewportId::ROOT || declared.contains_key(v) || held.contains(v)
@@ -299,6 +343,7 @@ impl MultiWindow {
         let app = &mut self.app;
         let out = self.ctx.run_ui(input, |ui| app.show(ui));
         self.take_output(ViewportId::ROOT, out);
+        self.assert_invariants();
     }
 
     /// Runs a declared window's pass; panics when the last main pass did
@@ -312,6 +357,7 @@ impl MultiWindow {
         let input = self.input(viewport);
         let out = self.ctx.run_ui(input, |ui| cb(ui));
         self.take_output(viewport, out);
+        self.assert_invariants();
     }
 }
 

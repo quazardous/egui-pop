@@ -243,6 +243,30 @@ pub fn assert_links_clean(app: &App) {
     );
 }
 
+/// Fails when a window invariant broke since the application started
+/// (ADR 0029: the registry against what is on screen), naming each rule,
+/// window, owner and state. [`windows::MultiWindow`] checks it after
+/// every pass by itself.
+#[track_caller]
+pub fn assert_window_invariants(app: &App) {
+    let broken: Vec<String> = app
+        .handle()
+        .broken_invariants()
+        .into_iter()
+        .map(|b| {
+            format!(
+                "`{}` broken by `{}` (owner {:?}): {}",
+                b.rule, b.window, b.owner, b.state
+            )
+        })
+        .collect();
+    assert!(
+        broken.is_empty(),
+        "window invariants broken:\n{}",
+        broken.join("\n")
+    );
+}
+
 /// Fails with the keymap's problems, if any.
 #[track_caller]
 pub fn assert_keymap_clean(app: &App) {
