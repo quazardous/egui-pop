@@ -503,6 +503,26 @@ fn refused(r: values::Refused) -> Refusal {
     Refusal::new(kind, r.to_string())
 }
 
+/// A dry run's answer when `by` may not write one of the values a step
+/// changed: the refusal the walk itself would give, without the
+/// diagnostic a refused write leaves.
+fn not_writer(s: &Store, step: &values::Step, by: &OwnerId) -> Result<(), Refusal> {
+    let Some((path, e)) = step
+        .changes
+        .iter()
+        .find(|(p, _, _)| !s.may_write(p, by))
+        .and_then(|(p, _, _)| s.get(p).map(|e| (p, e)))
+    else {
+        return Ok(());
+    };
+    Err(refused(values::Refused::NotWriter {
+        path: path.clone(),
+        by: by.clone(),
+        owner: e.owner.clone(),
+        current: e.value.clone(),
+    }))
+}
+
 /// A store's step as the interface sees it.
 fn step_info(scope: &ScopeId, step: &values::Step) -> StepInfo {
     StepInfo {
@@ -541,13 +561,16 @@ fn store_walk(
     redo: bool,
 ) -> Result<Vec<StepInfo>, Refusal> {
     let scope = &request.scope;
-    if request.dry_run {
-        let step = s.check_walk(scope, redo).map_err(refused)?;
-        return Ok(step.map(|st| step_info(scope, st)).into_iter().collect());
-    }
     // Walked by the origin's writer: an agent may not take back what it
     // may not write (the user's writer, the framework, may).
     let by = origin.writer();
+    if request.dry_run {
+        let step = s.check_walk(scope, redo).map_err(refused)?;
+        if let Some(st) = step {
+            not_writer(s, st, &by)?;
+        }
+        return Ok(step.map(|st| step_info(scope, st)).into_iter().collect());
+    }
     let step = if redo {
         s.redo_in_by(scope, origin, &by)
     } else {
@@ -599,6 +622,11 @@ fn store_jump(
                     format!("`{p}` is held by a gesture in progress"),
                 ));
             }
+        }
+        // And writable by the origin, as the jump itself checks.
+        let by = origin.writer();
+        for st in list.iter().rev().take(jump.count) {
+            not_writer(s, st, &by)?;
         }
         return Ok(walked);
     }
