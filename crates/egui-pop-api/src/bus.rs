@@ -107,6 +107,7 @@
 //! application's part that follows a setting listens there too.
 
 use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use bus_contract::{ListenOpts, Point, PointDecl, PointKind};
@@ -559,6 +560,10 @@ pub const FOCUS: &str = "window.focus";
 /// `command`) is shown, restored and given the system's focus: the one
 /// place egui-pop sends `ViewportCommand::Focus`.
 pub const RAISE: &str = "window.raise";
+/// Another window becoming the active one drops every window's shortcut
+/// in progress: a chord begun in one window is never finished in another
+/// (a local listener: the windows' key dispatchers are the interface's).
+pub const KEYS: &str = "window.keys";
 /// The one list of windows and popups ([`AppHandle::windows_list`]).
 pub const REGISTRY: &str = "window.registry";
 /// A window's place, kept when it closes.
@@ -672,6 +677,9 @@ pub(crate) struct Bus {
     /// Application windows raised by a command, asked the focus again
     /// from their own next pass (one not drawn yet has no system window).
     raise_pending: RefCell<std::collections::BTreeSet<ViewportId>>,
+    /// Counts the changes of the active window ([`KEYS`]): a window's key
+    /// dispatcher that saw another count drops its shortcut in progress.
+    pub(crate) keys_epoch: Rc<Cell<u64>>,
     /// The last journal event delivered to the event points' listeners.
     delivered: Cell<Seq>,
     /// A delivery runs: one asked from inside it is left to it.
@@ -712,6 +720,8 @@ impl Bus {
         main.activate(WindowId::MAIN);
         let registry = Arc::new(Mutex::new(main));
         install(&*kernel, &registry);
+        let keys_epoch = Rc::new(Cell::new(0));
+        activate::install_keys(&*kernel, keys_epoch.clone());
         let wake: Arc<Mutex<Option<egui::Context>>> = Arc::default();
         {
             let wake = wake.clone();
@@ -727,6 +737,7 @@ impl Bus {
             invariants: Mutex::default(),
             focus_seen: RefCell::default(),
             raise_pending: RefCell::default(),
+            keys_epoch,
             delivered: Cell::new(0),
             delivering: Cell::new(false),
             settings_heard: settings::Heard::default(),

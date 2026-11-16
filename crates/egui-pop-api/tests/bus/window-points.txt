@@ -22,7 +22,8 @@ window.reparent
 window.activate
   1. window.registry (owner egui_pop): before window.raise
   2. window.raise (owner egui_pop): after window.registry
-  3. window.invariants (owner egui_pop): last
+  3. window.keys (owner egui_pop): local; after window.registry
+  4. window.invariants (owner egui_pop): last
 popup.open
   1. window.registry (owner egui_pop): nothing
   2. window.invariants (owner egui_pop): last
