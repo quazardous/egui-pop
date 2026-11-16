@@ -10,6 +10,10 @@ use egui_pop_platform::window::{raise, wayland};
 
 fn commands(mut f: impl FnMut(&Context)) -> (Vec<ViewportCommand>, bool) {
     let ctx = Context::default();
+    // egui's own first frame sends the theme: past it, only what `f` sends.
+    ctx.run_ui(RawInput::default(), |_| {})
+        .textures_delta
+        .clear();
     let mut out = ctx.run_ui(RawInput::default(), |ui| f(ui.ctx()));
     // No renderer takes the font atlas.
     out.textures_delta.clear();
