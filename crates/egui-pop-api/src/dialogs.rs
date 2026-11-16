@@ -20,7 +20,16 @@
 //! dialog's window to the front). A dialog whose application window
 //! closes is cancelled with it, as a file choice asked from there is; one
 //! whose window moves into the main window (the main window closed while
-//! it was open) goes to the main window's queue. The dialogs' block is in the `WINDOW_OVERLAYS` zone, drawn in
+//! it was open) goes to the main window's queue.
+//!
+//! A dialog is a popup on the bus (ADR 0029): coming up, it asks its
+//! `popup.open` (`dialog:<id>`, owned by the plugin that opened it or by
+//! this one, its parent the window of its group); answered, cancelled, or
+//! its plugin gone, its `popup.close`. Its window closing asks that
+//! `popup.close` (`parent-closed`), and this plugin's listener on it
+//! ([`POPUP_LISTENER`]) cancels the dialog in that call; the dialogs still
+//! waiting in that window's queue are cancelled by [`CANCEL_ON_CLOSE`], a
+//! listener of `window.close`. The dialogs' block is in the `WINDOW_OVERLAYS` zone, drawn in
 //! every window.
 //!
 //! [`Dialogs::current`], [`Dialogs::answer`] and the `dialogs` collector
@@ -155,13 +164,19 @@ use egui_pop_model::values::{Change, Descriptor, PathHint, PathKind, Set, Type, 
 use serde::Serialize;
 use serde_json::{Map, Value as Json, json};
 
+use bus_contract::{ListenOpts, Point as _};
+
 use crate::app::AppHandle;
+use crate::bus::{
+    CHILDREN, FOCUS, PopupClose, REGISTRY, Reason, WindowClose, WindowKind, WindowRequest,
+};
 use crate::files::{self, FILES, FilePicker, FileRequest, PickerAnswer};
 use crate::host::Pending;
 use crate::host::source_of;
 use crate::services::ServiceToken;
 use crate::steps::{Outcome, StepSpec};
 use crate::strings as txt;
+use crate::windows::WindowId;
 use crate::zones::{self, Block};
 use crate::{Ctx, Plugin, PluginError};
 
@@ -193,6 +208,15 @@ pub const CMD_MOVE: CommandId = CommandId::from_static("dialogs.move");
 
 /// The plugin's id, owner of the positions it keeps.
 pub const PLUGIN: PluginId = PluginId::from_static("egui_pop.dialogs");
+
+/// The dialogs' listener on `popup.close`: the dialog of that popup is
+/// cancelled, whoever asked (its window closing, among others).
+pub const POPUP_LISTENER: &str = "dialogs.popup";
+/// The dialogs' listener on `window.close`: the dialogs waiting in the
+/// closing window's queue (never shown, so no popup yet) are cancelled.
+pub const CANCEL_ON_CLOSE: &str = "dialogs.cancel-on-close";
+/// A dialog's popup id in the registry: `dialog:<id>`.
+pub const POPUP_PREFIX: &str = "dialog:";
 /// What is left of the backdrop while a dialog is dragged.
 const DRAG_DIM: f32 = 0.35;
 /// How many arrow steps one Shift+arrow press moves.
@@ -1060,6 +1084,22 @@ struct Open {
     body: Json,
     /// The owner it was opened under (`values::current_scope`), if any.
     opener: Option<OwnerId>,
+    /// Its `popup.open` was asked (it came up): its end asks `popup.close`.
+    on_bus: bool,
+}
+
+impl Open {
+    /// Its popup's id in the registry.
+    fn popup(&self) -> String {
+        format!("{POPUP_PREFIX}{}", self.id)
+    }
+
+    /// Who owns its popup: the plugin that opened it, else this one.
+    fn owner(&self) -> String {
+        self.opener
+            .as_ref()
+            .map_or_else(|| PLUGIN.as_str().to_string(), |o| o.as_str().to_string())
+    }
 }
 
 #[derive(Debug, Default)]
@@ -1070,9 +1110,6 @@ struct State {
     given: Vec<(u64, Answer, Origin)>,
     /// What happened to the last dialogs: title and answer.
     answered: VecDeque<(String, Answer, Origin)>,
-    /// Dialogs whose application window closed: cancelled at the next
-    /// pass, before any is drawn.
-    orphaned: Vec<u64>,
 }
 
 /// The queue of dialogs.
@@ -1110,6 +1147,7 @@ impl Dialogs {
             ready: true,
             body: Json::Null,
             opener: egui_pop_model::values::current_scope(),
+            on_bus: false,
         });
         id
     }
@@ -1388,6 +1426,7 @@ impl Plugin for DialogsPlugin {
             zones::WINDOW_OVERLAYS,
             Block::add(BlockId::from_static("egui_pop.dialogs"), 10, show),
         );
+        listen(&ctx.app());
         Ok(())
     }
 }
@@ -1568,6 +1607,19 @@ fn apply(
         ),
         _ => {}
     }
+    if open.on_bus {
+        let reason = if origin == Origin::User {
+            Reason::User
+        } else {
+            Reason::Command
+        };
+        app.request_popup_close(WindowRequest::new(
+            open.popup(),
+            WindowKind::Popup,
+            open.owner(),
+            reason,
+        ));
+    }
     if let Some((command, args)) = run {
         app.run_as(command, args, origin);
     }
@@ -1642,6 +1694,14 @@ pub(crate) fn owner_gone(
             "dialog.cancelled",
             json!({ "id": open.id, "title": open.dialog.title(), "reason": reason }),
         );
+        if open.on_bus {
+            app.request_popup_close(WindowRequest::new(
+                open.popup(),
+                WindowKind::Popup,
+                open.owner(),
+                Reason::OwnerGone,
+            ));
+        }
     }
     if !gone.is_empty() {
         app.egui().request_repaint();
@@ -1673,23 +1733,88 @@ fn answer_step(
     }
 }
 
-/// An application window closed: the dialogs opened from it are
-/// cancelled at the next pass instead of moving to the main window's
-/// queue. A window moving into the main window does not call this.
-pub(crate) fn window_closed(app: &AppHandle, window: egui::ViewportId) {
-    let Some(d) = app.service(&DIALOGS) else {
-        return;
-    };
-    let mut s = lock(&d.0);
-    let ids: Vec<u64> = s
-        .queue
-        .iter()
-        .filter(|o| o.group == Some(window))
-        .map(|o| o.id)
-        .collect();
-    s.orphaned.extend(ids);
-    drop(s);
-    app.egui().request_repaint_of(egui::ViewportId::ROOT);
+/// Registers the dialogs' listeners on the bus, replacing those of an
+/// earlier connection: [`POPUP_LISTENER`] on `popup.close`,
+/// [`CANCEL_ON_CLOSE`] on `window.close`.
+fn listen(app: &AppHandle) {
+    let bus = app.bus();
+    bus.unlisten(PopupClose::ID, POPUP_LISTENER);
+    bus.unlisten(WindowClose::ID, CANCEL_ON_CLOSE);
+    let mine = || ListenOpts::new().owner(PLUGIN.as_str());
+    let listened = [
+        bus.listen::<PopupClose>(POPUP_LISTENER, mine().before(REGISTRY), |req, did| {
+            let Some(id) = req
+                .window
+                .strip_prefix(POPUP_PREFIX)
+                .and_then(|n| n.parse::<u64>().ok())
+            else {
+                return Ok(());
+            };
+            let Some(app) = crate::bus::asking() else {
+                return Ok(());
+            };
+            let Some(d) = app.service(&DIALOGS) else {
+                return Ok(());
+            };
+            // Its popup closes now: the cancel asks no second one.
+            let title = {
+                let mut s = lock(&d.0);
+                s.queue.iter_mut().find(|o| o.id == id).map(|o| {
+                    o.on_bus = false;
+                    o.dialog.title().to_string()
+                })
+            };
+            let Some(title) = title else {
+                return Ok(());
+            };
+            overlay::close(&app.egui(), overlay_id(id));
+            apply(&app, &d, id, Answer::Cancel, Origin::User)?;
+            did.push(format!(
+                "{POPUP_LISTENER}: `{title}` cancelled ({})",
+                req.reason.as_str()
+            ));
+            Ok(())
+        }),
+        bus.listen::<WindowClose>(
+            CANCEL_ON_CLOSE,
+            mine().after(CHILDREN).before(FOCUS),
+            |req, did| {
+                if req.kind != WindowKind::App {
+                    return Ok(());
+                }
+                let Some(app) = crate::bus::asking() else {
+                    return Ok(());
+                };
+                let (Some(d), Some(window)) = (
+                    app.service(&DIALOGS),
+                    app.window_viewport(&WindowId::new(&req.window)),
+                ) else {
+                    return Ok(());
+                };
+                let waiting: Vec<u64> = lock(&d.0)
+                    .queue
+                    .iter()
+                    .filter(|o| o.group == Some(window))
+                    .map(|o| o.id)
+                    .collect();
+                for id in &waiting {
+                    apply(&app, &d, *id, Answer::Cancel, Origin::User)?;
+                }
+                if !waiting.is_empty() {
+                    did.push(format!(
+                        "{CANCEL_ON_CLOSE}: {} waiting dialogs cancelled",
+                        waiting.len()
+                    ));
+                }
+                Ok(())
+            },
+        ),
+    ];
+    for l in listened {
+        if let Err(e) = l {
+            log::error!(target: "egui_pop", "{e}");
+        }
+    }
 }
 
 /// Draws the dialog shown, and applies the answers given meanwhile.
@@ -1700,16 +1825,6 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let ctx = ui.ctx().clone();
     let here = ctx.viewport_id();
     let group = app.window_group(here);
-    // The dialogs of a window that closed are cancelled: they do not come
-    // up again over the main window.
-    let orphaned = std::mem::take(&mut lock(&d.0).orphaned);
-    for id in orphaned {
-        if d.is_open(id)
-            && let Err(e) = apply(app, &d, id, Answer::Cancel, Origin::User)
-        {
-            log::warn!(target: "egui_pop", "dialog: {e}");
-        }
-    }
     // Each dialog's group: the one it was opened in, while that window is
     // open (the main window's otherwise); the active one's when unknown.
     {
@@ -1771,6 +1886,22 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                 log::warn!(target: "egui_pop", "dialog: {e}");
             }
             return;
+        }
+        // It is on screen: a popup of its group's window.
+        if !open_dialog.on_bus {
+            let req = WindowRequest::new(
+                open_dialog.popup(),
+                WindowKind::Popup,
+                open_dialog.owner(),
+                Reason::Command,
+            )
+            .parent(app.registry_window_of(group));
+            if app.request_popup_open(req) {
+                open_dialog.on_bus = true;
+                if let Some(o) = lock(&d.0).queue.iter_mut().find(|o| o.id == shown_id) {
+                    o.on_bus = true;
+                }
+            }
         }
         // Where it was left, when it keeps its place; centred otherwise.
         if let Some(key) = &open_dialog.remember {

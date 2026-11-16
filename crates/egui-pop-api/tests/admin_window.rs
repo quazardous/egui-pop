@@ -184,8 +184,7 @@ const OPENED: [&str; 3] = [
 
 /// What `window.close`'s listeners did, closing it while it was the
 /// window worked in: the same whatever closed it.
-const CLOSED: [&str; 6] = [
-    "window.children: its dialogs cancelled",
+const CLOSED: [&str; 5] = [
     "admin.window: the Settings app closed",
     "window.focus: the window worked in before is active",
     "window.registry: closed",
@@ -367,7 +366,7 @@ fn pop_in_is_a_close_the_app_survives() {
     assert!(admin::is_open(m.app()));
     assert!(!held(m.app()));
     let mut moved = CLOSED.map(String::from).to_vec();
-    moved[1] = "admin.window: the Settings app moves over the main window".into();
+    moved[0] = "admin.window: the Settings app moves over the main window".into();
     assert_eq!(did(m.app(), "window.close"), (moved, 1));
     m.root_pass();
     assert!(m.declared().is_empty());
@@ -384,7 +383,7 @@ fn its_plugin_disconnected_closes_its_window() {
     m.root_pass();
     assert!(!held(m.app()));
     let mut gone = CLOSED.map(String::from).to_vec();
-    gone.remove(1);
+    gone.remove(0);
     assert_eq!(did(m.app(), "window.close"), (gone, 1));
     let closed = events(m.app(), "window.closed");
     assert_eq!(closed.last().unwrap().data["reason"], "owner-gone");

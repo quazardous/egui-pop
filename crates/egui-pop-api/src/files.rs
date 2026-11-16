@@ -14,6 +14,13 @@
 //! in-app picker's modal is drawn over that application window and blocks
 //! it alone; the window closed, the choice is cancelled.
 //!
+//! A choice under way is on the bus (ADR 0029): started, it asks its
+//! `popup.open` (`file:<id>`, owned by this plugin, its parent the window
+//! it was asked from), or, for the system's chooser, the `window.open` of
+//! a native window; ended, their close. Its window closing closes it
+//! (`parent-closed`), and this plugin's listener ([`CHOICE_LISTENER`])
+//! cancels the choice in that call.
+//!
 //! - **The system's chooser** (feature `native-dialogs`, through `rfd`):
 //!   a fallback kept in case an application cannot do with the in-app
 //!   picker, off at build time and at run time. Used only when the feature
@@ -149,7 +156,12 @@ use egui_pop_model::values::{Change, Descriptor, Set, Value};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
 
+use bus_contract::{HookError, ListenOpts, Point as _};
+
 use crate::app::AppHandle;
+use crate::bus::{
+    CHILDREN, FOCUS, PopupClose, REGISTRY, Reason, WindowClose, WindowKind, WindowRequest,
+};
 use crate::dialogs::{Confirm, DIALOGS};
 use crate::host::{self, Pending, Resolver};
 use crate::services::ServiceToken;
@@ -688,6 +700,9 @@ struct Open {
     /// window's group (`AppHandle::window_group`); cancelled once that
     /// window closes.
     owner: egui::ViewportId,
+    /// What it is on the bus, once its open was asked: a popup, or a
+    /// native window for the system's chooser.
+    on_bus: Option<WindowKind>,
 }
 
 #[derive(Debug, Default)]
@@ -961,6 +976,7 @@ impl Files {
                 by: Origin::User,
                 choices: None,
                 owner,
+                on_bus: None,
             });
             id
         };
@@ -994,9 +1010,65 @@ impl Files {
             {
                 resolver.resolve(r);
             }
+        } else {
+            self.open_on_bus(app, id);
         }
         app.egui().request_repaint();
         (id, pending)
+    }
+
+    /// Asks the open of a choice under way: its in-app picker's (or a
+    /// plugin's) popup, or the system chooser's native window, a child of
+    /// the window it was asked from.
+    fn open_on_bus(&self, app: &AppHandle, id: u64) {
+        let Some((owner, via)) = lock(&self.0)
+            .open
+            .iter()
+            .find(|o| o.id == id)
+            .map(|o| (o.owner, o.via))
+        else {
+            return;
+        };
+        let kind = if via == Via::Native {
+            WindowKind::Native
+        } else {
+            WindowKind::Popup
+        };
+        let req = WindowRequest::new(
+            format!("{POPUP_PREFIX}{id}"),
+            kind,
+            PLUGIN.as_str(),
+            Reason::Command,
+        )
+        .parent(app.registry_window_of(owner));
+        let opened = if kind == WindowKind::Native {
+            app.request_native_open(req)
+        } else {
+            app.request_popup_open(req)
+        };
+        if opened && let Some(o) = lock(&self.0).open.iter_mut().find(|o| o.id == id) {
+            o.on_bus = Some(kind);
+        }
+    }
+
+    /// Cancels an open choice now (its popup or native window closing):
+    /// the journal and its result say so. Whether one was open.
+    fn cancel_now(&self, app: &AppHandle, id: u64) -> bool {
+        let Some(o) = ({
+            let mut s = lock(&self.0);
+            s.open
+                .iter()
+                .position(|o| o.id == id)
+                .map(|at| s.open.remove(at))
+        }) else {
+            return false;
+        };
+        overlay::close(&app.egui(), overlay_id(id));
+        if o.picker.is_some() {
+            self.previews().cancel();
+        }
+        finish(app, self, id, &o.request, None, o.resolver, &o.by);
+        true
     }
 
     /// Draws the in-app picker of a choice started with
@@ -1445,6 +1517,13 @@ fn start_folder(app: &AppHandle, request: &FileRequest, fs: &SharedFs) -> Option
 /// The plugin's id.
 pub const PLUGIN: PluginId = PluginId::from_static("egui_pop.files");
 
+/// The files plugin's listener on `popup.close` and `window.close`: the
+/// choice of that popup or native window is cancelled, whoever asked (its
+/// window closing, among others).
+pub const CHOICE_LISTENER: &str = "files.choice";
+/// A choice's id in the registry: `file:<id>`.
+pub const POPUP_PREFIX: &str = "file:";
+
 /// The plugin.
 #[derive(Clone, Debug)]
 pub struct FilesPlugin {
@@ -1818,7 +1897,57 @@ impl Plugin for FilesPlugin {
             zones::WINDOW_OVERLAYS,
             Block::add(BlockId::from_static("egui_pop.files"), 9, frame),
         );
+        listen(&ctx.app());
         Ok(())
+    }
+}
+
+/// The choice a popup or native window of the registry is, if any.
+fn choice_of(req: &WindowRequest) -> Option<u64> {
+    req.window.strip_prefix(POPUP_PREFIX)?.parse().ok()
+}
+
+/// [`CHOICE_LISTENER`] on a popup or native window closing: its choice,
+/// if still open, is cancelled in this call.
+fn cancel_on_close(req: &WindowRequest, did: &mut Vec<String>) -> Result<(), HookError> {
+    let Some(id) = choice_of(req) else {
+        return Ok(());
+    };
+    let Some(app) = crate::bus::asking() else {
+        return Ok(());
+    };
+    let Some(files) = app.service(&FILES) else {
+        return Ok(());
+    };
+    if files.cancel_now(&app, id) {
+        did.push(format!(
+            "{CHOICE_LISTENER}: choice {id} cancelled ({})",
+            req.reason.as_str()
+        ));
+    }
+    Ok(())
+}
+
+/// Registers the files plugin's listener on the bus, replacing that of an
+/// earlier connection: [`CHOICE_LISTENER`] on `popup.close` (the in-app
+/// picker's popup) and `window.close` (the system chooser's window).
+fn listen(app: &AppHandle) {
+    let bus = app.bus();
+    bus.unlisten(PopupClose::ID, CHOICE_LISTENER);
+    bus.unlisten(WindowClose::ID, CHOICE_LISTENER);
+    let mine = || ListenOpts::new().owner(PLUGIN.as_str());
+    let listened = [
+        bus.listen::<PopupClose>(CHOICE_LISTENER, mine().before(REGISTRY), cancel_on_close),
+        bus.listen::<WindowClose>(
+            CHOICE_LISTENER,
+            mine().after(CHILDREN).before(FOCUS),
+            cancel_on_close,
+        ),
+    ];
+    for l in listened {
+        if let Err(e) = l {
+            log::error!(target: "egui_pop", "{e}");
+        }
     }
 }
 
@@ -1865,23 +1994,13 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
         ChoiceValues,
         Option<Resolver>,
         Origin,
+        Option<WindowKind>,
     )> = {
         let here = ui.ctx().viewport_id();
         let mut s = lock(&files.0);
         let mut done = Vec::new();
         let mut i = 0;
         while i < s.open.len() {
-            // Its window closed, a choice is cancelled: it does not come
-            // up again over another window.
-            let owner = s.open[i].owner;
-            if owner != egui::ViewportId::ROOT && app.still_open(owner) != owner {
-                let mut answer = lock(&s.open[i].answer);
-                if answer.is_none() {
-                    *answer = Some(None);
-                }
-                drop(answer);
-                s.open[i].picker = None;
-            }
             // An in-app picker's modal is its window's: the choice ends in
             // that window's pass, which closes it.
             let shown = picker_window(app, s.open[i].owner);
@@ -1900,7 +2019,7 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
                         .choices
                         .or_else(|| o.picker.map(|p| p.choice_values))
                         .unwrap_or_else(|| o.request.choice_defaults());
-                    done.push((o.id, o.request, a, choices, o.resolver, o.by));
+                    done.push((o.id, o.request, a, choices, o.resolver, o.by, o.on_bus));
                 }
                 None => i += 1,
             }
@@ -1912,10 +2031,27 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
         // Nothing to preview for them any more.
         files.previews().cancel();
     }
-    for (id, request, answer, choices, resolver, by) in done {
+    for (id, request, answer, choices, resolver, by, on_bus) in done {
         overlay::close(&ctx, overlay_id(id));
         let answer = answer.map(|paths| (paths, choices));
         finish(app, &files, id, &request, answer, resolver, &by);
+        // Ended: its popup or native window closes.
+        let reason = if by == Origin::User {
+            Reason::User
+        } else {
+            Reason::Command
+        };
+        let req =
+            |kind| WindowRequest::new(format!("{POPUP_PREFIX}{id}"), kind, PLUGIN.as_str(), reason);
+        match on_bus {
+            Some(WindowKind::Native) => {
+                app.request_window_close(req(WindowKind::Native));
+            }
+            Some(kind) => {
+                app.request_popup_close(req(kind));
+            }
+            None => {}
+        }
     }
     picker_overlay(&ctx, app, &files);
 }

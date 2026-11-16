@@ -12,7 +12,10 @@ use std::time::Duration;
 
 use egui::ViewportId;
 use egui_pop_api::admin::{APP_WINDOW, AdminPlugin, CMD_OPEN};
-use egui_pop_api::bus::{PopupOpen, Reason, WindowKind, WindowOpen, WindowRequest};
+use egui_pop_api::bus::bus_contract::ListenOpts;
+use egui_pop_api::bus::{
+    CHILDREN, FOCUS, PopupOpen, Reason, WindowClose, WindowKind, WindowOpen, WindowRequest,
+};
 use egui_pop_api::window_invariants::{BACKEND, CHILD_ALIVE, OWNER, PAINTS, POPUP_PARENT};
 use egui_pop_api::windows::{WindowId, WindowSpec, WindowsPlugin};
 use egui_pop_api::{App, AppHandle, DefaultPlugins};
@@ -198,10 +201,27 @@ fn a_popup_whose_parent_closed_breaks_rule_4() {
     let mut m = multi();
     m.allow_broken(POPUP_PARENT);
     open_settings(&mut m);
-    m.app().bus().alter::<PopupOpen>(
-        WindowRequest::new("test.menu", WindowKind::Popup, "test", Reason::User).parent(APP_WINDOW),
-        Vec::new(),
-    );
+    // Opened while its parent closes, once its children were closed.
+    let bus = m.app().bus();
+    let opener = bus.clone();
+    bus.listen::<WindowClose>(
+        "test.late",
+        ListenOpts::new()
+            .owner("test")
+            .after(CHILDREN)
+            .before(FOCUS),
+        move |req, _| {
+            if req.window == APP_WINDOW {
+                opener.alter::<PopupOpen>(
+                    WindowRequest::new("test.menu", WindowKind::Popup, "test", Reason::User)
+                        .parent(APP_WINDOW),
+                    Vec::new(),
+                );
+            }
+            Ok(())
+        },
+    )
+    .unwrap();
     m.root_pass();
     assert!(said(m.app()).is_empty(), "its parent is open");
     close_settings(&m);
@@ -217,16 +237,32 @@ fn a_child_left_alive_breaks_rule_5() {
     let mut m = multi();
     m.allow_broken(CHILD_ALIVE);
     open_settings(&mut m);
-    m.app().bus().alter::<WindowOpen>(
-        WindowRequest::new(
-            "test.web",
-            WindowKind::Native,
-            "test.viewer",
-            Reason::Command,
-        )
-        .parent(APP_WINDOW),
-        Vec::new(),
-    );
+    // Opened while its parent closes, once its children were closed.
+    let bus = m.app().bus();
+    let opener = bus.clone();
+    bus.listen::<WindowClose>(
+        "test.late",
+        ListenOpts::new()
+            .owner("test")
+            .after(CHILDREN)
+            .before(FOCUS),
+        move |req, _| {
+            if req.window == APP_WINDOW {
+                opener.alter::<WindowOpen>(
+                    WindowRequest::new(
+                        "test.web",
+                        WindowKind::Native,
+                        "test.viewer",
+                        Reason::Command,
+                    )
+                    .parent(APP_WINDOW),
+                    Vec::new(),
+                );
+            }
+            Ok(())
+        },
+    )
+    .unwrap();
     m.root_pass();
     assert!(said(m.app()).is_empty(), "its parent is open");
     close_settings(&m);

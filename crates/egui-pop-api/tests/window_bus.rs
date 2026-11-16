@@ -69,6 +69,8 @@ fn the_window_points_run_in_their_reviewed_order() {
             "window.children",
             "workbench.window",
             "admin.window",
+            "dialogs.cancel-on-close",
+            "files.choice",
             "window.focus",
             "window.registry",
             "window.place",
