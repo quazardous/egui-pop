@@ -124,15 +124,11 @@ fn a_press_in_each_window_activates_it_once_and_a_close_hands_it_back() {
     assert_eq!(m.app().active_window_id(), EDITOR);
     assert_eq!(m.app().active_window(), editor);
     assert_eq!(listed_active(m.app()), [EDITOR]);
-    // A dialog opened now comes up over the editor, the window worked in.
-    assert_eq!(dialog_parent(&mut m, editor).as_deref(), Some(EDITOR));
 
     press(&mut m, ViewportId::ROOT);
     assert_eq!(m.app().active_window_id(), "main");
     assert_eq!(m.app().active_window(), ViewportId::ROOT);
     assert_eq!(listed_active(m.app()), ["main"]);
-    // A dialog opened now comes up over the main window.
-    assert_eq!(dialog_parent(&mut m, editor).as_deref(), Some("main"));
 
     let said = activated(m.app());
     let windows: Vec<&str> = said
@@ -159,6 +155,15 @@ fn a_press_in_each_window_activates_it_once_and_a_close_hands_it_back() {
     assert_eq!(last.data["window"], "main");
     assert_eq!(last.data["from"], LOG_WINDOW);
     assert_eq!(last.data["reason"], "system");
+
+    // A dialog opened from outside any window comes up over the window
+    // worked in last: the editor, then the main window. (A modal dialog
+    // in the main window's group blocks its detached windows, so the
+    // dialogs come last.)
+    press(&mut m, editor);
+    assert_eq!(dialog_parent(&mut m, editor).as_deref(), Some(EDITOR));
+    press(&mut m, ViewportId::ROOT);
+    assert_eq!(dialog_parent(&mut m, editor).as_deref(), Some("main"));
     assert!(m.app().broken_invariants().is_empty());
 }
 
