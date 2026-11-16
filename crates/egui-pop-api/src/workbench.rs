@@ -1700,8 +1700,9 @@ impl Workbench {
 
 /// Draws the detached panels, each in a window of its own (with its own
 /// scale, and the application's frame when it draws one). Closing such a
-/// window is the `workbench.close_window` step, whose default docks the
-/// panel back.
+/// window is the `workbench.close_window` step, whose default asks the
+/// window's `window.close` on the bus: the workbench's listener docks its
+/// panels back (`crate::bus::panels`, which shows the windows too).
 ///
 /// Each window is a window of the application in full: `keys` dispatches
 /// its keys in its own context (its focus chain, `window` naming its
@@ -1761,7 +1762,7 @@ pub(crate) fn windows(
             builder = builder.with_position(p);
         }
         let panel = aux.panel.clone();
-        ctx.show_viewport_immediate(window_id(&panel), builder, |ui, class| {
+        crate::bus::panels::show_window(ctx, window_id(&panel), builder, |ui, class| {
             let vctx = ui.ctx().clone();
             // Embedded in the main window (a backend without windows of
             // its own, kittest): the main window's pass does all this.
@@ -1826,10 +1827,12 @@ pub(crate) fn windows(
                 crate::menus::draw_popup(&vctx, app);
             }
             if vctx.input(|i| i.viewport().close_requested()) {
-                // The step decides: the default docks the panel back.
-                let out = app.change_workbench(Change::CloseWindow(panel.clone()));
-                if matches!(out, Some(Outcome::Vetoed { .. })) {
-                    vctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                // The step decides, then the window's `window.close`: the
+                // default docks its panels back. Refused, it stays.
+                app.change_workbench(Change::CloseWindow(panel.clone()));
+                let kept = (app.workbench_mut().layout.auxiliary.iter()).any(|a| a.panel == panel);
+                if kept {
+                    crate::bus::panels::keep_open(&vctx);
                 }
             }
             // Its place, kept in the layout.
@@ -1996,7 +1999,6 @@ const WINDOW_EDGE_COVERAGE: f32 = 0.25;
 /// they showed is gone with them (a dialog shown there comes to the main
 /// window).
 pub(crate) fn forget_closed_windows(app: &AppHandle, ctx: &egui::Context) {
-    report_panel_windows(app);
     let mut open: Vec<ViewportId> = app
         .workbench_mut()
         .layout
@@ -2017,54 +2019,6 @@ pub fn window_id(panel: &PanelId) -> ViewportId {
 /// A detached panel's window id, from the panel's id.
 pub(crate) fn panel_viewport(panel: &str) -> ViewportId {
     ViewportId::from_hash_of(("egui_pop.aux", panel))
-}
-
-/// The detached panels' windows the main window shows this pass are the
-/// registry's panel windows: the ones gone reported closed, the new ones
-/// opened (ADR 0029: their path is not on its requests yet, slice 4). The
-/// panels are not drawn while a window's content holds the main window.
-fn report_panel_windows(app: &AppHandle) {
-    use crate::bus::{Reason, WindowKind, WindowRequest};
-    use crate::window_invariants::PANEL_PREFIX;
-    use egui_pop_hooks::Point as _;
-    let shown: Vec<String> = if app.root_has_content() {
-        Vec::new()
-    } else {
-        app.workbench_mut()
-            .layout
-            .auxiliary
-            .iter()
-            .map(|a| format!("{PANEL_PREFIX}{}", a.panel.as_str()))
-            .collect()
-    };
-    let held: Vec<String> = app
-        .windows_list()
-        .into_iter()
-        .filter(|w| w.kind == WindowKind::Panel)
-        .map(|w| w.id)
-        .collect();
-    for id in held.iter().filter(|id| !shown.contains(id)) {
-        app.report_window(
-            crate::bus::WindowClose::ID,
-            WindowRequest::new(
-                id.as_str(),
-                WindowKind::Panel,
-                "egui_pop.workbench",
-                Reason::Command,
-            ),
-        );
-    }
-    for id in shown.iter().filter(|id| !held.contains(id)) {
-        app.report_window(
-            crate::bus::WindowOpen::ID,
-            WindowRequest::new(
-                id.as_str(),
-                WindowKind::Panel,
-                "egui_pop.workbench",
-                Reason::Command,
-            ),
-        );
-    }
 }
 
 /// An area's id: its egui panel's, and its tabs' cache key.

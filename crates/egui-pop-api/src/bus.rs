@@ -49,9 +49,12 @@
 //! own `window.close` first; a window's content moving into the main
 //! window when it closes, and back when the main window is asked to its
 //! front, is a `window.reparent` ([`AppHandle::request_window_reparent`]).
-//! Detached panels and popups still do their work themselves and report
-//! it to the registry; they move onto their requests one by one (the
-//! ADR's slices).
+//! Detached panels' windows are the workbench's: detaching a panel is its
+//! window's `window.open`, docking it back its `window.reparent` into the
+//! main window, closing its window its `window.close`, the workbench's
+//! listener ([`WORKBENCH_WINDOW`]) changing the layout whoever asked.
+//! Popups still do their work themselves and report it to the registry;
+//! they move onto their requests one by one (the ADR's slices).
 //!
 //! The job lifecycle is the second family. Asking about a job is a
 //! request ([`JobCancel`], [`JobPause`], [`JobResume`], [`JobRetry`], each
@@ -84,6 +87,8 @@ pub use egui_pop_hooks;
 
 mod owners;
 pub use owners::OWNER_GONE;
+pub(crate) mod panels;
+pub use panels::{WORKBENCH_OWNER, WORKBENCH_WINDOW};
 mod shell;
 pub use shell::STEP_WINDOW_REPARENT;
 
@@ -675,6 +680,7 @@ fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
                     match req.kind {
                         WindowKind::App => app.registry_close(&WindowId::new(&req.window)),
                         WindowKind::Main if held => app.registry_close_main(),
+                        WindowKind::Panel if held => panels::left(&app, &req.window),
                         _ => {}
                     }
                 }
@@ -737,6 +743,7 @@ fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
         });
     }
     shell::install(kernel, registry);
+    panels::install(kernel);
     owners::install(kernel);
     // The invariants check runs last on every other window point: the
     // rules the registry alone answers (the backend's and the paint
@@ -880,6 +887,7 @@ impl AppHandle {
         let open = match request.kind {
             WindowKind::App => self.windows_ref().entry(&id).is_some(),
             WindowKind::Main => lock(&self.0.bus.registry).holds(WindowId::MAIN),
+            WindowKind::Panel => lock(&self.0.bus.registry).holds(&request.window),
             _ => true,
         };
         if !open {
@@ -1023,31 +1031,6 @@ impl AppHandle {
         // Up to the last event: a job started since the last pass counts.
         self.deliver_events();
         emit_with::<PluginDisconnect>(self, change, serde_json::Map::new())
-    }
-
-    /// A path not moved onto its request yet reports a window opened, so
-    /// the registry holds it (the detached panels' windows, until their
-    /// slice).
-    pub(crate) fn report_window(&self, point: &str, req: WindowRequest) {
-        match point {
-            WindowOpen::ID => {
-                emit::<WindowOpen>(self, req);
-            }
-            WindowReparent::ID => {
-                emit::<WindowReparent>(self, req);
-            }
-            PopupOpen::ID => {
-                emit::<PopupOpen>(self, req);
-            }
-            PopupClose::ID => {
-                emit::<PopupClose>(self, req);
-            }
-            _ => {
-                // A close goes through `request_window_close`; this one
-                // only takes the registry's record away.
-                lock(&self.0.bus.registry).close(&req.window);
-            }
-        }
     }
 
     /// `window.registry`'s part on an application window: marked closed,
