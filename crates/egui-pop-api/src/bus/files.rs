@@ -156,15 +156,25 @@ pub(crate) fn system_drag(ctx: &Context) -> Option<(Vec<PathBuf>, bool)> {
 /// A widget of this pass took the files dropped: `what` says how, as
 /// [`BROWSER`] says it on the request.
 pub(crate) fn take(ctx: &Context, what: String) {
-    let id = pass_id(ctx);
-    ctx.data_mut(|d| d.get_temp_mut_or_default::<Pass>(id).taken.push(what));
+    in_pass(ctx, |p| p.taken.push(what));
 }
 
 /// A widget of this pass showed where the hovering files would go: the
 /// window shows nothing more.
 pub(crate) fn shown(ctx: &Context) {
+    in_pass(ctx, |p| p.shown = true);
+}
+
+/// Changes the window pass's record; outside an egui-pop window's pass
+/// (a widget in plain egui) there is none, and nothing to say.
+fn in_pass(ctx: &Context, change: impl FnOnce(&mut Pass)) {
     let id = pass_id(ctx);
-    ctx.data_mut(|d| d.get_temp_mut_or_default::<Pass>(id).shown = true);
+    ctx.data_mut(|d| {
+        if let Some(mut p) = d.get_temp::<Pass>(id).filter(|p| p.window.is_some()) {
+            change(&mut p);
+            d.insert_temp(id, p);
+        }
+    });
 }
 
 /// A window's pass ends: files dropped on it are its `files.drop`; files
