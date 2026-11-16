@@ -1273,6 +1273,9 @@ fn tab_follows_reading_order_and_groups_and_f6_moves_between_panels() {
 fn tab_cycles_inside_a_modal() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "inputs"));
     h.run();
+    // Below the decorators, past the page's first screen.
+    h.get_by_label("Open the form in a modal").scroll_to_me();
+    h.run();
     h.get_by_label("Open the form in a modal").click();
     h.run();
     let all = ["Book title", "Author", "OK", "Cancel"];

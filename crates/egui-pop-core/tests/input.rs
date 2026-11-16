@@ -201,3 +201,177 @@ fn text_typed_with_an_accesskit_focus_reaches_a_plain_text_edit() {
     focus_and_type(&mut h, "Name", "Ada");
     assert_eq!(h.state(), "Ada");
 }
+
+/// Every text an assistive technology reads in the tree: names, values,
+/// descriptions, placeholders (text runs carry their text as values).
+fn every_text<S>(h: &Harness<'_, S>) -> Vec<String> {
+    h.root()
+        .children_recursive()
+        .flat_map(|n| {
+            let a = n.accesskit_node();
+            [
+                a.label(),
+                a.value(),
+                a.description().map(|d| d.to_string()),
+                a.placeholder().map(|p| p.to_string()),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+fn secret_form(read_only: bool) -> Harness<'static, String> {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(320.0, 80.0))
+        .build_ui_state(
+            move |ui, s: &mut String| {
+                let state = if read_only {
+                    FieldState::new().read_only()
+                } else {
+                    FieldState::new()
+                };
+                Input::masked(s, "API token").state(state).show(ui);
+            },
+            "hunter2-secret".to_string(),
+        );
+    h.run();
+    h
+}
+
+#[test]
+fn a_masked_input_never_gives_its_value_to_assistive_technologies() {
+    for read_only in [false, true] {
+        let mut h = secret_form(read_only);
+        let field = h.get_by_role_and_label(Role::PasswordInput, "API token");
+        assert!(
+            !field.value().unwrap_or_default().contains("hunter"),
+            "the value is bullets"
+        );
+        if !read_only {
+            h.get_by_label("API token").focus();
+            h.run();
+            h.key_press(Key::End);
+            h.run();
+            h.get_by_label("API token").type_text("-more");
+            h.run();
+            assert_eq!(h.state(), "hunter2-secret-more", "it is typed in");
+        }
+        for text in every_text(&h) {
+            assert!(
+                !text.contains("hunter") && !text.contains("secret"),
+                "read only: {read_only}, a text in the tree shows the value: {text:?}"
+            );
+        }
+        let fields = egui_pop_core::field::fields(&h.ctx);
+        let f = fields.iter().find(|f| f.label == "API token").unwrap();
+        assert_eq!(f.kind, "masked", "agents read its kind, not its value");
+    }
+}
+
+#[derive(Default)]
+struct Notes {
+    text: String,
+    submitted: u32,
+    chat: String,
+    sent: u32,
+    height: f32,
+}
+
+fn notes(text: &str) -> Harness<'static, Notes> {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(320.0, 400.0))
+        .build_ui_state(
+            |ui, n: &mut Notes| {
+                // The room the field takes: where the next widget starts.
+                let top = ui.cursor().top();
+                let out = Input::multiline(&mut n.text, "Notes")
+                    .rows(2)
+                    .max_rows(4)
+                    .width(300.0)
+                    .show(ui);
+                n.height = ui.cursor().top() - top;
+                if out.submitted {
+                    n.submitted += 1;
+                }
+                let out = Input::multiline(&mut n.chat, "Message")
+                    .submit_on_enter(true)
+                    .width(300.0)
+                    .show(ui);
+                if out.submitted {
+                    n.sent += 1;
+                }
+            },
+            Notes {
+                text: text.into(),
+                ..Notes::default()
+            },
+        );
+    h.run();
+    h
+}
+
+#[test]
+fn enter_starts_a_new_line_and_ctrl_enter_submits_a_multiline_input() {
+    let mut h = notes("");
+    let field = h.get_by_role_and_label(Role::MultilineTextInput, "Notes");
+    field.focus();
+    h.run();
+    h.get_by_label("Notes").type_text("one");
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+    h.get_by_label("Notes").type_text("two");
+    h.run();
+    assert_eq!(h.state().text, "one\ntwo");
+    assert_eq!(h.state().submitted, 0, "Enter is a new line");
+    h.key_press_modifiers(egui::Modifiers::COMMAND, Key::Enter);
+    h.run();
+    assert_eq!(h.state().submitted, 1, "Ctrl+Enter submits");
+    assert_eq!(h.state().text, "one\ntwo", "and adds no line");
+    assert!(
+        h.get_by_label("Notes").is_focused(),
+        "the field keeps the focus"
+    );
+}
+
+#[test]
+fn enter_submits_a_multiline_input_set_to_and_shift_enter_starts_a_line() {
+    let mut h = notes("");
+    h.get_by_label("Message").focus();
+    h.run();
+    h.get_by_label("Message").type_text("hi");
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::SHIFT, Key::Enter);
+    h.run();
+    h.get_by_label("Message").type_text("there");
+    h.run();
+    assert_eq!(h.state().chat, "hi\nthere");
+    assert_eq!(h.state().sent, 0);
+    h.key_press(Key::Enter);
+    h.run();
+    assert_eq!(h.state().sent, 1, "Enter submits");
+    assert_eq!(h.state().chat, "hi\nthere", "and adds no line");
+}
+
+#[test]
+fn a_multiline_input_grows_with_its_text_up_to_its_most_rows() {
+    let height = |text: &str| notes(text).state().height;
+    let two = height("");
+    assert_eq!(two, height("a\nb"), "short text: its rows");
+    let three = height("a\nb\nc");
+    let four = height("a\nb\nc\nd");
+    assert!(three > two && four > three, "{two} {three} {four}");
+    assert_eq!(four, height("a\nb\nc\nd\ne\nf"), "then it scrolls");
+    let mut h = notes("");
+    h.get_by_label("Notes").focus();
+    h.run();
+    h.key_press(Key::Tab);
+    h.run();
+    assert!(
+        h.get_by_label("Message").is_focused(),
+        "Tab moves the focus, it types no tab"
+    );
+    assert_eq!(h.state().text, "");
+}

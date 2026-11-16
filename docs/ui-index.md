@@ -57,13 +57,17 @@ To add an entry, give the item a doc line
 | a drop-down choice (combo box) | `ui.combo_box(..)`<br>`egui_pop::core::ui::UiPop::combo_box` | Shows egui's combo box (`widgets::combo_box`, for the kit's arrow) with its box drawn from the kit's `combo-box` (`Stock::ComboBox`), `add` its list's content: `ComboBox::show_ui` in a scope. |
 | a file or folder path field | `Input::path(..)`<br>`egui_pop::core::input::Input::path` | A path field. |
 | a filter box | `Input::search(..)`<br>`egui_pop::core::input::Input::search` | A search field: a magnifier before the query, clearable. |
+| a masked field for a secret (token, API key) | `Input::masked(..)`<br>`egui_pop::core::input::Input::masked` | A masked text field (a password, a token, a key): every character a bullet, nothing to copy, and its value never given to assistive technologies or agents, only its name. |
+| a multi-line text field (a description, notes) | `Input::multiline(..)`<br>`egui_pop::core::input::Input::multiline` | A multi-line text field: `rows` lines tall, growing with its text up to `max_rows`, then scrolling; Enter starts a new line, Ctrl+Enter submits (see `submit_on_enter`). |
 | a number field with a unit | `Input::number(..)`<br>`egui_pop::core::input::Input::number` | A number field: a number or an expression (`x * 2`, `1,5`), committed when it loses the focus. |
 | a number field with steps and limits | `NumberInput`<br>`egui_pop::core::number::NumberInput` | A number input; see the module. |
+| a password field | `Input::masked(..)`<br>`egui_pop::core::input::Input::masked` | A masked text field (a password, a token, a key): every character a bullet, nothing to copy, and its value never given to assistive technologies or agents, only its name. |
 | a rotary knob | `Knob`<br>`egui_pop::core::knob::Knob` | A rotary knob over an `f64`. |
 | a search field | `Input::search(..)`<br>`egui_pop::core::input::Input::search` | A search field: a magnifier before the query, clearable. |
 | a single-line text field | `Input::text(..)`<br>`egui_pop::core::input::Input::text` | A text field named `label` (for assistive technologies and agents; the label itself is drawn by the form around it). |
 | a slider over a number | `Slider`<br>`egui_pop::core::slider::Slider` | A slider over an `f64`. |
 | a star rating | `RatingStars`<br>`egui_pop::core::rating::RatingStars` | Five stars (see the module). |
+| a text area that grows with its text | `Input::multiline(..)`<br>`egui_pop::core::input::Input::multiline` | A multi-line text field: `rows` lines tall, growing with its text up to `max_rows`, then scrolling; Enter starts a new line, Ctrl+Enter submits (see `submit_on_enter`). |
 | a text field with a placeholder | `Input::text(..)`<br>`egui_pop::core::input::Input::text` | A text field named `label` (for assistive technologies and agents; the label itself is drawn by the form around it). |
 | a toggle chip, a filter turned on or off | `ToggleChip`<br>`egui_pop::core::widgets::ToggleChip` | A small toggle showing a short text or a glyph, on while `selected`: its box is the kit's `toggle-chip` component (based on `selectable-row`), its text or glyph in the state's `text`. |
 | one choice among a few (radio buttons) | `widgets::radio_value(..)`<br>`egui_pop::core::widgets::radio_value` | A radio button setting `current` to `alternative` when clicked: `ui.radio_value`, drawn through the kit. |

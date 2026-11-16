@@ -1,7 +1,8 @@
 # Inputs, field states and Tab order
 
 egui-pop's inputs are one component, the **decorated input**
-(`egui_pop_core::input`), around a text, number, path or search field;
+(`egui_pop_core::input`), around a text, masked, multi-line, number,
+path or search field;
 one **field state** model (`egui_pop_model::field`) that every input
 shows the same way, the sliders included; and a **Tab order** decided
 per focus scope (`egui_pop_core::tab`), with F6 between the window's regions.
@@ -57,6 +58,52 @@ a unit ignored) and commits it when it loses the focus: Enter, Tab, a
 click elsewhere. Escape leaves it with nothing: what was typed is
 dropped and the value stays.
 
+### Masked and multi-line fields
+
+Experimental, as the whole input.
+
+```rust
+use egui_pop::egui;
+use egui_pop::core::input::Input;
+
+fn account(ui: &mut egui::Ui, token: &mut String, notes: &mut String, chat: &mut String) {
+    Input::masked(token, "API token").show(ui);
+
+    let out = Input::multiline(notes, "Notes")
+        .rows(3)      // its height while the text is short (2 by default)
+        .max_rows(6)  // it grows with its text up to 6 lines, then scrolls (8 by default)
+        .show(ui);
+    if out.submitted { /* Ctrl+Enter (Cmd+Enter on macOS) */ }
+
+    let out = Input::multiline(chat, "Message").submit_on_enter(true).show(ui);
+    if out.submitted { /* Enter; Shift+Enter starts a new line */ }
+}
+```
+
+A **masked** field (`Input::masked`: a password, a token, a key) draws
+each character as a bullet and cannot be copied or cut from. Assistive
+technologies get its name and the password-input role, never its value:
+the value and the text runs they read are bullets too, and agents read
+its kind (`masked`), not its value. A read-only masked field stays
+masked.
+
+A **multi-line** field (`Input::multiline`) is `rows` lines tall while
+its text is short, grows line by line with its text (wrapped lines
+count) up to `max_rows`, then scrolls; assistive technologies read it as
+a multi-line text input. Its keys:
+
+| Key | Default | With `.submit_on_enter(true)` |
+|---|---|---|
+| Enter | a new line | submits (`InputOutput::submitted`) |
+| Shift+Enter | a new line | a new line |
+| Ctrl+Enter (Cmd+Enter) | submits | submits |
+| Tab, Shift+Tab | the next or previous stop | the same |
+
+Submitting keeps the focus in the field. The key dispatcher leaves only
+Escape and Enter without Ctrl or Alt to a text field: when the keymap
+binds Ctrl+Enter, the binding runs instead. The slots, the clear ✕, the
+markers and attached buttons stay on the field's first line.
+
 Every part has an accessible name: the field its label, the ✕ "Clear
 *label*", the reset "Reset *label* to default", the chevron "*label*,
 choices" (a list box popup, expanded or not), a split button's chevron
@@ -106,7 +153,8 @@ before.
 
 **Agents** read every field drawn in the last pass through the debug
 bridge's `fields` collector (and `egui_pop_core::field::describe`): its
-label, kind (`text`, `number`, `path`, `search`, `slider`, `range`), its
+label, kind (`text`, `masked`, `multiline`, `number`, `path`, `search`,
+`slider`, `range`), its
 marks, whether it can be focused and edited, the disabled reason and the
 invalid message. The same snapshot lists the Tab scopes and their
 stops.
