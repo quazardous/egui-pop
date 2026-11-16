@@ -37,8 +37,22 @@
 //! The other window paths (opening, moving into the main window, detached
 //! panels, popups) still do their work themselves and report it to the
 //! registry; they move onto their requests one by one (the ADR's slices).
+//!
+//! The job lifecycle is the second family. Asking about a job is a
+//! request ([`JobCancel`], [`JobPause`], [`JobResume`], [`JobRetry`], each
+//! a [`JobAsk`], asked by [`AppHandle::request_job`]); whoever runs the
+//! job does the work and answers with its `job.*` events. Those events,
+//! and the job commands' `command.*` events, are delivered to the
+//! listeners of [`JobEvents`] (`job.*`) in journal order, once each
+//! ([`AppHandle::deliver_events`]): the jobs plugin's model is one of them
+//! (`jobs.model`), so no job state changes but on the bus. A plugin
+//! connecting or disconnecting is asked on [`PluginConnect`] and
+//! [`PluginDisconnect`] (a [`PluginChange`]), the disconnection before
+//! `plugin.disconnected` is said: the jobs a plugin leaves are cancelled
+//! or said orphaned by a listener of its disconnection, and taken back by
+//! one of its connection.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::sync::{Arc, Mutex};
 
 use egui::{ViewportCommand, ViewportId};
@@ -48,6 +62,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::app::{AppHandle, WeakApp};
+use crate::host::{Event, Seq};
 use crate::windows::WindowId;
 
 pub use egui_pop_hooks;
@@ -210,6 +225,190 @@ pub const WINDOW_POINTS: [&str; 5] = [
     PopupClose::ID,
 ];
 
+/// A request about a job, asked of whoever runs it (the host, or the
+/// application's own runner): which job, what, and why when it is not
+/// the person asking.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct JobAsk {
+    /// The job's id.
+    pub id: String,
+    pub request: egui_pop_model::jobs::Request,
+    /// Why, when it is not the person asking (its plugin disconnected).
+    pub reason: Option<String>,
+    /// Asked by the framework itself, whoever acts now: its command runs
+    /// as `script:egui_pop`.
+    pub(crate) framework: bool,
+}
+
+impl JobAsk {
+    pub fn new(id: impl Into<String>, request: egui_pop_model::jobs::Request) -> Self {
+        Self {
+            id: id.into(),
+            request,
+            reason: None,
+            framework: false,
+        }
+    }
+
+    /// Why it is asked.
+    pub fn reason(mut self, reason: impl Into<String>) -> Self {
+        self.reason = Some(reason.into());
+        self
+    }
+
+    /// The framework's own request (the jobs of a plugin that went).
+    pub(crate) fn by_framework(mut self) -> Self {
+        self.framework = true;
+        self
+    }
+
+    /// Whether the framework itself asks it.
+    pub fn is_framework(&self) -> bool {
+        self.framework
+    }
+
+    /// The command's arguments: `{ "id" }`, with `reason` when given.
+    pub fn args(&self) -> serde_json::Value {
+        let mut args = json!({ "id": self.id });
+        if let Some(r) = &self.reason {
+            args["reason"] = json!(r);
+        }
+        args
+    }
+}
+
+/// A job is asked to stop (`job.cancel`); its listeners say what they
+/// did, one line each, in the value.
+#[derive(Debug)]
+pub struct JobCancel;
+impl Point for JobCancel {
+    const ID: &'static str = "job.cancel";
+    type Input = JobAsk;
+    type Value = Vec<String>;
+}
+
+/// A job is asked to pause (`job.pause`).
+#[derive(Debug)]
+pub struct JobPause;
+impl Point for JobPause {
+    const ID: &'static str = "job.pause";
+    type Input = JobAsk;
+    type Value = Vec<String>;
+}
+
+/// A paused job is asked to go on (`job.resume`).
+#[derive(Debug)]
+pub struct JobResume;
+impl Point for JobResume {
+    const ID: &'static str = "job.resume";
+    type Input = JobAsk;
+    type Value = Vec<String>;
+}
+
+/// A failed or cancelled job is asked to run again (`job.retry`).
+#[derive(Debug)]
+pub struct JobRetry;
+impl Point for JobRetry {
+    const ID: &'static str = "job.retry";
+    type Input = JobAsk;
+    type Value = Vec<String>;
+}
+
+/// A job event was said (`job.*`): each `job.*` event of the journal, and
+/// each `command.*` event of a job command, delivered once, in journal
+/// order ([`AppHandle::deliver_events`]).
+#[derive(Debug)]
+pub struct JobEvents;
+impl Point for JobEvents {
+    const ID: &'static str = "job.*";
+    type Input = Event;
+    type Value = ();
+}
+
+/// A plugin connecting or disconnecting: which, its owner id, why, and
+/// the commands it registered (gone with it on a disconnection).
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct PluginChange {
+    pub plugin: String,
+    pub owner: String,
+    /// Why: `connected`, `removed`, `failed connect`…
+    pub reason: String,
+    pub commands: Vec<String>,
+}
+
+impl PluginChange {
+    pub fn new(
+        plugin: impl Into<String>,
+        owner: impl Into<String>,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self {
+            plugin: plugin.into(),
+            owner: owner.into(),
+            reason: reason.into(),
+            commands: Vec::new(),
+        }
+    }
+
+    /// The commands it registered.
+    pub fn commands(mut self, commands: Vec<String>) -> Self {
+        self.commands = commands;
+        self
+    }
+}
+
+/// A plugin is connected (`plugin.connect`), what it registers in
+/// place; its listeners take back what it had left.
+#[derive(Debug)]
+pub struct PluginConnect;
+impl Point for PluginConnect {
+    const ID: &'static str = "plugin.connect";
+    type Input = PluginChange;
+    type Value = Vec<String>;
+}
+
+/// A plugin is disconnected (`plugin.disconnect`), what it registered
+/// removed, before `plugin.disconnected` is said: each listener adds what
+/// it did to the value (`jobs_cancelled`…), which the event's `removed`
+/// carries.
+#[derive(Debug)]
+pub struct PluginDisconnect;
+impl Point for PluginDisconnect {
+    const ID: &'static str = "plugin.disconnect";
+    type Input = PluginChange;
+    type Value = serde_json::Map<String, serde_json::Value>;
+}
+
+/// The job points, in the order [`order_dump`] prints them.
+pub const JOB_POINTS: [&str; 5] = [
+    JobCancel::ID,
+    JobPause::ID,
+    JobResume::ID,
+    JobRetry::ID,
+    JobEvents::ID,
+];
+
+/// The plugin points, in the order [`order_dump`] prints them.
+pub const PLUGIN_POINTS: [&str; 2] = [PluginConnect::ID, PluginDisconnect::ID];
+
+/// Every point egui-pop declares: the window, job and plugin points.
+pub const POINTS: [&str; 12] = [
+    WindowOpen::ID,
+    WindowClose::ID,
+    WindowReparent::ID,
+    PopupOpen::ID,
+    PopupClose::ID,
+    JobCancel::ID,
+    JobPause::ID,
+    JobResume::ID,
+    JobRetry::ID,
+    JobEvents::ID,
+    PluginConnect::ID,
+    PluginDisconnect::ID,
+];
+
 /// What owns egui-pop's own listeners.
 pub const OWNER: &str = "egui_pop";
 /// What belongs to a closing window goes with it: its dialogs.
@@ -284,6 +483,10 @@ pub(crate) struct Bus {
     /// What the window invariants remember between passes
     /// ([`crate::window_invariants`]).
     pub(crate) invariants: Mutex<crate::window_invariants::State>,
+    /// The last journal event delivered to the event points' listeners.
+    delivered: Cell<Seq>,
+    /// A delivery runs: one asked from inside it is left to it.
+    delivering: Cell<bool>,
 }
 
 impl std::fmt::Debug for Bus {
@@ -306,6 +509,8 @@ impl Default for Bus {
             kernel,
             registry,
             invariants: Mutex::default(),
+            delivered: Cell::new(0),
+            delivering: Cell::new(false),
         }
     }
 }
@@ -316,8 +521,9 @@ thread_local! {
     static ASKING: RefCell<Vec<WeakApp>> = const { RefCell::new(Vec::new()) };
 }
 
-/// The application whose request runs now, for a listener.
-fn asking() -> Option<AppHandle> {
+/// The application whose request runs now, for a listener (listeners
+/// are `Send + Sync` and keep no handle).
+pub(crate) fn asking() -> Option<AppHandle> {
     ASKING.with_borrow(|a| a.last().and_then(|w| w.get().ok()))
 }
 
@@ -337,13 +543,41 @@ fn emit<P: Point<Input = WindowRequest, Value = Vec<String>>>(
     app: &AppHandle,
     req: WindowRequest,
 ) -> Vec<String> {
+    emit_with::<P>(app, req, Vec::new())
+}
+
+/// Runs `P`'s listeners for `app`, inline, from `value`: what they left,
+/// their failures logged.
+fn emit_with<P: Point>(app: &AppHandle, input: P::Input, value: P::Value) -> P::Value
+where
+    P::Value: Clone,
+{
     ASKING.with_borrow_mut(|a| a.push(app.downgrade()));
     let _asking = Asking;
-    let out = app.0.bus.kernel.alter::<P>(req, Vec::new());
+    let out = app.0.bus.kernel.alter::<P>(input, value);
     for f in &out.failures {
         log::error!(target: "egui_pop", "{f}");
     }
     out.value
+}
+
+/// Whether a journal event goes to [`JobEvents`]: a `job.*` event, or a
+/// job command's `command.*` event.
+pub(crate) fn is_job_event(e: &Event) -> bool {
+    e.name.starts_with("job.")
+        || (e.name.starts_with("command.")
+            && e.data["command"]
+                .as_str()
+                .is_some_and(|c| c.starts_with("job.")))
+}
+
+/// Ends a delivery, even by a panic a listener's boundary did not catch.
+struct Delivering<'a>(&'a Cell<bool>);
+
+impl Drop for Delivering<'_> {
+    fn drop(&mut self) {
+        self.0.set(false);
+    }
 }
 
 /// Declares the window points and registers egui-pop's listeners.
@@ -374,6 +608,28 @@ fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
             _ => kernel.declare::<PopupClose>(spec),
         };
         debug_assert!(done.is_ok(), "{id} declared once");
+    }
+    let declared = [
+        kernel.declare::<JobCancel>(PointSpec::new(
+            "A job is asked to stop: whoever runs it is asked, and the job shows as asked until it answers.",
+        )),
+        kernel.declare::<JobPause>(PointSpec::new("A job is asked to pause.")),
+        kernel.declare::<JobResume>(PointSpec::new("A paused job is asked to go on.")),
+        kernel.declare::<JobRetry>(PointSpec::new(
+            "A failed or cancelled job is asked to run again.",
+        )),
+        kernel.declare::<JobEvents>(PointSpec::new(
+            "A `job.*` event, or a job command's `command.*` event, was said: delivered once each, in journal order.",
+        )),
+        kernel.declare::<PluginConnect>(PointSpec::new(
+            "A plugin is connected: what it had left is taken back.",
+        )),
+        kernel.declare::<PluginDisconnect>(PointSpec::new(
+            "A plugin is disconnected, before `plugin.disconnected` is said: what it leaves is closed or marked, each listener counting what it did.",
+        )),
+    ];
+    for d in declared {
+        debug_assert!(d.is_ok(), "{d:?}");
     }
     let mine = || ListenOpts::new().owner(OWNER);
     // `window.close`, in the ADR's order.
@@ -656,6 +912,94 @@ impl AppHandle {
                 result.is_ok()
             }
         }
+    }
+
+    /// The order the listeners of the job and plugin points run in
+    /// ([`order_dump`]).
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn bus_order_of(&self, points: &[&str]) -> String {
+        order_dump(&self.0.bus.kernel, points)
+    }
+
+    /// Asks about a job (`job.cancel`, `job.pause`, `job.resume`,
+    /// `job.retry`): its listeners run now, in their declared order (the
+    /// jobs plugin's: the job shows as asked, then whoever runs it is
+    /// asked); the answer comes as the runner's `job.*` events. What they
+    /// did, one line each; with nobody listening (no jobs plugin) it is
+    /// refused, said as `job.refused`.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn request_job(&self, ask: JobAsk) -> Vec<String> {
+        use egui_pop_model::jobs::Request;
+        let point = ask.request.command();
+        let id = ask.id.clone();
+        let did = match ask.request {
+            Request::Cancel => emit_with::<JobCancel>(self, ask, Vec::new()),
+            Request::Pause => emit_with::<JobPause>(self, ask, Vec::new()),
+            Request::Resume => emit_with::<JobResume>(self, ask, Vec::new()),
+            Request::Retry => emit_with::<JobRetry>(self, ask, Vec::new()),
+        };
+        if did.is_empty() {
+            log::warn!(target: "egui_pop", "`{point}` of job `{id}`: nobody listens (no jobs plugin)");
+            self.publish(
+                "egui_pop",
+                None,
+                "job.refused",
+                json!({ "request": point, "id": id, "reason": "nobody listens to it (no jobs plugin)" }),
+            );
+        }
+        did
+    }
+
+    /// Delivers the journal's events not delivered yet to the event
+    /// points' listeners ([`JobEvents`]), in journal order, once each.
+    /// Each pass does it before its handlers run; a read that must see
+    /// every event up to the last (a wait, a plugin going) does it first.
+    /// Asked from inside a delivery, it returns at once: the delivery
+    /// running goes on, and what it did not take waits for the next.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn deliver_events(&self) {
+        let bus = &self.0.bus;
+        if bus.delivering.replace(true) {
+            return;
+        }
+        let _delivering = Delivering(&bus.delivering);
+        let events = self.events_since(bus.delivered.get());
+        for e in events {
+            bus.delivered.set(e.seq);
+            if is_job_event(&e) {
+                emit_with::<JobEvents>(self, e, ());
+            }
+        }
+    }
+
+    /// The last journal event delivered ([`AppHandle::deliver_events`]):
+    /// a listener registering late reads the record up to it.
+    pub(crate) fn delivered_event(&self) -> Seq {
+        self.0.bus.delivered.get()
+    }
+
+    /// Asks the plugin points' listeners about a plugin connected: what
+    /// they did.
+    pub(crate) fn plugin_connected(&self, change: PluginChange) -> Vec<String> {
+        self.deliver_events();
+        emit_with::<PluginConnect>(self, change, Vec::new())
+    }
+
+    /// Asks the plugin points' listeners about a plugin disconnected,
+    /// before `plugin.disconnected` is said: what they did, counted.
+    pub(crate) fn plugin_disconnected(
+        &self,
+        change: PluginChange,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        // Up to the last event: a job started since the last pass counts.
+        self.deliver_events();
+        emit_with::<PluginDisconnect>(self, change, serde_json::Map::new())
     }
 
     /// A path not moved onto its request yet reports a window opened, so
