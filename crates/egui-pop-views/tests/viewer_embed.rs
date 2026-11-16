@@ -492,3 +492,225 @@ fn a_web_view_failing_gives_the_same_page() {
     assert_eq!(s["embed"], Value::Null);
     assert_eq!(pretend.log().open, 0);
 }
+
+// The web view on the bus (ADR 0029): a native window owned by the viewer,
+// a child of the window its page is drawn in, opened by its `window.open`
+// and closed, wherever it is dropped, by its `window.close`.
+
+/// The viewer's native windows listed: (id, parent).
+fn web_views(app: &AppHandle) -> Vec<(String, Option<String>)> {
+    app.windows_list()
+        .into_iter()
+        .filter(|w| w.kind == egui_pop_api::bus::WindowKind::Native && w.owner == "egui_pop.viewer")
+        .map(|w| (w.id, w.parent))
+        .collect()
+}
+
+fn said(app: &AppHandle, name: &str) -> Vec<egui_pop_api::host::Event> {
+    app.events_since(Default::default())
+        .into_iter()
+        .filter(|e| e.name == name && e.data["owner"] == "egui_pop.viewer")
+        .collect()
+}
+
+/// The reasons of the viewer's `window.closed`, in order.
+fn closed_reasons(app: &AppHandle) -> Vec<String> {
+    said(app, "window.closed")
+        .iter()
+        .map(|e| e.data["reason"].as_str().unwrap_or_default().to_string())
+        .collect()
+}
+
+#[test]
+fn the_web_view_is_a_native_window_of_the_viewer_while_shown() {
+    let pretend = Pretend::default();
+    let mut h = shown(&pretend, VIDEO);
+    let app = handle(&h);
+    let listed = web_views(&app);
+    assert_eq!(listed.len(), 1, "{:?}", app.windows_list());
+    assert_eq!(listed[0].1.as_deref(), Some("main"));
+    let opened = said(&app, "window.opened");
+    assert_eq!(opened.len(), 1);
+    assert_eq!(opened[0].data["window"], listed[0].0.as_str());
+    assert_eq!(opened[0].data["kind"], "native");
+    // Leaving the page: its `window.close`, the view dropped in that call.
+    links::open(&app, Request::new("docs:other"));
+    h.run_steps(2);
+    assert_eq!(pretend.log().open, 0);
+    assert!(web_views(&app).is_empty());
+    assert_eq!(closed_reasons(&app), ["command"]);
+    assert_eq!(
+        said(&app, "window.closed")[0].data["window"],
+        listed[0].0.as_str()
+    );
+    assert!(
+        app.broken_invariants().is_empty(),
+        "{:?}",
+        app.broken_invariants()
+    );
+}
+
+#[test]
+fn hiding_its_panel_closes_the_web_view_on_the_bus() {
+    let pretend = Pretend::default();
+    let mut h = shown(&pretend, VIDEO);
+    let app = handle(&h);
+    app.set_panel_visible(&PANEL, false);
+    h.run_steps(5);
+    assert_eq!(pretend.log().open, 0);
+    assert!(web_views(&app).is_empty());
+    assert_eq!(closed_reasons(&app), ["command"]);
+    // Shown again: a new `window.open`.
+    app.set_panel_visible(&PANEL, true);
+    h.run_steps(3);
+    assert_eq!(web_views(&app).len(), 1);
+    assert_eq!(said(&app, "window.opened").len(), 2);
+}
+
+#[test]
+fn a_panel_too_small_closes_the_web_view_on_the_bus() {
+    let pretend = Pretend::default();
+    pretend.log().in_panel = true;
+    let mut h = shown(&pretend, VIDEO);
+    let app = handle(&h);
+    assert_eq!(web_views(&app).len(), 1);
+    h.set_size(egui::vec2(1000.0, 180.0));
+    h.run_steps(4);
+    assert_eq!(pretend.log().open, 0);
+    assert!(web_views(&app).is_empty());
+    assert_eq!(closed_reasons(&app), ["command"]);
+}
+
+#[test]
+fn its_own_window_closed_by_the_user_is_its_window_close() {
+    let pretend = Pretend::default();
+    pretend.log().own_window = true;
+    let mut h = shown(&pretend, VIDEO);
+    let app = handle(&h);
+    pretend.log().closed = true;
+    h.run_steps(3);
+    assert!(web_views(&app).is_empty());
+    assert_eq!(closed_reasons(&app), ["user"]);
+}
+
+#[test]
+fn a_web_view_failing_closes_its_window_on_the_bus() {
+    let pretend = Pretend::default();
+    let mut h = shown(&pretend, VIDEO);
+    let app = handle(&h);
+    pretend.log().fail = Some("the web process crashed".into());
+    h.run_steps(3);
+    assert_eq!(pretend.log().open, 0);
+    assert!(web_views(&app).is_empty());
+    assert_eq!(closed_reasons(&app), ["system"]);
+    // One that cannot open leaves nothing listed.
+    let pretend = Pretend::default();
+    pretend.log().refuse = Some("WebKitGTK is missing".into());
+    let h = shown(&pretend, VIDEO);
+    assert!(web_views(&handle(&h)).is_empty());
+}
+
+#[test]
+fn closing_its_window_closes_the_web_view_first() {
+    use egui_pop_api::bus::WindowKind;
+    let pretend = Pretend::default();
+    let p = pretend.clone();
+    let mut m =
+        egui_pop_test::windows::MultiWindow::new(move |ctx| plugins(Some(&p)).build(ctx).unwrap());
+    m.root_pass();
+    let app = m.app().clone();
+    links::open(&app, Request::new(VIDEO));
+    for _ in 0..3 {
+        m.root_pass();
+    }
+    assert_eq!(web_views(&app).len(), 1, "{:?}", app.windows_list());
+    // The viewer in a window of its own: its web view is reopened there.
+    assert!(app.detach_panel(&PANEL).unwrap().ok());
+    for _ in 0..4 {
+        m.root_pass();
+    }
+    let panel = app
+        .windows_list()
+        .into_iter()
+        .find(|w| w.kind == WindowKind::Panel)
+        .expect("the viewer's window")
+        .id;
+    let listed = web_views(&app);
+    assert_eq!(listed.len(), 1, "{:?}", app.windows_list());
+    assert_eq!(listed[0].1.as_deref(), Some(panel.as_str()));
+    assert_eq!(pretend.log().open, 1);
+    // Its window closed by the system: the web view's own `window.close`
+    // first (`parent-closed`), the view dropped in that call.
+    let v = egui_pop_api::workbench::window_id(&PANEL);
+    m.request_close(v);
+    m.root_pass();
+    let all = app.events_since(Default::default());
+    let at = |pred: &dyn Fn(&egui_pop_api::host::Event) -> bool| all.iter().position(pred);
+    let child = at(&|e| {
+        e.name == "window.closed"
+            && e.data["window"] == listed[0].0.as_str()
+            && e.data["reason"] == "parent-closed"
+    });
+    let parent = at(&|e| e.name == "window.closed" && e.data["window"] == panel.as_str());
+    assert!(child.is_some(), "{:?}", said(&app, "window.closed"));
+    assert!(child < parent, "the web view closed before its window");
+    assert!(
+        web_views(&app)
+            .iter()
+            .all(|(_, parent)| parent.as_deref() != Some(panel.as_str())),
+        "no child left: {:?}",
+        app.windows_list()
+    );
+    assert!(
+        app.broken_invariants().is_empty(),
+        "{:?}",
+        app.broken_invariants()
+    );
+}
+
+/// The embed module opens and closes its native view only through the bus:
+/// the backend is asked after the view's `window.open`, and the view is
+/// dropped only by the viewer's listener on `window.close`.
+#[test]
+fn the_web_view_opens_and_closes_only_through_the_bus() {
+    let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/viewer/embed.rs"))
+        .unwrap();
+    let code: Vec<&str> = src
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect();
+    let find = |needle: &str| {
+        code.iter()
+            .enumerate()
+            .filter(|(_, l)| l.contains(needle))
+            .map(|(i, _)| i)
+            .collect::<Vec<_>>()
+    };
+    let opens = find("backend.open(");
+    let asks = find("request_native_open(");
+    assert_eq!(opens.len(), 1, "one place opens a web view");
+    assert!(
+        asks.len() == 1 && asks[0] < opens[0],
+        "its `window.open` is asked first: {asks:?} {opens:?}"
+    );
+    // Where the listener is: from its fn to the next fn.
+    let start = find("fn drop_on_close(");
+    assert_eq!(start.len(), 1, "the viewer's listener on `window.close`");
+    let end = code
+        .iter()
+        .enumerate()
+        .skip(start[0] + 1)
+        .find(|(_, l)| l.contains("fn "))
+        .map_or(code.len(), |(i, _)| i);
+    for needle in [".view.take()", "view = None", "view.take()"] {
+        for i in find(needle) {
+            assert!(
+                (start[0]..end).contains(&i),
+                "a web view dropped outside the bus at line {}: {}",
+                i + 1,
+                code[i]
+            );
+        }
+    }
+    assert!(!find("request_window_close(").is_empty());
+}
