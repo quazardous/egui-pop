@@ -67,6 +67,7 @@ fn the_window_points_run_in_their_reviewed_order() {
         close,
         [
             "window.children",
+            "workbench.window",
             "admin.window",
             "window.focus",
             "window.registry",

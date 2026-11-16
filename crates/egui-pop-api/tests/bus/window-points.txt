@@ -1,19 +1,22 @@
 window.open
-  1. admin.window (owner egui_pop.admin): before window.registry
-  2. window.registry (owner egui_pop): nothing
-  3. window.invariants (owner egui_pop): last
+  1. workbench.window (owner egui_pop.workbench): before window.registry
+  2. admin.window (owner egui_pop.admin): before window.registry
+  3. window.registry (owner egui_pop): nothing
+  4. window.invariants (owner egui_pop): last
 window.close
   1. window.children (owner egui_pop): before window.focus; priority 1000
-  2. admin.window (owner egui_pop.admin): after window.children; before window.focus
-  3. window.focus (owner egui_pop): before window.registry
-  4. window.registry (owner egui_pop): after window.focus
-  5. window.place (owner egui_pop): after window.registry
-  6. window.invariants (owner egui_pop): last
+  2. workbench.window (owner egui_pop.workbench): after window.children; before window.focus
+  3. admin.window (owner egui_pop.admin): after window.children; before window.focus
+  4. window.focus (owner egui_pop): before window.registry
+  5. window.registry (owner egui_pop): after window.focus
+  6. window.place (owner egui_pop): after window.registry
+  7. window.invariants (owner egui_pop): last
 window.reparent
-  1. window.registry (owner egui_pop): before window.place
-  2. window.place (owner egui_pop): after window.registry
-  3. window.focus (owner egui_pop): after window.place
-  4. window.invariants (owner egui_pop): last
+  1. workbench.window (owner egui_pop.workbench): before window.registry
+  2. window.registry (owner egui_pop): before window.place
+  3. window.place (owner egui_pop): after window.registry
+  4. window.focus (owner egui_pop): after window.place
+  5. window.invariants (owner egui_pop): last
 popup.open
   1. window.registry (owner egui_pop): nothing
   2. window.invariants (owner egui_pop): last

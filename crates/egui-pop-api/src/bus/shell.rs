@@ -18,6 +18,11 @@
 //!   keeps its own place), `window.focus` (the main window is the one
 //!   worked in), then the invariants.
 //!
+//! A detached panel's window docked back is a `window.reparent` too (the
+//! workbench's listener moves its panels first, [`super::panels`]); while
+//! a window's content holds the main window, the detached panels' windows
+//! leave the registry with the shell, and come back with it.
+//!
 //! The system window's own close request stays the way a window's title
 //! bar asks it where its content may refuse ([`crate::windows::WindowUi::keep_open`]):
 //! the window's pass then asks `window.close`. The raw viewport commands
@@ -65,24 +70,45 @@ pub(super) fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
     let listened = [
         kernel.listen::<WindowReparent>(REGISTRY, mine().before(PLACE), move |req, did| {
             let Some(app) = asking() else { return Ok(()) };
+            if req.kind == WindowKind::Panel {
+                // A detached panel's window, docked back: the workbench's
+                // listener moved its panels; the window goes.
+                if req.parent.as_deref() == Some(WindowId::MAIN)
+                    && lock(&registry).close(&req.window)
+                {
+                    let mut w = app.windows_mut();
+                    w.moved_events
+                        .push(("window.closed", json!({ "window": req.window })));
+                    w.moved_events.push((
+                        "window.moved",
+                        json!({ "window": req.window, "to": WindowId::MAIN }),
+                    ));
+                    did.push(format!("{REGISTRY}: `{}` docked in the main window", req.window));
+                }
+                return Ok(());
+            }
             let id = WindowId::new(&req.window);
             match req.parent.as_deref() {
                 Some(WindowId::MAIN) => {
                     if app.move_into_root(&id) {
-                        lock(&registry).close(&req.window);
+                        let mut registry = lock(&registry);
+                        registry.close(&req.window);
                         did.push(format!(
                             "{REGISTRY}: `{}` drawn in the main window",
                             req.window
                         ));
+                        did.extend(super::panels::follow_shell(&app, &mut registry, true));
                     }
                 }
                 None => {
                     if app.move_out_of_root() {
-                        lock(&registry).open(req, Some(id.deferred_viewport()));
+                        let mut registry = lock(&registry);
+                        registry.open(req, Some(id.deferred_viewport()));
                         did.push(format!(
                             "{REGISTRY}: `{}` in a window of its own",
                             req.window
                         ));
+                        did.extend(super::panels::follow_shell(&app, &mut registry, false));
                     }
                 }
                 Some(other) => {

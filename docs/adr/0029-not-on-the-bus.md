@@ -356,6 +356,23 @@ test and leaves `next` green. Slices 1 and 2 come first; the paths of
    asks the system's close request (its content may refuse), which its
    pass answers with `window.close`. Left: detached panels (detach, dock
    back, their close), once slice 2's panel reports are on `next`.
+   Second part done (2026-11-16): the workbench owns its panels' windows
+   (`panel:<id>`, owner `egui_pop.workbench`). Detaching a panel is its
+   window's `window.open`, docking it back (by command, or moved to an
+   area as a dragged tab is) its `window.reparent` into the main window,
+   closing its window (title bar, the system, the command, anyone asking)
+   its `window.close`; the workbench's listener `workbench.window` changes
+   the layout on all three, before `window.registry`. A vetoed close (the
+   `workbench.close_window` step's or `window.close`'s) leaves the
+   registry and the layout unchanged. Another workbench change that adds
+   or ends a detached window (a panel joining another window, a layout put
+   in, panels declared again) asks the same requests in the call that
+   changed it, so slice 2's per-pass panel report is gone. The detached
+   panels' windows leave the registry while a window's content holds the
+   main window, and come back with the shell. The raw viewport calls of
+   these windows are in the bus's panels module; the test kit's
+   `MultiWindow` renders immediate viewports, so a detached panel's
+   window is a real viewport there and invariant 1 holds for it.
 5. **Dialogs and choosers.** Dialogs, the in-app and system file
    choosers, the viewer's web view. *Test:* a window closed with a
    dialog and a file choice open leaves `popup.closed` (`parent-closed`)

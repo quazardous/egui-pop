@@ -10,6 +10,13 @@
 //! own queued events, focus, size and close request; the commands each
 //! pass sent to the system (`ViewportCommand`) are kept for the test.
 //!
+//! Immediate viewports (a detached panel's window) are real too: the
+//! harness is the context's immediate renderer, so each runs its pass of
+//! its own, with its input, inside the main window's pass that shows it,
+//! as eframe runs them; [`MultiWindow::root_pass`] takes their output as
+//! a window's. A window shown that way is listed from the next pass on,
+//! and leaves the list at the first main pass that no longer shows it.
+//!
 //! It is the backend of the window invariants (ADR 0029): a window the
 //! main pass declares is listed in the input of every later pass, as a
 //! system window that exists. After each pass, a window invariant broken
@@ -17,22 +24,76 @@
 //! test allows that rule ([`MultiWindow::allow_broken`]) because it
 //! breaks it on purpose.
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
+use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
 use egui::{
-    Context, DeferredViewportUiCallback, Event, Key, Modifiers, Pos2, RawInput, Rect, Vec2,
-    ViewportCommand, ViewportEvent, ViewportId, ViewportInfo,
+    Context, DeferredViewportUiCallback, Event, Id, ImmediateViewport, Key, Modifiers, Pos2,
+    RawInput, Rect, Vec2, ViewportCommand, ViewportEvent, ViewportId, ViewportInfo,
 };
 use egui_pop_api::{App, AppHandle};
 
 /// Each window's size at first.
 const SIZE: Vec2 = Vec2::new(640.0, 480.0);
 
+/// The immediate windows' side of a harness: the input each takes in its
+/// next pass, and the output of the passes run inside the last main pass.
+#[derive(Default)]
+struct Immediate {
+    inputs: BTreeMap<ViewportId, RawInput>,
+    outputs: Vec<(ViewportId, egui::FullOutput)>,
+}
+
+thread_local! {
+    /// The harnesses of this thread, by the token their context keeps:
+    /// egui's immediate renderer is one per thread.
+    static HARNESSES: RefCell<BTreeMap<u64, Weak<RefCell<Immediate>>>> =
+        const { RefCell::new(BTreeMap::new()) };
+    static NEXT_TOKEN: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Where a harness's context keeps its token.
+fn token_id() -> Id {
+    Id::unique("egui_pop_test.multi_window")
+}
+
+/// The immediate renderer: runs an immediate window's pass in the context
+/// that shows it, with the input its harness prepared, and keeps the
+/// output for it. A context without a harness gets a plain input.
+fn render_immediate(ctx: &Context, viewport: ImmediateViewport<'_>) {
+    let ImmediateViewport {
+        ids,
+        mut viewport_ui_cb,
+        ..
+    } = viewport;
+    let token = ctx.data(|d| d.get_temp::<u64>(token_id()));
+    let harness = token.and_then(|t| HARNESSES.with_borrow(|h| h.get(&t).and_then(Weak::upgrade)));
+    let input = harness
+        .as_ref()
+        .and_then(|h| h.borrow_mut().inputs.remove(&ids.this))
+        .unwrap_or_else(|| RawInput {
+            viewport_id: ids.this,
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SIZE)),
+            ..Default::default()
+        });
+    let out = ctx.run_ui(input, |ui| viewport_ui_cb(ui));
+    if let Some(h) = harness {
+        h.borrow_mut().outputs.push((ids.this, out));
+    }
+}
+
 /// An application driven pass by pass, each window on its own.
 pub struct MultiWindow {
     ctx: Context,
     app: App,
+    /// The immediate windows' inputs and outputs, shared with the
+    /// renderer.
+    immediate: Rc<RefCell<Immediate>>,
+    token: u64,
+    /// The immediate windows the last main pass showed.
+    shown_immediate: BTreeSet<ViewportId>,
     /// The deferred windows the last main pass declared, with their
     /// callbacks.
     declared: BTreeMap<ViewportId, Arc<DeferredViewportUiCallback>>,
@@ -71,12 +132,24 @@ impl MultiWindow {
         let ctx = Context::default();
         ctx.set_embed_viewports(false);
         ctx.enable_accesskit();
+        let immediate = Rc::new(RefCell::new(Immediate::default()));
+        let token = NEXT_TOKEN.with(|n| {
+            let t = n.get();
+            n.set(t + 1);
+            t
+        });
+        HARNESSES.with_borrow_mut(|h| h.insert(token, Rc::downgrade(&immediate)));
+        ctx.data_mut(|d| d.insert_temp(token_id(), token));
+        Context::set_immediate_viewport_renderer(render_immediate);
         let app = build(&ctx);
         let mut info = BTreeMap::new();
         info.insert(ViewportId::ROOT, Self::fresh_info());
         Self {
             ctx,
             app,
+            immediate,
+            token,
+            shown_immediate: BTreeSet::new(),
             declared: BTreeMap::new(),
             info,
             queued: BTreeMap::new(),
@@ -208,7 +281,8 @@ impl MultiWindow {
     }
 
     fn run_pass(&mut self, viewport: ViewportId) {
-        if viewport == ViewportId::ROOT {
+        // An immediate window's pass runs inside the main window's.
+        if viewport == ViewportId::ROOT || self.shown_immediate.contains(&viewport) {
             self.root_pass();
         } else {
             self.window_pass(viewport);
@@ -331,23 +405,58 @@ impl MultiWindow {
                 self.info.entry(*v).or_insert_with(Self::fresh_info);
             }
             let held = &self.held;
+            let immediate = &self.shown_immediate;
+            for v in immediate {
+                self.info.entry(*v).or_insert_with(Self::fresh_info);
+            }
             self.info.retain(|v, _| {
-                *v == ViewportId::ROOT || declared.contains_key(v) || held.contains(v)
+                *v == ViewportId::ROOT
+                    || declared.contains_key(v)
+                    || immediate.contains(v)
+                    || held.contains(v)
             });
         }
     }
 
-    /// Runs the main window's pass (`App::show`).
+    /// Runs the main window's pass (`App::show`), and the passes of the
+    /// immediate windows it shows, inside it.
     pub fn root_pass(&mut self) {
         let input = self.input(ViewportId::ROOT);
+        // Each immediate window listed takes its input in the pass that
+        // shows it.
+        let listed: Vec<ViewportId> = self
+            .info
+            .keys()
+            .copied()
+            .filter(|v| *v != ViewportId::ROOT && !self.declared.contains_key(v))
+            .collect();
+        let inputs: BTreeMap<ViewportId, RawInput> =
+            listed.into_iter().map(|v| (v, self.input(v))).collect();
+        self.immediate.borrow_mut().inputs = inputs;
         let app = &mut self.app;
         let out = self.ctx.run_ui(input, |ui| app.show(ui));
+        let shown = {
+            let mut im = self.immediate.borrow_mut();
+            im.inputs.clear();
+            std::mem::take(&mut im.outputs)
+        };
+        self.shown_immediate = shown.iter().map(|(v, _)| *v).collect();
         self.take_output(ViewportId::ROOT, out);
+        for (v, out) in shown {
+            self.take_output(v, out);
+        }
         self.assert_invariants();
     }
 
+    /// The immediate windows (a detached panel's) the last main pass
+    /// showed, each in a pass of its own.
+    pub fn shown_immediate(&self) -> BTreeSet<ViewportId> {
+        self.shown_immediate.clone()
+    }
+
     /// Runs a declared window's pass; panics when the last main pass did
-    /// not declare it.
+    /// not declare it (an immediate window's pass runs inside the main
+    /// window's: [`MultiWindow::root_pass`]).
     pub fn window_pass(&mut self, viewport: ViewportId) {
         let cb = self
             .declared
@@ -358,6 +467,12 @@ impl MultiWindow {
         let out = self.ctx.run_ui(input, |ui| cb(ui));
         self.take_output(viewport, out);
         self.assert_invariants();
+    }
+}
+
+impl Drop for MultiWindow {
+    fn drop(&mut self) {
+        HARNESSES.with_borrow_mut(|h| h.remove(&self.token));
     }
 }
 

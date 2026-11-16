@@ -2959,7 +2959,9 @@ impl AppHandle {
     /// Puts in a layout (loaded, or an arrangement), repaired against
     /// today's panels and screens; says what the repair changed.
     pub fn set_layout(&self, layout: egui_pop_model::layout::Layout) -> Vec<String> {
+        let before = self.workbench_mut().layout.auxiliary.clone();
         let notes = self.workbench_mut().set_layout(layout, &SCREENS);
+        self.sync_panel_windows(&before);
         self.egui().request_repaint();
         notes
     }
@@ -3022,7 +3024,17 @@ impl AppHandle {
         let focused = self.focused_panel();
         let out = self.step(&step, args, move |app, args| {
             let c = crate::workbench::Change::from_args(&id, args)?;
-            app.workbench_mut().apply(&c)
+            // A detached panel's window opened, docked back or closed is
+            // its request on the bus, whose workbench listener changes the
+            // layout; any other window the change made or ended is asked
+            // once it is done.
+            let before = app.workbench_mut().layout.auxiliary.clone();
+            let done = match crate::bus::panels::ask(app, &c) {
+                Some(done) => done,
+                None => app.workbench_mut().apply(&c),
+            };
+            app.sync_panel_windows(&before);
+            done
         });
         if self.focused_panel() != focused {
             self.publish_focused();
@@ -5920,9 +5932,12 @@ impl App {
             })
             .cloned()
             .collect();
-        for note in self.handle.workbench_mut().refresh(specs, &SCREENS) {
+        let before = self.handle.workbench_mut().layout.auxiliary.clone();
+        let notes = self.handle.workbench_mut().refresh(specs, &SCREENS);
+        for note in notes {
             log::info!(target: "egui_pop", "layout: {note}");
         }
+        self.handle.sync_panel_windows(&before);
         let mut all = self.handle.0.diagnostics.borrow_mut();
         // Resolution diagnostics are recomputed each rebuild.
         let kept: Vec<Diagnostic> = all
