@@ -463,6 +463,25 @@ under `tabs`, the shown one as `shown`: an application that predates
 tabs in windows opens the first panel there and docks the others in
 their default areas.
 
+**A whole tab group.** The empty part of a tab bar, right of its tabs,
+drags the whole group, as an editor group is dragged by its tab bar in
+established IDEs: all its tabs move together, in order, the shown one
+kept (egui_stack's `DockArea::dragged_node`). Inside the main window it
+takes the same zones as a tab (the middle of a group joins its tabs, an
+edge splits the group), each tab dropped in another area running its
+`workbench.move`; over a detached window it joins the window's tabs
+whole, with the same frames and outlines as a tab (the drag session
+carries the group); let go outside every window, it opens a window of
+its own holding it. A group goes whole or not at all: the first of its
+panels that may not leave the main window refuses it, with its reason.
+The tab's menu offers the same, "Move group to window", naming each
+detached window and a new one, for keyboard users and where a drag
+cannot reach a window (Wayland), on a group of two tabs or more. Across
+windows, these are the `workbench.join_window` and `workbench.detach`
+steps with `group: true` (`Change::JoinWindowGroup`,
+`Change::DetachGroup`): the window it opens is its `window.open`, a
+window it empties closes as a panel's joining another does.
+
 Such a window is a window of the application in full:
 
 - **Keys.** The keymap reaches it: the key dispatcher runs in each

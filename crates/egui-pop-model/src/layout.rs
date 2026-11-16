@@ -1070,6 +1070,79 @@ impl Layout {
         Ok(())
     }
 
+    /// The tab group holding a docked or detached panel: its panels in
+    /// order and the index of the shown one (an area's tabs holding it,
+    /// or its window's tabs).
+    ///
+    /// ```
+    /// use egui_pop_model::ids::PanelId;
+    /// use egui_pop_model::layout::{Layout, Node};
+    /// use egui_pop_model::panels::Area;
+    ///
+    /// let [a, b] = [PanelId::from_static("app.a"), PanelId::from_static("app.b")];
+    /// let mut layout = Layout::default();
+    /// layout.areas.push((Area::Bottom, Node::Tabs { panels: vec![a.clone(), b.clone()], active: 1 }));
+    /// assert_eq!(layout.group_of(&a), Some((vec![a, b], 1)));
+    /// ```
+    pub fn group_of(&self, panel: &PanelId) -> Option<(Vec<PanelId>, usize)> {
+        if let Some(a) = self.window_of(panel) {
+            let shown = a.shown.min(a.tabs.len());
+            return Some((a.panels().cloned().collect(), shown));
+        }
+        fn find(n: &Node, panel: &PanelId) -> Option<(Vec<PanelId>, usize)> {
+            match n {
+                Node::Tabs { panels, active } => panels
+                    .contains(panel)
+                    .then(|| (panels.clone(), (*active).min(panels.len() - 1))),
+                Node::Split { a, b, .. } => find(a, panel).or_else(|| find(b, panel)),
+                Node::Grid { children, .. } => children.iter().find_map(|c| find(c, panel)),
+            }
+        }
+        self.areas.iter().find_map(|(_, n)| find(n, panel))
+    }
+
+    /// Moves the tab group holding `panel` ([`Layout::group_of`]) into
+    /// the window holding `window`, after its tabs, in order; the group's
+    /// shown panel is shown there. A group already in that window stays.
+    pub fn join_window_group(&mut self, panel: &PanelId, window: &PanelId) -> Result<(), String> {
+        let (panels, shown) = self
+            .group_of(panel)
+            .ok_or_else(|| format!("`{panel}` is in no tab group"))?;
+        for p in &panels {
+            self.join_window(p, window)?;
+        }
+        if let Some(a) = self.auxiliary.iter_mut().find(|a| a.holds(window)) {
+            a.show(&panels[shown]);
+        }
+        Ok(())
+    }
+
+    /// Moves the tab group holding `panel` ([`Layout::group_of`]) into a
+    /// window of its own at `rect` on `screen`, in order, its shown panel
+    /// shown. A group that is a window already stays.
+    pub fn detach_group(
+        &mut self,
+        panel: &PanelId,
+        screen: &str,
+        rect: [f32; 4],
+    ) -> Result<(), String> {
+        if self.window_of(panel).is_some() {
+            return Ok(());
+        }
+        let (panels, shown) = self
+            .group_of(panel)
+            .ok_or_else(|| format!("`{panel}` is in no tab group"))?;
+        for p in &panels {
+            self.remove(p);
+            self.hidden.retain(|h| h != p);
+        }
+        let mut a = Auxiliary::window(panels[0].clone(), screen, rect);
+        a.tabs = panels[1..].to_vec();
+        a.shown = shown;
+        self.auxiliary.push(a);
+        Ok(())
+    }
+
     /// The group a floating panel floats in, if it floats.
     pub fn floating_of(&self, panel: &PanelId) -> Option<&FloatingGroup> {
         self.floating.iter().find(|g| g.holds(panel))

@@ -69,12 +69,21 @@ pub(super) fn install(kernel: &dyn Bus) {
             let Some((app, panel)) = panel_request(req) else {
                 return Ok(());
             };
-            let alone = app
+            // Nothing to do when the layout has the window already: the
+            // panel alone in it, or a window the workbench made that the
+            // registry does not hold yet (a tab group detached whole).
+            let named = app
                 .workbench_mut()
                 .layout
                 .window_of(&panel)
-                .is_some_and(|a| a.panel == panel && a.tabs.is_empty());
-            if !alone {
+                .filter(|a| a.panel == panel)
+                .map(|a| a.tabs.is_empty());
+            let made = match named {
+                Some(true) => true,
+                Some(false) => !app.windows_list().iter().any(|w| w.id == req.window),
+                None => false,
+            };
+            if !made {
                 app.workbench_mut().apply(&Change::Detach(panel.clone()))?;
                 did.push(format!("{WORKBENCH_WINDOW}: `{panel}` detached"));
             }

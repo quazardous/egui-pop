@@ -748,6 +748,14 @@ pub const WORKBENCH_CLOSE_PANEL: StrKey =
 /// into.
 pub const WORKBENCH_MOVE_TO_WINDOW: StrKey =
     StrKey::new("egui-pop-workbench-move-to-window", "Move to window");
+/// The tab menu's submenu moving the whole tab group into a detached
+/// window, or a new one.
+pub const WORKBENCH_MOVE_GROUP_TO_WINDOW: StrKey = StrKey::new(
+    "egui-pop-workbench-move-group-to-window",
+    "Move group to window",
+);
+/// The "Move group to window" submenu's entry opening a new window.
+pub const WORKBENCH_NEW_WINDOW: StrKey = StrKey::new("egui-pop-workbench-new-window", "New window");
 /// Why a dragged tab may not go into a detached window.
 pub const WORKBENCH_STAYS_DOCKED: StrKey = StrKey::new(
     "egui-pop-workbench-stays-docked",
@@ -1829,6 +1837,8 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_DETACH,
     WORKBENCH_CLOSE_PANEL,
     WORKBENCH_MOVE_TO_WINDOW,
+    WORKBENCH_MOVE_GROUP_TO_WINDOW,
+    WORKBENCH_NEW_WINDOW,
     WORKBENCH_STAYS_DOCKED,
     WORKBENCH_FLOAT,
     WORKBENCH_UNFOLD,

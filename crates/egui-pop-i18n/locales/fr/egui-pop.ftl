@@ -2203,9 +2203,13 @@ egui-pop-workbench-flyout-pin = Épingler { $panel }
 
 egui-pop-workbench-fold = Replier { $area }
 
+egui-pop-workbench-move-group-to-window = Déplacer le groupe vers la fenêtre
+
 egui-pop-workbench-move-to = Déplacer vers { $area }
 
 egui-pop-workbench-move-to-window = Déplacer vers la fenêtre
+
+egui-pop-workbench-new-window = Nouvelle fenêtre
 
 egui-pop-workbench-stays-docked = { $panel } ne peut pas aller dans une fenêtre
 
