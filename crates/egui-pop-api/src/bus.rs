@@ -38,11 +38,20 @@
 //! `window.open` and `window.close` for it as its owner, in the call that
 //! changed what it wants, and its listener (`admin.window`) keeps the
 //! app's state with the window on both points. A plugin disconnected has
-//! its windows closed ([`OWNER_GONE`], reason `owner-gone`). The other
-//! window paths (opening an application window, moving into the main
-//! window, detached panels, popups) still do their work themselves and
-//! report it to the registry; they move onto their requests one by one
-//! (the ADR's slices).
+//! its windows closed ([`OWNER_GONE`], reason `owner-gone`).
+//!
+//! The shell's windows are on the bus too: opening an application window
+//! is its `window.open` ([`AppHandle::request_window_open`], the
+//! application as owner for [`AppHandle::open_window`]); the main
+//! window's close, whatever asked (the system, its title bar's Close,
+//! [`AppHandle::close_window`], [`AppHandle::quit`] with the reason
+//! `quit`), is its `window.close`, which closes every other window by its
+//! own `window.close` first; a window's content moving into the main
+//! window when it closes, and back when the main window is asked to its
+//! front, is a `window.reparent` ([`AppHandle::request_window_reparent`]).
+//! Detached panels and popups still do their work themselves and report
+//! it to the registry; they move onto their requests one by one (the
+//! ADR's slices).
 //!
 //! The job lifecycle is the second family. Asking about a job is a
 //! request ([`JobCancel`], [`JobPause`], [`JobResume`], [`JobRetry`], each
@@ -75,6 +84,8 @@ pub use egui_pop_hooks;
 
 mod owners;
 pub use owners::OWNER_GONE;
+mod shell;
+pub use shell::STEP_WINDOW_REPARENT;
 
 /// Why a window or a popup opens or closes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -635,7 +646,9 @@ fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
     let listened = [
         kernel.listen::<WindowClose>(CHILDREN, mine().before(FOCUS).priority(1000), |req, did| {
             let Some(app) = asking() else { return Ok(()) };
-            if req.kind == WindowKind::App
+            if req.kind == WindowKind::Main {
+                shell::close_children_of_main(&app, req, did);
+            } else if req.kind == WindowKind::App
                 && let Some(v) = app.window_viewport(&WindowId::new(&req.window))
             {
                 crate::dialogs::window_closed(&app, v);
@@ -654,10 +667,12 @@ fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
             let registry = registry.clone();
             kernel.listen::<WindowClose>(REGISTRY, mine().after(FOCUS), move |req, did| {
                 let held = lock(&registry).close(&req.window);
-                if let Some(app) = asking()
-                    && req.kind == WindowKind::App
-                {
-                    app.registry_close(&WindowId::new(&req.window));
+                if let Some(app) = asking() {
+                    match req.kind {
+                        WindowKind::App => app.registry_close(&WindowId::new(&req.window)),
+                        WindowKind::Main if held => app.registry_close_main(),
+                        _ => {}
+                    }
                 }
                 if held {
                     did.push(format!("{REGISTRY}: closed"));
@@ -714,22 +729,7 @@ fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
             Ok(())
         });
     }
-    {
-        let registry = registry.clone();
-        // A window's content moved into another (`parent`): its own
-        // window went.
-        let _ = kernel.listen::<WindowReparent>(REGISTRY, mine(), move |req, did| {
-            if let Some(into) = &req.parent
-                && lock(&registry).close(&req.window)
-            {
-                did.push(format!(
-                    "{REGISTRY}: `{}` now drawn in `{into}`",
-                    req.window
-                ));
-            }
-            Ok(())
-        });
-    }
+    shell::install(kernel, registry);
     owners::install(kernel);
     // The invariants check runs last on every window point.
     for point in [WindowOpen::ID, WindowReparent::ID] {
@@ -866,7 +866,12 @@ impl AppHandle {
     /// (docs/stability.md).</div>
     pub fn request_window_close(&self, request: WindowRequest) -> bool {
         let id = WindowId::new(&request.window);
-        if request.kind == WindowKind::App && self.windows_ref().entry(&id).is_none() {
+        let open = match request.kind {
+            WindowKind::App => self.windows_ref().entry(&id).is_some(),
+            WindowKind::Main => lock(&self.0.bus.registry).holds(WindowId::MAIN),
+            _ => true,
+        };
+        if !open {
             self.publish(
                 "egui_pop",
                 None,
@@ -880,6 +885,11 @@ impl AppHandle {
             // A before-hook may have redirected it.
             let req = serde_json::from_value::<WindowRequest>(args.clone())
                 .map_err(|e| format!("not a window request: {e}"))?;
+            // The main window's close with another window open moves
+            // that window into it (ADR 0025): a `window.reparent`.
+            if let Some(moved) = shell::move_in_instead(app, &req) {
+                return Ok(moved);
+            }
             let did = emit::<WindowClose>(app, req);
             Ok(json!({ "did": did }))
         });
@@ -891,6 +901,10 @@ impl AppHandle {
                     "window.refused",
                     json!({ "request": WindowClose::ID, "window": request.window, "owner": request.owner, "vetoed_by": by, "reason": reason }),
                 );
+                false
+            }
+            crate::steps::Outcome::Done(Ok(moved)) if moved.get(shell::MOVED_IN).is_some() => {
+                // It did not close: the window moved in instead.
                 false
             }
             crate::steps::Outcome::Done(result) => {
@@ -1001,7 +1015,9 @@ impl AppHandle {
     }
 
     /// A path not moved onto its request yet reports a window opened, so
-    /// the registry holds it.
+    /// the registry holds it (the detached panels' windows, until their
+    /// slice).
+    #[allow(dead_code, reason = "the detached panels' windows report through it")]
     pub(crate) fn report_window(&self, point: &str, req: WindowRequest) {
         match point {
             WindowOpen::ID => {
@@ -1083,9 +1099,10 @@ pub(crate) fn declare(ctx: &mut crate::Ctx<'_>) -> Result<(), crate::ctx::CtxErr
     ctx.step(
         crate::steps::StepSpec::new(
             STEP_WINDOW_CLOSE,
-            "An application window closes (`window`, `kind`, `owner`, `reason`, `cause`): its listeners on the bus run in their declared order; `window.closed` follows.",
+            "A window closes (`window`, `kind`, `owner`, `reason`, `cause`): its listeners on the bus run in their declared order; `window.closed` follows. The main window's, with another window open and not quitting, moves that window into it instead (`window.reparent`).",
         )
         .args(json!({ "window": "settings", "kind": "app", "owner": "egui_pop.admin", "reason": "user" })),
     )?;
+    shell::declare(ctx)?;
     Ok(())
 }
