@@ -199,4 +199,9 @@ the run loop they share may still move"; "The read kernel
   lines).
 - Reads: unit tests in `crates/egui-pop-api/src/reads.rs`; through the
   Settings app in `crates/egui-pop-api/tests/admin.rs`.
-- Waits: `crates/egui-pop-test/tests/wait.rs` and the module's doc test.
+- Waits: `crates/egui-pop-api/tests/wait.rs` (each condition read back
+  from its arguments, the refusals, an event matched only after `since`
+  and by its cause, `any` in its order, `bridge.wait`'s answer met or
+  not, the schemas); `crates/egui-pop-test/tests/wait.rs` (the bridge's
+  `describe`, the frame-stepping wait) and the module's doc test.
+  Settling on idle jobs is tested with the jobs model.

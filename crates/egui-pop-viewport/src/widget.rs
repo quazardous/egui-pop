@@ -180,6 +180,11 @@ pub struct ViewportState {
     drag: Option<HandleDrag>,
     split_drag: Option<f32>,
     before_held: bool,
+    /// The `before` key as last seen down, and whether its press began
+    /// a comparison (a `Begin` signalled): the hook is asked once per
+    /// press and release, a release only after a press it let through.
+    before_key: bool,
+    before_begun: bool,
     asked_readout: Option<(Side, [i64; 2])>,
     signalled_readout: Option<(Side, [i64; 2])>,
     last_complete: bool,
@@ -1818,22 +1823,40 @@ fn handle_compare(
     f: &mut Frame<'_>,
 ) -> Compare {
     let held = (response.hovered() || response.has_focus()) && ui.input(|i| i.key_down(g.before));
-    if held != f.state.before_held {
-        let proposed = if held { Compare::Before } else { compare };
-        let allowed = match f.state.hooks.before_compare.as_mut() {
-            None => Some(proposed),
-            Some(hook) => match hook(&compare, &proposed) {
-                Verdict::Allow => Some(proposed),
-                Verdict::Veto => None,
-                Verdict::Redirect(c) => Some(c),
-            },
-        };
-        if let Some(c) = allowed {
-            f.state.before_held = held && c == Compare::Before;
-            f.signals.push(Signal::Compare {
-                compare: c,
-                phase: if held { Phase::Begin } else { Phase::End },
-            });
+    if held != f.state.before_key {
+        f.state.before_key = held;
+        if held || f.state.before_begun {
+            let proposed = if held { Compare::Before } else { compare };
+            let allowed = match f.state.hooks.before_compare.as_mut() {
+                None => Some(proposed),
+                Some(hook) => match hook(&compare, &proposed) {
+                    Verdict::Allow => Some(proposed),
+                    Verdict::Veto => {
+                        f.state.record(
+                            "before_compare",
+                            "veto",
+                            format!("{compare:?} to {proposed:?}"),
+                        );
+                        None
+                    }
+                    Verdict::Redirect(c) => {
+                        f.state.record(
+                            "before_compare",
+                            "redirect",
+                            format!("{compare:?} to {proposed:?}, given {c:?}"),
+                        );
+                        Some(c)
+                    }
+                },
+            };
+            f.state.before_begun = held && allowed.is_some();
+            if let Some(c) = allowed {
+                f.state.before_held = held && c == Compare::Before;
+                f.signals.push(Signal::Compare {
+                    compare: c,
+                    phase: if held { Phase::Begin } else { Phase::End },
+                });
+            }
         }
     }
     if f.state.before_held {

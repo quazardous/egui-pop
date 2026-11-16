@@ -509,5 +509,11 @@ eviction, conversion on the delivering thread, the largest texture
 side, one image pixel per physical pixel at 100 % on both paths),
 `device_tiles.rs`, `view.rs` (the collector and `set_view`),
 `overlays.rs`, `navigation.rs`, `canvas_navigation.rs`, `pointer.rs`,
-`cursor.rs`, `loupe.rs`, `images.rs`. The tokens and the thumbnail
-re-export have no test of their own.
+`cursor.rs`, `loupe.rs`, `images.rs`, `gestures.rs` (the tables read
+from each built-in profile, the plain double click from the profile's
+option, the default keys, a context's gestures following its profile
+until set), `hooks.rs` (the hooks named, the trace kept to its bound,
+`before_compare` asked once per press and release, its veto and
+redirect traced). The tokens and the thumbnail re-export have no test
+of their own; the `on_readout` hook's text is painted only, with no
+test.

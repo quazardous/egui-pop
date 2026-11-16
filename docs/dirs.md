@@ -75,4 +75,8 @@ applications ship them").
 ## Tests
 
 Unit tests in `crates/egui-pop-api/src/dirs.rs`; doc tests of both
-modules. The platform module has no test of its own beyond its doc test.
+modules; `crates/egui-pop-platform/tests/dirs.rs` (the state directory
+per platform from the environment given, a relative place skipped, the
+logs, crash reports and cache under their places, the temporary
+directory and the process id). `reveal` starts the system's opener and
+is not run in tests.
