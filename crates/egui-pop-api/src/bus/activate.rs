@@ -124,6 +124,14 @@ impl AppHandle {
         let did = emit::<WindowActivate>(self, request.clone());
         let after = self.active_window_id();
         if after != before {
+            // The other windows lost the focus, whether or not they drew a
+            // pass since: one focused again gains it anew.
+            let here = crate::window_invariants::viewport_of(request.kind, &request.window);
+            self.0
+                .bus
+                .focus_seen
+                .borrow_mut()
+                .retain(|v, _| Some(*v) == here);
             self.publish(
                 "egui_pop",
                 request.cause,
