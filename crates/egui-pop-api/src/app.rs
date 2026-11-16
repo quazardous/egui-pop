@@ -547,7 +547,9 @@ impl Drop for ActingFor<'_> {
 pub(crate) struct Registries {
     /// Declarations, each with its in-process handler if it has one.
     pub commands: Commands<Option<CommandFn>>,
-    pub keymap: Keymap,
+    /// Shared with the `pointer.profile` listener, which loads the
+    /// profile's bindings into it.
+    pub keymap: Rc<RefCell<Keymap>>,
     pub menus: Menus,
     pub panels: Panels,
     pub hooks: OwnedList<Hook>,
@@ -574,7 +576,7 @@ impl Registries {
     fn new() -> Self {
         Self {
             commands: Commands::new(),
-            keymap: Keymap::new(),
+            keymap: Rc::new(RefCell::new(Keymap::new())),
             menus: Menus::new(),
             panels: Panels::new(),
             hooks: OwnedList::new(),
@@ -588,7 +590,7 @@ impl Registries {
     /// Removes what an owner registered; the commands removed.
     fn remove_owner(&mut self, owner: &OwnerId) -> Vec<CommandId> {
         let commands = self.commands.remove_owner(owner);
-        self.keymap.remove_owner(owner);
+        self.keymap.borrow_mut().remove_owner(owner);
         self.menus.remove_owner(owner);
         self.panels.remove_owner(owner);
         self.hooks.remove_owner(owner);
@@ -910,7 +912,7 @@ impl AppHandle {
         bus: Option<Arc<dyn crate::bus::bus_contract::Bus>>,
     ) -> Self {
         let store = host.store();
-        AppHandle(Rc::new(Shared {
+        let handle = AppHandle(Rc::new(Shared {
             ctx: RefCell::new(ctx.clone()),
             store,
             services: RefCell::new(Services::default()),
@@ -971,7 +973,10 @@ impl AppHandle {
             windows: RefCell::default(),
             bus: crate::bus::Bus::new(bus),
             keymap: RefCell::default(),
-        }))
+        }));
+        // Every setting changed is said once on the bus.
+        crate::bus::settings::hear(&mut lock(&handle.0.store), &handle.0.bus.settings_heard);
+        handle
     }
 
     /// The state of type `T` kept on the application side, made on first
@@ -4021,11 +4026,7 @@ impl AppBuilder {
             panel_keys: BTreeMap::new(),
             dirty: true,
             started: false,
-            installed: None,
-            accent_setting: None,
-            text_seen: crate::text::Seen::default(),
-            scroll_bars_seen: None,
-            preference: None,
+            theme: Rc::default(),
             persist: self.persist,
             kits: Vec::new(),
             in_flight: Vec::new(),
@@ -4034,7 +4035,8 @@ impl AppBuilder {
             on_exit: self.on_exit,
             autosave: AutoSave::default(),
             rebuilds: 0,
-            pointer: crate::pointer::Sync::default(),
+            pointer: Rc::default(),
+            keymap_changed: Rc::default(),
             logic_pass: None,
         };
         install_pass_marker(ctx);
@@ -4167,6 +4169,7 @@ impl AppBuilder {
         app.load_documents();
         app.rebuild();
         app.autosave_baseline();
+        app.listen_settings();
         app.install_theme();
         app.emit(&Lifecycle::Started);
         app.started = true;
@@ -4268,6 +4271,135 @@ pub(crate) fn report_make_error(app: &AppHandle, e: &(dyn std::error::Error + Se
     );
 }
 
+/// Loads the pointer profile the setting asks for into the keymap's
+/// default layer; after a change (not the first load), asks about the
+/// user's changes. The keymap is rebuilt with the next requests.
+fn load_pointer_profile(
+    app: &AppHandle,
+    keymap: &RefCell<Keymap>,
+    sync: &RefCell<crate::pointer::Sync>,
+    changed: &std::cell::Cell<bool>,
+) {
+    let id = crate::pointer::profile_id(app);
+    let first = {
+        let mut sync = sync.borrow_mut();
+        if sync.loaded.as_deref() == Some(id.as_str()) {
+            return;
+        }
+        let first = sync.loaded.is_none();
+        sync.loaded = Some(id.clone());
+        first
+    };
+    let loaded = crate::pointer::load_profile(&mut keymap.borrow_mut(), &id);
+    match loaded {
+        Some(profile) => {
+            changed.set(true);
+            if !first {
+                crate::pointer::ask_about_overrides(app, profile);
+            }
+        }
+        None => app.0.diagnostics.borrow_mut().warn(
+            "unknown-pointer-profile",
+            None,
+            &id,
+            format!(
+                "`{id}` is not a pointer profile: `{}` stays in force",
+                egui_pop_model::pointer::DEFAULT_PROFILE
+            ),
+        ),
+    }
+}
+
+/// The settings the theme follows (`theme.install`).
+const THEME_SETTINGS: [SettingId; 6] = [
+    SETTING_ACCENT_COLOR,
+    SETTING_THEME_PREFERENCE,
+    crate::text::SETTING_TEXT_SIZE,
+    crate::text::SETTING_FONT_UI,
+    crate::text::SETTING_FONT_MONO,
+    crate::scroll_bars::SETTING_SCROLL_BARS,
+];
+
+/// The theme installed and the settings it follows, shared by the
+/// application and its `theme.install` listener.
+#[derive(Default)]
+struct ThemeFollow {
+    /// The settings were read once.
+    read: bool,
+    /// The spec last installed.
+    installed: Option<ThemeSpec>,
+    /// The accent colour setting as last read (it changes the spec's
+    /// accent when it changes).
+    accent_setting: Option<String>,
+    /// The text settings as last read.
+    text_seen: crate::text::Seen,
+    /// What the scroll bars' setting asked for when last read.
+    scroll_bars_seen: Option<theme::ScrollBars>,
+    /// The light or dark preference applied since the last install.
+    preference: Option<egui::ThemePreference>,
+}
+
+impl ThemeFollow {
+    /// Writes the settings into the theme service's spec. Read for the
+    /// first time, a setting at its default leaves the application's spec
+    /// alone.
+    fn read_settings(&mut self, app: &AppHandle) {
+        self.read = true;
+        let service = app.theme();
+        let accent = service.accent_setting();
+        if self.accent_setting.as_ref() != Some(&accent) {
+            if self.accent_setting.is_some() || !accent.trim().is_empty() {
+                service.apply_accent_setting(&accent);
+            }
+            self.accent_setting = Some(accent);
+        }
+        let mut wanted = service.spec();
+        let text = crate::text::apply(app, &mut self.text_seen, &mut wanted);
+        let bars = crate::scroll_bars::apply(app, &mut self.scroll_bars_seen, &mut wanted);
+        if text || bars {
+            service.set(wanted);
+        }
+    }
+
+    /// Installs the theme service's spec when it is not the one installed
+    /// (or `force`), its light or dark preference with it.
+    fn install(&mut self, app: &AppHandle, force: bool) {
+        let service = app.theme();
+        let mut spec = service.spec();
+        if !force && self.installed.as_ref() == Some(&spec) {
+            return;
+        }
+        if self.installed.is_some() {
+            // A spec set since (a theme chosen, the application's own):
+            // the settings the person chose go over it again, as read for
+            // the first time.
+            self.accent_setting = None;
+            self.text_seen = crate::text::Seen::default();
+            self.scroll_bars_seen = None;
+            self.read_settings(app);
+            spec = service.spec();
+        }
+        let ctx = app.egui();
+        theme::install_with(&ctx, service.themes(), &spec);
+        THEME_INSTALLED.set(&ctx, true);
+        self.installed = Some(spec);
+        // The install forces the theme's own mode.
+        self.preference = None;
+        let paired = theme::is_paired(&ctx);
+        app.set_context("themePaired", if paired { "true" } else { "false" });
+        self.follow_preference(app);
+    }
+
+    /// Applies the light or dark preference the setting asks for.
+    fn follow_preference(&mut self, app: &AppHandle) {
+        let preference = app.theme().preference();
+        if self.preference != Some(preference) {
+            theme::set_preference(&app.egui(), preference);
+            self.preference = Some(preference);
+        }
+    }
+}
+
 /// A window's key dispatcher, and the count of active-window changes it
 /// last saw ([`crate::bus::KEYS`]).
 #[derive(Debug, Default)]
@@ -4301,17 +4433,9 @@ pub struct App {
     panel_keys: BTreeMap<egui::ViewportId, WindowKeys>,
     dirty: bool,
     started: bool,
-    installed: Option<ThemeSpec>,
-    /// The accent colour setting as last seen (it changes the spec's
-    /// accent when it changes).
-    accent_setting: Option<String>,
-    /// The text settings as last seen (they change the spec when they
-    /// change).
-    text_seen: crate::text::Seen,
-    /// What the scroll bars' setting asked for when last seen.
-    scroll_bars_seen: Option<theme::ScrollBars>,
-    /// The light or dark preference applied since the last install.
-    preference: Option<egui::ThemePreference>,
+    /// The theme installed and the settings it follows, shared with its
+    /// listener on `settings.changed` ([`crate::bus::THEME_INSTALL`]).
+    theme: Rc<RefCell<ThemeFollow>>,
     persist: Option<Persist>,
     /// The kits added: their faces and handlers are registered in each
     /// context the theme is installed in.
@@ -4326,8 +4450,12 @@ pub struct App {
     autosave: AutoSave,
     /// Rebuilds so far (the keymap may have changed).
     rebuilds: u64,
-    /// The pointer profile loaded and the map published.
-    pointer: crate::pointer::Sync,
+    /// The pointer profile loaded and the map published, shared with the
+    /// `pointer.profile` listener.
+    pointer: Rc<RefCell<crate::pointer::Sync>>,
+    /// The `pointer.profile` listener changed the keymap: rebuilt with
+    /// the application's next requests.
+    keymap_changed: Rc<std::cell::Cell<bool>>,
     /// The pass the logic last ran in (`App::logic`).
     logic_pass: Option<(egui::ViewportId, u64)>,
 }
@@ -4408,7 +4536,7 @@ impl App {
         let store = lock(&h.store);
         BTreeMap::from([
             ("commands", self.reg.commands.len()),
-            ("bindings", self.reg.keymap.all().count()),
+            ("bindings", self.reg.keymap.borrow().all().count()),
             ("menu items", self.reg.menus.len()),
             ("panels", self.reg.panels.all().len()),
             ("panel views", h.panels.borrow().len()),
@@ -4434,8 +4562,8 @@ impl App {
     }
 
     /// The keymap.
-    pub fn keymap(&self) -> &Keymap {
-        &self.reg.keymap
+    pub fn keymap(&self) -> std::cell::Ref<'_, Keymap> {
+        self.reg.keymap.borrow()
     }
 
     /// The framework's own registrations.
@@ -5714,7 +5842,10 @@ impl App {
             .filter(|(c, _)| self.reg.commands.spec(c).is_none())
             .map(|(c, p)| (c.clone(), p.clone()))
             .collect();
-        self.reg.keymap.set_dormant(gone.keys().cloned());
+        self.reg
+            .keymap
+            .borrow_mut()
+            .set_dormant(gone.keys().cloned());
         let reg = &self.reg;
         // Hooks in order: `after` constraints, then priority.
         let hooks: Vec<&Hook> = reg.hooks.iter().map(|s| &s.item).collect();
@@ -5774,6 +5905,7 @@ impl App {
                 category: s.category.clone(),
                 keys: reg
                     .keymap
+                    .borrow()
                     .keys_for(&s.id)
                     .iter()
                     .map(|k| k.to_string())
@@ -5871,14 +6003,14 @@ impl App {
             .commands
             .specs()
             .map(|s| {
-                let keys = reg.keymap.keys_for(&s.id);
+                let keys = reg.keymap.borrow().keys_for(&s.id);
                 (s.id.clone(), keys.iter().map(|k| k.to_string()).collect())
             })
             .collect();
         derived.sources = reg
             .commands
             .specs()
-            .map(|s| (s.id.clone(), reg.keymap.sources_for(&s.id)))
+            .map(|s| (s.id.clone(), reg.keymap.borrow().sources_for(&s.id)))
             .filter(|(_, b)| !b.is_empty())
             .collect();
         derived.panels = reg
@@ -5887,10 +6019,11 @@ impl App {
             .into_iter()
             .map(|(spec, owner)| (spec.clone(), owner.clone()))
             .collect();
-        derived.conflicts = reg.keymap.conflicts();
-        derived.system = reg.keymap.system_bindings();
+        derived.conflicts = reg.keymap.borrow().conflicts();
+        derived.system = reg.keymap.borrow().system_bindings();
         derived.dormant = reg
             .keymap
+            .borrow()
             .dormant()
             .into_iter()
             .filter_map(|binding| {
@@ -5931,7 +6064,7 @@ impl App {
             Layer::User,
         ]
         .into_iter()
-        .map(|l| (l, reg.keymap.export_layer(l)))
+        .map(|l| (l, reg.keymap.borrow().export_layer(l)))
         .collect();
         // New conflicts are signalled once.
         let before: Vec<String> = self
@@ -5962,13 +6095,21 @@ impl App {
         derived.rebound = reg
             .commands
             .specs()
-            .filter(|s| reg.keymap.rebound(&OwnerId::USER, Layer::User, &s.id))
+            .filter(|s| {
+                reg.keymap
+                    .borrow()
+                    .rebound(&OwnerId::USER, Layer::User, &s.id)
+            })
             .map(|s| s.id.clone())
             .collect();
         derived.rebound_workspace = reg
             .commands
             .specs()
-            .filter(|s| reg.keymap.rebound(&WORKSPACE_KEYS, Layer::Workspace, &s.id))
+            .filter(|s| {
+                reg.keymap
+                    .borrow()
+                    .rebound(&WORKSPACE_KEYS, Layer::Workspace, &s.id)
+            })
             .map(|s| s.id.clone())
             .collect();
         // Menu items naming unknown commands are reported.
@@ -6024,7 +6165,7 @@ impl App {
         drop(all);
         self.dirty = false;
         self.rebuilds += 1;
-        *self.handle.0.keymap.borrow_mut() = Rc::new(self.reg.keymap.clone());
+        *self.handle.0.keymap.borrow_mut() = Rc::new(self.reg.keymap.borrow().clone());
         if self.started {
             self.emit(&Lifecycle::Rebuilt);
         }
@@ -6135,6 +6276,7 @@ impl App {
                 let d = self
                     .reg
                     .keymap
+                    .borrow_mut()
                     .load(&OwnerId::USER, Layer::User, &read.value);
                 self.handle
                     .0
@@ -6196,7 +6338,7 @@ impl App {
         let settings = settings_schema()
             .save(&doc)
             .map_err(|e| doc_error("settings", e))?;
-        let keymap = self.reg.keymap.export(&OwnerId::USER, Layer::User);
+        let keymap = self.reg.keymap.borrow().export(&OwnerId::USER, Layer::User);
         let keymap = egui_pop_model::keymap_schema()
             .save(&keymap)
             .map_err(|e| doc_error("keymap", e))?;
@@ -6405,7 +6547,7 @@ impl App {
         let Some(owner) = self.reg.commands.remove(id) else {
             return false;
         };
-        self.reg.keymap.remove_command(&owner, id);
+        self.reg.keymap.borrow_mut().remove_command(&owner, id);
         self.reg.menus.remove_command(&owner, id);
         self.rebuild();
         true
@@ -6421,7 +6563,7 @@ impl App {
     ) -> Result<egui_pop_model::keymap::KeymapDiff, String> {
         let owner = layer_owner(layer).ok_or("only the user's and the workspace's layers load")?;
         let handle = self.handle.clone();
-        let keymap = &mut self.reg.keymap;
+        let mut keymap = self.reg.keymap.borrow_mut();
         let mut diff = None;
         let out = handle.step(
             &STEP_LOAD_KEYMAP,
@@ -6455,6 +6597,7 @@ impl App {
                 Ok(summary)
             },
         );
+        drop(keymap);
         self.rebuild();
         match out {
             Outcome::Done(Ok(_)) => Ok(diff.unwrap_or_default()),
@@ -6493,46 +6636,72 @@ impl App {
         }
     }
 
+    /// Installs the theme where it is not yet (the kits' faces with it),
+    /// or again when the theme service's spec changed; the settings are
+    /// read once here, then followed by the `theme.install` listener.
     fn install_theme(&mut self) {
-        let service = self.handle.theme();
-        let accent = service.accent_setting();
-        if self.accent_setting.as_ref() != Some(&accent) {
-            // The setting moved: it decides the accent. Seen for the
-            // first time, an empty one leaves the application's spec.
-            if self.accent_setting.is_some() || !accent.trim().is_empty() {
-                service.apply_accent_setting(&accent);
-            }
-            self.accent_setting = Some(accent);
-        }
-        let mut wanted = service.spec();
-        let text = crate::text::apply(&self.handle, &mut self.text_seen, &mut wanted);
-        let bars = crate::scroll_bars::apply(&self.handle, &mut self.scroll_bars_seen, &mut wanted);
-        if text || bars {
-            service.set(wanted);
-        }
-        let spec = service.spec();
         let ctx = self.handle.egui();
         let here = THEME_INSTALLED.get(&ctx).unwrap_or(false);
-        if !here || self.installed.as_ref() != Some(&spec) {
-            if !here {
-                for kit in &self.kits {
-                    kit.register(&ctx);
-                }
+        if !here {
+            for kit in &self.kits {
+                kit.register(&ctx);
             }
-            theme::install_with(&ctx, service.themes(), &spec);
-            THEME_INSTALLED.set(&ctx, true);
-            self.installed = Some(spec);
-            // The install forces the theme's own mode.
-            self.preference = None;
-            let paired = theme::is_paired(&ctx);
-            self.handle
-                .set_context("themePaired", if paired { "true" } else { "false" });
         }
-        let preference = service.preference();
-        if self.preference != Some(preference) {
-            theme::set_preference(&ctx, preference);
-            self.preference = Some(preference);
+        let mut follow = self.theme.borrow_mut();
+        if !follow.read {
+            follow.read_settings(&self.handle);
         }
+        follow.install(&self.handle, !here);
+    }
+
+    /// Registers egui-pop's listeners of `settings.changed`, local to the
+    /// interface's thread: the theme, the pointer profile, the main
+    /// window's frame.
+    fn listen_settings(&mut self) {
+        use crate::bus::{OWNER, SettingsChanged, THEME_INSTALL, asking};
+        let bus = self.handle.bus();
+        let follow = self.theme.clone();
+        let listened = bus.listen_local::<SettingsChanged>(
+            THEME_INSTALL,
+            bus_contract::ListenOpts::new().owner(OWNER),
+            move |change, ()| {
+                if !change.is_any(&THEME_SETTINGS) {
+                    return Ok(());
+                }
+                let Some(app) = asking() else { return Ok(()) };
+                let Ok(mut follow) = follow.try_borrow_mut() else {
+                    return Err("the theme is being installed".into());
+                };
+                follow.read_settings(&app);
+                if THEME_INSTALLED.get(&app.egui()).unwrap_or(false) {
+                    follow.install(&app, false);
+                    follow.follow_preference(&app);
+                }
+                Ok(())
+            },
+        );
+        if let Err(e) = listened {
+            log::error!(target: "egui_pop", "{THEME_INSTALL}: {e}");
+        }
+        let keymap = self.reg.keymap.clone();
+        let sync = self.pointer.clone();
+        let changed = self.keymap_changed.clone();
+        let listened = bus.listen_local::<SettingsChanged>(
+            crate::bus::POINTER_PROFILE,
+            bus_contract::ListenOpts::new().owner(OWNER),
+            move |change, ()| {
+                if change.id() != crate::pointer::SETTING_PROFILE.as_str() {
+                    return Ok(());
+                }
+                let Some(app) = asking() else { return Ok(()) };
+                load_pointer_profile(&app, &keymap, &sync, &changed);
+                Ok(())
+            },
+        );
+        if let Err(e) = listened {
+            log::error!(target: "egui_pop", "{}: {e}", crate::bus::POINTER_PROFILE);
+        }
+        crate::frame::listen(&self.handle);
     }
 
     /// Draws in this context from now on (an application built on one
@@ -6819,7 +6988,7 @@ impl App {
     /// a text (one shortcut), `null` (none) or an array (several).
     fn rebind_step(&mut self, command: &CommandId, args: Json) {
         let handle = self.handle.clone();
-        let keymap = &mut self.reg.keymap;
+        let mut keymap = self.reg.keymap.borrow_mut();
         let mut changed = false;
         let out = handle.step(&STEP_REBIND, args, |_, args| {
             let command = args
@@ -6924,7 +7093,7 @@ impl App {
                     }
                     Request::ResetKeys { command, layer } => {
                         if let Some(owner) = layer_owner(layer) {
-                            self.reg.keymap.reset(&owner, layer, &command);
+                            self.reg.keymap.borrow_mut().reset(&owner, layer, &command);
                             self.dirty = true;
                         }
                     }
@@ -6936,6 +7105,9 @@ impl App {
                     }
                 }
             }
+        }
+        if self.keymap_changed.take() {
+            self.dirty = true;
         }
         if self.dirty {
             self.rebuild();
@@ -6964,6 +7136,9 @@ impl App {
         }
         profiling::scope!("pop.app.logic");
         self.attach(ctx);
+        // The settings changed since the last pass, said on the bus: the
+        // theme, the pointer profile and the frame follow there.
+        self.handle.deliver_settings();
         self.install_theme();
         self.settle();
         self.handle.feed_indicators();
@@ -6976,46 +7151,30 @@ impl App {
             self.handle.run_pending();
             self.emit(&Lifecycle::Pass);
         }
-        self.load_pointer_profile();
+        if self.pointer.borrow().loaded.is_none() {
+            // Read once; then followed by `pointer.profile`.
+            load_pointer_profile(
+                &self.handle,
+                &self.reg.keymap,
+                &self.pointer,
+                &self.keymap_changed,
+            );
+        }
         self.process_requests();
+        // What the requests changed, followed before the pass draws.
+        self.handle.deliver_settings();
+        if self.keymap_changed.get() {
+            self.process_requests();
+        }
         self.publish_pointer(ctx);
         self.autosave(ctx);
-    }
-
-    /// The pointer profile the setting asks for, in the keymap's default
-    /// layer; after a change (not the first load), the question about
-    /// the user's changes.
-    fn load_pointer_profile(&mut self) {
-        let id = crate::pointer::profile_id(&self.handle);
-        if self.pointer.loaded.as_deref() == Some(id.as_str()) {
-            return;
-        }
-        let first = self.pointer.loaded.is_none();
-        self.pointer.loaded = Some(id.clone());
-        match crate::pointer::load_profile(&mut self.reg.keymap, &id) {
-            Some(profile) => {
-                self.dirty = true;
-                if !first {
-                    crate::pointer::ask_about_overrides(&self.handle, profile);
-                }
-            }
-            None => self.handle.0.diagnostics.borrow_mut().warn(
-                "unknown-pointer-profile",
-                None,
-                &id,
-                format!(
-                    "`{id}` is not a pointer profile: `{}` stays in force",
-                    egui_pop_model::pointer::DEFAULT_PROFILE
-                ),
-            ),
-        }
     }
 
     /// Publishes the pointer gestures in force to the context, when the
     /// keymap or the settings changed, or the context lacks them.
     fn publish_pointer(&mut self, ctx: &Context) {
         let print = crate::pointer::settings_print(&self.handle);
-        let fresh = match &self.pointer.published {
+        let fresh = match &self.pointer.borrow().published {
             Some((map, rebuilds, p)) => {
                 *rebuilds == self.rebuilds
                     && *p == print
@@ -7026,9 +7185,9 @@ impl App {
         if fresh {
             return;
         }
-        let map = Arc::new(crate::pointer::map(&self.handle, &self.reg.keymap));
+        let map = Arc::new(crate::pointer::map(&self.handle, &self.reg.keymap.borrow()));
         egui_pop_core::pointer::set_shared_map(ctx, map.clone());
-        self.pointer.published = Some((map, self.rebuilds, print));
+        self.pointer.borrow_mut().published = Some((map, self.rebuilds, print));
     }
 
     /// Draws the whole application in a `Ui` covering the window, after
@@ -7053,7 +7212,7 @@ impl App {
                 json!({ "viewport": "root", "from": from, "to": to }),
             );
             // Strokes are snapped for the scale: install the theme again.
-            self.installed = None;
+            self.theme.borrow_mut().installed = None;
             self.install_theme();
         }
         // Drawn with the theme of this pass, as `Kit::of` and
@@ -7122,6 +7281,12 @@ impl App {
             self.handle.run(command, Json::Null);
         }
         self.process_requests();
+        // What this pass changed (a Settings row, a bound widget), said
+        // and followed in it.
+        self.handle.deliver_settings();
+        if self.keymap_changed.get() {
+            self.process_requests();
+        }
     }
 
     /// Dispatches the keys of the window being drawn (`ctx`'s current
@@ -7140,7 +7305,7 @@ impl App {
         let dispatched = if self.handle.0.capturing.get() {
             Vec::new()
         } else {
-            dispatcher.process(ctx, &self.reg.keymap, &cx)
+            dispatcher.process(ctx, &self.reg.keymap.borrow(), &cx)
         };
         // What the debug bridge shows: the main window's, or the
         // detached window worked in.

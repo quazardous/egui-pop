@@ -340,6 +340,6 @@ pub(crate) fn register(
             }
         },
     )?;
-    load_profile(&mut ctx.reg.keymap, default);
+    load_profile(&mut ctx.reg.keymap.borrow_mut(), default);
     Ok(())
 }
