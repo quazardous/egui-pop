@@ -18,9 +18,14 @@
 //!   note at the end (a count, a key): an entry of a "More (n)" fold, a
 //!   "Show all". A button to assistive technologies, focused by Tab and
 //!   pressed with Space or Enter.
+//! - [`RowButton`]: a button small enough for a list's row (Cancel,
+//!   Retry beside a job), the kit's `button` around its words with a
+//!   hairline's padding, no taller than the row ([`Tokens`]'
+//!   `size.row.height`). A button to assistive technologies, named by its
+//!   words, focused by Tab and pressed with Space or Enter.
 //!
 //! ```
-//! use egui_pop_core::compact::{ChoiceCell, MenuRow};
+//! use egui_pop_core::compact::{ChoiceCell, MenuRow, RowButton};
 //!
 //! fn row(ui: &mut egui::Ui, mode: &mut usize) {
 //!     let size = egui::vec2(120.0, 22.0);
@@ -29,6 +34,9 @@
 //!         .show(ui);
 //!     if ui.add(MenuRow::new("Show Contrast").note("hidden")).clicked() {
 //!         // reveal it
+//!     }
+//!     if ui.add(RowButton::new("Cancel")).clicked() {
+//!         // cancel the row's job
 //!     }
 //! }
 //! ```
@@ -243,6 +251,89 @@ impl Widget for MenuRow {
         };
         let enabled = ui.is_enabled();
         response.widget_info(|| WidgetInfo::labeled(Role::Button, enabled, &name));
+        response
+    }
+}
+
+/// A button small enough for a list's row (see [the module](self)).
+///
+/// Need (action): a small (compact) button in a dense list row.
+#[derive(Clone, Debug)]
+#[must_use = "add it with `ui.add`"]
+pub struct RowButton {
+    text: String,
+    tone: Tone,
+    height: Option<f32>,
+}
+
+impl RowButton {
+    /// A button saying `text`, its accessible name.
+    pub fn new(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            tone: Tone::Neutral,
+            height: None,
+        }
+    }
+
+    /// Its tone, from the kit's `button.tone.*` (a danger "Delete").
+    pub fn tone(mut self, tone: Tone) -> Self {
+        self.tone = tone;
+        self
+    }
+
+    /// Its height; by default its words with `space.xs` above and below,
+    /// no taller than a row (`size.row.height`).
+    pub fn height(mut self, height: f32) -> Self {
+        self.height = Some(height);
+        self
+    }
+}
+
+impl Widget for RowButton {
+    fn ui(self, ui: &mut Ui) -> Response {
+        let ctx = ui.ctx().clone();
+        let t = Tokens::of(&ctx);
+        let kit = Kit::of(&ctx);
+        let button = &kit.button;
+        let font = egui::TextStyle::Button.resolve(ui.style());
+        let label = ui
+            .painter()
+            .layout_no_wrap(self.text.clone(), font, Color32::PLACEHOLDER);
+        let height = self.height.unwrap_or_else(|| {
+            (label.size().y + 2.0 * t.space.xs)
+                .min(t.size.row_height)
+                .max(label.size().y)
+        });
+        let pad = t.space.s.max(button.border_room(ctx.pixels_per_point()));
+        let size = vec2((label.size().x + 2.0 * pad).max(height), height.max(1.0));
+        let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+        if ui.is_rect_visible(rect) {
+            let state = State::from_response(&response).toned(self.tone);
+            let painter = ui.painter().with_clip_rect(rect.intersect(ui.clip_rect()));
+            let cx = KitCx {
+                painter: &painter,
+                ppp: ctx.pixels_per_point(),
+            };
+            button.paint(
+                &cx,
+                &Part {
+                    rect,
+                    room: rect,
+                    state,
+                    label: None,
+                },
+            );
+            // Centred whatever the component's label alignment, with the
+            // compact padding rather than the button's own.
+            painter.galley(
+                rect.center() - label.size() / 2.0,
+                label,
+                button.style(state).text,
+            );
+        }
+        let enabled = ui.is_enabled();
+        response.widget_info(|| WidgetInfo::labeled(Role::Button, enabled, &self.text));
         response
     }
 }

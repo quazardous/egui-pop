@@ -200,6 +200,21 @@ that weight (`fonts::family`), once a theme has installed the fonts;
 egui's bundled font has one weight, which draws them all. The role
 colours are in the contrast pairs, over panels and the raised surface.
 
+Beside the roles, three helpers of `UiPop` (experimental) read the same
+tokens for what is not a role of its own:
+
+- `ui.code_text(text)`: monospace text (a log or console line, a path) in
+  egui's monospace style (`font.text-style.monospace`, `font.family.mono`)
+  and the body's colour (`text-role.body.color`).
+- `ui.text_tone(tone, text)`: the body role in a tone's colour
+  (`egui_pop_core::ui::tone_color`): `danger`, `warning`, `success` and
+  `info` the status colours, `accent` the accent, `muted` the muted
+  role's colour, `neutral` the body's. Colour is not the only signal: the
+  words say it too ("Failed: ...").
+- `ui.divider()`: a rule across the layout between two sections, in
+  `border.default`, one point wide on whole pixels, centred in a space
+  of `space.group`; upright in a row.
+
 ## The categorical palette
 
 Charts and data views colour what they tell apart by identity (an

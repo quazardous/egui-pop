@@ -99,6 +99,25 @@ pub fn role_text(ui: &Ui, role: TextRole, text: impl Into<String>) -> RichText {
     }
 }
 
+/// The colour of text in `tone` ([`UiPop::text_tone`]): `danger`,
+/// `warning`, `success` and `info` the status colours (`status.*`),
+/// `accent` `accent.default`, `muted` `text-role.muted.color`, `record`
+/// `status.danger`, `neutral` `text-role.body.color`.
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
+pub fn tone_color(tokens: &Tokens, tone: Tone) -> egui::Color32 {
+    match tone {
+        Tone::Neutral => tokens.text_role.body.color,
+        Tone::Accent => tokens.accent.default,
+        Tone::Info => tokens.status.info,
+        Tone::Success => tokens.status.success,
+        Tone::Warning => tokens.status.warning,
+        Tone::Danger | Tone::Record => tokens.status.danger,
+        Tone::Muted => tokens.text_role.muted.color,
+    }
+}
+
 /// The family drawing a weight of interface text: `None` for the
 /// regular weight (egui's own family, or the preview's text style in
 /// `fonts::with_preview`), and while the theme's weighted families are
@@ -198,7 +217,7 @@ mod sealed {
 pub trait UiPop: sealed::Sealed {
     /// A label in a text role ([`role_text`]).
     ///
-    /// Need (text): a label in a named text role (body, strong, code...).
+    /// Need (text): a label in a named text role (title, section, body, muted, meta).
     fn text_role(&mut self, role: TextRole, text: impl Into<String>) -> Response;
 
     /// A section's title (`text-role.section`).
@@ -217,6 +236,46 @@ pub trait UiPop: sealed::Sealed {
     ///
     /// Need (text): small print about an item, a date or a size.
     fn meta(&mut self, text: impl Into<String>) -> Response;
+
+    /// Monospace text: a log's or a console's line, a path, a piece of
+    /// code. egui's monospace text style (`font.text-style.monospace`,
+    /// in `font.family.mono`) in the body role's colour
+    /// (`text-role.body.color`), without the box egui's own `code` label
+    /// draws, so a log's lines read as text.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    ///
+    /// Need (text): monospace text, a log or console line, a path or code.
+    fn code_text(&mut self, text: impl Into<String>) -> Response;
+
+    /// Text in a tone: a failed state, an error, a warning, a success.
+    /// The body role's size and weight in the tone's colour, from the
+    /// tokens ([`tone_color`]): `danger`, `warning`, `success` and `info`
+    /// the status colours (legible as text on panels), `accent` the
+    /// accent, `muted` the muted role's colour, `record` the danger
+    /// colour, [`Tone::Neutral`] the body's. The tone is in its colour
+    /// only: say it in the words too ("Failed: ..."), as colour alone
+    /// reaches neither every eye nor assistive technologies.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    ///
+    /// Need (text): text in a tone, a failed state or an error in the danger colour.
+    /// Need (status): an inline error, warning or success message.
+    fn text_tone(&mut self, tone: Tone, text: impl Into<String>) -> Response;
+
+    /// A divider: a rule across the layout between two sections, in
+    /// `border.default`, one point wide on whole physical pixels, centred in a space of
+    /// [`Space::Group`]. Horizontal in a vertical layout, vertical (the
+    /// row's height) in a horizontal one. Decoration: it has no name and
+    /// takes no input.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    ///
+    /// Need (layout): a divider, a rule between two sections (separator).
+    fn divider(&mut self) -> Response;
 
     /// Space by intent along the layout's direction ([`Space`]); egui's
     /// own `add_space` takes points.
@@ -367,6 +426,46 @@ impl UiPop for Ui {
 
     fn meta(&mut self, text: impl Into<String>) -> Response {
         self.text_role(TextRole::Meta, text)
+    }
+
+    fn code_text(&mut self, text: impl Into<String>) -> Response {
+        let color = Tokens::of(self.ctx()).text_role.body.color;
+        self.label(RichText::new(text).monospace().color(color))
+    }
+
+    fn text_tone(&mut self, tone: Tone, text: impl Into<String>) -> Response {
+        let color = tone_color(&Tokens::of(self.ctx()), tone);
+        let rich = role_text(self, TextRole::Body, text).color(color);
+        self.label(rich)
+    }
+
+    fn divider(&mut self) -> Response {
+        let t = Tokens::of(self.ctx());
+        let across = self.layout().main_dir().is_horizontal();
+        let room = if self.is_sizing_pass() {
+            egui::Vec2::ZERO
+        } else {
+            self.available_size_before_wrap()
+        };
+        let size = if across {
+            egui::vec2(t.space.group, room.y)
+        } else {
+            egui::vec2(room.x, t.space.group)
+        };
+        let (rect, response) = self.allocate_exact_size(size, egui::Sense::hover());
+        if self.is_rect_visible(rect) {
+            let painter = self.painter();
+            let width = crate::scale::snap(1.0, self.ctx().pixels_per_point());
+            let stroke = egui::Stroke::new(width, t.border.default);
+            if across {
+                let x = painter.round_to_pixel_center(rect.center().x);
+                painter.vline(x, rect.y_range(), stroke);
+            } else {
+                let y = painter.round_to_pixel_center(rect.center().y);
+                painter.hline(rect.x_range(), y, stroke);
+            }
+        }
+        response
     }
 
     fn space_role(&mut self, space: Space) {

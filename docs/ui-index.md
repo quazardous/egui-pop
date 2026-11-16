@@ -20,17 +20,20 @@ To add an entry, give the item a doc line
 | Need | Use | What it is |
 |---|---|---|
 | a heading over a group of fields | `ui.section_title(..)`<br>`egui_pop::core::ui::UiPop::section_title` | A section's title (`text-role.section`). |
-| a label in a named text role (body, strong, code...) | `ui.text_role(..)`<br>`egui_pop::core::ui::UiPop::text_role` | A label in a text role (`role_text`). |
+| a label in a named text role (title, section, body, muted, meta) | `ui.text_role(..)`<br>`egui_pop::core::ui::UiPop::text_role` | A label in a text role (`role_text`). |
 | a section title | `ui.section_title(..)`<br>`egui_pop::core::ui::UiPop::section_title` | A section's title (`text-role.section`). |
 | greyed or weak text | `ui.muted(..)`<br>`egui_pop::core::ui::UiPop::muted` | Secondary text: a hint, a description (`text-role.muted`). |
+| monospace text, a log or console line, a path or code | `ui.code_text(..)`<br>`egui_pop::core::ui::UiPop::code_text` | Monospace text: a log's or a console's line, a path, a piece of code. |
 | secondary text, a hint or a description | `ui.muted(..)`<br>`egui_pop::core::ui::UiPop::muted` | Secondary text: a hint, a description (`text-role.muted`). |
 | small print about an item, a date or a size | `ui.meta(..)`<br>`egui_pop::core::ui::UiPop::meta` | Small print about an item: a date, a size (`text-role.meta`). |
+| text in a tone, a failed state or an error in the danger colour | `ui.text_tone(..)`<br>`egui_pop::core::ui::UiPop::text_tone` | Text in a tone: a failed state, an error, a warning, a success. |
 
 ## Spacing, cards and scrolling
 
 | Need | Use | What it is |
 |---|---|---|
 | a card, a framed group | `ui.card(..)`<br>`egui_pop::core::ui::UiPop::card` | `add` inside the kit's `card` in a tone (`Tone::Neutral` for the plain card). |
+| a divider, a rule between two sections (separator) | `ui.divider(..)`<br>`egui_pop::core::ui::UiPop::divider` | A divider: a rule across the layout between two sections, in `border.default`, one point wide on whole physical pixels, centred in a space of `Space::Group`. |
 | a scrolling region | `ui.scroll_area(..)`<br>`egui_pop::core::ui::UiPop::scroll_area` | Shows egui's scroll area with its bars drawn from the kit's `scroll-bar` (`Stock::ScrollBar`: the thumb's fills and corners, the track), `add` its content, drawn in this `Ui`'s own style. |
 | collapsible sections in a panel | `Sections`<br>`egui_pop::core::sections::Sections` | A stack of collapsible sections filling the room it is given (a panel's height), named for its memory and for agents. |
 | one of egui's own widgets, styled by the kit | `ui.scoped(..)`<br>`egui_pop::core::ui::UiPop::scoped` | `add` in a scope where egui's own widgets of a `Stock` kind (buttons, combo boxes, text fields, buttons shown on or off) are drawn from the kit's component, in a tone: its states become egui's widget visuals, so egui keeps drawing the widget (`Kit::scope`). |
@@ -42,6 +45,7 @@ To add an entry, give the item a doc line
 |---|---|---|
 | a button by tone (primary, danger, quiet) | `ui.button_tone(..)`<br>`egui_pop::core::ui::UiPop::button_tone` | egui's button in a tone of the kit's `button` (`button.tone.*`): a `Stock::Button` scope (`UiPop::scoped`), so the button keeps its layout, icon and shortcut text. |
 | a button with a menu of alternatives (split button) | `input::split_button(..)`<br>`egui_pop::core::input::split_button` | A split button on its own: an action (`text`) and a chevron opening a menu of `items`. |
+| a small (compact) button in a dense list row | `RowButton`<br>`egui_pop::core::compact::RowButton` | A button small enough for a list's row (see the module). |
 | an icon button | `IconWidget`<br>`egui_pop::core::icon::IconWidget` | An icon as a widget. |
 
 ## Fields and choices
@@ -84,6 +88,7 @@ To add an entry, give the item a doc line
 | a colour swatch | `Indicator`<br>`egui_pop::core::indicator::Indicator` | A micro-indicator, built then added inline (`ui.add`) or painted on a widget (`Indicator::on`, `Indicator::paint_at`). |
 | a level against thresholds (disk space, memory) | `Meter`<br>`egui_pop::core::progress::Meter` | A value against thresholds (disk space, memory), not progress: a bar whose tone follows the highest threshold reached. |
 | a status dot, a LED, a count badge or a flag | `Indicator`<br>`egui_pop::core::indicator::Indicator` | A micro-indicator, built then added inline (`ui.add`) or painted on a widget (`Indicator::on`, `Indicator::paint_at`). |
+| an inline error, warning or success message | `ui.text_tone(..)`<br>`egui_pop::core::ui::UiPop::text_tone` | Text in a tone: a failed state, an error, a warning, a success. |
 
 ## Icons and glyphs
 

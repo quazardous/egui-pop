@@ -8,10 +8,11 @@ no label beside it (a HUD's parts, a property sheet, a card's fold).
 |---|---|
 | `egui_pop_core::compact::ChoiceCell` | One of a few words in a slot: egui-pop's `combo_box` sized to it |
 | `egui_pop_core::compact::MenuRow` | A row the width of its room in the look of a menu's items, with a muted note at its end |
+| `egui_pop_core::compact::RowButton` | A button small enough for a list's row: the kit's `button` around its words, no taller than a row |
 | `egui_pop_core::slider::Slider::scrub` | The slider as a scrub field: label and value, no fill, no thumb |
 | `egui_pop_core::input::Input::cell` | The decorated input sized exactly to a slot |
 
-**Owns**: these four looks, and the rule that a compact control keeps
+**Owns**: these five looks, and the rule that a compact control keeps
 every behaviour of its full-size version (keys, typed entry, history,
 name).
 
@@ -22,7 +23,7 @@ caller's, or [list items and property rows](list-items.md)).
 ## The API
 
 ```rust
-use egui_pop_core::compact::{ChoiceCell, MenuRow};
+use egui_pop_core::compact::{ChoiceCell, MenuRow, RowButton};
 use egui_pop_core::slider::Slider;
 
 fn row(ui: &mut egui::Ui, mode: &mut usize, exposure: &mut f64) {
@@ -34,6 +35,9 @@ fn row(ui: &mut egui::Ui, mode: &mut usize, exposure: &mut f64) {
     if ui.add(MenuRow::new("Show Contrast").note("hidden")).clicked() {
         // reveal it
     }
+    if ui.add(RowButton::new("Cancel")).clicked() {
+        // cancel the row's job
+    }
 }
 ```
 
@@ -43,6 +47,9 @@ fn row(ui: &mut egui::Ui, mode: &mut usize, exposure: &mut f64) {
   changed.
 - `MenuRow::new(text)`: `note` (a count, a key), `height` (default: the
   kit's `menu-item.height`, at least a row).
+- `RowButton::new(text)`: `tone` (the kit's `button.tone.*`), `height`
+  (default: its words with `space.xs` above and below, no taller than
+  `size.row.height`); its words are centred with `space.s` at each side.
 - `Slider::scrub`: a drag along the field scrubs over the soft range
   whatever the field's width; too narrow for its label, it shows the
   value alone. Horizontal only: a vertical slider keeps its track.
@@ -57,6 +64,8 @@ fn row(ui: &mut egui::Ui, mode: &mut usize, exposure: &mut f64) {
   state is the combo box's, from the kit.
 - `MenuRow`: focused by Tab, pressed with Space or Enter; hover and
   focus from the kit's `menu-item`.
+- `RowButton`: a button named by its words, focused by Tab, pressed with
+  Space or Enter; its look in each state is the kit's `button`'s.
 - The scrub field and the cell keep their full-size versions' states,
   keys, menus and history.
 

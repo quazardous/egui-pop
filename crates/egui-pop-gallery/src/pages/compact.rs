@@ -3,10 +3,10 @@
 //! size with no label beside it. Scrub fields (the slider's scrub look),
 //! a text, a number and a choice in compact cells, a value's marks
 //! (changed, held, moved), value bars across and upright, and the menu
-//! rows of a "More" fold.
+//! rows of a "More" fold, and row buttons beside a job.
 
 use egui::{Ui, vec2};
-use egui_pop::core::compact::{ChoiceCell, MenuRow};
+use egui_pop::core::compact::{ChoiceCell, MenuRow, RowButton};
 use egui_pop::core::indicator::{Indicator, ValueMark};
 use egui_pop::core::input::Input;
 use egui_pop::core::progress::Meter;
@@ -30,6 +30,7 @@ pub struct State {
     mode: usize,
     levels: [f64; 3],
     revealed: Vec<&'static str>,
+    cancelled: Option<&'static str>,
 }
 
 impl Default for State {
@@ -44,6 +45,7 @@ impl Default for State {
             mode: 1,
             levels: [0.35, 0.72, 0.94],
             revealed: Vec::new(),
+            cancelled: None,
         }
     }
 }
@@ -164,5 +166,19 @@ pub fn show(ui: &mut Ui, s: &mut State) {
     });
     if !s.revealed.is_empty() {
         ui.label(format!("Shown: {}", s.revealed.join(", ")));
+    }
+
+    section(ui, "Row buttons");
+    for job in ["Import 12 photos", "Export 3 photos"] {
+        ui.horizontal(|ui| {
+            ui.label(job);
+            if ui.add(RowButton::new("Cancel")).clicked() {
+                s.cancelled = Some(job);
+            }
+            ui.add(RowButton::new("Retry").tone(Tone::Accent));
+        });
+    }
+    if let Some(job) = s.cancelled {
+        ui.label(format!("Cancelled: {job}"));
     }
 }
