@@ -189,6 +189,9 @@ impl Admin {
         });
         lock(&self.state).open = true;
         self.refresh();
+        // A focus screen takes it over the main window; another wizard
+        // opens in its window, in the window mode.
+        super::window::settle(app, self, false);
         Ok(self.wizard_state(app))
     }
 
@@ -260,7 +263,7 @@ impl Admin {
             return Err(format!("no command `{command}`"));
         }
         app.run(id, args.clone());
-        self.end_wizard();
+        self.end_wizard(app);
         let done = json!({ "finished": wizard, "command": command, "args": args });
         *lock(&self.finished) = Some(done.clone());
         Ok(done)
@@ -298,16 +301,19 @@ impl Admin {
             );
             return Ok(json!({ "asked": true }));
         }
-        self.end_wizard();
+        self.end_wizard(app);
         Ok(json!({ "cancelled": run.flow.wizard }))
     }
 
     /// Ends the wizard running; the Settings app closes when the wizard
     /// opened it.
-    fn end_wizard(&self) {
+    fn end_wizard(&self, app: &AppHandle) {
         let run = lock(&self.wizard).take();
         if run.is_some_and(|r| r.opened) {
-            self.close();
+            self.close(app);
+        } else {
+            // A focus screen ended: back in its window, in the window mode.
+            super::window::settle(app, self, false);
         }
     }
 
@@ -398,7 +404,7 @@ pub(super) fn page(ui: &mut Ui, app: &AppHandle, admin: &Admin) {
         return;
     };
     let Some(w) = tree.wizard(&run.flow.wizard) else {
-        admin.end_wizard();
+        admin.end_wizard(app);
         return;
     };
     let f = &run.flow;

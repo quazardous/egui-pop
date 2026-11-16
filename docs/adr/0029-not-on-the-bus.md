@@ -322,6 +322,19 @@ test and leaves `next` green. Slices 1 and 2 come first; the paths of
    every way (title bar, the page's Close, Escape, the command, the app
    closing under it, its plugin disconnected), the registry and the
    backend agree after each.
+   Done (2026-11-16): the app is its window's owner and asks
+   `window.open` (opened, or brought to the front) and `window.close`
+   where what it wants changes (`Admin::open`, `Admin::close`, the
+   `admin.window` setting written through the app, a focus-screen
+   wizard starting or ending), in that call; `admin.window` listens to
+   both points (first on `window.open`; after `window.children`, before
+   `window.focus` on `window.close`), closing the app unless it moves
+   over the main window ("Pop in"). Its plugin disconnected closes its
+   window through `window.owner-gone`, a listener of `plugin.disconnect`.
+   The overlay reads the registry to know whether the window draws the
+   app. Left: the `admin.window` setting changed by another writer (the
+   settings store, `settings.set`) is followed at the app's next request,
+   until settings changes are on the bus.
 4. **The shell: application windows, the main window, detached
    panels.** `open_window`, moving into the main window and back
    (`window.reparent`), the main window's close, `quit`, `frame.close`,
