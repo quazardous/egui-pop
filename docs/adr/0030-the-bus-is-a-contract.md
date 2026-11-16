@@ -54,13 +54,12 @@ only) and without egui. It holds the contract and nothing that runs:
 
   The kind is declared, not enforced: a request is an `alter` emit over
   a request's input, an event point an `alter` with a unit value.
-- **`PointSpec`** (description, deadline, kind), **`ListenOpts`**
+- **`PointSpec`** (description, deadline), **`ListenOpts`**
   (owner, `after`, `before`, `last`, priority, deadline, threaded),
   **`Failure`**, **`Refused`**, **`HookError`**, **`Altered`**,
   **`Collected`**, **`PointInfo`**, **`ListenerInfo`**,
   `DEFAULT_DEADLINE`, `PLUGIN_DEADLINE`, `LAST`, `FAILED_FACT`: moved
-  from `egui-pop-hooks` unchanged; the kind is added to `PointSpec` and
-  `PointInfo`.
+  from `egui-pop-hooks` unchanged; the kind is added to `PointInfo`.
 - **`Bus`**, the trait an implementation provides, object safe and
   `Send + Sync`, its values type-erased:
 
@@ -75,8 +74,9 @@ only) and without egui. It holds the contract and nothing that runs:
   | `on_failure(sink)` | Receives each dropped contribution (an error, a panic, a missed deadline) |
   | `points()`, `listeners(point)` | Introspection: points, listeners in run order, owners, constraints, missing targets, counters |
 
-  A `PointKey` (`ID`, `TypeId`, type name) names a point to the erased
-  methods, so an implementation refuses an id registered with two types.
+  A `PointKey` (`ID`, kind, `TypeId`, type name) names a point to the
+  erased methods, so an implementation refuses an id registered with two
+  types.
 - **The typed calls** (`declare::<P>`, `listen::<P>`, `alter::<P>`,
   `collect::<P>`) are methods on `dyn Bus` itself, written once in the
   contract crate over the erased ones. Code that holds an
@@ -166,8 +166,8 @@ The bus is an `Arc<dyn Bus>`, not a type parameter:
 
 - `egui-pop-bus`: a new crate, `0.1.0`, Experimental.
 - `egui-pop-hooks`: **major** (0.x). The types move to `egui-pop-bus`
-  and are re-exported; `PointSpec`, `PointInfo` gain `kind` (a struct
-  literal without it no longer builds); `Point` gains `KIND` with a
+  and are re-exported; `PointInfo` gains `kind` (a struct literal or
+  pattern without it no longer builds); `Point` gains `KIND` with a
   default (no change for implementors).
 - `egui-pop-api`: **major**. `AppHandle::bus()` returns
   `Arc<dyn Bus>` instead of `Arc<Kernel>`; `bus::order_dump` and
