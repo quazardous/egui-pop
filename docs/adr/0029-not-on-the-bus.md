@@ -377,6 +377,18 @@ test and leaves `next` green. Slices 1 and 2 come first; the paths of
    choosers, the viewer's web view. *Test:* a window closed with a
    dialog and a file choice open leaves `popup.closed` (`parent-closed`)
    for each and no child in `windows.list`.
+   First part done (2026-11-16): a dialog coming up asks its
+   `popup.open` (`dialog:<id>`, its parent the window of its group), a
+   file choice started its `popup.open` (`file:<id>`) or, for the
+   system's chooser, a native window's `window.open`
+   (`AppHandle::request_native_open`); each ends by its close.
+   `window.children` closes every popup and native window of a closing
+   window by its own request (`parent-closed`), and the owners' listeners
+   (`dialogs.popup`, `files.choice`) cancel the dialog or the choice in
+   that call; `dialogs.cancel-on-close` cancels the dialogs still waiting
+   in its queue. A window's content moving into the main window takes its
+   popups with it. The dialogs' deferred cancel and the files' per-pass
+   check of the asking window are gone. Left: the viewer's web view.
 6. **Popups, menus and tooltips.** The overlay stack's opens and closes,
    popup menus, the palette, flyouts, popovers, hover cards; tooltips and
    field-bound lists declared as exceptions. *Test:* every overlay of

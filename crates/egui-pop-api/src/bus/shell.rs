@@ -76,6 +76,8 @@ pub(super) fn install(kernel: &dyn Bus, registry: &Arc<Mutex<Registry>>) {
                 if req.parent.as_deref() == Some(WindowId::MAIN)
                     && lock(&registry).close(&req.window)
                 {
+                    // Its popups and native windows go with its panels.
+                    lock(&registry).adopt(&req.window, WindowId::MAIN);
                     super::panels::left(&app, &req.window);
                     let mut w = app.windows_mut();
                     w.moved_events
@@ -98,6 +100,13 @@ pub(super) fn install(kernel: &dyn Bus, registry: &Arc<Mutex<Registry>>) {
                             "{REGISTRY}: `{}` drawn in the main window",
                             req.window
                         ));
+                        // Its dialogs and file choices go with its content.
+                        let adopted = registry.adopt(&req.window, WindowId::MAIN);
+                        if adopted > 0 {
+                            did.push(format!(
+                                "{REGISTRY}: {adopted} of its popups now the main window's"
+                            ));
+                        }
                         did.extend(super::panels::follow_shell(&app, &mut registry, true));
                     }
                 }

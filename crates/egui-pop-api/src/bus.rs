@@ -59,8 +59,16 @@
 //! window's `window.open`, docking it back its `window.reparent` into the
 //! main window, closing its window its `window.close`, the workbench's
 //! listener ([`WORKBENCH_WINDOW`]) changing the layout whoever asked.
-//! Popups still do their work themselves and report it to the registry;
-//! they move onto their requests one by one (the ADR's slices).
+//! Dialogs and file choices are on the bus too: a dialog coming up is its
+//! `popup.open` (`dialog:<n>`, parent: its window), a file choice started
+//! its `popup.open` (`file:<n>`), or `window.open` of a native window for
+//! the system's chooser ([`AppHandle::request_native_open`]); each ends by
+//! its `popup.close` or `window.close`. A window closing closes its
+//! popups and native windows first, each by its own request (reason
+//! `parent-closed`), and their owners' listeners (`dialogs.popup`,
+//! `files.choice`) cancel what they showed in the same call. Other popups
+//! still do their work themselves; they move onto their requests one by
+//! one (the ADR's slices).
 //!
 //! The job lifecycle is the second family. Asking about a job is a
 //! request ([`JobCancel`], [`JobPause`], [`JobResume`], [`JobRetry`], each
@@ -97,6 +105,7 @@ mod owners;
 pub use owners::OWNER_GONE;
 pub(crate) mod panels;
 pub use panels::{WORKBENCH_OWNER, WORKBENCH_WINDOW};
+mod popups;
 mod shell;
 pub use shell::STEP_WINDOW_REPARENT;
 
@@ -541,6 +550,19 @@ impl Registry {
     fn holds(&self, id: &str) -> bool {
         self.records.iter().any(|r| r.id == id)
     }
+
+    /// The children of `from` (its popups, its native windows) become
+    /// `to`'s: `from`'s content moved there. How many.
+    fn adopt(&mut self, from: &str, to: &str) -> usize {
+        let mut moved = 0;
+        for r in &mut self.records {
+            if r.parent.as_deref() == Some(from) && r.id != to {
+                r.parent = Some(to.to_string());
+                moved += 1;
+            }
+        }
+        moved
+    }
 }
 
 /// The bus an application holds: the bus it was given (or the default
@@ -671,12 +693,8 @@ fn install(kernel: &dyn bus_contract::Bus, registry: &Arc<Mutex<Registry>>) {
             let Some(app) = asking() else { return Ok(()) };
             if req.kind == WindowKind::Main {
                 shell::close_children_of_main(&app, req, did);
-            } else if req.kind == WindowKind::App
-                && let Some(v) = app.window_viewport(&WindowId::new(&req.window))
-            {
-                crate::dialogs::window_closed(&app, v);
-                did.push(format!("{CHILDREN}: its dialogs cancelled"));
             }
+            popups::close_children(&app, req, did);
             Ok(())
         }),
         kernel.listen::<WindowClose>(FOCUS, mine().before(REGISTRY), |req, did| {
@@ -830,8 +848,7 @@ impl AppHandle {
         let open = match request.kind {
             WindowKind::App => self.windows_ref().entry(&id).is_some(),
             WindowKind::Main => lock(&self.0.bus.registry).holds(WindowId::MAIN),
-            WindowKind::Panel => lock(&self.0.bus.registry).holds(&request.window),
-            _ => true,
+            _ => lock(&self.0.bus.registry).holds(&request.window),
         };
         if !open {
             self.publish(
