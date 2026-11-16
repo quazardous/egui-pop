@@ -4364,9 +4364,19 @@ impl ThemeFollow {
     /// (or `force`), its light or dark preference with it.
     fn install(&mut self, app: &AppHandle, force: bool) {
         let service = app.theme();
-        let spec = service.spec();
+        let mut spec = service.spec();
         if !force && self.installed.as_ref() == Some(&spec) {
             return;
+        }
+        if self.installed.is_some() {
+            // A spec set since (a theme chosen, the application's own):
+            // the settings the person chose go over it again, as read for
+            // the first time.
+            self.accent_setting = None;
+            self.text_seen = crate::text::Seen::default();
+            self.scroll_bars_seen = None;
+            self.read_settings(app);
+            spec = service.spec();
         }
         let ctx = app.egui();
         theme::install_with(&ctx, service.themes(), &spec);
