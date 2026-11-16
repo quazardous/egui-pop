@@ -9,9 +9,23 @@ in [Advanced widgets](widgets.md), section 3.
 ## The jobs model
 
 `egui_pop::model::jobs::Jobs` (no egui) folds the events into jobs;
-`JobsPlugin` (opt-in, `egui_pop::api::jobs`) feeds it on each pass from
-the journal, behind the `JOBS` service. Nothing polls: without new
-events, nothing is read.
+`JobsPlugin` (opt-in, `egui_pop::api::jobs`) keeps it behind the `JOBS`
+service, as a listener on the bus
+([ADR 0029](adr/0029-not-on-the-bus.md)): the bus delivers each
+`job.*` event of the journal once, in order, to the listeners of `job.*`
+(each pass, and before a wait or a plugin's disconnection reads the
+jobs: `AppHandle::deliver_events`), and `jobs.model` is one of them.
+Nothing polls: without new events, nothing is read.
+
+Asking about a job is a request on the bus: `job.cancel`, `job.pause`,
+`job.resume`, `job.retry` (`AppHandle::request_job` with a
+`bus::JobAsk`, or `jobs::ask`). Their listeners run in the call, in
+their declared order: `jobs.model` marks the job as waiting for the
+answer, then `jobs.host` runs its command for the host (or the
+application's runner); the answer is the host's events. With no jobs
+plugin, nobody listens and the request is refused (`job.refused`). The
+order is printed by `AppHandle::bus_order_of(&bus::JOB_POINTS)` and kept
+as a reviewed file (`crates/egui-pop-api/tests/bus/jobs-points.txt`).
 
 | Event | Data |
 |---|---|
@@ -102,9 +116,11 @@ naming no one has no owner. `Job::owner` and `Job::command` keep them.
 
 When the plugin is disconnected
 ([ADR 0028](adr/0028-removed-contributor-work-in-flight.md)), each of
-its jobs still going on gets one of two ends, both on the journal
-(`Jobs::left_by` decides, the model follows the events as for any
-other):
+its jobs still going on gets one of two ends, both on the bus: the
+plugin's disconnection is a request (`plugin.disconnect`) asked before
+`plugin.disconnected` is said, and its listener
+`jobs.cancel-on-disconnect` asks them (`Jobs::left_by` decides, the
+model follows the events as for any other):
 
 - a job naming it that is `cancellable` is cancelled by the host: the
   framework runs `job.cancel` with `{ "id", "reason" }` (source
@@ -118,7 +134,8 @@ other):
   "running, its plugin x is off" and offers Dismiss on it though it goes
   on (`Jobs::dismiss` accepts an orphaned job). The mark goes when the
   job ends or starts again, or when the plugin reconnects
-  (`job.adopted`). An orphaned job is not waited on: nothing owns it
+  (`job.adopted`, said by `jobs.adopt-on-connect`, a listener of
+  `plugin.connect`). An orphaned job is not waited on: nothing owns it
   and it may never end, so `Jobs::idle` (and the application's
   `settled`) leave it out, and `Jobs::orphans` lists it apart. The
   `jobs` collector says `orphaned` (a count) beside `idle`, and

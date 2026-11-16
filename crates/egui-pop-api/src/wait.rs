@@ -157,7 +157,7 @@ impl AppHandle {
             && !self.commands().iter().any(|(s, _)| self.running(&s.id))
             && self.service(&crate::jobs::JOBS).is_none_or(|j| {
                 // Up to the last `job.*` event, not the last pass's.
-                j.fold(self);
+                self.deliver_events();
                 j.idle()
             })
             && !self.egui().has_requested_repaint()
@@ -165,11 +165,11 @@ impl AppHandle {
 
     /// The orphaned jobs still going on: left by a disconnected plugin,
     /// not waited on by [`AppHandle::settled`]; 0 without the jobs
-    /// plugin. Read from the jobs fold of the journal's `job.*` events, up
-    /// to the last one.
+    /// plugin. Read from the jobs model, the bus having delivered the
+    /// journal's `job.*` events up to the last one.
     pub fn orphaned_jobs(&self) -> usize {
         self.service(&crate::jobs::JOBS).map_or(0, |j| {
-            j.fold(self);
+            self.deliver_events();
             j.orphans().len()
         })
     }

@@ -1,8 +1,11 @@
 //! Jobs, as a plugin ([`JobsPlugin`], opt-in): the host's background
-//! work, followed from its journal. The host publishes `job.*` events
-//! (see [`egui_pop_model::jobs`] for their data); each pass the plugin
-//! folds the new ones into the [`Jobs`] model behind the [`JOBS`]
-//! service. Nothing polls: without events, nothing is read.
+//! work, followed on the bus ([ADR 0029](crate::bus)). The host publishes
+//! `job.*` events (see [`egui_pop_model::jobs`] for their data); the bus
+//! delivers each once, in journal order, to the listeners of `job.*`
+//! (each pass, and before a read that must see them all), and the
+//! [`Jobs`] model behind the [`JOBS`] service is one of them
+//! ([`MODEL`], `jobs.model`): no job state changes but on a bus event or
+//! request. Nothing polls: without events, nothing is read.
 //!
 //! <div class="warning">Experimental: may change in any release
 //! (docs/stability.md).</div>
@@ -15,20 +18,25 @@
 //!   `{ "fraction": 0.4 }` (or `null`: the model's own). It runs only
 //!   when a plugin hooks it, once per pass for each job that moved, so
 //!   a job's progress does not double the journal.
-//! - Cancel, pause, resume and retry are commands (`job.cancel`,
-//!   `job.pause`, `job.resume`, `job.retry`, each `{ "id" }`) declared
-//!   for the host to run, or run in-process by a runner the application
-//!   gives ([`JobsPlugin::run_locally`]). [`ask`] runs one and marks the
-//!   job as waiting until the host answers.
+//! - Cancel, pause, resume and retry are requests on the bus
+//!   (`job.cancel`, `job.pause`, `job.resume`, `job.retry`,
+//!   [`AppHandle::request_job`]; [`ask`] asks one): [`MODEL`] marks the
+//!   job as waiting for the answer, then [`HOST`] runs its command (each
+//!   `{ "id" }`), declared for the host to run, or run in-process by a
+//!   runner the application gives ([`JobsPlugin::run_locally`]). The
+//!   answer is the runner's `job.*` events.
 //! - A job belongs to a plugin when its `job.started` names it (`owner`,
 //!   or `command`, a command of the plugin), or when the plugin
 //!   published it itself. When that plugin is disconnected (ADR 0028),
-//!   the framework asks the host to cancel its jobs that can be
-//!   (`job.cancel` with `{ "id", "reason" }`, from `egui_pop`; the job
+//!   [`CANCEL_ON_DISCONNECT`] (a listener of `plugin.disconnect`, run
+//!   before `plugin.disconnected` is said) asks the host to cancel its
+//!   jobs that can be (`job.cancel` with `{ "id", "reason" }`, from
+//!   `egui_pop`; the job
 //!   keeps the reason, [`Job::reason`]) and publishes `job.orphaned` for
 //!   the others, which go on, marked ([`Job::orphaned`]: the jobs centre
 //!   says "its plugin is off") until they end or the plugin is back
-//!   (`job.adopted`). `plugin.disconnected` counts both
+//!   (`job.adopted`, said by [`ADOPT_ON_CONNECT`], a listener of
+//!   `plugin.connect`). `plugin.disconnected` counts both
 //!   (`jobs_cancelled`, `jobs_orphaned`). An orphaned job is not waited
 //!   on: [`JobsService::idle`] leaves it out (nothing owns it, it may
 //!   never end) and [`JobsService::orphans`] lists it.
@@ -74,14 +82,19 @@ use egui_pop_core::ui::UiPop as _;
 use egui_pop_model::clock::SharedClock;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::commands::Origin;
-use egui_pop_model::ids::{BlockId, CommandId, OwnerId, PluginId, StepId};
+use egui_pop_model::ids::{BlockId, CommandId, PluginId, StepId};
 use egui_pop_model::jobs::{Incoming, Job, Jobs, Left, Request, Summary};
 use egui_pop_model::panels::{Area, PanelSpec};
 use serde_json::{Value as Json, json};
 
 use crate::app::AppHandle;
+use crate::bus::egui_pop_hooks::{Kernel, ListenOpts, Point};
+use crate::bus::{
+    self, JobAsk, JobCancel, JobEvents, JobPause, JobResume, JobRetry, PluginConnect,
+    PluginDisconnect,
+};
 use crate::hooks::On;
-use crate::host::Seq;
+use crate::host::Event;
 use crate::services::ServiceToken;
 use crate::steps::StepSpec;
 use crate::strings as txt;
@@ -103,6 +116,19 @@ pub const CMD_RETRY: CommandId = CommandId::from_static("job.retry");
 /// it to the model.
 pub const STEP_ESTIMATE: StepId = StepId::from_static("jobs.estimate");
 
+/// The jobs model's listener: of `job.*` (it folds each event), and of
+/// the job requests (the job shows as asked).
+pub const MODEL: &str = "jobs.model";
+/// Runs a job request's command, after [`MODEL`]: the host (or the
+/// application's runner) answers with its events.
+pub const HOST: &str = "jobs.host";
+/// Of `plugin.disconnect`: the jobs a plugin leaves are cancelled, or
+/// said orphaned.
+pub const CANCEL_ON_DISCONNECT: &str = "jobs.cancel-on-disconnect";
+/// Of `plugin.connect`: the jobs a plugin had left are its own again
+/// (`job.adopted`).
+pub const ADOPT_ON_CONNECT: &str = "jobs.adopt-on-connect";
+
 /// The command asking `request`.
 pub fn command_of(request: Request) -> CommandId {
     match request {
@@ -116,9 +142,7 @@ pub fn command_of(request: Request) -> CommandId {
 #[derive(Debug, Default)]
 struct State {
     jobs: Jobs,
-    /// The last event folded.
-    seen: Seq,
-    /// The motion clock's time at the last pass.
+    /// The motion clock's time at the last event or pass.
     now: f64,
     /// The jobs whose log console is open.
     expanded: BTreeSet<String>,
@@ -218,15 +242,21 @@ impl JobsService {
     }
 
     /// Overrides a job's estimate (0 to 1), or gives it back to the
-    /// model.
-    pub fn refine(&self, id: &str, fraction: Option<f64>) {
+    /// model: the `jobs.estimate` step's answer.
+    pub(crate) fn refine(&self, id: &str, fraction: Option<f64>) {
         let now = self.now();
         lock(&self.state).jobs.refine(id, fraction, now);
     }
 
-    /// Notes that `request` was asked of the host for a job.
-    pub fn mark(&self, id: &str, request: Request) {
-        lock(&self.state).jobs.request(id, request);
+    /// Notes that `request` was asked for a job ([`MODEL`] on a job
+    /// request); whether the job is known.
+    pub(crate) fn mark(&self, id: &str, request: Request) -> bool {
+        let mut s = lock(&self.state);
+        if s.jobs.get(id).is_none() {
+            return false;
+        }
+        s.jobs.request(id, request);
+        true
     }
 
     /// Whether a job's log console is open (remembered per job, shared
@@ -254,81 +284,51 @@ impl JobsService {
         d
     }
 
-    /// Folds the journal's new events; the jobs that moved.
-    fn feed(&self, app: &AppHandle) -> BTreeSet<String> {
-        self.fold(app);
-        lock(&self.state).jobs.take_changed()
+    /// A pass: the motion clock's time kept; the jobs that moved since
+    /// the last one.
+    fn pass(&self, app: &AppHandle) -> BTreeSet<String> {
+        let time = egui_pop_core::motion::now(&app.egui());
+        let mut s = lock(&self.state);
+        s.now = time;
+        s.jobs.take_changed()
     }
 
-    /// Folds the journal's new events: a read that must see every job
-    /// event up to the last (a wait, a disconnection) calls it first.
-    pub(crate) fn fold(&self, app: &AppHandle) {
+    /// Folds one event the bus delivered ([`MODEL`] on `job.*`).
+    fn follow(&self, app: &AppHandle, e: &Event) {
         let time = egui_pop_core::motion::now(&app.egui());
-        let seen = {
-            let mut s = lock(&self.state);
-            s.now = time;
-            s.seen
-        };
-        let last = app.last_event();
-        if last <= seen {
-            return;
-        }
-        let events = app.events_since(seen);
+        lock(&self.state).now = time;
         let now = self.now();
-        let mut s = lock(&self.state);
-        for e in &events {
-            let incoming = Incoming {
-                seq: e.seq,
-                source: &e.source,
-                cause: e.cause,
-                name: &e.name,
-                data: &e.data,
-            };
-            s.jobs.apply(&incoming, now);
-        }
-        s.seen = last;
+        let incoming = Incoming {
+            seq: e.seq,
+            source: &e.source,
+            cause: e.cause,
+            name: &e.name,
+            data: &e.data,
+        };
+        lock(&self.state).jobs.apply(&incoming, now);
     }
 }
 
 /// The journal's source of what the framework itself asks or says.
 const FRAMEWORK: &str = "egui_pop";
 
-/// The jobs a plugin that goes leaves (ADR 0028), read before its
-/// disconnection is published so that the event counts them; nothing
-/// without the jobs plugin.
-pub(crate) fn left_by(
-    app: &AppHandle,
-    plugin: &PluginId,
-    owner: &OwnerId,
-    commands: &[CommandId],
-) -> Left {
-    let Some(jobs) = app.service(&JOBS) else {
-        return Left::default();
-    };
-    // Up to the last event: a job started since the last pass counts.
-    jobs.fold(app);
-    let commands: Vec<&str> = commands.iter().map(CommandId::as_str).collect();
-    jobs.with(|j| j.left_by(&[plugin.as_str(), owner.as_str()], &commands))
-}
-
-/// Does what [`left_by`] found, on the journal alone (the model follows
-/// from there, as for any job event): the host is asked to cancel the
-/// jobs that can be, with the reason, and the others are published as
-/// orphaned.
-pub(crate) fn owner_gone(app: &AppHandle, plugin: &PluginId, left: &Left) {
+/// Does what [`Jobs::left_by`] found, on the bus alone (the model
+/// follows from there, as for any job event): `job.cancel` is asked for
+/// the jobs that can be, with the reason, and the others are published
+/// as orphaned.
+fn owner_gone(app: &AppHandle, plugin: &str, left: &Left) {
     if left.is_empty() {
         return;
     }
     let reason = format!("its plugin `{plugin}` is disconnected");
     for id in &left.cancel {
         log::info!(target: "egui_pop", "job `{id}`: the host is asked to cancel it: {reason}");
-        // Queued as the framework's own request, whoever asked for the
-        // plugin to go.
-        app.push_request(crate::app::Request::Run {
-            command: CMD_CANCEL,
-            args: json!({ "id": id, "reason": reason }),
-            origin: Origin::Script(FRAMEWORK.into()),
-        });
+        // The framework's own request, whoever asked for the plugin to go.
+        app.request_job(
+            JobAsk::new(id.clone(), Request::Cancel)
+                .reason(reason.clone())
+                .by_framework(),
+        );
     }
     for id in &left.orphan {
         log::info!(target: "egui_pop", "job `{id}` is orphaned: {reason}");
@@ -341,31 +341,128 @@ pub(crate) fn owner_gone(app: &AppHandle, plugin: &PluginId, left: &Left) {
     }
 }
 
-/// A plugin is back: the jobs it had left are its own again
-/// (`job.adopted`, one event naming them).
-fn owner_back(app: &AppHandle, plugin: &PluginId) {
-    let Some(jobs) = app.service(&JOBS) else {
-        return;
-    };
-    jobs.fold(app);
-    let back = lock(&jobs.state).jobs.adopt(plugin.as_str());
-    if !back.is_empty() {
-        app.publish(
-            FRAMEWORK,
-            None,
-            "job.adopted",
-            json!({ "plugin": plugin, "jobs": back }),
-        );
-    }
+/// Asks the host to cancel, pause, resume or retry a job, on the bus
+/// ([`AppHandle::request_job`]): the job shows as waiting for the
+/// answer, and its command runs for whoever acts now.
+pub fn ask(app: &AppHandle, id: &str, request: Request) {
+    app.request_job(JobAsk::new(id, request));
 }
 
-/// Asks the host to cancel, pause, resume or retry a job: runs its
-/// command as the user, and marks the job as waiting for the answer.
-pub fn ask(app: &AppHandle, id: &str, request: Request) {
-    if let Some(jobs) = app.service(&JOBS) {
-        jobs.mark(id, request);
+/// Registers `request`'s listeners: [`MODEL`] marks the job, then
+/// [`HOST`] runs its command.
+fn listen_request<P: Point<Input = JobAsk, Value = Vec<String>>>(
+    kernel: &Kernel,
+    owner: &str,
+) -> Vec<Result<(), egui_pop_hooks::Refused>> {
+    let mine = || ListenOpts::new().owner(owner);
+    vec![
+        kernel.listen::<P>(MODEL, mine().before(HOST), |ask, did| {
+            let Some(app) = bus::asking() else {
+                return Ok(());
+            };
+            if app
+                .service(&JOBS)
+                .is_some_and(|j| j.mark(&ask.id, ask.request))
+            {
+                did.push(format!("{MODEL}: `{}` waits for the answer", ask.id));
+            }
+            Ok(())
+        }),
+        kernel.listen::<P>(HOST, mine().after(MODEL), |ask, did| {
+            let Some(app) = bus::asking() else {
+                return Ok(());
+            };
+            let command = command_of(ask.request);
+            if ask.is_framework() {
+                // Queued as the framework's own request.
+                app.push_request(crate::app::Request::Run {
+                    command: command.clone(),
+                    args: ask.args(),
+                    origin: Origin::Script(FRAMEWORK.into()),
+                });
+            } else {
+                app.run(command.clone(), ask.args());
+            }
+            did.push(format!("{HOST}: `{command}` asked"));
+            Ok(())
+        }),
+    ]
+}
+
+/// Registers the jobs plugin's listeners on the bus, replacing those of
+/// an earlier connection.
+fn listen(app: &AppHandle, owner: &str) {
+    let kernel = app.bus();
+    for point in bus::JOB_POINTS.iter().chain(&bus::PLUGIN_POINTS) {
+        for id in [MODEL, HOST, CANCEL_ON_DISCONNECT, ADOPT_ON_CONNECT] {
+            kernel.unlisten(point, id);
+        }
     }
-    app.run(command_of(request), json!({ "id": id }));
+    let mine = || ListenOpts::new().owner(owner);
+    let mut listened = Vec::new();
+    listened.extend(listen_request::<JobCancel>(&kernel, owner));
+    listened.extend(listen_request::<JobPause>(&kernel, owner));
+    listened.extend(listen_request::<JobResume>(&kernel, owner));
+    listened.extend(listen_request::<JobRetry>(&kernel, owner));
+    listened.push(kernel.listen::<JobEvents>(MODEL, mine(), |e, _| {
+        if let Some(app) = bus::asking()
+            && let Some(jobs) = app.service(&JOBS)
+        {
+            jobs.follow(&app, e);
+        }
+        Ok(())
+    }));
+    listened.push(kernel.listen::<PluginDisconnect>(
+        CANCEL_ON_DISCONNECT,
+        mine(),
+        |change, counts| {
+            let Some(app) = bus::asking() else {
+                return Ok(());
+            };
+            let Some(jobs) = app.service(&JOBS) else {
+                return Ok(());
+            };
+            let commands: Vec<&str> = change.commands.iter().map(String::as_str).collect();
+            let left = jobs
+                .with(|j| j.left_by(&[change.plugin.as_str(), change.owner.as_str()], &commands));
+            owner_gone(&app, &change.plugin, &left);
+            // The model follows what was said, in this call.
+            app.deliver_events();
+            counts.insert("jobs_cancelled".into(), json!(left.cancel.len()));
+            counts.insert("jobs_orphaned".into(), json!(left.orphan.len()));
+            Ok(())
+        },
+    ));
+    listened.push(
+        kernel.listen::<PluginConnect>(ADOPT_ON_CONNECT, mine(), |change, did| {
+            let Some(app) = bus::asking() else {
+                return Ok(());
+            };
+            let Some(jobs) = app.service(&JOBS) else {
+                return Ok(());
+            };
+            let back = jobs.with(|j| j.orphaned_by(&change.plugin));
+            if !back.is_empty() {
+                app.publish(
+                    FRAMEWORK,
+                    None,
+                    egui_pop_model::jobs::ADOPTED,
+                    json!({ "plugin": change.plugin, "jobs": back }),
+                );
+                app.deliver_events();
+                did.push(format!(
+                    "{ADOPT_ON_CONNECT}: {} job(s) its own again",
+                    back.len()
+                ));
+            }
+            Ok(())
+        }),
+    );
+    for l in listened {
+        if let Err(e) = l {
+            log::error!(target: "egui_pop", "jobs: {e}");
+        }
+    }
 }
 
 /// Runs a job command in-process: the application's own job runner.
@@ -613,7 +710,23 @@ impl Plugin for JobsPlugin {
         if let Some(n) = self.history {
             model = model.with_history(n);
         }
-        ctx.service(&JOBS, JobsService::new(model, self.clock.clone()))?;
+        let service = JobsService::new(model, self.clock.clone());
+        // Connected late: the job events said before, up to the last the
+        // bus delivered, from the journal's record; the bus delivers the
+        // rest.
+        let app = ctx.app();
+        let upto = app.delivered_event();
+        if upto > 0 {
+            for e in app
+                .events_since(0)
+                .iter()
+                .filter(|e| e.seq <= upto && bus::is_job_event(e))
+            {
+                service.follow(&app, e);
+            }
+        }
+        ctx.service(&JOBS, service)?;
+        listen(&app, ctx.owner().as_str());
         for request in Request::ALL {
             match &self.runner {
                 Some(run) => {
@@ -637,16 +750,11 @@ impl Plugin for JobsPlugin {
             )
             .args(json!({ "id": "export-1", "title": "Export", "kind": "export", "fraction": 0.25, "done": 2, "total": 8, "steps": [], "step": null, "elapsed": 4.0 })),
         )?;
-        ctx.on(On::Connected, |app, ev| {
-            if let crate::hooks::Lifecycle::Connected(p) = ev {
-                owner_back(app, p);
-            }
-        });
         ctx.on(On::Pass, |app, _| {
             let Some(jobs) = app.service(&JOBS) else {
                 return;
             };
-            let moved = jobs.feed(app);
+            let moved = jobs.pass(app);
             if !moved.is_empty() && estimate_hooked(app) {
                 refine(app, &jobs, &moved);
             }
