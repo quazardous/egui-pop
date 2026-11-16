@@ -134,36 +134,135 @@ impl WindowState {
     }
 }
 
+/// A screen (a monitor), as the system tells it: its name, its
+/// rectangle in points and its scale factor. Given by whatever runs the
+/// event loop ([`set_screens`]): egui-pop's native runner, or a host
+/// application running eframe on its own loop.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Screen {
+    /// The monitor's name as the system gives it (winit's
+    /// `MonitorHandle::name`), what recognises a screen plugged in
+    /// again; none when the system gives none.
+    pub name: Option<String>,
+    /// Its rectangle, in points: the physical one over [`Self::scale`].
+    pub rect: Rect,
+    /// Physical pixels per point (1.0 when the system tells none).
+    pub scale: f32,
+}
+
+impl Screen {
+    /// A screen from what the system gives in physical pixels (winit's
+    /// `MonitorHandle::{name, position, size, scale_factor}`): its
+    /// rectangle in points is the physical one over its own scale factor
+    /// (1.0 when that is not positive).
+    pub fn from_physical(
+        name: Option<String>,
+        position: (i32, i32),
+        size: (u32, u32),
+        scale: f64,
+    ) -> Screen {
+        let s = if scale > 0.0 { scale as f32 } else { 1.0 };
+        Screen {
+            name,
+            rect: Rect::from_min_size(
+                egui::pos2(position.0 as f32 / s, position.1 as f32 / s),
+                egui::vec2(size.0 as f32 / s, size.1 as f32 / s),
+            ),
+            scale: s,
+        }
+    }
+
+    /// A screen known by its rectangle in points alone (no name, scale
+    /// 1.0): what a test says.
+    pub fn from_rect(rect: Rect) -> Screen {
+        Screen {
+            name: None,
+            rect,
+            scale: 1.0,
+        }
+    }
+}
+
 thread_local! {
-    /// The screens a test says (`set_test_screens`), over the system's.
-    static TEST_SCREENS: std::cell::RefCell<Option<Vec<Rect>>> =
-        const { std::cell::RefCell::new(None) };
+    /// The screens told to egui-pop on this thread ([`set_screens`]).
+    static SCREENS: std::cell::RefCell<Vec<Screen>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// The screens, in points, as far as egui-pop knows them: those the event
-/// loop saw at start (`runner::screens`, with the `create-native`
-/// feature); none otherwise. A window's kept place is repaired against
-/// them ([`WindowState::repair`]) before it opens.
+/// The screens, in points, as far as egui-pop knows them: those told by
+/// what runs the event loop ([`set_screens`]; egui-pop's native runner
+/// tells them before the main window is created); none until told. A
+/// window's kept place is repaired against them
+/// ([`WindowState::repair`]) before it opens.
 pub fn screens() -> Vec<Rect> {
-    if let Some(s) = TEST_SCREENS.with_borrow(Clone::clone) {
-        return s;
-    }
-    #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
-    {
-        crate::runner::screens()
-    }
-    #[cfg(not(all(feature = "eframe", not(target_arch = "wasm32"))))]
-    {
-        Vec::new()
-    }
+    SCREENS.with_borrow(|s| s.iter().map(|s| s.rect).collect())
 }
 
-/// Says the screens for this thread's windows, in place of the system's
-/// (`None`: the system's again). For headless tests
+/// The screens as told ([`set_screens`]), with their names and scale
+/// factors.
+pub fn screen_list() -> Vec<Screen> {
+    SCREENS.with_borrow(Clone::clone)
+}
+
+/// Tells egui-pop the screens, for the windows of this thread (the one
+/// running the event loop and the application's frames). A host that
+/// runs the event loop itself (eframe on its own winit loop, without the
+/// `create-native` feature) reads the monitors and calls it: before the
+/// main window is created (so its kept place is repaired against them,
+/// [`repair_builder`]), and again when they change (a scale factor
+/// changed, a window moved to another monitor). egui-pop's native runner
+/// calls it the same way. Windows opened after the call (detached panels,
+/// application windows) are repaired against the screens given; an empty
+/// list says none are known (only sizes are bounded).
+pub fn set_screens(screens: Vec<Screen>) {
+    log::debug!(target: "egui_pop::window", "screens: {screens:?}");
+    SCREENS.set(screens);
+}
+
+/// Says the screens for this thread's windows by their rectangles, in
+/// place of the system's (`None`: none known again). For headless tests
 /// (`egui_pop_test::windows::MultiWindow::set_screens`).
 #[doc(hidden)]
 pub fn set_test_screens(screens: Option<Vec<Rect>>) {
-    TEST_SCREENS.set(screens);
+    set_screens(
+        screens
+            .unwrap_or_default()
+            .into_iter()
+            .map(Screen::from_rect)
+            .collect(),
+    );
+}
+
+/// A native window's builder, its kept place repaired against the
+/// screens told ([`set_screens`]): a position off every screen is pulled
+/// back onto the first, a size larger than its screen shrunk; the
+/// maximized and full-screen flags stay. Unchanged while no screen is
+/// known. Called from eframe's `NativeOptions::window_builder` hook, which
+/// runs as the main window is created (egui-pop's native runner does it).
+pub fn repair_builder(vb: egui::ViewportBuilder) -> egui::ViewportBuilder {
+    repair_place(vb, &screens())
+}
+
+pub(crate) fn repair_place(
+    mut vb: egui::ViewportBuilder,
+    screens: &[Rect],
+) -> egui::ViewportBuilder {
+    if screens.is_empty() {
+        return vb;
+    }
+    let Some(size) = vb.inner_size else {
+        return vb;
+    };
+    let state = WindowState {
+        position: vb.position,
+        size,
+        maximized: false,
+        fullscreen: false,
+    }
+    .repair(screens);
+    vb.position = state.position;
+    vb.inner_size = Some(state.size);
+    vb
 }
 
 /// Reads the window's place from a saved settings document.

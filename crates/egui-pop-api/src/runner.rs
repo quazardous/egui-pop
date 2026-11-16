@@ -12,9 +12,12 @@
 //!
 //! - **The screens before the main window.** The handler reads the
 //!   monitors in `resumed`, before eframe's own `resumed` creates the main
-//!   window; eframe calls the window's `window_builder` hook inside it, so
-//!   the place restored from the last run is repaired against real screens
-//!   (`WindowState::repair`), not only bounded. [`screens`] gives them.
+//!   window, and tells them (`window::set_screens`, the way a host running
+//!   its own loop tells them); eframe calls the window's `window_builder`
+//!   hook inside it, so the place restored from the last run is repaired
+//!   against real screens (`window::repair_builder`), not only bounded.
+//!   They are read again when a window's scale factor changes or a window
+//!   moves (onto another monitor, maybe). [`screens`] gives them.
 //! - **Every window's handles.** eframe hands out the main window's only.
 //!   It paints a window synchronously in that window's `RedrawRequested`,
 //!   so the handler notes which window is being painted, and a
@@ -52,12 +55,8 @@ mod native;
     not(any(target_os = "ios", target_os = "android"))
 )))]
 mod native {
-    use egui::{Rect, ViewportId};
+    use egui::ViewportId;
     use raw_window_handle::RawWindowHandle;
-
-    pub(super) fn screens() -> Vec<Rect> {
-        Vec::new()
-    }
 
     pub(super) fn window_handle(_: ViewportId) -> Option<RawWindowHandle> {
         None
@@ -167,11 +166,13 @@ pub fn windows() -> Vec<ViewportId> {
     native::windows()
 }
 
-/// The screens the event loop saw before the main window was created, in
-/// points (each monitor's physical rectangle over its scale factor); empty
-/// before the loop runs, or when egui-pop does not own it.
+/// The screens, in points (each monitor's physical rectangle over its
+/// scale factor): those told to egui-pop (`window::screens`), by this
+/// runner before the main window is created and again when they change,
+/// or by a host running the event loop itself (`window::set_screens`);
+/// empty until told.
 pub fn screens() -> Vec<Rect> {
-    native::screens()
+    crate::window::screens()
 }
 
 /// The raw handle of the window showing `viewport` ([`window`]): the main
@@ -203,59 +204,10 @@ pub(crate) fn run(
     native::run(title, options, creator)
 }
 
-/// The monitors, in points: each one's physical rectangle over its own
-/// scale factor.
-#[cfg_attr(
-    not(all(
-        feature = "create-native",
-        not(any(target_os = "ios", target_os = "android"))
-    )),
-    allow(dead_code)
-)]
-pub(crate) fn screen_rect(position: (i32, i32), size: (u32, u32), scale: f64) -> Rect {
-    let s = if scale > 0.0 { scale as f32 } else { 1.0 };
-    Rect::from_min_size(
-        egui::pos2(position.0 as f32 / s, position.1 as f32 / s),
-        egui::vec2(size.0 as f32 / s, size.1 as f32 / s),
-    )
-}
-
-/// The main window's builder, its restored place repaired against
-/// `screens`: a position off every screen is pulled back onto the first,
-/// a size larger than its screen shrunk. Maximized and full-screen flags
-/// are kept as they are.
-#[cfg_attr(
-    not(all(
-        feature = "create-native",
-        not(any(target_os = "ios", target_os = "android"))
-    )),
-    allow(dead_code)
-)]
-pub(crate) fn repair_place(
-    mut vb: egui::ViewportBuilder,
-    screens: &[Rect],
-) -> egui::ViewportBuilder {
-    if screens.is_empty() {
-        return vb;
-    }
-    let Some(size) = vb.inner_size else {
-        return vb;
-    };
-    let state = crate::window::WindowState {
-        position: vb.position,
-        size,
-        maximized: false,
-        fullscreen: false,
-    }
-    .repair(screens);
-    vb.position = state.position;
-    vb.inner_size = Some(state.size);
-    vb
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::window::{Screen, repair_place};
 
     #[test]
     fn no_window_before_the_loop_runs() {
@@ -267,13 +219,15 @@ mod tests {
 
     #[test]
     fn a_monitor_in_points() {
-        let r = screen_rect((2560, 0), (2560, 1440), 2.0);
+        let s = Screen::from_physical(Some("DP-1".into()), (2560, 0), (2560, 1440), 2.0);
         assert_eq!(
-            r,
+            s.rect,
             Rect::from_min_size(egui::pos2(1280.0, 0.0), egui::vec2(1280.0, 720.0))
         );
-        let r = screen_rect((0, 0), (800, 600), 0.0);
-        assert_eq!(r.size(), egui::vec2(800.0, 600.0));
+        assert_eq!(s.name.as_deref(), Some("DP-1"));
+        assert_eq!(s.scale, 2.0);
+        let s = Screen::from_physical(None, (0, 0), (800, 600), 0.0);
+        assert_eq!(s.rect.size(), egui::vec2(800.0, 600.0));
     }
 
     #[test]

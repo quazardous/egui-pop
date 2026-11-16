@@ -291,11 +291,18 @@ impl MultiWindow {
     }
 
     /// The screens the system says, in points, for this thread's
-    /// application (`egui_pop_api::window::screens`): a window kept off
-    /// every one of them is brought back onto the first. Forgotten when
-    /// the harness is dropped.
+    /// application (`egui_pop_api::window::screens`), as a host running
+    /// the event loop tells them (`egui_pop_api::window::set_screens`): a
+    /// window kept off every one of them is brought back onto the first.
+    /// Forgotten when the harness is dropped.
     pub fn set_screens(&mut self, screens: &[Rect]) {
-        egui_pop_api::window::set_test_screens(Some(screens.to_vec()));
+        egui_pop_api::window::set_screens(
+            screens
+                .iter()
+                .copied()
+                .map(egui_pop_api::window::Screen::from_rect)
+                .collect(),
+        );
     }
 
     /// Sets a window's inner size, as the system would after a resize; it
@@ -621,7 +628,7 @@ impl MultiWindow {
 impl Drop for MultiWindow {
     fn drop(&mut self) {
         HARNESSES.with_borrow_mut(|h| h.remove(&self.token));
-        egui_pop_api::window::set_test_screens(None);
+        egui_pop_api::window::set_screens(Vec::new());
         // Kept for pictures only: never uploaded, nothing to free.
         self.textures.clear();
     }
