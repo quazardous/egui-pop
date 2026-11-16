@@ -1,5 +1,6 @@
 //! The inputs page: the decorated input with every decorator
-//! (placeholder, slots, clear, attached and split buttons, a dropdown),
+//! (placeholder, slots, clear, attached and split buttons, a dropdown,
+//! a masked field, a multi-line field),
 //! every field state on inputs and sliders, and Tab order: a form whose
 //! columns read row by row, a group, two panels F6 moves between, and a
 //! form in a modal where Tab cycles.
@@ -66,6 +67,9 @@ struct State {
     title: String,
     author: String,
     answered: String,
+    token: String,
+    notes: String,
+    notes_sent: u32,
 }
 
 impl Default for State {
@@ -98,6 +102,9 @@ impl Default for State {
             title: String::new(),
             author: String::new(),
             answered: "nothing yet".into(),
+            token: "correct-horse".into(),
+            notes: "Golden hour on the harbour,\nthe boats coming back.".into(),
+            notes_sent: 0,
         }
     }
 }
@@ -132,7 +139,7 @@ impl Plugin for InputsPage {
             Story::new(StoryId::from_static("inputs"), "Inputs", move |ui, app| {
                 show(ui, app, &mut state.borrow_mut())
             })
-            .description("The decorated input (placeholder, icons, prefix and suffix, clear, attached and split buttons, a dropdown), the field states on inputs and sliders, and Tab order: reading order, groups, panels (F6) and a modal.")
+            .description("The decorated input (placeholder, icons, prefix and suffix, clear, attached and split buttons, a dropdown, a masked field, a multi-line field), the field states on inputs and sliders, and Tab order: reading order, groups, panels (F6) and a modal.")
             .group("Components", 47),
         )?;
         Ok(())
@@ -227,6 +234,21 @@ fn decorators(ui: &mut Ui, app: &AppHandle, s: &mut State) {
                         .response
                 });
             });
+            row(ui, "Token", |ui| {
+                Input::masked(&mut s.token, "API token")
+                    .width(width)
+                    .show(ui);
+            });
+            row(ui, "Notes", |ui| {
+                let out = Input::multiline(&mut s.notes, "Notes")
+                    .placeholder("Ctrl+Enter sends")
+                    .max_rows(4)
+                    .width(width)
+                    .show(ui);
+                if out.submitted {
+                    s.notes_sent += 1;
+                }
+            });
             row(ui, "Split button", |ui| {
                 let out =
                     input::split_button(ui, "Publish", &["Publish to album", "Publish to web"]);
@@ -236,6 +258,7 @@ fn decorators(ui: &mut Ui, app: &AppHandle, s: &mut State) {
             });
         });
     ui.label(format!("Exports asked: {}", s.exports));
+    ui.label(format!("Notes sent: {}", s.notes_sent));
 }
 
 fn states(ui: &mut Ui, s: &mut State) {

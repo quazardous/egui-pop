@@ -21,6 +21,26 @@
 //!   icon per state, the disabled reason as a tooltip), given to
 //!   assistive technologies and reported to agents ([`crate::field`]).
 //!
+//! Two text fields go beyond one visible line of plain text:
+//!
+//! - a **masked** field ([`Input::masked`]: a password, a token, an API
+//!   key) draws every character as a bullet, cannot be copied or cut
+//!   from, and gives assistive technologies its name and the
+//!   password-input role, never its value (the value and the text runs
+//!   they read are bullets too); agents get its kind (`masked`), never
+//!   its value;
+//! - a **multi-line** field ([`Input::multiline`]) shows
+//!   [`rows`](Input::rows) lines when it is short (2 by default), grows
+//!   with its text up to [`max_rows`](Input::max_rows) lines (8 by
+//!   default), then scrolls. Enter starts a new line and Ctrl+Enter
+//!   (Cmd+Enter on macOS) submits ([`InputOutput::submitted`], the field
+//!   keeps the focus); with [`submit_on_enter`](Input::submit_on_enter),
+//!   Enter submits and Shift+Enter starts a new line, as in a chat box.
+//!   Ctrl+Enter is a key binding's when the keymap binds it (the
+//!   dispatcher leaves only Escape and Enter without Ctrl or Alt to a
+//!   text field). Tab still moves the focus; the slots, the buttons and
+//!   the markers stay on the first line.
+//!
 //! The field itself is egui's `TextEdit`, so it follows the focus rules
 //! of every text input: while it has the focus, Escape and Enter are its
 //! own (Escape leaves the field, Enter commits it), and no key binding
@@ -45,6 +65,12 @@
 //!         .show(ui);
 //!     if out.button == Some(0) { /* open a file dialog */ }
 //!     Input::number(iso, "ISO").unit("ISO").choices(["100", "400", "1600"]).show(ui);
+//! }
+//!
+//! fn account(ui: &mut egui::Ui, token: &mut String, notes: &mut String) {
+//!     Input::masked(token, "API token").show(ui);
+//!     let out = Input::multiline(notes, "Notes").rows(3).max_rows(6).show(ui);
+//!     if out.submitted { /* Ctrl+Enter: send the notes */ }
 //! }
 //! ```
 
@@ -161,6 +187,16 @@ pub struct Input<'a> {
     salt: Option<Id>,
     default: Option<String>,
     precision: Option<usize>,
+    masked: bool,
+    lines: Option<Lines>,
+}
+
+/// A multi-line field's rows and its Enter key.
+#[derive(Clone, Copy, Debug)]
+struct Lines {
+    rows: usize,
+    max_rows: usize,
+    submit_on_enter: bool,
 }
 
 impl std::fmt::Debug for Input<'_> {
@@ -168,6 +204,8 @@ impl std::fmt::Debug for Input<'_> {
         f.debug_struct("Input")
             .field("kind", &self.kind)
             .field("label", &self.label)
+            .field("masked", &self.masked)
+            .field("multiline", &self.lines.is_some())
             .field("state", &self.state)
             .finish_non_exhaustive()
     }
@@ -184,7 +222,8 @@ pub struct InputOutput {
     pub cleared: bool,
     /// The reset arrow was pressed.
     pub reset: bool,
-    /// Enter was pressed in the field.
+    /// Enter was pressed in the field (in a multi-line field,
+    /// Ctrl+Enter, or Enter with [`Input::submit_on_enter`]).
     pub submitted: bool,
     /// An attached button (its action, for a split button), by index.
     pub button: Option<usize>,
@@ -213,6 +252,8 @@ impl<'a> Input<'a> {
             salt: None,
             default: None,
             precision: None,
+            masked: false,
+            lines: None,
         }
     }
 
@@ -223,6 +264,66 @@ impl<'a> Input<'a> {
     /// Need (input): a text field with a placeholder.
     pub fn text(value: &'a mut String, label: &str) -> Self {
         Self::with(Value::Text(value), Kind::Text, label)
+    }
+
+    /// A masked text field (a password, a token, a key): every character
+    /// a bullet, nothing to copy, and its value never given to assistive
+    /// technologies or agents, only its name.
+    ///
+    /// Need (input): a password field.
+    /// Need (input): a masked field for a secret (token, API key).
+    pub fn masked(value: &'a mut String, label: &str) -> Self {
+        let mut input = Self::with(Value::Text(value), Kind::Text, label);
+        input.masked = true;
+        input
+    }
+
+    /// A multi-line text field: [`rows`](Self::rows) lines tall, growing
+    /// with its text up to [`max_rows`](Self::max_rows), then scrolling;
+    /// Enter starts a new line, Ctrl+Enter submits (see
+    /// [`submit_on_enter`](Self::submit_on_enter)).
+    ///
+    /// Need (input): a multi-line text field (a description, notes).
+    /// Need (input): a text area that grows with its text.
+    pub fn multiline(value: &'a mut String, label: &str) -> Self {
+        let mut input = Self::with(Value::Text(value), Kind::Text, label);
+        input.lines = Some(Lines {
+            rows: 2,
+            max_rows: 8,
+            submit_on_enter: false,
+        });
+        input
+    }
+
+    /// A multi-line field's height when its text is short, in lines (at
+    /// least one; 2 by default). Raises [`max_rows`](Self::max_rows) to
+    /// it if needed. Nothing on a single-line field.
+    pub fn rows(mut self, rows: usize) -> Self {
+        if let Some(l) = &mut self.lines {
+            l.rows = rows.max(1);
+            l.max_rows = l.max_rows.max(l.rows);
+        }
+        self
+    }
+
+    /// The most lines a multi-line field grows to before it scrolls (8 by
+    /// default; never under [`rows`](Self::rows)). Nothing on a
+    /// single-line field.
+    pub fn max_rows(mut self, max_rows: usize) -> Self {
+        if let Some(l) = &mut self.lines {
+            l.max_rows = max_rows.max(l.rows);
+        }
+        self
+    }
+
+    /// In a multi-line field, Enter submits and Shift+Enter starts a new
+    /// line (a chat box); by default Enter starts a new line and
+    /// Ctrl+Enter submits. Nothing on a single-line field.
+    pub fn submit_on_enter(mut self, on: bool) -> Self {
+        if let Some(l) = &mut self.lines {
+            l.submit_on_enter = on;
+        }
+        self
     }
 
     /// A search field: a magnifier before the query, clearable.
@@ -390,6 +491,8 @@ impl<'a> Input<'a> {
             salt: _,
             default,
             precision,
+            masked,
+            lines,
         } = self;
         let ctx = ui.ctx().clone();
         let t = Tokens::of(&ctx);
@@ -451,8 +554,6 @@ impl<'a> Input<'a> {
                 .unwrap_or_else(|| ui.available_width())
                 .max(attached + h * 4.0),
         };
-        let (_, row) = ui.allocate_space(vec2(total, h));
-        let field = Rect::from_min_max(row.min, pos2(row.right() - attached, row.bottom()));
         let text_id = base.with("text");
 
         // Its text as shown.
@@ -473,45 +574,86 @@ impl<'a> Input<'a> {
         let mut menu = None;
         let mut choice = None;
 
+        // What the field keeps beside its text, on its first line.
+        let slot_w = |s: &Slot| match s {
+            Slot::Icon(_) => side + gap,
+            Slot::Text(x) => text_w(x) + gap,
+        };
+        let has_chevron = !choices.is_empty() && editable;
+        let show_clear = clearable && kind != Kind::Number && editable && has_value;
+        let markers_w = field::markers_width(&state, side * 0.8, gap / 2.0);
+        let parts = [has_chevron, state.is_resettable(), show_clear]
+            .iter()
+            .filter(|on| **on)
+            .count() as f32;
+        let right_used = gap
+            + parts * h * 0.8
+            + trailing.iter().map(slot_w).sum::<f32>()
+            + if markers_w > 0.0 {
+                markers_w + gap
+            } else {
+                0.0
+            };
+        let left_used = field::edge_width(&t) + pad + leading.iter().map(slot_w).sum::<f32>();
+
+        // A multi-line field: as many lines as its text, between its rows
+        // and its most rows; the first line where a single-line text sits.
+        let row_h = ui.text_style_height(&TextStyle::Body);
+        let inset = ((h - row_h) / 2.0).max(0.0);
+        let (field_h, shown_rows) = match lines {
+            None => (h, 1),
+            Some(l) => {
+                let wrap = (total - attached - right_used - left_used).max(h);
+                let n = measure
+                    .layout(buffer.clone(), font.clone(), Color32::WHITE, wrap)
+                    .rows
+                    .len()
+                    .max(1);
+                let shown = n.clamp(l.rows, l.max_rows);
+                (h.max(shown as f32 * row_h + 2.0 * inset), shown)
+            }
+        };
+        let (_, row) = ui.allocate_space(vec2(total, field_h));
+        let field = Rect::from_min_max(row.min, pos2(row.right() - attached, row.bottom()));
+        let line = Rect::from_min_max(field.min, pos2(field.right(), field.top() + h));
+
         // From the right end of the field: the chevron, the reset, the
         // clear ✕, the trailing slots, the state's markers.
-        let mut right = field.right() - gap;
+        let mut right = line.right() - gap;
         let mut take = |w: f32| {
-            let r = Rect::from_min_max(pos2(right - w, field.top()), pos2(right, field.bottom()));
+            let r = Rect::from_min_max(pos2(right - w, line.top()), pos2(right, line.bottom()));
             right -= w;
             r
         };
-        let chevron_rect = (!choices.is_empty() && editable).then(|| take(h * 0.8));
+        let chevron_rect = has_chevron.then(|| take(h * 0.8));
         let reset_rect = state.is_resettable().then(|| take(h * 0.8));
-        let show_clear = clearable && kind != Kind::Number && editable && has_value;
         let clear_rect = show_clear.then(|| take(h * 0.8));
         let mut trailing_rects = Vec::new();
         for s in trailing.iter().rev() {
-            let w = match s {
-                Slot::Icon(_) => side + gap,
-                Slot::Text(x) => text_w(x) + gap,
-            };
-            trailing_rects.push((take(w), s));
+            trailing_rects.push((take(slot_w(s)), s));
         }
-        let markers_w = field::markers_width(&state, side * 0.8, gap / 2.0);
         let markers_rect = (markers_w > 0.0).then(|| take(markers_w + gap));
-        let mut left = field.left() + field::edge_width(&t) + pad;
+        let mut left = line.left() + field::edge_width(&t) + pad;
         let mut leading_rects = Vec::new();
         for s in &leading {
-            let w = match s {
-                Slot::Icon(_) => side + gap,
-                Slot::Text(x) => text_w(x) + gap,
-            };
+            let w = slot_w(s);
             leading_rects.push((
-                Rect::from_min_max(pos2(left, field.top()), pos2(left + w, field.bottom())),
+                Rect::from_min_max(pos2(left, line.top()), pos2(left + w, line.bottom())),
                 s,
             ));
             left += w;
         }
-        let text_rect = Rect::from_min_max(
-            pos2(left, field.top()),
-            pos2(right.max(left + h), field.bottom()),
-        );
+        let text_rect = if lines.is_some() {
+            Rect::from_min_max(
+                pos2(left, field.top() + inset),
+                pos2(right.max(left + h), field.bottom() - inset),
+            )
+        } else {
+            Rect::from_min_max(
+                pos2(left, field.top()),
+                pos2(right.max(left + h), field.bottom()),
+            )
+        };
 
         // The frame, then the text (drawn before the buttons inside the
         // field: egui's own Tab order is the order of drawing).
@@ -524,36 +666,37 @@ impl<'a> Input<'a> {
             };
             ui.painter().rect_filled(field, radius, fill);
         }
-        let number = kind == Kind::Number;
-        let width = text_rect.width();
+        let look = Look {
+            id: text_id,
+            width: text_rect.width(),
+            color: fk.style(State::REST).text,
+            number: kind == Kind::Number,
+            masked,
+            lines: lines.map(|l| (l, shown_rows)),
+        };
         let response = if editable {
-            let mut text = style(
-                egui::TextEdit::singleline(&mut buffer),
-                text_id,
-                width,
-                fk.style(State::REST).text,
-                number,
-            );
+            let mut text = look.apply(if lines.is_some() {
+                egui::TextEdit::multiline(&mut buffer)
+            } else {
+                egui::TextEdit::singleline(&mut buffer)
+            });
             if let Some(p) = &placeholder {
                 text = text.hint_text(
                     egui::RichText::new(p).color(fk.style_toned(Tone::Muted, State::REST).text),
                 );
             }
-            ui.put(text_rect, text)
+            put_text(ui, text_rect, base, lines.is_some(), text)
         } else {
-            // Read-only: selectable and copyable, never changed.
+            // Read-only: selectable and copyable (unless masked), never
+            // changed.
             let shown_text = buffer.clone();
             let mut shown: &str = shown_text.as_str();
-            ui.put(
-                text_rect,
-                style(
-                    egui::TextEdit::singleline(&mut shown),
-                    text_id,
-                    width,
-                    fk.style(State::REST).text,
-                    number,
-                ),
-            )
+            let text = look.apply(if lines.is_some() {
+                egui::TextEdit::multiline(&mut shown)
+            } else {
+                egui::TextEdit::singleline(&mut shown)
+            });
+            put_text(ui, text_rect, base, lines.is_some(), text)
         };
         tab::stop(ui, &response, part_stop.clone().skip(!state.is_focusable()));
 
@@ -628,7 +771,31 @@ impl<'a> Input<'a> {
             }
         }
 
-        let submitted = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        let submitted = match lines {
+            None => response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)),
+            // A multi-line field keeps the focus: its submit key is read
+            // as it is pressed (the text edit left it in the events).
+            Some(l) => {
+                response.has_focus()
+                    && ui.input(|i| {
+                        i.events.iter().any(|e| match e {
+                            egui::Event::Key {
+                                key: egui::Key::Enter,
+                                pressed: true,
+                                modifiers,
+                                ..
+                            } => {
+                                if l.submit_on_enter {
+                                    !modifiers.shift
+                                } else {
+                                    modifiers.command
+                                }
+                            }
+                            _ => false,
+                        })
+                    })
+            }
+        };
 
         // The value written back.
         match &mut value {
@@ -755,7 +922,15 @@ impl<'a> Input<'a> {
             }
         });
         field::access(&ctx, response.id, &state);
-        field::record(&ctx, response.id, &label, kind.name(), &state);
+        // What agents read: its kind, never a masked field's value.
+        let kind_name = if masked {
+            "masked"
+        } else if lines.is_some() {
+            "multiline"
+        } else {
+            kind.name()
+        };
+        field::record(&ctx, response.id, &label, kind_name, &state);
         // Its icons, by name, for agents.
         for slot in leading.iter().chain(trailing.iter()) {
             if let Slot::Icon(i) = slot {
@@ -784,25 +959,71 @@ impl<'a> Input<'a> {
     }
 }
 
-/// The field's text: no frame of its own (the input draws it), centred
-/// in the row, a number to the right.
-fn style(
-    text: egui::TextEdit<'_>,
+/// How the field's text is drawn: no frame of its own (the input draws
+/// it), a single line centred in the row (a number to the right), a
+/// multi-line text from the top.
+struct Look {
     id: Id,
     width: f32,
     color: Color32,
     number: bool,
-) -> egui::TextEdit<'_> {
-    text.id(id)
-        .frame(egui::Frame::NONE)
-        .margin(egui::Margin::ZERO)
-        .align(if number {
-            Align2::RIGHT_CENTER
-        } else {
-            Align2::LEFT_CENTER
-        })
-        .desired_width(width)
-        .text_color(color)
+    masked: bool,
+    /// A multi-line field: its rows and the lines shown.
+    lines: Option<(Lines, usize)>,
+}
+
+impl Look {
+    fn apply<'t>(&self, text: egui::TextEdit<'t>) -> egui::TextEdit<'t> {
+        let align = match (self.lines, self.number) {
+            (Some(_), _) => Align2::LEFT_TOP,
+            (None, true) => Align2::RIGHT_CENTER,
+            (None, false) => Align2::LEFT_CENTER,
+        };
+        let mut text = text
+            .id(self.id)
+            .frame(egui::Frame::NONE)
+            .margin(egui::Margin::ZERO)
+            .align(align)
+            .desired_width(self.width)
+            .text_color(self.color)
+            .password(self.masked);
+        if let Some((l, shown)) = self.lines {
+            // Enter starts a new line unless it submits; then Shift+Enter
+            // does.
+            let newline = if l.submit_on_enter {
+                egui::Modifiers::SHIFT
+            } else {
+                egui::Modifiers::NONE
+            };
+            text = text
+                .desired_rows(shown)
+                .return_key(egui::KeyboardShortcut::new(newline, egui::Key::Enter));
+        }
+        text
+    }
+}
+
+/// Puts the field's text in its place: a single line as it is, a
+/// multi-line text in a scroll area as tall as the lines shown.
+fn put_text(
+    ui: &mut Ui,
+    rect: Rect,
+    base: Id,
+    multiline: bool,
+    text: egui::TextEdit<'_>,
+) -> Response {
+    if !multiline {
+        return ui.put(rect, text);
+    }
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+        egui::ScrollArea::vertical()
+            .id_salt(base.with("scroll"))
+            .max_height(rect.height())
+            .auto_shrink([false, true])
+            .show(ui, |ui| ui.add(text))
+            .inner
+    })
+    .inner
 }
 
 fn format_number(ctx: &egui::Context, v: f64, precision: Option<usize>) -> String {
