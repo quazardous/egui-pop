@@ -15,6 +15,10 @@ use super::store::{Changes, SettingsStore, Values, apply, diff};
 use super::{Admin, write};
 use crate::app::AppHandle;
 
+/// Who wrote a change the store read or another of its clients made, as
+/// `settings.changed` says it.
+pub(crate) const BY_STORE: &str = "store";
+
 /// What the store's threads (its worker, its watchers) hand to the UI
 /// thread.
 #[derive(Default)]
@@ -145,17 +149,22 @@ impl Admin {
         self.save_changes(app, &store);
         let to_load = std::mem::take(&mut lock(&self.sync).to_load);
         for scope in to_load {
+            let _writing = crate::bus::settings::writing(scope.name(), Some(BY_STORE));
             self.load_scope(app, &store, scope);
         }
         let events = std::mem::take(&mut *lock(&self.shared.events));
         let applied = !events.is_empty();
         for (scope, changes) in events {
+            let _writing = crate::bus::settings::writing(scope.name(), Some(BY_STORE));
             self.apply_elsewhere(app, &store, scope, &changes);
         }
         if applied {
             // What was applied is what the store holds: nothing goes back.
             self.mark_seen(app);
         }
+        // What the store held or another client changed is said on the
+        // bus now: its followers follow it in the pass it is heard.
+        app.deliver_settings();
     }
 
     /// Follows every scope of the store not followed yet.

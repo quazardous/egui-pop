@@ -58,3 +58,85 @@ fn an_accent_another_client_changes_is_installed_in_the_pass_it_is_heard() {
         "the theme is installed in the pass the change is heard"
     );
 }
+
+/// The reviewed order of the settings point's listeners.
+#[test]
+fn the_settings_point_runs_in_its_reviewed_order() {
+    use egui_pop_api::bus::{self, SETTINGS_POINTS};
+    use std::path::Path;
+    let h = harness();
+    let app = h.state().handle();
+    let dump = app.bus_order_of(&SETTINGS_POINTS);
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/bus/settings-points.txt");
+    if std::env::var_os("UPDATE_BUS_ORDER").is_some() {
+        std::fs::write(&path, &dump).unwrap();
+    }
+    let reviewed = std::fs::read_to_string(&path).unwrap_or_default();
+    assert_eq!(
+        dump,
+        reviewed,
+        "review it, then UPDATE_BUS_ORDER=1 writes {}",
+        path.display()
+    );
+    for listener in [
+        bus::THEME_INSTALL,
+        bus::POINTER_PROFILE,
+        bus::FRAME_DECORATIONS,
+    ] {
+        assert!(dump.contains(listener), "{dump}");
+    }
+    assert_eq!(
+        bus::missing_targets(&app.bus(), &SETTINGS_POINTS),
+        Vec::<String>::new()
+    );
+}
+
+/// A setting written here is said once, with its scope and its writer.
+#[test]
+fn a_setting_written_here_is_said_once_and_its_follower_runs_in_the_pass() {
+    use egui_pop_api::bus::SettingsChanged;
+    use egui_pop_model::commands::Origin;
+    use egui_pop_model::values::{Change, Set, Value};
+    use std::sync::{Arc, Mutex};
+    let mut h = harness();
+    let app = h.state().handle().clone();
+    let said: Arc<Mutex<Vec<(String, String, String)>>> = Arc::default();
+    {
+        let said = said.clone();
+        app.bus()
+            .listen::<SettingsChanged>(
+                "test.said",
+                egui_pop_api::bus::bus_contract::ListenOpts::new(),
+                move |c, ()| {
+                    said.lock()
+                        .unwrap()
+                        .push((c.id().to_string(), c.scope.clone(), c.by.clone()));
+                    Ok(())
+                },
+            )
+            .unwrap();
+    }
+    let profile = egui_pop_api::pointer::SETTING_PROFILE;
+    egui_pop_core::lock(&app.store())
+        .set(Set::new(
+            &format!("settings/{profile}"),
+            Change::To(Value::Choice("darktable".into())),
+            Origin::User,
+        ))
+        .unwrap();
+    h.step();
+    assert_eq!(
+        *said.lock().unwrap(),
+        [(profile.to_string(), "app".to_string(), "user".to_string())],
+        "said once"
+    );
+    // Its follower loaded the profile in that pass.
+    let loaded = h
+        .state()
+        .handle()
+        .bus_order_of(&egui_pop_api::bus::SETTINGS_POINTS);
+    assert!(
+        loaded.contains(egui_pop_api::bus::POINTER_PROFILE),
+        "{loaded}"
+    );
+}

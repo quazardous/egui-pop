@@ -229,6 +229,7 @@ impl<'a> Ctx<'a> {
     ) -> Result<&mut Self, CtxError> {
         self.reg
             .keymap
+            .borrow_mut()
             .bind(&self.owner, layer, keys, Action::Run(command), when)
             .map_err(|error| CtxError::Keys {
                 keys: keys.into(),
@@ -249,6 +250,7 @@ impl<'a> Ctx<'a> {
     ) -> Result<&mut Self, CtxError> {
         self.reg
             .keymap
+            .borrow_mut()
             .bind_with(
                 &self.owner,
                 layer,
@@ -268,6 +270,7 @@ impl<'a> Ctx<'a> {
     pub fn unbind(&mut self, keys: &str, layer: Layer) -> Result<&mut Self, CtxError> {
         self.reg
             .keymap
+            .borrow_mut()
             .bind(&self.owner, layer, keys, Action::Unbind, "")
             .map_err(|error| CtxError::Keys {
                 keys: keys.into(),
@@ -702,6 +705,7 @@ pub(crate) fn add_command(
         .map_err(CtxError::Command)?;
     for k in keys {
         reg.keymap
+            .borrow_mut()
             .bind_with(
                 owner,
                 Layer::Default,
