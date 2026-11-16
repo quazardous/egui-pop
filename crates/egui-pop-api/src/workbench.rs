@@ -166,7 +166,8 @@ use crate::strings as txt;
 use crate::window::WindowState;
 
 mod drag_session;
-use drag_session::{DragSession, Dragged, Over};
+use crate::bus::drag::{self, End, Seen as DragSeen};
+use drag_session::Dragged;
 
 /// The shell's zones as panels.
 pub const PANEL_SIDE_BAR: PanelId = PanelId::from_static("app.side-bar");
@@ -986,11 +987,6 @@ pub(crate) struct Workbench {
     /// The detached window under a dragged tab last frame, where a drop
     /// moves it.
     pub window_drop: Option<WindowDrop>,
-    /// A tab let go outside the main window over no window that saw it
-    /// (a system hiding window positions: Wayland), and the passes left
-    /// for a detached window to take it: the first one that then sees the
-    /// pointer over its body, once the drag's grab ends, joins it.
-    released_outside: Option<(Dragged, u8)>,
     /// The detached windows outlined this pass, where a tab dragged out of
     /// the main window may go but no window can tell the pointer is over
     /// it (`window_outline`).
@@ -1064,7 +1060,6 @@ impl Default for Workbench {
             landing: None,
             landing_rect: None,
             window_drop: None,
-            released_outside: None,
             window_outlines: Vec::new(),
             closed_windows: BTreeMap::new(),
             hint: None,
@@ -1823,36 +1818,22 @@ pub(crate) fn windows(
     app_name: &str,
     keys: &mut dyn FnMut(&egui::Context),
 ) {
-    let (auxiliary, dragging, released) = {
+    // A group let go outside every window, no window taking it: it opens
+    // a window of its own.
+    if let Some((group, End::Left { inside: false })) = drag::ended::<Dragged>(ctx)
+        && group.is_group()
+    {
+        drag::take_ended::<Dragged>(ctx);
+        detach_dropped(app, &group);
+        drag::claim(ctx, "workbench.detach");
+    }
+    let auxiliary = {
         let mut wb = app.workbench_mut();
         // Found again by this pass's windows.
         wb.window_drop = None;
         wb.window_outlines.clear();
-        // A tab let go outside, waiting for a window to see the pointer:
-        // a few passes, then forgotten.
-        let released = wb.released_outside.as_ref().map(|(d, _)| d.clone());
-        let (left, expired) = match wb.released_outside.take() {
-            Some((d, n)) if n > 0 => (Some((d, n - 1)), None),
-            Some((d, _)) => (None, Some(d)),
-            None => (None, None),
-        };
-        wb.released_outside = left;
-        drop(wb);
-        // A group no window took: let go outside every window, it opens
-        // a window of its own.
-        if let Some(group) = expired.filter(Dragged::is_group) {
-            detach_dropped(app, &group);
-        }
-        let wb = app.workbench_mut();
-        (wb.layout.auxiliary.clone(), wb.dragging.clone(), released)
+        wb.layout.auxiliary.clone()
     };
-    if released.is_some() {
-        // The windows' passes, until one sees the pointer.
-        ctx.request_repaint();
-    }
-    // The drag as the detached windows see it: they do not see a drag
-    // begun in the main window.
-    let session = dragging.map(|(dragged, _, at)| DragSession::of(ctx, dragged, at));
     let screens = crate::window::screens();
     for aux in auxiliary {
         // Titled after the panel it shows.
@@ -1900,7 +1881,9 @@ pub(crate) fn windows(
             let own_window = class != egui::ViewportClass::EmbeddedWindow;
             if own_window {
                 app.note_window(&vctx);
-                crate::bus::files::begin_pass(&vctx, &crate::bus::panels::window_of_panel(&panel));
+                let window = crate::bus::panels::window_of_panel(&panel);
+                crate::bus::files::begin_pass(&vctx, &window);
+                drag::begin_pass(&vctx, &window);
                 app.block_window(&vctx, &|v| !crate::windows::is_app_window(app, v));
                 egui_pop_core::overlay::begin_pass(&vctx);
                 keys(&vctx);
@@ -1944,36 +1927,39 @@ pub(crate) fn windows(
                 })
                 .response
                 .rect;
+            // A tab or a group dragged from the main window: this window
+            // is one of its drop targets, by its id on the bus (the drag
+            // session finds it, in this window or from the screen's
+            // coordinates, and delivers the drop once).
             let holds = |d: &Dragged| d.panels().iter().any(|p| aux.holds(p));
-            if let Some(session) = session.as_ref().filter(|s| !holds(&s.dragged)) {
-                match session.over(&vctx, own_window, body) {
-                    Over::At(pointer) => {
-                        window_drop(app, &vctx, &aux, &session.dragged, body, pointer);
-                    }
-                    Over::Unknown => window_outline(app, &vctx, &aux, &session.dragged, body),
-                    Over::Away => {}
+            let window = crate::bus::panels::window_of_panel(&panel);
+            let refusal = |d: &Dragged| {
+                window_refusal(app, d).map(|spec| {
+                    let title = strings::panel_title(&vctx, spec.id.as_str(), &spec.title);
+                    strings::tr_args(&vctx, &txt::WORKBENCH_STAYS_DOCKED, &[("panel", &title)])
+                })
+            };
+            let seen = if drag::payload::<Dragged>(&vctx).is_some_and(|d| holds(&d)) {
+                DragSeen::Nothing
+            } else {
+                drag::target::<Dragged>(&vctx, &window, body, refusal)
+            };
+            match seen {
+                DragSeen::Over { payload, at } => {
+                    window_drop(app, &vctx, &aux, &payload, body, at);
                 }
-            }
-            // A tab let go outside the main window where the system hides
-            // window positions: no window could tell it was under the
-            // pointer while the drag held it. The pointer is this
-            // window's once the drag lets it go: dropped here.
-            if own_window
-                && let Some(dragged) = released.as_ref().filter(|d| !holds(d))
-                && vctx
-                    .input(|i| i.pointer.hover_pos())
-                    .is_some_and(|p| body.contains(p))
-            {
-                // Taken once: the other windows of this pass leave it.
-                let taken = app.workbench_mut().released_outside.take().is_some();
-                if taken {
-                    join_dropped(app, dragged, &panel);
+                DragSeen::Unknown(payload) => window_outline(app, &vctx, &aux, &payload, body),
+                // Refused, the step says why, as a tab menu's move would.
+                DragSeen::Dropped(payload) | DragSeen::Refused { payload, .. } => {
+                    join_dropped(app, &payload, &panel);
                 }
+                _ => {}
             }
             if own_window {
                 app.show_zone(ui, &crate::zones::WINDOW_OVERLAYS);
                 // Files dropped on this window: its `files.drop`.
                 crate::bus::files::end_pass(app, ui);
+                drag::end_pass(app, &vctx);
                 crate::menus::draw_popup(&vctx, app);
             }
             if vctx.input(|i| i.viewport().close_requested()) {
@@ -2137,7 +2123,7 @@ pub(crate) fn window_drop(
 /// until the drag lets it go, so each detached window that may take the
 /// tab outlines its body (the kit's `dock-preview` border, disabled where
 /// the panel may not go), the best hint there is. A drop over it still
-/// joins it (`released_outside`).
+/// joins it (the drag session delivers it there).
 fn window_outline(
     app: &AppHandle,
     vctx: &egui::Context,
@@ -4714,12 +4700,6 @@ impl TabViewer for Viewer<'_> {
     }
 }
 
-/// How many passes a tab or a group let go outside the main window waits
-/// for a detached window to see the pointer (a pass a frame while it
-/// waits: about a fifth of a second), before a group no window took
-/// opens a window of its own.
-const RELEASED_OUTSIDE_PASSES: u8 = 12;
-
 /// A tab or a group dropped on a detached window: it joins the window's
 /// tabs (`workbench.join_window`, with `group` for a group), a refusal
 /// said.
@@ -4749,44 +4729,44 @@ fn detach_dropped(app: &AppHandle, group: &Dragged) {
 type Before = (Dragged, Area, Vec<(Area, Node)>);
 
 /// Follows a tab drag across the areas, which egui_stack's space resolves
-/// (its zones, preview and veto): keeps the dragged tab for the detached
-/// windows, which take a drop egui_stack cannot see (`windows`); once let
-/// go, joins a detached window it was dropped on, and runs the
+/// (its zones, preview and veto): carries the dragged tab in a drag
+/// session (`bus::drag`), which the detached windows are targets of and
+/// which delivers a drop egui_stack cannot see to the window it is let go
+/// over (`windows`); once let go over no window, runs the
 /// `workbench.move` step for a tab dropped in another area. A veto, or a
 /// refusal, puts the areas back as they were before the drop.
 fn track_drag(app: &AppHandle, ctx: &egui::Context, before: Option<Before>) {
     let dragged = app.workbench_mut().dragged(ctx);
     if let Some((dragged, from, pointer)) = dragged {
+        let started = app.workbench_mut().dragging.is_none();
+        if started {
+            let kind = if dragged.is_group() {
+                "tab-group"
+            } else {
+                "tab"
+            };
+            drag::start(ctx, kind, dragged.clone());
+        }
         // The main window's pointer, which keeps following a drag past its
-        // edges, for the detached windows.
+        // edges.
         let at = ctx.input(|i| i.pointer.latest_pos()).unwrap_or(pointer);
         app.workbench_mut().dragging = Some((dragged, from, at));
         return;
     }
-    let ended = app.workbench_mut().dragging.take();
-    // Over a detached window when it was let go (`windows`): it joins
-    // that window's tabs.
-    let over = app.workbench_mut().window_drop.take();
-    if let Some((dragged, _, _)) = &ended
-        && let Some(drop) = over.filter(|d| d.panel == *dragged.lead())
-    {
-        join_dropped(app, dragged, &drop.window);
+    if app.workbench_mut().dragging.take().is_none() {
         return;
     }
-    // Let go outside the main window, over no window that saw it: a
-    // detached window seeing the pointer in the next passes takes it
-    // (`windows`), where the system hides window positions (Wayland). A
-    // group no window takes opens a window of its own.
-    if let Some((dragged, _, at)) = &ended
-        && !ctx.input(|i| i.viewport_rect()).contains(*at)
-    {
-        if !app.workbench_mut().layout.auxiliary.is_empty() {
-            app.workbench_mut().released_outside = Some((dragged.clone(), RELEASED_OUTSIDE_PASSES));
-            ctx.request_repaint();
-        } else if dragged.is_group() {
-            detach_dropped(app, dragged);
-        }
+    // Let go over a detached window, or outside the main window waiting
+    // for one to see the pointer (where the system hides where windows
+    // are), or cancelled: the session has it (`windows`). Let go in the
+    // main window, over no window: the areas take it.
+    if drag::waiting(ctx) {
         return;
+    }
+    match drag::ended::<Dragged>(ctx) {
+        Some((_, End::Left { inside: true })) => drag::claim(ctx, "workbench.areas"),
+        None => {}
+        Some(_) => return,
     }
     let Some((dragged, from, areas)) = before else {
         return;
