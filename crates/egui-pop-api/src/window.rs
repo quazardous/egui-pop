@@ -13,7 +13,10 @@
 //! edge shows a strip with the title and an "Exit full screen" button.
 //!
 //! Where the window manager does not tell the window's position
-//! (Wayland), only the size and the states are kept.
+//! (Wayland), only the size and the states are kept: the position an
+//! earlier run kept (X11, Windows) stays for the next run where it is
+//! told, never replaced by a made-up one, and the View menu says under
+//! Full screen that the system places the windows ([`POSITIONS_HIDDEN`]).
 
 use egui::{Align2, Context, Id, Order, Pos2, Rect, Ui, Vec2, ViewportCommand};
 use egui_pop_core::kit::{Kit, State};
@@ -41,6 +44,12 @@ pub const MAXIMIZED: &str = "settings/window.maximized";
 pub const FULLSCREEN: &str = "settings/window.fullscreen";
 /// Whether the kept position is known (the window manager told it).
 pub const PLACED: &str = "settings/window.placed";
+/// The context key saying the system tells no window's position and
+/// places windows itself (Wayland): `"true"` there.
+pub const POSITIONS_HIDDEN: &str = "windowPositionsHidden";
+/// The View menu's note, under Full screen, where the system places the
+/// windows ([`POSITIONS_HIDDEN`]).
+pub const LIST_PLACEMENT: &str = "app.window.placement";
 
 /// The largest side kept (a window past the GPU's texture limit cannot
 /// be drawn).
@@ -83,6 +92,7 @@ impl WindowState {
         })
     }
 
+    #[cfg(test)]
     fn to_store(self) -> Vec<f64> {
         let (x, y) = self
             .position
@@ -253,6 +263,21 @@ impl Plugin for WindowPlugin {
                 Ok(json!({ "fullscreen": on }))
             },
         )?;
+        // Where the system places windows itself (Wayland), the View menu
+        // says so under Full screen: their place is not lost by a bug.
+        ctx.menu_item(egui_pop_model::menus::MenuItem::list(
+            MENU_VIEW,
+            "9_window",
+            1,
+            LIST_PLACEMENT,
+        ))?;
+        ctx.list_provider(LIST_PLACEMENT, |app, _| {
+            if app.context().get(POSITIONS_HIDDEN) != "true" {
+                return Vec::new();
+            }
+            let note = strings::tr(&app.egui(), &crate::strings::WINDOW_PLACED_BY_SYSTEM);
+            vec![crate::menus::ListItem::new(&note, CMD_FULLSCREEN, json!(null)).disabled()]
+        });
         ctx.block(
             zones::OVERLAYS,
             Block::add(BlockId::from_static("egui_pop.window"), 30, show),
@@ -272,7 +297,13 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         "windowFullscreen",
         if fullscreen { "true" } else { "false" },
     );
-    track(app, &info, maximized, fullscreen);
+    // A window of its own (not embedded: kittest, the web) told no
+    // rectangle while shown: the system hides positions (Wayland).
+    let hidden =
+        !ctx.embed_viewports() && info.inner_rect.is_none() && info.minimized != Some(true);
+    app.set_context(POSITIONS_HIDDEN, if hidden { "true" } else { "false" });
+    let size = ctx.input(|i| i.viewport_rect().size());
+    track(app, &info, size, maximized, fullscreen);
     // The application's title bar, drawn this pass, holds the way out;
     // in zen mode, zen's own strip does (leaving it shows the bar).
     if fullscreen && !app.zen() && !crate::frame::bar_shown_in_full_screen(&ctx) {
@@ -280,9 +311,20 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     }
 }
 
-fn track(app: &AppHandle, info: &egui::ViewportInfo, maximized: bool, fullscreen: bool) {
+fn track(
+    app: &AppHandle,
+    info: &egui::ViewportInfo,
+    viewport_size: Vec2,
+    maximized: bool,
+    fullscreen: bool,
+) {
     let store = app.store();
     let mut s = lock(&store);
+    // The position an earlier run kept, where the system told it.
+    let kept = match s.get(RECT).map(|e| &e.value) {
+        Some(Value::Floats(r)) if r.len() == 4 => Some((r[0], r[1])),
+        _ => None,
+    };
     let mut write = |path: &str, v: Value| {
         if s.get(path).is_some_and(|e| e.value != v) {
             let _ = s.set(
@@ -300,15 +342,24 @@ fn track(app: &AppHandle, info: &egui::ViewportInfo, maximized: bool, fullscreen
     if maximized || fullscreen || info.minimized == Some(true) {
         return;
     }
-    let Some(inner) = info.inner_rect else { return };
-    let state = WindowState {
-        position: info.outer_rect.map(|r| r.min),
-        size: inner.size(),
-        maximized,
-        fullscreen,
+    // Wayland tells no rectangle: the size is the window's own.
+    let size = info.inner_rect.map_or(viewport_size, |r| r.size());
+    if size.x <= 0.0 || size.y <= 0.0 {
+        return;
+    }
+    let (x, y) = match info.outer_rect {
+        Some(r) => {
+            write(PLACED, Value::Bool(true));
+            (f64::from(r.min.x), f64::from(r.min.y))
+        }
+        // Not told (Wayland): the position an earlier run kept stays as
+        // it is, never replaced by a made-up one.
+        None => kept.unwrap_or((0.0, 0.0)),
     };
-    write(PLACED, Value::Bool(state.position.is_some()));
-    write(RECT, Value::Floats(state.to_store()));
+    write(
+        RECT,
+        Value::Floats(vec![x, y, f64::from(size.x), f64::from(size.y)]),
+    );
 }
 
 /// The strip at the top of a full screen window.

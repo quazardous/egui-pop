@@ -327,3 +327,23 @@ fn a_detached_window_kept_off_every_screen_comes_back_onto_one() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+// Saying it.
+
+#[test]
+fn the_view_menu_says_the_system_places_windows_only_where_positions_are_hidden() {
+    let dir = scratch("note");
+    let mut m = run(&dir);
+    m.root_pass();
+    let note = |m: &MultiWindow| {
+        let app = m.app();
+        app.list_items(window::LIST_PLACEMENT, &app.when_context())
+    };
+    assert!(note(&m).is_empty(), "positions are told: nothing to say");
+    m.hide_positions();
+    m.root_pass();
+    let items = note(&m);
+    assert_eq!(items.len(), 1);
+    assert!(items[0].label.contains("Wayland"), "{:?}", items[0].label);
+    assert!(!items[0].enabled, "a note, not a command");
+    let _ = std::fs::remove_dir_all(&dir);
+}
