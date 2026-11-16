@@ -54,7 +54,7 @@
 //! |---|---|---|
 //! | `frame.minimize` | `{}` | minimizes the window |
 //! | `frame.maximize` | `{ "maximized": bool }` (the state asked for) | maximizes or restores |
-//! | `frame.close` | `{ "viewport": "root" }` | closes the window |
+//! | `frame.close` | `{ "viewport": "root" }` | closes the window: the main one's `window.close`; an application window's close request, its content may refuse, then its `window.close` |
 //! | `frame.system_menu` | `{ "x", "y" }` (points) | opens the system menu there |
 //! | `frame.exit_fullscreen` | `{ "viewport": "root" }` | leaves full screen |
 //! | `frame.hit_test` | `{ "viewport": "root", "install": bool }` | on Windows, takes over the window's hit testing (or gives it back) |
@@ -233,10 +233,7 @@ pub fn request(app: &AppHandle, ctx: &Context, r: FrameRequest) {
             app.step(
                 &STEP_CLOSE,
                 json!({ "viewport": viewport_name(ctx) }),
-                move |_, _| {
-                    c.send_viewport_cmd(ViewportCommand::Close);
-                    Ok(json!({ "closed": true }))
-                },
+                move |app, _| Ok(json!({ "closed": app.frame_close(&c) })),
             );
         }
         FrameRequest::ExitFullscreen => {

@@ -72,7 +72,6 @@ use serde_json::json;
 
 use crate::app::{AppHandle, WeakApp};
 use crate::bus::{Reason, WindowKind, WindowRequest};
-use egui_pop_hooks::Point as _;
 
 /// The context key naming the application window being drawn (its
 /// [`WindowId`]; `main` in the main window until another moves into it).
@@ -330,6 +329,11 @@ pub(crate) struct Windows {
     /// The application quits ([`AppHandle::quit`]): the main window's
     /// next close quits instead of moving a window into it.
     quitting: bool,
+    /// The places a `window.reparent` leaves to `window.place`, each
+    /// under its own id.
+    pub(crate) moved_places: Vec<(WindowId, Geometry)>,
+    /// What a `window.reparent` says once its last listener ran.
+    pub(crate) moved_events: Vec<(&'static str, serde_json::Value)>,
 }
 
 impl Default for Windows {
@@ -352,6 +356,8 @@ impl Default for Windows {
             tick: 0,
             going_home: false,
             quitting: false,
+            moved_places: Vec::new(),
+            moved_events: Vec::new(),
         }
     }
 }
@@ -472,38 +478,36 @@ impl AppHandle {
     /// draws it each pass of its own; it may hold `Rc` state. The main
     /// window's id (`main`, or a window moved into it) cannot be opened
     /// again.
+    ///
+    /// It is the `window.open` request ([`AppHandle::request_window_open`])
+    /// with the application (`app`) as its owner.
     pub fn open_window(
         &self,
         spec: WindowSpec,
         content: impl FnMut(&mut Ui, &mut WindowUi<'_>) + 'static,
     ) -> WindowId {
-        self.open_window_for(spec, None, content).0
+        let id = spec.id.clone();
+        self.request_window_open(spec, "app", Reason::Command, content);
+        id
     }
 
     /// The `window.open` request of an application window its owner asks
     /// for (ADR 0029): opened, or, open already, brought to the front;
     /// either way its listeners run now, in their declared order (the
     /// owner's first), and `window.opened` is said after the last one
-    /// when it opened. What they did, one line each.
-    pub(crate) fn request_window_open(
+    /// when it opened. What they did, one line each. The owner (a plugin's
+    /// id, `app`) is who the window's closes are asked for and whose
+    /// listener on `window.close` closes the state it shows.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn request_window_open(
         &self,
         spec: WindowSpec,
         owner: &str,
         reason: Reason,
         content: impl FnMut(&mut Ui, &mut WindowUi<'_>) + 'static,
     ) -> Vec<String> {
-        self.open_window_for(spec, Some((owner, reason)), content).1
-    }
-
-    /// Opens an application window: asked by its owner on the bus, or
-    /// (`None`) by a path not moved onto its request yet, which only
-    /// reports a window it opened (ADR 0029, slice 4).
-    fn open_window_for(
-        &self,
-        spec: WindowSpec,
-        asked: Option<(&str, Reason)>,
-        content: impl FnMut(&mut Ui, &mut WindowUi<'_>) + 'static,
-    ) -> (WindowId, Vec<String>) {
         MAIN_THREAD.with(|m| {
             if m.get().is_none() {
                 m.set(Some(std::thread::current().id()));
@@ -545,7 +549,6 @@ impl AppHandle {
                 true
             }
         };
-        let mut did = Vec::new();
         if opened {
             REGISTRY.with(|r| {
                 r.borrow_mut()
@@ -553,52 +556,32 @@ impl AppHandle {
             });
             self.app_window_opened(id.deferred_viewport());
         }
-        match asked {
-            // Its owner asked: the request runs, opened or brought to the
-            // front, and `window.opened` follows its last listener.
-            Some((owner, reason)) => {
-                let req = WindowRequest::new(id.as_str(), WindowKind::App, owner, reason);
-                did = self.ask_window_open(req);
-                if opened {
-                    self.publish(
-                        "egui_pop",
-                        None,
-                        "window.opened",
-                        json!({ "window": id, "title": spec.title, "owner": owner, "reason": reason, "did": did }),
-                    );
-                }
-            }
-            // Opening is not on its request yet (ADR 0029, slice 4): the
-            // registry is told.
-            None if opened => {
-                self.publish(
-                    "egui_pop",
-                    None,
-                    "window.opened",
-                    json!({ "window": id, "title": spec.title }),
-                );
-                self.report_window(
-                    crate::bus::WindowOpen::ID,
-                    WindowRequest::new(id.as_str(), WindowKind::App, "app", Reason::Command),
-                );
-            }
-            None => {}
+        // The request runs, opened or brought to the front, and
+        // `window.opened` follows its last listener.
+        let req = WindowRequest::new(id.as_str(), WindowKind::App, owner, reason);
+        let did = self.ask_window_open(req);
+        if opened {
+            self.publish(
+                "egui_pop",
+                None,
+                "window.opened",
+                json!({ "window": id, "title": spec.title, "owner": owner, "reason": reason, "did": did }),
+            );
         }
         self.egui().request_repaint_of(ViewportId::ROOT);
-        (id, did)
+        did
     }
 
     /// Closes an application window (the main one: as its close button
     /// does, another window moving into it when one is open).
     ///
-    /// An application window's close is the `window.close` request
+    /// A window's close is the `window.close` request
     /// ([`AppHandle::request_window_close`]): its owner's state closes
     /// with it, in this call.
     pub fn close_window(&self, id: &WindowId) {
         let is_root = self.windows_mut().root.id == *id;
         if is_root {
-            self.egui()
-                .send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Close);
+            self.ask_main_close(Reason::Command);
             return;
         }
         self.close_entry(id, Some("app"), Reason::Command);
@@ -685,6 +668,8 @@ impl AppHandle {
             if w.root.id == *id {
                 Some(ViewportId::ROOT)
             } else if w.root.home == *id {
+                // Asked at once below; while the content is being drawn,
+                // at the main window's next pass.
                 w.going_home = true;
                 Some(ViewportId::ROOT)
             } else if let Some(e) = w.entry_mut(id) {
@@ -698,6 +683,9 @@ impl AppHandle {
             let ctx = self.egui();
             ctx.send_viewport_cmd_to(v, ViewportCommand::Focus);
             ctx.request_repaint_of(v);
+        }
+        if self.windows_ref().root.content.is_some() {
+            self.ask_home();
         }
     }
 
@@ -891,16 +879,21 @@ impl AppHandle {
         self.save_later(GEOMETRY_DOC, text);
     }
 
-    /// The main window's close was asked while other windows are open:
-    /// the window worked in last moves into it. Returns whether one did
-    /// (the close is then to be cancelled).
-    pub(crate) fn move_into_root(&self) -> bool {
+    /// The window a close of the main window moves into it: the one
+    /// worked in last, when one is open.
+    pub(crate) fn window_to_move_in(&self) -> Option<WindowId> {
+        self.windows_ref().others_by_recency().into_iter().next()
+    }
+
+    /// `window.registry`'s part of a `window.reparent` into the main
+    /// window: `id`'s content is drawn by the main window from its next
+    /// pass, which takes its geometry; its own window is no longer
+    /// declared. The places each keeps are left to `window.place`, what is
+    /// said to the request. Whether it moved.
+    pub(crate) fn move_into_root(&self, id: &WindowId) -> bool {
         let moved = {
             let mut w = self.windows_mut();
-            let Some(id) = w.others_by_recency().into_iter().next() else {
-                return false;
-            };
-            let Some(at) = w.entries.iter().position(|e| e.id == id && !e.closed) else {
+            let Some(at) = w.entries.iter().position(|e| &e.id == id && !e.closed) else {
                 return false;
             };
             let e = w.entries.remove(at);
@@ -923,7 +916,7 @@ impl AppHandle {
             });
             let left = std::mem::replace(&mut w.root.id, e.id.clone());
             let shell_title = w.root.title.replace(e.title.clone());
-            if w.root.content.is_none() {
+            if left == w.root.home {
                 // The shell leaves: its title comes back with it.
                 w.root.home_title = shell_title;
             }
@@ -938,28 +931,30 @@ impl AppHandle {
         if let Some(g) = geometry {
             self.apply_root_geometry(g);
         }
-        for (at, g) in kept {
-            if let Some(g) = g {
-                self.keep_geometry(&at, g);
-            }
-        }
         REGISTRY.with(|r| r.borrow_mut().remove(&id.deferred_viewport()));
         self.sync_separate_windows();
-        // Not on its request yet (ADR 0029, slice 4): the registry is told.
-        self.report_window(
-            crate::bus::WindowReparent::ID,
-            WindowRequest::new(id.as_str(), WindowKind::App, "app", Reason::User)
-                .parent(WindowId::MAIN),
-        );
-        self.publish("egui_pop", None, "window.closed", json!({ "window": left }));
-        self.publish(
-            "egui_pop",
-            None,
-            "window.moved",
-            json!({ "window": id, "to": "main" }),
-        );
+        {
+            let mut w = self.windows_mut();
+            w.moved_places
+                .extend(kept.into_iter().filter_map(|(at, g)| g.map(|g| (at, g))));
+            w.moved_events
+                .push(("window.closed", json!({ "window": left })));
+            w.moved_events
+                .push(("window.moved", json!({ "window": id, "to": "main" })));
+        }
         self.egui().request_repaint_of(ViewportId::ROOT);
         true
+    }
+
+    /// `window.place`'s part of a `window.reparent`: the places the move
+    /// left, each kept under its own id. How many.
+    pub(crate) fn keep_moved_places(&self) -> usize {
+        let places = std::mem::take(&mut self.windows_mut().moved_places);
+        let n = places.len();
+        for (id, g) in places {
+            self.keep_geometry(&id, g);
+        }
+        n
     }
 
     /// Gives the main window a geometry, through viewport commands: the
@@ -986,13 +981,17 @@ impl AppHandle {
 
     /// Quits the application: the main window closes, and the other
     /// windows with it, none moving into the main window as closing it
-    /// does otherwise. A close the host cancels (unsaved work) leaves the
+    /// does otherwise. It is the `window.close` request of the main window
+    /// with the reason `quit`: each other window is closed by its own
+    /// `window.close` (`quit`), its owner's state with it. A close vetoed
+    /// (a before-hook on the `window.close` step: unsaved work) leaves the
     /// application as it was.
     pub fn quit(&self) {
         self.windows_mut().quitting = true;
-        let ctx = self.egui();
-        ctx.send_viewport_cmd_to(ViewportId::ROOT, ViewportCommand::Close);
-        ctx.request_repaint_of(ViewportId::ROOT);
+        if !self.ask_main_close(Reason::Quit) {
+            self.windows_mut().quitting = false;
+        }
+        self.egui().request_repaint_of(ViewportId::ROOT);
     }
 
     /// Whether [`AppHandle::quit`] was asked and its close not yet seen.
@@ -1006,15 +1005,24 @@ impl AppHandle {
         std::mem::take(&mut self.windows_mut().quitting)
     }
 
-    /// The inverse of [`AppHandle::move_into_root`], when
-    /// [`AppHandle::raise_window`] asked for the main window while a
-    /// window's content holds it: that content goes back to a window of
-    /// its own, and the main window draws the shell again. Returns whether
-    /// one went back.
+    /// The main window was asked to its front while a window's content
+    /// holds it ([`AppHandle::raise_window`]): the window whose content it
+    /// is, the flag spent.
+    pub(crate) fn take_going_home(&self) -> Option<WindowId> {
+        let mut w = self.windows_mut();
+        let going = std::mem::take(&mut w.going_home);
+        (going && w.root.id != w.root.home && w.root.content.is_some()).then(|| w.root.id.clone())
+    }
+
+    /// `window.registry`'s part of a `window.reparent` out of the main
+    /// window, the inverse of [`AppHandle::move_into_root`]: the content
+    /// it holds goes back to a window of its own, and the main window
+    /// draws the shell again. Whether one went back.
     pub(crate) fn move_out_of_root(&self) -> bool {
         let back = {
             let mut w = self.windows_mut();
-            if !std::mem::take(&mut w.going_home) || w.root.id == w.root.home {
+            w.going_home = false;
+            if w.root.id == w.root.home {
                 return false;
             }
             let Some(content) = w.root.content.take() else {
@@ -1068,18 +1076,15 @@ impl AppHandle {
                 .insert(id.deferred_viewport(), (self.downgrade(), id.clone()))
         });
         self.sync_separate_windows();
-        self.set_active_window(ViewportId::ROOT);
-        self.publish(
-            "egui_pop",
-            None,
-            "window.moved",
-            json!({ "window": id, "from": home, "to": id, "title": title }),
-        );
-        self.publish("egui_pop", None, "window.opened", json!({ "window": home }));
-        self.report_window(
-            crate::bus::WindowOpen::ID,
-            WindowRequest::new(id.as_str(), WindowKind::App, "app", Reason::User),
-        );
+        {
+            let mut w = self.windows_mut();
+            w.moved_events.push((
+                "window.moved",
+                json!({ "window": id, "from": home, "to": id, "title": title }),
+            ));
+            w.moved_events
+                .push(("window.opened", json!({ "window": home })));
+        }
         self.egui().request_repaint_of(ViewportId::ROOT);
         true
     }
@@ -1137,15 +1142,21 @@ impl AppHandle {
                 // The shell's title bar left with the shell: the content
                 // gets the frame an application window has.
                 let title = wui.title.clone();
+                let drawn_id = wui.id.clone();
                 framed(ui, self, &title, bars, |ui| content(ui, &mut wui));
                 let mut w = self.windows_mut();
-                if w.root.content.is_none() {
-                    w.root.content = Some(content);
+                // A request asked while it drew (the main window closed,
+                // another window moved in) may have changed what the main
+                // window holds: this content then went.
+                if w.root.id == drawn_id {
+                    if w.root.content.is_none() {
+                        w.root.content = Some(content);
+                    }
+                    w.root.title = Some(wui.title);
                 }
-                w.root.title = Some(wui.title);
                 drop(w);
                 if wui.close {
-                    ctx.send_viewport_cmd(ViewportCommand::Close);
+                    self.ask_main_close(Reason::User);
                 }
                 true
             }

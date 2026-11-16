@@ -10,8 +10,10 @@ window.close
   5. window.place (owner egui_pop): after window.registry
   6. window.invariants (owner egui_pop): last
 window.reparent
-  1. window.registry (owner egui_pop): nothing
-  2. window.invariants (owner egui_pop): last
+  1. window.registry (owner egui_pop): before window.place
+  2. window.place (owner egui_pop): after window.registry
+  3. window.focus (owner egui_pop): after window.place
+  4. window.invariants (owner egui_pop): last
 popup.open
   1. window.registry (owner egui_pop): nothing
   2. window.invariants (owner egui_pop): last

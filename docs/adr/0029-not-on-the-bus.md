@@ -342,6 +342,20 @@ test and leaves `next` green. Slices 1 and 2 come first; the paths of
    unchanged; closing the main window with a window open moves it in as
    a `window.reparent`; a vetoed panel close leaves the registry
    unchanged.
+   First part done (2026-11-16): `open_window` is a `window.open` owned
+   by the application (`request_window_open` for an owner of its own);
+   the main window's close, from the system, its title bar, `close_window`
+   or `quit` (reason `quit`), is one `window.close` of the main window,
+   vetoable by its step's before-hook; with another window open and not
+   quitting, its step answers with a `window.reparent` of the window
+   worked in last into the main window, and raising the main window
+   asks the way back. `window.reparent` runs `window.registry`,
+   `window.place`, `window.focus`, the invariants; the main window's
+   close closes every other window by its own `window.close` first
+   (`window.children`). An application window's title-bar Close still
+   asks the system's close request (its content may refuse), which its
+   pass answers with `window.close`. Left: detached panels (detach, dock
+   back, their close), once slice 2's panel reports are on `next`.
 5. **Dialogs and choosers.** Dialogs, the in-app and system file
    choosers, the viewer's web view. *Test:* a window closed with a
    dialog and a file choice open leaves `popup.closed` (`parent-closed`)

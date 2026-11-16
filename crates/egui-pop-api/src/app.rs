@@ -6975,15 +6975,11 @@ impl App {
         }
         self.handle.note_window(&ctx);
         crate::workbench::forget_closed_windows(&self.handle, &ctx);
-        // Closing the main window while application windows are open
-        // moves the one worked in last into it, and quits nothing; unless
-        // the application quits (`AppHandle::quit`).
-        if ctx.viewport_id() == egui::ViewportId::ROOT
-            && ctx.input(|i| i.viewport().close_requested())
-            && !self.handle.take_quitting()
-            && self.handle.move_into_root()
-        {
-            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        // The system asks the main window's close: a `window.close` of
+        // the main window (another window moving into it when one is
+        // open, ADR 0025), unless one already ran.
+        if ctx.viewport_id() == egui::ViewportId::ROOT {
+            self.handle.main_close_seen(&ctx);
         }
         // A dialog open in a detached panel's window blocks this one; one
         // in an application window does not.
@@ -6993,8 +6989,8 @@ impl App {
         self.dispatch_keys(&ctx);
         self.process_requests();
         // The main window asked to the front while a window's content
-        // holds it: that content goes back to a window of its own.
-        self.handle.move_out_of_root();
+        // was drawn in it: that content goes back to a window of its own.
+        self.handle.ask_home();
         self.handle.declare_windows(&ctx);
         self.handle.mark_pass_start(ui);
         if !self.handle.root_pass(ui) {
