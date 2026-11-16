@@ -640,6 +640,9 @@ pub(crate) struct Bus {
     /// Whether each window had the system's focus at its last pass: a
     /// window gaining it asks `window.activate` (`system`) once.
     focus_seen: RefCell<std::collections::BTreeMap<ViewportId, bool>>,
+    /// Application windows raised by a command, asked the focus again
+    /// from their own next pass (one not drawn yet has no system window).
+    raise_pending: RefCell<std::collections::BTreeSet<ViewportId>>,
     /// The last journal event delivered to the event points' listeners.
     delivered: Cell<Seq>,
     /// A delivery runs: one asked from inside it is left to it.
@@ -677,6 +680,7 @@ impl Bus {
             registry,
             invariants: Mutex::default(),
             focus_seen: RefCell::default(),
+            raise_pending: RefCell::default(),
             delivered: Cell::new(0),
             delivering: Cell::new(false),
         }

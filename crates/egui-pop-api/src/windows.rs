@@ -1307,6 +1307,7 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
         app.block_window(&ctx, &|v| v == viewport);
         egui_pop_core::overlay::begin_pass(&ctx);
         app.dispatch_window_keys(&ctx, &id);
+        app.raise_in_pass(&ctx);
     }
     if let Some((from, to)) = egui_pop_core::scale::changed(&ctx) {
         app.publish(

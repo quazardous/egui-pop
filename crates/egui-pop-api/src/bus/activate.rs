@@ -48,6 +48,9 @@ pub(super) fn install(kernel: &dyn Bus, registry: &Arc<Mutex<Registry>>) {
                 return Ok(());
             };
             raise(&app.egui(), v, req.kind == WindowKind::Main);
+            if req.kind == WindowKind::App {
+                app.0.bus.raise_pending.borrow_mut().insert(v);
+            }
             did.push(format!("{RAISE}: `{}` to the front", req.window));
             Ok(())
         }),
@@ -223,11 +226,27 @@ impl AppHandle {
         self.request_window_activate(WindowRequest::new(id, kind, OWNER, reason));
     }
 
+    /// From an application window's own pass: the focus asked again when
+    /// a command raised it since (`window.raise`), so a window not yet
+    /// drawn when it was raised gets it too.
+    pub(crate) fn raise_in_pass(&self, ctx: &Context) {
+        if self
+            .0
+            .bus
+            .raise_pending
+            .borrow_mut()
+            .remove(&ctx.viewport_id())
+        {
+            ctx.send_viewport_cmd(ViewportCommand::Focus);
+        }
+    }
+
     /// A closing window's focus is forgotten: a window of the same id
     /// opened again and focused gains the focus anew.
     pub(crate) fn forget_focus(&self, req: &WindowRequest) {
         if let Some(v) = crate::window_invariants::viewport_of(req.kind, &req.window) {
             self.0.bus.focus_seen.borrow_mut().remove(&v);
+            self.0.bus.raise_pending.borrow_mut().remove(&v);
         }
     }
 
