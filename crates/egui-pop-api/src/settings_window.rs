@@ -203,7 +203,7 @@ impl Plugin for SettingsPlugin {
                 // was.
                 if let Some(admin) = call.app.service(&ADMIN) {
                     if admin.is_open() {
-                        admin.close();
+                        admin.close(call.app);
                         return Ok(json!({ "open": false }));
                     }
                     if let Some(w) = call.app.service(&SETTINGS_WINDOW) {
@@ -245,7 +245,7 @@ impl Plugin for SettingsPlugin {
                     w.close();
                 } else {
                     if let Some(admin) = call.app.service(&ADMIN) {
-                        admin.close();
+                        admin.close(call.app);
                         // Its overlay goes too, or the window's modal
                         // would open under it and close at once.
                         egui_pop_core::overlay::close(

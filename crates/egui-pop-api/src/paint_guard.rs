@@ -783,7 +783,7 @@ impl AppHandle {
             // The Settings app open with nothing drawn would keep the
             // window: closed with it.
             if let Some(a) = self.service(&crate::admin::ADMIN) {
-                a.close();
+                a.close(self);
             }
             // Zen mode hides the bars and the title bar: left with it.
             if self.zen() {

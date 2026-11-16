@@ -15,4 +15,5 @@ job.*
 plugin.connect
   1. jobs.adopt-on-connect (owner egui_pop.jobs): nothing
 plugin.disconnect
-  1. jobs.cancel-on-disconnect (owner egui_pop.jobs): nothing
+  1. window.owner-gone (owner egui_pop): nothing
+  2. jobs.cancel-on-disconnect (owner egui_pop.jobs): nothing

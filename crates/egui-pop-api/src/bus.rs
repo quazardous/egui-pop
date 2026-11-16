@@ -34,9 +34,15 @@
 //! [`order_dump`] prints who runs when; the `bus` collector of the debug
 //! bridge shows it too.
 //!
-//! The other window paths (opening, moving into the main window, detached
-//! panels, popups) still do their work themselves and report it to the
-//! registry; they move onto their requests one by one (the ADR's slices).
+//! The Settings app's window is wholly on the bus: the app asks
+//! `window.open` and `window.close` for it as its owner, in the call that
+//! changed what it wants, and its listener (`admin.window`) keeps the
+//! app's state with the window on both points. A plugin disconnected has
+//! its windows closed ([`OWNER_GONE`], reason `owner-gone`). The other
+//! window paths (opening an application window, moving into the main
+//! window, detached panels, popups) still do their work themselves and
+//! report it to the registry; they move onto their requests one by one
+//! (the ADR's slices).
 //!
 //! The job lifecycle is the second family. Asking about a job is a
 //! request ([`JobCancel`], [`JobPause`], [`JobResume`], [`JobRetry`], each
@@ -66,6 +72,9 @@ use crate::host::{Event, Seq};
 use crate::windows::WindowId;
 
 pub use egui_pop_hooks;
+
+mod owners;
+pub use owners::OWNER_GONE;
 
 /// Why a window or a popup opens or closes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -468,12 +477,6 @@ impl Registry {
     fn holds(&self, id: &str) -> bool {
         self.records.iter().any(|r| r.id == id)
     }
-
-    fn set_owner(&mut self, id: &str, owner: &str) {
-        if let Some(r) = self.records.iter_mut().find(|r| r.id == id) {
-            r.owner = owner.to_string();
-        }
-    }
 }
 
 /// The bus an application holds: the kernel and the window registry.
@@ -730,6 +733,7 @@ fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
             Ok(())
         });
     }
+    owners::install(kernel);
     // The invariants check runs last on every other window point: the
     // rules the registry alone answers (the backend's and the paint
     // guard's are checked in the main window's pass).
@@ -1024,12 +1028,6 @@ impl AppHandle {
                 lock(&self.0.bus.registry).close(&req.window);
             }
         }
-    }
-
-    /// The owner of a window the registry holds, when it opened before
-    /// its owner could say so.
-    pub(crate) fn set_window_owner(&self, id: &WindowId, owner: &str) {
-        lock(&self.0.bus.registry).set_owner(id.as_str(), owner);
     }
 
     /// `window.registry`'s part on an application window: marked closed,

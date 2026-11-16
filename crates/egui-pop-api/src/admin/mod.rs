@@ -68,11 +68,10 @@
 pub mod focus;
 pub mod quick;
 mod shell;
-
-pub(crate) use shell::follow as follow_window;
 pub mod store;
 mod sync;
 pub mod transfer;
+mod window;
 pub mod wizard;
 
 use std::collections::BTreeMap;
@@ -107,8 +106,9 @@ pub use wizard::{
 pub const CMD_OPEN: CommandId = CommandId::from_static("admin.open");
 /// Closes it.
 pub const CMD_CLOSE: CommandId = CommandId::from_static("admin.close");
-/// The Settings app's listener on the bus's `window.close`: its window
-/// closing closes the app (ADR 0029).
+/// The Settings app's listener on the bus's `window.open` and
+/// `window.close`: the app is open while its window is, and its window
+/// closing closes the app, whoever asked (ADR 0029).
 pub const WINDOW_LISTENER: &str = "admin.window";
 /// The plugin owning the Settings app (its window, its listeners).
 pub const OWNER: &str = "egui_pop.admin";
@@ -187,8 +187,6 @@ struct State {
     filter: String,
     /// The value scope a row writes to, when its "Set for" menu chose.
     target: BTreeMap<String, ValueScope>,
-    /// Its application window opened, not seen closed since.
-    window_shown: bool,
 }
 
 /// The administration app's state, manifests, hooks, widget kinds and
@@ -302,6 +300,8 @@ impl Admin {
         }
         lock(&self.state).open = true;
         self.refresh();
+        // In its window: opened, or brought to the front (`window.open`).
+        window::settle(app, self, true);
         Ok(())
     }
 
@@ -317,23 +317,24 @@ impl Admin {
             .swap(false, std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// Closes it, and the wizard running with it.
-    pub fn close(&self) {
+    /// Closes it, and the wizard running with it. In its window, it is
+    /// the window's close (`window.close`, the app asking): the app closes
+    /// in that call, its window's listeners after it.
+    pub fn close(&self, app: &AppHandle) {
+        if window::held(app) {
+            window::close(app);
+        }
+        self.close_state();
+    }
+
+    /// The app's state closed: by [`Admin::close`], or by its window's
+    /// close (`admin.window`).
+    fn close_state(&self) {
         lock(&self.wizard).take();
         let mut s = lock(&self.state);
         s.open = false;
         s.filter.clear();
         s.mark = None;
-    }
-
-    /// Whether its application window was opened and not seen closed
-    /// since.
-    fn window_shown(&self) -> bool {
-        lock(&self.state).window_shown
-    }
-
-    fn set_window_shown(&self, shown: bool) {
-        lock(&self.state).window_shown = shown;
     }
 
     /// The scope, section and search shown.
@@ -606,7 +607,7 @@ impl Admin {
             let plain = scope == ValueScope::App && l.origin(&path) == ValueScope::App;
             (l.set(scope, &path, value, &now), plain)
         };
-        match (w, plain) {
+        let set = match (w, plain) {
             (Some(v), true) => {
                 let ty = descriptor(app, &path)?.ty;
                 let v = Value::from_json(ty, &v)?;
@@ -620,7 +621,13 @@ impl Admin {
                 Ok(())
             }
             (None, _) => Ok(()),
+        };
+        // The window mode changed: the window follows in this call
+        // ("Pop out", "Pop in").
+        if set.is_ok() && *id == WINDOW {
+            window::settle(app, self, false);
         }
+        set
     }
 
     /// Whether a setting opted into a host scope: in its declaration
@@ -974,7 +981,7 @@ impl Plugin for AdminPlugin {
         transfer::hooks(&service);
         ctx.service(&ADMIN, service)?;
         if let Some(admin) = ctx.app().service(&ADMIN) {
-            shell::listen_window_close(&ctx.app(), admin);
+            window::listen(&ctx.app(), admin);
         }
         ctx.local_scope(
             SURFACE,
@@ -1041,7 +1048,7 @@ impl Plugin for AdminPlugin {
         ctx.command(
             CommandSpec::new(CMD_CLOSE, "Close settings", "File").hidden(),
             |call| {
-                admin(call)?.close();
+                admin(call)?.close(call.app);
                 Ok(json!({ "open": false }))
             },
         )?;

@@ -477,6 +477,33 @@ impl AppHandle {
         spec: WindowSpec,
         content: impl FnMut(&mut Ui, &mut WindowUi<'_>) + 'static,
     ) -> WindowId {
+        self.open_window_for(spec, None, content).0
+    }
+
+    /// The `window.open` request of an application window its owner asks
+    /// for (ADR 0029): opened, or, open already, brought to the front;
+    /// either way its listeners run now, in their declared order (the
+    /// owner's first), and `window.opened` is said after the last one
+    /// when it opened. What they did, one line each.
+    pub(crate) fn request_window_open(
+        &self,
+        spec: WindowSpec,
+        owner: &str,
+        reason: Reason,
+        content: impl FnMut(&mut Ui, &mut WindowUi<'_>) + 'static,
+    ) -> Vec<String> {
+        self.open_window_for(spec, Some((owner, reason)), content).1
+    }
+
+    /// Opens an application window: asked by its owner on the bus, or
+    /// (`None`) by a path not moved onto its request yet, which only
+    /// reports a window it opened (ADR 0029, slice 4).
+    fn open_window_for(
+        &self,
+        spec: WindowSpec,
+        asked: Option<(&str, Reason)>,
+        content: impl FnMut(&mut Ui, &mut WindowUi<'_>) + 'static,
+    ) -> (WindowId, Vec<String>) {
         MAIN_THREAD.with(|m| {
             if m.get().is_none() {
                 m.set(Some(std::thread::current().id()));
@@ -518,27 +545,47 @@ impl AppHandle {
                 true
             }
         };
+        let mut did = Vec::new();
         if opened {
             REGISTRY.with(|r| {
                 r.borrow_mut()
                     .insert(id.deferred_viewport(), (self.downgrade(), id.clone()))
             });
             self.app_window_opened(id.deferred_viewport());
-            self.publish(
-                "egui_pop",
-                None,
-                "window.opened",
-                json!({ "window": id, "title": spec.title }),
-            );
+        }
+        match asked {
+            // Its owner asked: the request runs, opened or brought to the
+            // front, and `window.opened` follows its last listener.
+            Some((owner, reason)) => {
+                let req = WindowRequest::new(id.as_str(), WindowKind::App, owner, reason);
+                did = self.ask_window_open(req);
+                if opened {
+                    self.publish(
+                        "egui_pop",
+                        None,
+                        "window.opened",
+                        json!({ "window": id, "title": spec.title, "owner": owner, "reason": reason, "did": did }),
+                    );
+                }
+            }
             // Opening is not on its request yet (ADR 0029, slice 4): the
             // registry is told.
-            self.report_window(
-                crate::bus::WindowOpen::ID,
-                WindowRequest::new(id.as_str(), WindowKind::App, "app", Reason::Command),
-            );
+            None if opened => {
+                self.publish(
+                    "egui_pop",
+                    None,
+                    "window.opened",
+                    json!({ "window": id, "title": spec.title }),
+                );
+                self.report_window(
+                    crate::bus::WindowOpen::ID,
+                    WindowRequest::new(id.as_str(), WindowKind::App, "app", Reason::Command),
+                );
+            }
+            None => {}
         }
         self.egui().request_repaint_of(ViewportId::ROOT);
-        id
+        (id, did)
     }
 
     /// Closes an application window (the main one: as its close button
@@ -1124,9 +1171,6 @@ impl AppHandle {
         if ctx.viewport_id() != ViewportId::ROOT {
             return;
         }
-        // The Settings app's window follows the app first: closed from
-        // here, it is not declared again.
-        crate::admin::follow_window(self, ctx);
         let app_id = self.app_id();
         // The application draws each window's frame as the main window's
         // (`frame::window_frame`), or the system draws them all.
