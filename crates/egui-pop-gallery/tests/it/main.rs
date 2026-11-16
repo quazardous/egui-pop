@@ -22,4 +22,5 @@ mod rerun_like;
 mod scenarios;
 mod shot;
 mod viewer_video;
+mod window_drop;
 mod youtube_referrer;

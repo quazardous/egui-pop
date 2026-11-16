@@ -1593,6 +1593,7 @@ dependencies = [
  "egui-pop-viewport",
  "egui-wgpu",
  "egui_kittest",
+ "image",
  "ron",
  "serde",
  "serde_json",

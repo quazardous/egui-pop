@@ -469,6 +469,7 @@ fn a_tab_dragged_out_of_the_main_window_outlines_the_windows_where_positions_are
         m.app().window_drop().is_none(),
         "no window can tell it is under the pointer"
     );
+    assert_eq!(m.app().window_outlines(), [LOG]);
     assert!(
         covering(&m, v) > rest,
         "the detached window outlines itself ({} at rest, {} now)",
@@ -484,4 +485,5 @@ fn a_tab_dragged_out_of_the_main_window_outlines_the_windows_where_positions_are
         rest,
         "the outline goes with the pointer back"
     );
+    assert!(m.app().window_outlines().is_empty());
 }

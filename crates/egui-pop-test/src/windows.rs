@@ -119,6 +119,9 @@ pub struct MultiWindow {
     painted: BTreeMap<ViewportId, bool>,
     /// The shapes each window's last pass painted.
     shapes: BTreeMap<ViewportId, Vec<egui::epaint::ClippedShape>>,
+    /// Every pass's texture changes, in order (the windows share their
+    /// textures, the context's), for a picture of a window.
+    textures: egui::TexturesDelta,
     /// The window invariants a test breaks on purpose.
     allowed: BTreeSet<String>,
     /// The system tells no window's position (Wayland): no inner or
@@ -171,6 +174,7 @@ impl MultiWindow {
             held: BTreeSet::new(),
             painted: BTreeMap::new(),
             shapes: BTreeMap::new(),
+            textures: egui::TexturesDelta::default(),
             allowed: BTreeSet::new(),
             positions_hidden: false,
             seen_broken: 0,
@@ -426,13 +430,33 @@ impl MultiWindow {
         self.shapes.get(&viewport).map_or(&[], Vec::as_slice)
     }
 
+    /// A picture of what a window's last pass painted (feature `wgpu`),
+    /// drawn with the process's wgpu device, the size of the last pass's
+    /// window: take it right after a pass of that window (an immediate
+    /// window's pass runs inside the main one's, so the windows are best
+    /// the same size). For a snapshot, compare it with
+    /// `egui_kittest::try_image_snapshot_options`.
+    #[cfg(feature = "wgpu")]
+    pub fn render(&self, viewport: ViewportId) -> Result<image::RgbaImage, String> {
+        use egui_kittest::TestRenderer as _;
+        let mut renderer = crate::gpu::shared_renderer();
+        renderer.handle_delta(&mut self.textures.clone());
+        let output = egui::FullOutput {
+            shapes: self.shapes(viewport).to_vec(),
+            pixels_per_point: self.ctx.pixels_per_point(),
+            ..Default::default()
+        };
+        renderer.render(&self.ctx, &output)
+    }
+
     fn take_output(&mut self, viewport: ViewportId, mut out: egui::FullOutput) {
         self.painted
             .insert(viewport, out.shapes.iter().any(|s| is_content(&s.shape)));
         self.shapes
             .insert(viewport, std::mem::take(&mut out.shapes));
-        // No painter: the textures are not uploaded anywhere.
-        out.textures_delta.clear();
+        // No painter: the textures are kept for a picture.
+        self.textures
+            .append(std::mem::take(&mut out.textures_delta));
         // A close request is seen by one pass only.
         if let Some(info) = self.info.get_mut(&viewport) {
             info.events.clear();

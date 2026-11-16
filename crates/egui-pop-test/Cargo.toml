@@ -19,7 +19,7 @@ workspace = true
 ## A tile source for the image viewport (`viewport::TestSource`).
 viewport = ["dep:egui-pop-viewport"]
 ## Render with wgpu (snapshots).
-wgpu = ["egui_kittest/wgpu", "dep:egui-wgpu"]
+wgpu = ["egui_kittest/wgpu", "dep:egui-wgpu", "dep:image"]
 ## Compare a scenario's shots as images (with `wgpu`). Off by default: it
 ## pulls egui_kittest's image diffing, a test-only tool.
 snapshot = ["egui_kittest/snapshot"]
@@ -29,6 +29,8 @@ egui-pop-viewport = { workspace = true, optional = true }
 egui.workspace = true
 egui_kittest.workspace = true
 egui-wgpu = { workspace = true, optional = true }
+# The picture `MultiWindow::render` returns (feature `wgpu`).
+image = { workspace = true, optional = true }
 egui-pop-core.workspace = true
 egui-pop-api.workspace = true
 egui-pop-model.workspace = true
