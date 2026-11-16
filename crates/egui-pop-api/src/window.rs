@@ -124,6 +124,38 @@ impl WindowState {
     }
 }
 
+thread_local! {
+    /// The screens a test says (`set_test_screens`), over the system's.
+    static TEST_SCREENS: std::cell::RefCell<Option<Vec<Rect>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The screens, in points, as far as egui-pop knows them: those the event
+/// loop saw at start (`runner::screens`, with the `create-native`
+/// feature); none otherwise. A window's kept place is repaired against
+/// them ([`WindowState::repair`]) before it opens.
+pub fn screens() -> Vec<Rect> {
+    if let Some(s) = TEST_SCREENS.with_borrow(Clone::clone) {
+        return s;
+    }
+    #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
+    {
+        crate::runner::screens()
+    }
+    #[cfg(not(all(feature = "eframe", not(target_arch = "wasm32"))))]
+    {
+        Vec::new()
+    }
+}
+
+/// Says the screens for this thread's windows, in place of the system's
+/// (`None`: the system's again). For headless tests
+/// (`egui_pop_test::windows::MultiWindow::set_screens`).
+#[doc(hidden)]
+pub fn set_test_screens(screens: Option<Vec<Rect>>) {
+    TEST_SCREENS.set(screens);
+}
+
 /// Reads the window's place from a saved settings document.
 pub fn from_settings(doc: &SettingsDoc) -> Option<WindowState> {
     let rect: Vec<f64> = doc

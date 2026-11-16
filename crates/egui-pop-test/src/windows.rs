@@ -32,7 +32,8 @@ use std::sync::Arc;
 
 use egui::{
     Context, DeferredViewportUiCallback, Event, HoveredFile, Id, ImmediateViewport, Key, Modifiers,
-    Pos2, RawInput, Rect, Vec2, ViewportCommand, ViewportEvent, ViewportId, ViewportInfo,
+    Pos2, RawInput, Rect, Vec2, ViewportBuilder, ViewportCommand, ViewportEvent, ViewportId,
+    ViewportInfo,
 };
 use egui_pop_api::{App, AppHandle};
 
@@ -45,6 +46,8 @@ const SIZE: Vec2 = Vec2::new(640.0, 480.0);
 struct Immediate {
     inputs: BTreeMap<ViewportId, RawInput>,
     outputs: Vec<(ViewportId, egui::FullOutput)>,
+    /// The builders the windows shown were given.
+    builders: Vec<(ViewportId, ViewportBuilder)>,
 }
 
 thread_local! {
@@ -66,8 +69,8 @@ fn token_id() -> Id {
 fn render_immediate(ctx: &Context, viewport: ImmediateViewport<'_>) {
     let ImmediateViewport {
         ids,
+        builder,
         mut viewport_ui_cb,
-        ..
     } = viewport;
     let token = ctx.data(|d| d.get_temp::<u64>(token_id()));
     let harness = token.and_then(|t| HARNESSES.with_borrow(|h| h.get(&t).and_then(Weak::upgrade)));
@@ -83,7 +86,9 @@ fn render_immediate(ctx: &Context, viewport: ImmediateViewport<'_>) {
         });
     let out = ctx.run_ui(input, |ui| viewport_ui_cb(ui));
     if let Some(h) = harness {
-        h.borrow_mut().outputs.push((ids.this, out));
+        let mut h = h.borrow_mut();
+        h.outputs.push((ids.this, out));
+        h.builders.push((ids.this, builder));
     }
 }
 
@@ -107,6 +112,8 @@ pub struct MultiWindow {
     files: BTreeMap<ViewportId, Files>,
     /// The commands each window's last pass sent.
     commands: BTreeMap<ViewportId, Vec<ViewportCommand>>,
+    /// The builder each window was last given by the main window's pass.
+    builders: BTreeMap<ViewportId, ViewportBuilder>,
     /// The accessible names each window's last pass gave.
     names: BTreeMap<ViewportId, Vec<String>>,
     /// Each named node's rectangle (in points) and whether it is
@@ -169,6 +176,7 @@ impl MultiWindow {
             queued: BTreeMap::new(),
             files: BTreeMap::new(),
             commands: BTreeMap::new(),
+            builders: BTreeMap::new(),
             names: BTreeMap::new(),
             nodes: BTreeMap::new(),
             held: BTreeSet::new(),
@@ -260,6 +268,34 @@ impl MultiWindow {
             .entry(viewport)
             .or_insert_with(Self::fresh_info)
             .focused = Some(true);
+    }
+
+    /// The builder the main window's last pass gave a window (deferred or
+    /// immediate): the size, position, maximized and full-screen states it
+    /// asks its system window to open with.
+    pub fn builder(&self, viewport: ViewportId) -> Option<ViewportBuilder> {
+        self.builders.get(&viewport).cloned()
+    }
+
+    /// Maximizes or restores a window, as the system would: its input says
+    /// so from its next pass (its size is the test's: [`Self::set_inner_size`]).
+    pub fn set_maximized(&mut self, viewport: ViewportId, on: bool) {
+        let info = self.info.entry(viewport).or_insert_with(Self::fresh_info);
+        info.maximized = Some(on);
+    }
+
+    /// Puts a window in full screen or out of it, as the system would.
+    pub fn set_fullscreen(&mut self, viewport: ViewportId, on: bool) {
+        let info = self.info.entry(viewport).or_insert_with(Self::fresh_info);
+        info.fullscreen = Some(on);
+    }
+
+    /// The screens the system says, in points, for this thread's
+    /// application (`egui_pop_api::window::screens`): a window kept off
+    /// every one of them is brought back onto the first. Forgotten when
+    /// the harness is dropped.
+    pub fn set_screens(&mut self, screens: &[Rect]) {
+        egui_pop_api::window::set_test_screens(Some(screens.to_vec()));
     }
 
     /// Sets a window's inner size, as the system would after a resize; it
@@ -492,6 +528,11 @@ impl MultiWindow {
             }
         }
         if viewport == ViewportId::ROOT {
+            for (v, o) in &out.viewport_output {
+                if *v != ViewportId::ROOT && o.viewport_ui_cb.is_some() {
+                    self.builders.insert(*v, o.builder.clone());
+                }
+            }
             self.declared = out
                 .viewport_output
                 .into_iter()
@@ -538,6 +579,9 @@ impl MultiWindow {
         let shown = {
             let mut im = self.immediate.borrow_mut();
             im.inputs.clear();
+            for (v, b) in std::mem::take(&mut im.builders) {
+                self.builders.insert(v, b);
+            }
             std::mem::take(&mut im.outputs)
         };
         self.shown_immediate = shown.iter().map(|(v, _)| *v).collect();
@@ -574,6 +618,7 @@ impl MultiWindow {
 impl Drop for MultiWindow {
     fn drop(&mut self) {
         HARNESSES.with_borrow_mut(|h| h.remove(&self.token));
+        egui_pop_api::window::set_test_screens(None);
         // Kept for pictures only: never uploaded, nothing to free.
         self.textures.clear();
     }
