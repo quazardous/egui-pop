@@ -6,12 +6,14 @@
 mod order;
 
 use std::any::{Any, TypeId};
-use std::collections::BTreeMap;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{RecvTimeoutError, sync_channel};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
+use std::thread::{self, ThreadId};
 use std::time::{Duration, Instant};
 
 /// The bus contract this kernel implements; its types are re-exported
@@ -19,10 +21,50 @@ use std::time::{Duration, Instant};
 pub use bus_contract;
 pub use bus_contract::{
     Altered, Collected, DEFAULT_DEADLINE, FAILED_FACT, Failure, FailureKind, HookError, LAST,
-    ListenOpts, ListenerInfo, PLUGIN_DEADLINE, Point, PointDecl, PointInfo, PointKind, PointSpec,
-    Refused, declare_all, missing_targets, order_dump,
+    ListenOpts, ListenerInfo, PLUGIN_DEADLINE, PendingRun, Point, PointDecl, PointInfo, PointKind,
+    PointSpec, Refused, declare_all, missing_targets, order_dump,
 };
-use bus_contract::{AnyInput, AnyListener, AnyValue, Bus, CloneFn, FailureSink, FreshFn, PointKey};
+use bus_contract::{
+    AnyInput, AnyListener, AnyLocalListener, AnyValue, Bus, CloneFn, FailureSink, FreshFn,
+    PendingWaker, PointKey,
+};
+
+thread_local! {
+    /// The local listeners registered on this thread, by kernel and
+    /// listener sequence: a kernel is shared between threads, a local
+    /// listener is not.
+    static LOCAL: RefCell<HashMap<(u64, u64), AnyLocalListener>> = RefCell::new(HashMap::new());
+}
+
+/// Kernel ids, unique in the process (the key of [`LOCAL`]).
+static NEXT_KERNEL: AtomicU64 = AtomicU64::new(0);
+
+/// How a listener runs: shared between threads, or local to the thread
+/// that registered it (its closure in that thread's [`LOCAL`]).
+#[derive(Clone)]
+enum Run {
+    Shared(AnyListener),
+    Local(ThreadId),
+}
+
+/// What a queued emit hands its deferred listeners.
+enum Work {
+    /// A copy of the value the emit returned, passed along.
+    Alter(AnyValue, CloneFn),
+    /// A fresh value for each.
+    Collect(FreshFn),
+}
+
+/// An emit's local part, queued for its thread's
+/// [`Bus::run_pending`].
+struct Pending {
+    thread: ThreadId,
+    point: &'static str,
+    input: AnyInput,
+    work: Work,
+    entries: Vec<Arc<Entry>>,
+    deadline: Duration,
+}
 
 /// A point's listeners in order, the point's deadline, and the failures
 /// known before running.
@@ -32,7 +74,9 @@ struct Entry {
     id: String,
     opts: ListenOpts,
     seq: u64,
-    run: AnyListener,
+    run: Run,
+    /// Unlistened or forgotten: a queued run skips it.
+    removed: AtomicBool,
     runs: AtomicU64,
     failures: AtomicU64,
     last_failure: Mutex<Option<String>>,
@@ -92,8 +136,16 @@ impl Slot {
 /// introspection. `Send + Sync`: share it in an `Arc`. Listeners run with
 /// no lock held, so a listener may emit or listen itself.
 pub struct Kernel {
+    /// Its key in each thread's local listeners.
+    id: u64,
     points: RwLock<BTreeMap<&'static str, Slot>>,
     sinks: RwLock<Vec<FailureSink>>,
+    wakers: RwLock<Vec<PendingWaker>>,
+    /// Local parts of emits made on another thread than theirs.
+    pending: Mutex<Vec<Pending>>,
+    /// Local listeners removed from another thread than theirs: their
+    /// closures are dropped on their thread, at its next local call.
+    dropped: Mutex<Vec<(ThreadId, u64)>>,
     default_deadline: Duration,
     seq: AtomicU64,
 }
@@ -124,8 +176,12 @@ impl Kernel {
     /// An empty kernel with another default deadline.
     pub fn with_default_deadline(deadline: Duration) -> Kernel {
         Kernel {
+            id: NEXT_KERNEL.fetch_add(1, Ordering::Relaxed),
             points: RwLock::new(BTreeMap::new()),
             sinks: RwLock::new(Vec::new()),
+            wakers: RwLock::new(Vec::new()),
+            pending: Mutex::new(Vec::new()),
+            dropped: Mutex::new(Vec::new()),
             default_deadline: deadline,
             seq: AtomicU64::new(0),
         }
@@ -190,6 +246,67 @@ impl Kernel {
         opts: ListenOpts,
         run: AnyListener,
     ) -> Result<(), Refused> {
+        self.add(key, id, opts, Run::Shared(run)).map(|_| ())
+    }
+
+    /// Registers a local listener on `P` under `id`, bound to the calling
+    /// thread: it may hold state that is not `Send`. It takes its place
+    /// in the point's order; an emit from another thread queues it for
+    /// this thread's [`Kernel::run_pending`].
+    pub fn listen_local<P: Point>(
+        &self,
+        id: impl Into<String>,
+        opts: ListenOpts,
+        run: impl Fn(&P::Input, &mut P::Value) -> Result<(), HookError> + 'static,
+    ) -> Result<(), Refused> {
+        self.listen_local_any(
+            PointKey::of::<P>(),
+            id.into(),
+            opts,
+            bus_contract::erase_local::<P>(run),
+        )
+    }
+
+    /// Registers an erased local listener by its point's key
+    /// ([`Bus::listen_local_any`]).
+    pub fn listen_local_any(
+        &self,
+        key: PointKey,
+        id: String,
+        opts: ListenOpts,
+        run: AnyLocalListener,
+    ) -> Result<(), Refused> {
+        if opts.threaded {
+            return Err(Refused::Threaded {
+                point: key.id,
+                listener: id,
+            });
+        }
+        self.drop_removed_locals();
+        // The closure goes in first: an emit on another thread may run
+        // as soon as the entry is in its slot, and only queues it.
+        let seq = self.seq.fetch_add(1, Ordering::Relaxed);
+        LOCAL.with(|l| l.borrow_mut().insert((self.id, seq), run));
+        let added = self.add_with_seq(key, id, opts, Run::Local(thread::current().id()), seq);
+        if added.is_err() {
+            LOCAL.with(|l| l.borrow_mut().remove(&(self.id, seq)));
+        }
+        added
+    }
+
+    fn add(&self, key: PointKey, id: String, opts: ListenOpts, run: Run) -> Result<(), Refused> {
+        let seq = self.seq.fetch_add(1, Ordering::Relaxed);
+        self.add_with_seq(key, id, opts, run, seq)
+    }
+
+    fn add_with_seq(
+        &self,
+        key: PointKey,
+        id: String,
+        opts: ListenOpts,
+        run: Run,
+        seq: u64,
+    ) -> Result<(), Refused> {
         let mut points = self.write();
         let slot = points.entry(key.id).or_insert_with(|| Slot::new(&key));
         if slot.type_id != key.type_id {
@@ -205,8 +322,9 @@ impl Kernel {
         entries.push(Arc::new(Entry {
             id,
             opts,
-            seq: self.seq.fetch_add(1, Ordering::Relaxed),
+            seq,
             run,
+            removed: AtomicBool::new(false),
             runs: AtomicU64::new(0),
             failures: AtomicU64::new(0),
             last_failure: Mutex::new(None),
@@ -224,36 +342,196 @@ impl Kernel {
         let Some(slot) = points.get_mut(point) else {
             return false;
         };
-        let before = slot.ordered.len();
-        let entries: Vec<_> = slot
-            .ordered
-            .iter()
-            .filter(|e| e.id != id)
-            .cloned()
-            .collect();
-        let removed = entries.len() != before;
+        let (kept, gone): (Vec<_>, Vec<_>) = slot.ordered.iter().cloned().partition(|e| e.id != id);
         // Removing a listener cannot close a cycle.
-        let _ = slot.set(entries);
-        removed
+        let _ = slot.set(kept);
+        drop(points);
+        self.removed(&gone);
+        !gone.is_empty()
+    }
+
+    /// Marks removed entries so a queued run skips them, and drops the
+    /// closures of local ones (now on this thread, later on another).
+    fn removed(&self, gone: &[Arc<Entry>]) {
+        let here = thread::current().id();
+        for entry in gone {
+            entry.removed.store(true, Ordering::Relaxed);
+            if let Run::Local(thread) = entry.run {
+                if thread == here {
+                    let _ = LOCAL.try_with(|l| l.borrow_mut().remove(&(self.id, entry.seq)));
+                } else {
+                    self.dropped
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .push((thread, entry.seq));
+                }
+            }
+        }
+    }
+
+    /// Drops this thread's closures of local listeners removed from
+    /// another thread.
+    fn drop_removed_locals(&self) {
+        let here = thread::current().id();
+        let mine: Vec<u64> = {
+            let mut dropped = self.dropped.lock().unwrap_or_else(PoisonError::into_inner);
+            if dropped.is_empty() {
+                return;
+            }
+            let (mine, rest) = std::mem::take(&mut *dropped)
+                .into_iter()
+                .partition(|(t, _)| *t == here);
+            *dropped = rest;
+            mine.into_iter().map(|(_, seq)| seq).collect()
+        };
+        LOCAL.with(|l| {
+            let mut l = l.borrow_mut();
+            for seq in mine {
+                l.remove(&(self.id, seq));
+            }
+        });
     }
 
     /// Removes every listener of `owner`, on every point (a plugin
     /// uninstalled, a module switched off); how many were removed.
     pub fn forget(&self, owner: &str) -> usize {
         let mut points = self.write();
-        let mut removed = 0;
+        let mut gone = Vec::new();
         for slot in points.values_mut() {
-            let before = slot.ordered.len();
-            let entries: Vec<_> = slot
+            let (kept, out): (Vec<_>, Vec<_>) = slot
                 .ordered
                 .iter()
-                .filter(|e| e.opts.owner.as_deref() != Some(owner))
+                .cloned()
+                .partition(|e| e.opts.owner.as_deref() != Some(owner));
+            if !out.is_empty() {
+                gone.extend(out);
+                let _ = slot.set(kept);
+            }
+        }
+        drop(points);
+        self.removed(&gone);
+        gone.len()
+    }
+
+    /// Adds a waker called, with the thread's id, when an emit queues
+    /// local listeners for that thread. A waker that panics is ignored.
+    pub fn on_pending(&self, wake: impl Fn(ThreadId) + Send + Sync + 'static) {
+        self.add_pending_waker(Arc::new(wake));
+    }
+
+    fn add_pending_waker(&self, wake: PendingWaker) {
+        self.wakers
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(wake);
+    }
+
+    /// Queues an emit's deferred local listeners, one queued emit per
+    /// thread, and calls the wakers.
+    fn defer(
+        &self,
+        point: &'static str,
+        input: &AnyInput,
+        deferred: Vec<Arc<Entry>>,
+        deadline: Duration,
+        work: impl Fn() -> Work,
+    ) {
+        let mut threads: Vec<ThreadId> = Vec::new();
+        for e in &deferred {
+            if let Run::Local(t) = e.run
+                && !threads.contains(&t)
+            {
+                threads.push(t);
+            }
+        }
+        for thread in threads {
+            let entries = deferred
+                .iter()
+                .filter(|e| matches!(e.run, Run::Local(t) if t == thread))
                 .cloned()
                 .collect();
-            removed += before - entries.len();
-            let _ = slot.set(entries);
+            self.pending
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(Pending {
+                    thread,
+                    point,
+                    input: input.clone(),
+                    work: work(),
+                    entries,
+                    deadline,
+                });
+            let wakers: Vec<PendingWaker> = self
+                .wakers
+                .read()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone();
+            for wake in wakers {
+                let _ = catch_unwind(AssertUnwindSafe(|| wake(thread)));
+            }
         }
-        removed
+    }
+
+    /// Runs the local listeners queued for the calling thread by emits on
+    /// other threads, emit by emit in the order they were queued
+    /// ([`Bus::run_pending`]). A listener removed since is skipped.
+    pub fn run_pending(&self) -> Vec<PendingRun> {
+        self.drop_removed_locals();
+        let here = thread::current().id();
+        let mine: Vec<Pending> = {
+            let mut pending = self.pending.lock().unwrap_or_else(PoisonError::into_inner);
+            if pending.is_empty() {
+                return Vec::new();
+            }
+            let (mine, rest) = std::mem::take(&mut *pending)
+                .into_iter()
+                .partition(|p| p.thread == here);
+            *pending = rest;
+            mine
+        };
+        mine.into_iter().map(|p| self.run_queued(p)).collect()
+    }
+
+    fn run_queued(&self, p: Pending) -> PendingRun {
+        let mut ran = Vec::new();
+        let mut failures = Vec::new();
+        let (mut value, fresh) = match p.work {
+            Work::Alter(value, clone) => (Some((value, clone)), None),
+            Work::Collect(fresh) => (None, Some(fresh)),
+        };
+        for entry in &p.entries {
+            if entry.removed.load(Ordering::Relaxed) {
+                continue;
+            }
+            let v = match (&value, fresh) {
+                (Some((v, clone)), _) => clone(&**v),
+                (None, Some(fresh)) => fresh(),
+                (None, None) => continue,
+            };
+            ran.push(entry.id.clone());
+            match self.call(
+                p.point,
+                entry,
+                &p.input,
+                v,
+                entry.opts.deadline.unwrap_or(p.deadline),
+            ) {
+                Some(Ok(v)) => {
+                    if let Some((old, _)) = &mut value {
+                        *old = v;
+                    }
+                }
+                Some(Err(kind)) => failures.push(self.failed(p.point, entry, kind)),
+                None => {
+                    ran.pop();
+                }
+            }
+        }
+        PendingRun {
+            point: p.point,
+            ran,
+            failures,
+        }
     }
 
     /// Adds a sink called with each failure that dropped a contribution
@@ -298,19 +576,35 @@ impl Kernel {
     ) -> Altered<AnyValue> {
         let (entries, deadline, mut failures) = self.snapshot(&key);
         let mut value = value;
+        let mut deferred = Vec::new();
         for entry in &entries {
-            match call(
+            if entry.elsewhere() {
+                deferred.push(entry.clone());
+                continue;
+            }
+            match self.call(
                 key.id,
                 entry,
                 &input,
                 clone(&*value),
                 entry.opts.deadline.unwrap_or(deadline),
             ) {
-                Ok(v) => value = v,
-                Err(kind) => failures.push(self.failed(key.id, entry, kind)),
+                Some(Ok(v)) => value = v,
+                Some(Err(kind)) => failures.push(self.failed(key.id, entry, kind)),
+                None => {}
             }
         }
-        Altered { value, failures }
+        let ids = deferred.iter().map(|e| e.id.clone()).collect();
+        if !deferred.is_empty() {
+            self.defer(key.id, &input, deferred, deadline, || {
+                Work::Alter(clone(&*value), clone)
+            });
+        }
+        Altered {
+            value,
+            failures,
+            deferred: ids,
+        }
     }
 
     fn collect_erased(
@@ -321,19 +615,33 @@ impl Kernel {
     ) -> Collected<AnyValue> {
         let (entries, deadline, mut failures) = self.snapshot(&key);
         let mut parts = Vec::with_capacity(entries.len());
+        let mut deferred = Vec::new();
         for entry in &entries {
-            match call(
+            if entry.elsewhere() {
+                deferred.push(entry.clone());
+                continue;
+            }
+            match self.call(
                 key.id,
                 entry,
                 &input,
                 fresh(),
                 entry.opts.deadline.unwrap_or(deadline),
             ) {
-                Ok(v) => parts.push((entry.id.clone(), v)),
-                Err(kind) => failures.push(self.failed(key.id, entry, kind)),
+                Some(Ok(v)) => parts.push((entry.id.clone(), v)),
+                Some(Err(kind)) => failures.push(self.failed(key.id, entry, kind)),
+                None => {}
             }
         }
-        Collected { parts, failures }
+        let ids = deferred.iter().map(|e| e.id.clone()).collect();
+        if !deferred.is_empty() {
+            self.defer(key.id, &input, deferred, deadline, || Work::Collect(fresh));
+        }
+        Collected {
+            parts,
+            failures,
+            deferred: ids,
+        }
     }
 
     /// The listeners of a point in order, the point's deadline, and the
@@ -443,6 +751,7 @@ impl Kernel {
                     priority: e.opts.priority,
                     deadline: e.opts.deadline.unwrap_or(deadline),
                     threaded: e.opts.threaded,
+                    local: matches!(e.run, Run::Local(_)),
                     missing: slot
                         .missing
                         .iter()
@@ -462,19 +771,81 @@ impl Kernel {
     }
 }
 
-/// Runs one listener on `value`, inline or on its own thread, within its
-/// deadline, panics caught.
-fn call(
-    point: &'static str,
-    entry: &Entry,
+impl Entry {
+    /// A local listener bound to another thread than the caller's.
+    fn elsewhere(&self) -> bool {
+        matches!(self.run, Run::Local(t) if t != thread::current().id())
+    }
+}
+
+impl Kernel {
+    /// Runs one listener on `value`, on this thread or its own, within
+    /// its deadline, panics caught; `None` for a local listener whose
+    /// closure this thread does not hold (removed meanwhile).
+    fn call(
+        &self,
+        point: &'static str,
+        entry: &Entry,
+        input: &AnyInput,
+        value: AnyValue,
+        deadline: Duration,
+    ) -> Option<Result<AnyValue, FailureKind>> {
+        let shared = match &entry.run {
+            Run::Shared(run) => run,
+            Run::Local(_) => {
+                // Taken out of the cell first: the listener may emit or
+                // listen.
+                let run = LOCAL.with(|l| l.borrow().get(&(self.id, entry.seq)).cloned())?;
+                entry.runs.fetch_add(1, Ordering::Relaxed);
+                return Some(timed(&*run, input, value, deadline));
+            }
+        };
+        entry.runs.fetch_add(1, Ordering::Relaxed);
+        Some(call(point, entry, shared, input, value, deadline))
+    }
+}
+
+impl Drop for Kernel {
+    /// Drops this thread's local listeners of the kernel; another
+    /// thread's go when that thread ends.
+    fn drop(&mut self) {
+        let id = self.id;
+        let _ = LOCAL.try_with(|l| l.borrow_mut().retain(|(k, _), _| *k != id));
+    }
+}
+
+/// Runs a listener inline, late once it returns past its deadline.
+fn timed(
+    run: &dyn Fn(&(dyn Any + Send + Sync), &mut (dyn Any + Send)) -> Result<(), HookError>,
     input: &AnyInput,
     value: AnyValue,
     deadline: Duration,
 ) -> Result<AnyValue, FailureKind> {
-    entry.runs.fetch_add(1, Ordering::Relaxed);
+    let start = Instant::now();
+    let result = guarded(run, &**input, value);
+    let took = start.elapsed();
+    match result {
+        Ok(_) if took > deadline => Err(FailureKind::Late {
+            deadline,
+            took: Some(took),
+        }),
+        r => r,
+    }
+}
+
+/// Runs one shared listener on `value`, inline or on its own thread,
+/// within its deadline, panics caught.
+fn call(
+    point: &'static str,
+    entry: &Entry,
+    run: &AnyListener,
+    input: &AnyInput,
+    value: AnyValue,
+    deadline: Duration,
+) -> Result<AnyValue, FailureKind> {
     if !entry.opts.threaded {
         let start = Instant::now();
-        let result = guarded(&entry.run, &**input, value);
+        let result = guarded(&**run, &**input, value);
         let took = start.elapsed();
         return match result {
             Ok(_) if took > deadline => Err(FailureKind::Late {
@@ -485,13 +856,13 @@ fn call(
         };
     }
     let (tx, rx) = sync_channel(1);
-    let run = entry.run.clone();
+    let run = run.clone();
     let input = input.clone();
     let spawned = std::thread::Builder::new()
         .name(format!("hook {point} {}", entry.id))
         .spawn(move || {
             // The emit may have stopped waiting: then nobody receives.
-            let _ = tx.send(guarded(&run, &*input, value));
+            let _ = tx.send(guarded(&*run, &*input, value));
         });
     if let Err(e) = spawned {
         return Err(FailureKind::Error(format!(
@@ -511,7 +882,7 @@ fn call(
 }
 
 fn guarded(
-    run: &AnyListener,
+    run: &dyn Fn(&(dyn Any + Send + Sync), &mut (dyn Any + Send)) -> Result<(), HookError>,
     input: &(dyn Any + Send + Sync),
     mut value: AnyValue,
 ) -> Result<AnyValue, FailureKind> {
@@ -545,6 +916,24 @@ impl Bus for Kernel {
         run: AnyListener,
     ) -> Result<(), Refused> {
         Kernel::listen_any(self, point, id, opts, run)
+    }
+
+    fn listen_local_any(
+        &self,
+        point: PointKey,
+        id: String,
+        opts: ListenOpts,
+        run: AnyLocalListener,
+    ) -> Result<(), Refused> {
+        Kernel::listen_local_any(self, point, id, opts, run)
+    }
+
+    fn run_pending(&self) -> Vec<PendingRun> {
+        Kernel::run_pending(self)
+    }
+
+    fn add_pending_waker(&self, wake: PendingWaker) {
+        Kernel::add_pending_waker(self, wake);
     }
 
     fn unlisten(&self, point: &str, id: &str) -> bool {

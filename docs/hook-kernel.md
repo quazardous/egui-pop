@@ -111,6 +111,15 @@ assert!(report.failures.is_empty());
   (`egui_pop_hooks::FAILED_FACT`) or logs them.
 - Listeners may call the kernel again (re-entry), and emits may come
   from several threads: the kernel is `Send + Sync`.
+- **Local listeners** (`listen_local::<P>`) hold state that is not
+  `Send` (an interface's `Rc<RefCell<…>>`). Each is bound to the thread
+  that registered it and takes its place in the same order as the
+  others. An emit on that thread runs it inline; an emit from another
+  thread runs the others, queues it (`Altered::deferred`,
+  `Collected::deferred`) and calls the `on_pending` wakers; the thread
+  runs the queue in order with `run_pending()`. egui-pop's application
+  calls `AppHandle::run_pending` once per pass, before the `On::Pass`
+  handlers, and asks for a pass when work is queued.
 
 ## Accessibility
 
@@ -131,4 +140,7 @@ priority and registration; cycles refused; missing targets; duplicate
 ids and mismatched types; `alter` keeping only successful edits;
 `collect` in order; inline and threaded deadlines and their resolution;
 sinks; introspection; `forget` and `unlisten`; re-entry and emits across
-threads. The README's examples run as doc tests.
+threads; local listeners in order, deferred from another thread, removed
+from any thread. `crates/egui-pop-api/tests/app_bus.rs`: a local listener
+on `window.close` in its place, and run at the next pass when the
+request comes from a worker. The README's examples run as doc tests.
