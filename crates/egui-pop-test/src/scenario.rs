@@ -221,8 +221,11 @@ pub mod invariants {
     pub const FRAME_BUDGET: &str = "FrameBudget";
     /// An i18n key showed untranslated.
     pub const NO_MISSING_TEXT: &str = "NoMissingText";
+    /// A window invariant broke (`window.invariant` on the journal: the
+    /// registry disagrees with what is on screen, ADR 0029).
+    pub const WINDOW_INVARIANTS: &str = "WindowInvariants";
     /// Every built-in invariant.
-    pub const ALL: [&str; 7] = [
+    pub const ALL: [&str; 8] = [
         NO_ERROR_TOAST,
         NO_FAILED_COMMAND,
         NO_UNKNOWN_COMMAND,
@@ -230,6 +233,7 @@ pub mod invariants {
         STABLE_WINDOWS,
         FRAME_BUDGET,
         NO_MISSING_TEXT,
+        WINDOW_INVARIANTS,
     ];
 }
 use invariants::*;
@@ -869,6 +873,19 @@ impl Run<'_> {
                 Ok(())
             } else {
                 Err(format!("command.failed: {failed:?}"))
+            },
+        )?;
+        let windows: Vec<String> = events
+            .iter()
+            .filter(|e| e.name == "window.invariant")
+            .map(|e| e.data.to_string())
+            .collect();
+        check(
+            WINDOW_INVARIANTS,
+            if windows.is_empty() {
+                Ok(())
+            } else {
+                Err(format!("window.invariant: {windows:?}"))
             },
         )?;
         check(

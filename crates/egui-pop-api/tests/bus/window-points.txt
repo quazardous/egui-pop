@@ -14,5 +14,7 @@ window.reparent
   2. window.invariants (owner egui_pop): last
 popup.open
   1. window.registry (owner egui_pop): nothing
+  2. window.invariants (owner egui_pop): last
 popup.close
   1. window.registry (owner egui_pop): nothing
+  2. window.invariants (owner egui_pop): last

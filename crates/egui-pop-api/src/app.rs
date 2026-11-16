@@ -5081,7 +5081,7 @@ impl App {
         b.register(
             FnCollector::new(
                 "bus",
-                "The bus (ADR 0029): each window and popup point with its listeners in the order they run (owner, after, before, priority, missing targets, runs, failures), the order as text, and the window registry (`windows.list`).",
+                "The bus (ADR 0029): each window and popup point with its listeners in the order they run (owner, after, before, priority, missing targets, runs, failures), the order as text, the window registry (`windows.list`), and the window invariants broken now and said.",
             )
             .snapshot(move |_| {
                 let Ok(app) = up(&w) else { return Json::Null };
@@ -5110,7 +5110,7 @@ impl App {
                         json!({ "point": p, "listeners": listeners })
                     })
                     .collect();
-                json!({ "points": points, "order": app.bus_order_of(&crate::bus::POINTS), "windows": app.windows_list() })
+                json!({ "points": points, "order": app.bus_order_of(&crate::bus::POINTS), "windows": app.windows_list(), "invariants": { "broken_now": app.invariants_broken_now(), "said": app.broken_invariants() } })
             }),
         )
         .expect("distinct names");
