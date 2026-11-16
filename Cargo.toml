@@ -115,11 +115,9 @@ image = { version = "0.25", default-features = false }
 # sash and grip labels, snapping and folding by drag; 0.25.6 the dismissal
 # the host decides (`LayoutArea::flyout_dismiss`, `over_dismiss`, `inside`)
 # and the resize edge of a zone lying over; 0.25.7 title drags in sections
-# sized by their content (`Sections::fill(false)`).
-# From git until egui_stack's next release: the tab group dragged whole
-# (`DockArea::dragged_node`). crates.io refuses git dependencies: back to a
-# plain version before egui-pop is published.
-egui_stack = { version = "0.25.11", git = "https://github.com/quazardous/egui_stack", rev = "91904bb716d5874af2a61e74989b652d2e817cf9", default-features = false }
+# sized by their content (`Sections::fill(false)`); 0.25.12 the tab group
+# dragged whole (`DockArea::dragged_node`, `DockState::move_node`).
+egui_stack = { version = "0.25.12", default-features = false }
 egui-pop = { version = "0.11.0", path = "crates/egui-pop" }
 
 [workspace.lints.rust]
