@@ -670,7 +670,7 @@ impl Plugin for TrayPlugin {
                 match e {
                     Event::Click(button) => {
                         app.step(&STEP_ACTIVATE, json!({ "button": button }), |app, args| {
-                            crate::window::raise(&app.egui());
+                            crate::window::raise_app(app);
                             Ok(json!({ "raised": true, "button": args["button"] }))
                         });
                     }

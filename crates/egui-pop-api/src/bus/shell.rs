@@ -142,7 +142,12 @@ pub(super) fn install(kernel: &dyn Bus, registry: &Arc<Mutex<Registry>>) {
             let Some(app) = asking() else { return Ok(()) };
             // The content moved in is the one worked in; the main window
             // asked to its front is too.
-            app.set_active_window(ViewportId::ROOT);
+            app.request_window_activate(WindowRequest::new(
+                WindowId::MAIN,
+                WindowKind::Main,
+                OWNER,
+                Reason::System,
+            ));
             did.push(format!("{FOCUS}: the main window is active"));
             Ok(())
         }),

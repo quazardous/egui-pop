@@ -286,10 +286,7 @@ pub(crate) struct Entry {
     shell_bars: bool,
     pub(crate) geometry: Option<Geometry>,
     pub(crate) focused: Option<bool>,
-    /// When it was last worked in (a tick, larger is later).
-    pub(crate) last_active: u64,
     dispatcher: Option<KeyDispatcher>,
-    raise: bool,
     pub(crate) closed: bool,
 }
 
@@ -304,7 +301,6 @@ pub(crate) struct Root {
     pub(crate) title: Option<String>,
     sent_title: Option<String>,
     content: Option<Content>,
-    pub(crate) last_active: u64,
     pub(crate) geometry: Option<Geometry>,
     /// The main window's own title, kept while a window's content holds
     /// it, given back when the shell comes back.
@@ -321,7 +317,6 @@ pub(crate) struct Windows {
     /// The windows other than the main one, in opening order.
     pub(crate) entries: Vec<Entry>,
     saved: Option<BTreeMap<String, Geometry>>,
-    tick: u64,
     /// The main window was asked to its front while a window's content
     /// holds it: that content goes back to a window of its own at the
     /// main window's next pass.
@@ -345,7 +340,6 @@ impl Default for Windows {
                 title: None,
                 sent_title: None,
                 content: None,
-                last_active: 0,
                 geometry: None,
                 home_title: None,
                 min_size: None,
@@ -353,7 +347,6 @@ impl Default for Windows {
             },
             entries: Vec::new(),
             saved: None,
-            tick: 0,
             going_home: false,
             quitting: false,
             moved_places: Vec::new(),
@@ -363,11 +356,6 @@ impl Default for Windows {
 }
 
 impl Windows {
-    fn next_tick(&mut self) -> u64 {
-        self.tick += 1;
-        self.tick
-    }
-
     pub(crate) fn entry(&self, id: &WindowId) -> Option<&Entry> {
         self.entries.iter().find(|e| &e.id == id && !e.closed)
     }
@@ -387,13 +375,6 @@ impl Windows {
             return Some(ViewportId::ROOT);
         }
         self.entry(id).map(|e| e.id.deferred_viewport())
-    }
-
-    /// The windows other than the main one, worked in last first.
-    fn others_by_recency(&self) -> Vec<WindowId> {
-        let mut open: Vec<&Entry> = self.entries.iter().filter(|e| !e.closed).collect();
-        open.sort_by_key(|e| std::cmp::Reverse(e.last_active));
-        open.into_iter().map(|e| e.id.clone()).collect()
     }
 }
 
@@ -516,15 +497,11 @@ impl AppHandle {
         let id = spec.id.clone();
         let opened = {
             let mut w = self.windows_mut();
-            if w.root.id == id {
-                false
-            } else if let Some(e) = w.entry_mut(&id) {
-                e.raise = true;
+            if w.root.id == id || w.entry(&id).is_some() {
                 false
             } else {
                 self.load_geometry(&mut w);
                 let saved = w.saved.as_ref().and_then(|s| s.get(id.as_str()).copied());
-                let tick = w.next_tick();
                 let first = match saved {
                     Some(g) => (Some(Vec2::from(g.size)), g.position, g.maximized),
                     None => (spec.size, None, false),
@@ -541,9 +518,7 @@ impl AppHandle {
                     shell_bars: spec.shell_bars,
                     geometry: saved,
                     focused: None,
-                    last_active: tick,
                     dispatcher: Some(KeyDispatcher::new()),
-                    raise: false,
                     closed: false,
                 });
                 true
@@ -559,7 +534,12 @@ impl AppHandle {
         // The request runs, opened or brought to the front, and
         // `window.opened` follows its last listener.
         let req = WindowRequest::new(id.as_str(), WindowKind::App, owner, reason);
-        let did = self.ask_window_open(req);
+        let mut did = self.ask_window_open(req);
+        if !opened && self.windows_ref().entry(&id).is_some() {
+            // Open already: brought to the front.
+            self.raise_viewport(id.deferred_viewport(), owner);
+            did.push(format!("{}: brought to the front", crate::bus::RAISE));
+        }
         if opened {
             self.publish(
                 "egui_pop",
@@ -613,27 +593,6 @@ impl AppHandle {
         ))
     }
 
-    /// `window.focus`'s part: when the window closing is the active one,
-    /// the window worked in before it becomes active (the main window, or
-    /// another application window). Whether the active window moved.
-    pub(crate) fn focus_before_close(&self, id: &WindowId) -> bool {
-        let closing = id.deferred_viewport();
-        if self.active_window() != closing {
-            return false;
-        }
-        let next = {
-            let w = self.windows_ref();
-            w.entries
-                .iter()
-                .filter(|e| !e.closed && &e.id != id)
-                .filter(|e| e.last_active > w.root.last_active)
-                .max_by_key(|e| e.last_active)
-                .map_or(ViewportId::ROOT, |e| e.id.deferred_viewport())
-        };
-        self.set_active_window(next);
-        true
-    }
-
     /// `window.place`'s part: a closed window's place, kept to be written
     /// with the others. Whether there was one.
     pub(crate) fn keep_closing_place(&self, id: &WindowId) -> bool {
@@ -672,17 +631,14 @@ impl AppHandle {
                 // at the main window's next pass.
                 w.going_home = true;
                 Some(ViewportId::ROOT)
-            } else if let Some(e) = w.entry_mut(id) {
-                e.raise = true;
-                Some(e.id.deferred_viewport())
             } else {
-                None
+                w.entry(id).map(|e| e.id.deferred_viewport())
             }
         };
+        // `window.activate` (`command`): the registry holds it as the
+        // active window, `window.raise` brings it to the front.
         if let Some(v) = viewport {
-            let ctx = self.egui();
-            ctx.send_viewport_cmd_to(v, ViewportCommand::Focus);
-            ctx.request_repaint_of(v);
+            self.raise_viewport(v, "app");
         }
         if self.windows_ref().root.content.is_some() {
             self.ask_home();
@@ -882,7 +838,10 @@ impl AppHandle {
     /// The window a close of the main window moves into it: the one
     /// worked in last, when one is open.
     pub(crate) fn window_to_move_in(&self) -> Option<WindowId> {
-        self.windows_ref().others_by_recency().into_iter().next()
+        self.app_windows_by_recency()
+            .into_iter()
+            .map(|id| WindowId::new(&id))
+            .find(|id| self.windows_ref().entry(id).is_some())
     }
 
     /// `window.registry`'s part of a `window.reparent` into the main
@@ -924,7 +883,6 @@ impl AppHandle {
             w.root.shell_bars = e.shell_bars;
             w.root.sent_title = None;
             w.root.content = e.content;
-            w.root.last_active = e.last_active;
             (left, e.id, kept, geometry)
         };
         let (left, id, kept, geometry) = moved;
@@ -1046,7 +1004,6 @@ impl AppHandle {
                 Some(g) => (Some(Vec2::from(g.size)), g.position, g.maximized),
                 None => (None, None, false),
             };
-            let tick = w.next_tick();
             w.entries.retain(|e| e.id != id);
             w.entries.push(Entry {
                 id: id.clone(),
@@ -1058,13 +1015,9 @@ impl AppHandle {
                 shell_bars,
                 geometry: saved,
                 focused: None,
-                last_active: tick,
                 dispatcher: Some(KeyDispatcher::new()),
-                raise: false,
                 closed: false,
             });
-            // The main window, asked to the front, is the one worked in.
-            w.root.last_active = w.next_tick();
             (home, id, title, home_geometry)
         };
         let (home, id, title, home_geometry) = back;
@@ -1113,11 +1066,6 @@ impl AppHandle {
             if ctx.input(|i| i.viewport().close_requested()) {
                 self.keep_geometry(&id, g);
             }
-        }
-        if ctx.input(|i| i.viewport().focused == Some(true)) {
-            let mut w = self.windows_mut();
-            let t = w.next_tick();
-            w.root.last_active = t;
         }
         let content = self.windows_mut().root.content.take();
         let drawn = match content {
@@ -1335,9 +1283,8 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
     let _group = enter_group(Some(viewport));
     let ctx = ui.ctx().clone();
     let own_window = class != ViewportClass::EmbeddedWindow;
-    let (content, title, raise, bars) = {
+    let (content, title, bars) = {
         let mut w = app.windows_mut();
-        let tick = w.next_tick();
         let Some(e) = w.entry_mut(&id) else {
             drop(w);
             crate::paint_guard::orphan_pass(ui, viewport, "its window is closed");
@@ -1348,26 +1295,20 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
         };
         if own_window {
             e.focused = ctx.input(|i| i.viewport().focused);
-            if e.focused == Some(true) {
-                e.last_active = tick;
-            }
             if let Some(g) = read_geometry(&ctx) {
                 e.geometry = Some(g);
             }
         }
-        let raise = std::mem::take(&mut e.raise);
-        (content, e.title.clone(), raise, e.shell_bars)
+        (content, e.title.clone(), e.shell_bars)
     };
     let mut content = content;
     if own_window {
         app.note_window(&ctx);
         crate::bus::files::begin_pass(&ctx, id.as_str());
-        egui_pop_core::overlay::block_window_among(&ctx, &|v| v == viewport);
+        app.block_window(&ctx, &|v| v == viewport);
         egui_pop_core::overlay::begin_pass(&ctx);
         app.dispatch_window_keys(&ctx, &id);
-        if raise {
-            ctx.send_viewport_cmd(ViewportCommand::Focus);
-        }
+        app.raise_in_pass(&ctx);
     }
     if let Some((from, to)) = egui_pop_core::scale::changed(&ctx) {
         app.publish(

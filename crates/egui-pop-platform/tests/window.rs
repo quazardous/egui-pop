@@ -1,15 +1,21 @@
 //! `window::raise`'s contract: the commands it sends the main window,
-//! read from a frame's output on a bare context. Whether the session is
+//! read from a frame's output on a bare context; in an application,
+//! `window::raise_app` asks the bus's `window.activate` of the main
+//! window, whose `window.raise` listener sends the same. Whether the session is
 //! a Wayland one is read from the environment: the attention request
 //! is checked against `wayland()`, whatever it says here. What the
 //! window manager then does with the commands needs a display and is
 //! not tested.
 
 use egui::{Context, RawInput, UserAttentionType, ViewportCommand, ViewportId};
-use egui_pop_platform::window::{raise, wayland};
+use egui_pop_api::App;
+use egui_pop_platform::window::{OWNER, raise, raise_app, wayland};
 
-fn commands(mut f: impl FnMut(&Context)) -> (Vec<ViewportCommand>, bool) {
-    let ctx = Context::default();
+fn commands(f: impl FnMut(&Context)) -> (Vec<ViewportCommand>, bool) {
+    commands_on(&Context::default(), f)
+}
+
+fn commands_on(ctx: &Context, mut f: impl FnMut(&Context)) -> (Vec<ViewportCommand>, bool) {
     // egui's own first frame sends the theme: past it, only what `f` sends.
     ctx.run_ui(RawInput::default(), |_| {})
         .textures_delta
@@ -40,6 +46,39 @@ fn raise_shows_restores_and_focuses_the_main_window() {
     }
     assert_eq!(sent, want);
     assert!(repaint, "a repaint is asked for at once");
+}
+
+/// What `raise` sends, in order.
+fn raised() -> Vec<ViewportCommand> {
+    let mut want = vec![
+        ViewportCommand::Visible(true),
+        ViewportCommand::Minimized(false),
+        ViewportCommand::Focus,
+    ];
+    if wayland() {
+        want.push(ViewportCommand::RequestUserAttention(
+            UserAttentionType::Informational,
+        ));
+    }
+    want
+}
+
+#[test]
+fn raise_app_asks_the_bus_and_its_listener_raises_the_main_window() {
+    let ctx = Context::default();
+    let app = App::builder().build(&ctx).unwrap();
+    let handle = app.handle().clone();
+    let (sent, repaint) = commands_on(&ctx, |_| raise_app(&handle));
+    assert_eq!(sent, raised());
+    assert!(repaint, "a repaint is asked for at once");
+    // The main window was active already: the request ran, nothing changed.
+    assert_eq!(handle.active_window_id(), "main");
+    assert!(
+        !handle
+            .events_since(Default::default())
+            .iter()
+            .any(|e| e.name == "window.refused" && e.data["owner"] == OWNER)
+    );
 }
 
 #[test]
