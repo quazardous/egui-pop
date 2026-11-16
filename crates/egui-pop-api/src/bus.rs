@@ -1028,7 +1028,6 @@ impl AppHandle {
     /// A path not moved onto its request yet reports a window opened, so
     /// the registry holds it (the detached panels' windows, until their
     /// slice).
-    #[allow(dead_code, reason = "the detached panels' windows report through it")]
     pub(crate) fn report_window(&self, point: &str, req: WindowRequest) {
         match point {
             WindowOpen::ID => {
