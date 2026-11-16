@@ -1044,6 +1044,7 @@ impl Files {
         let opened = if kind == WindowKind::Native {
             app.request_native_open(req)
         } else {
+            app.overlay_on_its_own(overlay_id(id));
             app.request_popup_open(req)
         };
         if opened && let Some(o) = lock(&self.0).open.iter_mut().find(|o| o.id == id) {

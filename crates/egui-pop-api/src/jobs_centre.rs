@@ -450,6 +450,14 @@ pub(crate) fn popover(ui: &mut Ui, app: &AppHandle, response: &egui::Response) {
             );
             egui_pop_core::focus::keep_tab(ui);
         });
+    // On the bus (ADR 0029): opened, closed and how.
+    egui_pop_core::overlay::follow_popup(
+        &ctx,
+        popover_id(),
+        "jobs popover",
+        popover_open(&ctx),
+        None,
+    );
 }
 
 /// The popover's id.

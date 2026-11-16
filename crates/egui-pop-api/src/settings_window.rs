@@ -209,9 +209,10 @@ impl Plugin for SettingsPlugin {
                     if let Some(w) = call.app.service(&SETTINGS_WINDOW) {
                         w.close();
                         // Its modal goes too, or it would stay over the app.
-                        egui_pop_core::overlay::close(
+                        call.app.close_overlay(
                             &call.app.egui(),
                             egui::Id::unique("egui_pop.settings"),
+                            egui_pop_core::overlay::Closing::Owner,
                         );
                     }
                     let place = section.and_then(|s| page_path(call.app, s));
@@ -248,9 +249,10 @@ impl Plugin for SettingsPlugin {
                         admin.close(call.app);
                         // Its overlay goes too, or the window's modal
                         // would open under it and close at once.
-                        egui_pop_core::overlay::close(
+                        call.app.close_overlay(
                             &call.app.egui(),
                             egui::Id::unique("egui_pop.admin"),
+                            egui_pop_core::overlay::Closing::Owner,
                         );
                     }
                     w.open(None);
@@ -648,7 +650,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     if close || !open {
         w.close();
         app.capture_keys(false);
-        overlay::close(&ctx, spec.id);
+        app.close_overlay(&ctx, spec.id, overlay::Closing::Owner);
     }
 }
 

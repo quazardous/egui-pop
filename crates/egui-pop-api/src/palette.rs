@@ -42,7 +42,7 @@ use egui::{Color32, FontId, Key, TextFormat, Ui};
 use egui_pop_core::icon::{Icon, IconRef};
 use egui_pop_core::kit::{Component, Kit, Part, State as KitState, Tone};
 use egui_pop_core::lock;
-use egui_pop_core::overlay::{self, Kind, OverlaySpec};
+use egui_pop_core::overlay::{self, Closing, Kind, OverlaySpec};
 use egui_pop_core::strings::{self, Arg};
 use egui_pop_core::theme::Tokens;
 use egui_pop_core::ui::UiPop as _;
@@ -65,6 +65,14 @@ pub const CMD_PALETTE: CommandId = CommandId::from_static("app.palette");
 
 /// The palette's state, as a service.
 pub const PALETTE: ServiceToken<Palette> = ServiceToken::new("app.palette");
+
+/// The palette's owner on the bus: its popup is `palette@<window>`.
+pub const OWNER: &str = "egui_pop.palette";
+/// The start of the palette's popup id.
+pub const POPUP_PREFIX: &str = "palette@";
+/// The palette's listener on `popup.close`: closed by anyone (its window
+/// closing under it), it closes in its window's group.
+pub const POPUP_LISTENER: &str = "palette.popup";
 
 /// How many recent commands come first.
 pub const RECENT: usize = 8;
@@ -486,6 +494,12 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     }
     // The palette handles Escape itself: back from a prompt, else close.
     let spec = OverlaySpec::new(SPEC_ID, "Command palette", Kind::Modal).keep_on_escape();
+    app.name_overlay(
+        spec.id,
+        window,
+        format!("{POPUP_PREFIX}{}", app.registry_window_of(window)),
+        OWNER,
+    );
     let entries = app.palette();
     let recent = recent(app);
     let mut run: Option<(CommandId, Json, WhenContext)> = None;
@@ -643,14 +657,38 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     });
     if let Some((command, args, context)) = run {
         p.close_in(group);
-        overlay::close(&ctx, spec.id);
+        app.close_overlay(&ctx, spec.id, Closing::Chosen);
         app.request_run_in(command, args, context);
     } else if close {
         p.close_in(group);
-        overlay::close(&ctx, spec.id);
+        app.close_overlay(&ctx, spec.id, Closing::Escape);
     } else if !open {
         p.close_in(group);
     }
+}
+
+/// [`POPUP_LISTENER`]: the palette's popup closed by a request (its
+/// window closing under it): it closes in the group of that window, in
+/// this call. Whether it was open there.
+pub(crate) fn popup_closed(app: &AppHandle, popup: &str) -> bool {
+    let Some(window) = popup.strip_prefix(POPUP_PREFIX) else {
+        return false;
+    };
+    let Some(p) = app.service(&PALETTE) else {
+        return false;
+    };
+    let groups: Vec<egui::ViewportId> = p
+        .open_groups()
+        .into_iter()
+        .filter(|g| {
+            p.window_in(*g)
+                .is_some_and(|v| app.registry_window_of(v) == window)
+        })
+        .collect();
+    for g in &groups {
+        p.close_in(*g);
+    }
+    !groups.is_empty()
 }
 
 /// Asks for the prompt's current argument. `Some(Some(args))`: all

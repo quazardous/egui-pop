@@ -686,7 +686,12 @@ fn edges(ui: &mut Ui, app: &AppHandle) {
             ui.ctx().cumulative_pass_nr() > opened && ui.ctx().input(|i| i.pointer.any_click());
     });
     if !open || clicked {
-        overlay::close(&ctx, spec.id);
+        let how = if clicked {
+            overlay::Closing::Chosen
+        } else {
+            overlay::Closing::Owner
+        };
+        app.close_overlay(&ctx, spec.id, how);
         SYSTEM_MENU.set(&ctx, None);
     }
 }

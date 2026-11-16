@@ -90,7 +90,11 @@ use egui_pop_model::when::{When, WhenContext};
 use serde::Serialize;
 use serde_json::{Map, Value as Json, json};
 
+use bus_contract::ListenOpts;
+use egui_pop_core::overlay::Closing;
+
 use crate::app::{AppHandle, Request};
+use crate::bus::{PopupClose, REGISTRY, Reason, WindowKind, WindowRequest};
 use crate::steps::Outcome;
 use crate::strings as txt;
 
@@ -367,6 +371,7 @@ pub fn bar_within(ui: &mut Ui, app: &AppHandle, menu: &MenuId, reserve: f32) {
             let label = access_label(ui, &m.label, m.key.filter(|_| alt));
             let (r, _) =
                 MenuButton::new(label).ui(ui, |ui| items(ui, app, &m.menu, &cx, &Json::Null, 0));
+            follow_menu(&ctx, id.with("popup"), &m.label);
             access_key(&ctx, r.id, m.key);
         });
     }
@@ -399,6 +404,7 @@ pub fn bar_within(ui: &mut Ui, app: &AppHandle, menu: &MenuId, reserve: f32) {
                 });
             }
         });
+        follow_menu(&ctx, id.with("popup"), &name);
         let rect = Rect::from_center_size(r.rect.center(), vec2(side, side));
         icon.paint(ui.painter(), rect, ui.style().interact(&r).text_color());
         r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
@@ -733,6 +739,13 @@ fn show_with(ui: &mut Ui, app: &AppHandle, menu: &MenuId, cx: &WhenContext, args
     });
 }
 
+/// A menu bar's menu (egui's popup `id`) on the overlays' watch: on the
+/// bus, opened and closed.
+fn follow_menu(ctx: &Context, id: Id, label: &str) {
+    let open = egui::Popup::is_id_open(ctx, id);
+    egui_pop_core::overlay::follow_popup(ctx, id, label, open, None);
+}
+
 /// Opens a declared menu on the widget's secondary click (or a long
 /// touch). Its items are evaluated in the context of the moment it
 /// opened, and their commands run in it. It does not open where a widget
@@ -834,6 +847,8 @@ pub fn popup_at_with(app: &AppHandle, menu: &MenuId, at: impl Into<At>, args: Js
     let Some(args) = open_step(app, menu, args, "popup") else {
         return false;
     };
+    // One at a time: the one open closes first.
+    end_popup(app, Reason::Command, "replaced");
     let popup = Popup {
         menu: menu.clone(),
         under: at.into().0,
@@ -842,9 +857,65 @@ pub fn popup_at_with(app: &AppHandle, menu: &MenuId, at: impl Into<At>, args: Js
         scope: ScopedTheme::current(&app.egui()),
         window: app.active_window(),
     };
+    let req = popup_request(app, &popup, Reason::Command);
     app.set_popup(Some(popup));
+    if !app.request_popup_open(req) {
+        app.set_popup(None);
+        return false;
+    }
     app.egui().request_repaint();
     true
+}
+
+/// The popup menu's owner on the bus ([`POPUP_LISTENER`]).
+pub const POPUP_OWNER: &str = "egui_pop.menus";
+/// The start of the popup menu's popup id: `menu@<window>`.
+pub const POPUP_PREFIX: &str = "menu@";
+/// The popup menu's listener on `popup.close`: closed by anyone (Escape,
+/// an item chosen, its window closing under it), it is no longer open,
+/// in that call.
+pub const POPUP_LISTENER: &str = "menus.popup";
+
+/// The popup menu's request, in the window it shows in.
+fn popup_request(app: &AppHandle, popup: &Popup, reason: Reason) -> WindowRequest {
+    let parent = app.registry_window_of(app.still_open(popup.window));
+    WindowRequest::new(
+        format!("{POPUP_PREFIX}{parent}"),
+        WindowKind::Popup,
+        POPUP_OWNER,
+        reason,
+    )
+    .parent(parent)
+}
+
+/// Closes the popup menu open, by its `popup.close`.
+fn end_popup(app: &AppHandle, reason: Reason, how: &str) {
+    let Some(p) = app.popup() else { return };
+    if !app.request_popup_close(popup_request(app, &p, reason).how(how)) {
+        app.set_popup(None);
+    }
+}
+
+/// Registers [`POPUP_LISTENER`].
+pub(crate) fn listen_popup(kernel: &dyn bus_contract::Bus) {
+    let l = kernel.listen::<PopupClose>(
+        POPUP_LISTENER,
+        ListenOpts::new().owner(POPUP_OWNER).before(REGISTRY),
+        |req, did| {
+            if !req.window.starts_with(POPUP_PREFIX) {
+                return Ok(());
+            }
+            let Some(app) = crate::bus::asking() else {
+                return Ok(());
+            };
+            if app.popup().is_some() {
+                app.set_popup(None);
+                did.push(format!("{POPUP_LISTENER}: closed"));
+            }
+            Ok(())
+        },
+    );
+    debug_assert!(l.is_ok(), "{l:?}");
 }
 
 /// The menu open as a popup, if one is.
@@ -858,9 +929,9 @@ pub fn popup_window(app: &AppHandle) -> Option<egui::ViewportId> {
     app.popup().map(|p| app.still_open(p.window))
 }
 
-/// Closes the popup menu, if one is open.
+/// Closes the popup menu, if one is open (its `popup.close`).
 pub fn close_popup(app: &AppHandle) {
-    app.set_popup(None);
+    end_popup(app, Reason::Command, "owner");
 }
 
 /// Draws the popup menu while it is open, in the window it belongs to
@@ -894,7 +965,12 @@ pub(crate) fn draw_popup(ctx: &Context, app: &AppHandle) {
         None => draw(),
     };
     if !open {
-        app.set_popup(None);
+        let how = egui_pop_core::overlay::closing_seen(ctx, popup_id());
+        let reason = match how {
+            Closing::Escape | Closing::Outside | Closing::Chosen => Reason::User,
+            _ => Reason::Command,
+        };
+        end_popup(app, reason, how.as_str());
     }
 }
 
