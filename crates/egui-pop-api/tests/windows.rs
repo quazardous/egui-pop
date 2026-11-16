@@ -375,7 +375,7 @@ fn the_palette_menus_and_toasts_open_in_the_detached_window_in_use() {
 }
 
 #[test]
-fn the_palette_and_a_menu_whose_window_closes_come_to_the_main_window() {
+fn the_palette_and_a_menu_whose_window_closes_close_with_it() {
     let mut r = Run::new();
     let h = r.app.handle().clone();
     let log = workbench::window_id(&LOG);
@@ -388,12 +388,13 @@ fn the_palette_and_a_menu_whose_window_closes_come_to_the_main_window() {
     assert!(menus::popup_at(&h, &MENU_VIEW, egui::pos2(40.0, 40.0)));
     r.frame();
     assert_eq!(menus::popup_window(&h), Some(log));
-    // The window closes (docked back): the menu goes to the main window.
+    // The window closes (docked back): the menu closes first, a popup of
+    // that window (ADR 0029, `parent-closed`).
     assert!(h.change_workbench(Change::CloseWindow(LOG)).unwrap().ok());
     r.frame();
     r.frame();
-    assert_eq!(menus::popup_window(&h), Some(ViewportId::ROOT));
-    menus::close_popup(&h);
+    assert_eq!(menus::popup_open(&h), None);
+    assert_eq!(menus::popup_window(&h), None);
     // The palette, opened in the log's window detached again, too.
     assert!(h.detach_panel(&LOG).unwrap().ok());
     r.frame();
@@ -404,9 +405,13 @@ fn the_palette_and_a_menu_whose_window_closes_come_to_the_main_window() {
     assert!(h.change_workbench(Change::CloseWindow(LOG)).unwrap().ok());
     r.frame();
     r.frame();
-    assert!(palette::is_open(&h));
-    assert_eq!(
-        overlay::window_of(&r.ctx, palette_overlay()),
-        Some(ViewportId::ROOT)
+    assert!(!palette::is_open(&h));
+    assert_eq!(overlay::window_of(&r.ctx, palette_overlay()), None);
+    assert!(
+        h.windows_list()
+            .iter()
+            .all(|w| w.kind != egui_pop_api::bus::WindowKind::Popup),
+        "{:?}",
+        h.windows_list()
     );
 }

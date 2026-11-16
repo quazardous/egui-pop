@@ -6727,6 +6727,7 @@ impl App {
             self.waking = Some(ctx.clone());
             self.handle.theme().follow(ctx);
             self.handle.0.bus.wake_with(ctx);
+            crate::bus::overlays::watch(ctx, &self.handle);
             let c = ctx.clone();
             if let Some(h) = self.handle.0.host.borrow_mut().as_mut() {
                 h.set_waker(Waker::new(move || c.request_repaint()));

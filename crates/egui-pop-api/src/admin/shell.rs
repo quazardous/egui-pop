@@ -88,7 +88,7 @@ pub(super) fn show(ui: &mut Ui, app: &AppHandle) {
     });
     if close || !open {
         admin.close(app);
-        overlay::close(&ctx, spec.id);
+        app.close_overlay(&ctx, spec.id, egui_pop_core::overlay::Closing::Owner);
     }
 }
 

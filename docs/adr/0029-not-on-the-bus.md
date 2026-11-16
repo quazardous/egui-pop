@@ -151,7 +151,7 @@ a new reason is an ADR.
 
 | Reason | What stays off the bus | Why |
 |---|---|---|
-| Per-frame painting | Drawing, layout, hover and animation state of a pass; egui's own tooltips | Nobody can act on it by the next pass; the bus would carry noise |
+| Per-frame painting | Drawing, layout, hover and animation state of a pass; egui's own tooltips; a field's list drawn while the field is (a combo box's choices, completions) | Nobody can act on it by the next pass; the bus would carry noise; a field's list has no life of its own worth a request |
 | Pixel and bulk data | Tiles, textures, thumbnails, text buffers | Too large; their arrival is an event, their content is not |
 | Private internals | State no other part reads or depends on (a cache, a scroll offset, a widget's memory slot) | No neighbour exists to forget |
 | Hot paths | Pointer moves, key repeats, scroll deltas, job progress ticks | Rate; their settled result is an event (`zoom.change`, a finished gesture) |
@@ -423,6 +423,29 @@ test and leaves `next` green. Slices 1 and 2 come first; the paths of
    field-bound lists declared as exceptions. *Test:* every overlay of
    the gallery opened and closed appears in and leaves `windows.list`;
    invariant 4 holds while a parent closes under a menu.
+   First part done (2026-11-16): the overlay stack tells every opening
+   and closing of every window's overlays to a watcher
+   (`overlay::watch`), in the call that made it; egui-pop's watcher asks
+   the popup's `popup.open` or `popup.close` there, with its owner (named
+   by `AppHandle::name_overlay`: `palette@<window>`, else
+   `overlay:<id>@<window>`), its window as parent, and how it closed
+   (`how`: `escape`, `outside`, `chosen`, `owner`, `below`, `gone`). The
+   egui popups the stack follows (`overlay::follow_popup`: context menus,
+   the menu bar's menus, the jobs popover, hover cards) are told the
+   same way. A popup closed by a request (its window closing,
+   `parent-closed`) closes in the stack (`overlay.stack`) and its owner's
+   state in that call: the popup menu (`menus.popup`, `menu@<window>`,
+   whose opening and closing are its own requests) and the palette
+   (`palette.popup`) close with their window instead of moving to the
+   main window. egui-pop's code closes an overlay by its popup's request
+   (`AppHandle::close_overlay`), never directly, but for the dialogs and
+   file choices, which ask their own (a test scans for it). Tooltips and
+   a field's lists are the per-frame exception above. Left: toasts, the
+   tips card, zen's bar, floating panels and the navigator (reviewed,
+   areas drawn from a state: not popups), and the remaining egui popups
+   of the views and the viewport (the node graph's own popup, a
+   toolbar's overflow, the palettes' menu) once their owners are on the
+   watch.
 7. **Standard windows.** The settings window, About, the jobs centre,
    tips. *Test:* each opened from a second window belongs to it, and
    goes with it.

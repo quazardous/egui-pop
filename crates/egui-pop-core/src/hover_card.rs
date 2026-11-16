@@ -44,7 +44,11 @@ use egui_pop_model::ids::CommandId;
 use serde::Serialize;
 use serde_json::Value as Json;
 
+use crate::overlay::Closing;
 use crate::placement::{Placement, Side, place};
+
+/// What a card is called for the overlays' watcher ([`crate::overlay::watch`]).
+const LABEL: &str = "hover card";
 
 /// A link in a card: a command run with its arguments.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -355,8 +359,10 @@ impl HoverCard {
             if s.open {
                 close(&ctx, id);
             }
+            crate::overlay::follow_popup(&ctx, id, LABEL, false, Some(Closing::Owner));
             return None;
         }
+        let mut how = None;
         let description = card.plain_text();
         ctx.accesskit_node_builder(anchor.id, |node| node.set_description(description));
         let now = ctx.input(|i| i.time);
@@ -370,6 +376,7 @@ impl HoverCard {
                 .zip(pointer)
                 .is_some_and(|(r, p)| r.expand(2.0).contains(p));
         if anchor.clicked() {
+            how = Some(Closing::Owner);
             s.open = false;
             s.by_key = false;
             s.suppressed = true;
@@ -395,6 +402,7 @@ impl HoverCard {
             } else {
                 let left = *s.left_at.get_or_insert(now);
                 if now - left >= grace {
+                    how = Some(Closing::Outside);
                     s.open = false;
                     s.left_at = None;
                 } else {
@@ -403,12 +411,14 @@ impl HoverCard {
             }
         }
         if s.open && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
+            how = Some(Closing::Escape);
             s.open = false;
             s.by_key = false;
             // Back to the widget it hovers.
             ctx.memory_mut(|m| m.request_focus(anchor.id));
         }
         if s.open && !on_card && !on_anchor && ctx.input(|i| i.pointer.any_pressed()) {
+            how = Some(Closing::Outside);
             s.open = false;
             s.by_key = false;
         }
@@ -439,10 +449,13 @@ impl HoverCard {
                 });
         }
         if clicked.is_some() {
+            how = Some(Closing::Chosen);
             s.open = false;
             s.by_key = false;
         }
+        let open = s.open;
         store(&ctx, id, s);
+        crate::overlay::follow_popup(&ctx, id, LABEL, open, how.or(Some(Closing::Owner)));
         clicked
     }
 }

@@ -1896,6 +1896,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                 Reason::Command,
             )
             .parent(app.registry_window_of(group));
+            app.overlay_on_its_own(overlay_id(open_dialog.id));
             if app.request_popup_open(req) {
                 open_dialog.on_bus = true;
                 if let Some(o) = lock(&d.0).queue.iter_mut().find(|o| o.id == shown_id) {

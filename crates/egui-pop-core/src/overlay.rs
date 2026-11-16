@@ -598,6 +598,19 @@ struct State {
     modals: Vec<Id>,
     /// Where the focus goes back, once the widget can hold it.
     focus_back: Option<Id>,
+    /// What opened and closed since the watcher last heard ([`watch`]).
+    notices: Vec<Change>,
+    /// The egui popups followed ([`follow_popup`]): open, and the pass
+    /// each was last seen in.
+    followed: Vec<Followed>,
+}
+
+/// An egui popup [`follow_popup`] follows.
+#[derive(Debug)]
+struct Followed {
+    id: Id,
+    label: String,
+    seen: u64,
 }
 
 const STATE: &str = "core.overlay";
@@ -737,19 +750,34 @@ pub fn block_window_raising(
 /// whether Escape was used (and consumed).
 pub fn begin_pass(ctx: &Context) -> bool {
     let st = state(ctx);
-    let mut s = lock(&st);
+    let used = begin_pass_in(ctx, &mut lock(&st));
+    tell(ctx, &st);
+    used
+}
+
+fn begin_pass_in(ctx: &Context, s: &mut State) -> bool {
     let now = pass(ctx);
     if s.pass == now {
         return false;
     }
     s.pass = now;
-    give_focus_back(ctx, &mut s, false);
+    // A followed popup not seen last pass is gone (its widget went).
+    let window = ctx.viewport_id();
+    let (kept, gone) = std::mem::take(&mut s.followed)
+        .into_iter()
+        .partition::<Vec<_>, _>(|f| f.seen + 1 >= now);
+    s.followed = kept;
+    for f in gone {
+        s.notices
+            .push(Change::closed(window, f.id, f.label, Closing::Gone));
+    }
+    give_focus_back(ctx, s, false);
     s.shown_last = std::mem::take(&mut s.shown);
     // A closing is news only to an owner still showing its overlay: one
     // left unseen would close the overlay the next time it opens.
     let State {
         closed, shown_last, ..
-    } = &mut *s;
+    } = s;
     closed.retain(|c| shown_last.contains(&c.id));
     // An overlay whose owner stopped showing it is closed.
     let gone: Vec<Id> = s
@@ -760,7 +788,7 @@ pub fn begin_pass(ctx: &Context) -> bool {
         .collect();
     for id in gone {
         let closed = s.stack.close(id);
-        settle(ctx, &mut s, closed);
+        settle(ctx, s, closed);
     }
     let mut used_escape = false;
     // An egui popup (a combo box's list, a context menu, a menu) open
@@ -776,7 +804,7 @@ pub fn begin_pass(ctx: &Context) -> bool {
             used_escape = true;
             ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
         }
-        settle(ctx, &mut s, closed);
+        settle(ctx, s, closed);
     }
     if let Some(pos) = ctx.input(|i| {
         i.pointer
@@ -787,7 +815,7 @@ pub fn begin_pass(ctx: &Context) -> bool {
         let layer = ctx.layer_id_at(pos);
         let hit = s.stack.hit_on(pos, layer);
         let closed = s.stack.click(hit);
-        settle(ctx, &mut s, closed);
+        settle(ctx, s, closed);
     }
     used_escape
 }
@@ -805,8 +833,15 @@ fn settle(ctx: &Context, s: &mut State, closed: Vec<Closed>) {
     if !gone.is_empty() {
         swallow_held_keys(ctx);
     }
+    let window = ctx.viewport_id();
     for c in &closed {
         log::debug!(target: "egui_pop", "overlay `{}` closed: {:?}", c.label, c.reason);
+        s.notices.push(Change::closed(
+            window,
+            c.id,
+            c.label.clone(),
+            c.reason.into(),
+        ));
     }
     s.history.extend(closed.iter().cloned());
     let len = s.history.len();
@@ -844,12 +879,235 @@ fn give_focus_back(ctx: &Context, s: &mut State, closing: bool) {
     }
 }
 
+/// How an overlay or a followed egui popup closed, as its watcher hears
+/// it ([`watch`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum Closing {
+    /// Escape.
+    Escape,
+    /// A press outside it.
+    Outside,
+    /// An item of it chosen (a menu's entry, a card's link).
+    Chosen,
+    /// Its owner closed it, or stopped showing it.
+    Owner,
+    /// An overlay below it closed.
+    Below,
+    /// Its widget is no longer drawn.
+    Gone,
+}
+
+impl Closing {
+    /// As the journal writes it (`escape`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Closing::Escape => "escape",
+            Closing::Outside => "outside",
+            Closing::Chosen => "chosen",
+            Closing::Owner => "owner",
+            Closing::Below => "below",
+            Closing::Gone => "gone",
+        }
+    }
+}
+
+impl From<Reason> for Closing {
+    fn from(r: Reason) -> Self {
+        match r {
+            Reason::Escape => Closing::Escape,
+            Reason::Outside => Closing::Outside,
+            Reason::Closed => Closing::Owner,
+            Reason::Parent => Closing::Below,
+        }
+    }
+}
+
+/// An overlay or a followed egui popup that opened or closed, in a window.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct Change {
+    /// The window it is in.
+    pub window: ViewportId,
+    pub id: Id,
+    pub label: String,
+    /// `None`: it opened; else how it closed.
+    pub closed: Option<Closing>,
+}
+
+impl Change {
+    fn closed(window: ViewportId, id: Id, label: String, how: Closing) -> Self {
+        Self {
+            window,
+            id,
+            label,
+            closed: Some(how),
+        }
+    }
+}
+
+/// What hears every overlay and followed popup opening and closing.
+pub type Watcher = std::sync::Arc<dyn Fn(&Context, &Change) + Send + Sync>;
+
+#[derive(Default)]
+struct Watch(Option<Watcher>);
+
+impl std::fmt::Debug for Watch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(if self.0.is_some() {
+            "Watch(set)"
+        } else {
+            "Watch(none)"
+        })
+    }
+}
+
+fn watcher(ctx: &Context) -> std::sync::Arc<std::sync::Mutex<Watch>> {
+    shared::<Watch>(ctx, "core.overlay.watch")
+}
+
+/// Has `watcher` hear every overlay of every window opening and closing,
+/// and every egui popup [`follow_popup`] follows, in the call that opened
+/// or closed it, once the stack's lock is let go (it may close another
+/// overlay from there, [`close_anywhere`]). An application puts them on
+/// its bus this way (ADR 0029). `None` stops it.
+pub fn watch(ctx: &Context, watcher_fn: Option<Watcher>) {
+    lock(&watcher(ctx)).0 = watcher_fn;
+}
+
+/// Tells the watcher what changed in a window's state.
+fn tell(ctx: &Context, st: &std::sync::Arc<std::sync::Mutex<State>>) {
+    let notices = std::mem::take(&mut lock(st).notices);
+    if notices.is_empty() {
+        return;
+    }
+    let Some(w) = lock(&watcher(ctx)).0.clone() else {
+        return;
+    };
+    for n in &notices {
+        w(ctx, n);
+    }
+}
+
+/// Follows an egui popup that is not in the stack (a context menu, a
+/// menu bar's menu, a popover of egui's, a hover card) for the watcher
+/// ([`watch`]): call it each pass its widget is drawn, `open` saying
+/// whether the popup is open after the widget drew it. Its opening and
+/// its closing are told once each; `how` says how it closed when the
+/// caller knows, else it is told from the pass's input (Escape, a press
+/// in it or outside it). One no longer followed (its widget not drawn)
+/// is told closed ([`Closing::Gone`]) at the window's next pass.
+pub fn follow_popup(ctx: &Context, id: Id, label: &str, open: bool, how: Option<Closing>) {
+    let st = state(ctx);
+    let now = pass(ctx);
+    let window = ctx.viewport_id();
+    {
+        let mut s = lock(&st);
+        match (s.followed.iter().position(|f| f.id == id), open) {
+            (None, true) => {
+                s.followed.push(Followed {
+                    id,
+                    label: label.to_string(),
+                    seen: now,
+                });
+                s.notices.push(Change {
+                    window,
+                    id,
+                    label: label.to_string(),
+                    closed: None,
+                });
+            }
+            (Some(i), true) => s.followed[i].seen = now,
+            (Some(i), false) => {
+                let f = s.followed.remove(i);
+                let how = how.unwrap_or_else(|| closing_seen(ctx, id));
+                s.notices.push(Change::closed(window, id, f.label, how));
+            }
+            (None, false) => {}
+        }
+    }
+    tell(ctx, &st);
+}
+
+/// How a popup egui closed by itself this pass closed: Escape, a press in
+/// it (an item chosen) or outside it, else its owner.
+pub fn closing_seen(ctx: &Context, id: Id) -> Closing {
+    let area = ctx.memory(|m| m.area_rect(id));
+    ctx.input(|i| {
+        if i.key_pressed(Key::Escape) {
+            return Closing::Escape;
+        }
+        let pressed = i.pointer.any_pressed() || i.pointer.any_released();
+        match i.pointer.interact_pos() {
+            Some(p) if pressed && area.is_some_and(|r| r.contains(p)) => Closing::Chosen,
+            Some(_) if pressed => Closing::Outside,
+            _ => Closing::Owner,
+        }
+    })
+}
+
+/// Closes an overlay, with those above it, or a followed popup, in
+/// whichever window it is open: what an application's bus does when a
+/// popup is closed by a request (its window closing under it). The
+/// overlays above it are told closed ([`Closing::Below`]); it is not
+/// (the caller is closing it). Whether it was open.
+pub fn close_anywhere(ctx: &Context, id: Id) -> bool {
+    let here = ctx.viewport_id();
+    for (window, st) in all(ctx) {
+        let mut s = lock(&st);
+        if s.stack.contains(id) {
+            let closed = s.stack.close(id);
+            if window == here {
+                settle(ctx, &mut s, closed);
+            } else {
+                settle_elsewhere(window, &mut s, closed);
+            }
+            s.notices.retain(|n| n.id != id || n.closed.is_none());
+            drop(s);
+            tell(ctx, &st);
+            return true;
+        }
+        if let Some(i) = s.followed.iter().position(|f| f.id == id) {
+            s.followed.remove(i);
+            drop(s);
+            egui::Popup::close_id(ctx, id);
+            crate::hover_card::close(ctx, id);
+            return true;
+        }
+    }
+    false
+}
+
+/// [`settle`] for a window other than the one being drawn: nothing of its
+/// focus or keys is touched (they are not this pass's).
+fn settle_elsewhere(window: ViewportId, s: &mut State, closed: Vec<Closed>) {
+    s.modals.retain(|m| !closed.iter().any(|c| c.id == *m));
+    for c in &closed {
+        s.notices.push(Change::closed(
+            window,
+            c.id,
+            c.label.clone(),
+            c.reason.into(),
+        ));
+    }
+    s.history.extend(closed.iter().cloned());
+    let len = s.history.len();
+    if len > 32 {
+        s.history.drain(..len - 32);
+    }
+    s.closed.extend(closed);
+}
+
 /// Closes an overlay (and those above it) from code.
 pub fn close(ctx: &Context, id: Id) {
     let st = state(ctx);
-    let mut s = lock(&st);
-    let closed = s.stack.close(id);
-    settle(ctx, &mut s, closed);
+    {
+        let mut s = lock(&st);
+        let closed = s.stack.close(id);
+        settle(ctx, &mut s, closed);
+    }
+    tell(ctx, &st);
 }
 
 /// Closes a popover with nothing to hold Tab, leaving the focus where Tab took
@@ -863,6 +1121,7 @@ pub(crate) fn close_for_tab(ctx: &Context, id: Id) {
     }
     settle(ctx, &mut s, closed);
     drop(s);
+    tell(ctx, &st);
     egui::Popup::close_id(ctx, id);
 }
 
@@ -1068,7 +1327,12 @@ pub struct Anchor {
 fn enter(ctx: &Context, spec: &OverlaySpec, open: &mut bool) -> bool {
     begin_pass(ctx);
     let st = state(ctx);
-    let mut s = lock(&st);
+    let shown = enter_in(ctx, &mut lock(&st), spec, open);
+    tell(ctx, &st);
+    shown
+}
+
+fn enter_in(ctx: &Context, s: &mut State, spec: &OverlaySpec, open: &mut bool) -> bool {
     if let Some(i) = s.closed.iter().position(|c| c.id == spec.id) {
         s.closed.remove(i);
         *open = false;
@@ -1077,7 +1341,7 @@ fn enter(ctx: &Context, spec: &OverlaySpec, open: &mut bool) -> bool {
     if !*open {
         if s.stack.contains(spec.id) {
             let closed = s.stack.close(spec.id);
-            settle(ctx, &mut s, closed);
+            settle(ctx, s, closed);
             s.closed.retain(|c| c.id != spec.id);
         }
         return false;
@@ -1086,7 +1350,13 @@ fn enter(ctx: &Context, spec: &OverlaySpec, open: &mut bool) -> bool {
         // The place of one that just closed, as long as it is owed.
         let focused = s.focus_back.take().or_else(|| ctx.memory(|m| m.focused()));
         let (_, closed) = s.stack.open(spec.clone(), focused);
-        settle(ctx, &mut s, closed);
+        settle(ctx, s, closed);
+        s.notices.push(Change {
+            window: ctx.viewport_id(),
+            id: spec.id,
+            label: spec.label.clone(),
+            closed: None,
+        });
         if spec.kind == Kind::Modal {
             s.modals.push(spec.id);
             swallow_held_keys(ctx);

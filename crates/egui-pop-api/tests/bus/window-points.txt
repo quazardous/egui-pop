@@ -28,7 +28,10 @@ popup.open
   1. window.registry (owner egui_pop): nothing
   2. window.invariants (owner egui_pop): last
 popup.close
-  1. dialogs.popup (owner egui_pop.dialogs): before window.registry
-  2. files.choice (owner egui_pop.files): before window.registry
-  3. window.registry (owner egui_pop): nothing
-  4. window.invariants (owner egui_pop): last
+  1. palette.popup (owner egui_pop.palette): before overlay.stack
+  2. overlay.stack (owner egui_pop): before window.registry
+  3. menus.popup (owner egui_pop.menus): before window.registry
+  4. dialogs.popup (owner egui_pop.dialogs): before window.registry
+  5. files.choice (owner egui_pop.files): before window.registry
+  6. window.registry (owner egui_pop): nothing
+  7. window.invariants (owner egui_pop): last

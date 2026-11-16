@@ -1,0 +1,6 @@
+---
+egui-pop-core: minor
+egui-pop-api: minor
+---
+
+Popups, menus and the palette are on the bus (ADR 0029, slice 6). Every overlay of a window's stack (the palette, the system menu, flyouts, popovers, the Settings app's overlay, modals of the application's own) and every egui popup the stack follows (context menus, the menu bar's menus, the jobs popover, hover cards) is a popup of the registry: opening it asks its `popup.open`, closing it its `popup.close`, in the call that opened or closed it, with its owner, its window as parent, and how it closed (`WindowRequest::how`, said in `popup.closed`: `escape`, `outside`, `chosen`, `owner`, `below`, `gone`). A popup closed by a request (its window closing under it, `parent-closed`) closes in the stack (`bus::OVERLAY_STACK`) and its owner's state in that call: the popup menu (`menus::POPUP_LISTENER`, popup `menu@<window>`) and the palette (`palette::POPUP_LISTENER`, popup `palette@<window>`) now close with their window instead of moving to the main window. New in the core: `overlay::watch`, `overlay::follow_popup`, `overlay::close_anywhere`, `overlay::closing_seen`, `overlay::Change`, `overlay::Closing`; in the API: `AppHandle::name_overlay`, `bus::OVERLAY_OWNER`. Tooltips and the lists of a field (a combo box's choices, completions) stay off the bus, declared exceptions.

@@ -66,9 +66,13 @@
 //! its `popup.close` or `window.close`. A window closing closes its
 //! popups and native windows first, each by its own request (reason
 //! `parent-closed`), and their owners' listeners (`dialogs.popup`,
-//! `files.choice`) cancel what they showed in the same call. Other popups
-//! still do their work themselves; they move onto their requests one by
-//! one (the ADR's slices).
+//! `files.choice`) cancel what they showed in the same call. The overlay
+//! stack's overlays (the palette, menus, flyouts, popovers) and the egui
+//! popups it follows (context menus, the menu bar's menus, hover cards)
+//! are popups too: each opening and closing is its `popup.open` or
+//! `popup.close`, asked in that call with how it closed (`how`), and a
+//! close asked by anyone closes it in the stack ([`OVERLAY_STACK`]);
+//! tooltips and a field's lists stay off, per-frame painting.
 //!
 //! The active window, the one the person works in, is the registry's too
 //! ([`WindowActivate`], [`AppHandle::request_window_activate`]): a press
@@ -132,6 +136,8 @@ mod owners;
 pub use owners::OWNER_GONE;
 pub(crate) mod panels;
 pub use panels::{WORKBENCH_OWNER, WORKBENCH_WINDOW};
+pub(crate) mod overlays;
+pub use overlays::{OVERLAY_OWNER, POPUP_PREFIX as OVERLAY_POPUP_PREFIX, STACK as OVERLAY_STACK};
 mod popups;
 pub(crate) mod settings;
 pub use settings::{
@@ -212,6 +218,11 @@ pub struct WindowRequest {
     /// The parent window, for a child window or a popup.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
+    /// How a popup closed, when the person or its stack closed it:
+    /// `escape`, `outside`, `chosen`, `owner`, `below` (an overlay under
+    /// it closed), `gone` (its widget no longer drawn).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub how: Option<String>,
 }
 
 impl WindowRequest {
@@ -228,6 +239,7 @@ impl WindowRequest {
             reason,
             cause: None,
             parent: None,
+            how: None,
         }
     }
 
@@ -240,6 +252,12 @@ impl WindowRequest {
     /// Its parent window.
     pub fn parent(mut self, parent: impl Into<String>) -> Self {
         self.parent = Some(parent.into());
+        self
+    }
+
+    /// How the popup closed (`escape`, `chosen`…).
+    pub fn how(mut self, how: impl Into<String>) -> Self {
+        self.how = Some(how.into());
         self
     }
 }
@@ -692,6 +710,8 @@ pub(crate) struct Bus {
     /// The context a pass is asked of when an emit on another thread
     /// queues local listeners ([`AppHandle::run_pending`]).
     wake: Arc<Mutex<Option<egui::Context>>>,
+    /// The overlays of the stack the registry holds as popups.
+    pub(crate) overlays: RefCell<overlays::Overlays>,
 }
 
 impl std::fmt::Debug for Bus {
@@ -743,6 +763,7 @@ impl Bus {
             settings_heard: settings::Heard::default(),
             settings_delivering: Cell::new(false),
             wake,
+            overlays: RefCell::default(),
         }
     }
 
@@ -926,6 +947,7 @@ fn install(kernel: &dyn bus_contract::Bus, registry: &Arc<Mutex<Registry>>) {
     panels::install(kernel);
     owners::install(kernel);
     files::install(kernel);
+    overlays::install(kernel);
     // The invariants check runs last on every other window point: the
     // rules the registry alone answers (the backend's and the paint
     // guard's are checked in the main window's pass).

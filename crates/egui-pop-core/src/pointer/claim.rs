@@ -370,12 +370,17 @@ pub fn context_menu_opened<R>(
         None
     };
     let popup = egui::Popup::menu(response).open_memory(open);
+    let id = popup.get_id();
     let popup = if keyed.get(&response.ctx).unwrap_or(false) {
         popup
     } else {
         popup.at_pointer_fixed()
     };
-    popup.show(add)
+    let shown = popup.show(add);
+    // On the overlays' watch (an application's bus): opened, closed and how.
+    let still = egui::Popup::is_id_open(&response.ctx, id);
+    crate::overlay::follow_popup(&response.ctx, id, "context menu", still, None);
+    shown
 }
 
 /// The claims in force and the uses seen, as the `pointer` collector

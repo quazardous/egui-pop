@@ -105,6 +105,9 @@ impl AppHandle {
             "reason": request.reason,
             "did": did,
         });
+        if let Some(how) = &request.how {
+            data["how"] = json!(how);
+        }
         if let Some(c) = request.cause {
             data["cause"] = json!(c);
         }

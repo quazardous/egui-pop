@@ -6,6 +6,8 @@
 //! region, the bars around it in a suite of their own
 //! (`the_bars_have_their_own_snapshots`, `chrome-*`).
 
+// Every overlay opened and closed in the registry (ADR 0029).
+mod overlays_bus;
 // The detached windows' drop frames, a picture of each window.
 mod window_drop;
 

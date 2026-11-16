@@ -2752,7 +2752,11 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     if let Some(old) = held
         && flyout.as_ref() != Some(&old)
     {
-        egui_pop_core::overlay::close(&ctx, Id::unique(flyout_overlay(&old)));
+        app.close_overlay(
+            &ctx,
+            Id::unique(flyout_overlay(&old)),
+            egui_pop_core::overlay::Closing::Owner,
+        );
     }
     let flyout = flyout.and_then(|panel| {
         let area = app.workbench_mut().layout.area_of(&panel)?;
