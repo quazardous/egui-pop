@@ -76,6 +76,7 @@ pub(super) fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
                 if req.parent.as_deref() == Some(WindowId::MAIN)
                     && lock(&registry).close(&req.window)
                 {
+                    super::panels::left(&app, &req.window);
                     let mut w = app.windows_mut();
                     w.moved_events
                         .push(("window.closed", json!({ "window": req.window })));

@@ -443,10 +443,11 @@ impl MultiWindow {
             std::mem::take(&mut im.outputs)
         };
         self.shown_immediate = shown.iter().map(|(v, _)| *v).collect();
-        self.take_output(ViewportId::ROOT, out);
+        // Theirs first: the main pass's commands to them add to theirs.
         for (v, out) in shown {
             self.take_output(v, out);
         }
+        self.take_output(ViewportId::ROOT, out);
         self.assert_invariants();
     }
 

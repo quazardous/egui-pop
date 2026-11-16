@@ -112,6 +112,10 @@ pub(crate) struct State {
     mismatch: BTreeMap<(ViewportId, bool), u32>,
     /// Every one said, oldest first, at most [`KEPT`].
     said: Vec<Broken>,
+    /// Mismatches the next check does not count: a window whose registry
+    /// entry changed inside the main window's pass (a detached panel's,
+    /// shown inside it), which the backend lists until the next one.
+    excused: BTreeSet<(ViewportId, bool)>,
 }
 
 /// The viewport a window of the registry is shown in by the backend:
@@ -267,6 +271,16 @@ impl AppHandle {
         }
     }
 
+    /// A window shown inside the main window's pass (a detached panel's)
+    /// left the registry (`registered` false) or came in: the backend's
+    /// list catches up one main pass later than for a window of its own,
+    /// so the next check does not count that mismatch.
+    pub(crate) fn excuse_backend_once(&self, viewport: ViewportId, registered: bool) {
+        egui_pop_core::lock(&self.0.bus.invariants)
+            .excused
+            .insert((viewport, registered));
+    }
+
     /// `window.invariants` after a request: the rules the registry alone
     /// answers. Whether they all hold.
     pub(crate) fn check_invariants_after_request(&self) -> bool {
@@ -342,8 +356,14 @@ impl AppHandle {
         let mut s = egui_pop_core::lock(&self.0.bus.invariants);
         let previous = std::mem::take(&mut s.mismatch);
         let mut out = Vec::new();
+        let excused = std::mem::take(&mut s.excused);
         for (v, b) in off {
-            let passes = previous.get(&v).copied().unwrap_or(0) + 1;
+            let before = previous.get(&v).copied().unwrap_or(0);
+            let passes = if excused.contains(&v) {
+                before
+            } else {
+                before + 1
+            };
             s.mismatch.insert(v, passes);
             if passes > BACKEND_GRACE {
                 out.push(b);

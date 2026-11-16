@@ -680,6 +680,7 @@ fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
                     match req.kind {
                         WindowKind::App => app.registry_close(&WindowId::new(&req.window)),
                         WindowKind::Main if held => app.registry_close_main(),
+                        WindowKind::Panel if held => panels::left(&app, &req.window),
                         _ => {}
                     }
                 }

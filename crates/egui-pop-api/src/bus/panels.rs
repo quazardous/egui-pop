@@ -210,6 +210,15 @@ pub(crate) fn ask(app: &AppHandle, change: &Change) -> Option<Result<serde_json:
     }
 }
 
+/// `window.registry`'s part when a detached panel's window leaves it:
+/// the backend lists its viewport until the main pass after the one that
+/// last showed it.
+pub(super) fn left(app: &AppHandle, id: &str) {
+    if let Some(v) = crate::window_invariants::viewport_of(WindowKind::Panel, id) {
+        app.excuse_backend_once(v, false);
+    }
+}
+
 /// The ids of the detached panels' windows the main window shows: none
 /// while a window's content holds it.
 pub(crate) fn shown(app: &AppHandle) -> Vec<String> {
