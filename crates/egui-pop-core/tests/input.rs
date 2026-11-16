@@ -284,12 +284,14 @@ fn notes(text: &str) -> Harness<'static, Notes> {
         .with_size(egui::vec2(320.0, 400.0))
         .build_ui_state(
             |ui, n: &mut Notes| {
+                // The room the field takes: where the next widget starts.
+                let top = ui.cursor().top();
                 let out = Input::multiline(&mut n.text, "Notes")
                     .rows(2)
                     .max_rows(4)
                     .width(300.0)
                     .show(ui);
-                n.height = out.response.rect.height();
+                n.height = ui.cursor().top() - top;
                 if out.submitted {
                     n.submitted += 1;
                 }
