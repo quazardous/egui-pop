@@ -116,6 +116,14 @@
 //! ([`DragDrop`]) and `drag.dropped`; refused, let go over nothing or
 //! cancelled, `drag.refused` with the reason. Where it hovers each pass
 //! stays off the bus (per-frame painting).
+//!
+//! The screens are on it too ([`screens`]): a screen plugged in or
+//! unplugged, as told by whatever runs the event loop
+//! ([`crate::window::set_screens`]), is said as `screen.added`
+//! ([`ScreenAdded`]) or `screen.removed` ([`ScreenRemoved`]), by its
+//! name; on `screen.removed` a detached panel's window kept on it docks
+//! back ([`WORKBENCH_SCREENS`]) and every other window left off every
+//! screen moves onto one ([`PLACE`]).
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -153,6 +161,8 @@ pub use settings::{
     FRAME_DECORATIONS, POINTER_PROFILE, SETTINGS_POINTS, SettingChange, SettingsChanged,
     THEME_INSTALL,
 };
+pub(crate) mod screens;
+pub use screens::{SCREEN_POINTS, ScreenAdded, ScreenChange, ScreenRemoved, WORKBENCH_SCREENS};
 mod shell;
 pub use shell::STEP_WINDOW_REPARENT;
 
@@ -521,8 +531,8 @@ pub const JOB_POINTS: [&str; 5] = [
 pub const PLUGIN_POINTS: [&str; 2] = [PluginConnect::ID, PluginDisconnect::ID];
 
 /// Every point egui-pop declares: the window, job, plugin, files,
-/// settings and drag points.
-pub const POINTS: [&str; 17] = [
+/// settings, drag and screen points.
+pub const POINTS: [&str; 19] = [
     WindowOpen::ID,
     WindowClose::ID,
     WindowReparent::ID,
@@ -540,6 +550,8 @@ pub const POINTS: [&str; 17] = [
     SettingsChanged::ID,
     DragStart::ID,
     DragDrop::ID,
+    ScreenAdded::ID,
+    ScreenRemoved::ID,
 ];
 
 /// egui-pop's contract table (ADR 0030): every point it declares on the
@@ -583,6 +595,12 @@ pub const CONTRACT: &[PointDecl] = &[
     PointDecl::of::<DragDrop>(
         "A drag is let go over a drop target that takes it, in its window or another: the window and the target; `drag.dropped` follows. A target refusing it, a drag let go over nothing, or cancelled, is said as `drag.refused` with the reason.",
     ),
+    PointDecl::of::<ScreenAdded>(
+        "A screen was plugged in, as told by whatever runs the event loop: its name as the system gives it, its rectangle in points, its scale factor.",
+    ),
+    PointDecl::of::<ScreenRemoved>(
+        "A screen was unplugged: a detached panel's window kept on it docks back, every other window left off every screen moves onto one (not where the system hides window positions).",
+    ),
 ];
 
 /// What owns egui-pop's own listeners.
@@ -601,7 +619,8 @@ pub const RAISE: &str = "window.raise";
 pub const KEYS: &str = "window.keys";
 /// The one list of windows and popups ([`AppHandle::windows_list`]).
 pub const REGISTRY: &str = "window.registry";
-/// A window's place, kept when it closes.
+/// A window's place, kept when it closes, and moved onto a screen left
+/// when its screen is unplugged (`screen.removed`).
 pub const PLACE: &str = "window.place";
 /// Checks, last, the window invariants ([`crate::window_invariants`]).
 pub const INVARIANTS: &str = "window.invariants";
@@ -706,6 +725,8 @@ pub(crate) struct Bus {
     /// What the window invariants remember between passes
     /// ([`crate::window_invariants`]).
     pub(crate) invariants: Mutex<crate::window_invariants::State>,
+    /// The screens this application follows ([`screens`]).
+    pub(crate) screens: RefCell<screens::Seen>,
     /// Whether each window had the system's focus at its last pass: a
     /// window gaining it asks `window.activate` (`system`) once.
     focus_seen: RefCell<std::collections::BTreeMap<ViewportId, bool>>,
@@ -772,6 +793,7 @@ impl Bus {
             kernel,
             registry,
             invariants: Mutex::default(),
+            screens: RefCell::default(),
             focus_seen: RefCell::default(),
             raise_pending: RefCell::default(),
             keys_epoch,
@@ -966,6 +988,7 @@ fn install(kernel: &dyn bus_contract::Bus, registry: &Arc<Mutex<Registry>>) {
     files::install(kernel);
     overlays::install(kernel);
     drag::install(kernel);
+    screens::install(kernel);
     // The invariants check runs last on every other window point: the
     // rules the registry alone answers (the backend's and the paint
     // guard's are checked in the main window's pass).

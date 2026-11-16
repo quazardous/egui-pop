@@ -1396,7 +1396,7 @@ impl Workbench {
                 // Its window closed earlier: where and as it was.
                 let mut window = egui_pop_model::layout::Auxiliary::window(
                     p.clone(),
-                    crate::app::SCREENS[0],
+                    crate::window::UNNAMED_SCREEN,
                     rect,
                 );
                 if beside.is_none()
@@ -1471,7 +1471,8 @@ impl Workbench {
                                 r.height().max(240.0),
                             ]
                         });
-                    self.layout.detach_group(p, crate::app::SCREENS[0], rect)?;
+                    self.layout
+                        .detach_group(p, crate::window::UNNAMED_SCREEN, rect)?;
                 }
                 let named = self.layout.window_of(p).map(|a| a.panel.clone());
                 json!({ "panel": p, "panels": panels, "window": named, "detached": true })
@@ -2006,6 +2007,15 @@ fn keep_window_place(app: &AppHandle, vctx: &egui::Context, panel: &PanelId) {
     let rect = [x, y, size.x, size.y];
     if a.rect != rect {
         a.rect = rect;
+    }
+    // The screen it is on, by the name the system gives it: unplugged,
+    // the window docks back (`screen.removed`).
+    if let Some(name) = info
+        .outer_rect
+        .and_then(|r| crate::window::screen_name_at(egui::Rect::from_min_size(r.min, size)))
+        && a.screen != name
+    {
+        a.screen = name;
     }
 }
 
