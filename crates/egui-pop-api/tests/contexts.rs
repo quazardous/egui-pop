@@ -1126,3 +1126,50 @@ fn the_root_crumb_says_what_the_application_names_it() {
     h.run();
     assert_eq!(key(&h, "place"), "root");
 }
+
+/// Another photo in the same place keeps the layout shown: a panel
+/// detached into a window of its own on one photo stays in its window on
+/// the next, rather than the place starting again from its arrangement.
+/// (A place whose payload chooses its arrangement keeps one layout per
+/// payload: `a_place_starts_from_the_arrangement_its_payload_chooses`.)
+#[test]
+fn another_photo_in_the_same_place_keeps_the_detached_panel() {
+    let mut h = harness(builder());
+    let app = h.state().handle().clone();
+    let under = |payload: &str| {
+        vec![
+            contexts::Entry {
+                frame: ALBUM,
+                payload: Json::Null,
+            },
+            contexts::Entry {
+                frame: PHOTO,
+                payload: json!(payload),
+            },
+        ]
+    };
+    let detached = |app: &egui_pop_api::AppHandle| -> Vec<PanelId> {
+        app.layout()
+            .auxiliary
+            .iter()
+            .map(|a| a.panel.clone())
+            .collect()
+    };
+    assert!(contexts::go(&app, under("p1")).ok());
+    h.run();
+    let _ = app.detach_panel(&LOG);
+    h.run();
+    assert_eq!(detached(&app), [LOG]);
+    assert!(contexts::go(&app, under("p2")).ok());
+    h.run();
+    assert_eq!(key(&h, "place"), "demo.photo");
+    assert_eq!(detached(&app), [LOG], "{:?}", app.layout());
+    // Back on the album: its own layout, the panel docked there.
+    assert!(contexts::back(&app).ok());
+    h.run();
+    assert!(detached(&app).is_empty(), "{:?}", app.layout());
+    // A photo again: the photos' layout as it was left.
+    assert!(contexts::go(&app, under("p3")).ok());
+    h.run();
+    assert_eq!(detached(&app), [LOG], "{:?}", app.layout());
+}
