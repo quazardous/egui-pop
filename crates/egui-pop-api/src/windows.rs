@@ -497,9 +497,7 @@ impl AppHandle {
         let id = spec.id.clone();
         let opened = {
             let mut w = self.windows_mut();
-            if w.root.id == id {
-                false
-            } else if w.entry(&id).is_some() {
+            if w.root.id == id || w.entry(&id).is_some() {
                 false
             } else {
                 self.load_geometry(&mut w);
@@ -633,10 +631,8 @@ impl AppHandle {
                 // at the main window's next pass.
                 w.going_home = true;
                 Some(ViewportId::ROOT)
-            } else if let Some(e) = w.entry(id) {
-                Some(e.id.deferred_viewport())
             } else {
-                None
+                w.entry(id).map(|e| e.id.deferred_viewport())
             }
         };
         // `window.activate` (`command`): the registry holds it as the
