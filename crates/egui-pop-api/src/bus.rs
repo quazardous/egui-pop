@@ -633,8 +633,12 @@ thread_local! {
 }
 
 /// The application whose request runs now, for a listener (listeners
-/// are `Send + Sync` and keep no handle).
-pub(crate) fn asking() -> Option<AppHandle> {
+/// are `Send + Sync` and keep no handle): an application's listener of
+/// `files.drop` runs its import command on it. `None` outside a request.
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
+pub fn asking() -> Option<AppHandle> {
     ASKING.with_borrow(|a| a.last().and_then(|w| w.get().ok()))
 }
 

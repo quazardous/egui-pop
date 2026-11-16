@@ -133,6 +133,8 @@ fn listen_import(app: &AppHandle) -> Taken {
                 if !did.is_empty() {
                     return Ok(());
                 }
+                // The application asking, for a listener keeping no handle.
+                assert!(bus::asking().is_some());
                 let paths = drop.paths.iter().map(|p| p.display().to_string()).collect();
                 t.lock().unwrap().push((drop.window.clone(), paths));
                 did.push(format!("demo.import: {} files", drop.paths.len()));
