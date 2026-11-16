@@ -1,0 +1,4 @@
+settings.changed
+  1. theme.install (owner egui_pop): local
+  2. pointer.profile (owner egui_pop): local
+  3. frame.decorations (owner egui_pop): local

@@ -602,6 +602,8 @@ impl Admin {
         if scope != ValueScope::App && !self.allows(app, id, scope) {
             return Err(format!("`{id}` is not set for a {}", scope.name()));
         }
+        // The write is said on the bus as made in this scope.
+        let _writing = crate::bus::settings::writing(scope.name(), None);
         let (w, plain) = {
             let mut l = lock(&self.layers);
             let plain = scope == ValueScope::App && l.origin(&path) == ValueScope::App;

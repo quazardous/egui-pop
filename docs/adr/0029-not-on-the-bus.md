@@ -493,9 +493,21 @@ application's bugs ask for:
   their followers (layout repair, persistence, focus) are calls.
 - **Selection**: has subscribers of its own (`selection.rs`), beside
   the journal.
-- **Settings changes**: value listeners per path
-  ([ADR 0016](0016-one-writer-per-value.md)); what follows a change
-  (theme install, scale, fonts) is called from the main pass.
+- **Settings changes**: moved (2026-11-16). The value store, the one
+  writer of a setting ([ADR 0016](0016-one-writer-per-value.md)), says
+  every change of a `settings/` path once as `settings.changed`
+  (`SettingChange`: path, scope, by), made here or by another client of
+  the host's store (`by`: `store`). Its listener runs under the store's
+  lock, so the change is said right after, at the next of these points
+  on the interface's thread: the start of the application's logic, after
+  its requests, after the Settings app's sync applied changes made
+  elsewhere, and at the end of the main window's pass. The theme
+  (`theme.install`: the accent, the text size and fonts, the scroll
+  bars, light or dark), the pointer profile (`pointer.profile`) and the
+  main window's decorations (`frame.decorations`) are its local
+  listeners; their per-pass comparisons are gone. Left: the
+  `admin.window` setting changed by another writer, still followed at
+  the app's next request.
 
 ## Consequences
 

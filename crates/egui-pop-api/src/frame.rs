@@ -478,16 +478,48 @@ fn follow_setting(ui: &Ui, app: &AppHandle) -> bool {
     app.set_context("windowMaximized", if maximized { "true" } else { "false" });
     native::follow(ctx, app, own);
     native::corners(ctx, own);
-    let key = DECORATED.keyed(ctx.viewport_id());
-    let applied = key.get(ctx);
-    if applied != Some(own) {
-        ctx.send_viewport_cmd(ViewportCommand::Decorations(!own));
-        key.set(ctx, own);
-        if !own {
-            HitTable::of(ctx).forget(ctx.viewport_id());
-        }
+    // Given once here; a change of the setting is followed by
+    // `frame.decorations`.
+    if DECORATED.keyed(ctx.viewport_id()).get(ctx).is_none() {
+        decorate(ctx, ctx.viewport_id(), own);
     }
     own
+}
+
+/// Gives a window the decorations `own` asks for (none when the
+/// application draws the frame), when it has others.
+fn decorate(ctx: &Context, viewport: egui::ViewportId, own: bool) {
+    let key = DECORATED.keyed(viewport);
+    if key.get(ctx) == Some(own) {
+        return;
+    }
+    ctx.send_viewport_cmd_to(viewport, ViewportCommand::Decorations(!own));
+    key.set(ctx, own);
+    if !own {
+        HitTable::of(ctx).forget(viewport);
+    }
+}
+
+/// Registers `frame.decorations`, egui-pop's local listener of
+/// `settings.changed`: the main window takes the decorations
+/// [`SETTING_FRAME`] asks for in the call that changed it.
+pub(crate) fn listen(app: &AppHandle) {
+    use crate::bus::{FRAME_DECORATIONS, OWNER, SettingsChanged, asking};
+    let listened = app.bus().listen_local::<SettingsChanged>(
+        FRAME_DECORATIONS,
+        bus_contract::ListenOpts::new().owner(OWNER),
+        |change, ()| {
+            if change.id() != SETTING_FRAME.as_str() {
+                return Ok(());
+            }
+            let Some(app) = asking() else { return Ok(()) };
+            decorate(&app.egui(), egui::ViewportId::ROOT, own_frame(&app));
+            Ok(())
+        },
+    );
+    if let Err(e) = listened {
+        log::error!(target: "egui_pop", "{FRAME_DECORATIONS}: {e}");
+    }
 }
 
 fn bar_in_full_screen(ctx: &Context) -> Slot<u64> {

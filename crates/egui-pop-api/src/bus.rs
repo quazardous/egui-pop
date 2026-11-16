@@ -98,6 +98,14 @@
 //! a [`FileDrop`] naming the window); whoever takes them listens, and
 //! nobody taking them is said as `files.refused`.
 //!
+//! Settings are on it too: every change of a setting's value is said
+//! once by the value store, its one writer, as `settings.changed`
+//! ([`SettingsChanged`], a [`SettingChange`]: path, scope, by), whether
+//! it was made here or by another client of the host's store; the theme,
+//! the pointer profile and the main window's frame are its listeners
+//! ([`THEME_INSTALL`], [`POINTER_PROFILE`], [`FRAME_DECORATIONS`]), and an
+//! application's part that follows a setting listens there too.
+//!
 //! A drag across windows is on it too ([`drag`]): a drag begins as
 //! `drag.start` ([`DragStart`], its kind and window); let go over a drop
 //! target that takes it, in its window or another, it is `drag.drop`
@@ -134,6 +142,11 @@ pub use owners::OWNER_GONE;
 pub(crate) mod panels;
 pub use panels::{WORKBENCH_OWNER, WORKBENCH_WINDOW};
 mod popups;
+pub(crate) mod settings;
+pub use settings::{
+    FRAME_DECORATIONS, POINTER_PROFILE, SETTINGS_POINTS, SettingChange, SettingsChanged,
+    THEME_INSTALL,
+};
 mod shell;
 pub use shell::STEP_WINDOW_REPARENT;
 
@@ -489,9 +502,9 @@ pub const JOB_POINTS: [&str; 5] = [
 /// The plugin points, in the order [`order_dump`] prints them.
 pub const PLUGIN_POINTS: [&str; 2] = [PluginConnect::ID, PluginDisconnect::ID];
 
-/// Every point egui-pop declares: the window, job, plugin, files and
-/// drag points.
-pub const POINTS: [&str; 16] = [
+/// Every point egui-pop declares: the window, job, plugin, files,
+/// settings and drag points.
+pub const POINTS: [&str; 17] = [
     WindowOpen::ID,
     WindowClose::ID,
     WindowReparent::ID,
@@ -506,6 +519,7 @@ pub const POINTS: [&str; 16] = [
     PluginConnect::ID,
     PluginDisconnect::ID,
     FilesDrop::ID,
+    SettingsChanged::ID,
     DragStart::ID,
     DragDrop::ID,
 ];
@@ -541,6 +555,9 @@ pub const CONTRACT: &[PointDecl] = &[
     ),
     PointDecl::of::<FilesDrop>(
         "Files from another program are dropped on a window: whoever takes them says so; `files.dropped` follows, or `files.refused` when nobody took them.",
+    ),
+    PointDecl::of::<SettingsChanged>(
+        "A setting's value changed, here or by another client of the host's store: said once by the value store, its one writer (path, scope, by); whoever follows the setting does its part.",
     ),
     PointDecl::of::<DragStart>(
         "A drag begins in a window (a tab, a tab group, an application's payload): its kind and the window; `drag.started` follows.",
@@ -684,6 +701,11 @@ pub(crate) struct Bus {
     delivered: Cell<Seq>,
     /// A delivery runs: one asked from inside it is left to it.
     delivering: Cell<bool>,
+    /// The settings the value store changed, not said yet
+    /// ([`AppHandle::deliver_settings`]).
+    pub(crate) settings_heard: settings::Heard,
+    /// A delivery of settings runs.
+    settings_delivering: Cell<bool>,
     /// The context a pass is asked of when an emit on another thread
     /// queues local listeners ([`AppHandle::run_pending`]).
     wake: Arc<Mutex<Option<egui::Context>>>,
@@ -735,6 +757,8 @@ impl Bus {
             keys_epoch,
             delivered: Cell::new(0),
             delivering: Cell::new(false),
+            settings_heard: settings::Heard::default(),
+            settings_delivering: Cell::new(false),
             wake,
         }
     }
