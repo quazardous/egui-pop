@@ -476,6 +476,19 @@ application's bugs ask for:
   nobody took them or the window is not open. The file browser's part is
   `files.browser`, first. While files hover a window and no widget shows
   where they would go, the window says whether anything takes files.
+- **Drags across windows**: moved (2026-11-16). A drag of any typed
+  payload is a session (`bus::drag`) that outlives the pass of the
+  window it began in: the source starts it (`drag.start`: its kind, its
+  window); drop targets register each pass by window and by id; let go,
+  the payload is delivered once to the target under the pointer, in the
+  source window or another (from the screen's coordinates where the
+  system tells where windows are, else to the first window that sees the
+  pointer over a target once the drag lets it go), as `drag.drop` then
+  `drag.dropped`; a target refusing it, a drag let go over nothing, or
+  cancelled, is `drag.refused` with the reason. The workbench's tabs and
+  tab groups are payloads of the same session; its detached windows are
+  targets. Where a drag hovers each pass stays off the bus (per-frame
+  painting).
 - **Panels and layout**: the workbench's changes are steps already;
   their followers (layout repair, persistence, focus) are calls.
 - **Selection**: has subscribers of its own (`selection.rs`), beside
