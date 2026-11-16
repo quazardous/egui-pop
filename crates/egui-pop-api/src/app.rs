@@ -3006,6 +3006,17 @@ impl AppHandle {
         self.workbench_mut().window_drop.clone()
     }
 
+    /// The detached windows outlined in the last pass: a tab is dragged out
+    /// of the main window, where the system hides window positions
+    /// (Wayland), and these windows may take it, though none can tell the
+    /// pointer is over it until it is let go.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn window_outlines(&self) -> Vec<PanelId> {
+        self.workbench_mut().window_outlines().to_vec()
+    }
+
     /// The panel the keys obey, the context key `focusedPanel`: the last that
     /// held the widget focus, had the pointer pressed in it or was given the
     /// keyboard (`crate::workbench`'s "The focused panel").
@@ -5302,6 +5313,7 @@ impl App {
                         "panel": p,
                         "from": crate::workbench::area_name(*a),
                     })),
+                    "window_outlines": wb.window_outlines(),
                     "window_drop": wb.window_drop.as_ref().map(|d| json!({
                         "panel": d.panel,
                         "window": d.window,

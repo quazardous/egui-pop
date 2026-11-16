@@ -6,6 +6,9 @@
 //! region, the bars around it in a suite of their own
 //! (`the_bars_have_their_own_snapshots`, `chrome-*`).
 
+// The detached windows' drop frames, a picture of each window.
+mod window_drop;
+
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop::model::ids::StoryId;

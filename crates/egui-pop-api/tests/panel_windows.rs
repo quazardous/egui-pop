@@ -352,3 +352,138 @@ fn a_tab_let_go_over_a_detached_window_joins_it_where_positions_are_hidden() {
     assert_eq!(layout.area_of(&TREE), None);
     assert_eq!(layout.auxiliary.len(), 1);
 }
+
+/// The rectangles a window's last pass painted over most of its body (a
+/// drop zone over the window, the body's own background): those a drag
+/// adds are its drop frames.
+fn covering(m: &MultiWindow, v: ViewportId) -> usize {
+    fn count(shape: &egui::Shape) -> usize {
+        match shape {
+            egui::Shape::Vec(v) => v.iter().map(count).sum(),
+            egui::Shape::Rect(r) => {
+                let big = r.rect.width() >= 500.0 && r.rect.height() >= 300.0;
+                let seen = r.fill.a() > 0 || (r.stroke.width > 0.0 && r.stroke.color.a() > 0);
+                usize::from(big && seen)
+            }
+            _ => 0,
+        }
+    }
+    m.shapes(v).iter().map(|c| count(&c.shape)).sum()
+}
+
+/// Presses the tree's tab in the main window and drags it to `to` (the
+/// main window's points), the button held; one more pass shows the
+/// windows what the drag reached.
+fn drag_tree(m: &mut MultiWindow, to: egui::Pos2) -> egui::Pos2 {
+    let (from, _) = m
+        .node(ViewportId::ROOT, "Tree")
+        .expect("the tree's tab in the main window");
+    let from = from.center();
+    let send = |m: &mut MultiWindow, e: egui::Event| {
+        m.queue(ViewportId::ROOT, e);
+        m.root_pass();
+    };
+    send(m, egui::Event::PointerMoved(from));
+    send(
+        m,
+        egui::Event::PointerButton {
+            pos: from,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        },
+    );
+    for i in 1..=8 {
+        send(
+            m,
+            egui::Event::PointerMoved(from + (to - from) * (i as f32 / 8.0)),
+        );
+    }
+    m.root_pass();
+    from
+}
+
+/// Lets the dragged tab go at `at` (the main window's points).
+fn release_tree(m: &mut MultiWindow, at: egui::Pos2) {
+    m.queue(
+        ViewportId::ROOT,
+        egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        },
+    );
+    m.root_pass();
+}
+
+/// A tab dragged from the main window over a detached window, where the
+/// system tells where windows are: the detached window paints its drop
+/// frame over its body, in its own frame, and a drop there joins it.
+#[test]
+fn a_tab_dragged_over_a_detached_window_paints_its_drop_frame_there() {
+    let mut m = multi();
+    let v = detach_log(&mut m);
+    // The main window at the screen's origin, the log's window right of
+    // it (the main one is 640 points wide).
+    m.set_outer_position(ViewportId::ROOT, [0.0, 0.0]);
+    m.set_outer_position(v, [700.0, 0.0]);
+    m.root_pass();
+    m.root_pass();
+    let rest = covering(&m, v);
+    // Over the log's window, at (200, 200) of its own points.
+    let to = egui::pos2(900.0, 200.0);
+    drag_tree(&mut m, to);
+    let over = m
+        .app()
+        .window_drop()
+        .expect("the drag is seen over the window");
+    assert_eq!(over.window, LOG);
+    assert!(
+        covering(&m, v) > rest,
+        "the detached window paints its drop frame over its body ({} at rest, {} now)",
+        rest,
+        covering(&m, v)
+    );
+    release_tree(&mut m, to);
+    m.root_pass();
+    let layout = m.app().layout();
+    assert_eq!(layout.window_of(&TREE).map(|w| w.panel.clone()), Some(LOG));
+}
+
+/// Where the system hides window positions (Wayland), no window can tell
+/// the pointer is over it while the drag holds it: once the pointer
+/// leaves the main window, each detached window that would take the tab
+/// outlines itself, the best hint there is; back in the main window, the
+/// outline goes.
+#[test]
+fn a_tab_dragged_out_of_the_main_window_outlines_the_windows_where_positions_are_hidden() {
+    let mut m = multi();
+    m.hide_positions();
+    let v = detach_log(&mut m);
+    m.root_pass();
+    let rest = covering(&m, v);
+    let to = egui::pos2(700.0, 200.0);
+    let from = drag_tree(&mut m, to);
+    assert!(
+        m.app().window_drop().is_none(),
+        "no window can tell it is under the pointer"
+    );
+    assert_eq!(m.app().window_outlines(), [LOG]);
+    assert!(
+        covering(&m, v) > rest,
+        "the detached window outlines itself ({} at rest, {} now)",
+        rest,
+        covering(&m, v)
+    );
+    // Back over the main window: no outline.
+    m.queue(ViewportId::ROOT, egui::Event::PointerMoved(from));
+    m.root_pass();
+    m.root_pass();
+    assert_eq!(
+        covering(&m, v),
+        rest,
+        "the outline goes with the pointer back"
+    );
+    assert!(m.app().window_outlines().is_empty());
+}
