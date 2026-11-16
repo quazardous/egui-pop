@@ -550,7 +550,7 @@ impl Plugin for InstancePlugin {
                 });
                 let links = links.clone();
                 app.step(&STEP_SECOND_LAUNCH, args, move |app, args| {
-                    crate::window::raise(&app.egui());
+                    crate::window::raise_app(app);
                     let urls: Vec<String> = args["links"]
                         .as_array()
                         .map(|l| {

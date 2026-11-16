@@ -684,6 +684,21 @@ pub fn block_window(ctx: &Context) -> Option<ViewportId> {
 /// almost a separate application blocks only itself, and is blocked by
 /// none of the others.
 pub fn block_window_among(ctx: &Context, same: &dyn Fn(ViewportId) -> bool) -> Option<ViewportId> {
+    // Without an application (this crate alone has no bus), the system is
+    // asked directly.
+    block_window_raising(ctx, same, &|owner| {
+        ctx.send_viewport_cmd_to(owner, egui::ViewportCommand::Focus);
+    })
+}
+
+/// As [`block_window_among`], a click on the backdrop asking `raise` to
+/// bring the window of the modal to the front (an application asks its
+/// bus's `window.activate`).
+pub fn block_window_raising(
+    ctx: &Context,
+    same: &dyn Fn(ViewportId) -> bool,
+    raise: &dyn Fn(ViewportId),
+) -> Option<ViewportId> {
     let here = ctx.viewport_id();
     let owner = modal_windows(ctx)
         .into_iter()
@@ -712,7 +727,7 @@ pub fn block_window_among(ctx: &Context, same: &dyn Fn(ViewportId) -> bool) -> O
         .frame(egui::Frame::NONE)
         .show(ctx, |_| {});
     if r.backdrop_response.clicked() || r.backdrop_response.drag_started() {
-        ctx.send_viewport_cmd_to(owner, egui::ViewportCommand::Focus);
+        raise(owner);
     }
     Some(owner)
 }

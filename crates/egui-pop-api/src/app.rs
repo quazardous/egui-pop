@@ -777,7 +777,6 @@ pub(crate) struct Shared {
     system_file_chooser: std::cell::Cell<bool>,
     /// The window the user worked in last (focused, clicked or typed
     /// in): a dialog opens over it.
-    active_window: std::cell::Cell<egui::ViewportId>,
     /// The shell panels' starting sizes (`AppBuilder::shell_panel_size`).
     shell_sizes: RefCell<Vec<(PanelId, f32)>>,
     /// The shell panels' least and largest sizes
@@ -934,7 +933,6 @@ impl AppHandle {
             toast_corner: std::cell::Cell::default(),
             menu_bar: std::cell::Cell::new(true),
             system_file_chooser: std::cell::Cell::new(false),
-            active_window: std::cell::Cell::new(egui::ViewportId::ROOT),
             shell_sizes: RefCell::default(),
             shell_bounds: RefCell::default(),
             centre_min: std::cell::Cell::new(None),
@@ -2118,10 +2116,14 @@ impl AppHandle {
     }
 
     /// The window the user worked in last (focused, clicked or typed
-    /// in), still open: the main window (`ViewportId::ROOT`) or a
-    /// detached panel's. A dialog opens over it.
+    /// in), still open: the main window (`ViewportId::ROOT`), a detached
+    /// panel's or an application window's. A dialog opens over it. The
+    /// registry holds it (`window.activate`, [`AppHandle::active_window_id`]).
     pub fn active_window(&self) -> egui::ViewportId {
-        self.still_open(self.0.active_window.get())
+        let (id, kind) = self.active_window_record();
+        self.still_open(
+            crate::window_invariants::viewport_of(kind, &id).unwrap_or(egui::ViewportId::ROOT),
+        )
     }
 
     /// A window if it is still open, else the main window.
@@ -2130,30 +2132,6 @@ impl AppHandle {
             window
         } else {
             egui::ViewportId::ROOT
-        }
-    }
-
-    /// Makes a window the active one (a window asked to the front).
-    pub(crate) fn set_active_window(&self, window: egui::ViewportId) {
-        self.0.active_window.set(window);
-    }
-
-    /// Notes the window being drawn as the active one when it has the
-    /// focus or got a press or a key this pass.
-    pub(crate) fn note_window(&self, ctx: &Context) {
-        let used = ctx.input(|i| {
-            i.viewport().focused == Some(true)
-                || i.events.iter().any(|e| {
-                    matches!(
-                        e,
-                        egui::Event::Key { pressed: true, .. }
-                            | egui::Event::PointerButton { pressed: true, .. }
-                            | egui::Event::Text(_)
-                    )
-                })
-        });
-        if used {
-            self.0.active_window.set(ctx.viewport_id());
         }
     }
 
@@ -2699,7 +2677,7 @@ impl AppHandle {
         ctx.request_repaint();
         // Its own window comes forward, if another has the system's focus.
         if ctx.input(|i| i.viewport().focused) == Some(false) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            self.raise_viewport(ctx.viewport_id(), "egui_pop.workbench");
         }
         // Egui would take the focus straight off a widget under a modal.
         if overlay::modal_open(ctx) {
@@ -7072,7 +7050,7 @@ impl App {
         // A dialog open in a detached panel's window blocks this one; one
         // in an application window does not.
         let app = self.handle.clone();
-        overlay::block_window_among(&ctx, &|v| !crate::windows::is_app_window(&app, v));
+        app.block_window(&ctx, &|v| !crate::windows::is_app_window(&app, v));
         overlay::begin_pass(&ctx);
         self.dispatch_keys(&ctx);
         self.process_requests();
