@@ -1165,6 +1165,20 @@ impl AppHandle {
         drawn
     }
 
+    /// An application window moved to `at` by `window.place` (its screen
+    /// gone): its builder asks that place from now on, so the next pass
+    /// does not move it back.
+    pub(crate) fn app_window_moved(&self, viewport: ViewportId, at: egui::Pos2) {
+        let mut w = self.windows_mut();
+        if let Some(e) = w
+            .entries
+            .iter_mut()
+            .find(|e| e.id.deferred_viewport() == viewport)
+        {
+            e.first.1 = Some([at.x, at.y]);
+        }
+    }
+
     /// Declares the open windows, from the main window's pass: a window
     /// not declared in a pass of its parent is closed by egui.
     pub(crate) fn declare_windows(&self, ctx: &Context) {
