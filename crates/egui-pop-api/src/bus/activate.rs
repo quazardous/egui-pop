@@ -10,6 +10,8 @@
 //! window changed. A window closing while active hands the activation to
 //! the window worked in before it (`window.focus`, a `system` request).
 
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use bus_contract::{Bus, ListenOpts, Point as _};
@@ -18,8 +20,8 @@ use egui_pop_core::lock;
 use serde_json::json;
 
 use super::{
-    OWNER, RAISE, REGISTRY, Reason, Registry, WindowActivate, WindowKind, WindowRequest, asking,
-    emit,
+    KEYS, OWNER, RAISE, REGISTRY, Reason, Registry, WindowActivate, WindowKind, WindowRequest,
+    asking, emit,
 };
 use crate::app::AppHandle;
 use crate::windows::WindowId;
@@ -57,6 +59,30 @@ pub(super) fn install(kernel: &dyn Bus, registry: &Arc<Mutex<Registry>>) {
     ];
     for l in listened {
         debug_assert!(l.is_ok(), "{l:?}");
+    }
+}
+
+/// Registers [`KEYS`], a local listener on `window.activate` after the
+/// registry: when the active window changes, `epoch` counts it, and each
+/// window's key dispatcher drops its shortcut in progress at its next
+/// pass. A chord begun in one window is never finished in another.
+pub(super) fn install_keys(kernel: &dyn Bus, epoch: Rc<Cell<u64>>) {
+    let last = RefCell::new(WindowId::MAIN.to_string());
+    let listened = kernel.listen_local::<WindowActivate>(
+        KEYS,
+        ListenOpts::new().owner(OWNER).after(REGISTRY),
+        move |req, did| {
+            let mut last = last.borrow_mut();
+            if *last != req.window {
+                req.window.clone_into(&mut last);
+                epoch.set(epoch.get() + 1);
+                did.push(format!("{KEYS}: shortcuts in progress dropped"));
+            }
+            Ok(())
+        },
+    );
+    if let Err(e) = listened {
+        log::warn!(target: "egui_pop", "{KEYS}: {e}");
     }
 }
 

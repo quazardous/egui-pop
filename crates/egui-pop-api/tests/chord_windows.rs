@@ -114,6 +114,7 @@ fn a_chord_in_progress_is_dropped_when_another_window_becomes_active() {
 
     key_in(&mut m, ViewportId::ROOT, Key::K);
     assert_eq!(m.app().pending_keys().as_deref(), Some("Ctrl+K"));
+    m.focus(panel);
     m.click(panel, egui::pos2(320.0, 300.0));
     assert_eq!(m.app().active_window_id(), "panel:demo.log");
     key_in(&mut m, ViewportId::ROOT, Key::G);
