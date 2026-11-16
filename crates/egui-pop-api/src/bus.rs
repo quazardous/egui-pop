@@ -679,17 +679,21 @@ fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
         {
             let registry = registry.clone();
             kernel.listen::<WindowClose>(INVARIANTS, mine().last(), move |req, did| {
-                let held = lock(&registry).holds(&req.window);
+                let left = lock(&registry).holds(&req.window);
+                let mut rest = true;
                 if let Some(app) = asking() {
-                    if held {
+                    if left {
                         app.invariant_broken(crate::window_invariants::closed_left(req));
                     }
-                    app.check_invariants_after_request();
+                    rest = app.check_invariants_after_request();
                 }
-                if held {
+                if left {
                     return Err(format!("`{}` is still in the registry", req.window).into());
                 }
-                did.push(format!("{INVARIANTS}: held"));
+                did.push(format!(
+                    "{INVARIANTS}: {}",
+                    if rest { "held" } else { "broken" }
+                ));
                 Ok(())
             })
         },
@@ -738,10 +742,11 @@ fn install(kernel: &Kernel, registry: &Arc<Mutex<Registry>>) {
     // rules the registry alone answers (the backend's and the paint
     // guard's are checked in the main window's pass).
     let check = |_: &WindowRequest, did: &mut Vec<String>| {
-        if let Some(app) = asking() {
-            app.check_invariants_after_request();
-        }
-        did.push(format!("{INVARIANTS}: checked"));
+        let held = asking().is_none_or(|app| app.check_invariants_after_request());
+        did.push(format!(
+            "{INVARIANTS}: {}",
+            if held { "held" } else { "broken" }
+        ));
         Ok(())
     };
     let others = [

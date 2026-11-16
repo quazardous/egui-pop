@@ -268,10 +268,13 @@ impl AppHandle {
     }
 
     /// `window.invariants` after a request: the rules the registry alone
-    /// answers.
-    pub(crate) fn check_invariants_after_request(&self) {
+    /// answers. Whether they all hold.
+    pub(crate) fn check_invariants_after_request(&self) -> bool {
         let records = self.windows_list();
-        self.reconcile(&STRUCTURE, structure(&records));
+        let found = structure(&records);
+        let held = found.is_empty();
+        self.reconcile(&STRUCTURE, found);
+        held
     }
 
     /// The end of the main window's pass: every rule the registry and
