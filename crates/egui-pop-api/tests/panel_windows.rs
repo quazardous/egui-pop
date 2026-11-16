@@ -258,3 +258,36 @@ fn the_workbench_has_no_direct_window_path() {
         );
     }
 }
+
+/// A layout put in again (what an application does when it re-applies a
+/// workspace) is not a close: a detached window it still holds stays
+/// open, the same viewport, with no request asked; a layout without it
+/// docks the panel back, as its window's `window.reparent`.
+#[test]
+fn a_layout_put_in_again_keeps_the_detached_window() {
+    let mut m = multi();
+    let v = detach_log(&mut m);
+    let asked = |m: &MultiWindow| {
+        ["window.opened", "window.closed", "window.moved"]
+            .iter()
+            .map(|n| events(m.app(), n).len())
+            .sum::<usize>()
+    };
+    let before = asked(&m);
+    let layout = m.app().layout();
+    m.app().set_layout(layout.clone());
+    assert_eq!(asked(&m), before, "nothing asked: the window stays");
+    assert_eq!(
+        panels_listed(m.app()),
+        [(LOG_WINDOW.to_string(), WORKBENCH_OWNER.to_string())]
+    );
+    m.root_pass();
+    m.root_pass();
+    assert!(m.shown_immediate().contains(&v));
+    // Without the window: the log docks back, its window reparented.
+    let mut docked = layout;
+    docked.place(&LOG, Area::Bottom);
+    m.app().set_layout(docked);
+    assert_eq!(events(m.app(), "window.moved").len(), 1);
+    assert_docked(&mut m, v);
+}
