@@ -35,5 +35,6 @@ after the fact except to mark it superseded by a later one.
 | [0027](0027-component-families.md) | Every public module belongs to one component family, which says what it owns and refuses; `cargo xtask families --check` | 2026-11-15 |
 | [0028](0028-removed-contributor-work-in-flight.md) | A removed contributor's work in flight is closed, refused or kept dormant, and said | 2026-11-15 |
 | [0029](0029-not-on-the-bus.md) | What is not on the bus does not exist: a module knows the bus (requests, events, named listeners in a declared order), not its neighbours; the window lifecycle first | 2026-11-15 |
+| [0030](0030-the-bus-is-a-contract.md) | The bus is a contract the application supplies: `egui-pop-bus` holds the traits, `egui-pop-hooks` is the default implementation, libraries take the bus at construction | 2026-11-16 |
 
 Template: copy any of them; keep it to half a page.
