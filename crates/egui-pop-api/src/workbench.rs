@@ -964,6 +964,11 @@ pub(crate) struct Workbench {
     /// The detached window under a dragged tab last frame, where a drop
     /// moves it.
     pub window_drop: Option<WindowDrop>,
+    /// A tab let go outside the main window over no window that saw it
+    /// (a system hiding window positions: Wayland), and the passes left
+    /// for a detached window to take it: the first one that then sees the
+    /// pointer over its body, once the drag's grab ends, joins it.
+    released_outside: Option<(PanelId, u8)>,
     /// The panel the keys obey: see [`Workbench::follow_focus`].
     pub focused: Option<PanelId>,
     /// The last panel to be `focused` that lives in the layout proper: where
@@ -1030,6 +1035,7 @@ impl Default for Workbench {
             landing: None,
             landing_rect: None,
             window_drop: None,
+            released_outside: None,
             hint: None,
             focused: None,
             settled: None,
@@ -1716,12 +1722,23 @@ pub(crate) fn windows(
     app_name: &str,
     keys: &mut dyn FnMut(&egui::Context),
 ) {
-    let (auxiliary, dragging) = {
+    let (auxiliary, dragging, released) = {
         let mut wb = app.workbench_mut();
         // Found again by this pass's windows.
         wb.window_drop = None;
-        (wb.layout.auxiliary.clone(), wb.dragging.clone())
+        // A tab let go outside, waiting for a window to see the pointer:
+        // a few passes, then forgotten.
+        let released = wb.released_outside.as_ref().map(|(p, _)| p.clone());
+        wb.released_outside = match wb.released_outside.take() {
+            Some((p, n)) if n > 0 => Some((p, n - 1)),
+            _ => None,
+        };
+        (wb.layout.auxiliary.clone(), wb.dragging.clone(), released)
     };
+    if released.is_some() {
+        // The windows' passes, until one sees the pointer.
+        ctx.request_repaint();
+    }
     // The main window's top-left on the screen, in pixels, for windows
     // that do not see a drag begun in the main one.
     let origin = ctx.input(|i| i.viewport().inner_rect).map(|r| {
@@ -1820,6 +1837,22 @@ pub(crate) fn windows(
                 let pointer = window_pointer(&vctx, own_window, *at, origin);
                 if let Some(pointer) = pointer.filter(|p| body.contains(*p)) {
                     window_drop(app, &vctx, &aux, dragged, body, pointer);
+                }
+            }
+            // A tab let go outside the main window where the system hides
+            // window positions: no window could tell it was under the
+            // pointer while the drag held it. The pointer is this
+            // window's once the drag lets it go: dropped here.
+            if own_window
+                && let Some(dragged) = released.as_ref().filter(|p| !aux.holds(p))
+                && vctx
+                    .input(|i| i.pointer.hover_pos())
+                    .is_some_and(|p| body.contains(p))
+            {
+                // Taken once: the other windows of this pass leave it.
+                let taken = app.workbench_mut().released_outside.take().is_some();
+                if taken {
+                    join_dropped(app, dragged, &panel);
                 }
             }
             if own_window {
@@ -4458,6 +4491,19 @@ impl TabViewer for Viewer<'_> {
     }
 }
 
+/// How many passes a tab let go outside the main window waits for a
+/// detached window to see the pointer.
+const RELEASED_OUTSIDE_PASSES: u8 = 4;
+
+/// A tab dropped on a detached window: it joins the window's tabs
+/// (`workbench.join_window`), a refusal said.
+fn join_dropped(app: &AppHandle, panel: &PanelId, window: &PanelId) {
+    let out = app.change_workbench(Change::JoinWindow(panel.clone(), window.clone()));
+    if let Some(Outcome::Done(Err(e))) = &out {
+        app.workbench_refused(&format!("move {panel}"), e);
+    }
+}
+
 /// A tab dragged at the start of a pass: its panel, its area, and the
 /// areas' trees before a drop.
 type Before = (PanelId, Area, Vec<(Area, Node)>);
@@ -4484,11 +4530,18 @@ fn track_drag(app: &AppHandle, ctx: &egui::Context, before: Option<Before>) {
     if let Some((panel, _, _)) = &ended
         && let Some(drop) = over.filter(|d| d.panel == *panel)
     {
-        let out = app.change_workbench(Change::JoinWindow(panel.clone(), drop.window));
-        if let Some(Outcome::Done(Err(e))) = &out {
-            app.workbench_refused(&format!("move {panel}"), e);
-        }
+        join_dropped(app, panel, &drop.window);
         return;
+    }
+    // Let go outside the main window, over no window that saw it: a
+    // detached window seeing the pointer in the next passes takes it
+    // (`windows`), where the system hides window positions (Wayland).
+    if let Some((panel, _, at)) = &ended
+        && !ctx.input(|i| i.viewport_rect()).contains(*at)
+        && !app.workbench_mut().layout.auxiliary.is_empty()
+    {
+        app.workbench_mut().released_outside = Some((panel.clone(), RELEASED_OUTSIDE_PASSES));
+        ctx.request_repaint();
     }
     let Some((panel, from, areas)) = before else {
         return;
