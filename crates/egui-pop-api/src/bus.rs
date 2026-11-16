@@ -768,8 +768,9 @@ fn install(kernel: &dyn bus_contract::Bus, registry: &Arc<Mutex<Registry>>) {
         }),
         kernel.listen::<WindowClose>(FOCUS, mine().before(REGISTRY), |req, did| {
             let Some(app) = asking() else { return Ok(()) };
-            if let Some(before) = app.focus_before_close(&req.window) {
-                did.push(format!("{FOCUS}: `{before}`, worked in before, is active"));
+            app.forget_focus(req);
+            if app.focus_before_close(&req.window).is_some() {
+                did.push(format!("{FOCUS}: the window worked in before is active"));
             }
             Ok(())
         }),

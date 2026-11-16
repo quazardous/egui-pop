@@ -223,6 +223,14 @@ impl AppHandle {
         self.request_window_activate(WindowRequest::new(id, kind, OWNER, reason));
     }
 
+    /// A closing window's focus is forgotten: a window of the same id
+    /// opened again and focused gains the focus anew.
+    pub(crate) fn forget_focus(&self, req: &WindowRequest) {
+        if let Some(v) = crate::window_invariants::viewport_of(req.kind, &req.window) {
+            self.0.bus.focus_seen.borrow_mut().remove(&v);
+        }
+    }
+
     /// `window.focus`'s part on a window closing: when it is the active
     /// one, the window worked in before it becomes active (a `system`
     /// request). The window made active, if one was.
