@@ -305,6 +305,26 @@ impl MultiWindow {
         );
     }
 
+    /// The screens the system says, named as winit names them, for this
+    /// thread's application (`egui_pop_api::window::set_screens`): told
+    /// again with one missing, it is unplugged (`screen.removed`) at the
+    /// main window's next pass. Forgotten when the harness is dropped.
+    pub fn set_screen_list(&mut self, screens: Vec<egui_pop_api::window::Screen>) {
+        egui_pop_api::window::set_screens(screens);
+    }
+
+    /// A window's rectangle on the screens as the system tells it (its
+    /// outer one): where the test put it ([`Self::set_outer_position`]),
+    /// or where a command moved it since (`ViewportCommand::OuterPosition`,
+    /// followed as a system telling positions does). None where positions
+    /// are hidden ([`Self::hide_positions`]) or none was set.
+    pub fn outer_rect(&self, viewport: ViewportId) -> Option<Rect> {
+        if self.positions_hidden {
+            return None;
+        }
+        self.info.get(&viewport).and_then(|i| i.outer_rect)
+    }
+
     /// Sets a window's inner size, as the system would after a resize; it
     /// keeps its place.
     pub fn set_inner_size(&mut self, viewport: ViewportId, size: [f32; 2]) {
@@ -532,6 +552,21 @@ impl MultiWindow {
         for (v, o) in &out.viewport_output {
             if *v == viewport || !o.commands.is_empty() {
                 self.commands.insert(*v, o.commands.clone());
+            }
+            // A window moved, as a system telling positions moves it (one
+            // hiding them, Wayland, sets none).
+            if self.positions_hidden {
+                continue;
+            }
+            for c in &o.commands {
+                if let ViewportCommand::OuterPosition(at) = c
+                    && let Some(info) = self.info.get_mut(v)
+                    && let Some(outer) = info.outer_rect
+                {
+                    let by = *at - outer.min;
+                    info.outer_rect = Some(outer.translate(by));
+                    info.inner_rect = info.inner_rect.map(|r| r.translate(by));
+                }
             }
         }
         if viewport == ViewportId::ROOT {

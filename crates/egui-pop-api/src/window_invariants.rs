@@ -6,7 +6,7 @@
 //! (docs/stability.md).</div>
 //!
 //! The registry ([`AppHandle::windows_list`]) is the one list of windows
-//! and popups. Five rules say it agrees with what egui and the system
+//! and popups. Six rules say it agrees with what egui and the system
 //! show; they are checked by `window.invariants`, the last listener of
 //! every window and popup point, and again at the end of every pass of
 //! the main window:
@@ -20,6 +20,11 @@
 //! 3. [`OWNER`]: no window or popup without an owner.
 //! 4. [`POPUP_PARENT`]: a popup's parent exists.
 //! 5. [`CHILD_ALIVE`]: a closed parent has no live child.
+//! 6. [`ON_SCREEN`]: a positioned window meets a screen: a window whose
+//!    position the system tells (not on Wayland, not minimized) overlaps
+//!    one of the screens told ([`crate::window::set_screens`]), past the
+//!    passes a move needs ([`crate::bus::ScreenRemoved`] moves those on a
+//!    screen gone). Not checked while no screen is told.
 //!
 //! [`CLOSED_LEFT`] is `window.close`'s own: a window it closed is still in
 //! the registry once its listeners ran.
@@ -54,11 +59,13 @@ pub const OWNER: &str = "has-owner";
 pub const POPUP_PARENT: &str = "popup-has-parent";
 /// Rule 5: a closed parent has no live child.
 pub const CHILD_ALIVE: &str = "no-child-of-closed-parent";
+/// Rule 6: a positioned window meets a screen.
+pub const ON_SCREEN: &str = "positioned-meets-a-screen";
 /// `window.close`'s check: the window it closed left the registry.
 pub const CLOSED_LEFT: &str = "closed-left-registry";
 
-/// The five rules, in the ADR's order.
-pub const RULES: [&str; 5] = [BACKEND, PAINTS, OWNER, POPUP_PARENT, CHILD_ALIVE];
+/// The six rules, in the ADR's order.
+pub const RULES: [&str; 6] = [BACKEND, PAINTS, OWNER, POPUP_PARENT, CHILD_ALIVE, ON_SCREEN];
 
 /// The rules read from the registry alone.
 const STRUCTURE: [&str; 3] = [OWNER, POPUP_PARENT, CHILD_ALIVE];
@@ -66,6 +73,11 @@ const STRUCTURE: [&str; 3] = [OWNER, POPUP_PARENT, CHILD_ALIVE];
 /// The main window's passes a mismatch with the backend may last: the
 /// one the backend needs to create or destroy a window.
 const BACKEND_GRACE: u32 = 1;
+
+/// The main window's passes a positioned window may stay off every
+/// screen: the system moving a window `window.place` moved, or one being
+/// dragged across screens.
+const ON_SCREEN_GRACE: u32 = 3;
 
 /// How many broken invariants [`AppHandle::broken_invariants`] keeps.
 const KEPT: usize = 256;
@@ -116,6 +128,9 @@ pub(crate) struct State {
     /// entry changed inside the main window's pass (a detached panel's,
     /// shown inside it), which the backend lists until the next one.
     excused: BTreeSet<(ViewportId, bool)>,
+    /// The main window's passes in a row each positioned window met no
+    /// screen in.
+    off_screen: BTreeMap<ViewportId, u32>,
 }
 
 /// The viewport a window of the registry is shown in by the backend:
@@ -301,7 +316,46 @@ impl AppHandle {
         let records = self.windows_list();
         let mut found = structure(&records);
         found.extend(self.backend_mismatch(ctx, &records));
-        self.reconcile(&[OWNER, POPUP_PARENT, CHILD_ALIVE, BACKEND], found);
+        found.extend(self.off_screen(ctx, &records));
+        self.reconcile(
+            &[OWNER, POPUP_PARENT, CHILD_ALIVE, BACKEND, ON_SCREEN],
+            found,
+        );
+    }
+
+    /// Rule 6: each window whose position the system tells meets a screen
+    /// told, broken once it stayed off every screen past the grace.
+    fn off_screen(&self, ctx: &egui::Context, records: &[WindowRecord]) -> Vec<Broken> {
+        let screens = crate::window::screens();
+        let mut s = egui_pop_core::lock(&self.0.bus.invariants);
+        if screens.is_empty() || ctx.embed_viewports() {
+            s.off_screen.clear();
+            return Vec::new();
+        }
+        let previous = std::mem::take(&mut s.off_screen);
+        let mut out = Vec::new();
+        for r in records {
+            let Some(v) = viewport_of(r.kind, &r.id) else {
+                continue;
+            };
+            let Some(rect) = crate::bus::screens::positioned(ctx, v) else {
+                continue;
+            };
+            if screens.iter().any(|sc| sc.intersects(rect)) {
+                continue;
+            }
+            let passes = previous.get(&v).copied().unwrap_or(0) + 1;
+            s.off_screen.insert(v, passes);
+            if passes > ON_SCREEN_GRACE {
+                out.push(Broken::new(
+                    ON_SCREEN,
+                    &r.id,
+                    &r.owner,
+                    format!("at {rect:?}, on no screen of {screens:?}"),
+                ));
+            }
+        }
+        out
     }
 
     /// Rule 1: what the registry holds against the viewports the backend

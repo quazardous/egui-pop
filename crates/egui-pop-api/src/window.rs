@@ -187,7 +187,17 @@ thread_local! {
     /// The screens told to egui-pop on this thread ([`set_screens`]).
     static SCREENS: std::cell::RefCell<Vec<Screen>> =
         const { std::cell::RefCell::new(Vec::new()) };
+    /// How many times the screens were told on this thread: an
+    /// application follows them from its main window's pass when it
+    /// changed (`screen.added`, `screen.removed`).
+    static TOLD: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
+
+/// The name a layout gives a screen it cannot name: a window detached
+/// where no screen is told by name (Wayland tells no positions, a
+/// system names no monitor). A window kept on it is never docked back
+/// for its screen being gone; its position is still repaired.
+pub const UNNAMED_SCREEN: &str = "primary";
 
 /// The screens, in points, as far as egui-pop knows them: those told by
 /// what runs the event loop ([`set_screens`]; egui-pop's native runner
@@ -214,9 +224,43 @@ pub fn screen_list() -> Vec<Screen> {
 /// calls it the same way. Windows opened after the call (detached panels,
 /// application windows) are repaired against the screens given; an empty
 /// list says none are known (only sizes are bounded).
+///
+/// Each application of the thread follows the change from its main
+/// window's next pass: a screen gone is said as `screen.removed`, a new
+/// one as `screen.added` (by name; [`crate::bus::ScreenRemoved`]), and
+/// every window on a screen gone moves onto one that is left, a detached
+/// panel's window docking back (`window.place`).
 pub fn set_screens(screens: Vec<Screen>) {
     log::debug!(target: "egui_pop::window", "screens: {screens:?}");
     SCREENS.set(screens);
+    TOLD.set(TOLD.get() + 1);
+}
+
+/// How many times the screens were told on this thread.
+pub(crate) fn screens_told() -> u64 {
+    TOLD.get()
+}
+
+/// The name of the screen `rect` is on (the one holding its centre, else
+/// the one it overlaps most), as told; none when no screen is told by
+/// name there.
+pub fn screen_name_at(rect: Rect) -> Option<String> {
+    SCREENS.with_borrow(|screens| {
+        let centre = rect.center();
+        screens
+            .iter()
+            .find(|s| s.rect.contains(centre))
+            .or_else(|| {
+                screens
+                    .iter()
+                    .filter(|s| s.rect.intersects(rect))
+                    .max_by(|a, b| {
+                        let area = |s: &Screen| s.rect.intersect(rect).area();
+                        area(a).total_cmp(&area(b))
+                    })
+            })
+            .and_then(|s| s.name.clone())
+    })
 }
 
 /// Says the screens for this thread's windows by their rectangles, in

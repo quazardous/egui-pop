@@ -728,9 +728,6 @@ struct PanelView {
     draw: Option<DrawFn>,
 }
 
-/// The screens auxiliary windows may be on, until egui names monitors.
-pub(crate) const SCREENS: [&str; 1] = ["primary"];
-
 struct StoryEntry {
     story: Story,
 }
@@ -2947,7 +2944,9 @@ impl AppHandle {
     /// today's panels and screens; says what the repair changed.
     pub fn set_layout(&self, layout: egui_pop_model::layout::Layout) -> Vec<String> {
         let before = self.workbench_mut().layout.auxiliary.clone();
-        let notes = self.workbench_mut().set_layout(layout, &SCREENS);
+        let names = self.layout_screens();
+        let screens: Vec<&str> = names.iter().map(String::as_str).collect();
+        let notes = self.workbench_mut().set_layout(layout, &screens);
         self.sync_panel_windows(&before);
         self.egui().request_repaint();
         notes
@@ -6146,7 +6145,9 @@ impl App {
             .cloned()
             .collect();
         let before = self.handle.workbench_mut().layout.auxiliary.clone();
-        let notes = self.handle.workbench_mut().refresh(specs, &SCREENS);
+        let names = self.handle.layout_screens();
+        let screens: Vec<&str> = names.iter().map(String::as_str).collect();
+        let notes = self.handle.workbench_mut().refresh(specs, &screens);
         for note in notes {
             log::info!(target: "egui_pop", "layout: {note}");
         }
@@ -7224,6 +7225,9 @@ impl App {
             ui.set_style(now);
         }
         self.handle.note_window(&ctx);
+        // The screens told since the last pass: `screen.added`,
+        // `screen.removed`, the windows on a screen gone moved or docked.
+        self.handle.follow_screens(&ctx);
         // The files the system says over the main window, read once.
         crate::bus::files::begin_pass(&ctx, crate::windows::WindowId::MAIN);
         // A drag begun here followed; let go, delivered (`bus::drag`).
