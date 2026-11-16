@@ -1361,6 +1361,7 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
     if own_window {
         app.note_window(&ctx);
         crate::bus::files::begin_pass(&ctx, id.as_str());
+        crate::bus::drag::begin_pass(&ctx, id.as_str());
         app.block_window(&ctx, &|v| v == viewport);
         egui_pop_core::overlay::begin_pass(&ctx);
         app.dispatch_window_keys(&ctx, &id);
@@ -1402,6 +1403,8 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
         app.show_zone(ui, &crate::zones::WINDOW_OVERLAYS);
         // Files dropped on this window: its `files.drop`.
         crate::bus::files::end_pass(&app, ui);
+        // A drag's target under the pointer kept; what it did said.
+        crate::bus::drag::end_pass(&app, &ctx);
         // A menu opened as a popup in this window (`menus::popup_at`).
         crate::menus::draw_popup(&ctx, &app);
         // A window whose content paints nothing: said, and a page that

@@ -97,6 +97,13 @@
 //! reads the files dropped on it once, as its `files.drop` ([`FilesDrop`],
 //! a [`FileDrop`] naming the window); whoever takes them listens, and
 //! nobody taking them is said as `files.refused`.
+//!
+//! A drag across windows is on it too ([`drag`]): a drag begins as
+//! `drag.start` ([`DragStart`], its kind and window); let go over a drop
+//! target that takes it, in its window or another, it is `drag.drop`
+//! ([`DragDrop`]) and `drag.dropped`; refused, let go over nothing or
+//! cancelled, `drag.refused` with the reason. Where it hovers each pass
+//! stays off the bus (per-frame painting).
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -118,6 +125,8 @@ pub use egui_pop_hooks;
 
 mod activate;
 pub use activate::raise_main_window;
+pub mod drag;
+pub use drag::{DRAG_POINTS, DragBegin, DragDelivery, DragDrop, DragStart, TARGET as DRAG_TARGET};
 pub(crate) mod files;
 pub use files::{BROWSER as FILES_BROWSER, FILES_POINTS, FileDrop, FilesDrop};
 mod owners;
@@ -480,9 +489,9 @@ pub const JOB_POINTS: [&str; 5] = [
 /// The plugin points, in the order [`order_dump`] prints them.
 pub const PLUGIN_POINTS: [&str; 2] = [PluginConnect::ID, PluginDisconnect::ID];
 
-/// Every point egui-pop declares: the window, job, plugin and files
-/// points.
-pub const POINTS: [&str; 14] = [
+/// Every point egui-pop declares: the window, job, plugin, files and
+/// drag points.
+pub const POINTS: [&str; 16] = [
     WindowOpen::ID,
     WindowClose::ID,
     WindowReparent::ID,
@@ -497,6 +506,8 @@ pub const POINTS: [&str; 14] = [
     PluginConnect::ID,
     PluginDisconnect::ID,
     FilesDrop::ID,
+    DragStart::ID,
+    DragDrop::ID,
 ];
 
 /// egui-pop's contract table (ADR 0030): every point it declares on the
@@ -530,6 +541,12 @@ pub const CONTRACT: &[PointDecl] = &[
     ),
     PointDecl::of::<FilesDrop>(
         "Files from another program are dropped on a window: whoever takes them says so; `files.dropped` follows, or `files.refused` when nobody took them.",
+    ),
+    PointDecl::of::<DragStart>(
+        "A drag begins in a window (a tab, a tab group, an application's payload): its kind and the window; `drag.started` follows.",
+    ),
+    PointDecl::of::<DragDrop>(
+        "A drag is let go over a drop target that takes it, in its window or another: the window and the target; `drag.dropped` follows. A target refusing it, a drag let go over nothing, or cancelled, is said as `drag.refused` with the reason.",
     ),
 ];
 
@@ -902,6 +919,7 @@ fn install(kernel: &dyn bus_contract::Bus, registry: &Arc<Mutex<Registry>>) {
     panels::install(kernel);
     owners::install(kernel);
     files::install(kernel);
+    drag::install(kernel);
     // The invariants check runs last on every other window point: the
     // rules the registry alone answers (the backend's and the paint
     // guard's are checked in the main window's pass).
