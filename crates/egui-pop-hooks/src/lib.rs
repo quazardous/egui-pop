@@ -39,6 +39,9 @@ thread_local! {
 /// Kernel ids, unique in the process (the key of [`LOCAL`]).
 static NEXT_KERNEL: AtomicU64 = AtomicU64::new(0);
 
+/// A listener's erased body, shared or local.
+type ListenerFn = dyn Fn(&(dyn Any + Send + Sync), &mut (dyn Any + Send)) -> Result<(), HookError>;
+
 /// How a listener runs: shared between threads, or local to the thread
 /// that registered it (its closure in that thread's [`LOCAL`]).
 #[derive(Clone)]
@@ -816,7 +819,7 @@ impl Drop for Kernel {
 
 /// Runs a listener inline, late once it returns past its deadline.
 fn timed(
-    run: &dyn Fn(&(dyn Any + Send + Sync), &mut (dyn Any + Send)) -> Result<(), HookError>,
+    run: &ListenerFn,
     input: &AnyInput,
     value: AnyValue,
     deadline: Duration,
@@ -882,7 +885,7 @@ fn call(
 }
 
 fn guarded(
-    run: &dyn Fn(&(dyn Any + Send + Sync), &mut (dyn Any + Send)) -> Result<(), HookError>,
+    run: &ListenerFn,
     input: &(dyn Any + Send + Sync),
     mut value: AnyValue,
 ) -> Result<AnyValue, FailureKind> {
