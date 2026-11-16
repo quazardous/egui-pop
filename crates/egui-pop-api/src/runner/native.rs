@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use eframe::UserEvent;
-use egui::{Rect, ViewportId};
+use egui::ViewportId;
 use egui_pop_winit::{Display, WindowHandles};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::application::ApplicationHandler;
@@ -32,7 +32,6 @@ thread_local! {
     /// by the first pass that begins in it).
     static PAINTING: Cell<Option<WindowId>> = const { Cell::new(None) };
     static DISPLAY: Cell<Option<Display>> = const { Cell::new(None) };
-    static SCREENS: RefCell<Vec<Rect>> = const { RefCell::new(Vec::new()) };
     static WINDOWS: RefCell<Vec<Paired>> = const { RefCell::new(Vec::new()) };
     /// The main window's handle as eframe gives it.
     static ROOT: Cell<Option<RawWindowHandle>> = const { Cell::new(None) };
@@ -41,10 +40,6 @@ thread_local! {
     static ROOT_WINDOW: RefCell<Option<super::Window>> = const { RefCell::new(None) };
     /// The application's context, to forget a destroyed window's handles.
     static CTX: RefCell<Option<egui::Context>> = const { RefCell::new(None) };
-}
-
-pub(super) fn screens() -> Vec<Rect> {
-    SCREENS.with_borrow(Clone::clone)
 }
 
 pub(super) fn ids_verified() -> Option<bool> {
@@ -196,6 +191,27 @@ fn forget(window: WindowId) {
     });
 }
 
+/// Tells egui-pop the monitors (`window::set_screens`), named as winit
+/// names them; only when they changed.
+fn tell_screens(event_loop: &ActiveEventLoop) {
+    let screens: Vec<crate::window::Screen> = event_loop
+        .available_monitors()
+        .map(|m| {
+            let p = m.position();
+            let s = m.size();
+            crate::window::Screen::from_physical(
+                m.name(),
+                (p.x, p.y),
+                (s.width, s.height),
+                m.scale_factor(),
+            )
+        })
+        .collect();
+    if crate::window::screen_list() != screens {
+        crate::window::set_screens(screens);
+    }
+}
+
 /// The loop's handler: egui-pop first, eframe for everything.
 struct Runner<'a> {
     eframe: eframe::EframeWinitApplication<'a>,
@@ -224,16 +240,7 @@ impl Runner<'_> {
 impl ApplicationHandler<UserEvent> for Runner<'_> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         DISPLAY.set(Display::of(event_loop));
-        let screens: Vec<Rect> = event_loop
-            .available_monitors()
-            .map(|m| {
-                let p = m.position();
-                let s = m.size();
-                super::screen_rect((p.x, p.y), (s.width, s.height), m.scale_factor())
-            })
-            .collect();
-        log::debug!(target: "egui_pop::runner", "screens before the main window: {screens:?}");
-        SCREENS.set(screens);
+        tell_screens(event_loop);
         let interval = pace::interval(
             event_loop
                 .available_monitors()
@@ -250,6 +257,10 @@ impl ApplicationHandler<UserEvent> for Runner<'_> {
                 if self.pacer.arrive(id, Instant::now()) {
                     self.paint(event_loop, id);
                 }
+            }
+            WindowEvent::ScaleFactorChanged { .. } | WindowEvent::Moved(_) => {
+                tell_screens(event_loop);
+                self.eframe.window_event(event_loop, id, event);
             }
             WindowEvent::Destroyed => {
                 forget(id);
@@ -353,7 +364,7 @@ pub(super) fn run(
             Some(hook) => hook(vb),
             None => vb,
         };
-        super::repair_place(vb, &screens())
+        crate::window::repair_builder(vb)
     }));
     let made = std::rc::Rc::new(RefCell::new(Creation::default()));
     let made_in = made.clone();

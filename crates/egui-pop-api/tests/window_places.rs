@@ -277,6 +277,107 @@ fn an_app_window_kept_off_every_screen_comes_back_onto_one() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The screens a host running the event loop tells (`window::set_screens`),
+/// named as winit names them: a laptop's panel and, at its right, a
+/// monitor.
+fn panel() -> window::Screen {
+    window::Screen::from_physical(Some("eDP-1".into()), (0, 0), (2560, 1600), 2.0)
+}
+
+fn monitor() -> window::Screen {
+    window::Screen::from_physical(Some("DP-1".into()), (2560, 0), (1920, 1080), 1.0)
+}
+
+/// Runs with `a` placed on the monitor, both screens told; returns where.
+fn a_on_the_monitor(dir: &Path) -> egui::Pos2 {
+    let mut m = run(dir);
+    window::set_screens(vec![panel(), monitor()]);
+    let va = open_a(&mut m);
+    let at = monitor().rect.min + vec2(200.0, 100.0);
+    m.set_outer_position(va, at.into());
+    m.window_pass(va);
+    close_a(&mut m, va);
+    at
+}
+
+#[test]
+fn an_app_window_kept_on_a_screen_now_gone_reopens_on_one_the_host_told() {
+    let dir = scratch("app-gone-screen");
+    let at = a_on_the_monitor(&dir);
+    // The monitor unplugged: the host tells the panel alone.
+    let mut m = run(&dir);
+    window::set_screens(vec![panel()]);
+    assert_eq!(window::screens(), vec![panel().rect]);
+    assert_eq!(window::screen_list()[0].name.as_deref(), Some("eDP-1"));
+    let va = open_a(&mut m);
+    let p = builder(&m, va).position.expect("a position");
+    assert!(panel().rect.contains(p), "{p:?} is on the panel");
+    close_a(&mut m, va);
+    drop(m);
+    // Plugged in again: a window placed there stays there.
+    let at2 = a_on_the_monitor(&dir);
+    assert_eq!(at, at2);
+    let mut m = run(&dir);
+    window::set_screens(vec![panel(), monitor()]);
+    let va = open_a(&mut m);
+    assert_eq!(builder(&m, va).position, Some(at));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn where_positions_are_hidden_the_screens_told_move_nothing() {
+    let dir = scratch("app-gone-hidden");
+    let at = a_on_the_monitor(&dir);
+    // A Wayland run: the screens are told (sizes, scales), positions are
+    // not; the window opens where the system puts it, and the place kept
+    // on the monitor stays for the next run that tells positions.
+    {
+        let mut m = run(&dir);
+        m.hide_positions();
+        window::set_screens(vec![panel()]);
+        let va = open_a(&mut m);
+        m.set_inner_size(va, [500.0, 300.0]);
+        m.window_pass(va);
+        close_a(&mut m, va);
+    }
+    let mut m = run(&dir);
+    window::set_screens(vec![panel(), monitor()]);
+    let va = open_a(&mut m);
+    assert_eq!(builder(&m, va).position, Some(at), "the kept place stayed");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_main_window_kept_on_a_screen_now_gone_opens_on_one_the_host_told() {
+    let _clear = Cleared;
+    let vb = ViewportBuilder::default()
+        .with_position(monitor().rect.min + vec2(100.0, 50.0))
+        .with_inner_size([1000.0, 700.0]);
+    // No screen told yet: unchanged.
+    window::set_screens(Vec::new());
+    assert_eq!(
+        window::repair_builder(vb.clone()).position,
+        vb.position,
+        "nothing is known"
+    );
+    window::set_screens(vec![panel()]);
+    let p = window::repair_builder(vb.clone())
+        .position
+        .expect("a position");
+    assert!(panel().rect.contains(p), "{p:?} is on the panel");
+    window::set_screens(vec![panel(), monitor()]);
+    assert_eq!(window::repair_builder(vb.clone()).position, vb.position);
+}
+
+/// Forgets the screens told when a test ends.
+struct Cleared;
+
+impl Drop for Cleared {
+    fn drop(&mut self) {
+        window::set_screens(Vec::new());
+    }
+}
+
 // Detached panel windows.
 
 #[test]
