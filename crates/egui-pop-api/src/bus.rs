@@ -83,6 +83,11 @@
 //! `plugin.disconnected` is said: the jobs a plugin leaves are cancelled
 //! or said orphaned by a listener of its disconnection, and taken back by
 //! one of its connection.
+//!
+//! Files dropped from another program are on it too: every window's pass
+//! reads the files dropped on it once, as its `files.drop` ([`FilesDrop`],
+//! a [`FileDrop`] naming the window); whoever takes them listens, and
+//! nobody taking them is said as `files.refused`.
 
 use std::cell::{Cell, RefCell};
 use std::sync::{Arc, Mutex};
@@ -101,6 +106,8 @@ pub use bus_contract;
 pub use bus_contract::{missing_targets, order_dump};
 pub use egui_pop_hooks;
 
+pub(crate) mod files;
+pub use files::{BROWSER as FILES_BROWSER, FILES_POINTS, FileDrop, FilesDrop};
 mod owners;
 pub use owners::OWNER_GONE;
 pub(crate) mod panels;
@@ -447,8 +454,9 @@ pub const JOB_POINTS: [&str; 5] = [
 /// The plugin points, in the order [`order_dump`] prints them.
 pub const PLUGIN_POINTS: [&str; 2] = [PluginConnect::ID, PluginDisconnect::ID];
 
-/// Every point egui-pop declares: the window, job and plugin points.
-pub const POINTS: [&str; 12] = [
+/// Every point egui-pop declares: the window, job, plugin and files
+/// points.
+pub const POINTS: [&str; 13] = [
     WindowOpen::ID,
     WindowClose::ID,
     WindowReparent::ID,
@@ -461,6 +469,7 @@ pub const POINTS: [&str; 12] = [
     JobEvents::ID,
     PluginConnect::ID,
     PluginDisconnect::ID,
+    FilesDrop::ID,
 ];
 
 /// egui-pop's contract table (ADR 0030): every point it declares on the
@@ -488,6 +497,9 @@ pub const CONTRACT: &[PointDecl] = &[
     PointDecl::of::<PluginConnect>("A plugin is connected: what it had left is taken back."),
     PointDecl::of::<PluginDisconnect>(
         "A plugin is disconnected, before `plugin.disconnected` is said: what it leaves is closed or marked, each listener counting what it did.",
+    ),
+    PointDecl::of::<FilesDrop>(
+        "Files from another program are dropped on a window: whoever takes them says so; `files.dropped` follows, or `files.refused` when nobody took them.",
     ),
 ];
 
@@ -777,6 +789,7 @@ fn install(kernel: &dyn bus_contract::Bus, registry: &Arc<Mutex<Registry>>) {
     shell::install(kernel, registry);
     panels::install(kernel);
     owners::install(kernel);
+    files::install(kernel);
     // The invariants check runs last on every other window point: the
     // rules the registry alone answers (the backend's and the paint
     // guard's are checked in the main window's pass).

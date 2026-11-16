@@ -1786,6 +1786,7 @@ pub(crate) fn windows(
             let own_window = class != egui::ViewportClass::EmbeddedWindow;
             if own_window {
                 app.note_window(&vctx);
+                crate::bus::files::begin_pass(&vctx, &crate::bus::panels::window_of_panel(&panel));
                 egui_pop_core::overlay::block_window_among(&vctx, &|v| {
                     !crate::windows::is_app_window(app, v)
                 });
@@ -1857,6 +1858,8 @@ pub(crate) fn windows(
             }
             if own_window {
                 app.show_zone(ui, &crate::zones::WINDOW_OVERLAYS);
+                // Files dropped on this window: its `files.drop`.
+                crate::bus::files::end_pass(app, ui);
                 crate::menus::draw_popup(&vctx, app);
             }
             if vctx.input(|i| i.viewport().close_requested()) {

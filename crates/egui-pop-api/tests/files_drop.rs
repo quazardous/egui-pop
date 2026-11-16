@@ -3,8 +3,18 @@
 //! reads the files dropped on it once, into a `files.drop` request naming
 //! that window. A listener taking them makes it `files.dropped`; with
 //! nobody taking them it is `files.refused` (ADR 0003), never lost.
+//! Nothing but the bus's files module reads egui's dropped files: the
+//! file browser takes a drop through it, said by its listener.
 
+use std::fs;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
+
+use bus_contract::ListenOpts;
 use egui::ViewportId;
+use egui_pop_api::bus::{self, FILES_BROWSER, FILES_POINTS, FilesDrop};
+use egui_pop_api::files::browser::{AppDropTarget, FileBrowser, FsSource};
+use egui_pop_api::files::fs::MemoryFs;
 use egui_pop_api::host::Event;
 use egui_pop_api::windows::WindowSpec;
 use egui_pop_api::workbench;
@@ -104,4 +114,187 @@ fn files_dropped_on_any_window_nobody_takes_are_refused_naming_that_window() {
         serde_json::json!(["/home/me/b.cr3", "/home/me/c.cr3"])
     );
     assert!(events(app, "files.dropped").is_empty());
+}
+
+/// The files dropped a listener of the application took: the window and
+/// the paths, each drop once.
+type Taken = Arc<Mutex<Vec<(String, Vec<String>)>>>;
+
+/// The application's import, a listener of `files.drop` after the file
+/// browser's: it takes what no browser took.
+fn listen_import(app: &AppHandle) -> Taken {
+    let taken = Taken::default();
+    let t = taken.clone();
+    app.bus()
+        .listen::<FilesDrop>(
+            "demo.import",
+            ListenOpts::new().owner("demo").after(FILES_BROWSER),
+            move |drop, did| {
+                if !did.is_empty() {
+                    return Ok(());
+                }
+                let paths = drop.paths.iter().map(|p| p.display().to_string()).collect();
+                t.lock().unwrap().push((drop.window.clone(), paths));
+                did.push(format!("demo.import: {} files", drop.paths.len()));
+                Ok(())
+            },
+        )
+        .unwrap();
+    taken
+}
+
+#[test]
+fn files_dropped_on_a_detached_window_and_an_app_window_are_dropped_once_each_naming_it() {
+    let mut m = multi();
+    let taken = listen_import(m.app());
+    let (panel, import) = two_windows(&mut m);
+
+    m.drop_files(panel, &["/home/me/a.cr3"]);
+    m.root_pass();
+    m.drop_files(import, &["/home/me/b.cr3"]);
+    m.window_pass(import);
+    m.root_pass();
+    m.window_pass(import);
+
+    let app = m.app();
+    assert_eq!(
+        windows_of(app, "files.dropped"),
+        ["panel:demo.log", "import"]
+    );
+    let dropped = events(app, "files.dropped");
+    assert_eq!(
+        dropped[0].data["paths"],
+        serde_json::json!(["/home/me/a.cr3"])
+    );
+    assert_eq!(
+        dropped[1].data["did"],
+        serde_json::json!(["demo.import: 1 files"])
+    );
+    assert!(events(app, "files.refused").is_empty());
+    assert_eq!(
+        *taken.lock().unwrap(),
+        [
+            (
+                "panel:demo.log".to_string(),
+                vec!["/home/me/a.cr3".to_string()]
+            ),
+            ("import".to_string(), vec!["/home/me/b.cr3".to_string()]),
+        ]
+    );
+}
+
+#[test]
+fn files_dropped_on_a_window_not_open_are_refused() {
+    let m = multi();
+    listen_import(m.app());
+    let did = m
+        .app()
+        .request_files_drop(bus::FileDrop::new("gone", vec!["/home/me/a.cr3".into()]));
+    assert!(did.is_empty());
+    let refused = events(m.app(), "files.refused");
+    assert_eq!(refused.len(), 1);
+    assert_eq!(refused[0].data["reason"], "no open window of this id");
+}
+
+#[test]
+fn a_file_browser_takes_files_dropped_on_its_target_said_by_its_listener() {
+    let mut m = multi();
+    let taken = listen_import(m.app());
+    let fs = MemoryFs::new().dir("/r").file("/r/IMG_001.png", vec![0; 3]);
+    let mut browser = FileBrowser::new("drop-browser", Arc::new(FsSource::new(Arc::new(fs))), "/r")
+        .with_drops(|_| true)
+        .with_drop_targets(vec![AppDropTarget::new(
+            "catalogue",
+            "Add to the catalogue",
+        )]);
+    let got = Arc::new(Mutex::new(Vec::new()));
+    let g = got.clone();
+    m.app()
+        .open_window(WindowSpec::new("browse", "Browse"), move |ui, _| {
+            let out = browser.show(ui);
+            g.lock().unwrap().extend(out.dropped);
+        });
+    m.root_pass();
+    let v = m.app().window_viewport(&"browse".into()).unwrap();
+    for _ in 0..3 {
+        m.window_pass(v);
+    }
+    let (zone, _) = m
+        .node(v, "Add to the catalogue")
+        .expect("the drop target is drawn");
+    m.queue(v, egui::Event::PointerMoved(zone.center()));
+    m.hover_files(v, &["/home/me/raw.cr3"]);
+    m.window_pass(v);
+    m.drop_files(v, &["/home/me/raw.cr3"]);
+    m.window_pass(v);
+
+    assert_eq!(got.lock().unwrap().len(), 1);
+    let dropped = events(m.app(), "files.dropped");
+    assert_eq!(dropped.len(), 1);
+    assert_eq!(dropped[0].data["window"], "browse");
+    assert_eq!(
+        dropped[0].data["did"],
+        serde_json::json!(["files.browser: a file browser took them for `catalogue`"])
+    );
+    // Taken by the browser: the application's import, after it, left it.
+    assert!(taken.lock().unwrap().is_empty());
+}
+
+/// The reviewed order of the files point's listeners.
+#[test]
+fn the_files_point_runs_in_its_reviewed_order() {
+    let m = multi();
+    let dump = m.app().bus_order_of(&FILES_POINTS);
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/bus/files-points.txt");
+    if std::env::var_os("UPDATE_BUS_ORDER").is_some() {
+        fs::write(&path, &dump).unwrap();
+    }
+    let reviewed = fs::read_to_string(&path).unwrap_or_default();
+    assert_eq!(
+        dump,
+        reviewed,
+        "review it, then UPDATE_BUS_ORDER=1 writes {}",
+        path.display()
+    );
+    assert_eq!(
+        bus::missing_targets(&m.app().bus(), &FILES_POINTS),
+        Vec::<String>::new()
+    );
+}
+
+/// Only the bus's files module reads egui's hovered and dropped files:
+/// every window's pass goes through it, and a widget reads what it read.
+#[test]
+fn only_the_bus_files_module_reads_the_files_dropped() {
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let allowed = Path::new("egui-pop-api/src/bus/files.rs");
+    let mut found = Vec::new();
+    let mut dirs: Vec<_> = fs::read_dir(&crates)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|e| e.path().join("src"))
+        .filter(|p| p.is_dir())
+        .collect();
+    while let Some(dir) = dirs.pop() {
+        for entry in fs::read_dir(&dir).unwrap().filter_map(Result::ok) {
+            let path = entry.path();
+            if path.is_dir() {
+                dirs.push(path);
+                continue;
+            }
+            if path.extension().is_none_or(|e| e != "rs") || path.ends_with(allowed) {
+                continue;
+            }
+            let text = fs::read_to_string(&path).unwrap();
+            for (n, line) in text.lines().enumerate() {
+                if line.contains(".dropped_files") || line.contains(".hovered_files") {
+                    found.push(format!("{}:{}: {}", path.display(), n + 1, line.trim()));
+                }
+            }
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "read outside the bus's files module: {found:#?}"
+    );
 }
