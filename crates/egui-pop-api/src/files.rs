@@ -1987,15 +1987,8 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
     app.set_context(WHEN_SELECTS, say(selects));
     app.set_context(WHEN_EDIT_PATH, say(edit_path));
     app.set_context(WHEN_BROWSER, say(picker_modes || browsing));
-    let done: Vec<(
-        u64,
-        FileRequest,
-        Answer,
-        ChoiceValues,
-        Option<Resolver>,
-        Origin,
-        Option<WindowKind>,
-    )> = {
+    // The choices ended: each with its answer and the application's choices.
+    let done: Vec<(Open, Answer, ChoiceValues)> = {
         let here = ui.ctx().viewport_id();
         let mut s = lock(&files.0);
         let mut done = Vec::new();
@@ -2014,12 +2007,13 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
             let answer = lock(&s.open[i].answer).take();
             match answer {
                 Some(a) => {
-                    let o = s.open.remove(i);
+                    let mut o = s.open.remove(i);
                     let choices = o
                         .choices
-                        .or_else(|| o.picker.map(|p| p.choice_values))
+                        .take()
+                        .or_else(|| o.picker.take().map(|p| p.choice_values))
                         .unwrap_or_else(|| o.request.choice_defaults());
-                    done.push((o.id, o.request, a, choices, o.resolver, o.by, o.on_bus));
+                    done.push((o, a, choices));
                 }
                 None => i += 1,
             }
@@ -2031,7 +2025,15 @@ fn frame(ui: &mut Ui, app: &AppHandle) {
         // Nothing to preview for them any more.
         files.previews().cancel();
     }
-    for (id, request, answer, choices, resolver, by, on_bus) in done {
+    for (o, answer, choices) in done {
+        let Open {
+            id,
+            request,
+            resolver,
+            by,
+            on_bus,
+            ..
+        } = o;
         overlay::close(&ctx, overlay_id(id));
         let answer = answer.map(|paths| (paths, choices));
         finish(app, &files, id, &request, answer, resolver, &by);
