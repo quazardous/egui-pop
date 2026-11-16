@@ -1507,7 +1507,11 @@ egui-pop-files-documents = Documents
 
 egui-pop-files-downloads = Downloads
 
+egui-pop-files-drop-here = Drop the files here
+
 egui-pop-files-drop-into = Drop into { $name }
+
+egui-pop-files-drop-nowhere = Nothing here takes files
 
 egui-pop-files-drop-refused = Cannot drop here
 

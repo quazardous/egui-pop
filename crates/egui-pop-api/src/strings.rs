@@ -614,6 +614,11 @@ pub const FILES_LISTING: StrKey = StrKey::new("egui-pop-files-listing", "Listing
 pub const FILES_DROP_INTO: StrKey = StrKey::new("egui-pop-files-drop-into", "Drop into { $name }");
 pub const FILES_DROP_REFUSED: StrKey =
     StrKey::new("egui-pop-files-drop-refused", "Cannot drop here");
+/// Over a window while files from another program hover it, where no
+/// widget shows where they would go.
+pub const FILES_DROP_HERE: StrKey = StrKey::new("egui-pop-files-drop-here", "Drop the files here");
+pub const FILES_DROP_NOWHERE: StrKey =
+    StrKey::new("egui-pop-files-drop-nowhere", "Nothing here takes files");
 /// The in-app picker's breadcrumbs: what each part is called, and what a
 /// segment's menu says when it has nothing to list.
 pub const FILES_CRUMB_OPEN: StrKey =
@@ -1729,6 +1734,8 @@ pub const ALL: &[StrKey] = &[
     FILES_LISTING,
     FILES_DROP_INTO,
     FILES_DROP_REFUSED,
+    FILES_DROP_HERE,
+    FILES_DROP_NOWHERE,
     FILES_CRUMB_OPEN,
     FILES_CRUMB_CURRENT,
     FILES_CRUMB_SUBFOLDERS,

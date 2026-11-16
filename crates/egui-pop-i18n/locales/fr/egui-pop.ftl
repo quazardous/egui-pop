@@ -1127,7 +1127,11 @@ egui-pop-files-agenda-year = Année
 
 egui-pop-files-listing = Lecture…
 
+egui-pop-files-drop-here = Déposez les fichiers ici
+
 egui-pop-files-drop-into = Déposer dans { $name }
+
+egui-pop-files-drop-nowhere = Rien ici ne prend de fichiers
 
 egui-pop-files-drop-refused = Impossible de déposer ici
 

@@ -165,6 +165,9 @@ use crate::steps::Outcome;
 use crate::strings as txt;
 use crate::window::WindowState;
 
+mod drag_session;
+use drag_session::{DragSession, Over};
+
 /// The shell's zones as panels.
 pub const PANEL_SIDE_BAR: PanelId = PanelId::from_static("app.side-bar");
 pub const PANEL_MAIN: PanelId = PanelId::from_static("app.main");
@@ -969,6 +972,10 @@ pub(crate) struct Workbench {
     /// for a detached window to take it: the first one that then sees the
     /// pointer over its body, once the drag's grab ends, joins it.
     released_outside: Option<(PanelId, u8)>,
+    /// The detached windows outlined this pass, where a tab dragged out of
+    /// the main window may go but no window can tell the pointer is over
+    /// it (`window_outline`).
+    window_outlines: Vec<PanelId>,
     /// The panel the keys obey: see [`Workbench::follow_focus`].
     pub focused: Option<PanelId>,
     /// The last panel to be `focused` that lives in the layout proper: where
@@ -1036,6 +1043,7 @@ impl Default for Workbench {
             landing_rect: None,
             window_drop: None,
             released_outside: None,
+            window_outlines: Vec::new(),
             hint: None,
             focused: None,
             settled: None,
@@ -1630,6 +1638,11 @@ impl Workbench {
             .map(|(a, _)| a)
     }
 
+    /// The detached windows outlined in the last pass (`window_outline`).
+    pub fn window_outlines(&self) -> &[PanelId] {
+        &self.window_outlines
+    }
+
     /// The tab being dragged between the areas, as the space's docks last
     /// saw it: its panel, its area and the pointer.
     fn dragged(&self, ctx: &egui::Context) -> Option<(PanelId, Area, Pos2)> {
@@ -1726,6 +1739,7 @@ pub(crate) fn windows(
         let mut wb = app.workbench_mut();
         // Found again by this pass's windows.
         wb.window_drop = None;
+        wb.window_outlines.clear();
         // A tab let go outside, waiting for a window to see the pointer:
         // a few passes, then forgotten.
         let released = wb.released_outside.as_ref().map(|(p, _)| p.clone());
@@ -1739,14 +1753,9 @@ pub(crate) fn windows(
         // The windows' passes, until one sees the pointer.
         ctx.request_repaint();
     }
-    // The main window's top-left on the screen, in pixels, for windows
-    // that do not see a drag begun in the main one.
-    let origin = ctx.input(|i| i.viewport().inner_rect).map(|r| {
-        (
-            r.min.to_vec2() * ctx.pixels_per_point(),
-            ctx.pixels_per_point(),
-        )
-    });
+    // The drag as the detached windows see it: they do not see a drag
+    // begun in the main window.
+    let session = dragging.map(|(panel, _, at)| DragSession::of(ctx, panel, at));
     for aux in auxiliary {
         // Titled after the panel it shows.
         let Some(spec) = app.workbench_mut().spec(aux.shown()).cloned() else {
@@ -1786,6 +1795,7 @@ pub(crate) fn windows(
             let own_window = class != egui::ViewportClass::EmbeddedWindow;
             if own_window {
                 app.note_window(&vctx);
+                crate::bus::files::begin_pass(&vctx, &crate::bus::panels::window_of_panel(&panel));
                 app.block_window(&vctx, &|v| !crate::windows::is_app_window(app, v));
                 egui_pop_core::overlay::begin_pass(&vctx);
                 keys(&vctx);
@@ -1829,12 +1839,13 @@ pub(crate) fn windows(
                 })
                 .response
                 .rect;
-            if let Some((dragged, _, at)) = &dragging
-                && !aux.holds(dragged)
-            {
-                let pointer = window_pointer(&vctx, own_window, *at, origin);
-                if let Some(pointer) = pointer.filter(|p| body.contains(*p)) {
-                    window_drop(app, &vctx, &aux, dragged, body, pointer);
+            if let Some(session) = session.as_ref().filter(|s| !aux.holds(&s.panel)) {
+                match session.over(&vctx, own_window, body) {
+                    Over::At(pointer) => {
+                        window_drop(app, &vctx, &aux, &session.panel, body, pointer);
+                    }
+                    Over::Unknown => window_outline(app, &vctx, &aux, &session.panel, body),
+                    Over::Away => {}
                 }
             }
             // A tab let go outside the main window where the system hides
@@ -1855,6 +1866,8 @@ pub(crate) fn windows(
             }
             if own_window {
                 app.show_zone(ui, &crate::zones::WINDOW_OVERLAYS);
+                // Files dropped on this window: its `files.drop`.
+                crate::bus::files::end_pass(app, ui);
                 crate::menus::draw_popup(&vctx, app);
             }
             if vctx.input(|i| i.viewport().close_requested()) {
@@ -1933,37 +1946,6 @@ fn window_dock_id(panel: &PanelId) -> Id {
     Id::unique(("egui_pop.window_dock", panel.as_str()))
 }
 
-/// Where the pointer is over a detached window while a tab drags, in
-/// that window's points, if egui knows it.
-///
-/// egui keeps each window's input apart, the drag in the window it began
-/// in. A window embedded in the main one (kittest, a backend without
-/// windows of its own) sees the main one's pointer. An OS window of its
-/// own sees the pointer only once the drag lets it go: while the button
-/// is held, the system gives every pointer event to the window where it
-/// was pressed (Wayland's and X11's implicit grab, the capture on
-/// Windows). There the main window's pointer, which the grab keeps
-/// following past its edges, is carried over the screen, when both
-/// windows know where they are (not on Wayland, which hides window
-/// positions: the tab menu's "Move to window" works everywhere).
-fn window_pointer(
-    vctx: &egui::Context,
-    own_window: bool,
-    at: Pos2,
-    origin: Option<(egui::Vec2, f32)>,
-) -> Option<Pos2> {
-    if let Some(p) = vctx.input(|i| i.pointer.hover_pos()) {
-        return Some(p);
-    }
-    if !own_window {
-        return Some(at);
-    }
-    let (origin, ppp) = origin?;
-    let inner = vctx.input(|i| i.viewport().inner_rect)?;
-    let screen = origin + at.to_vec2() * ppp;
-    Some((screen / vctx.pixels_per_point() - inner.min.to_vec2()).to_pos2())
-}
-
 /// A tab dragged over a detached window: the zone a drop takes there,
 /// drawn as the areas' (the kit's `dock-preview`, disabled with its
 /// reason where the panel may not go), kept for the drop.
@@ -2021,6 +2003,48 @@ pub(crate) fn window_drop(
         refusal,
     });
 }
+
+/// A tab dragged out of the main window where the system hides window
+/// positions (Wayland): no window can tell whether the pointer is over it
+/// until the drag lets it go, so each detached window that may take the
+/// tab outlines its body (the kit's `dock-preview` border, disabled where
+/// the panel may not go), the best hint there is. A drop over it still
+/// joins it (`released_outside`).
+fn window_outline(
+    app: &AppHandle,
+    vctx: &egui::Context,
+    aux: &Auxiliary,
+    dragged: &PanelId,
+    body: Rect,
+) {
+    let Some(spec) = app.workbench_mut().spec(dragged).cloned() else {
+        return;
+    };
+    let refused = spec
+        .refuses(&crate::mounts::panel_host(Place::Window))
+        .is_some();
+    let kit = Kit::of(vctx);
+    let style = kit
+        .dock_preview
+        .style(State::REST.with(State::DISABLED, refused));
+    let width = style.border_width.max(WINDOW_OUTLINE_WIDTH);
+    let painter = vctx.layer_painter(egui::LayerId::new(
+        egui::Order::Foreground,
+        Id::unique(("egui_pop.window_outline", aux.panel.as_str())),
+    ));
+    painter.rect_stroke(
+        body,
+        egui::CornerRadius::same(style.radius.round().clamp(0.0, 255.0) as u8),
+        egui::Stroke::new(width, style.border_color),
+        egui::StrokeKind::Inside,
+    );
+    app.workbench_mut().window_outlines.push(aux.panel.clone());
+}
+
+/// The least width of a detached window's outline while a tab is dragged
+/// out of the main window (`window_outline`), in points: seen at a glance
+/// around the whole window.
+const WINDOW_OUTLINE_WIDTH: f32 = 3.0;
 
 /// The share of a detached window's body along each edge a split would
 /// take, as egui_stack's (unused while windows hold tabs only).

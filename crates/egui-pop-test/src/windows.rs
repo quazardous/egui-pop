@@ -26,12 +26,13 @@
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
 use egui::{
-    Context, DeferredViewportUiCallback, Event, Id, ImmediateViewport, Key, Modifiers, Pos2,
-    RawInput, Rect, Vec2, ViewportCommand, ViewportEvent, ViewportId, ViewportInfo,
+    Context, DeferredViewportUiCallback, Event, HoveredFile, Id, ImmediateViewport, Key, Modifiers,
+    Pos2, RawInput, Rect, Vec2, ViewportCommand, ViewportEvent, ViewportId, ViewportInfo,
 };
 use egui_pop_api::{App, AppHandle};
 
@@ -101,6 +102,9 @@ pub struct MultiWindow {
     declared: BTreeMap<ViewportId, Arc<DeferredViewportUiCallback>>,
     info: BTreeMap<ViewportId, ViewportInfo>,
     queued: BTreeMap<ViewportId, Vec<Event>>,
+    /// Files from another program over each window (hovering) or
+    /// dropped on it, for its next pass.
+    files: BTreeMap<ViewportId, Files>,
     /// The commands each window's last pass sent.
     commands: BTreeMap<ViewportId, Vec<ViewportCommand>>,
     /// The accessible names each window's last pass gave.
@@ -113,6 +117,11 @@ pub struct MultiWindow {
     /// Whether each window's last pass painted content (a text, an
     /// image, a drawing; not only backgrounds and lines).
     painted: BTreeMap<ViewportId, bool>,
+    /// The shapes each window's last pass painted.
+    shapes: BTreeMap<ViewportId, Vec<egui::epaint::ClippedShape>>,
+    /// Every pass's texture changes, in order (the windows share their
+    /// textures, the context's), for a picture of a window.
+    textures: egui::TexturesDelta,
     /// The window invariants a test breaks on purpose.
     allowed: BTreeSet<String>,
     /// The system tells no window's position (Wayland): no inner or
@@ -158,11 +167,14 @@ impl MultiWindow {
             declared: BTreeMap::new(),
             info,
             queued: BTreeMap::new(),
+            files: BTreeMap::new(),
             commands: BTreeMap::new(),
             names: BTreeMap::new(),
             nodes: BTreeMap::new(),
             held: BTreeSet::new(),
             painted: BTreeMap::new(),
+            shapes: BTreeMap::new(),
+            textures: egui::TexturesDelta::default(),
             allowed: BTreeSet::new(),
             positions_hidden: false,
             seen_broken: 0,
@@ -250,18 +262,24 @@ impl MultiWindow {
             .focused = Some(true);
     }
 
-    /// Sets a window's inner size, as the system would after a resize.
+    /// Sets a window's inner size, as the system would after a resize; it
+    /// keeps its place.
     pub fn set_inner_size(&mut self, viewport: ViewportId, size: [f32; 2]) {
         let info = self.info.entry(viewport).or_insert_with(Self::fresh_info);
-        info.inner_rect = Some(Rect::from_min_size(Pos2::ZERO, Vec2::from(size)));
+        let at = info.inner_rect.map_or(Pos2::ZERO, |r| r.min);
+        info.inner_rect = Some(Rect::from_min_size(at, Vec2::from(size)));
     }
 
-    /// Sets a window's outer position, as a platform telling positions
-    /// would (Wayland tells none).
+    /// Sets a window's position on the screen, as a platform telling
+    /// positions would (Wayland tells none): its outer and inner
+    /// rectangles both start there, as a window without the system's
+    /// decorations.
     pub fn set_outer_position(&mut self, viewport: ViewportId, at: [f32; 2]) {
         let info = self.info.entry(viewport).or_insert_with(Self::fresh_info);
         let size = info.inner_rect.map_or(SIZE, |r| r.size());
-        info.outer_rect = Some(Rect::from_min_size(Pos2::from(at), size));
+        let rect = Rect::from_min_size(Pos2::from(at), size);
+        info.outer_rect = Some(rect);
+        info.inner_rect = Some(rect);
     }
 
     /// The system tells no window's position from now on, as Wayland:
@@ -275,6 +293,20 @@ impl MultiWindow {
     /// pass.
     pub fn queue(&mut self, viewport: ViewportId, event: Event) {
         self.queued.entry(viewport).or_default().push(event);
+    }
+
+    /// Files from another program dragged over a window, as the system
+    /// says them: its next pass sees them hovering (`hovered_files`).
+    pub fn hover_files(&mut self, viewport: ViewportId, paths: &[&str]) {
+        self.files.entry(viewport).or_default().hovered = paths.iter().map(PathBuf::from).collect();
+    }
+
+    /// Files from another program dropped on a window: its next pass sees
+    /// them dropped (`dropped_files`), and no longer hovering.
+    pub fn drop_files(&mut self, viewport: ViewportId, paths: &[&str]) {
+        let files = self.files.entry(viewport).or_default();
+        files.hovered.clear();
+        files.dropped = paths.iter().map(PathBuf::from).collect();
     }
 
     /// Clicks a point of a window (in points): the pointer moves there and
@@ -354,9 +386,25 @@ impl MultiWindow {
                 (*v, i)
             })
             .collect();
+        // Dropped files are said once; hovering ones while they hover.
+        let (hovered, dropped) = match self.files.get_mut(&viewport) {
+            Some(f) => (f.hovered.clone(), std::mem::take(&mut f.dropped)),
+            None => (Vec::new(), Vec::new()),
+        };
         RawInput {
             viewport_id: viewport,
             viewports,
+            hovered_files: hovered
+                .into_iter()
+                .map(|path| HoveredFile {
+                    path: Some(path),
+                    ..Default::default()
+                })
+                .collect(),
+            dropped_files: dropped
+                .into_iter()
+                .map(|p| Arc::new(SystemFile(p)) as egui::DroppedFileHandle)
+                .collect(),
             screen_rect: Some(rect),
             time: Some(self.time),
             focused: self
@@ -377,11 +425,38 @@ impl MultiWindow {
         self.painted.get(&viewport).copied().unwrap_or(false)
     }
 
+    /// The shapes a window's last pass painted, in paint order.
+    pub fn shapes(&self, viewport: ViewportId) -> &[egui::epaint::ClippedShape] {
+        self.shapes.get(&viewport).map_or(&[], Vec::as_slice)
+    }
+
+    /// A picture of what a window's last pass painted (feature `wgpu`),
+    /// drawn with the process's wgpu device, the size of the last pass's
+    /// window: take it right after a pass of that window (an immediate
+    /// window's pass runs inside the main one's, so the windows are best
+    /// the same size). For a snapshot, compare it with
+    /// `egui_kittest::try_image_snapshot_options`.
+    #[cfg(feature = "wgpu")]
+    pub fn render(&self, viewport: ViewportId) -> Result<image::RgbaImage, String> {
+        use egui_kittest::TestRenderer as _;
+        let mut renderer = crate::gpu::shared_renderer();
+        renderer.handle_delta(&mut self.textures.clone());
+        let output = egui::FullOutput {
+            shapes: self.shapes(viewport).to_vec(),
+            pixels_per_point: self.ctx.pixels_per_point(),
+            ..Default::default()
+        };
+        renderer.render(&self.ctx, &output)
+    }
+
     fn take_output(&mut self, viewport: ViewportId, mut out: egui::FullOutput) {
         self.painted
             .insert(viewport, out.shapes.iter().any(|s| is_content(&s.shape)));
-        // No painter: the textures are not uploaded anywhere.
-        out.textures_delta.clear();
+        self.shapes
+            .insert(viewport, std::mem::take(&mut out.shapes));
+        // No painter: the textures are kept for a picture.
+        self.textures
+            .append(std::mem::take(&mut out.textures_delta));
         // A close request is seen by one pass only.
         if let Some(info) = self.info.get_mut(&viewport) {
             info.events.clear();
@@ -499,6 +574,38 @@ impl MultiWindow {
 impl Drop for MultiWindow {
     fn drop(&mut self) {
         HARNESSES.with_borrow_mut(|h| h.remove(&self.token));
+        // Kept for pictures only: never uploaded, nothing to free.
+        self.textures.clear();
+    }
+}
+
+/// The files over a window, or dropped on it.
+#[derive(Debug, Default)]
+struct Files {
+    hovered: Vec<PathBuf>,
+    dropped: Vec<PathBuf>,
+}
+
+/// A file dropped from another program, as an integration gives it: its
+/// path; its content is empty.
+#[derive(Debug)]
+struct SystemFile(PathBuf);
+
+impl egui::DroppedFile for SystemFile {
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn bytes(&self) -> Result<Vec<u8>, String> {
+        Ok(Vec::new())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn bytes_async(
+        &self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<u8>, String>> + '_>> {
+        Box::pin(async { Ok(Vec::new()) })
     }
 }
 

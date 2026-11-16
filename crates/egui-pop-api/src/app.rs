@@ -2984,6 +2984,17 @@ impl AppHandle {
         self.workbench_mut().window_drop.clone()
     }
 
+    /// The detached windows outlined in the last pass: a tab is dragged out
+    /// of the main window, where the system hides window positions
+    /// (Wayland), and these windows may take it, though none can tell the
+    /// pointer is over it until it is let go.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn window_outlines(&self) -> Vec<PanelId> {
+        self.workbench_mut().window_outlines().to_vec()
+    }
+
     /// The panel the keys obey, the context key `focusedPanel`: the last that
     /// held the widget focus, had the pointer pressed in it or was given the
     /// keyboard (`crate::workbench`'s "The focused panel").
@@ -5280,6 +5291,7 @@ impl App {
                         "panel": p,
                         "from": crate::workbench::area_name(*a),
                     })),
+                    "window_outlines": wb.window_outlines(),
                     "window_drop": wb.window_drop.as_ref().map(|d| json!({
                         "panel": d.panel,
                         "window": d.window,
@@ -7022,6 +7034,8 @@ impl App {
             ui.set_style(now);
         }
         self.handle.note_window(&ctx);
+        // The files the system says over the main window, read once.
+        crate::bus::files::begin_pass(&ctx, crate::windows::WindowId::MAIN);
         crate::workbench::forget_closed_windows(&self.handle, &ctx);
         // The system asks the main window's close: a `window.close` of
         // the main window (another window moving into it when one is
@@ -7059,6 +7073,8 @@ impl App {
         }
         handle.show_zone(ui, &zones::OVERLAYS);
         handle.show_zone(ui, &zones::WINDOW_OVERLAYS);
+        // Files dropped on the main window: its `files.drop`.
+        crate::bus::files::end_pass(&handle, ui);
         // A focus screen without its page, a window that painted nothing:
         // said and repaired, never left as it is.
         handle.end_shell_pass(ui);

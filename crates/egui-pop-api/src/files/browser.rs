@@ -4252,10 +4252,27 @@ impl FileBrowser {
                 };
                 let accepted = self.accepts(&offer);
                 self.paint_drop(ui, entries_rect, rect, &offer, accepted);
+                if origin == DropOrigin::System {
+                    // The window shows nothing more over it.
+                    crate::bus::files::shown(ui.ctx());
+                }
                 if released {
                     if accepted {
-                        if origin == DropOrigin::App {
-                            egui::DragAndDrop::clear_payload(ui.ctx());
+                        match origin {
+                            DropOrigin::App => egui::DragAndDrop::clear_payload(ui.ctx()),
+                            // Said on the window's `files.drop` by the
+                            // browser's listener (`files.browser`).
+                            DropOrigin::System => crate::bus::files::take(
+                                ui.ctx(),
+                                match &offer.target {
+                                    DropTarget::Folder(p) | DropTarget::Place(p) => {
+                                        format!("a file browser took them into `{}`", p.display())
+                                    }
+                                    DropTarget::App(id) => {
+                                        format!("a file browser took them for `{id}`")
+                                    }
+                                },
+                            ),
                         }
                         out.dropped = Some(offer);
                     }
@@ -4499,29 +4516,12 @@ type DropPolicy = Arc<dyn Fn(&DropOffer) -> bool + Send + Sync>;
 /// What is being dragged this frame: its paths, where from, and whether it
 /// is released (dropped) this frame.
 fn dragged(ctx: &egui::Context) -> Option<(Vec<PathBuf>, DropOrigin, bool)> {
-    let (hovered, dropped, any_hovered, released) = ctx.input(|i| {
-        (
-            i.raw
-                .hovered_files
-                .iter()
-                .filter_map(|f| f.path.clone())
-                .collect::<Vec<_>>(),
-            i.raw
-                .dropped_files
-                .iter()
-                .map(|f| f.path().to_path_buf())
-                .filter(|p| !p.as_os_str().is_empty())
-                .collect::<Vec<_>>(),
-            !i.raw.hovered_files.is_empty(),
-            i.pointer.any_released(),
-        )
-    });
-    if !dropped.is_empty() {
-        return Some((dropped, DropOrigin::System, true));
+    // Files from another program: as the window's pass read them (the
+    // bus's files module, the one reader of egui's dropped files).
+    if let Some((paths, dropped)) = crate::bus::files::system_drag(ctx) {
+        return Some((paths, DropOrigin::System, dropped));
     }
-    if any_hovered {
-        return Some((hovered, DropOrigin::System, false));
-    }
+    let released = ctx.input(|i| i.pointer.any_released());
     let payload = egui::DragAndDrop::payload::<DraggedPaths>(ctx)?;
     Some((payload.0.clone(), DropOrigin::App, released))
 }
