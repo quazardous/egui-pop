@@ -814,7 +814,9 @@ fn steps_go_to_the_history_their_write_or_the_thread_names() {
     let rev = store.history_rev(&SETTINGS);
     let step = store.undo_in(&SETTINGS, &Origin::User).unwrap().unwrap();
     assert_eq!(step.label, "drag gain");
-    assert_eq!(store.get(GAIN).unwrap().value, Value::Float(2.0));
+    // The gain was written in another history since: that change stays.
+    assert_eq!(store.get(GAIN).unwrap().value, Value::Float(4.0));
+    assert_eq!(store.take_skipped()[0].path, GAIN);
     assert!(store.history_rev(&SETTINGS) > rev);
     assert_eq!(store.undo_steps().len(), 1);
     assert_eq!(store.redo_steps_in(&SETTINGS).len(), 1);

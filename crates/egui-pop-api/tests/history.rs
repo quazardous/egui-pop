@@ -506,9 +506,14 @@ fn a_store_write_entered_in_a_history_is_undone_there_alone() {
         set(&a, 2);
     }
     // The owner's routing never sees the SETTINGS history: its undo
-    // takes back the application's step alone (1 back to 0).
+    // takes back the application's step alone, and leaves the value the
+    // SETTINGS history changed since (2), naming it as skipped.
     assert_eq!(history::line(&a, &APP).unwrap().undo.len(), 1);
-    assert!(a.undo(&Origin::User).ok());
-    assert_eq!(n(&a), Value::Int(0));
+    let out = a.undo(&Origin::User);
+    assert_eq!(
+        out.result().unwrap().clone().unwrap()["skipped"],
+        json!([N])
+    );
+    assert_eq!(n(&a), Value::Int(2));
     assert_eq!(lock(&a.store()).undo_steps_in(&SETTINGS).len(), 1);
 }

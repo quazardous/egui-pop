@@ -1443,6 +1443,9 @@ fn run(
         match walk(app, &target, what, &request, &who) {
             Ok(Some(w)) => {
                 let name = w.steps.last().map(|s| label_text(&app.egui(), &s.label));
+                // The values it left with a change made outside the
+                // history since (the value store's rule, ADR 0014).
+                let skipped = lock(&app.store()).take_skipped_in(&w.scope);
                 let mut out = json!({
                     key: name,
                     "scope": w.scope,
@@ -1452,6 +1455,9 @@ fn run(
                 });
                 if w.dry_run {
                     out["dry_run"] = json!(true);
+                }
+                if !skipped.is_empty() {
+                    out["skipped"] = json!(skipped);
                 }
                 *w2.borrow_mut() = Some(w);
                 Ok(out)
@@ -1465,6 +1471,10 @@ fn run(
         }
     });
     let source = source_of(origin);
+    let skipped: Vec<String> = match &outcome {
+        Outcome::Done(Ok(v)) => serde_json::from_value(v["skipped"].clone()).unwrap_or_default(),
+        _ => Vec::new(),
+    };
     match &outcome {
         Outcome::Done(Ok(v)) => {
             if !v[key].is_null() && !dry_run {
@@ -1510,18 +1520,20 @@ fn run(
             }
         }
         kept.revs.borrow_mut().insert(w.scope.clone(), w.rev);
-        changed(app, &w.scope, w.rev, w.head);
+        changed(app, &w.scope, w.rev, w.head, &skipped);
     }
     outcome
 }
 
-fn changed(app: &AppHandle, scope: &ScopeId, rev: u64, head: u64) {
-    app.publish(
-        "egui_pop",
-        None,
-        "history.changed",
-        json!({ "scope": scope, "rev": rev, "head": head }),
-    );
+/// `history.changed`: the scope, its revision and head, and the values
+/// the move left with a change made outside the history (`skipped`,
+/// only when there are some).
+fn changed(app: &AppHandle, scope: &ScopeId, rev: u64, head: u64, skipped: &[String]) {
+    let mut data = json!({ "scope": scope, "rev": rev, "head": head });
+    if !skipped.is_empty() {
+        data["skipped"] = json!(skipped);
+    }
+    app.publish("egui_pop", None, "history.changed", data);
 }
 
 /// Each pass: the store's clock moved to the interface's time, merging
@@ -1547,6 +1559,11 @@ pub(crate) fn pass(app: &AppHandle) {
             s.seal();
         }
     }
+    // Values a group cancelled since left with an outside change.
+    let mut skipped: BTreeMap<ScopeId, Vec<String>> = BTreeMap::new();
+    for s in lock(&store).take_skipped() {
+        skipped.entry(s.history).or_default().push(s.path);
+    }
     let moved: Vec<(ScopeId, u64, u64)> = {
         let revs = kept.revs.borrow();
         with_owner(app, |h| {
@@ -1554,7 +1571,7 @@ pub(crate) fn pass(app: &AppHandle) {
                 .into_iter()
                 .filter_map(|s| {
                     let rev = h.rev(&s.id);
-                    (revs.get(&s.id).copied().unwrap_or(0) != rev)
+                    (revs.get(&s.id).copied().unwrap_or(0) != rev || skipped.contains_key(&s.id))
                         .then(|| (s.id.clone(), rev, h.line(&s.id).map_or(0, |l| l.head_id())))
                 })
                 .collect()
@@ -1563,7 +1580,17 @@ pub(crate) fn pass(app: &AppHandle) {
     };
     for (id, rev, head) in moved {
         kept.revs.borrow_mut().insert(id.clone(), rev);
-        changed(app, &id, rev, head);
+        let paths = skipped.remove(&id).unwrap_or_default();
+        changed(app, &id, rev, head, &paths);
+    }
+    // The store's other histories (a local scope's, such as the
+    // settings window's) say it too.
+    for (id, paths) in skipped {
+        let (rev, head) = {
+            let s = lock(&store);
+            (s.history_rev(&id), store_line(&s, &id).head_id())
+        };
+        changed(app, &id, rev, head, &paths);
     }
     // A preview no row asked for in the whole last pass: the rows that
     // asked are no longer drawn (or never say when they are, see

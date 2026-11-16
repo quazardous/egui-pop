@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use egui_pop_model::clock::ManualClock;
 use egui_pop_model::commands::{Commands, Origin};
+use egui_pop_model::history::ScopeId;
 use egui_pop_model::ids::{CommandId, OwnerId};
 use egui_pop_model::values::*;
 use egui_pop_model::when::WhenContext;
@@ -232,7 +233,7 @@ fn a_step_in_another_history_moves_that_history_alone() {
 }
 
 #[test]
-fn an_owner_removed_takes_its_steps_and_undo_walks_the_rest_to_the_start() {
+fn an_owner_removed_takes_its_steps_and_undo_walks_the_rest() {
     let plugin = OwnerId::new("plugin").unwrap();
     let mut s = store();
     s.declare(&plugin, PLUGIN_A, Descriptor::int("A", 0, 99, 0))
@@ -261,17 +262,19 @@ fn an_owner_removed_takes_its_steps_and_undo_walks_the_rest_to_the_start() {
         }]
     );
     assert!(s.history_rev(&APP) > rev, "the history moved");
-    // The user's first step is left to undo, and the redo of the third:
-    // the mixed step's change of `doc/x` (1 to 2) went with it, so undo
-    // and redo each walk from the values the remaining steps name.
+    // The user's first step is left to undo, and the redo of the third.
+    // The mixed step's change of `doc/x` (1 to 2) is in no history now:
+    // like any change made outside, undo and redo keep it.
     assert_eq!(s.undo_steps().len(), 1);
     assert_eq!(s.redo_steps().len(), 1);
     assert_eq!(int(&s, X), 2);
+    s.take_skipped();
     s.undo(&Origin::User).unwrap();
-    assert_eq!(int(&s, X), 0, "back to the start");
+    assert_eq!(int(&s, X), 2, "kept, said skipped");
+    assert_eq!(s.take_skipped().len(), 1);
     s.redo(&Origin::User).unwrap();
     s.redo(&Origin::User).unwrap();
-    assert_eq!(int(&s, X), 3);
+    assert_eq!(int(&s, X), 3, "the third step starts from it");
     assert_eq!(s.redo(&Origin::User).unwrap(), None);
     // The plugin back: its value comes back as it was, and no undo
     // touches it.
@@ -279,5 +282,161 @@ fn an_owner_removed_takes_its_steps_and_undo_walks_the_rest_to_the_start() {
         .unwrap();
     assert_eq!(int(&s, PLUGIN_A), 2);
     while s.undo(&Origin::User).unwrap().is_some() {}
-    assert_eq!((int(&s, X), int(&s, PLUGIN_A)), (0, 2));
+    assert_eq!((int(&s, X), int(&s, PLUGIN_A)), (2, 2));
+}
+
+fn skipped(s: &mut Store) -> Vec<(ScopeId, String)> {
+    s.take_skipped()
+        .into_iter()
+        .map(|k| (k.history, k.path))
+        .collect()
+}
+
+#[test]
+fn undo_and_redo_keep_a_value_changed_outside_the_history_since() {
+    let mut s = store();
+    user(&mut s, X, 1);
+    user(&mut s, Y, 1);
+    // A settings file read back changes `doc/x` (no step).
+    let doc = SettingsDoc {
+        values: [(X.to_string(), json!(5))].into(),
+    };
+    s.import(&doc, &Origin::Remote("file".into()));
+    // Undo walks both steps: `doc/y` goes back, `doc/x` keeps the
+    // file's value and is named as skipped.
+    s.undo(&Origin::User).unwrap();
+    s.undo(&Origin::User).unwrap();
+    assert_eq!((int(&s, X), int(&s, Y)), (5, 0));
+    assert_eq!(skipped(&mut s), [(APP, X.to_string())]);
+    assert!(skipped(&mut s).is_empty(), "taken once");
+    // Redo leaves it too: the outside change is never lost.
+    s.redo(&Origin::User).unwrap();
+    s.redo(&Origin::User).unwrap();
+    assert_eq!((int(&s, X), int(&s, Y)), (5, 1));
+    assert_eq!(skipped(&mut s), [(APP, X.to_string())]);
+    // A jump to the start skips it the same way.
+    s.jump_in(&APP, 0, &Origin::User).unwrap();
+    assert_eq!((int(&s, X), int(&s, Y)), (5, 0));
+    assert_eq!(skipped(&mut s), [(APP, X.to_string())]);
+}
+
+#[test]
+fn a_write_in_another_history_is_kept_by_an_undo_here() {
+    let mut s = store();
+    user(&mut s, X, 1);
+    {
+        let _settings = enter_history(&SETTINGS);
+        user(&mut s, X, 2);
+    }
+    s.undo(&Origin::User).unwrap();
+    assert_eq!(int(&s, X), 2, "the settings' change stays");
+    assert_eq!(skipped(&mut s), [(APP, X.to_string())]);
+    // Undone in its own history, it goes back to what it found.
+    s.undo_in(&SETTINGS, &Origin::User).unwrap();
+    assert_eq!(int(&s, X), 1);
+    assert!(skipped(&mut s).is_empty());
+}
+
+#[test]
+fn a_group_begun_before_a_step_is_undone_after_it() {
+    let mut s = store();
+    // An agent's group writes `doc/x`; the user writes it meanwhile;
+    // the group ends after the user's step.
+    let g = s.begin_group(agent(), "agent edit");
+    s.set(to(X, 1, agent()).gesture(g)).unwrap();
+    user(&mut s, X, 2);
+    s.end(g);
+    let labels: Vec<_> = s.undo_steps().iter().map(|st| st.label.clone()).collect();
+    assert_eq!(
+        labels,
+        ["agent edit", "set doc/x"],
+        "ordered by first write"
+    );
+    // Undoing everything comes back to the start.
+    s.undo(&Origin::User).unwrap();
+    assert_eq!(int(&s, X), 1);
+    s.undo(&Origin::User).unwrap();
+    assert_eq!(int(&s, X), 0);
+    assert!(skipped(&mut s).is_empty());
+    s.redo(&Origin::User).unwrap();
+    s.redo(&Origin::User).unwrap();
+    assert_eq!(int(&s, X), 2);
+}
+
+#[test]
+fn a_group_cancelled_keeps_a_change_made_outside_it_since() {
+    let mut s = store();
+    s.set(to(Y, 3, Origin::User).untracked()).unwrap();
+    let g = s.begin_group(agent(), "agent edit");
+    s.set(to(X, 1, agent()).gesture(g)).unwrap();
+    s.set(to(Y, 4, agent()).gesture(g)).unwrap();
+    // The user changes `doc/x` meanwhile (a step).
+    user(&mut s, X, 2);
+    s.cancel(g);
+    // `doc/y` goes back; `doc/x` keeps the user's 2.
+    assert_eq!((int(&s, X), int(&s, Y)), (2, 3));
+    assert_eq!(skipped(&mut s), [(APP, X.to_string())]);
+    // The user's step now starts from before the group: undoing it
+    // comes back to the start, never to the group's 1.
+    assert_eq!(
+        s.undo_steps()[0].changes,
+        [(X.to_string(), Value::Int(0), Value::Int(2))]
+    );
+    s.undo(&Origin::User).unwrap();
+    assert_eq!(int(&s, X), 0);
+}
+
+#[test]
+fn undoing_one_step_out_of_order_keeps_a_value_changed_outside_since() {
+    let mut s = store();
+    let g = s.begin_group(Origin::User, "both");
+    s.set(to(X, 1, Origin::User).gesture(g)).unwrap();
+    s.set(to(Y, 1, Origin::User).gesture(g)).unwrap();
+    s.end(g);
+    user(&mut s, PLACE, 1);
+    s.set(to(X, 7, Origin::User).untracked()).unwrap();
+    let first = s.undo_steps()[0].id;
+    s.undo_step_in(&APP, first, &Origin::User, false).unwrap();
+    assert_eq!((int(&s, X), int(&s, Y), int(&s, PLACE)), (7, 0, 1));
+    assert_eq!(skipped(&mut s), [(APP, X.to_string())]);
+    // A step whose every value changed outside since: refused, named.
+    user(&mut s, X, 8);
+    user(&mut s, PLACE, 2);
+    s.set(to(X, 9, Origin::User).untracked()).unwrap();
+    let id = s.undo_steps()[s.undo_steps().len() - 2].id;
+    let r = s.undo_step_in(&APP, id, &Origin::User, false).unwrap_err();
+    assert!(r.reason.contains("`doc/x`"), "{r:?}");
+    assert_eq!(int(&s, X), 9);
+}
+
+#[test]
+fn an_agent_may_not_undo_one_step_or_restore_what_it_may_not_write() {
+    let mut s = store();
+    let snap = s
+        .take_snapshot(&APP, "start", &Origin::User, false)
+        .unwrap();
+    user(&mut s, Y, 4);
+    user(&mut s, X, 1);
+    let first = s.undo_steps()[0].id;
+    for dry_run in [true, false] {
+        let r = s.undo_step_in(&APP, first, &agent(), dry_run).unwrap_err();
+        assert!(r.reason.contains("may not write `doc/y`"), "{r:?}");
+        let r = s
+            .restore_snapshot(&APP, snap.id, &agent(), dry_run)
+            .unwrap_err();
+        assert!(r.reason.contains("may not write"), "{r:?}");
+    }
+    assert_eq!((int(&s, X), int(&s, Y)), (1, 4));
+    // The head step too, dry run or not.
+    user(&mut s, Y, 5);
+    let head = s.undo_steps().last().unwrap().id;
+    for dry_run in [true, false] {
+        let r = s.undo_step_in(&APP, head, &agent(), dry_run).unwrap_err();
+        assert!(r.reason.contains("may not write `doc/y`"), "{r:?}");
+    }
+    assert_eq!(int(&s, Y), 5);
+    // The user may.
+    s.restore_snapshot(&APP, snap.id, &Origin::User, false)
+        .unwrap();
+    assert_eq!((int(&s, X), int(&s, Y)), (0, 0));
 }

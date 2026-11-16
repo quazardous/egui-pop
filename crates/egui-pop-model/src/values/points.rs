@@ -250,6 +250,21 @@ impl Store {
         if i + 1 == h.undo.len() {
             if dry_run {
                 self.can_replay(&step).map_err(held)?;
+                // As the undo checks it: the origin's writer, every path.
+                let by = origin.writer();
+                if let Some((path, e)) = step
+                    .changes
+                    .iter()
+                    .find(|(p, _, _)| !self.may_write(p, &by))
+                    .and_then(|(p, _, _)| self.entries.get(p).map(|e| (p, e)))
+                {
+                    return Err(held(Refused::NotWriter {
+                        path: path.clone(),
+                        by,
+                        owner: e.owner.clone(),
+                        current: e.value.clone(),
+                    }));
+                }
                 return Ok(step);
             }
             return self
@@ -266,18 +281,32 @@ impl Store {
                 ),
             ));
         }
-        // Back to the values it found, from what they are now.
+        // Back to the values it found, from what they are now; a value
+        // changed outside the history since keeps that change.
         let mut changes: Vec<(String, Value, Value)> = Vec::new();
-        for (path, old, _) in step.changes.iter().rev() {
-            let Some(e) = self.entries.get(path) else {
-                return Err(held(Refused::Unknown { path: path.clone() }));
+        let mut skipped = Vec::new();
+        for (path, old, new) in super::net(&step.changes).into_iter().rev() {
+            let Some(e) = self.entries.get(&path) else {
+                return Err(held(Refused::Unknown { path }));
             };
-            match changes.iter_mut().find(|(p, _, _)| p == path) {
-                Some(c) => c.2 = old.clone(),
-                None => changes.push((path.clone(), e.value.clone(), old.clone())),
+            if e.value == old {
+                continue;
             }
+            if e.value != new {
+                skipped.push(path);
+                continue;
+            }
+            changes.push((path, e.value.clone(), old));
         }
-        changes.retain(|(_, now, then)| now != then);
+        if changes.is_empty() && !skipped.is_empty() {
+            return Err(Refusal::new(
+                RefusalKind::Owner,
+                format!(
+                    "every value it changed was changed outside its history since: `{}`",
+                    skipped.join("`, `")
+                ),
+            ));
+        }
         self.write_step(
             history,
             format!("Undo “{}”", step.label),
@@ -285,6 +314,13 @@ impl Store {
             changes,
             dry_run,
         )?;
+        if !dry_run {
+            self.skipped
+                .extend(skipped.into_iter().map(|path| super::Skipped {
+                    history: history.clone(),
+                    path,
+                }));
+        }
         Ok(step)
     }
 

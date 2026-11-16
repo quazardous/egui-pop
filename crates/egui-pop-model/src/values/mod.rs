@@ -34,6 +34,11 @@
 //!   undoes one step out of order unless a later step changed the same
 //!   path ([`Store::undo_step_in`]); [`Store::values_at`] says what
 //!   differs at a point, for a preview.
+//! - A value changed outside a history since its step (an untracked
+//!   write, [`Store::import`], another history) keeps that change: undo,
+//!   redo, jumps and cancels leave it and list it
+//!   ([`Store::take_skipped`]). A group's step goes before the steps
+//!   made after its first write.
 //! - Paths are owned: a plugin's settings and listeners go with it.
 //! - One writer per value: a write names the scope issuing it
 //!   ([`Set::by`], or the scope [`enter_scope`] set, such as the plugin
@@ -355,6 +360,9 @@ struct Gesture {
     holds: bool,
     paths: BTreeSet<String>,
     changes: Vec<(String, Value, Value)>,
+    /// The store's last step id when it first wrote: steps with a higher
+    /// id were made after it began, so its own step goes before them.
+    mark: Option<u64>,
 }
 
 /// What [`Store::remove_owner_report`] removed with an owner.
@@ -542,6 +550,20 @@ pub struct Store {
     /// Writes from scopes that are not writers, each path and scope once.
     stray: Vec<StrayWrite>,
     diagnostics: Diagnostics,
+    /// Values an undo, a redo or a cancel left alone because they were
+    /// changed outside the history since ([`Store::take_skipped`]).
+    skipped: Vec<Skipped>,
+}
+
+/// A value an undo, a redo, a jump or a cancel left as it was: it was
+/// changed outside the history since the step (an untracked write, a
+/// settings file read back, another history), so the outside change is
+/// kept.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct Skipped {
+    /// The history walked (or the group's).
+    pub history: ScopeId,
+    pub path: String,
 }
 
 impl fmt::Debug for Store {
@@ -563,6 +585,19 @@ fn clamp(v: f64, range: Option<(f64, f64)>, soft: bool) -> (f64, Clamped) {
         ),
         _ => (v, Clamped::None),
     }
+}
+
+/// A step's changes per path, in the order first written: the value
+/// before the first write, the value after the last.
+fn net(changes: &[(String, Value, Value)]) -> Vec<(String, Value, Value)> {
+    let mut out: Vec<(String, Value, Value)> = Vec::new();
+    for (path, old, new) in changes {
+        match out.iter_mut().find(|(p, _, _)| p == path) {
+            Some(c) => c.2 = new.clone(),
+            None => out.push((path.clone(), old.clone(), new.clone())),
+        }
+    }
+    out
 }
 
 /// Checks a path: segments with the id syntax, separated by `/`.
@@ -1029,9 +1064,11 @@ impl Store {
         }
         let (old, seq) = self.write(&set.path, value.clone(), &set.origin, scope);
         let change = (set.path.clone(), old, value.clone());
+        let last_step = self.next_step;
         match set.gesture.and_then(|g| self.gestures.get_mut(&g)) {
             _ if set.untracked => {}
             Some(g) => {
+                g.mark.get_or_insert(last_step);
                 g.paths.insert(set.path.clone());
                 g.changes.push(change);
             }
@@ -1110,6 +1147,12 @@ impl Store {
     }
 
     fn push_step(&mut self, history: &ScopeId, step: Step) {
+        self.push_step_after(history, step, None);
+    }
+
+    /// Pushes a step; with `mark`, before the undo steps made after that
+    /// step id (a group or a gesture that began before them).
+    fn push_step_after(&mut self, history: &ScopeId, step: Step, mark: Option<u64>) {
         let clocked = self.clock.is_some();
         let h = self.histories.entry(history.clone()).or_default();
         h.rev += 1;
@@ -1121,6 +1164,13 @@ impl Store {
                     .entry(path.clone())
                     .or_insert_with(|| old.clone());
             }
+        }
+        // Begun before steps made since: it goes before them, so undoing
+        // them all comes back to where it began.
+        if let Some(i) = mark.and_then(|m| h.undo.iter().position(|s| s.id > m)) {
+            h.undo.insert(i, step);
+            self.trim_history();
+            return;
         }
         let joins = clocked && !h.sealed && h.redo.is_empty();
         let head = h.undo.last_mut().filter(|_| joins);
@@ -1225,6 +1275,7 @@ impl Store {
                 holds,
                 paths: BTreeSet::new(),
                 changes: Vec::new(),
+                mark: None,
             },
         );
         id
@@ -1249,7 +1300,7 @@ impl Store {
         };
         if !g.changes.is_empty() {
             let step = self.new_step(g.label, g.origin, g.changes, None, Some(id.0));
-            self.push_step(&g.history, step);
+            self.push_step_after(&g.history, step, g.mark);
         }
         true
     }
@@ -1270,12 +1321,62 @@ impl Store {
         let Some(g) = self.gestures.remove(&id) else {
             return false;
         };
-        for (path, old, _) in g.changes.into_iter().rev() {
-            if self.entries.contains_key(&path) {
+        for (path, old, new) in net(&g.changes).into_iter().rev() {
+            let Some(e) = self.entries.get(&path) else {
+                continue;
+            };
+            if e.value == new {
                 self.write(&path, old, &g.origin, Some(OwnerId::FRAMEWORK));
+            } else if e.value != old {
+                // Changed outside the group since: the outside change
+                // stays, and the first step made since on it now starts
+                // from the value before the group, so undoing it comes
+                // back there.
+                let mark = g.mark.unwrap_or(0);
+                for h in self.histories.values_mut() {
+                    let later = h
+                        .undo
+                        .iter_mut()
+                        .chain(h.redo.iter_mut().rev())
+                        .filter(|s| s.id > mark)
+                        .find_map(|s| s.changes.iter_mut().find(|(p, _, _)| *p == path));
+                    if let Some(c) = later {
+                        c.1 = old.clone();
+                        h.rev += 1;
+                    }
+                }
+                self.skipped.push(Skipped {
+                    history: g.history.clone(),
+                    path,
+                });
             }
         }
         true
+    }
+
+    /// The values the undos, redos, jumps and cancels since the last call
+    /// left alone because they had been changed outside the history,
+    /// each kept with the outside change; the list is emptied.
+    pub fn take_skipped(&mut self) -> Vec<Skipped> {
+        self.take_skipped_where(|_| true)
+    }
+
+    /// [`Store::take_skipped`] for one history: its skipped values are
+    /// taken, the other histories' stay.
+    pub fn take_skipped_in(&mut self, history: &ScopeId) -> Vec<String> {
+        self.take_skipped_where(|s| s.history == *history)
+            .into_iter()
+            .map(|s| s.path)
+            .collect()
+    }
+
+    fn take_skipped_where(&mut self, f: impl Fn(&Skipped) -> bool) -> Vec<Skipped> {
+        let (mut out, keep): (Vec<Skipped>, Vec<Skipped>) =
+            std::mem::take(&mut self.skipped).into_iter().partition(f);
+        self.skipped = keep;
+        let mut seen = BTreeSet::new();
+        out.retain(|s| seen.insert((s.history.clone(), s.path.clone())));
+        out
     }
 
     /// The application's undo steps ([`APP`]), oldest first.
@@ -1322,8 +1423,13 @@ impl Store {
     /// Puts back the values a step changed, as a write by `origin`;
     /// `by`, every path is checked against its writers first (all or
     /// nothing), else the framework replays it.
+    ///
+    /// A value no longer as the step left it (`back`) or found it was
+    /// changed outside the history since: it keeps that change and is
+    /// listed as skipped ([`Store::take_skipped`]).
     fn replay(
         &mut self,
+        history: &ScopeId,
         step: &Step,
         origin: &Origin,
         back: bool,
@@ -1335,27 +1441,29 @@ impl Store {
                 self.check_writer(path, Some(by))?;
             }
         }
-        let changes: Vec<(String, Value)> = if back {
-            step.changes
-                .iter()
-                .rev()
-                .map(|(p, old, _)| (p.clone(), old.clone()))
-                .collect()
-        } else {
-            step.changes
-                .iter()
-                .map(|(p, _, new)| (p.clone(), new.clone()))
-                .collect()
-        };
-        for (path, value) in changes {
-            if self.entries[&path].value != value {
-                self.write(
-                    &path,
-                    value,
-                    origin,
-                    Some(by.cloned().unwrap_or(OwnerId::FRAMEWORK)),
-                );
+        let mut changes = net(&step.changes);
+        if back {
+            changes.reverse();
+        }
+        for (path, old, new) in changes {
+            let (expect, to) = if back { (new, old) } else { (old, new) };
+            let now = &self.entries[&path].value;
+            if *now == to {
+                continue;
             }
+            if *now != expect {
+                self.skipped.push(Skipped {
+                    history: history.clone(),
+                    path,
+                });
+                continue;
+            }
+            self.write(
+                &path,
+                to,
+                origin,
+                Some(by.cloned().unwrap_or(OwnerId::FRAMEWORK)),
+            );
         }
         Ok(())
     }
@@ -1521,7 +1629,7 @@ impl Store {
         let Some(step) = (if redo { h.redo.pop() } else { h.undo.pop() }) else {
             return Ok(None);
         };
-        let replayed = self.replay(&step, origin, !redo, by);
+        let replayed = self.replay(history, &step, origin, !redo, by);
         let h = self.histories.get_mut(history).expect("still there");
         let (from, to) = if redo {
             (&mut h.redo, &mut h.undo)
