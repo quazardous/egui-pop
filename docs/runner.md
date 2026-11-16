@@ -143,8 +143,11 @@ states ([Late values](late-values.md)).
 `AppHandle::wait_met` says whether a `WaitFor` holds now, for the
 journal's events after a sequence number: an event by name (and
 optionally its cause), `Settled` (no command queued or running, every
-job idle, no repaint asked), or `Any` of several. It never blocks: who
-waits checks again after each frame. The test kit's
+job idle, no repaint asked), or `Any` of several. A job orphaned by its
+disconnected plugin ([Progress](progress.md)) is not waited on: it may
+never end; `AppHandle::orphaned_jobs` counts it, and `bridge.wait`'s
+answer carries the count (`orphaned`) beside `met` and `last`. It never
+blocks: who waits checks again after each frame. The test kit's
 `egui_pop_test::wait::wait_until` steps frames until it holds or a deadline
 passes; the bridge's `bridge.wait` holds the call in the transport.
 

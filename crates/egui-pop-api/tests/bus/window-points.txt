@@ -1,0 +1,17 @@
+window.open
+  1. window.registry (owner egui_pop): nothing
+  2. window.invariants (owner egui_pop): last
+window.close
+  1. window.children (owner egui_pop): before window.focus; priority 1000
+  2. admin.window (owner egui_pop.admin): after window.children; before window.focus
+  3. window.focus (owner egui_pop): before window.registry
+  4. window.registry (owner egui_pop): after window.focus
+  5. window.place (owner egui_pop): after window.registry
+  6. window.invariants (owner egui_pop): last
+window.reparent
+  1. window.registry (owner egui_pop): nothing
+  2. window.invariants (owner egui_pop): last
+popup.open
+  1. window.registry (owner egui_pop): nothing
+popup.close
+  1. window.registry (owner egui_pop): nothing

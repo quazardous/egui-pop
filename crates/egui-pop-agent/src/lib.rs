@@ -21,7 +21,7 @@
 //! | `describe` | none | `bridge.describe`: the capabilities, protocol 1, and the open `windows` (`id`, `title`, `main`, `active`) |
 //! | `snapshot` | `{ "collector"?, "window"? }` | every collector's snapshot, or one |
 //! | `call` | `{ "collector", "action", "args"?, "window"? }` | the bridge's feedback block (`ok`, `message`, `data`...) |
-//! | `wait` | `bridge.wait`'s arguments and `deadline_ms` | `{ "met", "by", "event", "last" }` |
+//! | `wait` | `bridge.wait`'s arguments and `deadline_ms` | `{ "met", "by", "event", "last", "orphaned" }` |
 //! | `ui` | `{ "action", "label"?, "role"?, "nth"?, "text"?, "key"?, "up"?, "window"? }` | the accessibility tree, or the node acted on |
 //!
 //! `ui` reads the interface as a person sees it and drives it: `tree`
@@ -556,9 +556,10 @@ impl UiSide {
             }
             if now >= w.deadline {
                 let last = app.last_event();
-                let _ = w.reply.send(Ok(
-                    json!({ "met": false, "by": null, "event": null, "last": last }),
-                ));
+                let orphaned = app.orphaned_jobs();
+                let _ = w.reply.send(Ok(json!({
+                    "met": false, "by": null, "event": null, "last": last, "orphaned": orphaned,
+                })));
                 return false;
             }
             true
@@ -843,9 +844,14 @@ fn ui_scope(app: &AppHandle, window: Option<&str>) -> Result<ui::Scope, String> 
 fn check(app: &AppHandle, until: &WaitFor, since: u64) -> Option<Json> {
     use egui_pop_api::wait::Waited;
     let last = app.last_event();
+    let orphaned = app.orphaned_jobs();
     app.wait_met(until, since).map(|w| match w {
-        Waited::Event(e) => json!({ "met": true, "by": "event", "event": e, "last": last }),
-        Waited::Settled => json!({ "met": true, "by": "settled", "event": null, "last": last }),
+        Waited::Event(e) => {
+            json!({ "met": true, "by": "event", "event": e, "last": last, "orphaned": orphaned })
+        }
+        Waited::Settled => {
+            json!({ "met": true, "by": "settled", "event": null, "last": last, "orphaned": orphaned })
+        }
     })
 }
 
