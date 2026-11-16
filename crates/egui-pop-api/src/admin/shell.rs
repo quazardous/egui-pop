@@ -160,10 +160,18 @@ fn follow_window(app: &AppHandle, admin: &Admin, ctx: &egui::Context, windowed: 
                 .min_size([PAGE_MIN_WIDTH + NAV_MIN_WIDTH + 48.0, 320.0])
                 .shell_bars(true);
             app.open_window(spec, window_content);
+            app.set_window_owner(&id, super::OWNER);
         }
+        // The app closed, or its mode changed to the overlay ("Pop
+        // in": it stays open, over the main window).
         (false, true) => {
             admin.set_window_shown(false);
-            app.close_window(&id);
+            let reason = if admin.is_open() {
+                crate::bus::Reason::Command
+            } else {
+                crate::bus::Reason::OwnerGone
+            };
+            app.close_entry(&id, Some(super::OWNER), reason);
         }
         (false, false) => admin.set_window_shown(false),
         (true, true) => {}
@@ -171,7 +179,8 @@ fn follow_window(app: &AppHandle, admin: &Admin, ctx: &egui::Context, windowed: 
 }
 
 /// The app's application window: the page, drawn in the window's own
-/// pass. Its close button, the page's Close and Escape close the app.
+/// pass. Its close button, the page's Close and Escape close the window;
+/// the app closes with it, in the same call (`admin.window`, on the bus).
 fn window_content(ui: &mut Ui, window: &mut WindowUi<'_>) {
     let app = window.app().clone();
     let Some(admin) = app.service(&ADMIN) else {
@@ -197,9 +206,46 @@ fn window_content(ui: &mut Ui, window: &mut WindowUi<'_>) {
         });
     });
     if close {
-        admin.set_window_shown(false);
-        admin.close();
         window.close();
+    }
+}
+
+/// `admin.window`: the Settings app's window closes, whoever asked (its
+/// title bar, its page, `window.close`, the application): the app closes
+/// in the same call, before the focus moves and the registry lets the
+/// window go (ADR 0029).
+pub(super) fn listen_window_close(app: &AppHandle, admin: std::sync::Arc<Admin>) {
+    use crate::bus::{CHILDREN, FOCUS, Reason, WindowClose};
+    use egui_pop_hooks::{ListenOpts, Point as _};
+    let bus = app.bus();
+    // Connected again: its listener is replaced.
+    bus.unlisten(WindowClose::ID, super::WINDOW_LISTENER);
+    let listened = bus.listen::<WindowClose>(
+        super::WINDOW_LISTENER,
+        ListenOpts::new()
+            .owner(super::OWNER)
+            .after(CHILDREN)
+            .before(FOCUS),
+        move |req, did| {
+            // The app asked it itself (closed, or popped in): its state is
+            // already what it wants.
+            let itself = req.owner == super::OWNER
+                && matches!(req.reason, Reason::Command | Reason::OwnerGone);
+            if req.window == super::APP_WINDOW && !itself {
+                admin.set_window_shown(false);
+                if admin.is_open() {
+                    admin.close();
+                    did.push(format!(
+                        "{}: the Settings app closed",
+                        super::WINDOW_LISTENER
+                    ));
+                }
+            }
+            Ok(())
+        },
+    );
+    if let Err(e) = listened {
+        log::error!(target: "egui_pop", "{e}");
     }
 }
 

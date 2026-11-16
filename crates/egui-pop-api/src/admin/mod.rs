@@ -107,6 +107,11 @@ pub use wizard::{
 pub const CMD_OPEN: CommandId = CommandId::from_static("admin.open");
 /// Closes it.
 pub const CMD_CLOSE: CommandId = CommandId::from_static("admin.close");
+/// The Settings app's listener on the bus's `window.close`: its window
+/// closing closes the app (ADR 0029).
+pub const WINDOW_LISTENER: &str = "admin.window";
+/// The plugin owning the Settings app (its window, its listeners).
+pub const OWNER: &str = "egui_pop.admin";
 /// Moves it between the overlay and a window of its own.
 pub const CMD_POP_OUT: CommandId = CommandId::from_static("admin.popOut");
 /// Sets a setting's value in a value scope (`{"key", "scope", "value"}`).
@@ -968,6 +973,9 @@ impl Plugin for AdminPlugin {
         crate::settings_window::register_kinds(&service);
         transfer::hooks(&service);
         ctx.service(&ADMIN, service)?;
+        if let Some(admin) = ctx.app().service(&ADMIN) {
+            shell::listen_window_close(&ctx.app(), admin);
+        }
         ctx.local_scope(
             SURFACE,
             StoreScope::new(egui_pop_model::history::SETTINGS, "Settings"),

@@ -1,7 +1,9 @@
 //! Listener ordering: `after`/`before` constraints first, then higher
 //! priority, then registration order, so the order is stable across
 //! runs. A constraint naming a listener that is not there is reported and
-//! ignored; a cycle is an error naming the listeners in it.
+//! ignored; a cycle is an error naming the listeners in it. The `after`
+//! target [`crate::LAST`] places a listener after every other one: two
+//! such listeners make a cycle.
 
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BinaryHeap};
@@ -42,6 +44,13 @@ pub(crate) fn resolve(nodes: &[Node<'_>]) -> Result<Resolved, Vec<String>> {
     };
     for (i, n) in nodes.iter().enumerate() {
         for a in n.after {
+            if a == crate::LAST {
+                // After every other listener of the point.
+                for j in (0..nodes.len()).filter(|&j| j != i) {
+                    edge(j, i, &mut edges);
+                }
+                continue;
+            }
             match index.get(a.as_str()) {
                 Some(&j) => edge(j, i, &mut edges),
                 None => missing.push((n.id.to_owned(), a.clone())),
@@ -164,6 +173,25 @@ mod tests {
                 ("b".to_string(), "spook".to_string())
             ]
         );
+    }
+
+    #[test]
+    fn last_runs_after_every_other_listener() {
+        let (order, missing) = run(&[
+            s("check", &[crate::LAST], &[], 100),
+            s("a", &[], &[], 0),
+            s("b", &["a"], &[], -10),
+        ])
+        .unwrap();
+        assert_eq!(order, ["a", "b", "check"]);
+        assert!(missing.is_empty(), "LAST is no missing target");
+        // Two listeners last: each runs after the other.
+        let cycle = run(&[
+            s("one", &[crate::LAST], &[], 0),
+            s("two", &[crate::LAST], &[], 0),
+        ])
+        .unwrap_err();
+        assert_eq!(cycle.len(), 3, "{cycle:?}");
     }
 
     #[test]

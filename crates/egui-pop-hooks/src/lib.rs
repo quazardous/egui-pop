@@ -23,6 +23,11 @@ pub const DEFAULT_DEADLINE: Duration = Duration::from_secs(1);
 /// [`PointSpec::deadline`].
 pub const PLUGIN_DEADLINE: Duration = Duration::from_secs(5);
 
+/// The `after` target that places a listener after every other listener
+/// of its point ([`ListenOpts::last`]): one per point, a second is
+/// refused as a [`Refused::Cycle`] (each would run after the other).
+pub const LAST: &str = "*";
+
 /// The name a host gives the fact it publishes for each [`Failure`] its
 /// sinks receive ([`Kernel::on_failure`]).
 pub const FAILED_FACT: &str = "hook.failed";
@@ -112,6 +117,24 @@ impl ListenOpts {
     pub fn before(mut self, id: impl Into<String>) -> ListenOpts {
         self.before.push(id.into());
         self
+    }
+
+    /// Runs after every other listener of its point, whatever they
+    /// declare: an invariants check, a listener that reads what all the
+    /// others left. One per point: a second one closes a cycle and is
+    /// refused ([`Refused::Cycle`]). Kept in [`ListenOpts::after`] as
+    /// [`LAST`].
+    pub fn last(mut self) -> ListenOpts {
+        if !self.after.iter().any(|a| a == LAST) {
+            self.after.push(LAST.to_owned());
+        }
+        self
+    }
+
+    /// Whether the listener runs after every other one of its point
+    /// ([`ListenOpts::last`]).
+    pub fn is_last(&self) -> bool {
+        self.after.iter().any(|a| a == LAST)
     }
 
     /// Higher runs first among listeners left free by `after`/`before`.

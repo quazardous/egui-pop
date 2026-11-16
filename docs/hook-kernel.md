@@ -10,16 +10,17 @@ Its README has the full examples; this page is its contract.
 It is not the application API's `alter` hooks and steps
 (`egui_pop_api::hooks`, `egui_pop_api::steps`, ADR 0011), which are
 tied to `App`: the kernel works in any Rust program, the interface
-thread or not. No egui-pop crate depends on it yet; applications use it
-for their own extension points.
+thread or not. Applications use it for their own extension points.
 
-[ADR 0029](adr/0029-not-on-the-bus.md) decides its first use inside
-egui-pop: the application's central bus is the steps (requests), the
-journal (events) and this kernel for the listeners of each, named and
-run in the order they declare, the window lifecycle first. The kernel
-itself stays no bus: it carries nothing and keeps no record. That ADR
-adds one constraint to it, "last" (an invariants listener after every
-other of its point), in its first slice.
+[ADR 0029](adr/0029-not-on-the-bus.md) makes it part of egui-pop's own
+central bus: the steps (requests), the journal (events) and this kernel
+for the listeners of each, named and run in the order they declare, the
+window lifecycle first. `egui-pop-api` depends on it: each application
+holds a kernel (`AppHandle::bus`) where the window points
+(`egui_pop_api::bus`) and their listeners live. The kernel itself stays
+no bus: it carries nothing and keeps no record. That ADR added one
+constraint to it, "last" (an invariants listener after every other of
+its point).
 
 **Owns**: typed hook points, listeners with ids ordered by
 `after`/`before` and priority, `alter` and `collect` emits, a
@@ -62,8 +63,10 @@ assert!(report.failures.is_empty());
 - **Listeners** (`Kernel::listen`) have ids, unique per point. They run
   ordered by `after`/`before`, then by priority (higher first), then by
   registration order: the same listeners always run in the same order.
-  `Kernel::unlisten` removes one, `Kernel::forget` every listener of an
-  owner.
+  `ListenOpts::last` runs one after every other listener of its point
+  (its `after` holds `egui_pop_hooks::LAST`); a second one on a point
+  closes a cycle and is refused. `Kernel::unlisten` removes one,
+  `Kernel::forget` every listener of an owner.
 - **`alter`** passes one value through the listeners in order
   (`Altered`: the value and the failures); **`collect`** gives each
   listener a fresh value and gathers each successful part with its
