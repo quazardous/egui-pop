@@ -66,7 +66,6 @@ use std::fmt;
 use std::thread::ThreadId;
 
 use egui::{Context, Ui, Vec2, ViewportBuilder, ViewportClass, ViewportCommand, ViewportId};
-use egui_pop_core::keys::KeyDispatcher;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -308,7 +307,7 @@ pub(crate) struct Entry {
     shell_bars: bool,
     pub(crate) geometry: Option<Geometry>,
     pub(crate) focused: Option<bool>,
-    dispatcher: Option<KeyDispatcher>,
+    dispatcher: Option<crate::app::WindowKeys>,
     pub(crate) closed: bool,
 }
 
@@ -545,7 +544,7 @@ impl AppHandle {
                     shell_bars: spec.shell_bars,
                     geometry: saved,
                     focused: None,
-                    dispatcher: Some(KeyDispatcher::new()),
+                    dispatcher: Some(crate::app::WindowKeys::default()),
                     closed: false,
                 });
                 true
@@ -1053,7 +1052,7 @@ impl AppHandle {
                 shell_bars,
                 geometry: saved,
                 focused: None,
-                dispatcher: Some(KeyDispatcher::new()),
+                dispatcher: Some(crate::app::WindowKeys::default()),
                 closed: false,
             });
             (home, id, title, home_geometry)
@@ -1247,7 +1246,7 @@ impl AppHandle {
     /// dispatcher; the commands run before the main window's next pass,
     /// in this window's context.
     fn dispatch_window_keys(&self, ctx: &Context, id: &WindowId) {
-        let Some(mut dispatcher) = self
+        let Some(mut keys) = self
             .windows_mut()
             .entry_mut(id)
             .and_then(|e| e.dispatcher.take())
@@ -1260,10 +1259,10 @@ impl AppHandle {
         let dispatched = if self.capturing_keys() {
             Vec::new()
         } else {
-            dispatcher.process(ctx, &keymap, &cx)
+            keys.dispatcher(self).process(ctx, &keymap, &cx)
         };
         if let Some(e) = self.windows_mut().entry_mut(id) {
-            e.dispatcher = Some(dispatcher);
+            e.dispatcher = Some(keys);
         }
         for d in dispatched {
             self.run_in_context(d.command, serde_json::Value::Null, cx.clone());

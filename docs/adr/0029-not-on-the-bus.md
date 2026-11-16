@@ -226,7 +226,10 @@ listeners: `window.registry` holds it as active (with the order windows
 were worked in), `window.raise` brings a window asked by a command to the
 front (shown, restored, focused; on Wayland the main window asks for
 attention), the one place `ViewportCommand::Focus` is sent;
-`window.invariants` last. `window.activated` is said after them when the
+`window.keys`, a local listener, drops every window's shortcut in
+progress when the active window changes (each window keys with its own
+dispatcher, so a chord begun in one window is never finished in
+another; amended 2026-11-16); `window.invariants` last. `window.activated` is said after them when the
 active window changed. `windows.list` marks the active window. On
 `window.close`, `window.focus` hands the activation to the window worked
 in before the closing one, whatever its kind (main, application, detached

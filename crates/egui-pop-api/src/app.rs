@@ -4017,7 +4017,8 @@ impl AppBuilder {
             handle,
             plugins: slots,
             reg: Registries::new(),
-            dispatcher: KeyDispatcher::new(),
+            keys: WindowKeys::default(),
+            panel_keys: BTreeMap::new(),
             dirty: true,
             started: false,
             installed: None,
@@ -4267,12 +4268,37 @@ pub(crate) fn report_make_error(app: &AppHandle, e: &(dyn std::error::Error + Se
     );
 }
 
+/// A window's key dispatcher, and the count of active-window changes it
+/// last saw ([`crate::bus::KEYS`]).
+#[derive(Debug, Default)]
+pub(crate) struct WindowKeys {
+    dispatcher: KeyDispatcher,
+    seen: u64,
+}
+
+impl WindowKeys {
+    /// The dispatcher, its shortcut in progress dropped when the active
+    /// window changed since it last keyed.
+    pub(crate) fn dispatcher(&mut self, app: &AppHandle) -> &mut KeyDispatcher {
+        let epoch = app.0.bus.keys_epoch.get();
+        if epoch != self.seen {
+            self.seen = epoch;
+            self.dispatcher.cancel_pending();
+        }
+        &mut self.dispatcher
+    }
+}
+
 /// A built application.
 pub struct App {
     handle: AppHandle,
     plugins: Vec<Slot>,
     reg: Registries,
-    dispatcher: KeyDispatcher,
+    /// The main window's key dispatcher.
+    keys: WindowKeys,
+    /// Each detached panel's window's own key dispatcher, by viewport:
+    /// a chord begun in one window is never finished in another.
+    panel_keys: BTreeMap<egui::ViewportId, WindowKeys>,
     dirty: bool,
     started: bool,
     installed: Option<ThemeSpec>,
@@ -4404,7 +4430,7 @@ impl App {
 
     /// The key dispatcher (its traces, a shortcut in progress).
     pub fn dispatcher(&self) -> &KeyDispatcher {
-        &self.dispatcher
+        &self.keys.dispatcher
     }
 
     /// The keymap.
@@ -7073,9 +7099,15 @@ impl App {
         let handle = self.handle.clone();
         // The detached panels belong to the shell: not drawn while a
         // window's content moved into the main window.
+        let mut drawn = Vec::new();
         if !handle.root_has_content() {
-            crate::workbench::windows(&handle, &ctx, &name, &mut |c| self.dispatch_keys(c));
+            crate::workbench::windows(&handle, &ctx, &name, &mut |c| {
+                drawn.push(c.viewport_id());
+                self.dispatch_keys(c);
+            });
         }
+        // A window no longer drawn takes its dispatcher with it.
+        self.panel_keys.retain(|v, _| drawn.contains(v));
         handle.show_zone(ui, &zones::OVERLAYS);
         handle.show_zone(ui, &zones::WINDOW_OVERLAYS);
         // Files dropped on the main window: its `files.drop`.
@@ -7098,13 +7130,24 @@ impl App {
     fn dispatch_keys(&mut self, ctx: &Context) {
         self.handle.follow_focus(ctx);
         let cx = self.handle.when_context();
+        let v = ctx.viewport_id();
+        let keys = if v == egui::ViewportId::ROOT {
+            &mut self.keys
+        } else {
+            self.panel_keys.entry(v).or_default()
+        };
+        let dispatcher = keys.dispatcher(&self.handle);
         let dispatched = if self.handle.0.capturing.get() {
             Vec::new()
         } else {
-            self.dispatcher.process(ctx, &self.reg.keymap, &cx)
+            dispatcher.process(ctx, &self.reg.keymap, &cx)
         };
-        *self.handle.0.traces.borrow_mut() = self.dispatcher.traces().cloned().collect();
-        *self.handle.0.pending_keys.borrow_mut() = self.dispatcher.pending().map(|k| k.to_string());
+        // What the debug bridge shows: the main window's, or the
+        // detached window worked in.
+        if v == egui::ViewportId::ROOT || self.handle.active_window() == v {
+            *self.handle.0.traces.borrow_mut() = dispatcher.traces().cloned().collect();
+            *self.handle.0.pending_keys.borrow_mut() = dispatcher.pending().map(|k| k.to_string());
+        }
         for d in dispatched {
             // A key bound to a command no longer there is worth a
             // warning; one whose command is not enabled here is not.

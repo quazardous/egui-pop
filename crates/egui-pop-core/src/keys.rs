@@ -108,6 +108,12 @@ impl KeyDispatcher {
         (!self.pending.is_empty()).then(|| Keys(self.pending.clone()))
     }
 
+    /// Drops the shortcut in progress, if any: the next key starts a new
+    /// one (the window it began in is no longer the one worked in).
+    pub fn cancel_pending(&mut self) {
+        self.pending.clear();
+    }
+
     /// The last resolutions, oldest first.
     pub fn traces(&self) -> impl Iterator<Item = &Trace> {
         self.traces.iter()
