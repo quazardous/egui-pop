@@ -2640,6 +2640,7 @@ impl AppHandle {
             return;
         };
         let scope = scope_name(id.as_str());
+        let region = ui.max_rect().intersect(ui.clip_rect());
         ui.push_id(("egui_pop_panel", id.as_str()), |ui| {
             focus::scope(ui, &scope, &[], |ui| {
                 let taking = self.takes_the_focus(ui.ctx(), id, &scope);
@@ -2659,6 +2660,14 @@ impl AppHandle {
                     );
                 };
                 fault::boundary_reporting(ui, "panel", title, |ui| draw(ui, self), failed);
+                // Its state (`panel.state`), drawn by the chrome over what
+                // the panel drew.
+                crate::bus::panel_state::paint_content(
+                    &self.0.bus.panel_states,
+                    ui,
+                    id.as_str(),
+                    region,
+                );
                 // What the inspect mode names the panel by.
                 egui_pop_core::inspect::region(ui, "panel", id.as_str(), None, owner.as_str());
                 if taking {

@@ -1,0 +1,5 @@
+---
+egui-pop-api: major
+---
+
+A panel says when its content is not current, through the bus: `panel.state` (`bus::PanelStateSet`, a `bus::PanelStateAsk` naming the panel, its `bus::PanelState`, who asks) marks it stale (what it shows no longer matches, its work not started), updating, failed (with the reason) or ready again, from any thread (`AppHandle::request_panel_state`, or on the application's bus). The workbench's chrome shows it, never the panel: the content dimmed and a busy mark on the panel's corner and on its tab once the state has lasted `motion.spinner.delay` (a fast update shows nothing), kept at least `motion.spinner.min`; a failure dimmed with a failed mark at once, its reason in the mark's name ("Update failed: …"). A tab shows one mark (`bus::TabMark`, the highest rank wins, the busy mark first). `AppHandle::panel_state` reads it, `bus::mark_id` names its marks for tests and agents. The point is in `bus::CONTRACT` and `bus::POINTS` (now 20 points, a breaking change for code naming the array's length; `bus::PANEL_STATE_POINTS` lists it), its listener `workbench.panel_state` (`bus::PANEL_CHROME`).

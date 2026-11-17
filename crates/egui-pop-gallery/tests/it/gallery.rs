@@ -3071,6 +3071,58 @@ fn the_strips_page_shows_live_states_a_popover_and_a_hover_card() {
     assert!(h.query_by_label("Sync: up to date").is_some());
 }
 
+/// A panel whose content is not current (`panel.state`), drawn by the
+/// workbench's chrome: dimmed, a busy mark on its corner and on its tab
+/// once the delay passed; a failure shows at once, its reason read in
+/// its mark's name.
+#[test]
+fn a_panel_not_current_is_dimmed_with_its_mark() {
+    use egui_pop::api::bus::{PanelState, PanelStateAsk, mark_id};
+    use egui_pop::core::indicator;
+    const PROPERTIES: &str = "gallery.properties";
+    let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
+    h.run();
+    h.get_by_label("Open the demonstration panels").click();
+    h.run();
+    let app = h.state().app.handle().clone();
+    let ask = |state| app.request_panel_state(PanelStateAsk::new(PROPERTIES, state, "gallery"));
+    ask(PanelState::Updating);
+    h.run();
+    assert!(
+        indicator::find(&h.ctx, &mark_id(PROPERTIES, false)).is_none(),
+        "nothing before the delay"
+    );
+    let delay = f64::from(Tokens::of(&h.ctx).motion.spinner_delay);
+    egui_pop::core::motion::freeze(&h.ctx, delay + 0.05);
+    h.run();
+    let mark = indicator::find(&h.ctx, &mark_id(PROPERTIES, false)).expect("the busy mark");
+    assert!(mark.shown);
+    assert_eq!(mark.state, "busy");
+    let tab = indicator::find(&h.ctx, &mark_id(PROPERTIES, true)).expect("the tab's mark");
+    assert_eq!(tab.state, "busy");
+    let area = app
+        .area_rect(egui_pop::model::panels::Area::EndSide)
+        .expect("the end side area")
+        // The tab's mark overhangs the tab's top corner.
+        .expand2(egui::vec2(0.0, 8.0));
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_shot_of("panel-state-updating-pop-dark", area));
+    ask(PanelState::Failed {
+        reason: "the preview could not be rendered".into(),
+    });
+    h.run();
+    let mark = indicator::find(&h.ctx, &mark_id(PROPERTIES, false)).expect("the failed mark");
+    assert_eq!(mark.state, "failed");
+    assert_eq!(
+        mark.name.as_deref(),
+        Some("Update failed: the preview could not be rendered")
+    );
+    results.add(h.try_shot_of("panel-state-failed-pop-dark", area));
+    ask(PanelState::Ready);
+    h.run();
+    assert!(indicator::find(&h.ctx, &mark_id(PROPERTIES, false)).is_none());
+}
+
 #[test]
 fn the_workbench_page_detaches_a_panel_into_its_own_window() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));

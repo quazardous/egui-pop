@@ -632,6 +632,17 @@ A tab dragged over a detached panel's window: its drop frame where the window se
   </tr>
 </table>
 
+### A panel's state
+
+A panel whose content is not current (`panel.state`, [the workbench](workbench.md#a-panels-state)): updating, dimmed with the busy mark on its corner and its tab once the delay passed; failed, with the failed mark.
+
+<table>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/panel-state-updating-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/panel-state-updating-pop-dark.png" width="200" alt="panel-state-updating-pop-dark"></a><br>panel-state-updating-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/panel-state-failed-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/panel-state-failed-pop-dark.png" width="200" alt="panel-state-failed-pop-dark"></a><br>panel-state-failed-pop-dark</td>
+  </tr>
+</table>
+
 ### Examples
 
 The `rerun_like` example, a whole application ([A Rerun-like viewer](rerun-like.md)), in its two kits.

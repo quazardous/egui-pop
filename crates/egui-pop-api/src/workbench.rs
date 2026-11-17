@@ -4598,6 +4598,8 @@ impl TabViewer for Viewer<'_> {
                 egui_pop_core::a11y::name(response, egui::Role::Button, &title);
             }
         }
+        // Its state's mark (`panel.state`), the tab's one mark slot.
+        crate::bus::panel_state::paint_tab(&self.app.0.bus.panel_states, response, tab.as_str());
         if response.has_focus() {
             // Painted in the kit's focus state (`DockPainter::tab`).
             egui_pop_core::focus::own_ring(&response.ctx, response.id);

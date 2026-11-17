@@ -124,6 +124,10 @@
 //! name; on `screen.removed` a detached panel's window kept on it docks
 //! back ([`WORKBENCH_SCREENS`]) and every other window left off every
 //! screen moves onto one ([`PLACE`]).
+//!
+//! A panel's state is on it too: whoever knows a panel's content is not
+//! current asks `panel.state` ([`PanelStateSet`], from any thread), and
+//! the workbench's chrome shows it ([`PANEL_CHROME`]), never the panel.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -151,6 +155,10 @@ pub(crate) mod files;
 pub use files::{BROWSER as FILES_BROWSER, FILES_POINTS, FileDrop, FilesDrop};
 mod owners;
 pub use owners::OWNER_GONE;
+pub(crate) mod panel_state;
+pub use panel_state::{
+    PANEL_CHROME, PANEL_STATE_POINTS, PanelState, PanelStateAsk, PanelStateSet, TabMark, mark_id,
+};
 pub(crate) mod panels;
 pub use panels::{WORKBENCH_OWNER, WORKBENCH_WINDOW};
 pub(crate) mod overlays;
@@ -531,8 +539,8 @@ pub const JOB_POINTS: [&str; 5] = [
 pub const PLUGIN_POINTS: [&str; 2] = [PluginConnect::ID, PluginDisconnect::ID];
 
 /// Every point egui-pop declares: the window, job, plugin, files,
-/// settings, drag and screen points.
-pub const POINTS: [&str; 19] = [
+/// settings, drag, screen and panel state points.
+pub const POINTS: [&str; 20] = [
     WindowOpen::ID,
     WindowClose::ID,
     WindowReparent::ID,
@@ -552,6 +560,7 @@ pub const POINTS: [&str; 19] = [
     DragDrop::ID,
     ScreenAdded::ID,
     ScreenRemoved::ID,
+    PanelStateSet::ID,
 ];
 
 /// egui-pop's contract table (ADR 0030): every point it declares on the
@@ -600,6 +609,9 @@ pub const CONTRACT: &[PointDecl] = &[
     ),
     PointDecl::of::<ScreenRemoved>(
         "A screen was unplugged: a detached panel's window kept on it docks back, every other window left off every screen moves onto one (not where the system hides window positions).",
+    ),
+    PointDecl::of::<PanelStateSet>(
+        "A panel's state is asked, from any thread: its content stale, updating, failed (with the reason) or ready again; the panel's chrome shows it (content dimmed, a delayed busy mark on its corner and tab), never the panel.",
     ),
 ];
 
@@ -750,6 +762,8 @@ pub(crate) struct Bus {
     wake: Arc<Mutex<Option<egui::Context>>>,
     /// The overlays of the stack the registry holds as popups.
     pub(crate) overlays: RefCell<overlays::Overlays>,
+    /// Each panel's state not ready (`panel.state`), for its chrome.
+    pub(crate) panel_states: panel_state::States,
 }
 
 impl std::fmt::Debug for Bus {
@@ -789,6 +803,8 @@ impl Bus {
                 }
             });
         }
+        let panel_states = panel_state::States::default();
+        panel_state::install(&*kernel, &panel_states, wake.clone());
         Bus {
             kernel,
             registry,
@@ -803,6 +819,7 @@ impl Bus {
             settings_delivering: Cell::new(false),
             wake,
             overlays: RefCell::default(),
+            panel_states,
         }
     }
 
@@ -1149,6 +1166,28 @@ impl AppHandle {
     /// (docs/stability.md).</div>
     pub fn bus_order_of(&self, points: &[&str]) -> String {
         order_dump(&*self.0.bus.kernel, points)
+    }
+
+    /// Asks a panel's state (`panel.state`): its listeners run now, in
+    /// their declared order (the workbench's keeps it for the panel's
+    /// chrome). What they did, one line each. An application holding the
+    /// bus may ask it there, from any thread.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn request_panel_state(&self, ask: PanelStateAsk) -> Vec<String> {
+        emit_with::<PanelStateSet>(self, ask, Vec::new())
+    }
+
+    /// A panel's state as last asked (`panel.state`): ready when never
+    /// asked.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn panel_state(&self, panel: &str) -> PanelState {
+        lock(&self.0.bus.panel_states)
+            .get(panel)
+            .map_or(PanelState::Ready, |k| k.state.clone())
     }
 
     /// Asks about a job (`job.cancel`, `job.pause`, `job.resume`,
