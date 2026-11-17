@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-hooks"
-version = "0.1.1"
+version = "0.2.0"
 description = "A small hook kernel: typed hook points, listeners with ids ordered by after/before and priority, alter and collect emits, a per-listener error boundary with panics caught and deadlines, introspection (no GUI toolkit); an implementation of the bus-contract crate"
 readme = "README.md"
 keywords = ["hooks", "plugins", "extension-points", "listeners", "events"]
