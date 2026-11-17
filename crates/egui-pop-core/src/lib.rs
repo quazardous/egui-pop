@@ -54,6 +54,8 @@
 //!   spacing by intent, a card and a button in a tone);
 //! - [`sections`]: collapsible sections stacked in a panel, each a
 //!   band over its own scrolling body, folded and resized, remembered;
+//! - [`fold`]: a group folding inside a panel under its header band,
+//!   and a hand-built tree's rows with their toggles, kept by id;
 //! - [`persist`]: documents written atomically, with a backup and
 //!   migrations;
 //! - [`fault`]: fault boundaries showing an error card on panic;
@@ -81,6 +83,7 @@ pub mod fault;
 pub mod field;
 pub mod focus;
 pub mod focus_mode;
+pub mod fold;
 pub mod fonts;
 pub mod frame;
 pub mod hover_card;

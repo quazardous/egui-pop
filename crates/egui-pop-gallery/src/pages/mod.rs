@@ -22,6 +22,7 @@ pub mod editors;
 pub mod faders;
 pub mod file_browser;
 pub mod files;
+pub mod folds;
 pub mod fonts;
 pub mod frame;
 pub mod grading;

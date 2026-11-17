@@ -34,6 +34,7 @@ To add an entry, give the item a doc line
 |---|---|---|
 | a card, a framed group | `ui.card(..)`<br>`egui_pop::core::ui::UiPop::card` | `add` inside the kit's `card` in a tone (`Tone::Neutral` for the plain card). |
 | a divider, a rule between two sections (separator) | `ui.divider(..)`<br>`egui_pop::core::ui::UiPop::divider` | A divider: a rule across the layout between two sections, in `border.default`, one point wide on whole physical pixels, centred in a space of `Space::Group`. |
+| a group that folds and opens inside a panel (a disclosure, a collapsing header) | `Fold`<br>`egui_pop::core::fold::Fold` | A group inside a panel whose header row folds and opens its body: a section band (disclosure mark, title, count) with optional actions at its right end, its body indented below it when open. |
 | a scrolling region | `ui.scroll_area(..)`<br>`egui_pop::core::ui::UiPop::scroll_area` | Shows egui's scroll area with its bars drawn from the kit's `scroll-bar` (`Stock::ScrollBar`: the thumb's fills and corners, the track), `add` its content, drawn in this `Ui`'s own style. |
 | collapsible sections in a panel | `Sections`<br>`egui_pop::core::sections::Sections` | A stack of collapsible sections filling the room it is given (a panel's height), named for its memory and for agents. |
 | one of egui's own widgets, styled by the kit | `ui.scoped(..)`<br>`egui_pop::core::ui::UiPop::scoped` | `add` in a scope where egui's own widgets of a `Stock` kind (buttons, combo boxes, text fields, buttons shown on or off) are drawn from the kit's component, in a tone: its states become egui's widget visuals, so egui keeps drawing the widget (`Kit::scope`). |
@@ -126,6 +127,7 @@ To add an entry, give the item a doc line
 | Need | Use | What it is |
 |---|---|---|
 | a long list, virtualised | `ListView`<br>`egui_pop::views::list::ListView` | The list widget. |
+| a row of a hand-built tree with its disclosure toggle (a folder tree in a side panel) | `TreeRow`<br>`egui_pop::core::fold::TreeRow` | A row of a hand-built tree: a branch's toggle, or a leaf's room for one, then the row the caller draws; `TreeRowResponse::body` shows the rows below a branch, indented, when it is open. |
 | a row picked from a short list | `SelectableRow`<br>`egui_pop::core::widgets::SelectableRow` | A row picked from a short list: its box is the kit's `selectable-row` component, `selected` for the chosen one (never `hover` then, so the choice stays visible under the pointer), its label in the state's `text`. |
 | a sortable column header | `SortHeader`<br>`egui_pop::core::widgets::SortHeader` | A column's header: its box is the kit's `table-header-cell` component, `selected` while the rows are sorted by it, the direction the kit's `sort-ascending` or `sort-descending` glyph after the title. |
 | a table with sortable, resizable columns | `DataTable`<br>`egui_pop::views::table::DataTable` | The data table widget. |
