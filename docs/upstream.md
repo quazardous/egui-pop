@@ -758,8 +758,9 @@ limit.
   through the protocol (or lets the driver declare a colour space where
   it holds the surface), and reads the preferred description through
   `get_surface_feedback`; the viewport renders into it with wgpu and
-  punches a hole in the interface. It needs a transparent window and
-  serves the main window only.
+  punches a hole in the interface. It needs a transparent window, and
+  serves each window whose handles are known, its own surface per window
+  (egui-wgpu keeps one format for every window's interface).
 - **Remove when**: egui-wgpu takes a surface colour space and wgpu
   offers one for the wanted encoding (or a pass-through one an
   application can tag), and winit exposes the preferred description;

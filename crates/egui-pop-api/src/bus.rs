@@ -655,6 +655,21 @@ pub struct WindowRecord {
     /// Whether it is the active window, the one worked in
     /// (`window.activate`): one window of the list is.
     pub active: bool,
+    /// What draws into its own surface besides egui, as that part says it
+    /// (`egui_pop_core::window_surface`): the image viewport's image
+    /// surface, its format, colour space, route or why it has none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub surface: Option<serde_json::Value>,
+    /// Its viewport, to read `surface`.
+    #[serde(skip)]
+    pub(crate) viewport_id: Option<ViewportId>,
+}
+
+impl WindowRecord {
+    /// Its viewport, when it has one.
+    pub fn viewport_id(&self) -> Option<ViewportId> {
+        self.viewport_id
+    }
 }
 
 /// The registry's state: the windows and popups open, the main window
@@ -677,6 +692,8 @@ impl Registry {
             viewport: viewport.map(|v| format!("{v:?}")),
             opened_because: req.reason,
             active: false,
+            surface: None,
+            viewport_id: viewport,
         });
     }
 
@@ -1069,8 +1086,13 @@ impl AppHandle {
         let r = lock(&self.0.bus.registry);
         let (active, _) = r.active();
         let mut list = r.records.clone();
+        drop(r);
+        let ctx = self.egui();
         for w in &mut list {
             w.active = w.id == active;
+            w.surface = w
+                .viewport_id
+                .and_then(|v| egui_pop_core::window_surface::get(&ctx, v));
         }
         list
     }

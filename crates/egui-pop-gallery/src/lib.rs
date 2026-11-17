@@ -519,6 +519,13 @@ impl Gallery {
                 if let Some(why) = offer.unavailable {
                     eprintln!("wide gamut: no image surface: {why}");
                 }
+                // Other windows get their own once their handles are
+                // known: built opaque, they say so (`windows.list`).
+                image_surface::set_window_source(
+                    &cc.egui_ctx,
+                    image_surface::Options::default(),
+                    egui_pop::api::runner::window,
+                );
                 display::want(
                     &cc.egui_ctx,
                     egui::ViewportId::ROOT,

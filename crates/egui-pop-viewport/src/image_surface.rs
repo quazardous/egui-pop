@@ -8,11 +8,19 @@
 //! (docs/stability.md).</div>
 //!
 //! - [`install`] (once, with eframe's creation context) joins the
-//!   compositor through the window's handles and records what it offers
-//!   ([`Offer`]): its colour manager's announcements, the formats and
-//!   colour spaces a subsurface can be presented in.
-//! - Each frame, the main window's viewports [`negotiate`] what the
-//!   application wants ([`display::want`]) against that offer:
+//!   compositor through the main window's handles and records what it
+//!   offers ([`Offer`]): its colour manager's announcements, the formats
+//!   and colour spaces a subsurface can be presented in.
+//! - Every other window gets an image surface of its own, under its own
+//!   surface and negotiated for what that window wants: set up with its
+//!   handles ([`install_window`]), or the first frame it draws the image
+//!   once [`set_window_source`] says where windows' handles are read;
+//!   freed when the window closes ([`close_window`], or at the next frame
+//!   once egui no longer knows the window). egui's interface keeps
+//!   egui-wgpu's one surface format in every window.
+//! - Each frame, a window's viewports [`negotiate`] what the application
+//!   wants for that window ([`display::want`]) against its offer
+//!   ([`negotiate_window`]):
 //!   - [`Route::Tagged`]: a subsurface egui-pop tags itself through
 //!     `wp_color_management_v1` (BT.2020 with a 2.2 power, for one;
 //!     KWin, sway, Weston);
@@ -32,8 +40,10 @@
 //! The `EGUI_POP_IMAGE_SURFACE` variable turns it `off`, or keeps the
 //! driver's colour spaces only (`no-tag`). The debug bridge's `viewport`
 //! collector reports it ([`report`]), with the compositor's preferred
-//! image description for the window.
+//! image description for each window; the window registry
+//! (`windows.list`) shows each window's (`egui_pop_core::window_surface`).
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -373,14 +383,30 @@ pub fn clear_colour(colour: Color32, target: &DisplayTarget) -> [f64; 4] {
 /// How [`install`] sets up image surfaces.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Options {
-    /// The main window was built transparent
+    /// The window was built transparent
     /// (`ViewportBuilder::with_transparent(true)`): required, the image
     /// surface shows through a hole in it.
     pub transparent_window: bool,
 }
 
+/// A window's raw handles, as [`set_window_source`] gives them.
+pub trait WindowHandles:
+    raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle
+{
+}
+
+impl<T: raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle + ?Sized>
+    WindowHandles for T
+{
+}
+
+/// Where the handles of a window opened after [`install`] are read.
+type Source = Arc<dyn Fn(ViewportId) -> Option<Box<dyn WindowHandles>> + Send + Sync>;
+
+/// One window's image surface: what its platform offers, what was
+/// negotiated there, and the surfaces made under it.
 #[derive(Default)]
-struct Shared {
+struct WindowSurface {
     offer: Offer,
     negotiated: Option<(DisplayTarget, Negotiation)>,
     /// Why the image surface failed (it then stays on the window until
@@ -388,6 +414,26 @@ struct Shared {
     failure: Option<String>,
     #[cfg(target_os = "linux")]
     manager: Option<wl::Manager>,
+}
+
+impl WindowSurface {
+    fn new(offer: Offer) -> WindowSurface {
+        WindowSurface {
+            offer,
+            ..WindowSurface::default()
+        }
+    }
+}
+
+#[derive(Default)]
+struct Shared {
+    /// The render state [`install`] was given, for the windows after.
+    render: Option<egui_wgpu::RenderState>,
+    /// The image surface of each window, the main window's from
+    /// [`install`], another's once it draws the image.
+    windows: HashMap<ViewportId, WindowSurface>,
+    /// Where another window's handles are read, and how it was built.
+    source: Option<(Source, Options)>,
 }
 
 /// The image surfaces of a context, shared with the paint callbacks.
@@ -410,11 +456,58 @@ impl ImageSurfaces {
 
 const SURFACES: Slot<ImageSurfaces> = Slot::opaque("viewport.image_surface");
 
+/// What the platform offers a window's image surface: joins the
+/// compositor through the window's own handles, with a manager of its
+/// own (one parent surface per window).
+fn offer_for(
+    rs: &egui_wgpu::RenderState,
+    window: &(impl raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle),
+    options: Options,
+) -> WindowSurface {
+    let mode = std::env::var(VARIABLE).unwrap_or_default();
+    if mode == "off" {
+        return WindowSurface::new(Offer::unavailable(format!("turned off ({VARIABLE}=off)")));
+    }
+    if !options.transparent_window {
+        return WindowSurface::new(Offer::unavailable(
+            "the window is opaque: the image surface sits below it and needs a transparent \
+             window (ViewportBuilder::with_transparent)",
+        ));
+    }
+    #[cfg(target_os = "linux")]
+    match wl::Manager::new(rs, window) {
+        Ok((manager, mut offer)) => {
+            offer.may_tag = mode != "no-tag";
+            WindowSurface {
+                manager: Some(manager),
+                ..WindowSurface::new(offer)
+            }
+        }
+        Err(e) => WindowSurface::new(Offer::unavailable(e)),
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (rs, window);
+        WindowSurface::new(Offer::unavailable(
+            "not a Wayland window (X11 or another system)",
+        ))
+    }
+}
+
+/// The image surfaces of `ctx`, made empty the first time.
+fn surfaces(ctx: &Context) -> ImageSurfaces {
+    SURFACES.get_or_insert_with(ctx, || {
+        ImageSurfaces(Arc::new(Mutex::new(Shared::default())))
+    })
+}
+
 /// Sets up image surfaces for the main window: `rs` is the render state
 /// the GPU path was installed on ([`crate::gpu::install`]), `window` the
 /// main window's handles (eframe's creation context). Returns what the
 /// platform offers; viewports in the main window use it from the next
-/// frame.
+/// frame. Other windows get theirs with [`install_window`], or as they
+/// draw the image once [`set_window_source`] says where their handles
+/// are.
 // upstream: winit binds no colour management and egui-wgpu takes no
 // colour space, hence a surface of the image's own (docs/upstream.md).
 pub fn install(
@@ -423,104 +516,222 @@ pub fn install(
     window: &(impl raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle),
     options: Options,
 ) -> Offer {
-    let mode = std::env::var(VARIABLE).unwrap_or_default();
-    let mut shared = Shared::default();
-    if mode == "off" {
-        shared.offer = Offer::unavailable(format!("turned off ({VARIABLE}=off)"));
-    } else if !options.transparent_window {
-        shared.offer = Offer::unavailable(
-            "the window is opaque: the image surface sits below it and needs a transparent \
-             window (ViewportBuilder::with_transparent)",
-        );
-    } else {
-        #[cfg(target_os = "linux")]
-        match wl::Manager::new(rs, window) {
-            Ok((manager, mut offer)) => {
-                offer.may_tag = mode != "no-tag";
-                shared.offer = offer;
-                shared.manager = Some(manager);
-            }
-            Err(e) => shared.offer = Offer::unavailable(e),
-        }
-        #[cfg(not(target_os = "linux"))]
-        {
-            let _ = (rs, window);
-            shared.offer = Offer::unavailable("not a Wayland window (X11 or another system)");
-        }
+    let surfaces = surfaces(ctx);
+    let window = offer_for(rs, window, options);
+    let offer = window.offer.clone();
+    {
+        let mut s = surfaces.lock();
+        s.render = Some(rs.clone());
+        s.windows.insert(ViewportId::ROOT, window);
     }
-    let offer = shared.offer.clone();
-    SURFACES.set(ctx, ImageSurfaces(Arc::new(Mutex::new(shared))));
     ctx.request_repaint();
     offer
 }
 
-/// What [`install`] found, if it ran.
-pub fn offer(ctx: &Context) -> Option<Offer> {
-    let surfaces = SURFACES.get(ctx)?;
-    Some(surfaces.lock().offer.clone())
+/// Sets up the image surface of another window (`viewport`), with its
+/// own handles, after [`install`] (whose render state it shares): its
+/// own parent surface, negotiated for what that window wants. Returns
+/// what the platform offers it; it is freed when the window closes
+/// ([`close_window`]). Without [`install`] first, none and why.
+pub fn install_window(
+    ctx: &Context,
+    viewport: ViewportId,
+    window: &(impl raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle),
+    options: Options,
+) -> Offer {
+    let surfaces = surfaces(ctx);
+    let mut s = surfaces.lock();
+    let w = match s.render.clone() {
+        Some(rs) => offer_for(&rs, window, options),
+        None => WindowSurface::new(Offer::unavailable(
+            "the image surfaces are not installed (image_surface::install, with the main window)",
+        )),
+    };
+    let offer = w.offer.clone();
+    s.windows.insert(viewport, w);
+    drop(s);
+    ctx.request_repaint_of(viewport);
+    offer
 }
 
-/// Where the image of the window being drawn goes, for what it wants
-/// (on the GPU path): negotiates when the wish changes, records the
-/// image surface's target and why ([`display::set_image_surface`]), and
-/// keeps the compositor's events read. The image surfaces when it has
-/// one.
-pub(crate) fn frame(ctx: &Context) -> Option<(ImageSurfaces, Route)> {
+/// Says where the handles of a window opened after [`install`] are read
+/// (`egui_pop::api::runner::window` on egui-pop's runner), and how such
+/// windows are built (`options`): a window drawing the image gets its own
+/// image surface the first frame its handles are known, freed when it
+/// closes.
+pub fn set_window_source<W>(
+    ctx: &Context,
+    options: Options,
+    source: impl Fn(ViewportId) -> Option<W> + Send + Sync + 'static,
+) where
+    W: raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle + 'static,
+{
+    let source: Source =
+        Arc::new(move |v| source(v).map(|w| Box::new(w) as Box<dyn WindowHandles>));
+    surfaces(ctx).lock().source = Some((source, options));
+}
+
+/// Records what a window's platform offers without joining it: no
+/// surface is made, only the negotiation and its state (a test's fake
+/// compositor, or a host presenting the image surface itself). The
+/// viewport's widget then sends the image to that surface: use it where
+/// something presents it.
+pub fn install_offer(ctx: &Context, viewport: ViewportId, offer: Offer) {
+    surfaces(ctx)
+        .lock()
+        .windows
+        .insert(viewport, WindowSurface::new(offer));
+    ctx.request_repaint_of(viewport);
+}
+
+/// Frees a window's image surface (the window closed): its subsurfaces
+/// and connection go, its state is forgotten. Windows egui no longer
+/// knows are freed this way at the next frame.
+pub fn close_window(ctx: &Context, viewport: ViewportId) {
+    if let Some(surfaces) = SURFACES.get(ctx) {
+        let gone = surfaces.lock().windows.remove(&viewport);
+        drop(gone);
+    }
+    display::set_image_surface(ctx, viewport, display::ImageSurface::default());
+    egui_pop_core::window_surface::set(ctx, viewport, None);
+}
+
+/// What [`install`] found for the main window, if it ran.
+pub fn offer(ctx: &Context) -> Option<Offer> {
+    offer_of(ctx, ViewportId::ROOT)
+}
+
+/// What the platform offers a window's image surface, once set up.
+pub fn offer_of(ctx: &Context, viewport: ViewportId) -> Option<Offer> {
     let surfaces = SURFACES.get(ctx)?;
-    let viewport = ctx.viewport_id();
-    let wanted = display::wanted(ctx);
-    if viewport != ViewportId::ROOT {
-        let why = wider_than_srgb(&wanted)
-            .then(|| "the image gets a surface of its own in the main window only".to_string());
-        display::set_image_surface(ctx, viewport, display::ImageSurface { target: None, why });
-        return None;
+    let s = surfaces.lock();
+    s.windows.get(&viewport).map(|w| w.offer.clone())
+}
+
+/// The windows with an image surface set up, the main window first.
+pub fn windows(ctx: &Context) -> Vec<ViewportId> {
+    let Some(surfaces) = SURFACES.get(ctx) else {
+        return Vec::new();
+    };
+    let s = surfaces.lock();
+    let mut out: Vec<ViewportId> = s.windows.keys().copied().collect();
+    out.sort_by_key(|v| (*v != ViewportId::ROOT, format!("{v:?}")));
+    out
+}
+
+/// A window's image surface as `windows.list` shows it.
+fn state(wanted: &DisplayTarget, n: &Negotiation) -> Json {
+    let target = n.route.target();
+    json!({
+        "kind": "image",
+        "route": n.route.name(),
+        "wanted": wanted.describe(),
+        "format": target.map(|t| format!("{:?}", t.surface_format)),
+        "colour_space": target.map(|t| t.describe()),
+        "why": n.why,
+    })
+}
+
+/// Where the image of `viewport` goes for what it wants
+/// ([`display::want`]): negotiates against that window's offer when the
+/// wish changes, records the image surface's target and why
+/// ([`display::set_image_surface`], and the window's entry in
+/// `windows.list`). The viewport calls it each frame it draws the image
+/// on the GPU path; call it yourself only with an offer from
+/// [`install_offer`] (tests).
+pub fn negotiate_window(ctx: &Context, viewport: ViewportId) -> Negotiation {
+    let window = |why: Option<String>| Negotiation {
+        route: Route::Window,
+        why,
+    };
+    let Some(surfaces) = SURFACES.get(ctx) else {
+        return window(None);
+    };
+    let wanted = display::wanted_of(ctx, viewport);
+    // Windows egui no longer knows closed: their surfaces go.
+    let open: Vec<ViewportId> = ctx.input(|i| i.raw.viewports.keys().copied().collect());
+    let closed: Vec<ViewportId> = if open.contains(&ViewportId::ROOT) {
+        let s = surfaces.lock();
+        s.windows
+            .keys()
+            .filter(|v| **v != ViewportId::ROOT && !open.contains(v))
+            .copied()
+            .collect()
+    } else {
+        Vec::new()
+    };
+    for v in closed {
+        close_window(ctx, v);
     }
     let negotiation = {
         let mut s = surfaces.lock();
-        #[cfg(target_os = "linux")]
-        if let Some(Err(e)) = s.manager.as_mut().map(wl::Manager::poll) {
-            s.failure = Some(format!("the compositor's events: {e}"));
-        }
-        if s.negotiated.as_ref().is_none_or(|(w, _)| *w != wanted) {
-            s.failure = None;
-            let n = negotiate(&wanted, &s.offer);
-            s.negotiated = Some((wanted, n));
-        }
-        let mut n = s
-            .negotiated
-            .as_ref()
-            .map(|(_, n)| n.clone())
-            .unwrap_or(Negotiation {
-                route: Route::Window,
-                why: None,
-            });
-        if let Some(f) = &s.failure
-            && n.route != Route::Window
-        {
-            n = Negotiation {
-                route: Route::Window,
-                why: Some(format!("the image surface failed: {f}")),
-            };
-        }
-        #[cfg(target_os = "linux")]
-        if let Some(m) = s.manager.as_mut() {
-            if n.route == Route::Window {
-                m.clear();
-            } else {
-                m.collect(ctx.cumulative_pass_nr());
+        if !s.windows.contains_key(&viewport) && wider_than_srgb(&wanted) {
+            let handles = s.source.as_ref().map(|(source, o)| (source(viewport), *o));
+            if let (Some((Some(handles), options)), Some(rs)) = (handles, s.render.clone()) {
+                let w = offer_for(&rs, &handles, options);
+                s.windows.insert(viewport, w);
             }
         }
-        n
+        match s.windows.get_mut(&viewport) {
+            None => window(wider_than_srgb(&wanted).then(|| {
+                if s.source.is_some() {
+                    "the window's handles are not known yet".to_string()
+                } else {
+                    "no image surface for this window (image_surface::install_window, or \
+                     set_window_source)"
+                        .to_string()
+                }
+            })),
+            Some(w) => {
+                #[cfg(target_os = "linux")]
+                if let Some(Err(e)) = w.manager.as_mut().map(wl::Manager::poll) {
+                    w.failure = Some(format!("the compositor's events: {e}"));
+                }
+                if w.negotiated.as_ref().is_none_or(|(old, _)| *old != wanted) {
+                    w.failure = None;
+                    let n = negotiate(&wanted, &w.offer);
+                    w.negotiated = Some((wanted, n));
+                }
+                let mut n = w
+                    .negotiated
+                    .as_ref()
+                    .map(|(_, n)| n.clone())
+                    .unwrap_or(window(None));
+                if let Some(f) = &w.failure
+                    && n.route != Route::Window
+                {
+                    n = window(Some(format!("the image surface failed: {f}")));
+                }
+                #[cfg(target_os = "linux")]
+                if let Some(m) = w.manager.as_mut() {
+                    if n.route == Route::Window {
+                        m.clear();
+                    } else {
+                        m.collect(ctx.cumulative_pass_nr());
+                    }
+                }
+                n
+            }
+        }
     };
     display::set_image_surface(
         ctx,
         viewport,
         display::ImageSurface {
             target: negotiation.route.target(),
-            why: negotiation.why,
+            why: negotiation.why.clone(),
         },
     );
-    (negotiation.route != Route::Window).then_some((surfaces, negotiation.route))
+    egui_pop_core::window_surface::set(ctx, viewport, Some(state(&wanted, &negotiation)));
+    negotiation
+}
+
+/// Where the image of the window `viewport` goes, on the GPU path
+/// ([`negotiate_window`]); the image surfaces when it has one.
+pub(crate) fn frame(ctx: &Context, viewport: ViewportId) -> Option<(ImageSurfaces, Route)> {
+    let surfaces = SURFACES.get(ctx)?;
+    let n = negotiate_window(ctx, viewport);
+    (n.route != Route::Window).then_some((surfaces, n.route))
 }
 
 /// One viewport's image for its image surface, and the hole for it in
@@ -529,6 +740,8 @@ pub(crate) fn frame(ctx: &Context) -> Option<(ImageSurfaces, Route)> {
 pub(crate) struct ImagePaint {
     pub ctx: Context,
     pub surfaces: ImageSurfaces,
+    /// The window it is drawn in (whose image surface takes it).
+    pub viewport: ViewportId,
     pub route: Route,
     /// The viewport's key (its tile slot).
     pub key: u64,
@@ -562,15 +775,18 @@ impl egui_wgpu::CallbackTrait for ImagePaint {
         #[cfg(target_os = "linux")]
         {
             let mut s = self.surfaces.lock();
-            let result = match s.manager.as_mut() {
+            let Some(w) = s.windows.get_mut(&self.viewport) else {
+                return Vec::new();
+            };
+            let result = match w.manager.as_mut() {
                 Some(m) => m.render(self, device, queue, r),
                 None => Ok(false),
             };
             match result {
                 Ok(shown) => self.shown.store(shown, Ordering::Relaxed),
                 Err(e) => {
-                    s.failure = Some(e);
-                    self.ctx.request_repaint();
+                    w.failure = Some(e);
+                    self.ctx.request_repaint_of(self.viewport);
                 }
             }
         }
@@ -592,13 +808,9 @@ impl egui_wgpu::CallbackTrait for ImagePaint {
     }
 }
 
-/// What the image surfaces of `ctx` are doing, for the debug bridge.
-pub fn report(ctx: &Context) -> Json {
-    let Some(surfaces) = SURFACES.get(ctx) else {
-        return json!({ "installed": false });
-    };
-    let s = surfaces.lock();
-    let colour = s.offer.colour.as_ref().map(|c| {
+/// One window's image surface, for the debug bridge.
+fn report_window(viewport: ViewportId, w: &WindowSurface) -> Json {
+    let colour = w.offer.colour.as_ref().map(|c| {
         let [features, primaries, transfers, intents] = c.names();
         json!({
             "version": c.version,
@@ -609,7 +821,7 @@ pub fn report(ctx: &Context) -> Json {
             "wsi_claims_srgb_surfaces": c.wsi_claims_srgb_surfaces(),
         })
     });
-    let negotiated = s.negotiated.as_ref().map(|(wanted, n)| {
+    let negotiated = w.negotiated.as_ref().map(|(wanted, n)| {
         json!({
             "wanted": wanted.describe(),
             "route": n.route.name(),
@@ -618,25 +830,50 @@ pub fn report(ctx: &Context) -> Json {
         })
     });
     #[cfg(target_os = "linux")]
-    let manager = s.manager.as_ref().map(wl::Manager::report);
+    let manager = w.manager.as_ref().map(wl::Manager::report);
     #[cfg(not(target_os = "linux"))]
     let manager: Option<Json> = None;
     json!({
-        "installed": true,
-        "unavailable": s.offer.unavailable,
+        "window": format!("{viewport:?}"),
+        "unavailable": w.offer.unavailable,
         "colour_management": colour,
-        "wsi": s.offer.wsi.iter().map(|(f, c)| format!("{f:?} {c:?}")).collect::<Vec<_>>(),
-        "may_tag": s.offer.may_tag,
+        "wsi": w.offer.wsi.iter().map(|(f, c)| format!("{f:?} {c:?}")).collect::<Vec<_>>(),
+        "may_tag": w.offer.may_tag,
         "negotiated": negotiated,
-        "failure": s.failure,
+        "failure": w.failure,
         "surfaces": manager,
     })
 }
 
+/// What the image surfaces of `ctx` are doing, for the debug bridge: the
+/// main window's at the top level (as before), every window's in
+/// `windows`.
+pub fn report(ctx: &Context) -> Json {
+    let Some(surfaces) = SURFACES.get(ctx) else {
+        return json!({ "installed": false });
+    };
+    let order = windows(ctx);
+    let s = surfaces.lock();
+    let mut out = s
+        .windows
+        .get(&ViewportId::ROOT)
+        .map(|w| report_window(ViewportId::ROOT, w))
+        .unwrap_or_else(|| json!({}));
+    out["installed"] = json!(s.windows.contains_key(&ViewportId::ROOT));
+    out["windows"] = Json::Array(
+        order
+            .iter()
+            .filter_map(|v| s.windows.get(v).map(|w| report_window(*v, w)))
+            .collect(),
+    );
+    out["window_source"] = json!(s.source.is_some());
+    out
+}
+
 #[cfg(target_os = "linux")]
 mod wl {
-    //! The Wayland image surfaces: one subsurface and wgpu surface per
-    //! viewport of the main window.
+    //! The Wayland image surfaces of one window: one subsurface and wgpu
+    //! surface per viewport drawn in it, under that window's surface.
 
     use std::collections::HashMap;
 
@@ -1158,5 +1395,144 @@ mod tests {
         );
         assert!((c[0] - srgb[0]).abs() < 0.02, "{c:?}");
         assert_eq!(c[3], 1.0);
+    }
+
+    /// One pass of `ctx` with `raw`, its output dropped.
+    fn pass(ctx: &Context, raw: egui::RawInput) {
+        ctx.run_ui(raw, |_| {}).textures_delta.clear();
+    }
+
+    /// A context whose egui knows the main window and `others`.
+    fn context_with(others: &[ViewportId]) -> Context {
+        let ctx = Context::default();
+        let mut raw = egui::RawInput::default();
+        raw.viewports
+            .insert(ViewportId::ROOT, egui::ViewportInfo::default());
+        for v in others {
+            raw.viewports.insert(*v, egui::ViewportInfo::default());
+        }
+        pass(&ctx, raw);
+        ctx
+    }
+
+    #[test]
+    fn each_window_gets_its_own_surface_negotiated_for_what_it_wants() {
+        let wide = ViewportId::from_hash_of("wide viewer");
+        let plain = ViewportId::from_hash_of("plain viewer");
+        let ctx = context_with(&[wide, plain]);
+        // The main window on GNOME's offer, the two viewers on KWin's.
+        install_offer(&ctx, ViewportId::ROOT, gnome());
+        install_offer(&ctx, wide, kwin());
+        install_offer(&ctx, plain, kwin());
+        display::want(&ctx, wide, rec2020());
+        display::want(&ctx, plain, DisplayTarget::srgb());
+        display::want(&ctx, ViewportId::ROOT, rec2020());
+
+        let n = negotiate_window(&ctx, wide);
+        let Route::Tagged(t) = n.route else {
+            panic!("{n:?}")
+        };
+        assert_eq!(t.surface_format, SurfaceFormat::Rgb10a2Unorm);
+        assert_eq!(negotiate_window(&ctx, plain).route, Route::Window);
+        let Route::Wsi(main) = negotiate_window(&ctx, ViewportId::ROOT).route else {
+            panic!()
+        };
+        assert_eq!(main.color_space(), Some(ColorSpace::DisplayP3));
+
+        // Each window's image surface, apart.
+        let of = |v| display::image_surface_of(&ctx, v).and_then(|i| i.target);
+        assert_eq!(of(wide), Some(t));
+        assert_eq!(of(plain), None);
+        assert_eq!(of(ViewportId::ROOT), Some(main));
+        assert_eq!(display::target_of(&ctx, wide), t);
+        // What windows.list shows of each.
+        let state = egui_pop_core::window_surface::get(&ctx, wide).unwrap();
+        assert_eq!(state["route"], "tagged");
+        assert_eq!(state["format"], "Rgb10a2Unorm");
+        assert!(
+            state["colour_space"].as_str().unwrap().contains("2020"),
+            "{state}"
+        );
+        let state = egui_pop_core::window_surface::get(&ctx, plain).unwrap();
+        assert_eq!(state["route"], "window");
+        assert_eq!(state["format"], Json::Null);
+        let r = report(&ctx);
+        assert_eq!(r["windows"].as_array().unwrap().len(), 3, "{r}");
+        assert_eq!(r["windows"][0]["window"], format!("{:?}", ViewportId::ROOT));
+    }
+
+    #[test]
+    fn closing_a_window_frees_its_surface() {
+        let viewer = ViewportId::from_hash_of("viewer");
+        let ctx = context_with(&[viewer]);
+        install_offer(&ctx, ViewportId::ROOT, kwin());
+        install_offer(&ctx, viewer, kwin());
+        display::want(&ctx, viewer, rec2020());
+        display::want(&ctx, ViewportId::ROOT, rec2020());
+        assert!(matches!(
+            negotiate_window(&ctx, viewer).route,
+            Route::Tagged(_)
+        ));
+        close_window(&ctx, viewer);
+        assert_eq!(offer_of(&ctx, viewer), None);
+        assert_eq!(windows(&ctx), vec![ViewportId::ROOT]);
+        assert_eq!(egui_pop_core::window_surface::get(&ctx, viewer), None);
+        assert_eq!(
+            display::image_surface_of(&ctx, viewer).and_then(|i| i.target),
+            None
+        );
+
+        // A window egui no longer knows is freed at the next frame.
+        install_offer(&ctx, viewer, kwin());
+        let _ = negotiate_window(&ctx, viewer);
+        let mut raw = egui::RawInput::default();
+        raw.viewports
+            .insert(ViewportId::ROOT, egui::ViewportInfo::default());
+        pass(&ctx, raw);
+        let _ = negotiate_window(&ctx, ViewportId::ROOT);
+        assert_eq!(windows(&ctx), vec![ViewportId::ROOT]);
+        assert_eq!(egui_pop_core::window_surface::get(&ctx, viewer), None);
+        // The main window's stays.
+        assert!(matches!(
+            negotiate_window(&ctx, ViewportId::ROOT).route,
+            Route::Tagged(_)
+        ));
+    }
+
+    #[test]
+    fn a_window_without_a_surface_says_why() {
+        let viewer = ViewportId::from_hash_of("viewer");
+        let ctx = context_with(&[viewer]);
+        install_offer(&ctx, ViewportId::ROOT, kwin());
+        display::want(&ctx, viewer, rec2020());
+        let n = negotiate_window(&ctx, viewer);
+        assert_eq!(n.route, Route::Window);
+        assert!(n.why.unwrap().contains("install_window"));
+        // Told where handles are, but none yet for this window.
+        set_window_source(&ctx, Options::default(), |_| None::<NoHandles>);
+        let why = negotiate_window(&ctx, viewer).why.unwrap();
+        assert!(why.contains("not known yet"), "{why}");
+        // Handles refused: the window's offer says why, kept.
+        set_window_source(&ctx, Options::default(), |_| Some(NoHandles));
+        // No render state: install never ran with a GPU.
+        assert_eq!(offer_of(&ctx, viewer), None);
+    }
+
+    struct NoHandles;
+
+    impl raw_window_handle::HasWindowHandle for NoHandles {
+        fn window_handle(
+            &self,
+        ) -> Result<raw_window_handle::WindowHandle<'_>, raw_window_handle::HandleError> {
+            Err(raw_window_handle::HandleError::Unavailable)
+        }
+    }
+
+    impl raw_window_handle::HasDisplayHandle for NoHandles {
+        fn display_handle(
+            &self,
+        ) -> Result<raw_window_handle::DisplayHandle<'_>, raw_window_handle::HandleError> {
+            Err(raw_window_handle::HandleError::Unavailable)
+        }
     }
 }

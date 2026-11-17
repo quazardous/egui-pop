@@ -780,7 +780,7 @@ impl<'a> Viewport<'a> {
         // target below is then that surface's.
         #[cfg(feature = "wayland")]
         let image_route = if tiles::device(ui.ctx()).gpu {
-            crate::image_surface::frame(ui.ctx())
+            crate::image_surface::frame(ui.ctx(), ui.ctx().viewport_id())
         } else {
             None
         };
@@ -1572,6 +1572,7 @@ fn draw_tiles(
                 let paint = crate::image_surface::ImagePaint {
                     ctx: ctx.clone(),
                     surfaces,
+                    viewport: ctx.viewport_id(),
                     route,
                     key: state.slot,
                     pass: ctx.cumulative_pass_nr(),

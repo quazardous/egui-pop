@@ -148,8 +148,11 @@ wgpu 30 configures a surface in a colour space
 3. Only the image is tagged; the interface stays the sRGB egui draws
    faithfully.
 
-What it costs: a transparent window; one image surface per viewport, on
-the main window only (its handles come from eframe's creation context);
+What it costs: a transparent window; one image surface per viewport,
+under its own window's surface (the main window's handles come from
+eframe's creation context, another window's from egui-pop's runner,
+`image_surface::set_window_source`, or the application,
+`install_window`; an immediate viewport's window has none known yet);
 a guess at the driver's rule for the colour surface, conservative and
 switchable off. The swapchain path stays the long-term one for HDR of the
 whole window, once egui-wgpu takes a colour space (see

@@ -206,3 +206,33 @@ fn a_listener_placed_after_the_owner_finds_its_state_closed() {
     // The focus went back to the main window, in the same call.
     assert_eq!(m.app().active_window(), ViewportId::ROOT);
 }
+
+/// What draws into a window's own surface (the image viewport's image
+/// surface) shows with that window in `windows.list`, and goes with it.
+#[test]
+fn the_registry_shows_what_draws_into_each_window_s_own_surface() {
+    let mut m = multi();
+    m.app()
+        .open_window(WindowSpec::new("viewer", "Viewer"), |ui, _| {
+            ui.label("image");
+        });
+    m.root_pass();
+    let viewer = m
+        .declared()
+        .into_iter()
+        .find(|v| *v != ViewportId::ROOT)
+        .expect("the viewer's viewport");
+    let state = json!({ "kind": "image", "route": "tagged", "format": "Rgb10a2Unorm" });
+    egui_pop_core::window_surface::set(m.ctx(), viewer, Some(state.clone()));
+    let list = m.app().windows_list();
+    let main = list.iter().find(|w| w.id == "main").unwrap();
+    let record = list.iter().find(|w| w.id == "viewer").unwrap();
+    assert_eq!(record.surface.as_ref(), Some(&state));
+    assert_eq!(main.surface, None);
+    assert_eq!(
+        serde_json::to_value(record).unwrap()["surface"]["route"],
+        "tagged"
+    );
+    m.app().close_window(&WindowId::new("viewer"));
+    assert!(!m.app().windows_list().iter().any(|w| w.id == "viewer"));
+}
