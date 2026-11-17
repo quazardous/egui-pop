@@ -728,6 +728,13 @@ pub fn show_in(ui: &mut Ui, app: &AppHandle, menu: &MenuId, cx: &WhenContext) {
     show_with(ui, app, menu, cx, &Json::Null);
 }
 
+/// Draws a menu's items in the current context, with arguments merged
+/// into every command an item runs and seen by `when` clauses as
+/// `args.<key>` (a menu `egui_stack` opens: a docked tab's).
+pub(crate) fn show_args(ui: &mut Ui, app: &AppHandle, menu: &MenuId, args: &Json) {
+    show_with(ui, app, menu, &with_args(&app.when_context(), args), args);
+}
+
 /// Draws a menu's items in a context, with arguments merged into every
 /// command an item runs.
 fn show_with(ui: &mut Ui, app: &AppHandle, menu: &MenuId, cx: &WhenContext, args: &Json) {

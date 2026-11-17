@@ -748,16 +748,6 @@ pub const WORKBENCH_DETACH: StrKey =
     StrKey::new("egui-pop-workbench-detach", "Detach into a window");
 pub const WORKBENCH_CLOSE_PANEL: StrKey =
     StrKey::new("egui-pop-workbench-close-panel", "Close { $panel }");
-/// The tab menu's submenu listing the detached windows a tab may move
-/// into.
-pub const WORKBENCH_MOVE_TO_WINDOW: StrKey =
-    StrKey::new("egui-pop-workbench-move-to-window", "Move to window");
-/// The tab menu's submenu moving the whole tab group into a detached
-/// window, or a new one.
-pub const WORKBENCH_MOVE_GROUP_TO_WINDOW: StrKey = StrKey::new(
-    "egui-pop-workbench-move-group-to-window",
-    "Move group to window",
-);
 /// The "Move group to window" submenu's entry opening a new window.
 pub const WORKBENCH_NEW_WINDOW: StrKey = StrKey::new("egui-pop-workbench-new-window", "New window");
 /// Why a dragged tab may not go into a detached window.
@@ -766,6 +756,9 @@ pub const WORKBENCH_STAYS_DOCKED: StrKey = StrKey::new(
     "{ $panel } cannot go into a window",
 );
 pub const WORKBENCH_FLOAT: StrKey = StrKey::new("egui-pop-workbench-float", "Float");
+/// The panel menu's entry docking a floating or detached panel back
+/// where it floated from.
+pub const WORKBENCH_DOCK_BACK: StrKey = StrKey::new("egui-pop-workbench-dock-back", "Dock back");
 /// A panel's mark while its content is stale or being updated
 /// (`panel.state`).
 pub const PANEL_STATE_UPDATING: StrKey = StrKey::new("egui-pop-panel-state-updating", "Updating…");
@@ -1848,11 +1841,10 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_STAYS_OUT,
     WORKBENCH_DETACH,
     WORKBENCH_CLOSE_PANEL,
-    WORKBENCH_MOVE_TO_WINDOW,
-    WORKBENCH_MOVE_GROUP_TO_WINDOW,
     WORKBENCH_NEW_WINDOW,
     WORKBENCH_STAYS_DOCKED,
     WORKBENCH_FLOAT,
+    WORKBENCH_DOCK_BACK,
     PANEL_STATE_UPDATING,
     PANEL_STATE_FAILED,
     WORKBENCH_UNFOLD,

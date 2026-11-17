@@ -100,7 +100,11 @@ fn messages() -> Messages {
         ))
         .build(&ctx)
         .expect("egui-pop's plugins build");
-    let mut found = extract::declarations(app.handle(), &[]);
+    // The panel menu's submenus: it opens on a panel, not from the main menu.
+    let mut found = extract::declarations(
+        app.handle(),
+        &[egui_pop_api::workbench::panel_menu::MENU_PANEL],
+    );
     // The language setting's choices are each language's own name,
     // generated at connect: not catalogue text.
     found.retain(|f| {
