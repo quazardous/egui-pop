@@ -3677,11 +3677,15 @@ impl LayoutPainter for ShellPainter<'_> {
 /// The centre every panel was moved out of: it stays laid out and stays a
 /// drop target (its empty dock, drawn over it by [`drop_targets`] while a
 /// tab drags; a palette docks there too, [`Workbench::dock_at`]), and says
-/// so, to the eye and to a screen reader.
-fn empty_centre(ui: &mut Ui) {
+/// so, to the eye and to a screen reader. It is a placeholder for the
+/// paint guard: a window showing nothing else still gets the fallback
+/// page.
+fn empty_centre(app: &AppHandle, ui: &mut Ui) {
     let text = strings::tr(ui.ctx(), &txt::WORKBENCH_DROP_HERE);
-    ui.centered_and_justified(|ui| {
-        ui.weak(text);
+    app.placeholder(ui, |ui| {
+        ui.centered_and_justified(|ui| {
+            ui.weak(text);
+        });
     });
 }
 
@@ -3764,7 +3768,7 @@ impl ZoneViewer for ShellViewer<'_> {
             frame.show(ui, |ui| {
                 ui.set_min_size(ui.available_size());
                 if !self.areas.contains(&Area::Center) {
-                    empty_centre(ui);
+                    empty_centre(app, ui);
                 } else if visible_in(app, Area::Center) {
                     draw_area(app, ui, Area::Center);
                 }
