@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-winit"
-version = "0.1.1"
+version = "0.1.2"
 description = "The winit layer of egui-pop's runner: a winit 0.30 window id as the window's raw handles (Win32, X11, Wayland), so every window of an event loop is reachable, with no egui dependency"
 readme = "README.md"
 keywords = ["winit", "raw-window-handle", "multi-window", "egui"]
