@@ -8,6 +8,18 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.12.1 (2026-11-17)
+
+Published: egui-pop-api 0.11.1, egui-pop-test 0.12.1, egui-pop 0.12.1.
+
+### Features
+
+- egui-pop, egui-pop-api, egui-pop-test: A detached panel's window no longer asks back the size the system just set. Its builder followed the window's live place, so the backend asked each size again one pass late: while an edge was dragged the window was pulled back, and where the compositor granted another size than the one asked (GNOME on Wayland) the width oscillated during the drag and kept oscillating after it. The window now opens with its place and keeps that builder while it lives; a place the system tells is followed into the layout (saved for the next run), and only a place the application changes on purpose (a layout applied) is asked, once, by explicit commands, each logged under the `egui_pop::window_size` target with its reason. `MultiWindow` patches each window's builder as eframe does: `MultiWindow::take_sent` gives every command the system received for a window (from its passes and from a builder that changed), and `MultiWindow::grant_sizes` makes the system obey a size asked, granting another one.
+
+### Fixes
+
+- egui-pop, egui-pop-api: A floating palette is resized by each of its four edges and four corners, each with the cursor of its direction: before, only its right edge, its bottom edge and the corner between them did, so it could not be widened leftwards. A left or top edge keeps the opposite edge where it is and the least width holds; its drop runs `palette.resize`, then `palette.move` for the new place.
+
 ## 0.12.0 (2026-11-17)
 
 Published: egui-pop-tokens 0.2.8, ortho-router 0.1.1, egui-pop-hooks 0.1.1, egui-pop-winit 0.1.1, egui-pop-model 0.9.0, egui-pop-core 0.11.0, egui-pop-api 0.11.0, egui-pop-test 0.12.0, egui-pop-viewport 0.11.0, egui-pop-i18n 0.11.0, egui-pop-agent 0.6.0, egui-pop-editors 0.11.0, egui-pop-platform 0.11.0, egui-pop-views 0.11.0, egui-pop-imaging 0.11.0, egui-pop 0.12.0.
