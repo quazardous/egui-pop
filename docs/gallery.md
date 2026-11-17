@@ -531,6 +531,12 @@ Zones and blocks, the workbench, the layout controls, palettes, arrangements, th
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-detached-drop-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-detached-drop-pop-dark.png" width="200" alt="workbench-detached-drop-pop-dark"></a><br>workbench-detached-drop-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/palette-panel-menu-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/palette-panel-menu-pop-dark.png" width="200" alt="palette-panel-menu-pop-dark"></a><br>palette-panel-menu-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/palettes-drag-hint-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/palettes-drag-hint-pop-dark.png" width="200" alt="palettes-drag-hint-pop-dark"></a><br>palettes-drag-hint-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-edge-active-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-edge-active-pop-dark.png" width="200" alt="frame-edge-active-pop-dark"></a><br>frame-edge-active-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-edge-inactive-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-edge-inactive-pop-dark.png" width="200" alt="frame-edge-inactive-pop-dark"></a><br>frame-edge-inactive-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-edge-maximized-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-edge-maximized-pop-dark.png" width="200" alt="frame-edge-maximized-pop-dark"></a><br>frame-edge-maximized-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-edge-rounded-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-edge-rounded-pop-dark.png" width="200" alt="frame-edge-rounded-pop-dark"></a><br>frame-edge-rounded-pop-dark</td>
   </tr>
 </table>
 
