@@ -1635,7 +1635,7 @@ mod tests {
         let ctx = Context::default();
         let fill = Color32::from_rgb(10, 20, 30);
         let corners = egui::CornerRadius::same(8);
-        let mut run = || {
+        let run = || {
             ctx.run_ui(egui::RawInput::default(), |ui| {
                 let ctx = ui.ctx().clone();
                 ctx.layer_painter(egui::LayerId::background()).rect_filled(
