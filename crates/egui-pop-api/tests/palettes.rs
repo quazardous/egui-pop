@@ -706,6 +706,93 @@ fn a_palette_is_resized_by_its_edges_and_keeps_its_size() {
     assert!(near(back.height(), start.height()), "{start:?} {back:?}");
 }
 
+/// Its left and top edges (and every corner) resize it too, the
+/// opposite edges staying where they are, never under its least width.
+#[test]
+fn a_palette_is_resized_by_its_left_and_top_edges_keeping_the_opposite_ones() {
+    let mut h = harness(false);
+    h.state()
+        .handle()
+        .change_workbench(Change::MovePalette(TOOLS, [300.0, 150.0]));
+    h.run();
+    h.run();
+    let start = frame(&h, &TOOLS);
+    let before = h.state().handle().last_event();
+    // The left edge, 40 points out: 40 wider, the right edge still.
+    drag_by(
+        &mut h,
+        egui::pos2(start.left() + 1.0, start.center().y),
+        egui::vec2(-40.0, 0.0),
+    );
+    let r = frame(&h, &TOOLS);
+    assert!(near(r.width(), start.width() + 40.0), "{start:?} {r:?}");
+    assert!(near(r.right(), start.right()), "{start:?} {r:?}");
+    assert!(near(r.height(), start.height()), "{start:?} {r:?}");
+    assert!(
+        events(&h, before).contains(&"palette.resized".to_string()),
+        "{:?}",
+        events(&h, before)
+    );
+    // The top edge, 40 points up: 40 taller, the bottom edge still.
+    drag_by(
+        &mut h,
+        egui::pos2(r.center().x, r.top() + 1.0),
+        egui::vec2(0.0, -40.0),
+    );
+    let t = frame(&h, &TOOLS);
+    assert!(near(t.height(), r.height() + 40.0), "{r:?} {t:?}");
+    assert!(near(t.bottom(), r.bottom()), "{r:?} {t:?}");
+    assert!(
+        near(t.left(), r.left()) && near(t.right(), r.right()),
+        "{r:?} {t:?}"
+    );
+    // The top-left corner: both ways, the bottom-right corner still.
+    drag_by(
+        &mut h,
+        t.left_top() + egui::vec2(1.0, 1.0),
+        egui::vec2(-20.0, -20.0),
+    );
+    let c = frame(&h, &TOOLS);
+    assert!(near(c.width(), t.width() + 20.0), "{t:?} {c:?}");
+    assert!(near(c.height(), t.height() + 20.0), "{t:?} {c:?}");
+    assert!(near(c.right(), t.right()) && near(c.bottom(), t.bottom()));
+    // The other corners and the bottom edge: each its own two edges.
+    drag_by(
+        &mut h,
+        c.right_top() + egui::vec2(-1.0, 1.0),
+        egui::vec2(10.0, -10.0),
+    );
+    let d = frame(&h, &TOOLS);
+    assert!(near(d.width(), c.width() + 10.0) && near(d.height(), c.height() + 10.0));
+    assert!(
+        near(d.left(), c.left()) && near(d.bottom(), c.bottom()),
+        "{c:?} {d:?}"
+    );
+    drag_by(
+        &mut h,
+        d.left_bottom() + egui::vec2(1.0, -1.0),
+        egui::vec2(-10.0, 10.0),
+    );
+    let e = frame(&h, &TOOLS);
+    assert!(near(e.width(), d.width() + 10.0) && near(e.height(), d.height() + 10.0));
+    assert!(
+        near(e.right(), d.right()) && near(e.top(), d.top()),
+        "{d:?} {e:?}"
+    );
+    // Never under its least width (160): the right edge stays.
+    drag_by(
+        &mut h,
+        egui::pos2(e.left() + 1.0, e.center().y),
+        egui::vec2(1000.0, 0.0),
+    );
+    let least = frame(&h, &TOOLS);
+    assert!(
+        least.width() >= 160.0 && least.width() < e.width(),
+        "{least:?}"
+    );
+    assert!(near(least.right(), e.right()), "{e:?} {least:?}");
+}
+
 #[test]
 fn a_hook_vetoes_a_resize_and_the_palette_goes_back() {
     let mut h = harness(true);
