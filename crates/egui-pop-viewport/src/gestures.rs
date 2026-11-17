@@ -19,142 +19,15 @@
 //! - a primary drag on a handle moves it, whatever the profile.
 
 use egui::{Context, Key, Modifiers, PointerButton};
-use egui_pop_core::model::ids::CommandId;
-use egui_pop_core::model::keymap::{Button, Pointer};
-use egui_pop_core::model::pointer::{
-    ImageDoubleClick, PointerMap, SCOPE_GRAPH, SCOPE_IMAGE, gesture,
-};
-use egui_pop_core::pointer::{self as pointer_map, MODIFIER_SETS, WheelInput};
+use egui_pop_core::model::keymap::Button;
+use egui_pop_core::model::pointer::{ImageDoubleClick, PointerMap, SCOPE_GRAPH, SCOPE_IMAGE};
+use egui_pop_core::pointer::view::slot;
+use egui_pop_core::pointer::{self as pointer_map};
 use egui_pop_core::state::Slot;
 
-/// What a pointer gesture does to a view (the image viewport's, the node
-/// graph's).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ViewAction {
-    /// Nothing: the wheel goes to the panel around.
-    #[default]
-    Nothing,
-    /// Zooms around the pointer, holding at the stops (fit, 100 %).
-    Zoom,
-    /// Zooms around the pointer without stops.
-    ZoomFree,
-    /// Pans by the wheel's motion, or following a drag.
-    Pan,
-    /// Pans horizontally by the wheel's motion.
-    PanX,
-    /// Pans vertically by the wheel's motion.
-    PanY,
-    /// 100 %, 200 %, fit, around the pointer.
-    ZoomCycle,
-    /// Fits the content.
-    Fit,
-    /// Fit, or 100 % around the pointer when fitting.
-    ZoomToggle,
-    /// Asks the application to leave the view (a signal; the view does
-    /// not change).
-    Leave,
-}
-
-impl ViewAction {
-    /// The action of a gesture command, in either view's scope.
-    pub fn of(command: &CommandId) -> ViewAction {
-        let pairs = [
-            (gesture::IMAGE_ZOOM, ViewAction::Zoom),
-            (gesture::IMAGE_ZOOM_FREE, ViewAction::ZoomFree),
-            (gesture::IMAGE_PAN, ViewAction::Pan),
-            (gesture::IMAGE_PAN_X, ViewAction::PanX),
-            (gesture::IMAGE_PAN_Y, ViewAction::PanY),
-            (gesture::IMAGE_ZOOM_CYCLE, ViewAction::ZoomCycle),
-            (gesture::IMAGE_FIT, ViewAction::Fit),
-            (gesture::IMAGE_ZOOM_TOGGLE, ViewAction::ZoomToggle),
-            (gesture::GRAPH_ZOOM, ViewAction::Zoom),
-            (gesture::GRAPH_PAN, ViewAction::Pan),
-            (gesture::GRAPH_PAN_X, ViewAction::PanX),
-            (gesture::GRAPH_PAN_Y, ViewAction::PanY),
-            (gesture::GRAPH_FIT, ViewAction::Fit),
-        ];
-        pairs
-            .into_iter()
-            .find(|(c, _)| c == command)
-            .map_or(ViewAction::Nothing, |(_, a)| a)
-    }
-
-    /// A zoom of any kind.
-    pub fn zooms(self) -> bool {
-        matches!(self, ViewAction::Zoom | ViewAction::ZoomFree)
-    }
-
-    /// A pan by the wheel of any kind.
-    pub fn pans(self) -> bool {
-        matches!(self, ViewAction::Pan | ViewAction::PanX | ViewAction::PanY)
-    }
-}
-
-/// A view's pointer gestures: per set of modifiers
-/// ([`egui_pop_core::pointer::index`]), what the wheel, a scroll and a
-/// pinch do, what a click and a double click of each button do, and
-/// which buttons' drags pan.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ViewGestures {
-    pub wheel: [ViewAction; MODIFIER_SETS],
-    pub scroll: [ViewAction; MODIFIER_SETS],
-    pub pinch: [ViewAction; MODIFIER_SETS],
-    /// Per set of modifiers, per button (`Button::ALL`'s order).
-    pub click: [[ViewAction; 5]; MODIFIER_SETS],
-    pub double_click: [[ViewAction; 5]; MODIFIER_SETS],
-    pub drag_pan: [[bool; 5]; MODIFIER_SETS],
-}
-
-fn slot(b: Button) -> usize {
-    Button::ALL.iter().position(|x| *x == b).unwrap_or(0)
-}
-
-impl ViewGestures {
-    /// A scope's bindings in a pointer map.
-    pub fn from_map(map: &PointerMap, scope: &str) -> ViewGestures {
-        let mut g = ViewGestures::default();
-        for b in map.scope(scope) {
-            let Some(p) = b.chord.pointer() else { continue };
-            let i = pointer_map::chord_index(&b.chord);
-            let action = ViewAction::of(&b.command);
-            match p {
-                Pointer::Wheel => g.wheel[i] = action,
-                Pointer::Scroll => g.scroll[i] = action,
-                Pointer::Pinch => g.pinch[i] = action,
-                Pointer::Click(button) => g.click[i][slot(button)] = action,
-                Pointer::DoubleClick(button) => g.double_click[i][slot(button)] = action,
-                Pointer::Drag(button) => g.drag_pan[i][slot(button)] = action == ViewAction::Pan,
-            }
-        }
-        g
-    }
-
-    /// What a wheel, scroll or pinch input does.
-    pub fn wheel_action(&self, input: &WheelInput) -> ViewAction {
-        let i = pointer_map::index(input.modifiers);
-        match input.pointer {
-            Pointer::Wheel => self.wheel[i],
-            Pointer::Scroll => self.scroll[i],
-            Pointer::Pinch => self.pinch[i],
-            _ => ViewAction::Nothing,
-        }
-    }
-
-    /// Whether a drag of this button with these modifiers pans.
-    pub fn drag_pans(&self, button: PointerButton, modifiers: Modifiers) -> bool {
-        self.drag_pan[pointer_map::index(modifiers)][slot(pointer_map::button(button))]
-    }
-
-    /// What a click of this button with these modifiers does.
-    pub fn click_action(&self, button: PointerButton, modifiers: Modifiers) -> ViewAction {
-        self.click[pointer_map::index(modifiers)][slot(pointer_map::button(button))]
-    }
-
-    /// What a double click of this button with these modifiers does.
-    pub fn double_click_action(&self, button: PointerButton, modifiers: Modifiers) -> ViewAction {
-        self.double_click[pointer_map::index(modifiers)][slot(pointer_map::button(button))]
-    }
-}
+/// The views' gestures and their action, shared with every zoomable view
+/// (`egui_pop_core::pointer::view`).
+pub use egui_pop_core::pointer::view::{ViewAction, ViewGestures};
 
 /// The viewport's gestures.
 #[derive(Clone, Copy, Debug, PartialEq)]

@@ -49,6 +49,7 @@ use crate::state::Slot;
 
 pub mod claim;
 pub mod drag;
+pub mod view;
 
 pub use claim::{Secondary, SecondaryClaim, claim_secondary, claimed};
 pub use drag::{
