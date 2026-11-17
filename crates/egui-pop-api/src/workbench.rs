@@ -1158,15 +1158,14 @@ impl Default for Workbench {
 impl Workbench {
     /// A detached window's place for this pass (#5241): the place its
     /// window opened with, for its builder (the same while it lives), and
-    /// the commands a place the application changed on purpose asks of
-    /// the system, once. A place the system told is never asked back.
+    /// the place the application changed on purpose (from, to), to ask of
+    /// the system once. A place the system told is never asked back.
     fn window_place(
         &mut self,
         panel: &PanelId,
         now: WindowPlace,
         screens: &[Rect],
-    ) -> (WindowState, Vec<egui::ViewportCommand>) {
-        use egui::ViewportCommand as C;
+    ) -> (WindowState, Option<(WindowState, WindowState)>) {
         let repaired = |(r, maximized, fullscreen): WindowPlace| {
             let [x, y, w, h] = r;
             WindowState {
@@ -1194,41 +1193,17 @@ impl Workbench {
                     told: None,
                 },
             );
-            return (opened, Vec::new());
+            return (opened, None);
         };
         if ask.asked == now || ask.told == Some(now) {
-            return (ask.opened, Vec::new());
+            return (ask.opened, None);
         }
         // The application changed the place: asked, from where the
         // window is (as told), once.
         let was = ask.told.unwrap_or(ask.asked);
-        let (from, to) = (repaired(was), repaired(now));
-        let mut commands = Vec::new();
-        if to.fullscreen != from.fullscreen {
-            commands.push(C::Fullscreen(to.fullscreen));
-        }
-        if to.maximized != from.maximized {
-            commands.push(C::Maximized(to.maximized));
-        }
-        if !to.maximized && !to.fullscreen {
-            if to.size != from.size {
-                commands.push(C::InnerSize(to.size));
-            }
-            if let Some(at) = to.position
-                && Some(at) != from.position
-            {
-                commands.push(C::OuterPosition(at));
-            }
-        }
-        for c in &commands {
-            log::info!(
-                target: "egui_pop::window_size",
-                "`{panel}`'s window asked {c:?}: the application changed its place in the layout"
-            );
-        }
         ask.asked = now;
         ask.told = None;
-        (ask.opened, commands)
+        (ask.opened, Some((repaired(was), repaired(now))))
     }
 
     /// A detached window's place as the system told it, followed into the
@@ -2065,13 +2040,13 @@ pub(crate) fn windows(
         // the place the window opened with: one that changed would be
         // asked of the system again by the backend, a size the system
         // just set asked back one pass late (#5241).
-        let (state, asks) = app.workbench_mut().window_place(
+        let (state, changed) = app.workbench_mut().window_place(
             &aux.panel,
             (aux.rect, aux.maximized, aux.fullscreen),
             &screens,
         );
-        for c in asks {
-            ctx.send_viewport_cmd_to(window_id(&aux.panel), c);
+        if let Some((from, to)) = changed {
+            crate::bus::panels::ask_place(ctx, window_id(&aux.panel), &aux.panel, from, to);
         }
         let own = crate::frame::own_frame(app);
         let panel_title = strings::panel_title(ctx, spec.id.as_str(), &spec.title);
