@@ -548,6 +548,28 @@ steps with `group: true` (`Change::JoinWindowGroup`,
 `Change::DetachGroup`): the window it opens is its `window.open`, a
 window it empties closes as a panel's joining another does.
 
+**Back out of a detached window.** A detached window always shows its
+tab bar, even holding one panel. A tab dragged out of it and let go
+over another window of the application goes there: over the main
+window, it docks in the area under the pointer (the centre, a side or
+the bottom area drawn, or a closed one along the areas' edge), as a
+`workbench.move` step; over another detached window, it joins its tabs.
+The main window's areas are targets of the drag session
+(`workbench.area.<area>`): over one, the whole area shows the drop zone
+(the kit's `dock-preview`), disabled with its reason for a panel the
+area refuses (`only_in`), and a drop there is refused with that reason
+(`drag.refused`, `workbench.refused`), the tab staying in its window.
+Let go outside every window, nothing moves. Where the system tells
+where windows are (X11, Windows), the zone shows during the drag; on
+Wayland, which hides window positions, nothing shows before the
+release, and the drop goes to the window the pointer is over once the
+drag lets it go (the drag session's fallback); the way home that
+always works is the **Dock back** button at the end of the window's
+tab bar, the tab menu's Dock back, or `Ctrl+Shift+Home`
+(`workbench.panel.dock_back`, on the focused panel): the shown panel
+docks back where it came from, else in its own area
+(`workbench.dock_back`).
+
 Such a window is a window of the application in full:
 
 - **Keys.** The keymap reaches it: the key dispatcher runs in each
