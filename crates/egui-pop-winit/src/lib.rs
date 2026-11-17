@@ -56,6 +56,12 @@ impl Display {
             .map(|d| Display(d.as_raw()))
     }
 
+    /// A display from its raw handle (a host that has no
+    /// `ActiveEventLoop` at hand, a test).
+    pub fn from_raw(raw: RawDisplayHandle) -> Display {
+        Display(raw)
+    }
+
     /// The raw display handle.
     pub fn raw(&self) -> RawDisplayHandle {
         self.0

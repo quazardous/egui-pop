@@ -298,9 +298,13 @@ Guards on the assumptions it rests on:
   compares the main window's id, read as a handle, with the handle
   eframe gives for it: other windows' handles are used only when both
   agree (`runner::ids_verified`).
-- **eframe paints inside `RedrawRequested`**, true in 0.37. Only the
-  first pass that begins there is paired; immediate viewports (painted
-  inside their parent's pass) are not.
+- **eframe paints inside `RedrawRequested`**, true in 0.37: the first
+  pass that begins there is that window's viewport. An immediate viewport
+  (a detached panel's window) is painted in a pass nested in its
+  parent's, and its own window's `RedrawRequested` runs no pass (eframe
+  repaints the parent instead): the two are paired in the order seen, a
+  guess a later pass of the window's own corrects. A host running the
+  loop itself gets the same through `runner::host` (feature `host-loop`).
 - **eframe's own result**: `create_native` keeps the run's error inside
   its handler, so the runner keeps the application creator's error
   itself (`run_native_with`'s `Error::AppCreation`), and reports a run

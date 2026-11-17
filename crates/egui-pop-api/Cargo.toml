@@ -39,7 +39,12 @@ eframe = ["dep:eframe"]
 ## is placed, and every window's handles are known (the file chooser's
 ## parent, the Windows hit test). Without it, `run_native` calls
 ## `eframe::run_native`. No effect on the web.
-create-native = ["eframe", "dep:winit", "dep:egui-pop-winit"]
+create-native = ["host-loop"]
+## A host running the winit event loop itself (`eframe::create_native`)
+## pairs every window with its viewport through `runner::host`'s hooks,
+## so `runner::window` answers for its windows too (detached panels'
+## included). Implied by `create-native`.
+host-loop = ["eframe", "dep:winit", "dep:egui-pop-winit"]
 ## The system's file chooser (rfd), a fallback kept just in case: off by
 ## default, and even built in, used only when the application allows it at
 ## run time (`AppBuilder::system_file_chooser`), never under tests

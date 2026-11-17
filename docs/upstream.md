@@ -512,7 +512,9 @@ limit.
   other window's too: egui-pop owns the event loop and reads a window's
   handles from its winit id (`egui-pop-winit`, an implementation detail
   of winit 0.30 checked by a test per system and, at run time, against
-  the main window's handles). See [eframe-comparison.md](eframe-comparison.md#the-runner-eframe-through-create_native).
+  the main window's handles), immediate viewports' included. A host
+  running its own loop calls `runner::host`'s hooks (feature
+  `host-loop`) for the same. See [eframe-comparison.md](eframe-comparison.md#the-runner-eframe-through-create_native).
 - **Remove when**: eframe gives each viewport's window or raw handles;
   egui-pop then records them as each window opens.
 

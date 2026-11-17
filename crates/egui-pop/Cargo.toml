@@ -29,6 +29,9 @@ eframe = ["egui-pop-api/eframe"]
 ## (`eframe::create_native`): screens known before the main window is
 ## placed, every window's handles known. Off: plain `eframe::run_native`.
 create-native = ["egui-pop-api/create-native"]
+## A host running the winit event loop itself pairs every window with
+## its viewport (`api::runner::host`); implied by `create-native`.
+host-loop = ["egui-pop-api/host-loop"]
 ## Icons drawn from the Phosphor icon font (MIT, about 480 KB); without
 ## it, icons are painted with lines and fills.
 phosphor = ["egui-pop-api/phosphor"]

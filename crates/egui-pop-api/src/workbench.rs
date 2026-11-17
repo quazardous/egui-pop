@@ -1972,6 +1972,22 @@ pub(crate) fn windows(
             builder = builder.with_fullscreen(true);
         }
         let panel = aux.panel.clone();
+        // Transparent where a surface below it (the image surface) can
+        // show through, when the application asks; the window says how
+        // it was built and why.
+        let transparency = if app.transparent_panel_windows() {
+            crate::window::surface_below_transparency(crate::window::windowing())
+        } else {
+            egui_pop_core::window_surface::Transparency::Opaque(
+                "the application builds its panels' windows opaque \
+                 (AppBuilder::transparent_panel_windows)"
+                    .into(),
+            )
+        };
+        if transparency.is_transparent() {
+            builder = builder.with_transparent(true);
+        }
+        egui_pop_core::window_surface::set_transparency(ctx, window_id(&panel), Some(transparency));
         crate::bus::panels::show_window(ctx, window_id(&panel), builder, |ui, class| {
             let vctx = ui.ctx().clone();
             // Embedded in the main window (a backend without windows of

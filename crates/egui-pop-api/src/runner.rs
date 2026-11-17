@@ -38,9 +38,14 @@
 //!   (an X server without DRI3, Mesa's software rendering), where an
 //!   animating window would otherwise draw as fast as the CPU goes.
 //!
-//! Immediate viewports (painted inside their parent's pass) are not
-//! paired. On the web, and without the feature, eframe runs as before and
-//! this module's functions answer nothing.
+//! - **Immediate viewports' windows too** (a detached panel's window):
+//!   painted inside their parent's pass, their own window's redraw runs no
+//!   pass; the nested pass and that redraw are paired in the order seen.
+//!
+//! A host that runs the event loop itself (feature `host-loop`, without
+//! `create-native`) gets the same pairing by calling [`host`]'s hooks
+//! from its own handler. On the web, and without either feature, eframe
+//! runs as before and this module's functions answer nothing.
 
 #[cfg(all(
     feature = "create-native",
@@ -48,13 +53,24 @@
 ))]
 mod native;
 
+#[cfg(all(
+    feature = "host-loop",
+    not(any(target_os = "ios", target_os = "android"))
+))]
+pub mod host;
+#[cfg(all(
+    feature = "host-loop",
+    not(any(target_os = "ios", target_os = "android"))
+))]
+mod pairs;
+
 /// Without the feature (or on iOS and Android): eframe's own runner, and
 /// nothing seen.
 #[cfg(not(all(
-    feature = "create-native",
+    feature = "host-loop",
     not(any(target_os = "ios", target_os = "android"))
 )))]
-mod native {
+mod host {
     use egui::ViewportId;
     use raw_window_handle::RawWindowHandle;
 
@@ -74,6 +90,16 @@ mod native {
         None
     }
 
+    pub(super) fn windowing() -> crate::window::Windowing {
+        crate::window::Windowing::Unknown
+    }
+}
+
+#[cfg(not(all(
+    feature = "create-native",
+    not(any(target_os = "ios", target_os = "android"))
+)))]
+mod native {
     pub(super) fn run(
         title: &str,
         options: eframe::NativeOptions,
@@ -110,7 +136,7 @@ pub struct Window(Arc<dyn ParentWindow>);
 impl Window {
     #[cfg_attr(
         not(all(
-            feature = "create-native",
+            feature = "host-loop",
             not(any(target_os = "ios", target_os = "android"))
         )),
         allow(dead_code)
@@ -152,18 +178,19 @@ impl HasDisplayHandle for Window {
 /// The native window showing `viewport`, reached by its id: the main
 /// window ([`ViewportId::ROOT`]) as soon as eframe created it, on every
 /// system; another deferred viewport's once it was painted for a redraw
-/// request and the window ids were verified ([`ids_verified`]). None for
-/// an immediate viewport (painted inside its parent's window), a viewport
-/// not open (or closed since), when called off the event loop's thread,
-/// or when egui-pop does not own the event loop.
+/// request, an immediate viewport's (a detached panel's window) once its
+/// window's redraw came, and the window ids were verified
+/// ([`ids_verified`]). None for a viewport not open (or closed since),
+/// when called off the event loop's thread, or when neither egui-pop nor
+/// the host (`host`, feature `host-loop`) pairs the windows.
 pub fn window(viewport: ViewportId) -> Option<Window> {
-    native::window(viewport)
+    host::window(viewport)
 }
 
 /// The viewports whose native window is known ([`window`]), the main
 /// window first.
 pub fn windows() -> Vec<ViewportId> {
-    native::windows()
+    host::windows()
 }
 
 /// The screens, in points (each monitor's physical rectangle over its
@@ -179,10 +206,9 @@ pub fn screens() -> Vec<Rect> {
 /// window's as eframe gives it, another window's once it was painted for
 /// a redraw request (eframe paints a window still hidden at start
 /// outside of one) and the window ids were verified ([`ids_verified`]);
-/// none for an immediate viewport, or when egui-pop does not own the
-/// event loop.
+/// none when neither egui-pop nor the host pairs the windows.
 pub fn window_handle(viewport: ViewportId) -> Option<RawWindowHandle> {
-    native::window_handle(viewport)
+    host::window_handle(viewport)
 }
 
 /// Whether winit's window ids were seen to be the native windows: the
@@ -192,7 +218,14 @@ pub fn window_handle(viewport: ViewportId) -> Option<RawWindowHandle> {
 /// they differ (macOS, or a winit that changed), where no window's
 /// handles are recorded beyond the main window's.
 pub fn ids_verified() -> Option<bool> {
-    native::ids_verified()
+    host::ids_verified()
+}
+
+/// The windowing system the event loop's display is on: told when the
+/// loop resumes (egui-pop's runner, or a host's `host::resumed`);
+/// `Windowing::Unknown` before, or when nobody told.
+pub fn windowing() -> crate::window::Windowing {
+    host::windowing()
 }
 
 /// `eframe::run_native`, or eframe on egui-pop's own event loop.

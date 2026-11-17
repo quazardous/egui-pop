@@ -73,6 +73,14 @@ egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
 # Path only: a dev-dependency without a version is left out when
 # publishing (the test kit depends on this crate).
 egui-pop-test = { path = "../egui-pop-test", features = ["viewport", "wgpu"] }
+# Path only, as above: a detached panel's window, its handles paired by
+# the runner's host hooks, gets its own image surface
+# (`tests/detached_window_surface.rs`).
+egui-pop-api = { path = "../egui-pop-api", features = ["host-loop"] }
+egui-pop-model = { path = "../egui-pop-model" }
+egui-pop-winit = { path = "../egui-pop-winit" }
+# Apache-2.0, eframe 0.37's winit: the window ids the host hooks take.
+winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
 serde_json.workspace = true
 # MIT OR Apache-2.0, already in the tree through wgpu: the viewport's
 # WGSL parsed and validated in unit tests, without a GPU.
