@@ -804,7 +804,7 @@ impl<'a> Slider<'a> {
         let wanted = match (size, vertical) {
             (Some(s), false) => vec2(s.x.max(MIN_WIDTH), s.y.max(1.0)),
             (Some(s), true) => vec2(s.x.max(1.0), s.y.max(MIN_WIDTH)),
-            (None, false) => vec2(ui.available_width().max(MIN_WIDTH), row_height),
+            (None, false) => vec2(room(ui).max(MIN_WIDTH), row_height),
             (None, true) => vec2(row_height * 1.5, VERTICAL_LENGTH),
         };
         let (id, row) = ui.allocate_space(wanted);
@@ -1040,6 +1040,20 @@ pub(crate) fn typing_text(ctx: &egui::Context, typing_id: Id) -> Option<String> 
 /// The id of a slider's typed entry (for tests).
 pub fn typing_id(slider: Id) -> Id {
     slider.with("egui_pop_slider_typing")
+}
+
+/// The width a horizontal slider takes when no size is given: what is
+/// left in its row, but no more than shows of it. A row may be wider
+/// than the panel drawing it (a panel's edge cuts it): there, the bar
+/// ends at the edge, so its value is laid out where it can be seen.
+fn room(ui: &Ui) -> f32 {
+    let row = ui.available_rect_before_wrap();
+    let shown = row.intersect(ui.clip_rect()).width();
+    if shown >= MIN_WIDTH {
+        row.width().min(shown)
+    } else {
+        row.width()
+    }
 }
 
 /// The bar and, when there is a quad, the square at its end.
@@ -1549,20 +1563,23 @@ pub(crate) fn paint_bar_fitted(
             .size()
             .x
     };
-    let value_w = measure(text);
+    // The value is measured as it is drawn: in the numbers' font
+    // (`font.numeric`), wider than the label's.
+    let galley =
+        |t: &str| crate::fonts::number_galley(ui.ctx(), t, font.size, Color32::PLACEHOLDER);
+    let value_pad = kit.slider_value.data.padding_x.max(0.0);
+    let mut value = galley(text);
+    let value_w = value.size().x;
     let gap = ui.spacing().item_spacing.x;
-    let label_shown = !compact && measure(&spec.label) + value_w + gap + 2.0 * pad <= rect.width();
+    let label_shown =
+        !compact && measure(&spec.label) + value_w + gap + pad + value_pad <= rect.width();
     // Too narrow for the value with its unit: the number alone.
-    let number;
-    let text = if !label_shown && value_w + 2.0 * pad > rect.width() && !spec.unit.is_empty() {
-        number = text
+    if !label_shown && value_w + 2.0 * value_pad > rect.width() && !spec.unit.is_empty() {
+        let number = text
             .strip_suffix(spec.unit.as_str())
-            .map_or(text, str::trim_end)
-            .to_owned();
-        number.as_str()
-    } else {
-        text
-    };
+            .map_or(text, str::trim_end);
+        value = galley(number);
+    }
     if !ui.is_rect_visible(rect) {
         return label_shown;
     }
@@ -1643,8 +1660,13 @@ pub(crate) fn paint_bar_fitted(
     }
     kit.slider.paint_label(&cx, &bar);
     // The value's digits line up from one value to the next
-    // (`font.numeric`): it does not jitter while dragged.
-    let value = crate::fonts::number_galley(ui.ctx(), text, font.size, Color32::PLACEHOLDER);
+    // (`font.numeric`): it does not jitter while dragged. Even a number
+    // too wide for the bar is cut at the bar's ends, never drawn past.
+    let painter = ui.painter_at(rect);
+    let cx = KitCx {
+        painter: &painter,
+        ppp: cx.ppp,
+    };
     kit.slider_value.paint_part(
         &cx,
         &Part {

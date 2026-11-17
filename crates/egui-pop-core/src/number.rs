@@ -79,7 +79,14 @@ pub struct NumberInput<'a> {
     integer: bool,
     unit: String,
     decimals: usize,
+    width: Option<f32>,
 }
+
+/// A range end at or past this magnitude counts as no end: the field is
+/// sized to the value shown, not to the end (`f64::MAX` would ask for
+/// the widest field). Past it, an `f64` no longer holds every whole
+/// number.
+const UNBOUNDED: f64 = 9.0e15;
 
 /// What the field keeps between frames.
 #[derive(Clone, Default)]
@@ -105,6 +112,7 @@ impl<'a> NumberInput<'a> {
             integer: false,
             unit: String::new(),
             decimals: 0,
+            width: None,
         }
     }
 
@@ -149,6 +157,45 @@ impl<'a> NumberInput<'a> {
             self.decimals = decimals;
         }
         self
+    }
+
+    /// The field's width, in points (the unit and the arrows come
+    /// after it). By default the field is as wide as the range's widest
+    /// end with two more digits, or, with no range (an end at
+    /// `f64::MAX`), as the value shown with two more digits; between
+    /// 48 and 160 points either way.
+    pub fn width(mut self, points: f32) -> Self {
+        if points.is_finite() && points > 0.0 {
+            self.width = Some(points);
+        }
+        self
+    }
+
+    /// The field's width when none is given: its widest text with room
+    /// for two more digits.
+    fn field_width(&self, ui: &Ui, value: f64) -> f32 {
+        if let Some(w) = self.width {
+            return w;
+        }
+        let ctx = ui.ctx();
+        let (lo, hi) = (*self.range.start(), *self.range.end());
+        let unbounded = |v: f64| !v.is_finite() || v.abs() >= UNBOUNDED;
+        let texts = if unbounded(lo) || unbounded(hi) {
+            vec![self.shown(ctx, value)]
+        } else {
+            vec![self.shown(ctx, lo), self.shown(ctx, hi)]
+        };
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let widest = texts
+            .into_iter()
+            .map(|t| {
+                ui.painter()
+                    .layout_no_wrap(format!("{t}00"), font.clone(), Color32::WHITE)
+                    .size()
+                    .x
+            })
+            .fold(0.0_f32, f32::max);
+        widest.clamp(48.0, 160.0)
     }
 
     /// A typed text's value, or why it is refused.
@@ -210,17 +257,11 @@ impl<'a> NumberInput<'a> {
             typing.text = self.shown(&ctx, before);
         }
 
-        let font = egui::TextStyle::Body.resolve(ui.style());
-        let widest = self.shown(&ctx, *self.range.end());
-        let widest = ui
-            .painter()
-            .layout_no_wrap(format!("{widest}00"), font, Color32::WHITE)
-            .size()
-            .x;
+        let width = self.field_width(ui, before);
         let mut field = ui.add(
             TextEdit::singleline(&mut typing.text)
                 .id(edit_id)
-                .desired_width(widest.clamp(48.0, 160.0))
+                .desired_width(width)
                 .align(Align2::RIGHT_CENTER),
         );
 
