@@ -157,26 +157,26 @@ fn children(
     let mut nodes = Vec::new();
     let mut i = lo;
     loop {
-        if let Some(&g) = kids.peek() {
-            if groups[g].range.start <= i {
-                kids.next();
-                let group = &groups[g];
-                nodes.push(Node::Group {
-                    index: g,
-                    header: group.header_index(),
-                    children: children(
-                        group.members_start(),
-                        group.range.end,
-                        Some(g),
-                        order,
-                        groups,
-                        parents,
-                        ignored,
-                    ),
-                });
-                i = i.max(group.range.end);
-                continue;
-            }
+        if let Some(&g) = kids.peek()
+            && groups[g].range.start <= i
+        {
+            kids.next();
+            let group = &groups[g];
+            nodes.push(Node::Group {
+                index: g,
+                header: group.header_index(),
+                children: children(
+                    group.members_start(),
+                    group.range.end,
+                    Some(g),
+                    order,
+                    groups,
+                    parents,
+                    ignored,
+                ),
+            });
+            i = i.max(group.range.end);
+            continue;
         }
         if i < hi {
             nodes.push(Node::Element(i));
