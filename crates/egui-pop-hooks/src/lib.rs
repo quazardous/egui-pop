@@ -14,7 +14,10 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{RecvTimeoutError, sync_channel};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::thread::{self, ThreadId};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+// `std::time::Instant::now` panics on wasm32-unknown-unknown; web-time
+// is the same type on native and the browser's clock on the web.
+use web_time::Instant;
 
 /// The bus contract this kernel implements; its types are re-exported
 /// below under their old paths.

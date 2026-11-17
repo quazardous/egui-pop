@@ -117,7 +117,7 @@
 //! cancelled, `drag.refused` with the reason. Where it hovers each pass
 //! stays off the bus (per-frame painting).
 //!
-//! The screens are on it too ([`screens`]): a screen plugged in or
+//! The screens are on it too: a screen plugged in or
 //! unplugged, as told by whatever runs the event loop
 //! ([`crate::window::set_screens`]), is said as `screen.added`
 //! ([`ScreenAdded`]) or `screen.removed` ([`ScreenRemoved`]), by its

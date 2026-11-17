@@ -376,7 +376,14 @@ jobs:
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: wasm32-unknown-unknown
+          components: clippy
       - uses: Swatinem/rust-cache@v2
+      # No `std::time` clock in code that reaches the browser: it panics
+      # there (clippy.toml; off on native, where web-time re-exports it).
+      - name: No std clock on the web
+        run: >-
+          cargo clippy --target wasm32-unknown-unknown -p egui-pop-gallery --locked --
+          -A clippy::all -D clippy::disallowed_methods
       - uses: taiki-e/install-action@v2
         with:
           tool: trunk
