@@ -3174,13 +3174,12 @@ fn a_palette_that_edits_shows_the_mark_in_its_band() {
     assert_eq!(toolbox.state, "edit");
     assert!(indicator::find(&h.ctx, &mark_id("gallery.navigator", true)).is_none());
     egui_pop_test::assert_all_named(&h);
-    let title = h
-        .query_all_by_label("Toolbox")
-        .next()
-        .expect("the toolbox's band")
-        .rect();
-    let band =
-        egui::Rect::from_min_size(title.min - egui::vec2(16.0, 12.0), egui::vec2(190.0, 44.0));
+    // The band around its mark: the title before it, the buttons after.
+    let [x, y, w, hgt] = toolbox.rect;
+    let band = egui::Rect::from_min_max(
+        egui::pos2(x - 150.0, y - 14.0),
+        egui::pos2(x + w + 90.0, y + hgt + 14.0),
+    );
     let mut results = egui_kittest::SnapshotResults::new();
     results.add(h.try_shot_of("panel-kind-palette-pop-dark", band));
 }
@@ -3204,8 +3203,9 @@ fn the_workbench_page_detaches_a_panel_into_its_own_window() {
     // The Properties tab dragged over the window, held: the window shows
     // its drop zone; let go, it joins the window's tabs.
     let properties = egui_pop::model::ids::PanelId::from_static("gallery.properties");
+    // Its tab's name says its edits mark too (it edits the selection).
     let a = h
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Properties")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Properties, Edits your work")
         .rect()
         .center();
     let b = h.get_by_label("Free notes.").rect().center();
