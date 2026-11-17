@@ -2,7 +2,7 @@
 //!
 //! Run with `cargo run --example dump`.
 
-use egui_fit::{layout, Axis, Container, Element, Orientation, Size, Size2, SizePolicy};
+use egui_pop_fit::{Axis, Container, Element, Orientation, Size, Size2, SizePolicy, layout};
 
 fn main() {
     let unit = 24.0;

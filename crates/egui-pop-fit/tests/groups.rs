@@ -1,8 +1,8 @@
 //! Scenario tests for groups: dense within, strict order across.
 
-use egui_fit::{
-    layout, layout_grouped, Container, Element, GridRect, Group, Reason, Size, Size2, SizePolicy,
-    Status,
+use egui_pop_fit::{
+    Container, Element, GridRect, Group, Reason, Size, Size2, SizePolicy, Status, layout,
+    layout_grouped,
 };
 
 const UNIT: f32 = 24.0;
@@ -258,7 +258,7 @@ fn a_bounded_box_overflows_what_a_group_pushes_out() {
 
 #[test]
 fn growth_and_hysteresis_hold_in_groups() {
-    use egui_fit::Axis;
+    use egui_pop_fit::Axis;
     let row = |u| Size2::new(Size::units(u), Size::ONE);
     let slider = |key| {
         Element::new(

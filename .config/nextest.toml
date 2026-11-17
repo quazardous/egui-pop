@@ -15,6 +15,7 @@ fail-fast = false
 filter = """
 not (package(egui-pop-tokens) | package(egui-pop-model) | package(egui-pop-wayland)
      | package(egui-pop-win32) | package(egui-pop-test-macros) | package(ortho-router)
+     | package(egui-pop-fit)
      | package(egui-pop-hooks)
      | package(xtask))
 """

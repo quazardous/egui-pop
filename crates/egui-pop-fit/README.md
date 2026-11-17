@@ -1,25 +1,21 @@
-# egui_fit
+# egui-pop-fit
 
-[<img alt="github" src="https://img.shields.io/badge/github-quazardous/egui__fit-8da0cb?logo=github" height="20">](https://github.com/quazardous/egui_fit)
-[![Latest version](https://img.shields.io/crates/v/egui_fit.svg)](https://crates.io/crates/egui_fit)
-[![Documentation](https://docs.rs/egui_fit/badge.svg)](https://docs.rs/egui_fit)
-[![CI](https://github.com/quazardous/egui_fit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/quazardous/egui_fit/actions/workflows/ci.yml)
-[![Demo](https://github.com/quazardous/egui_fit/actions/workflows/pages.yml/badge.svg?branch=main)](https://quazardous.github.io/egui_fit/)
+[![Latest version](https://img.shields.io/crates/v/egui-pop-fit.svg)](https://crates.io/crates/egui-pop-fit)
+[![Documentation](https://docs.rs/egui-pop-fit/badge.svg)](https://docs.rs/egui-pop-fit)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-**[Live demo](https://quazardous.github.io/egui_fit/)**: real egui-pop
-widgets laid out in a box you resize, with the engine's choices drawn over
-them.
-
-Formerly named `egui_gridflow`: the repository and the crate were renamed
-`egui_fit`, and the old GitHub URL redirects here.
+Formerly `egui_fit` (and before that `egui_gridflow`): the crate joined
+the [egui-pop](https://github.com/quazardous/egui-pop) workspace as
+`egui-pop-fit`, with its history and an unchanged API. Its facade
+re-exports it as `egui_pop::fit`. Moving from `egui_fit` 0.1 takes the
+new dependency and `egui_fit::` paths renamed `egui_pop_fit::`.
 
 A slot layout engine over plain boxes. It packs ordered elements into a
 container in standard slot sizes and says where each one goes. It knows
 nothing of widgets, values or drawing.
 
-**It has no egui dependency.** The `egui_` prefix only marks it as part of
-the egui-pop family of crates: the engine works on plain boxes, in twelfths
+**It has no egui dependency.** The `egui-pop-` prefix only marks it as part
+of the egui-pop workspace: the engine works on plain boxes, in twelfths
 of a unit and in points, and any toolkit can use its results.
 
 - **Base unit:** one row, scaled by density, given in points by the caller.
@@ -60,7 +56,7 @@ of a unit and in points, and any toolkit can use its results.
 ## Example
 
 ```rust
-use egui_fit::{layout, Axis, Container, Element, Size, Size2, SizePolicy};
+use egui_pop_fit::{layout, Axis, Container, Element, Size, Size2, SizePolicy};
 
 let half = Size2::new(Size::HALF, Size::ONE);
 let row = Size2::new(Size::units(2), Size::ONE);
@@ -95,7 +91,7 @@ unit stays empty.
 ### Groups
 
 ```rust
-use egui_fit::{layout_grouped, Container, Element, Group, Size, Size2, SizePolicy};
+use egui_pop_fit::{layout_grouped, Container, Element, Group, Size, Size2, SizePolicy};
 
 let slot = |key, w, h| Element::new(key, SizePolicy::fixed(Size2::new(w, h)));
 let one = Size::ONE;
@@ -140,30 +136,14 @@ Within the case, `e` moves up beside `c`; across it, `c` stays below the
 legend `b` instead of moving up beside `a`, and `f` stays below the case.
 The gutter draws each group's band.
 
-`cargo run --example dump` lays out a small panel at several widths.
+`cargo run -p egui-pop-fit --example dump` lays out a small panel at several widths.
 
 ## Demo
 
-The demo (`demo/`, not published) lays out real
-[egui-pop](https://github.com/quazardous/egui-pop) widgets (sliders, toggles,
-drop-downs, fields, a curve editor, colour wheels, a meter and a histogram)
-in a box you resize by its right edge. It lets you edit each element's
-forms, sizes, orientations and pins, add, remove and reorder elements,
-group ticked elements into a case under a legend (drawn in its frame), and
-shows the grid, each slot's status, logical and visual order, the
-hysteresis trail and the `dump()`. Only the demo depends on egui; the
-engine does not.
-
-Run it in a browser with [Trunk](https://trunkrs.dev):
-
-```sh
-rustup target add wasm32-unknown-unknown
-cargo install --locked trunk
-cd demo
-trunk serve    # then open http://127.0.0.1:8080
-```
-
-or on the desktop with `cargo run -p egui_fit_demo`.
+An interactive web demo lays out real egui-pop widgets with the engine
+in a box you resize: it stays in the
+[egui_fit repository](https://github.com/quazardous/egui_fit) (`demo/`),
+[live here](https://quazardous.github.io/egui_fit/).
 
 ## Features
 
@@ -171,7 +151,7 @@ or on the desktop with `cargo run -p egui_fit_demo`.
 
 ## Status
 
-Version 0, not published. The API may change.
+Version 0: the API may change, each break in a new minor.
 
 ## License
 

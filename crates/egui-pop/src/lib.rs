@@ -50,6 +50,10 @@ pub use egui_pop_api::eframe;
 /// The token parser and resolver (no egui dependency).
 pub use egui_pop_tokens as tokens;
 
+/// The slot layout engine (no egui dependency): plain boxes packed into a
+/// grid in standard slot sizes, with forms, groups, growth and hysteresis.
+pub use egui_pop_fit as fit;
+
 /// The logic without egui: ids, commands, keymap, menus, panels, layouts,
 /// the value store, documents.
 pub use egui_pop_model as model;

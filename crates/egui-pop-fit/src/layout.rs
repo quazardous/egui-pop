@@ -1,8 +1,8 @@
 //! The engine: choosing forms and orientations, dense packing, growth.
 
 use crate::element::{Axis, Element, Grow, Orientation, SizePolicy};
-use crate::group::{tree, Group, GroupPlacement, Node};
-use crate::size::{floor_step, is_allowed, next_step, prev_step, HALF_UNIT, TWELFTHS_PER_UNIT};
+use crate::group::{Group, GroupPlacement, Node, tree};
+use crate::size::{HALF_UNIT, TWELFTHS_PER_UNIT, floor_step, is_allowed, next_step, prev_step};
 use core::fmt;
 
 /// The largest grid extent, in twelfths: ten thousand units.

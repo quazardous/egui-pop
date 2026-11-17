@@ -1,12 +1,14 @@
-//! # egui_fit
+//! # egui-pop-fit
 //!
 //! A slot layout engine over plain boxes. It knows nothing of widgets,
 //! values or drawing: it packs ordered elements into a container in
 //! standard slot sizes, and says where each one goes.
 //!
-//! It has no egui dependency: the `egui_` prefix only marks it as part of
-//! the egui-pop family. Results are plain rectangles, in twelfths of the
-//! unit and in points.
+//! It has no egui dependency: the `egui-pop-` prefix only marks it as
+//! part of the egui-pop workspace, whose facade re-exports it as
+//! `egui_pop::fit`. Results are plain rectangles, in twelfths of the unit
+//! and in points. It was published as `egui_fit` (0.1) before it joined
+//! the workspace; its API did not change.
 //!
 //! - **Base unit.** One row, scaled by density, given in points by the
 //!   caller ([`Container::unit`]).
@@ -33,7 +35,7 @@
 //!   threshold.
 //!
 //! ```
-//! use egui_fit::{layout, Axis, Container, Element, Size, Size2, SizePolicy};
+//! use egui_pop_fit::{layout, Axis, Container, Element, Size, Size2, SizePolicy};
 //!
 //! let half = Size2::new(Size::HALF, Size::ONE);
 //! let row = Size2::new(Size::units(2), Size::ONE);
@@ -56,6 +58,7 @@
 //!      c key=3 form=0 horizontal at 6,0 size 12x12\n",
 //! );
 //! ```
+#![doc = "\n\n<div class=\"warning\">Experimental: may change in any release\n(docs/stability.md).</div>"]
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
 
@@ -68,7 +71,7 @@ mod size;
 pub use element::{AspectRatio, Axis, Cell, Element, Grow, Orientation, Size2, SizePolicy};
 pub use group::{Group, GroupPlacement};
 pub use layout::{
-    layout, layout_grouped, Container, GridRect, Layout, Placement, PointRect, Reason, Status,
+    Container, GridRect, Layout, Placement, PointRect, Reason, Status, layout, layout_grouped,
 };
 pub use size::{InvalidSize, Size, TWELFTHS_PER_UNIT};
 

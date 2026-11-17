@@ -50,6 +50,9 @@ theme-zip = ["egui-pop-api/theme-zip"]
 ## The image viewport, thumbnails and the histogram
 ## (`egui-pop-viewport`, re-exported as `egui_pop::viewport`).
 viewport = ["dep:egui-pop-viewport"]
+## `Serialize` and `Deserialize` for the slot layout engine's types
+## (`egui_pop::fit`).
+fit-serde = ["egui-pop-fit/serde"]
 ## The node graph's reference model kept in a YAML file
 ## (`egui_pop::viewport::graph::yaml`).
 graph-yaml = ["viewport", "egui-pop-viewport/graph-yaml"]
@@ -164,6 +167,7 @@ image-previews = ["egui-pop-api/image-previews"]
 [dependencies]
 egui.workspace = true
 egui-pop-tokens.workspace = true
+egui-pop-fit.workspace = true
 egui-pop-model.workspace = true
 egui-pop-core.workspace = true
 egui-pop-api.workspace = true

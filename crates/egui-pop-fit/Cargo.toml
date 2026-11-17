@@ -1,29 +1,27 @@
-# The root is the `egui_fit` crate; `demo/` is its web demo, never
-# published. `cargo test` here tests the core only.
-[workspace]
-members = ["demo"]
-
 [package]
-name = "egui_fit"
+name = "egui-pop-fit"
 version = "0.1.0"
-edition = "2021"
-rust-version = "1.95"
-license = "MIT OR Apache-2.0"
-description = "A slot layout engine with no egui dependency: dense grid packing of plain boxes in standard slot sizes, with forms, orientations, growth and hysteresis."
+description = "A slot layout engine with no egui dependency: dense grid packing of plain boxes in standard slot sizes, with forms, orientations, growth and hysteresis (formerly egui_fit)"
+readme = "README.md"
 keywords = ["layout", "grid", "packing", "gui"]
 categories = ["gui", "algorithms"]
-readme = "README.md"
-repository = "https://github.com/quazardous/egui_fit"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
 
-[lib]
-name = "egui_fit"
+[lints]
+workspace = true
 
 [features]
 default = []
+## `Serialize` and `Deserialize` for every public type.
 serde = ["dep:serde"]
 
 [dependencies]
-serde = { version = "1", features = ["derive"], optional = true }
+serde = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest = "1"
