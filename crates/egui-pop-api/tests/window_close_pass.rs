@@ -120,3 +120,52 @@ fn the_settings_window_closes_in_one_step_whatever_closes_it() {
         assert!(!admin::is_open(m.app()), "{how}: still closed");
     }
 }
+
+/// Closed, the Settings window goes with only the passes the application
+/// asks for itself: no click, no Alt+Tab, no other window brought forward
+/// by the system. The main window under it may get no redraw from the
+/// system (GNOME under Wayland sends no frame callback to a window it
+/// does not show), and only the main window's pass lets a closed window
+/// go: the loop paints it itself once its frame is owed too long
+/// (`main_wake`). With eframe's loop alone, the window stayed on screen,
+/// frozen.
+#[test]
+fn a_closed_settings_window_goes_without_an_outside_event() {
+    let mut m = multi();
+    for covered in [false, true] {
+        for (how, close) in ways() {
+            let v = open_settings(&mut m);
+            // Settled: what opening asked for is run.
+            m.run_requested(20);
+            m.withhold_frames(ViewportId::ROOT, covered);
+            close(&mut m, v);
+            let ran = m.run_requested(10);
+            assert!(
+                !m.declared().contains(&v),
+                "{how} (main window covered: {covered}): the closed window is still there after the passes asked for ({ran:?}): it waits for an outside event"
+            );
+            assert!(!admin::is_open(m.app()), "{how}: closed");
+            m.withhold_frames(ViewportId::ROOT, false);
+        }
+    }
+}
+
+/// eframe's loop alone, the main window covered: the closed Settings
+/// window stays until the system shows the main window again (the
+/// owner's report). What the loop's wake adds.
+#[test]
+fn without_the_loops_wake_a_closed_window_waits_for_the_main_window_shown() {
+    let mut m = multi();
+    m.host_wake(false);
+    let v = open_settings(&mut m);
+    m.run_requested(20);
+    m.withhold_frames(ViewportId::ROOT, true);
+    m.request_close(v);
+    m.run_requested(10);
+    assert!(!admin::is_open(m.app()), "the app closed with its window");
+    assert!(m.declared().contains(&v), "its system window stays, frozen");
+    // Alt+Tab: the system shows the main window, and redraws it.
+    m.withhold_frames(ViewportId::ROOT, false);
+    m.root_pass();
+    assert!(!m.declared().contains(&v), "gone at the main window's pass");
+}

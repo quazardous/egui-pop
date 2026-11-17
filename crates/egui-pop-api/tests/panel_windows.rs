@@ -487,3 +487,50 @@ fn a_tab_dragged_out_of_the_main_window_outlines_the_windows_where_positions_are
     );
     assert!(m.app().window_outlines().is_empty());
 }
+
+/// A detached panel's window is drawn by the main window's pass (egui's
+/// immediate viewport). With the main window covered by it (GNOME under
+/// Wayland sends a window it does not show no frame callback), what
+/// happens in the panel's window still runs with no outside event: the
+/// loop paints the main window once its frame is owed too long
+/// (`main_wake`). Closing it docks it back; detaching it again and
+/// docking it by command too.
+#[test]
+fn a_detached_panel_works_with_the_main_window_covered() {
+    let mut m = multi();
+    let v = detach_log(&mut m);
+    m.run_requested(20);
+    m.withhold_frames(ViewportId::ROOT, true);
+    // Its title bar's close: the system's event to its window.
+    m.request_close(v);
+    let ran = m.run_requested(10);
+    assert_eq!(
+        events(m.app(), "window.closed").len(),
+        1,
+        "closed with no outside event ({ran:?})"
+    );
+    m.run_requested(10);
+    assert!(!m.shown_immediate().contains(&v), "its window is gone");
+    assert_eq!(m.app().layout().area_of(&LOG), Some(Area::Bottom));
+    // eframe's loop alone: the close waits for the main window shown.
+    m.withhold_frames(ViewportId::ROOT, false);
+    let v = detach_log(&mut m);
+    m.run_requested(20);
+    m.withhold_frames(ViewportId::ROOT, true);
+    m.host_wake(false);
+    m.request_close(v);
+    m.run_requested(10);
+    assert_eq!(events(m.app(), "window.closed").len(), 1, "not closed yet");
+    m.host_wake(true);
+    m.run_requested(10);
+    assert_eq!(events(m.app(), "window.closed").len(), 2);
+    // Docked back by command from its window's menu, the main window
+    // covered.
+    m.withhold_frames(ViewportId::ROOT, false);
+    let v = detach_log(&mut m);
+    m.run_requested(20);
+    m.withhold_frames(ViewportId::ROOT, true);
+    assert!(m.app().attach_panel(&LOG).unwrap().ok());
+    m.run_requested(10);
+    assert!(!m.shown_immediate().contains(&v), "docked back");
+}

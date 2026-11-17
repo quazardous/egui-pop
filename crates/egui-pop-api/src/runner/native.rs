@@ -16,6 +16,8 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::platform::run_on_demand::EventLoopExtRunOnDemand;
 use winit::window::WindowId;
 
+use crate::main_wake::{MainWake, PassCounter};
+
 /// A window eframe painted, and its viewport.
 struct Paired {
     viewport: ViewportId,
@@ -40,6 +42,10 @@ thread_local! {
     static ROOT_WINDOW: RefCell<Option<super::Window>> = const { RefCell::new(None) };
     /// The application's context, to forget a destroyed window's handles.
     static CTX: RefCell<Option<egui::Context>> = const { RefCell::new(None) };
+    /// The context's passes, counted (`main_wake`).
+    static PASSES: RefCell<Option<PassCounter>> = const { RefCell::new(None) };
+    /// The main window's winit id.
+    static ROOT_ID: Cell<Option<WindowId>> = const { Cell::new(None) };
 }
 
 pub(super) fn ids_verified() -> Option<bool> {
@@ -217,22 +223,40 @@ struct Runner<'a> {
     eframe: eframe::EframeWinitApplication<'a>,
     /// Each window's paints, at most one per interval (see `pace`).
     pacer: pace::Pacer<WindowId>,
+    /// The main window's frames owed, painted when the system withholds
+    /// its redraw (`main_wake`).
+    wake: MainWake<WindowId>,
 }
 
 impl Runner<'_> {
     /// Paints `window` now: eframe runs its pass in `RedrawRequested`.
     fn paint(&mut self, event_loop: &ActiveEventLoop, window: WindowId) {
+        if self.wake.main().is_none()
+            && let Some(main) = ROOT_ID.get()
+        {
+            self.wake.set_main(main);
+            if let Some(c) = PASSES.with_borrow(Clone::clone) {
+                self.wake.set_counter(c);
+            }
+        }
         let previous = PAINTING.replace(Some(window));
-        self.eframe
-            .window_event(event_loop, window, WindowEvent::RedrawRequested);
+        let eframe = &mut self.eframe;
+        self.wake.redraw(window, || {
+            eframe.window_event(event_loop, window, WindowEvent::RedrawRequested);
+        });
         PAINTING.set(previous);
     }
 
-    /// Paints the windows whose held redraw came due.
+    /// Paints the windows whose held redraw came due, and the main window
+    /// when its frame is owed past the grace.
     fn paint_due(&mut self, event_loop: &ActiveEventLoop) {
         for window in self.pacer.due(Instant::now()) {
             log::trace!(target: "egui_pop::runner", "held redraw of {window:?} painted");
             self.paint(event_loop, window);
+        }
+        if let Some(main) = self.wake.due(Instant::now()) {
+            log::debug!(target: "egui_pop::runner", "the main window's redraw is withheld: painted");
+            self.paint(event_loop, main);
         }
     }
 }
@@ -277,6 +301,9 @@ impl ApplicationHandler<UserEvent> for Runner<'_> {
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
+        if let Some(ctx) = CTX.with_borrow(Clone::clone) {
+            self.wake.user_event(&ctx, &event);
+        }
         self.eframe.user_event(event_loop, event);
     }
 
@@ -287,8 +314,13 @@ impl ApplicationHandler<UserEvent> for Runner<'_> {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         self.paint_due(event_loop);
         self.eframe.about_to_wait(event_loop);
-        // Wake for the next held redraw, if eframe would sleep past it.
-        if let Some(at) = self.pacer.next() {
+        // Wake for the next held redraw or owed frame, if eframe would
+        // sleep past it.
+        let next = [self.pacer.next(), self.wake.next()]
+            .into_iter()
+            .flatten()
+            .min();
+        if let Some(at) = next {
             let wake = match event_loop.control_flow() {
                 ControlFlow::Wait => Some(at),
                 ControlFlow::WaitUntil(t) if at < t => Some(at),
@@ -346,6 +378,7 @@ pub(super) fn run(
     ROOT_WINDOW.set(None);
     VERIFIED.set(None);
     WINDOWS.with_borrow_mut(Vec::clear);
+    let wake_enabled = crate::main_wake::paint_safe(options.wgpu_options.surface.present_mode);
     let hook = options.event_loop_builder.take();
     let built = EVENT_LOOP.with_borrow_mut(|slot| -> eframe::Result {
         if slot.is_none() {
@@ -373,10 +406,12 @@ pub(super) fn run(
             ROOT.set(Some(h.as_raw()));
         }
         if let Some(w) = cc.winit_window() {
+            ROOT_ID.set(Some(w.id()));
             let w: Arc<dyn crate::files::ParentWindow> = w.clone();
             ROOT_WINDOW.set(Some(super::Window::new(w)));
         }
         CTX.set(Some(cc.egui_ctx.clone()));
+        PASSES.set(Some(PassCounter::install(&cc.egui_ctx)));
         cc.egui_ctx
             .on_begin_pass("egui_pop::runner", Arc::new(note_viewport));
         match creator(cc) {
@@ -395,14 +430,19 @@ pub(super) fn run(
     let ran = EVENT_LOOP.with_borrow_mut(|slot| -> eframe::Result {
         let event_loop = slot.as_mut().expect("the event loop was built above");
         let app = eframe::create_native(title, options, creator, event_loop);
+        let mut wake = MainWake::new();
+        wake.set_enabled(wake_enabled);
         let mut runner = Runner {
             eframe: app,
             pacer: pace::Pacer::new(pace::interval([])),
+            wake,
         };
         event_loop.run_app_on_demand(&mut runner)?;
         Ok(())
     });
     CTX.set(None);
+    PASSES.set(None);
+    ROOT_ID.set(None);
     ROOT_WINDOW.set(None);
     ROOT.set(None);
     WINDOWS.with_borrow_mut(Vec::clear);

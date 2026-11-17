@@ -60,6 +60,27 @@ creates and paints every window; owning the loop adds:
   idle seconds the idle windows draw at most a few frames a second, the
   animating one at most its screen's refresh.
 
+- **The main window's frames owed** (`egui_pop_api::main_wake`): on
+  Wayland a compositor sends no frame callback to a window it does not
+  show (GNOME, the main window covered by the application's other
+  windows), so the system sends it no redraw and eframe runs no pass of
+  it, only `App::logic`. That pass is what lets a closed window go (the
+  backend drops the system windows it no longer declares) and what draws
+  the detached panels' windows (immediate viewports): without it a closed
+  Settings window stayed on screen frozen, and a detached panel froze,
+  until a click or Alt+Tab showed the main window. `MainWake` keeps a
+  frame owed to the main window (a repaint asked of it, or a redraw of a
+  window that began no pass of its own), and the handler paints the main
+  window itself once one is owed past `main_wake::GRACE` (100 ms), where
+  the present does not wait for the compositor (`main_wake::paint_safe`:
+  not FIFO on Wayland; egui-pop's `windows::present_mode` chooses one
+  that does not wait there). A host running its own event loop does the
+  same: `PassCounter::install` on the context, `MainWake::user_event`
+  before eframe's `user_event`, every `RedrawRequested` through
+  `MainWake::redraw`, and `MainWake::due` (with `next` for the loop's
+  wake-up time) in `new_events` and `about_to_wait`. The test kit's
+  `MultiWindow::withhold_frames` and `host_wake` model it.
+
 ```rust
 use egui_pop_api::runner;
 
