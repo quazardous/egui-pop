@@ -29,6 +29,7 @@ drawing one frame in a bare `egui::Context`.
 | Platform readers | `egui-pop-platform` (`platform-*`) | `text_scale::read`, `focus::read`, `wheel_lines::read`, `dirs`, `window::raise` |
 | A single instance | `egui-pop-platform` (`platform-instance`) | `instance::single`, then `Launches::set_waker` and `Launches::take` each frame |
 | Orthogonal wire routing | `ortho-router` (no egui) | its own crate |
+| Slot layout: plain boxes packed in standard slot sizes | `egui-pop-fit` (no egui), `egui_pop::fit` | `layout`, `layout_grouped`, `Element`, `Group` |
 | Hook points: ordered listeners, alter and collect, an error boundary | `egui-pop-hooks` (no egui) | `Kernel::new()`, `listen`, `alter`, `collect`, `points` |
 | The test kit's checks on any harness | `egui-pop-test` (dev-dependency) | `themed`, `assert_all_named`, `a11y_tree` |
 

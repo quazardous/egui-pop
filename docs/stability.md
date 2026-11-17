@@ -149,6 +149,9 @@ Three tiers:
   the zoom control and navigator, their steps in `egui-pop-imaging`),
   the node graph (`egui_pop::viewport::graph`) and its wire router
   (`ortho-router`).
+- The slot layout engine (`egui-pop-fit`, `egui_pop::fit`): it joined
+  the workspace from the separate `egui_fit` with its API unchanged; it
+  may move while egui-pop's slot regions are built over it.
 - The hook kernel (`egui-pop-hooks`): new; its API may move while
   the first applications move their extension points onto it.
 - The data views (`egui-pop-views`): the tree, the list, the data table,
