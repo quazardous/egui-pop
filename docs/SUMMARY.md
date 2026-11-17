@@ -142,5 +142,6 @@
 - [Navigation on large canvases, a study](design/navigation.md)
 - [One file browser, many views](design/file-browser.md)
 - [Administration as forms, a design](design/admin-forms.md)
+- [Moving a floating panel vs docking it](design/drag-move-vs-dock.md)
 - [Wide gamut on Wayland](wayland-colour.md)
 - [The logo](logo/README.md)
