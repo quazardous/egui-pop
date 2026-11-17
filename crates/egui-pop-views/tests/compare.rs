@@ -8,6 +8,8 @@ use egui::{Event, Modifiers, MouseWheelUnit, Pos2, Rect, TextureId, Vec2, vec2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_core::model::pointer::{self, PointerMap};
+// The image viewport's own zoom factor per wheel motion.
+use egui_pop_core::pointer::view::wheel_factor;
 use egui_pop_views::library::compare::{CompareState, CompareView, Pane};
 use egui_pop_views::library::grid::{Thumb, ThumbSource};
 
@@ -86,12 +88,6 @@ fn wheel(h: &mut Harness<'_, Bench>, at: Pos2, lines: f32, modifiers: Modifiers)
     h.run();
 }
 
-/// The image viewport's zoom factor for a wheel of `points` (its
-/// `WHEEL_RATE`).
-fn wheel_factor(points: f32) -> f64 {
-    (f64::from(points) * 0.0015).exp()
-}
-
 /// The points a wheel of `lines` moves by, as the views read it.
 fn points(h: &Harness<'_, Bench>, lines: f32) -> f32 {
     lines * h.ctx.options(|o| o.input_options.line_scroll_speed)
@@ -117,7 +113,11 @@ fn the_wheel_zooms_a_pane_as_it_zooms_the_image_viewport() {
     use_profile(&h, pointer::DEFAULT_PROFILE);
     h.run();
     wheel(&mut h, at, 2.0, Modifiers::NONE);
-    assert_eq!(h.state().state.view(0, true).zoom, 1.0, "the wheel alone pans");
+    assert_eq!(
+        h.state().state.view(0, true).zoom,
+        1.0,
+        "the wheel alone pans"
+    );
     wheel(&mut h, at, 2.0, Modifiers::COMMAND);
     let got = h.state().state.view(0, true).zoom;
     assert!((got - want).abs() < 1e-4, "Ctrl+wheel: {got} != {want}");
@@ -185,7 +185,10 @@ fn synced_drag_keeps_every_pane_under_the_pointer(photos: Vec<[u32; 2]>, size: V
             let (a, img) = under(&h, 0, at);
             let (b, _) = under(&h, j, at);
             let off = ((a - b) * img).length();
-            assert!(off < 0.5, "panes 0 and {j} show the same point: {off} pt apart");
+            assert!(
+                off < 0.5,
+                "panes 0 and {j} show the same point: {off} pt apart"
+            );
         }
     }
 }

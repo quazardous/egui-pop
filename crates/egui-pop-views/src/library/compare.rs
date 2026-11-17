@@ -1,8 +1,13 @@
 //! Two to four images side by side (four in a square), with their zoom
 //! and pan synced (an option), and a "best" marker.
 //!
-//! Each pane zooms with Ctrl and the wheel around the pointer, pans by dragging,
-//! and goes back to fit on a double click; synced, every pane follows.
+//! Each pane zooms around the pointer and pans as the pointer profile says
+//! for the image canvas, through the same wheel path as the image viewport
+//! (`egui_pop_core::pointer::view`: the wheel alone zooms with darktable's
+//! profile, Ctrl and the wheel with the default one), pans by dragging,
+//! and goes back to fit on a double click. Synced, every pane follows by
+//! the same motion in points, so the image point under the pointer stays
+//! under it in every pane, whatever each photo's shape.
 //! The images come from the library's [`ThumbSource`]; the application
 //! says which one is the best and hears when the user marks another
 //! ([`CompareOutput::best`]).
@@ -29,12 +34,14 @@
 //! ```
 
 use egui::{
-    Align2, Color32, Id, Pos2, Rect, Response, Role, Sense, TextStyle, Ui, Vec2, WidgetInfo, pos2,
-    vec2,
+    Align2, Color32, Id, PointerButton, Pos2, Rect, Response, Role, Sense, TextStyle, Ui, Vec2,
+    WidgetInfo, pos2, vec2,
 };
 use egui_pop_core::icon::Icon;
 use egui_pop_core::kit::{self, Corners, Kit, KitCx, Part, State};
+use egui_pop_core::model::pointer::SCOPE_IMAGE;
 use egui_pop_core::placeholder::SkeletonTokens;
+use egui_pop_core::pointer::view::{self as view_input, ViewGestures, ViewWheel};
 use egui_pop_core::strings::tr;
 use egui_pop_core::theme::Tokens;
 
@@ -65,7 +72,8 @@ impl<K> Pane<K> {
 }
 
 /// A view of one pane: its zoom (1 is fit) and where its image's centre
-/// is, in fitted widths and heights from the pane's centre.
+/// is from the pane's centre, in the pane's widths and heights times the
+/// zoom (the same for every photo, so synced panes move together).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PaneView {
     pub zoom: f32,
@@ -193,6 +201,8 @@ impl<K: Key> CompareView<K> {
         let pw = (rect.width() - gap * (cols as f32 - 1.0)) / cols as f32;
         let ph = (rect.height() - gap * (rows as f32 - 1.0)) / rows as f32;
         let small = TextStyle::Small.resolve(ui.style());
+        // The image canvas's gestures, as in the image viewport.
+        let gestures = ViewGestures::from_map(&egui_pop_core::pointer::map(ui.ctx()), SCOPE_IMAGE);
         let mut best = None;
         for (i, pane) in panes.iter().enumerate() {
             let (c, r) = (i % cols, i / cols);
@@ -223,12 +233,11 @@ impl<K: Key> CompareView<K> {
                 Thumb::Ready { size, .. } => size,
                 _ => [3, 2],
             };
+            let inner = area.shrink(t.space.xs).size();
             let fit = crate::library::fitted(area.shrink(t.space.xs), size);
             let v = state.view(i, self.synced);
-            let drawn = Rect::from_center_size(
-                area.center() + v.pan * fit.size() * v.zoom,
-                fit.size() * v.zoom,
-            );
+            let drawn =
+                Rect::from_center_size(area.center() + v.pan * inner * v.zoom, fit.size() * v.zoom);
             match thumb {
                 Thumb::Ready { texture, .. } => {
                     painter.image(
@@ -257,23 +266,44 @@ impl<K: Key> CompareView<K> {
             egui_pop_core::pointer::drag_cursor(&pr, egui_pop_core::pointer::DragKind::Pan);
             let pane_name = pane.label.clone();
             pr.widget_info(move || WidgetInfo::labeled(Role::Unknown, true, &pane_name));
+            let drag_id = id.with(("drag", i));
             if pr.double_clicked() {
                 *state.view_mut(i, self.synced) = PaneView::default();
-            } else if pr.dragged() {
-                let d = pr.drag_delta();
-                let v = state.view_mut(i, self.synced);
-                v.pan += d / (fit.size() * v.zoom);
+            } else if pr.dragged() && pans(&pr, &gestures, ui.input(|i| i.modifiers)) {
+                // From where the press was, whole: no motion lost to the
+                // drag threshold, no error piling up frame after frame.
+                let (origin, now) =
+                    ui.input(|i| (i.pointer.press_origin(), i.pointer.latest_pos()));
+                if let (Some(origin), Some(now)) = (origin, now) {
+                    let v = state.view_mut(i, self.synced);
+                    let (start, from) = ui
+                        .data(|d| d.get_temp::<(PaneView, Pos2)>(drag_id))
+                        .unwrap_or((*v, origin));
+                    ui.data_mut(|d| d.insert_temp(drag_id, (start, from)));
+                    v.pan = start.pan + (now - from) / (inner * start.zoom);
+                }
+            } else {
+                ui.data_mut(|d| d.remove::<(PaneView, Pos2)>(drag_id));
             }
             if let Some(m) = pr.hover_pos() {
-                let z = ui.input(|input| input.zoom_delta());
-                if (z - 1.0).abs() > f32::EPSILON {
-                    zoom_at(
-                        state.view_mut(i, self.synced),
-                        area.center(),
-                        fit.size(),
-                        m,
-                        z,
-                    );
+                let steps = view_input::view_wheel(ui.ctx(), &gestures);
+                let changed = !steps.is_empty();
+                let v = state.view_mut(i, self.synced);
+                for step in steps {
+                    match step {
+                        ViewWheel::Zoom { points, .. } => zoom_at(
+                            v,
+                            area.center(),
+                            inner,
+                            m,
+                            view_input::wheel_factor(points) as f32,
+                        ),
+                        ViewWheel::Pan(d) => v.pan += d / (inner * v.zoom),
+                    }
+                }
+                if changed && pr.dragged() {
+                    // A drag going on starts again from here.
+                    ui.data_mut(|d| d.insert_temp(drag_id, (*v, m)));
                 }
             }
             painter.text(
@@ -324,17 +354,30 @@ impl<K: Key> CompareView<K> {
     }
 }
 
-/// Zooms a view by `factor` keeping the point under `at` still.
-fn zoom_at(v: &mut PaneView, center: Pos2, fit: Vec2, at: Pos2, factor: f32) {
+/// Whether a drag on a pane pans, as the profile says (any button it
+/// binds a pan drag to).
+fn pans(r: &Response, g: &ViewGestures, modifiers: egui::Modifiers) -> bool {
+    [
+        PointerButton::Primary,
+        PointerButton::Middle,
+        PointerButton::Secondary,
+    ]
+    .into_iter()
+    .any(|b| r.dragged_by(b) && g.drag_pans(b, modifiers))
+}
+
+/// Zooms a view by `factor` keeping the point under `at` still; `unit`
+/// is the pane's size, [`PaneView::pan`]'s unit.
+fn zoom_at(v: &mut PaneView, center: Pos2, unit: Vec2, at: Pos2, factor: f32) {
     let z0 = v.zoom;
     let z1 = (z0 * factor).clamp(1.0, MAX_ZOOM);
-    let c0 = center + v.pan * fit * z0;
+    let c0 = center + v.pan * unit * z0;
     let c1 = at + (c0 - at) * (z1 / z0);
     v.zoom = z1;
     v.pan = if z1 <= 1.0 {
         Vec2::ZERO
     } else {
-        (c1 - center) / (fit * z1)
+        (c1 - center) / (unit * z1)
     };
 }
 

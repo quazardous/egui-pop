@@ -151,9 +151,9 @@ pub fn zoom_out(zoom: f64) -> f64 {
         .unwrap_or(ZOOM_LADDER[0].min(zoom))
 }
 
-/// How fast the wheel zooms: the factor per point of scroll is
-/// `exp(points × WHEEL_RATE)`.
-pub const WHEEL_RATE: f64 = 0.0015;
+/// How fast the wheel zooms, shared with every zoomable view: the factor
+/// per point of scroll is `exp(points × WHEEL_RATE)`.
+pub use egui_pop_core::pointer::view::WHEEL_RATE;
 
 /// The zoom after a wheel motion of `points` (positive zooms in): a
 /// continuous factor that stops at exactly 100 % when it crosses it.
