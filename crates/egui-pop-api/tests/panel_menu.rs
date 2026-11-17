@@ -117,9 +117,10 @@ fn close_entry(h: &Harness<'static, App>, label: &str) -> egui::Rect {
 #[test]
 fn a_floating_panels_title_opens_the_panel_menu() {
     let h = floating_log_menu();
+    // Dock back shows its key (`Ctrl+Shift+D`) beside it.
     for entry in ["Detach into a window", "Move to group", "Dock back"] {
         assert!(
-            h.query_by_label(entry).is_some(),
+            h.query_by_label_contains(entry).is_some(),
             "the floating panel's menu lists {entry}"
         );
     }
@@ -171,7 +172,7 @@ fn dock_back_returns_a_floating_panel_to_the_place_it_floated_from() {
     h.run();
     h.get_by_label("Log").click_secondary();
     h.run();
-    h.get_by_label("Dock back").click();
+    h.get_by_label_contains("Dock back").click();
     h.run();
     let layout = app.layout();
     assert!(layout.floating_of(&LOG).is_none());
@@ -219,7 +220,7 @@ fn a_tab_of_a_floating_group_opens_the_same_menu() {
         .click_secondary();
     h.run();
     assert!(h.get_all_by_label("Close Output").count() >= 2);
-    assert!(h.query_by_label("Dock back").is_some());
+    assert!(h.query_by_label_contains("Dock back").is_some());
 }
 
 #[test]

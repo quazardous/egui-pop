@@ -2387,7 +2387,7 @@ fn window_tabs(app: &AppHandle, ui: &mut Ui, aux: &Auxiliary) {
 /// The Dock back button at the end of a detached window's tab bar: its
 /// shown panel docks back where it came from, else in its own area
 /// (`workbench.dock_back`, as the tab menu's Dock back and the
-/// `workbench.panel.dock_back` command, `Ctrl+Shift+Home`). Named for
+/// `workbench.panel.dock_back` command, `Ctrl+Shift+D`). Named for
 /// assistive technology, its name its tooltip.
 fn dock_back_button(app: &AppHandle, ui: &mut Ui, kit: &Kit, bar: TabBar, shown: &PanelId) {
     let side = bar.rect.height().min(kit.tab.data.height.max(16.0));

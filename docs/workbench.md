@@ -565,7 +565,7 @@ Wayland, which hides window positions, nothing shows before the
 release, and the drop goes to the window the pointer is over once the
 drag lets it go (the drag session's fallback); the way home that
 always works is the **Dock back** button at the end of the window's
-tab bar, the tab menu's Dock back, or `Ctrl+Shift+Home`
+tab bar, the tab menu's Dock back, or `Ctrl+Shift+D`
 (`workbench.panel.dock_back`, on the focused panel): the shown panel
 docks back where it came from, else in its own area
 (`workbench.dock_back`).

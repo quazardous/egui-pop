@@ -160,7 +160,7 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
         CommandSpec::new(CMD_PANEL_DOCK_BACK, "Dock panel back", "View")
             .description("Docks the focused panel, or `panel`, floating or detached, back where it floated from (else in its own area).")
             .when("!modalOpen")
-            .key("Ctrl+Shift+Home")
+            .key("Ctrl+Shift+D")
             .hidden()
             .args(example.clone()),
         |call| {

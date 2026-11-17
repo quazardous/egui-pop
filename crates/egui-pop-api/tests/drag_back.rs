@@ -202,3 +202,33 @@ fn the_dock_back_button_returns_the_panel_to_its_area() {
     assert!(layout.window_of(&PARAMS).is_none());
     assert_eq!(layout.area_of(&PARAMS), Some(Area::EndSide));
 }
+
+/// `Ctrl+Shift+D` docks the focused panel back, from its window.
+#[test]
+fn the_dock_back_key_returns_the_focused_panel_to_its_area() {
+    let mut m = multi();
+    let v = detach(&mut m, &PARAMS);
+    m.app().focus_panel(&PARAMS);
+    m.root_pass();
+    let ctrl_shift = egui::Modifiers {
+        ctrl: true,
+        command: true,
+        shift: true,
+        ..Default::default()
+    };
+    m.queue(
+        v,
+        egui::Event::Key {
+            key: egui::Key::D,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: ctrl_shift,
+        },
+    );
+    m.root_pass();
+    m.root_pass();
+    let layout = m.app().layout();
+    assert!(layout.window_of(&PARAMS).is_none());
+    assert_eq!(layout.area_of(&PARAMS), Some(Area::EndSide));
+}

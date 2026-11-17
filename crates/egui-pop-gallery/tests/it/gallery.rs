@@ -2999,8 +2999,12 @@ fn a_floating_palettes_title_opens_the_panel_menu() {
     h.run();
     h.get_by_label("Navigator").click_secondary();
     h.run();
+    // Dock back shows its key beside it.
     for entry in ["Detach into a window", "Move to group", "Dock back"] {
-        assert!(h.query_by_label(entry).is_some(), "the menu lists {entry}");
+        assert!(
+            h.query_by_label_contains(entry).is_some(),
+            "the menu lists {entry}"
+        );
     }
     h.remove_cursor();
     h.run();
