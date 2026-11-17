@@ -353,6 +353,16 @@ impl<'a> Toolbar<'a> {
             .laid
             .more
             .is_some_and(|more| Popup::is_id_open(&ctx, more.with("popup")));
+        // On the bus (ADR 0029): the More menu opened, closed and how.
+        if let Some(more) = response.laid.more {
+            egui_pop_core::overlay::follow_popup(
+                &ctx,
+                more.with("popup"),
+                "toolbar overflow",
+                more_open,
+                None,
+            );
+        }
         if more_open {
             let gutter = icon + 2.0 * pad;
             for tr in traces

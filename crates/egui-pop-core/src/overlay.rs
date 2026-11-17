@@ -1030,6 +1030,16 @@ pub fn follow_popup(ctx: &Context, id: Id, label: &str, open: bool, how: Option<
     tell(ctx, &st);
 }
 
+/// Follows the menu egui opens from a widget ([`follow_popup`]): the
+/// popup of `ui.menu_button`, `Response::context_menu` or
+/// `egui::Popup::menu(response)` without an id of its own. Call it after
+/// the menu is drawn, each pass its widget is.
+pub fn follow_menu(response: &egui::Response, label: &str) {
+    let id = egui::Popup::default_response_id(response);
+    let open = egui::Popup::is_id_open(&response.ctx, id);
+    follow_popup(&response.ctx, id, label, open, None);
+}
+
 /// How a popup egui closed by itself this pass closed: Escape, a press in
 /// it (an item chosen) or outside it, else its owner.
 pub fn closing_seen(ctx: &Context, id: Id) -> Closing {

@@ -465,6 +465,7 @@ impl<'a> SearchField<'a> {
                     egui_pop_core::a11y::name(&field, Role::TextInput, &label);
                     // Each button's name is its tooltip too.
                     let add = ui.menu_button("+", |ui| add_menu(ui, &mut state.chips));
+                    egui_pop_core::overlay::follow_menu(&add.response, "add filter menu");
                     let add_name = tr(&ctx, &s::ADD_FILTER);
                     egui_pop_core::a11y::name(&add.response, Role::Button, &add_name);
                     let _ = add.response.tip(add_name);

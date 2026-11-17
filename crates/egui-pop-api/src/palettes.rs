@@ -1314,6 +1314,7 @@ fn group_menu(ui: &mut Ui, side: f32, title: &str, asked: &mut Asked) {
             ui.close();
         }
     });
+    egui_pop_core::overlay::follow_menu(&r, "palette group menu");
 }
 
 /// Pin, or Unpin, named with the palette's (or the group's) title.

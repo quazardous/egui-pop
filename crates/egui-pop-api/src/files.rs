@@ -5320,6 +5320,14 @@ impl FilePicker {
                 }
             }
         });
+        // On the bus (ADR 0029): opened, closed and how.
+        egui_pop_core::overlay::follow_popup(
+            &ctx,
+            id,
+            "folder menu",
+            egui::Popup::is_id_open(&ctx, id),
+            None,
+        );
         if was_open && !egui::Popup::is_id_open(&ctx, id) {
             self.crumb_menu = None;
             if chosen.is_none() {

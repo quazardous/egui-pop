@@ -1045,6 +1045,7 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
                 add(ui, &c.id);
             }
         });
+        egui_pop_core::overlay::follow_menu(&r, "column menu");
         if let Some(to) = sort_to
             && to.as_ref() != self.sort
         {

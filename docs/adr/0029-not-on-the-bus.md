@@ -446,6 +446,16 @@ test and leaves `next` green. Slices 1 and 2 come first; the paths of
    of the views and the viewport (the node graph's own popup, a
    toolbar's overflow, the palettes' menu) once their owners are on the
    watch.
+   Second part done (2026-11-17): the remaining egui popups are on the
+   watch, through `overlay::follow_menu` (a widget's own menu) or
+   `overlay::follow_popup`: a toolbar's overflow (More tools), a palette
+   group's menu, the breadcrumb's and the status bar's overflow, the
+   viewport's zoom menu, the library filter's add menu, a table column's
+   menu and the file chooser's folder menu. The node graph's menus were
+   already the claimed context menus (`pointer::claim::context_menu`),
+   on the watch since the first part; a gallery test opens one with the
+   toolbar's overflow and a palette group's menu. Submenus belong to
+   their menu's popup. Slice 6 is done.
 7. **Standard windows.** The settings window, About, the jobs centre,
    tips. *Test:* each opened from a second window belongs to it, and
    goes with it.

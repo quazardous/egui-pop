@@ -1,8 +1,9 @@
 //! Every overlay of the gallery opened and closed appears in and leaves
 //! `windows.list` (ADR 0029, slice 6): the palette, the menu bar's and a
-//! card's menus, a popup menu, a modal, the strips' popover, a hover card
-//! and a flyout, each a popup of the main window while open, and none
-//! left once closed; no window invariant broken.
+//! card's menus, a popup menu, a modal, the strips' popover, a hover card,
+//! a flyout, a toolbar's overflow, a palette's menu and the node graph's
+//! menu, each a popup of the main window while open, and none left once
+//! closed; no window invariant broken.
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
@@ -142,6 +143,71 @@ fn every_overlay_opened_and_closed_appears_in_and_leaves_the_windows_list() {
         "a flyout",
         |h| {
             assert!(app.open_flyout(&outline, true).unwrap().ok());
+            h.run();
+        },
+        escape,
+    );
+
+    let mut h = harness(options("pop-dark", Density::Comfortable, "toolbars"));
+    h.run();
+    opened_and_closed(
+        &mut h,
+        "a toolbar's overflow",
+        |h| {
+            h.get_by_label("More tools: Narrow").click();
+            h.run();
+        },
+        escape,
+    );
+
+    let mut h = harness(options("pop-dark", Density::Comfortable, "palettes"));
+    h.run();
+    h.get_by_label("Open the palettes").click();
+    h.run();
+    h.run();
+    // The navigator stacked under the toolbox: their group's band has a menu.
+    let app = h.state().app.handle().clone();
+    let toolbox = egui_pop::model::ids::PanelId::from_static("gallery.toolbox");
+    let navigator = egui_pop::model::ids::PanelId::from_static("gallery.navigator");
+    let _ = app.change_workbench(egui_pop::api::workbench::Change::Group(
+        vec![navigator],
+        toolbox,
+        egui_pop::model::layout::Join::Below,
+    ));
+    h.run();
+    h.run();
+    opened_and_closed(
+        &mut h,
+        "a palette group's menu",
+        |h| {
+            h.get_by_label("Toolbox · Navigator menu").click();
+            h.run();
+        },
+        escape,
+    );
+
+    let mut h = harness(options("pop-dark", Density::Comfortable, "node-graph"));
+    h.run();
+    opened_and_closed(
+        &mut h,
+        "the node graph's menu",
+        |h| {
+            let graph = h.get_by_label("Processing graph").rect();
+            let at = graph.left_bottom() + egui::vec2(12.0, -12.0);
+            h.hover_at(at);
+            h.run();
+            h.event(egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Secondary,
+                pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            });
+            h.event(egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Secondary,
+                pressed: false,
+                modifiers: egui::Modifiers::NONE,
+            });
             h.run();
         },
         escape,
