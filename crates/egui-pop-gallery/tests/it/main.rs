@@ -13,7 +13,6 @@ mod drag_cursors;
 mod gallery;
 mod gallery_doc;
 mod hosts_doc;
-mod input_widths;
 mod inspect;
 mod inspection;
 mod keyboard_walk;
