@@ -1,6 +1,6 @@
 [package]
 name = "ortho-router"
-version = "0.1.0"
+version = "0.1.1"
 description = "Orthogonal connector routing around rectangular obstacles: right-angled wires between ports that go around nodes, with few bends (no dependencies)"
 readme = "README.md"
 keywords = ["routing", "orthogonal", "connector", "diagram", "node-graph"]

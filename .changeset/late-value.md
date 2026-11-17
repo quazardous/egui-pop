@@ -1,6 +1,0 @@
----
-egui-pop-core: minor
-egui-pop-i18n: patch
----
-
-A late-value cell, `late::LateValue`, for a value worked out asynchronously (a volume's free space, a folder's size) in four states, `late::Late`: pending (a skeleton line, or a spinner delayed by `motion.spinner.delay` with `Waiting::Spinner` and `since`), fresh (the value as text in a text role, or drawn by a closure with `show_with`), refreshing (the last value and a small spinner beside it), failed (an error icon, the reason and Retry; `LateResponse::retry` says it was clicked). The cell is sized like the expected value (`sample`, `size`) and keeps the spinner's room in every state, so nothing moves when the value lands. Its accessible node keeps the value's name, says the state as its value, and is busy while the work runs; the placeholder, the spinner and Retry are named after the value (new strings `egui-pop-late-loading`, `egui-pop-late-updating`, `egui-pop-late-retry`, translated into French). `Spinner::name` names a spinner for assistive technologies without drawing text. `EmptyState::new` takes an `IconRef` (an `Icon` or a name, such as `"phosphor:image"`). A skeleton of text lines alone keeps the width it is given, however narrow. The gallery's placeholders page shows late values in each state.

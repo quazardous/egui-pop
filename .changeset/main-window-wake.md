@@ -1,6 +1,0 @@
----
-egui-pop-api: minor
-egui-pop-test: minor
----
-
-A window closed, or a detached panel used, no longer waits for an outside event when the system withholds the main window's redraw. On Wayland a compositor sends no frame callback to a window it does not show (GNOME, the main window covered by Settings or by detached panels), so eframe ran no pass of the main window, and that pass is what lets a closed window go and what draws the detached panels' windows: a closed Settings window stayed on screen frozen, a detached panel froze, until a click or Alt+Tab brought the main window forward. The new `main_wake` module keeps the main window's frames owed (`MainWake`: a repaint asked of it, or a redraw of a window that began no pass of its own; `PassCounter` counts the context's passes) and the loop paints the main window itself once one is owed past `main_wake::GRACE` (100 ms), where its present does not wait for the compositor (`main_wake::paint_safe`). egui-pop's native runner does it; a host running its own event loop uses `MainWake` the same way. `egui-pop-test`: `MultiWindow` hears the application's repaint requests as eframe does (`repaints_due`, `run_requested`: only the passes asked for, as an idle loop runs them), models a window whose redraws the system withholds (`withhold_frames`) and the loop's wake (`host_wake`).
