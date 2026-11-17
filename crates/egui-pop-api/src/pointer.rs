@@ -331,7 +331,7 @@ pub(crate) fn register(
             dock_drag.map_or(FROM_PROFILE, DockDrag::as_str),
         )
         .description(
-            "What dragging a floating panel by its title does: modifier-docks moves it, and docks it or joins another panel only with the dock keys held (Ctrl, Cmd on macOS; the shortcuts editor changes them); modifier-floats docks it over a target, the dock keys keep it floating; dwell docks it once the pointer rests on a target for a moment; profile: as the pointer profile says.",
+            "A floating panel dragged by its title: modifier-docks moves it, docking only with the dock keys held (Ctrl, or Cmd on macOS); modifier-floats docks it, the keys keep it floating; dwell docks it after a rest on a target; profile as the pointer profile says.",
         ),
     )?;
     ctx.setting(

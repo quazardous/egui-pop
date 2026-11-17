@@ -2753,7 +2753,7 @@ setting-input-slider-wheel-choice-guarded = protégée
 setting-input-slider-wheel-choice-value = valeur
 
 setting-input-dock-drag =
-    .description = Ce que fait le glissement d’un panneau flottant par son titre : touche pour ancrer le déplace, et ne l’ancre ou ne le joint à un autre panneau qu’avec les touches d’ancrage maintenues (Ctrl, Cmd sur macOS ; l’éditeur de raccourcis les change) ; touche pour flotter l’ancre au-dessus d’une cible, les touches d’ancrage le gardent flottant ; attente l’ancre une fois que le pointeur reste un moment sur une cible ; profil : comme le dit le profil de pointeur.
+    .description = Un panneau flottant tiré par son titre : touche pour ancrer le déplace, et ne l’ancre qu’avec les touches d’ancrage tenues (Ctrl, ou Cmd sur macOS) ; touche pour flotter l’ancre, les touches le gardent flottant ; attente l’ancre après un arrêt sur une cible ; profil : comme le dit le profil de pointeur.
     .label = Glisser un panneau flottant
 
 setting-input-dock-drag-choice-profile = profil
