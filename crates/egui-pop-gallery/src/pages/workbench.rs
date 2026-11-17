@@ -20,7 +20,7 @@ use egui_pop::core::widgets;
 use egui_pop::model::commands::CommandSpec;
 use egui_pop::model::ids::{CommandId, PanelId, PluginId, StoryId};
 use egui_pop::model::layout::Node;
-use egui_pop::model::panels::{Area, PanelSpec};
+use egui_pop::model::panels::{Area, PanelKind, PanelSpec};
 
 use super::section;
 use crate::shell::SHELL;
@@ -78,6 +78,8 @@ impl Plugin for WorkbenchPage {
         )?
         .panel(
             PanelSpec::new(PROPERTIES, "Properties", Area::EndSide)
+                // It edits the selection: its tab carries the edits mark.
+                .kind(PanelKind::Control)
                 .min_size(180.0)
                 .icon("settings")
                 .closed(),

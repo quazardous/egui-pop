@@ -456,6 +456,40 @@ Stale then updating is one wait, its delay going on. A tab holds one mark
 busy mark first. The marks are indicators named by `bus::mark_id`, for
 tests and agents (`indicator::find`).
 
+## A panel's kind
+
+A panel says what it does to what the application edits (a document, a
+photo), declared with it: `PanelSpec::kind` takes a
+`egui_pop_model::panels::PanelKind`, a view unless declared.
+
+| Kind | What it is | What the chrome shows |
+|---|---|---|
+| `View` | it only shows, or moves what is shown (pan, zoom, selection) | nothing |
+| `Control` | its purpose is editing (parameters, a node graph) | an edits mark, read "Edits your work" |
+| `Mixed` | a view with parts that edit (a histogram dragged to change the exposure) | the edits mark, read "Parts of it edit your work" |
+
+```rust
+use egui_pop::model::ids::PanelId;
+use egui_pop::model::panels::{Area, PanelKind, PanelSpec};
+
+let spec = PanelSpec::new(PanelId::from_static("app.params"), "Parameters", Area::EndSide)
+    .kind(PanelKind::Control);
+assert!(spec.kind.edits());
+```
+
+The mark is drawn by the chrome, never by the panel: on a docked tab's
+top end corner, and after the title of a floating palette's band (or on
+its tab in a group of tabs). It takes the tab's one mark slot
+(`bus::TabMark::Edits`), of the lowest rank: while the panel is busy or
+failed (`panel.state`), that mark shows instead, and the edits mark comes
+back once it is ready. It is the same indicator id as the state's
+(`bus::mark_id(panel, true)`), its state `edit`.
+
+`panel.describe` (`bus::PanelDescribe`, `AppHandle::describe_panel`)
+describes a declared panel on the bus: its title, whether it is a
+palette, and its kind (`bus::PanelDescription`), for agents and tests
+without a screenshot.
+
 ## Auxiliary windows
 
 A detachable panel moves to an OS window of its own, with its own scale

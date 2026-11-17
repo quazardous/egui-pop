@@ -36,6 +36,42 @@ impl Area {
     }
 }
 
+/// What a panel does to what the application edits (a document, a
+/// photo): shows it, edits it, or shows it with parts that edit it. The
+/// application declares it ([`PanelSpec::kind`]); the panel's chrome
+/// shows an "edits" mark for a control or mixed panel, never the panel.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PanelKind {
+    /// It only shows, or moves what is shown (pan, zoom, selection):
+    /// nothing it does is an edit.
+    #[default]
+    View,
+    /// Its purpose is editing (parameters, a node graph, masks).
+    Control,
+    /// A view with parts that edit (a histogram dragged to change the
+    /// exposure).
+    Mixed,
+}
+
+impl PanelKind {
+    pub const ALL: [PanelKind; 3] = [PanelKind::View, PanelKind::Control, PanelKind::Mixed];
+
+    /// As the bus and agents write it (`control`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PanelKind::View => "view",
+            PanelKind::Control => "control",
+            PanelKind::Mixed => "mixed",
+        }
+    }
+
+    /// Whether it edits, wholly or in part: its chrome shows the mark.
+    pub fn edits(self) -> bool {
+        self != PanelKind::View
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct PanelSpec {
     pub id: PanelId,
@@ -70,6 +106,9 @@ pub struct PanelSpec {
     /// What its content needs (ADR 0013): checked against each host it
     /// is put in. `None`: a plain widget, any host of a panel.
     pub content: Option<Mountable>,
+    /// What it does to what the application edits ([`PanelKind`]):
+    /// a view unless declared.
+    pub kind: PanelKind,
 }
 
 /// Where a panel is put: one of the shell's areas, floating over the
@@ -107,7 +146,16 @@ impl PanelSpec {
             palette: false,
             floatable: false,
             content: None,
+            kind: PanelKind::View,
         }
+    }
+
+    /// What it does to what the application edits: a control or mixed
+    /// panel's chrome shows an "edits" mark on its tab and its palette
+    /// band.
+    pub fn kind(mut self, kind: PanelKind) -> Self {
+        self.kind = kind;
+        self
     }
 
     /// What its content needs: a host refusing it refuses the panel.
@@ -286,6 +334,20 @@ mod tests {
         PanelHost {
             place,
             offer: HostOffer::new("panel", "P", "Docked panel"),
+        }
+    }
+
+    #[test]
+    fn a_panel_is_a_view_unless_declared() {
+        let id = PanelId::new("demo.params").unwrap();
+        let spec = PanelSpec::new(id.clone(), "Parameters", Area::EndSide);
+        assert_eq!(spec.kind, PanelKind::View);
+        assert!(!spec.kind.edits());
+        let spec = spec.kind(PanelKind::Mixed);
+        assert!(spec.kind.edits());
+        assert_eq!(serde_json::to_value(spec.kind).unwrap(), "mixed");
+        for k in PanelKind::ALL {
+            assert_eq!(serde_json::to_value(k).unwrap(), k.as_str());
         }
     }
 

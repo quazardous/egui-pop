@@ -1540,6 +1540,14 @@ impl AppHandle {
     }
 
     /// A panel's title as shown (its id when it is not declared).
+    /// A panel's declared kind: a view when it is not declared.
+    pub(crate) fn panel_kind(&self, id: &PanelId) -> egui_pop_model::panels::PanelKind {
+        self.workbench_mut()
+            .spec(id)
+            .map(|s| s.kind)
+            .unwrap_or_default()
+    }
+
     pub(crate) fn panel_title(&self, ctx: &Context, id: &PanelId) -> String {
         let title = self.workbench_mut().spec(id).map(|s| s.title.clone());
         match title {
