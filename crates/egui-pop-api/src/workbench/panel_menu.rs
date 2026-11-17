@@ -212,32 +212,26 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
             LIST_GROUP_WINDOWS,
         ))?
         .menu_item(MenuItem::list(MENU_PANEL_GROUPS, "1", 0, LIST_GROUPS))?;
-    ctx.list_provider(LIST_PLACE, |app, cx| {
-        with_panel(app, cx, |app, panel| place_entries(app, panel))
-    })
-    .list_provider(LIST_DETACH, |app, cx| {
-        with_panel(app, cx, |app, panel| detach_entries(app, panel))
-    })
-    .list_provider(LIST_WINDOWS, |app, cx| {
-        with_panel(app, cx, |app, panel| window_entries(app, panel, false))
-    })
-    .list_provider(LIST_GROUP_WINDOWS, |app, cx| {
-        with_panel(app, cx, |app, panel| window_entries(app, panel, true))
-    })
-    .list_provider(LIST_GROUPS, |app, cx| {
-        with_panel(app, cx, |app, panel| group_entries(app, panel))
-    })
-    .list_provider(LIST_CLOSE, |app, cx| {
-        with_panel(app, cx, |app, panel| {
-            let ctx = app.egui();
-            let title = app.panel_title(&ctx, panel);
-            vec![ListItem::new(
-                &strings::tr_args(&ctx, &txt::WORKBENCH_CLOSE_PANEL, &[("panel", &title)]),
-                CMD_PANEL_CLOSE,
-                json!({ "panel": panel }),
-            )]
+    ctx.list_provider(LIST_PLACE, |app, cx| with_panel(app, cx, place_entries))
+        .list_provider(LIST_DETACH, |app, cx| with_panel(app, cx, detach_entries))
+        .list_provider(LIST_WINDOWS, |app, cx| {
+            with_panel(app, cx, |app, panel| window_entries(app, panel, false))
         })
-    });
+        .list_provider(LIST_GROUP_WINDOWS, |app, cx| {
+            with_panel(app, cx, |app, panel| window_entries(app, panel, true))
+        })
+        .list_provider(LIST_GROUPS, |app, cx| with_panel(app, cx, group_entries))
+        .list_provider(LIST_CLOSE, |app, cx| {
+            with_panel(app, cx, |app, panel| {
+                let ctx = app.egui();
+                let title = app.panel_title(&ctx, panel);
+                vec![ListItem::new(
+                    &strings::tr_args(&ctx, &txt::WORKBENCH_CLOSE_PANEL, &[("panel", &title)]),
+                    CMD_PANEL_CLOSE,
+                    json!({ "panel": panel }),
+                )]
+            })
+        });
     Ok(())
 }
 
