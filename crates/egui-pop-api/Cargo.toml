@@ -15,18 +15,6 @@ authors.workspace = true
 [lints]
 workspace = true
 
-# Temporary, for egui-pop-api's next release only. `SelectionItem` moved to
-# `egui_pop_model::selection` and stays at `egui_pop_api::selection` as a
-# `pub use`; cargo-semver-checks reads one crate's rustdoc JSON at a time,
-# which does not inline an item from another crate, so it reports the
-# re-exported struct as removed (a known limitation of the tool, its
-# "cross-crate items" goal). The test `selection_item_keeps_its_0_10_surface`
-# shows the old path keeps everything 0.10.0 offered. `warn` keeps the
-# finding in the log without failing; remove this table once the release
-# after 0.10.0 is on crates.io, whose baseline holds the re-export already.
-[package.metadata.cargo-semver-checks.lints]
-struct_missing = "warn"
-
 [features]
 default = ["eframe", "create-native", "bundled-fonts", "image-previews"]
 ## egui-pop's default font pair, Inter and JetBrains Mono NL (see

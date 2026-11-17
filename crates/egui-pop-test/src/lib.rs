@@ -17,6 +17,9 @@
 //! - [`unnamed_interactive`] and [`assert_all_named`]: every interactive
 //!   node (button, check box, slider, text input...) has a name a screen
 //!   reader can say;
+//! - [`unnamed_inputs`] and [`assert_inputs_named`]: every input brick
+//!   drawn (text input, number input, slider, a descriptor's drop-down)
+//!   has a name, its own label unless its caller points it at another;
 //! - [`a11y_tree`]: the accessibility tree as indented text, for
 //!   assertions and for reading in a failure;
 //! - [`indicators`] and [`assert_indicator`]: the micro-indicators with
@@ -429,6 +432,42 @@ pub fn assert_all_named<S>(h: &Harness<'_, S>) {
     assert!(
         unnamed.is_empty(),
         "interactive nodes without a name:\n  {}\n\naccessibility tree:\n{}",
+        unnamed.join("\n  "),
+        a11y_tree(h)
+    );
+}
+
+/// The input bricks drawn in the last pass (a text input, a number
+/// input, a slider, a descriptor's drop-down:
+/// [`egui_pop_core::a11y::inputs`]) a screen reader cannot name: no label
+/// of their own and none pointed at (`labelled_by`, which in egui
+/// replaces the brick's own label). Described as in the tree; a brick
+/// drawn but missing from the tree is listed too.
+pub fn unnamed_inputs<S>(h: &Harness<'_, S>) -> Vec<String> {
+    let mut out = Vec::new();
+    for id in egui_pop_core::a11y::inputs(&h.ctx) {
+        let node = id.accesskit_id();
+        match h
+            .root()
+            .children_recursive()
+            .find(|n| n.accesskit_node().locate().0 == node)
+        {
+            Some(n) if named(&n) => {}
+            Some(n) => out.push(describe(&n)),
+            None => out.push(format!("{id:?} (not in the tree)")),
+        }
+    }
+    out
+}
+
+/// Fails, listing them, when an input brick drawn in the last pass has
+/// no name ([`unnamed_inputs`]).
+#[track_caller]
+pub fn assert_inputs_named<S>(h: &Harness<'_, S>) {
+    let unnamed = unnamed_inputs(h);
+    assert!(
+        unnamed.is_empty(),
+        "input bricks without a name:\n  {}\n\naccessibility tree:\n{}",
         unnamed.join("\n  "),
         a11y_tree(h)
     );

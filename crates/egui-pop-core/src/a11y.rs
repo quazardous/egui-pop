@@ -10,16 +10,72 @@
 //! ```
 
 use egui::accesskit::{Live, Role};
-use egui::{Context, Response, Ui, WidgetInfo};
+use egui::{Context, Id, Response, Ui, WidgetInfo};
 use serde::Serialize;
 
-use crate::state::{lock, shared};
+use crate::state::{lock, pass, shared};
 
 /// Gives a custom widget its role and accessible name.
 pub fn name(response: &Response, kind: Role, label: &str) {
     let enabled = response.enabled();
     let label = label.to_string();
     response.widget_info(move || WidgetInfo::labeled(kind, enabled, &label));
+}
+
+/// The input bricks drawn, pass by pass.
+#[derive(Debug, Default)]
+struct Inputs {
+    pass: u64,
+    building: Vec<Id>,
+    last: Vec<Id>,
+}
+
+fn rotate(ctx: &Context, s: &mut Inputs) {
+    let now = pass(ctx);
+    if s.pass != now {
+        s.pass = now;
+        s.last = std::mem::take(&mut s.building);
+    }
+}
+
+/// Names an input brick (a text input, a number input, a slider, a
+/// descriptor's drop-down) by its own `label`, so assistive technologies
+/// read a name whether or not its caller also points it at a label drawn
+/// beside it (`labelled_by`), and records it as drawn this pass, its node
+/// `id`, for the check that every one has a name ([`inputs`]).
+///
+/// A blank label leaves the brick without a name: a debug build stops on
+/// it (give the brick its label); a release build records it unnamed, and
+/// the test kit's `assert_inputs_named` lists it.
+pub fn input(ctx: &Context, id: Id, label: &str) {
+    let named = !label.trim().is_empty();
+    debug_assert!(
+        named,
+        "an input brick without a name ({id:?}): give it a label, which screen readers say"
+    );
+    if named {
+        let label = label.to_string();
+        ctx.accesskit_node_builder(id, |n| n.set_label(label));
+    }
+    drawn(ctx, id);
+}
+
+/// Records an input brick named otherwise (a range's thumbs, each by its
+/// end) as drawn this pass, for [`inputs`].
+pub(crate) fn drawn(ctx: &Context, id: Id) {
+    let st = shared::<Inputs>(ctx, "core.a11y.inputs");
+    let mut s = lock(&st);
+    rotate(ctx, &mut s);
+    s.building.push(id);
+}
+
+/// The input bricks drawn in the last complete pass, by node id: what a
+/// test checks has a name of its own.
+pub fn inputs(ctx: &Context) -> Vec<Id> {
+    let st = shared::<Inputs>(ctx, "core.a11y.inputs");
+    let mut s = lock(&st);
+    rotate(ctx, &mut s);
+    s.last.clone()
 }
 
 /// How urgently a message is read.

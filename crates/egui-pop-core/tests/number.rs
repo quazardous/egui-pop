@@ -6,7 +6,7 @@
 use egui::Key;
 use egui::accesskit::Role;
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable as _;
+use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_core::number::NumberInput;
 use egui_pop_core::param::{self, Mode};
 use egui_pop_model::values::{Descriptor, Value};
@@ -108,4 +108,38 @@ fn param_types_a_wide_range_and_slides_a_short_one() {
     h.get_by_label("Increase Files seen kept").click();
     h.run();
     assert_eq!(h.state().0, Value::Int(1_000_001));
+}
+
+#[test]
+fn a_number_input_names_itself_without_a_label_beside_it() {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(520.0, 120.0))
+        .build_ui_state(
+            |ui, v: &mut f64| {
+                NumberInput::new(v, "Files kept", 0.0..=1000.0).show(ui);
+            },
+            30.0,
+        );
+    h.run();
+    let field = h.get_by_role(Role::TextInput);
+    assert_eq!(
+        field.accesskit_node().data().label(),
+        Some("Files kept"),
+        "its own name, with no `labelled_by`"
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "an input brick without a name")]
+fn a_number_input_without_a_name_stops_a_debug_build() {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(520.0, 120.0))
+        .build_ui_state(
+            |ui, v: &mut f64| {
+                NumberInput::new(v, "", 0.0..=1000.0).show(ui);
+            },
+            30.0,
+        );
+    h.run();
 }
