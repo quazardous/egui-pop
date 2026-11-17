@@ -120,6 +120,18 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         app.set_context(VETO, if veto { "true" } else { "false" });
     }
 
+    let mut rounded = egui_pop::core::frame::rounding(ui.ctx());
+    if widgets::checkbox(
+        ui,
+        &mut rounded,
+        "Rounded window corners while the window floats free (needs a transparent window: --rounded-windows)",
+    )
+    .changed()
+    {
+        egui_pop::core::frame::set_rounding(ui.ctx(), rounded);
+    }
+    ui.weak("Every window the gallery decorates has a 1 px line around it (window.rest.border-color), dimmer while another window has the focus; rounded corners only while it is neither maximized, in full screen nor against a screen's edge.");
+
     section(ui, "Preview");
     let width = ui.available_width().min(560.0);
     let (outer, _) = ui.allocate_exact_size(

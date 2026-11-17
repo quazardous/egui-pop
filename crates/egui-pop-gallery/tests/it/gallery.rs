@@ -1871,6 +1871,49 @@ fn in_full_screen_the_gallerys_own_title_bar_stays_with_its_way_out() {
 }
 
 #[test]
+fn the_gallerys_own_frame_has_a_line_dimmer_when_inactive_and_rounds_while_floating() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "frame"));
+    h.run();
+    let store = h.state().app.handle().store();
+    egui_pop::core::lock(&store)
+        .set(egui_pop::model::values::Set::new(
+            "settings/window.frame",
+            egui_pop::model::values::Change::To(egui_pop::model::values::Value::Choice(
+                "own".into(),
+            )),
+            egui_pop::model::commands::Origin::User,
+        ))
+        .unwrap();
+    let place = |h: &mut Harness<'static, Gallery>, focused: bool, maximized: bool| {
+        let v = h
+            .input_mut()
+            .viewports
+            .entry(egui::ViewportId::ROOT)
+            .or_default();
+        v.focused = Some(focused);
+        v.maximized = Some(maximized);
+        v.fullscreen = Some(false);
+        h.run();
+    };
+    let mut results = egui_kittest::SnapshotResults::new();
+    // An opaque window: square, its line in border.default, dimmer while
+    // another window has the focus.
+    place(&mut h, true, false);
+    results.add(h.try_window_shot("frame-edge-active-pop-dark"));
+    place(&mut h, false, false);
+    results.add(h.try_window_shot("frame-edge-inactive-pop-dark"));
+    // Transparent (the page's toggle): rounded while it floats free,
+    // square maximized.
+    h.get_by_label_contains("Rounded window corners").click();
+    h.run();
+    assert!(egui_pop::core::frame::rounding(&h.ctx));
+    place(&mut h, true, false);
+    results.add(h.try_window_shot("frame-edge-rounded-pop-dark"));
+    place(&mut h, true, true);
+    results.add(h.try_window_shot("frame-edge-maximized-pop-dark"));
+}
+
+#[test]
 fn the_scale_page_sets_the_interface_zoom_and_draws_at_twice_the_pixels() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "scale"));
     h.run();

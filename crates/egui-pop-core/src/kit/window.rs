@@ -94,8 +94,35 @@ pub struct WindowKit {
     pub corners: WindowCorners,
     /// The line around a window drawn by the application, inside its
     /// edges (`window.rest.border-width` and `border-color`); none when
-    /// the width is 0, the default.
+    /// the width is 0.
     pub outline: egui::Stroke,
+}
+
+/// The rest of a window's edge, beside [`WindowKit::outline`]: the line
+/// while another window has the focus and the corners rounded while the
+/// window floats free.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[non_exhaustive]
+pub struct WindowEdgeKit {
+    /// The line around the window while another window has the focus
+    /// (`window.inactive.border-color`, dimmer).
+    pub inactive: egui::Stroke,
+    /// The corners the application rounds on its own floating window
+    /// (`window.radius`), in points; 0 for square.
+    pub radius: f32,
+}
+
+impl WindowEdgeKit {
+    pub(super) fn compile(t: &Tokens) -> WindowEdgeKit {
+        WindowEdgeKit {
+            inactive: outline(t, "window.inactive.border-color"),
+            radius: t
+                .resolved()
+                .dimension("window.radius")
+                .unwrap_or(0.0)
+                .max(0.0),
+        }
+    }
 }
 
 /// Reads a string token among `choices`; what is not one of them is a
@@ -148,15 +175,22 @@ impl WindowKit {
                 ],
                 problems,
             ),
-            outline: match t.resolved().dimension("window.rest.border-width") {
-                Some(w) if w > 0.0 => egui::Stroke::new(
-                    w,
-                    t.color("window.rest.border-color")
-                        .unwrap_or(egui::Color32::TRANSPARENT),
-                ),
-                _ => egui::Stroke::NONE,
-            },
+            outline: outline(t, "window.rest.border-color"),
         }
+    }
+}
+
+/// The window's line in the colour at `color`, `window.rest.border-width`
+/// wide; none when that is 0.
+fn outline(t: &Tokens, color: &str) -> egui::Stroke {
+    match t.resolved().dimension("window.rest.border-width") {
+        Some(w) if w > 0.0 => egui::Stroke::new(
+            w,
+            t.color(color)
+                .or_else(|| t.color("window.rest.border-color"))
+                .unwrap_or(egui::Color32::TRANSPARENT),
+        ),
+        _ => egui::Stroke::NONE,
     }
 }
 
@@ -179,8 +213,14 @@ mod tests {
         let default = kit(r#"
                           $extends: "pop-dark"
                           "#);
-        assert_eq!(default.window, WindowKit::default());
         assert_eq!(default.window.corners, WindowCorners::Round);
+        // A 1 px line, dimmer while another window has the focus, and
+        // the window's radius.
+        let (w, e) = (default.window, default.window_edge);
+        assert_eq!(w.outline.width, 1.0);
+        assert_eq!(e.inactive.width, 1.0);
+        assert!(e.inactive.color.a() < w.outline.color.a(), "{e:?}");
+        assert_eq!(e.radius, 8.0);
         let square = kit(r#"
                          $extends: "pop-dark"
                          window:

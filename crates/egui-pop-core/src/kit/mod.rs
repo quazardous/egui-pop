@@ -61,7 +61,7 @@ pub use scroll::{Placement, ScrollBarKit, Visibility};
 pub use source::KitSource;
 pub use tone::Tone;
 pub use window::{
-    ButtonsHover, ButtonsSide, CountPlacement, SectionsKit, WindowCorners, WindowKit,
+    ButtonsHover, ButtonsSide, CountPlacement, SectionsKit, WindowCorners, WindowEdgeKit, WindowKit,
 };
 
 /// The states a part can be in, combined (a selected tab under the
@@ -658,6 +658,9 @@ macro_rules! components {
             /// The window's own terms (`title-bar.buttons-side`,
             /// `title-bar.buttons-hover`, `window.corners`).
             pub window: WindowKit,
+            /// The window's edge beside its line (`window.inactive`,
+            /// `window.radius`).
+            pub window_edge: WindowEdgeKit,
             /// The sections' terms (`section-count.placement`).
             pub sections: SectionsKit,
             /// The drag cursors by kind (`drag-cursor.<kind>.hover`,
@@ -699,6 +702,7 @@ macro_rules! components {
                     $($field: component($name, $default),)*
                     glyphs,
                     window: WindowKit::default(),
+                    window_edge: WindowEdgeKit::default(),
                     sections: SectionsKit::default(),
                     drag_cursors: DragCursorKit::default(),
                     scroll: ScrollBarKit::default(),
@@ -1152,6 +1156,7 @@ impl Kit {
         let mut kit = Kit::compile_components(component, Glyphs::default(), Vec::new());
         kit.glyphs = Glyphs::compile(t, &mut problems);
         kit.window = WindowKit::compile(t, &mut problems);
+        kit.window_edge = WindowEdgeKit::compile(t);
         kit.sections = SectionsKit::compile(t, &mut problems);
         kit.drag_cursors = DragCursorKit::compile(t, &mut problems);
         kit.area_line = dock::AreaLineKit::compile(t, &kit.side_area);

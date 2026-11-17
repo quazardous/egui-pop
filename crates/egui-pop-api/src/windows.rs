@@ -1193,6 +1193,7 @@ impl AppHandle {
         // The application draws each window's frame as the main window's
         // (`frame::window_frame`), or the system draws them all.
         let own = crate::frame::own_frame(self);
+        let rounded = egui_pop_core::frame::rounding(ctx);
         let screens = crate::window::screens();
         let builders: Vec<(ViewportId, ViewportBuilder)> = {
             let mut w = self.windows_mut();
@@ -1208,6 +1209,10 @@ impl AppHandle {
                     let mut b = ViewportBuilder::default()
                         .with_title(e.title.clone())
                         .with_decorations(!own);
+                    // Transparent for its rounded corners.
+                    if own && rounded {
+                        b = b.with_transparent(true);
+                    }
                     if !app_id.is_empty() {
                         b = b.with_app_id(app_id.clone());
                     }

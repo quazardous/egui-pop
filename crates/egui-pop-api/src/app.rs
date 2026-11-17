@@ -777,6 +777,9 @@ pub(crate) struct Shared {
     /// Detached panels' windows are built transparent where the platform
     /// gives a surface below them (`AppBuilder::transparent_panel_windows`).
     transparent_panel_windows: std::cell::Cell<bool>,
+    /// Whether the decorated windows are built transparent for rounded
+    /// corners (`AppBuilder::rounded_windows`).
+    rounded_windows: std::cell::Cell<bool>,
     /// The window the user worked in last (focused, clicked or typed
     /// in): a dialog opens over it.
     /// The shell panels' starting sizes (`AppBuilder::shell_panel_size`).
@@ -936,6 +939,7 @@ impl AppHandle {
             menu_bar: std::cell::Cell::new(true),
             system_file_chooser: std::cell::Cell::new(false),
             transparent_panel_windows: std::cell::Cell::new(false),
+            rounded_windows: std::cell::Cell::new(false),
             shell_sizes: RefCell::default(),
             shell_bounds: RefCell::default(),
             centre_min: std::cell::Cell::new(None),
@@ -2922,6 +2926,12 @@ impl AppHandle {
         self.0.transparent_panel_windows.get()
     }
 
+    /// Whether the windows the application decorates are built
+    /// transparent for rounded corners (`AppBuilder::rounded_windows`).
+    pub fn rounded_windows(&self) -> bool {
+        self.0.rounded_windows.get()
+    }
+
     pub(crate) fn set_drawing_areas(&self, on: bool) {
         self.0.drawing_areas.set(on);
     }
@@ -3316,6 +3326,7 @@ pub struct AppBuilder {
     menu_bar: bool,
     system_file_chooser: bool,
     transparent_panel_windows: bool,
+    rounded_windows: Option<bool>,
     shell_sizes: Vec<(PanelId, f32)>,
     shell_bounds: Vec<(PanelId, crate::workbench::ShellBounds)>,
     centre_min: Option<crate::workbench::ShellSize>,
@@ -3422,6 +3433,7 @@ impl AppBuilder {
             menu_bar: true,
             system_file_chooser: false,
             transparent_panel_windows: false,
+            rounded_windows: None,
             shell_sizes: Vec::new(),
             shell_bounds: Vec::new(),
             centre_min: None,
@@ -3641,6 +3653,20 @@ impl AppBuilder {
     /// shows the desktop there.
     pub fn transparent_panel_windows(mut self, on: bool) -> Self {
         self.transparent_panel_windows = on;
+        self
+    }
+
+    /// Whether the windows the application decorates (its own frame:
+    /// the main window, detached panels' and application windows) get
+    /// rounded corners while they float free (the kit's `window.radius`;
+    /// square when maximized, in full screen or against a screen's
+    /// edge). A rounded corner needs a transparent window, so they are
+    /// built transparent: by default on Wayland only; `true` allows X11
+    /// too (a compositing window manager is needed there), `false` keeps
+    /// them square and opaque. Windows and macOS round their windows
+    /// themselves (`window.corners`), the web has no window: never there.
+    pub fn rounded_windows(mut self, on: bool) -> Self {
+        self.rounded_windows = Some(on);
         self
     }
 
@@ -4128,6 +4154,10 @@ impl AppBuilder {
             .0
             .transparent_panel_windows
             .set(self.transparent_panel_windows);
+        let rounded =
+            crate::window::rounded_windows(self.rounded_windows, crate::window::windowing());
+        app.handle.0.rounded_windows.set(rounded);
+        egui_pop_core::frame::set_rounding(ctx, rounded);
         *app.handle.0.shell_sizes.borrow_mut() = self.shell_sizes;
         *app.handle.0.shell_bounds.borrow_mut() = self.shell_bounds;
         app.handle.0.centre_min.set(self.centre_min);
@@ -4270,6 +4300,7 @@ impl AppBuilder {
         if self.multi_window {
             crate::windows::present_mode(&mut options);
         }
+        crate::window::transparent_for_corners(&mut options, self.rounded_windows);
         crate::runner::run(
             title,
             options,
@@ -4313,6 +4344,7 @@ impl AppBuilder {
         if self.multi_window {
             crate::windows::present_mode(&mut options);
         }
+        crate::window::transparent_for_corners(&mut options, self.rounded_windows);
         crate::runner::run(
             title,
             options,
@@ -7442,21 +7474,16 @@ impl App {
     /// The shell, inside the kit's outline when the application draws
     /// the window (`window.rest.border-width`).
     fn outlined(&mut self, ui: &mut Ui) {
-        let outline = if crate::frame::own_frame(&self.handle) {
-            egui_pop_core::frame::outline(ui.ctx())
-        } else {
-            egui::Stroke::NONE
-        };
+        if !crate::frame::own_frame(&self.handle) {
+            return self.shell(ui);
+        }
+        let edge = egui_pop_core::frame::window_edge(ui.ctx(), &crate::window::screens());
+        egui_pop_core::frame::paint_window_edge(ui.ctx(), edge);
+        let outline = edge.stroke;
         if outline.width <= 0.0 {
             return self.shell(ui);
         }
         let rect = ui.max_rect();
-        ui.ctx()
-            .layer_painter(egui::LayerId::new(
-                egui::Order::Foreground,
-                Id::unique("egui_pop.window_outline"),
-            ))
-            .rect_stroke(rect, 0.0, outline, egui::StrokeKind::Inside);
         ui.scope_builder(
             egui::UiBuilder::new().max_rect(rect.shrink(outline.width)),
             |ui| self.shell(ui),
@@ -7708,6 +7735,18 @@ impl eframe::App for App {
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         self.show_wrapped(ui);
+    }
+
+    /// Transparent where windows are built transparent for their rounded
+    /// corners: what egui leaves unpainted outside a corner shows the
+    /// desktop. An opaque window ignores the alpha.
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        if self.handle.rounded_windows() {
+            [0.0; 4]
+        } else {
+            // eframe's own default.
+            egui::Color32::from_rgba_unmultiplied(12, 12, 12, 180).to_normalized_gamma_f32()
+        }
     }
 
     fn on_exit(&mut self) {

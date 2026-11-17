@@ -597,6 +597,42 @@ pub fn surface_below_transparency(
     }
 }
 
+/// Whether the windows the application decorates are built transparent
+/// for rounded corners (`AppBuilder::rounded_windows`): `asked`, or by
+/// default on Wayland only. X11 needs a compositing window manager (so
+/// only when asked); Windows and macOS round their windows themselves;
+/// the web, headless runs and an unknown system never.
+pub(crate) fn rounded_windows(asked: Option<bool>, windowing: Windowing) -> bool {
+    match (asked, windowing) {
+        (Some(false), _) => false,
+        (_, Windowing::Wayland) => true,
+        (Some(true), Windowing::X11) => true,
+        _ => false,
+    }
+}
+
+/// Builds the main window transparent when its corners may be rounded
+/// ([`rounded_windows`]), decided once the windowing system is known
+/// (eframe's `window_builder` hook runs in `resumed`).
+#[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
+pub(crate) fn transparent_for_corners(options: &mut eframe::NativeOptions, asked: Option<bool>) {
+    if asked == Some(false) {
+        return;
+    }
+    let previous = options.window_builder.take();
+    options.window_builder = Some(Box::new(move |vb| {
+        let vb = match previous {
+            Some(hook) => hook(vb),
+            None => vb,
+        };
+        if rounded_windows(asked, windowing()) {
+            vb.with_transparent(true)
+        } else {
+            vb
+        }
+    }));
+}
+
 /// The windowing system of this run ([`Windowing`]): the runner's, or
 /// [`Windowing::Unknown`] without one (the web, headless, tests).
 ///
@@ -615,6 +651,24 @@ pub fn windowing() -> Windowing {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn rounded_windows_by_default_on_wayland_only() {
+        use super::{Windowing, rounded_windows};
+        assert!(rounded_windows(None, Windowing::Wayland));
+        assert!(!rounded_windows(Some(false), Windowing::Wayland));
+        assert!(!rounded_windows(None, Windowing::X11));
+        assert!(rounded_windows(Some(true), Windowing::X11));
+        for w in [
+            Windowing::Windows,
+            Windowing::MacOs,
+            Windowing::Other,
+            Windowing::Unknown,
+        ] {
+            assert!(!rounded_windows(Some(true), w), "{w:?}");
+            assert!(!rounded_windows(None, w), "{w:?}");
+        }
+    }
+
     #[test]
     fn a_window_showing_a_surface_below_is_transparent_on_wayland_only() {
         use super::{Windowing, surface_below_transparency};

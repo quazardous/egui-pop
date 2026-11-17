@@ -396,9 +396,20 @@ compiled at install.
   their glyphs show together. `examples/kits/flavour-macos` is the macOS
   flavour, data only (`frame-kit-macos`). `window.corners` is asked of
   Windows 11 when the application draws the frame; elsewhere there is no
-  portable request. `window.rest.border-width` and `border-color` draw a
-  line around the window, inside its edges (the shell is laid out within
-  it), except when maximized or full screen.
+  portable request. `window.rest.border-width` and `border-color` (1 px
+  in `border.default` by default) draw a line around every window the
+  application decorates (the main window, a detached panel's, an
+  application window), inside its edges (the shell is laid out within
+  it), in `window.inactive.border-color` (dimmer) while another window
+  has the focus, and none in full screen. `window.radius` rounds its
+  corners while it floats free (`frame::Placement`), never maximized,
+  in full screen or on a side against a screen's edge, and only where
+  the window is transparent (Wayland by default,
+  `AppBuilder::rounded_windows`): what egui paints at a corner is
+  rounded at the end of the pass (`frame::paint_window_edge`), a picture
+  (a mesh) there is not. Wayland does not tell egui a tiled window
+  (winit 0.30 keeps the compositor's tiled states): one there keeps its
+  rounded corners.
 - **Resizable dialogs and splitters** (`dialog-grip`, `splitter`). A
   modal declared resizable takes the pointer `dialog-grip.width` on
   either side of its edges, and draws three lines in `text`

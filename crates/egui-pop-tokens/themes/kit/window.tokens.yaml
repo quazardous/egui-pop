@@ -9,12 +9,21 @@ window:
     $type: "string"
     $value: "round"
     $description: "The window's corners where the system can round a window drawn by the application (Windows 11): round, small or square."
+  radius:
+    $type: "dimension"
+    $value: "{radius.window}"
+    $description: "The rounded corners the application draws on its own decorated window while it floats free (not maximized, full screen or against a screen edge), where the window is transparent; 0: square."
   # The line around a window the application draws, inside its edges:
-  # none in the default kit (the system's shadow and corners frame it).
+  # it tells a window from the one under it.
   rest:
     border-width:
       $type: "dimension"
-      $value: {value: 0, unit: "px"}
+      $value: {value: 1, unit: "px"}
     border-color:
       $type: "color"
       $value: "{border.default}"
+  inactive:
+    border-color:
+      $type: "color"
+      $value: "{border.default}"
+      $extensions: {org.egui-pop.alpha: 0.5}

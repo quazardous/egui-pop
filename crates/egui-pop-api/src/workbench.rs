@@ -2111,7 +2111,8 @@ pub(crate) fn windows(
                     .into(),
             )
         };
-        if transparency.is_transparent() {
+        // Transparent too for its rounded corners, when it has them.
+        if transparency.is_transparent() || (own && egui_pop_core::frame::rounding(ctx)) {
             builder = builder.with_transparent(true);
         }
         egui_pop_core::window_surface::set_transparency(ctx, window_id(&panel), Some(transparency));
@@ -2142,6 +2143,14 @@ pub(crate) fn windows(
             let full_screen = egui_pop_core::frame::full_screen(&vctx);
             if own && (!full_screen || crate::frame::bar_in_fullscreen(app)) {
                 egui_pop_core::frame::resize_edges(&vctx);
+                // Its edge: a line that tells it from the window under it
+                // (embedded in the main window, that window's is drawn).
+                if own_window {
+                    egui_pop_core::frame::paint_window_edge(
+                        &vctx,
+                        egui_pop_core::frame::window_edge(&vctx, &crate::window::screens()),
+                    );
+                }
                 let out = egui::Panel::top(Id::unique(("egui_pop.aux.title", panel.as_str())))
                     .frame(egui::Frame::NONE)
                     .show(ui, |ui| {

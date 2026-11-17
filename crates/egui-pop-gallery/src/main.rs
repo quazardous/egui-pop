@@ -34,8 +34,9 @@ fn main() -> eframe::Result {
             .with_title(TITLE)
             .with_app_id(egui_pop_gallery::pages::platform::APP_ID)
             .with_inner_size(options.size)
-            // The image surface shows through a hole in the interface.
-            .with_transparent(options.wide_gamut),
+            // The image surface shows through a hole in the interface;
+            // the desktop outside the frame's rounded corners.
+            .with_transparent(options.wide_gamut || options.rounded_windows),
         // A size asked for wins over the one kept.
         persist_window: options.persists() && options.size == DEFAULT_SIZE,
         // eframe always reads its storage: a file not there reads as nothing,
