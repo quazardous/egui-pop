@@ -114,6 +114,15 @@ pub struct MultiWindow {
     commands: BTreeMap<ViewportId, Vec<ViewportCommand>>,
     /// The builder each window was last given by the main window's pass.
     builders: BTreeMap<ViewportId, ViewportBuilder>,
+    /// The builder the backend keeps for each window, patched by each new
+    /// one as eframe patches it: a field that changed becomes a command.
+    system_builders: BTreeMap<ViewportId, ViewportBuilder>,
+    /// Every command the system received for each window since the test
+    /// last took them ([`MultiWindow::take_sent`]).
+    sent: BTreeMap<ViewportId, Vec<ViewportCommand>>,
+    /// The system obeys a size asked (`ViewportCommand::InnerSize`),
+    /// granting what this gives for it ([`MultiWindow::grant_sizes`]).
+    grant: Option<Box<dyn Fn(Vec2) -> Vec2>>,
     /// The accessible names each window's last pass gave.
     names: BTreeMap<ViewportId, Vec<String>>,
     /// Each named node's rectangle (in points) and whether it is
@@ -198,6 +207,9 @@ impl MultiWindow {
             files: BTreeMap::new(),
             commands: BTreeMap::new(),
             builders: BTreeMap::new(),
+            system_builders: BTreeMap::new(),
+            sent: BTreeMap::new(),
+            grant: None,
             names: BTreeMap::new(),
             nodes: BTreeMap::new(),
             held: BTreeSet::new(),
@@ -598,6 +610,62 @@ impl MultiWindow {
         }
     }
 
+    /// Every command the system received for a window since the last
+    /// call: those its passes sent, and those the backend made of a
+    /// builder that changed (eframe patches the builder it keeps with
+    /// each pass's: a size, position or state that differs is asked of
+    /// the system again).
+    pub fn take_sent(&mut self, viewport: ViewportId) -> Vec<ViewportCommand> {
+        self.sent.remove(&viewport).unwrap_or_default()
+    }
+
+    /// The system obeys the sizes asked of a window
+    /// (`ViewportCommand::InnerSize`, from a pass or a changed builder),
+    /// granting what `grant` gives for the size asked, as a compositor
+    /// rounding to its own grid or keeping to its own constraints
+    /// would: the window's next pass sees that size.
+    pub fn grant_sizes(&mut self, grant: impl Fn(Vec2) -> Vec2 + 'static) {
+        self.grant = Some(Box::new(grant));
+    }
+
+    /// A window's builder as the backend takes it: the first one creates
+    /// the window, each later one patches the kept one, and what changed
+    /// is sent to the system.
+    fn backend_builder(&mut self, viewport: ViewportId, builder: ViewportBuilder) {
+        if viewport == ViewportId::ROOT {
+            return;
+        }
+        let delta = match self.system_builders.get_mut(&viewport) {
+            Some(kept) => kept.patch(builder).0,
+            None => {
+                self.system_builders.insert(viewport, builder);
+                Vec::new()
+            }
+        };
+        self.system_receives(viewport, &delta);
+    }
+
+    /// Commands reaching the system for a window: kept for the test, a
+    /// size obeyed when the test says the system grants sizes.
+    fn system_receives(&mut self, viewport: ViewportId, commands: &[ViewportCommand]) {
+        if commands.is_empty() {
+            return;
+        }
+        self.sent
+            .entry(viewport)
+            .or_default()
+            .extend(commands.iter().cloned());
+        let Some(grant) = &self.grant else { return };
+        for c in commands {
+            if let ViewportCommand::InnerSize(asked) = c {
+                let size = grant(*asked);
+                let info = self.info.entry(viewport).or_insert_with(Self::fresh_info);
+                let at = info.inner_rect.map_or(Pos2::ZERO, |r| r.min);
+                info.inner_rect = Some(Rect::from_min_size(at, size));
+            }
+        }
+    }
+
     fn input(&mut self, viewport: ViewportId) -> RawInput {
         self.time += 1.0 / 60.0;
         let info = self.info.entry(viewport).or_insert_with(Self::fresh_info);
@@ -722,6 +790,7 @@ impl MultiWindow {
             if *v == viewport || !o.commands.is_empty() {
                 self.commands.insert(*v, o.commands.clone());
             }
+            self.system_receives(*v, &o.commands);
             // A window moved, as a system telling positions moves it (one
             // hiding them, Wayland, sets none).
             if self.positions_hidden {
@@ -742,6 +811,7 @@ impl MultiWindow {
             for (v, o) in &out.viewport_output {
                 if *v != ViewportId::ROOT && o.viewport_ui_cb.is_some() {
                     self.builders.insert(*v, o.builder.clone());
+                    self.backend_builder(*v, o.builder.clone());
                 }
             }
             self.declared = out
@@ -770,6 +840,7 @@ impl MultiWindow {
             // A window gone: the builder it was given goes with it.
             let info = &self.info;
             self.builders.retain(|v, _| info.contains_key(v));
+            self.system_builders.retain(|v, _| info.contains_key(v));
         }
     }
 
@@ -793,11 +864,16 @@ impl MultiWindow {
         let shown = {
             let mut im = self.immediate.borrow_mut();
             im.inputs.clear();
-            for (v, b) in std::mem::take(&mut im.builders) {
-                self.builders.insert(v, b);
+            let builders = std::mem::take(&mut im.builders);
+            for (v, b) in &builders {
+                self.builders.insert(*v, b.clone());
             }
-            std::mem::take(&mut im.outputs)
+            (builders, std::mem::take(&mut im.outputs))
         };
+        let (builders, shown) = shown;
+        for (v, b) in builders {
+            self.backend_builder(v, b);
+        }
         self.shown_immediate = shown.iter().map(|(v, _)| *v).collect();
         // Theirs first: the main pass's commands to them add to theirs.
         for (v, out) in shown {

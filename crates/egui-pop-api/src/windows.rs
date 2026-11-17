@@ -948,6 +948,10 @@ impl AppHandle {
     fn apply_root_geometry(&self, g: Geometry) {
         let ctx = self.egui();
         let root = ViewportId::ROOT;
+        log::info!(
+            target: "egui_pop::window_size",
+            "the main window asked {g:?}: a window's content moved into it"
+        );
         if g.fullscreen {
             ctx.send_viewport_cmd_to(root, ViewportCommand::Fullscreen(true));
             return;

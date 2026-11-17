@@ -336,6 +336,44 @@ pub(crate) fn show_window<T>(
     ctx.show_viewport_immediate(viewport, builder, content)
 }
 
+/// A detached panel's window given another place by the application on
+/// purpose (a layout applied): what changed from `from` to `to` is asked
+/// of the system once, each command logged with its reason (#5241). A
+/// place the system told is never asked back: the window's builder keeps
+/// the place it opened with.
+pub(crate) fn ask_place(
+    ctx: &Context,
+    viewport: ViewportId,
+    panel: &PanelId,
+    from: crate::window::WindowState,
+    to: crate::window::WindowState,
+) {
+    let mut commands = Vec::new();
+    if to.fullscreen != from.fullscreen {
+        commands.push(ViewportCommand::Fullscreen(to.fullscreen));
+    }
+    if to.maximized != from.maximized {
+        commands.push(ViewportCommand::Maximized(to.maximized));
+    }
+    if !to.maximized && !to.fullscreen {
+        if to.size != from.size {
+            commands.push(ViewportCommand::InnerSize(to.size));
+        }
+        if let Some(at) = to.position
+            && Some(at) != from.position
+        {
+            commands.push(ViewportCommand::OuterPosition(at));
+        }
+    }
+    for c in commands {
+        log::info!(
+            target: "egui_pop::window_size",
+            "`{panel}`'s window asked {c:?}: the application changed its place in the layout"
+        );
+        ctx.send_viewport_cmd_to(viewport, c);
+    }
+}
+
 /// The system asked a detached panel's window to close and its
 /// `window.close` was refused: the system's close is cancelled.
 pub(crate) fn keep_open(vctx: &Context) {
