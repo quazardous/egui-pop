@@ -2355,8 +2355,11 @@ fn window_tabs(app: &AppHandle, ui: &mut Ui, aux: &Auxiliary) {
     let started = ctx
         .data(|d| d.get_temp::<bool>(started_id))
         .unwrap_or(false);
+    // A flag left by a window a drop emptied and closed does not hold
+    // back the next drag: a session carrying the tab is what counts.
+    let carried = |p: &PanelId| drag::payload::<Dragged>(&ctx).is_some_and(|d| d.holds(p));
     match dragged {
-        Some(panel) if !started => {
+        Some(panel) if !carried(&panel) => {
             drag::start(&ctx, "tab", Dragged::Tab(panel));
             ctx.data_mut(|d| d.insert_temp(started_id, true));
         }
