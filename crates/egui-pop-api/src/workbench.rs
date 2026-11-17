@@ -45,7 +45,12 @@
 //! | `workbench.detach` | `{ "panel" }`: into a window of its own (its own scale) |
 //! | `workbench.attach` | `{ "panel" }`: a detached panel docked back |
 //! | `workbench.close_window` | `{ "panel" }`: a detached panel's window closes; the default docks it back, a veto keeps the window |
+//! | `workbench.join_group` | `{ "panel", "group" }`: docks it in the tab group holding `group`, after its tabs, shown |
+//! | `workbench.dock_back` | `{ "panel" }`: a floating or detached panel docked back where it floated from, else in its own area |
 //! | `workbench.zen` | `{ "zen" }`: zen mode on or off (see below) |
+//!
+//! A panel's context menu is the same wherever it is, docked, floating
+//! or detached: [`panel_menu`].
 //!
 //! # The focused panel
 //!
@@ -166,6 +171,7 @@ use crate::strings as txt;
 use crate::window::WindowState;
 
 mod drag_session;
+pub mod panel_menu;
 use crate::bus::drag::{self, End, Seen as DragSeen};
 use drag_session::Dragged;
 
@@ -188,6 +194,8 @@ pub const STEP_ZEN: StepId = StepId::from_static("workbench.zen");
 pub const STEP_FLYOUT: StepId = StepId::from_static("workbench.flyout");
 pub const STEP_FLYOUT_SIZE: StepId = StepId::from_static("workbench.flyout_size");
 pub const STEP_ARRANGE: StepId = StepId::from_static("workbench.arrange");
+pub const STEP_JOIN_GROUP: StepId = StepId::from_static("workbench.join_group");
+pub const STEP_DOCK_BACK: StepId = StepId::from_static("workbench.dock_back");
 
 /// Toggles zen mode: only the centre is shown.
 pub const CMD_ZEN: egui_pop_model::ids::CommandId =
@@ -400,6 +408,16 @@ pub(crate) fn steps() -> Vec<crate::steps::StepSpec> {
         )
         .args(json!({ "panel": "app.outline", "window": "app.inspector" })),
         StepSpec::new(
+            STEP_JOIN_GROUP,
+            "A panel docks in the tab group holding another one, after its tabs and shown (`panel`; `group`: a docked panel of that group), out of where it was: floating, detached or docked.",
+        )
+        .args(json!({ "panel": "app.outline", "group": "app.inspector" })),
+        StepSpec::new(
+            STEP_DOCK_BACK,
+            "A floating or detached panel docks back (`panel`): where it floated from (its area, among the same tabs), else its own area.",
+        )
+        .args(json!({ "panel": "app.outline" })),
+        StepSpec::new(
             STEP_ZEN,
             "Zen mode starts (`zen`: true: only the centre is shown) or ends (false).",
         )
@@ -574,6 +592,13 @@ pub enum Change {
     /// tabs: the window holding the second panel (`workbench.join_window`
     /// with `group`).
     JoinWindowGroup(PanelId, PanelId),
+    /// A panel docks in the tab group holding the second one (docked),
+    /// after its tabs, shown: out of where it was, floating, detached or
+    /// docked.
+    JoinGroup(PanelId, PanelId),
+    /// A floating or detached panel docks back: where it floated from
+    /// (its area, among the same tabs), else in its own area.
+    DockBack(PanelId),
     /// A palette opens: floating (where it was, or cascaded), or docked
     /// when it may not float.
     OpenPalette(PanelId),
@@ -717,6 +742,8 @@ impl Change {
                 STEP_JOIN_WINDOW,
                 json!({ "panel": p, "window": w, "group": true }),
             ),
+            Change::JoinGroup(p, g) => (STEP_JOIN_GROUP, json!({ "panel": p, "group": g })),
+            Change::DockBack(p) => (STEP_DOCK_BACK, json!({ "panel": p })),
             Change::OpenPalette(p) => (crate::palettes::STEP_OPEN, json!({ "panel": p })),
             Change::Float(p, pos) => (
                 crate::palettes::STEP_FLOAT,
@@ -905,6 +932,14 @@ impl Change {
                 }
             }
             "workbench.hide" => Change::Hide(panel),
+            "workbench.join_group" => {
+                let g = args
+                    .get("group")
+                    .and_then(Json::as_str)
+                    .ok_or("`group` is missing")?;
+                Change::JoinGroup(panel, PanelId::new(g).map_err(|e| e.to_string())?)
+            }
+            "workbench.dock_back" => Change::DockBack(panel),
             "workbench.arrange" => Change::Arrange(panel, Arrangement::from_args(args)?),
             _ => Change::Focus(panel),
         })
@@ -994,6 +1029,9 @@ pub(crate) struct Workbench {
     /// The place of each panel's detached window when it closed: the
     /// panel detached again opens its window there, as it was.
     closed_windows: BTreeMap<PanelId, Auxiliary>,
+    /// Where each floating panel was docked when it floated (its area,
+    /// among which tabs): where Dock back puts it (`workbench.dock_back`).
+    floated_from: BTreeMap<PanelId, egui_pop_model::layout::DormantPlace>,
     /// The panel the keys obey: see [`Workbench::follow_focus`].
     pub focused: Option<PanelId>,
     /// The last panel to be `focused` that lives in the layout proper: where
@@ -1062,6 +1100,7 @@ impl Default for Workbench {
             window_drop: None,
             window_outlines: Vec::new(),
             closed_windows: BTreeMap::new(),
+            floated_from: BTreeMap::new(),
             hint: None,
             focused: None,
             settled: None,
@@ -1496,9 +1535,60 @@ impl Workbench {
                 if let Some(why) = spec.refuses(&crate::mounts::panel_host(Place::Floating)) {
                     return Err(why);
                 }
+                // Docked until now: where Dock back puts it.
+                match self.layout.docked_place(p) {
+                    Some(place) => {
+                        self.floated_from.insert(p.clone(), place);
+                    }
+                    None if self.layout.floating_of(p).is_none() => {
+                        self.floated_from.remove(p);
+                    }
+                    None => {}
+                }
                 self.layout.float(p, *pos);
                 self.anchor_palette(p, false);
                 json!({ "panel": p, "pos": pos })
+            }
+            Change::JoinGroup(p, into) => {
+                let spec = spec_of(p)?;
+                let area = self
+                    .layout
+                    .area_of(into)
+                    .ok_or_else(|| format!("`{into}` is not docked"))?;
+                if let Some(why) = spec.refuses(&crate::mounts::panel_host(Place::Area(area))) {
+                    return Err(why);
+                }
+                if self.layout.window_of(p).is_some() {
+                    self.keep_closed_window(p);
+                }
+                self.layout.join_tabs(p, into)?;
+                json!({ "panel": p, "group": into, "area": area_name(area) })
+            }
+            Change::DockBack(p) => {
+                let spec = spec_of(p)?;
+                if self.layout.floating_of(p).is_none() && self.layout.window_of(p).is_none() {
+                    return Err(format!("{} is docked", spec.title));
+                }
+                if self.layout.window_of(p).is_some() {
+                    self.keep_closed_window(p);
+                }
+                let place = self.floated_from.remove(p).filter(|place| match place {
+                    egui_pop_model::layout::DormantPlace::Docked { area, .. } => spec
+                        .refuses(&crate::mounts::panel_host(Place::Area(*area)))
+                        .is_none(),
+                    _ => false,
+                });
+                let area = match &place {
+                    Some(place) => {
+                        self.layout.dock_at(p, place);
+                        self.layout.area_of(p).unwrap_or(spec.area)
+                    }
+                    None => {
+                        self.layout.place(p, spec.area);
+                        spec.area
+                    }
+                };
+                json!({ "panel": p, "area": area_name(area) })
             }
             Change::DockGroup(p, area) => {
                 let panels: Vec<PanelId> = match self.layout.floating_of(p) {
@@ -3870,7 +3960,12 @@ pub(crate) fn move_to_window_command(app: &AppHandle, args: &Json) -> Result<Jso
         .and_then(Json::as_str)
         .ok_or("`window` is missing: a panel of the window")?;
     let window = PanelId::new(window).map_err(|e| e.to_string())?;
-    match app.change_workbench(Change::JoinWindow(panel, window)) {
+    let change = if args.get("group").and_then(Json::as_bool) == Some(true) {
+        Change::JoinWindowGroup(panel, window)
+    } else {
+        Change::JoinWindow(panel, window)
+    };
+    match app.change_workbench(change) {
         Some(Outcome::Done(r)) => r,
         Some(Outcome::Vetoed { by, reason }) => Err(format!("stopped by `{by}`: {reason}")),
         _ => Ok(json!({ "queued": true })),
@@ -4475,64 +4570,6 @@ impl TabCache {
     }
 }
 
-impl Viewer<'_> {
-    /// The tab menu's way to move the whole tab group holding `tab` (all
-    /// its tabs, in order, its shown tab kept), as dragging the group by
-    /// its tab bar does, for keyboard users and where a drag cannot reach
-    /// a window (`window_pointer`): "Move group to window", naming each
-    /// detached window it may join, then a new window of its own. Shown
-    /// for a group of two tabs or more, every one of which may go into a
-    /// window.
-    fn group_menu(&mut self, ui: &mut Ui, ctx: &egui::Context, tab: &PanelId) {
-        let (windows, in_window) = {
-            let wb = self.app.workbench_mut();
-            let Some((panels, _)) = wb.layout.group_of(tab) else {
-                return;
-            };
-            let movable = panels.len() > 1
-                && panels.iter().all(|p| {
-                    wb.spec(p).is_some_and(|s| {
-                        s.refuses(&crate::mounts::panel_host(Place::Window))
-                            .is_none()
-                    })
-                });
-            if !movable {
-                return;
-            }
-            let windows: Vec<(PanelId, Vec<PanelId>)> = (wb.layout.auxiliary.iter())
-                .filter(|a| !a.holds(tab))
-                .map(|a| (a.panel.clone(), a.panels().cloned().collect()))
-                .collect();
-            (windows, wb.layout.window_of(tab).is_some())
-        };
-        ui.menu_button(
-            strings::tr(ctx, &txt::WORKBENCH_MOVE_GROUP_TO_WINDOW),
-            |ui| {
-                for (window, panels) in windows {
-                    let titles: Vec<String> = panels
-                        .iter()
-                        .map(|p| self.app.panel_title(ctx, p))
-                        .collect();
-                    if ui.button(titles.join(", ")).clicked() {
-                        self.app
-                            .change_workbench(Change::JoinWindowGroup(tab.clone(), window));
-                        ui.close();
-                    }
-                }
-                // A group in a window is one already.
-                if !in_window
-                    && ui
-                        .button(strings::tr(ctx, &txt::WORKBENCH_NEW_WINDOW))
-                        .clicked()
-                {
-                    self.app.change_workbench(Change::DetachGroup(tab.clone()));
-                    ui.close();
-                }
-            },
-        );
-    }
-}
-
 impl TabViewer for Viewer<'_> {
     type Tab = PanelId;
 
@@ -4568,96 +4605,8 @@ impl TabViewer for Viewer<'_> {
     }
 
     fn context_menu(&mut self, ui: &mut Ui, tab: &mut PanelId, _path: egui_stack::TabPath) {
-        let spec = self.app.workbench_mut().spec(tab).cloned();
-        let Some(spec) = spec else { return };
-        let ctx = ui.ctx().clone();
-        let title = strings::panel_title(&ctx, spec.id.as_str(), &spec.title);
-        for area in Area::ALL {
-            let allowed = spec.allows(area);
-            let r = ui
-                .add_enabled(
-                    allowed,
-                    egui::Button::new(strings::tr_args(
-                        &ctx,
-                        &txt::WORKBENCH_MOVE_TO,
-                        &[("area", &area_text(&ctx, area))],
-                    )),
-                )
-                .on_disabled_hover_text(refusal(&ctx, &spec, &title, area).unwrap_or_default());
-            if r.clicked() {
-                self.app.change_workbench(Change::Move(tab.clone(), area));
-                ui.close();
-            }
-        }
-        ui.separator();
-        if spec.floatable
-            && ui
-                .button(strings::tr(&ctx, &txt::WORKBENCH_FLOAT))
-                .clicked()
-        {
-            // Floats where its area is, a little in.
-            let pos = {
-                let wb = self.app.workbench_mut();
-                let at = wb
-                    .layout
-                    .area_of(tab)
-                    .and_then(|a| wb.rects.get(&a))
-                    .map_or(wb.content.min, |r| r.min);
-                let off = at - wb.content.min;
-                [off.x + 24.0, off.y + 24.0]
-            };
-            self.app.change_workbench(Change::Float(tab.clone(), pos));
-            ui.close();
-        }
-        if spec.detachable
-            && ui
-                .button(strings::tr(&ctx, &txt::WORKBENCH_DETACH))
-                .clicked()
-        {
-            self.app.change_workbench(Change::Detach(tab.clone()));
-            ui.close();
-        }
-        // The windows it may join, by their panels' titles: the way into
-        // a window where a drag cannot reach it (`window_pointer`).
-        let windows: Vec<(PanelId, Vec<PanelId>)> = if spec
-            .refuses(&crate::mounts::panel_host(Place::Window))
-            .is_none()
-        {
-            let wb = self.app.workbench_mut();
-            (wb.layout.auxiliary.iter())
-                .filter(|a| !a.holds(tab))
-                .map(|a| (a.panel.clone(), a.panels().cloned().collect()))
-                .collect()
-        } else {
-            Vec::new()
-        };
-        if !windows.is_empty() {
-            ui.menu_button(strings::tr(&ctx, &txt::WORKBENCH_MOVE_TO_WINDOW), |ui| {
-                for (window, panels) in windows {
-                    let titles: Vec<String> = panels
-                        .iter()
-                        .map(|p| self.app.panel_title(&ctx, p))
-                        .collect();
-                    if ui.button(titles.join(", ")).clicked() {
-                        self.app
-                            .change_workbench(Change::JoinWindow(tab.clone(), window));
-                        ui.close();
-                    }
-                }
-            });
-        }
-        self.group_menu(ui, &ctx, tab);
-        if ui
-            .button(strings::tr_args(
-                &ctx,
-                &txt::WORKBENCH_CLOSE_PANEL,
-                &[("panel", &title)],
-            ))
-            .clicked()
-        {
-            self.app.change_workbench(Change::Hide(tab.clone()));
-            ui.close();
-        }
+        // The panel menu, the one a floating panel's title opens too.
+        panel_menu::show(ui, self.app, tab);
     }
 
     fn allowed_in_windows(&self, _tab: &mut PanelId) -> bool {

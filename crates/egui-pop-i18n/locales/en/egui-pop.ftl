@@ -1069,6 +1069,30 @@ command-workbench-next-region =
     .description = Moves the keyboard to the next part of the window: the activity bar, a side or bottom area, the centre, a palette, the flyout, the status bar.
     .title = Go to the next region
 
+command-workbench-panel-close =
+    .description = Closes the focused panel, or `panel`.
+    .title = Close panel
+
+command-workbench-panel-detach =
+    .description = Moves the focused panel, or `panel`, into a window of its own; with `group`, its tab group whole.
+    .title = Detach panel into a window
+
+command-workbench-panel-dock-back =
+    .description = Docks the focused panel, or `panel`, floating or detached, back where it floated from (else in its own area).
+    .title = Dock panel back
+
+command-workbench-panel-float =
+    .description = Floats the focused panel, or `panel`, over the interface, where its area is.
+    .title = Float panel
+
+command-workbench-panel-move =
+    .description = Docks the focused panel, or `panel`, in an area (`area`: `center`, `start_side`, `end_side` or `bottom`).
+    .title = Move panel to area
+
+command-workbench-panel-move-to-group =
+    .description = Docks the focused panel, or `panel`, in the tab group holding `group`, after its tabs: out of where it was, floating, detached or docked.
+    .title = Move panel to group
+
 command-workbench-previous-region =
     .description = Moves the keyboard to the previous part of the window.
     .title = Go to the previous region
@@ -2863,17 +2887,15 @@ egui-pop-workbench-close-panel = Close { $panel }
 
 egui-pop-workbench-detach = Detach into a window
 
+egui-pop-workbench-dock-back = Dock back
+
 egui-pop-workbench-float = Float
 
 egui-pop-workbench-flyout-pin = Pin { $panel }
 
 egui-pop-workbench-fold = Fold { $area }
 
-egui-pop-workbench-move-group-to-window = Move group to window
-
 egui-pop-workbench-move-to = Move to { $area }
-
-egui-pop-workbench-move-to-window = Move to window
 
 egui-pop-workbench-new-window = New window
 
@@ -2903,6 +2925,15 @@ menu-app-menu-layout =
 
 menu-app-menu-view =
     .label = View
+
+menu-workbench-panel-group-windows =
+    .label = Move group to window
+
+menu-workbench-panel-groups =
+    .label = Move to group
+
+menu-workbench-panel-windows =
+    .label = Move to window
 
 panel-egui-pop-devtools =
     .title = Devtools

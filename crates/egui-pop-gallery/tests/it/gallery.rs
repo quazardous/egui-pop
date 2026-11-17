@@ -2928,6 +2928,24 @@ fn the_workbench_page_shows_drop_zones_and_arranges_the_bottom_area_as_a_grid() 
     assert!(!format!("{:?}", bottom(&app)).contains("Grid"));
 }
 
+/// A floating panel's title opens the panel menu a docked tab opens.
+#[test]
+fn a_floating_palettes_title_opens_the_panel_menu() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "palettes"));
+    h.run();
+    h.get_by_label("Open the palettes").click();
+    h.run();
+    h.run();
+    h.get_by_label("Navigator").click_secondary();
+    h.run();
+    for entry in ["Detach into a window", "Move to group", "Dock back"] {
+        assert!(h.query_by_label(entry).is_some(), "the menu lists {entry}");
+    }
+    h.remove_cursor();
+    h.run();
+    h.page_shot("palette-panel-menu-pop-dark");
+}
+
 #[test]
 fn the_palettes_page_floats_a_toolbox_a_colour_palette_and_a_navigator() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "palettes"));

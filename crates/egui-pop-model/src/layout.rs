@@ -1390,6 +1390,106 @@ impl Layout {
         }
     }
 
+    /// Where a docked panel is: its area, the other panels of its tabs
+    /// and its index among them (a [`DormantPlace::Docked`]); `None` when
+    /// it is not docked.
+    ///
+    /// ```
+    /// use egui_pop_model::ids::PanelId;
+    /// use egui_pop_model::layout::{DormantPlace, Layout, Node};
+    /// use egui_pop_model::panels::Area;
+    ///
+    /// let [a, b] = [PanelId::from_static("app.a"), PanelId::from_static("app.b")];
+    /// let mut layout = Layout::default();
+    /// layout.areas.push((Area::Bottom, Node::Tabs { panels: vec![a.clone(), b.clone()], active: 0 }));
+    /// let place = layout.docked_place(&b).unwrap();
+    /// assert_eq!(place, DormantPlace::Docked { area: Area::Bottom, beside: vec![a.clone()], index: 1 });
+    /// layout.float(&b, [0.0, 0.0]);
+    /// layout.dock_at(&b, &place);
+    /// assert_eq!(layout.group_of(&b), Some((vec![a, b], 1)));
+    /// ```
+    pub fn docked_place(&self, panel: &PanelId) -> Option<DormantPlace> {
+        self.areas.iter().find_map(|(area, n)| {
+            n.tabs_of(panel)
+                .map(|(beside, index)| DormantPlace::Docked {
+                    area: *area,
+                    beside,
+                    index,
+                })
+        })
+    }
+
+    /// Docks a panel at a place [`Layout::docked_place`] gave (taken out of
+    /// where it is, opened if closed), shown: at its index in the tabs
+    /// holding one of the panels it was beside, else in its area's first
+    /// tabs. A place that is not [`DormantPlace::Docked`] changes nothing;
+    /// whether it was docked.
+    pub fn dock_at(&mut self, panel: &PanelId, place: &DormantPlace) -> bool {
+        let DormantPlace::Docked {
+            area,
+            beside,
+            index,
+        } = place
+        else {
+            return false;
+        };
+        self.remove(panel);
+        self.hidden.retain(|h| h != panel);
+        let beside_one = self
+            .areas
+            .iter_mut()
+            .any(|(a, n)| *a == *area && n.insert_beside(panel, beside, *index));
+        if !beside_one {
+            self.place(panel, *area);
+        }
+        self.activate(panel);
+        true
+    }
+
+    /// Docks a panel in the tabs holding `into`, after them and shown
+    /// (taken out of where it is: floating, detached or docked, opened if
+    /// closed). `into` is docked; a panel already there is only shown.
+    ///
+    /// ```
+    /// use egui_pop_model::ids::PanelId;
+    /// use egui_pop_model::layout::{Layout, Node};
+    /// use egui_pop_model::panels::Area;
+    ///
+    /// let [a, b] = [PanelId::from_static("app.a"), PanelId::from_static("app.b")];
+    /// let mut layout = Layout::default();
+    /// layout.areas.push((Area::Bottom, Node::tab(a.clone())));
+    /// layout.float(&b, [0.0, 0.0]);
+    /// layout.join_tabs(&b, &a).unwrap();
+    /// assert_eq!(layout.group_of(&b), Some((vec![a, b], 1)));
+    /// ```
+    pub fn join_tabs(&mut self, panel: &PanelId, into: &PanelId) -> Result<(), String> {
+        if panel == into {
+            return Err(format!("`{panel}` cannot join its own tabs"));
+        }
+        let Some(area) = self.area_of(into) else {
+            return Err(format!("`{into}` is not docked"));
+        };
+        let same = self
+            .areas
+            .iter()
+            .find_map(|(_, n)| n.tabs_of(into))
+            .is_some_and(|(others, _)| others.contains(panel));
+        if !same {
+            self.remove(panel);
+            self.hidden.retain(|h| h != panel);
+            let into = [into.clone()];
+            let inserted = self
+                .areas
+                .iter_mut()
+                .any(|(a, n)| *a == area && n.insert_beside(panel, &into, usize::MAX));
+            if !inserted {
+                self.place(panel, area);
+            }
+        }
+        self.activate(panel);
+        Ok(())
+    }
+
     /// Closes a panel: out of its area or window, and kept closed.
     pub fn hide(&mut self, panel: &PanelId) {
         self.remove(panel);

@@ -4812,6 +4812,7 @@ impl App {
             |call| crate::workbench::move_to_window_command(call.app, call.args),
         )?;
         crate::palettes::declare(&mut ctx)?;
+        crate::workbench::panel_menu::declare(&mut ctx)?;
         for (i, (menu, label)) in [
             (MENU_FILE, "File"),
             (MENU_EDIT, "Edit"),

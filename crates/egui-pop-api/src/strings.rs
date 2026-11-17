@@ -748,16 +748,6 @@ pub const WORKBENCH_DETACH: StrKey =
     StrKey::new("egui-pop-workbench-detach", "Detach into a window");
 pub const WORKBENCH_CLOSE_PANEL: StrKey =
     StrKey::new("egui-pop-workbench-close-panel", "Close { $panel }");
-/// The tab menu's submenu listing the detached windows a tab may move
-/// into.
-pub const WORKBENCH_MOVE_TO_WINDOW: StrKey =
-    StrKey::new("egui-pop-workbench-move-to-window", "Move to window");
-/// The tab menu's submenu moving the whole tab group into a detached
-/// window, or a new one.
-pub const WORKBENCH_MOVE_GROUP_TO_WINDOW: StrKey = StrKey::new(
-    "egui-pop-workbench-move-group-to-window",
-    "Move group to window",
-);
 /// The "Move group to window" submenu's entry opening a new window.
 pub const WORKBENCH_NEW_WINDOW: StrKey = StrKey::new("egui-pop-workbench-new-window", "New window");
 /// Why a dragged tab may not go into a detached window.
@@ -766,6 +756,9 @@ pub const WORKBENCH_STAYS_DOCKED: StrKey = StrKey::new(
     "{ $panel } cannot go into a window",
 );
 pub const WORKBENCH_FLOAT: StrKey = StrKey::new("egui-pop-workbench-float", "Float");
+/// The panel menu's entry docking a floating or detached panel back
+/// where it floated from.
+pub const WORKBENCH_DOCK_BACK: StrKey = StrKey::new("egui-pop-workbench-dock-back", "Dock back");
 pub const WORKBENCH_UNFOLD: StrKey = StrKey::new("egui-pop-workbench-unfold", "Unfold { $area }");
 pub const WORKBENCH_FOLD: StrKey = StrKey::new("egui-pop-workbench-fold", "Fold { $area }");
 /// The button of a flyout (a folded area's panel shown over the centre)
@@ -1841,11 +1834,10 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_STAYS_OUT,
     WORKBENCH_DETACH,
     WORKBENCH_CLOSE_PANEL,
-    WORKBENCH_MOVE_TO_WINDOW,
-    WORKBENCH_MOVE_GROUP_TO_WINDOW,
     WORKBENCH_NEW_WINDOW,
     WORKBENCH_STAYS_DOCKED,
     WORKBENCH_FLOAT,
+    WORKBENCH_DOCK_BACK,
     WORKBENCH_UNFOLD,
     WORKBENCH_FOLD,
     WORKBENCH_FLYOUT_PIN,

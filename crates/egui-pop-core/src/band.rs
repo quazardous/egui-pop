@@ -65,6 +65,9 @@ pub struct Band {
     pub delta: Vec2,
     /// Under the pointer (not under one of its buttons).
     pub hovered: bool,
+    /// The band's own response (not its buttons'): a context menu opens
+    /// on it.
+    pub response: Option<egui::Response>,
 }
 
 impl Band {
@@ -110,11 +113,13 @@ pub fn begin<R>(
         double_clicked: response.double_clicked(),
         delta: response.drag_delta(),
         hovered: response.hovered(),
+        response: None,
     };
     let inner = add(ui, band.state());
     band.bottom = ui.min_rect().bottom() + style.gap;
     ui.add_space(2.0 * style.gap);
     crate::pointer::drag_cursor(&response, crate::pointer::DragKind::Move);
+    band.response = Some(response);
     (inner, band)
 }
 

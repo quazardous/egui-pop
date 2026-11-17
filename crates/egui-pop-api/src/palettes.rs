@@ -16,7 +16,10 @@
 //! hint), it docks there; a docked floatable panel floats again from its
 //! tab menu (Float). Its band carries Close, Roll up (down to the band)
 //! and Pin (kept in place, in sight and opaque); a double click on the
-//! band rolls it up or down.
+//! band rolls it up or down. A right click on its title, or on a tab of
+//! its group, opens the panel menu a docked tab opens
+//! ([`crate::workbench::panel_menu`]): Detach into a window, Move to
+//! group, Dock back (where it floated from), Close.
 //!
 //! **Never modal.** A palette never blocks the interface: anything that
 //! must be answered first is a dialog ([`crate::dialogs`]). It takes the
@@ -789,6 +792,8 @@ struct Asked {
     show: Option<PanelId>,
     /// The tabs drawn, and whether each is dragged.
     grabs: Vec<(PanelId, bool)>,
+    /// The titles and tabs drawn, each opening its panel's menu.
+    menus: Vec<(egui::Response, PanelId)>,
 }
 
 /// A member's band as laid out, with where the member is drawn
@@ -971,6 +976,9 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
                                 let title = &titles[&m.panel];
                                 band_row(ui, &t, title, state, m, Some(g.pinned), &mut asked);
                             });
+                            if let Some(r) = &b.response {
+                                asked.menus.push((r.clone(), m.shown().clone()));
+                            }
                             if !m.rolled {
                                 match body(ui) {
                                     Some(h) => {
@@ -994,6 +1002,10 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
                         let (_, b) = band::begin(ui, &style, |ui, state| {
                             group_row(ui, &t, &joined, &g, &titles, state, &mut asked);
                         });
+                        // The group's band acts on its shown panel.
+                        if let Some(r) = &b.response {
+                            asked.menus.push((r.clone(), g.shown().clone()));
+                        }
                         let mut column = |ui: &mut Ui| {
                             for m in &g.members {
                                 if tabs && m.panel != *g.shown() {
@@ -1022,6 +1034,9 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
                                         (mb, ui.min_rect().bottom())
                                     })
                                     .inner;
+                                if let Some(r) = &mb.response {
+                                    asked.menus.push((r.clone(), shown.clone()));
+                                }
                                 bands.push(MemberBand {
                                     panel: shown,
                                     tabs: m.is_tabs(),
@@ -1092,6 +1107,11 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
             && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape))
         {
             ctx.memory_mut(|m| m.surrender_focus(focused));
+        }
+        // Each title and tab opens its panel's menu, the one a docked tab
+        // opens.
+        for (r, panel) in &asked.menus {
+            crate::workbench::panel_menu::context_menu(r, app, panel);
         }
         if asked.close_group {
             run(app, &lead, Some(Change::CloseGroup(lead.clone())));
@@ -1298,6 +1318,7 @@ fn tab(ui: &mut Ui, title: &str, panel: &PanelId, selected: bool, asked: &mut As
         asked.show = Some(panel.clone());
     }
     asked.grabs.push((panel.clone(), r.dragged()));
+    asked.menus.push((r, panel.clone()));
 }
 
 /// The group's menu button on its band, and its menu: Close group (a

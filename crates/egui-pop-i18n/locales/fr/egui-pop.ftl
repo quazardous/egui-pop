@@ -2200,16 +2200,15 @@ egui-pop-workbench-close-panel = Fermer { $panel }
 egui-pop-workbench-detach = Détacher dans une fenêtre
 
 egui-pop-workbench-float = Faire flotter
+egui-pop-workbench-dock-back = Réancrer
 
 egui-pop-workbench-flyout-pin = Épingler { $panel }
 
 egui-pop-workbench-fold = Replier { $area }
 
-egui-pop-workbench-move-group-to-window = Déplacer le groupe vers la fenêtre
 
 egui-pop-workbench-move-to = Déplacer vers { $area }
 
-egui-pop-workbench-move-to-window = Déplacer vers la fenêtre
 
 egui-pop-workbench-new-window = Nouvelle fenêtre
 
@@ -3261,3 +3260,28 @@ command-settings-importPreview =
     .title = Aperçu d'un import de réglages
 command-settings-undoImport =
     .title = Annuler le dernier import de réglages
+
+menu-workbench-panel-windows =
+    .label = Déplacer vers la fenêtre
+menu-workbench-panel-group-windows =
+    .label = Déplacer le groupe vers la fenêtre
+menu-workbench-panel-groups =
+    .label = Déplacer vers le groupe
+command-workbench-panel-move =
+    .description = Ancre le panneau actif, ou `panel`, dans une zone (`area` : `center`, `start_side`, `end_side` ou `bottom`).
+    .title = Déplacer le panneau vers une zone
+command-workbench-panel-float =
+    .description = Fait flotter le panneau actif, ou `panel`, au-dessus de l’interface, là où est sa zone.
+    .title = Faire flotter le panneau
+command-workbench-panel-detach =
+    .description = Déplace le panneau actif, ou `panel`, dans une fenêtre à lui ; avec `group`, son groupe d’onglets entier.
+    .title = Détacher le panneau dans une fenêtre
+command-workbench-panel-move-to-group =
+    .description = Ancre le panneau actif, ou `panel`, dans le groupe d’onglets qui contient `group`, après ses onglets : sorti d’où il était, flottant, détaché ou ancré.
+    .title = Déplacer le panneau vers un groupe
+command-workbench-panel-dock-back =
+    .description = Ancre de nouveau le panneau actif, ou `panel`, flottant ou détaché, là d’où il est parti (sinon dans sa propre zone).
+    .title = Réancrer le panneau
+command-workbench-panel-close =
+    .description = Ferme le panneau actif, ou `panel`.
+    .title = Fermer le panneau

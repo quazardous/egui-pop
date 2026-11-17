@@ -25,9 +25,12 @@ impl Plugin for Demo {
     }
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
-        ctx.panel(PanelSpec::new(OUT, "Output", Area::Bottom), |ui, _| {
-            ui.label("output body");
-        })?
+        ctx.panel(
+            PanelSpec::new(OUT, "Output", Area::Bottom).floatable(true),
+            |ui, _| {
+                ui.label("output body");
+            },
+        )?
         .panel(
             PanelSpec::new(LOG, "Log", Area::Bottom).floatable(true),
             |ui, _| {
@@ -103,20 +106,25 @@ fn pick_in_submenu(h: &mut Harness<'static, App>, submenu: &str, label: &str) {
     h.run();
 }
 
+/// The menu's Close entry: wider than the band's ✕ named the same.
+fn close_entry(h: &Harness<'static, App>, label: &str) -> egui::Rect {
+    h.get_all_by_label(label)
+        .map(|n| n.rect())
+        .max_by(|a, b| a.width().total_cmp(&b.width()))
+        .unwrap_or_else(|| panic!("no {label}"))
+}
+
 #[test]
 fn a_floating_panels_title_opens_the_panel_menu() {
     let h = floating_log_menu();
-    for entry in [
-        "Detach into a window",
-        "Move to group",
-        "Dock back",
-        "Close Log",
-    ] {
+    for entry in ["Detach into a window", "Move to group", "Dock back"] {
         assert!(
             h.query_by_label(entry).is_some(),
             "the floating panel's menu lists {entry}"
         );
     }
+    // The band's ✕ is named Close Log too: the menu's entry is the other.
+    assert_eq!(h.get_all_by_label("Close Log").count(), 2);
 }
 
 #[test]
@@ -175,7 +183,11 @@ fn dock_back_returns_a_floating_panel_to_the_place_it_floated_from() {
 #[test]
 fn close_from_a_floating_panel_closes_it() {
     let mut h = floating_log_menu();
-    h.get_by_label("Close Log").click();
+    let entry = close_entry(&h, "Close Log");
+    h.get_all_by_label("Close Log")
+        .find(|n| n.rect() == entry)
+        .unwrap()
+        .click();
     h.run();
     let layout = h.state().handle().layout();
     assert!(layout.floating_of(&LOG).is_none());
@@ -195,9 +207,18 @@ fn a_tab_of_a_floating_group_opens_the_same_menu() {
     );
     h.run();
     h.run();
-    h.get_by_label("Output").click_secondary();
+    // Its tab in the group's band (the shown panel is named Output too).
+    let tab = h
+        .get_all_by_label("Output")
+        .map(|n| n.rect())
+        .min_by(|a, b| a.top().total_cmp(&b.top()))
+        .unwrap();
+    h.get_all_by_label("Output")
+        .find(|n| n.rect() == tab)
+        .unwrap()
+        .click_secondary();
     h.run();
-    assert!(h.query_by_label("Close Output").is_some());
+    assert!(h.get_all_by_label("Close Output").count() >= 2);
     assert!(h.query_by_label("Dock back").is_some());
 }
 
