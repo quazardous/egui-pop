@@ -12,8 +12,11 @@ use egui_pop::core::ui::{Space, UiPop};
 /// The pretend panel's size.
 const PANEL: egui::Vec2 = vec2(220.0, 420.0);
 
+/// A folder and the names of the folders in it.
+type Folder = (&'static str, &'static [&'static str]);
+
 /// The folder tree: a name and its children.
-const TREE: &[(&str, &[(&str, &[&str])])] = &[
+const TREE: &[(&str, &[Folder])] = &[
     (
         "Photos",
         &[
