@@ -22,7 +22,6 @@ use egui::{
     Vec2, WidgetInfo, pos2,
 };
 use egui_pop_core::kit::{Kit, KitCx, Part, State};
-use egui_pop_core::model::keymap::Pointer;
 use egui_pop_core::pointer::claim::{self, Secondary};
 
 use crate::cursor::{self, Cursor, CursorQuery, Shown, Tool};
@@ -37,6 +36,7 @@ use crate::source::{Readout, Side, Stats, TileSink, TileSource};
 use crate::tiles::{self, Texture, Tiles, Transfers, UploadBudget, UploadReport};
 use crate::tokens::ViewportTokens;
 use crate::view::{self, Mapping, View, Zoom};
+use egui_pop_core::pointer::view::ViewWheel;
 
 /// Where a change stands in its gesture.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1267,37 +1267,27 @@ fn handle_wheel(ui: &Ui, response: &Response, g: &Gestures, f: &mut Frame<'_>) {
         f.state.detent = false;
         return;
     }
-    let inputs = egui_pop_core::pointer::wheel_inputs(ui.ctx());
-    // The canvas takes the wheel: the panel around it does not scroll.
-    egui_pop_core::pointer::take_wheel(ui.ctx());
+    let steps = egui_pop_core::pointer::view::view_wheel(ui.ctx(), &g.pointer);
     let pointer = response.hover_pos().unwrap_or(f.mapping.rect.center());
     let mut moved = false;
-    for input in &inputs {
-        let action = g.pointer.wheel_action(input);
-        let cause = if input.pointer == Pointer::Pinch {
-            Cause::Pinch
-        } else {
-            Cause::Wheel
-        };
-        // A pinch's factor as the wheel's motion.
-        let along = if input.pointer == Pointer::Pinch {
-            (f64::from(input.zoom).ln() / view::WHEEL_RATE) as f32
-        } else {
-            input.along_y()
-        };
-        match action {
-            ViewAction::Zoom | ViewAction::ZoomFree => {
-                moved = true;
-                let free = action == ViewAction::ZoomFree || cause == Cause::Pinch;
+    for step in steps {
+        moved = true;
+        match step {
+            ViewWheel::Zoom {
+                points,
+                free,
+                pinch,
+            } => {
+                let cause = if pinch { Cause::Pinch } else { Cause::Wheel };
                 if !free && f.state.detent {
                     // Held on 100 % until the wheel stops.
                     continue;
                 }
                 let z = if free {
-                    (f.mapping.zoom * (f64::from(along) * view::WHEEL_RATE).exp())
+                    (f.mapping.zoom * egui_pop_core::pointer::view::wheel_factor(points))
                         .clamp(view::MIN_ZOOM, view::MAX_ZOOM)
                 } else {
-                    view::wheel_zoom(f.mapping.zoom, along)
+                    view::wheel_zoom(f.mapping.zoom, points)
                 };
                 if !free {
                     f.state.detent = z == 1.0 && f.mapping.zoom != 1.0;
@@ -1305,17 +1295,10 @@ fn handle_wheel(ui: &Ui, response: &Response, g: &Gestures, f: &mut Frame<'_>) {
                 let to = f.mapping.zoom_around(pointer, z);
                 f.change(to, cause, Phase::Once);
             }
-            ViewAction::Pan | ViewAction::PanX | ViewAction::PanY => {
-                moved = true;
-                let delta = match action {
-                    ViewAction::PanX => Vec2::new(input.along_x(), 0.0),
-                    ViewAction::PanY => Vec2::new(0.0, input.along_y()),
-                    _ => input.delta,
-                };
+            ViewWheel::Pan(delta) => {
                 let to = f.mapping.panned(delta);
-                f.change(to, cause, Phase::Once);
+                f.change(to, Cause::Wheel, Phase::Once);
             }
-            _ => {}
         }
     }
     if !moved {
