@@ -638,8 +638,14 @@ fn a_dock_separator_is_a_stop_and_moves_with_the_arrows() {
     }
     assert_eq!(app.set_layout(layout), Vec::<String>::new());
     let _ = h.run_ok();
-    // egui_stack names its separators ("Resize", from its labels).
-    let line = |s: &Stop| s.name == "Resize" && s.rect.height() < 10.0 && s.rect.width() < 200.0;
+    // egui_stack names its separators after the tabs on each side
+    // ("Resize between {first} and {second}", from its labels).
+    let line = |s: &Stop| {
+        s.name.starts_with("Resize between ")
+            && s.name.contains(" and ")
+            && s.rect.height() < 10.0
+            && s.rect.width() < 200.0
+    };
     let separator = (0..200)
         .find_map(|_| walk::press(&mut h, TAB).filter(line))
         .expect("Tab reaches the separator");

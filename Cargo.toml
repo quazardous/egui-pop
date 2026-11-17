@@ -119,8 +119,10 @@ image = { version = "0.25", default-features = false }
 # the host decides (`LayoutArea::flyout_dismiss`, `over_dismiss`, `inside`)
 # and the resize edge of a zone lying over; 0.25.7 title drags in sections
 # sized by their content (`Sections::fill(false)`); 0.25.12 the tab group
-# dragged whole (`DockArea::dragged_node`, `DockState::move_node`).
-egui_stack = { version = "0.25.12", default-features = false }
+# dragged whole (`DockArea::dragged_node`, `DockState::move_node`); 0.26
+# the tab drag threshold, the drop zones that leave the tab bar out and
+# the `OverlayFeel` built with `..Default::default()`.
+egui_stack = { version = "0.26.0", default-features = false }
 egui-pop = { version = "0.13.1", path = "crates/egui-pop" }
 
 [workspace.lints.rust]
