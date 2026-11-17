@@ -161,6 +161,22 @@ fn every_interactive_node_of_every_page_has_a_name() {
     }
 }
 
+// Every input brick (a text input, a number input, a slider, a
+// descriptor's drop-down) drawn by a page has a name, and is drawn by a
+// brick that records itself. Not critical, as above.
+#[test]
+fn every_input_brick_of_every_page_has_a_name() {
+    let mut seen = 0;
+    for page in PAGES {
+        let mut h = harness(options("pop-dark", Density::Comfortable, page));
+        run_page(&mut h, page);
+        seen += egui_pop::core::a11y::inputs(&h.ctx).len();
+        let unnamed = egui_pop_test::unnamed_inputs(&h);
+        assert!(unnamed.is_empty(), "{page}: {unnamed:#?}");
+    }
+    assert!(seen > 0, "the gallery draws input bricks");
+}
+
 #[test]
 fn snapshots_per_theme() {
     let mut results = egui_kittest::SnapshotResults::new();

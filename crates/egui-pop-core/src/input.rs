@@ -931,6 +931,7 @@ impl<'a> Input<'a> {
             kind.name()
         };
         field::record(&ctx, response.id, &label, kind_name, &state);
+        crate::a11y::input(&ctx, response.id, &label);
         // Its icons, by name, for agents.
         for slot in leading.iter().chain(trailing.iter()) {
             if let Slot::Icon(i) = slot {
