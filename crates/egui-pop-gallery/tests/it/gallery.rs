@@ -5159,7 +5159,7 @@ fn the_folds_page_folds_and_opens_by_click_and_keys() {
     h.get_by_label("Rescan").click();
     h.run();
     assert_eq!(expanded(&h, "Folders, 8"), Some(true));
-    assert!(h.query_by_label("Rescan").is_some());
+    assert!(h.query_by_label("Rescans: 1").is_some());
     // A click opens a fold, its body shown.
     h.get_by_label("Imports").click();
     h.run();
