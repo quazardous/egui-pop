@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 425ff2317f80fe3b0cb0d1e807def82bcfb3009a601c6aa604c8b7a606c749a0 # shrinks to c = Container { width: 16.087234, height: None, unit: 24.0 }, c2 = Container { width: 81.73037, height: Some(75.56818), unit: 24.0 }, e = [Element { key: 0, forms: [SizePolicy { min_size: Size2 { width: Size(36), height: Size(3) }, size: Size2 { width: Size(3), height: Size(3) }, max_size: Size2 { width: Size(3), height: Size(3) }, aspect_ratio: None, grow: Fixed }], orientations: [], pinned_orientation: None, pin: None }, Element { key: 1, forms: [SizePolicy { min_size: Size2 { width: Size(3), height: Size(36) }, size: Size2 { width: Size(6), height: Size(3) }, max_size: Size2 { width: Size(6), height: Size(3) }, aspect_ratio: None, grow: Fixed }], orientations: [Vertical, Horizontal], pinned_orientation: None, pin: None }]

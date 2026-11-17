@@ -1,0 +1,29 @@
+# The root is the `egui_fit` crate; `demo/` is its web demo, never
+# published. `cargo test` here tests the core only.
+[workspace]
+members = ["demo"]
+
+[package]
+name = "egui_fit"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+description = "A slot layout engine with no egui dependency: dense grid packing of plain boxes in standard slot sizes, with forms, orientations, growth and hysteresis."
+keywords = ["layout", "grid", "packing", "gui"]
+categories = ["gui", "algorithms"]
+readme = "README.md"
+repository = "https://github.com/quazardous/egui_fit"
+
+[lib]
+name = "egui_fit"
+
+[features]
+default = []
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"], optional = true }
+
+[dev-dependencies]
+proptest = "1"
