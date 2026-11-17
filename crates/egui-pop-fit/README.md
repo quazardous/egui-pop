@@ -157,8 +157,8 @@ Version 0: the API may change, each break in a new minor.
 
 Licensed under either of
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-- MIT license ([LICENSE-MIT](LICENSE-MIT))
+- Apache License, Version 2.0 ([LICENSE-APACHE](https://github.com/quazardous/egui-pop/blob/main/crates/egui-pop-fit/LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](https://github.com/quazardous/egui-pop/blob/main/crates/egui-pop-fit/LICENSE-MIT))
 
 at your option.
 
