@@ -1,0 +1,8 @@
+# Denied in the web CI job only (`cargo clippy --target wasm32-unknown-unknown
+# -p egui-pop-gallery`): see `disallowed_methods` in the workspace lints.
+disallowed-methods = [
+    { path = "std::time::Instant::now", reason = "panics on wasm32-unknown-unknown: use web_time::Instant" },
+    { path = "std::time::Instant::elapsed", reason = "calls Instant::now, which panics on wasm32-unknown-unknown: use web_time::Instant" },
+    { path = "std::time::SystemTime::now", reason = "panics on wasm32-unknown-unknown: use web_time::SystemTime" },
+    { path = "std::time::SystemTime::elapsed", reason = "calls SystemTime::now, which panics on wasm32-unknown-unknown: use web_time::SystemTime" },
+]

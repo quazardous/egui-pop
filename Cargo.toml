@@ -126,3 +126,8 @@ missing_debug_implementations = "warn"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+# clippy.toml lists `std::time` clocks that panic on wasm32-unknown-unknown.
+# On native, web-time re-exports those very items, so the lint is off here
+# and the web CI job denies it with `--target wasm32-unknown-unknown`, where
+# only code that reaches the browser is compiled.
+disallowed_methods = "allow"

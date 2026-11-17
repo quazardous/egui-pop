@@ -17,3 +17,6 @@ workspace = true
 
 [dependencies]
 bus-contract.workspace = true
+# MIT OR Apache-2.0: the listener deadlines' clock on the web too, where
+# `std::time::Instant::now` panics.
+web-time = "1"
