@@ -310,6 +310,10 @@ of every crate with every feature on.
   app with two navigation axes: a declarative form tree contributed by
   manifests, a closed set of bricks, standalone task surfaces and a
   wizard kit, with a survey and Helios's information architecture.
+- [Moving a floating panel vs docking it](design/drag-move-vs-dock.md):
+  how other applications tell a move from a dock, the modifier per
+  platform, today's drags, and the decision (a plain drag moves, Ctrl
+  docks, a mode the application and the user can change).
 - [Fonts](fonts.md): font families from the theme at four weights, the
   size scale and the text size seeded from the system's (built), and
   the design for the rest.
