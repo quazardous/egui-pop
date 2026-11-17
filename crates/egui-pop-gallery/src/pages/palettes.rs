@@ -12,7 +12,7 @@ use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::widgets;
 use egui_pop::model::ids::{PanelId, PluginId, StoryId};
 use egui_pop::model::layout::Join;
-use egui_pop::model::panels::{Area, PanelSpec};
+use egui_pop::model::panels::{Area, PanelKind, PanelSpec};
 use egui_pop::theme::Tokens;
 
 use super::section;
@@ -53,6 +53,9 @@ impl Plugin for PalettesPage {
         ctx.panel(
             PanelSpec::new(TOOLBOX, "Toolbox", Area::StartSide)
                 .palette()
+                // Its tools edit the canvas: its band carries the edits
+                // mark.
+                .kind(PanelKind::Control)
                 .min_size(150.0)
                 .default_size(150.0)
                 .icon("edit")

@@ -18,15 +18,20 @@
 //! - **Ready**: nothing; the state is forgotten.
 //!
 //! The tab holds one mark ([`TabMark`]): when a panel has more than one
-//! to show, the one of the highest rank wins, the busy mark first.
+//! to show, the one of the highest rank wins, the busy mark first, then a
+//! failure, then the "edits" mark of a control or mixed panel
+//! ([`PanelKind`]), which shows while nothing else does. A floating
+//! palette's band holds the same mark after its title.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use bus_contract::{Bus, ListenOpts, Point, PointKind};
 use egui::{Context, Id, Rect, Response, Ui, UiBuilder};
-use egui_pop_core::indicator::{Anchor, Indicator, Pip};
+use egui_pop_core::icon::Icon;
+use egui_pop_core::indicator::{Anchor, Indicator, Pip, Size};
 use egui_pop_core::{lock, motion, strings};
+use egui_pop_model::panels::PanelKind;
 use serde::{Deserialize, Serialize};
 
 use super::OWNER;
@@ -125,15 +130,26 @@ pub enum TabMark {
     Busy,
     /// Its work failed: why.
     Failed(String),
+    /// It edits, wholly ([`PanelKind::Control`]) or in part
+    /// ([`PanelKind::Mixed`]): declared with the panel, shown while no
+    /// state is.
+    Edits(PanelKind),
 }
 
 impl TabMark {
-    /// Its rank: the busy mark first, then a failure.
+    /// Its rank: the busy mark first, then a failure, then the edits
+    /// mark.
     pub fn rank(&self) -> u8 {
         match self {
-            TabMark::Busy => 2,
-            TabMark::Failed(_) => 1,
+            TabMark::Busy => 3,
+            TabMark::Failed(_) => 2,
+            TabMark::Edits(_) => 1,
         }
+    }
+
+    /// The edits mark of a panel of `kind`: none for a view.
+    pub fn of_kind(kind: PanelKind) -> Option<TabMark> {
+        kind.edits().then_some(TabMark::Edits(kind))
     }
 
     /// Of the marks a tab may show, the one it shows.
@@ -256,11 +272,38 @@ fn indicator(ctx: &Context, mark: &TabMark, id: String) -> Indicator {
             &txt::PANEL_STATE_FAILED,
             &[("reason", why)],
         )),
+        TabMark::Edits(kind) => {
+            let key = match kind {
+                PanelKind::Mixed => &txt::PANEL_KIND_MIXED,
+                _ => &txt::PANEL_KIND_CONTROL,
+            };
+            Indicator::icon(Icon::Edit)
+                .size(Size::Small)
+                .id(id)
+                .name(strings::tr(ctx, key))
+        }
     }
 }
 
+/// The one mark `panel`'s tab or palette band shows: the highest rank of
+/// its state's and its kind's.
+pub(crate) fn tab_mark(
+    states: &States,
+    ctx: &Context,
+    panel: &str,
+    kind: PanelKind,
+) -> Option<TabMark> {
+    TabMark::winner(
+        shown(states, ctx, panel)
+            .mark()
+            .into_iter()
+            .chain(TabMark::of_kind(kind)),
+    )
+}
+
 /// The indicator id of a panel's mark on its content (`panel-state:<id>`)
-/// and on its tab (`panel-state-tab:<id>`), for tests and agents.
+/// and on its tab or palette band (`panel-state-tab:<id>`, its one mark
+/// slot: the busy, failed or edits mark), for tests and agents.
 pub fn mark_id(panel: &str, on_tab: bool) -> String {
     if on_tab {
         format!("panel-state-tab:{panel}")
@@ -284,9 +327,9 @@ pub(crate) fn paint_content(states: &States, ui: &mut Ui, panel: &str, rect: Rec
 /// On a panel's tab button: its one mark (the highest rank of those it
 /// has), on the tab's top end corner, its meaning added to the tab's
 /// name.
-pub(crate) fn paint_tab(states: &States, tab: &Response, panel: &str) {
+pub(crate) fn paint_tab(states: &States, tab: &Response, panel: &str, kind: PanelKind) {
     let ctx = tab.ctx.clone();
-    let Some(mark) = TabMark::winner(shown(states, &ctx, panel).mark()) else {
+    let Some(mark) = tab_mark(states, &ctx, panel, kind) else {
         return;
     };
     let mut ui = Ui::new(
@@ -299,6 +342,14 @@ pub(crate) fn paint_tab(states: &States, tab: &Response, panel: &str) {
         .on(&mut ui, tab, Anchor::TopEnd);
 }
 
+/// In a floating palette's band, after its title: its one mark, inline.
+pub(crate) fn add_inline(states: &States, ui: &mut Ui, panel: &str, kind: PanelKind) {
+    let ctx = ui.ctx().clone();
+    if let Some(mark) = tab_mark(states, &ctx, panel, kind) {
+        ui.add(indicator(&ctx, &mark, mark_id(panel, true)));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -308,6 +359,13 @@ mod tests {
         let shown = TabMark::winner([TabMark::Failed("no data".into()), TabMark::Busy]);
         assert_eq!(shown, Some(TabMark::Busy));
         assert_eq!(TabMark::winner([]), None);
+        let edits = TabMark::of_kind(PanelKind::Control);
+        assert_eq!(edits, Some(TabMark::Edits(PanelKind::Control)));
+        assert_eq!(TabMark::of_kind(PanelKind::View), None);
+        let shown = TabMark::winner(edits.clone().into_iter().chain([TabMark::Busy]));
+        assert_eq!(shown, Some(TabMark::Busy));
+        let shown = TabMark::winner(edits.into_iter().chain([TabMark::Failed("x".into())]));
+        assert_eq!(shown, Some(TabMark::Failed("x".into())));
     }
 
     #[test]

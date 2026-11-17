@@ -646,6 +646,17 @@ A panel whose content is not current (`panel.state`, [the workbench](workbench.m
   </tr>
 </table>
 
+### A panel's kind
+
+A panel that edits (`PanelKind::Control` or `Mixed`, [the workbench](workbench.md#a-panels-kind)): the edits mark on its tab (Properties), and after its floating palette's title (the toolbox); a view panel carries none.
+
+<table>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/panel-kind-tab-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/panel-kind-tab-pop-dark.png" width="200" alt="panel-kind-tab-pop-dark"></a><br>panel-kind-tab-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/panel-kind-palette-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/panel-kind-palette-pop-dark.png" width="200" alt="panel-kind-palette-pop-dark"></a><br>panel-kind-palette-pop-dark</td>
+  </tr>
+</table>
+
 ### Examples
 
 The `rerun_like` example, a whole application ([A Rerun-like viewer](rerun-like.md)), in its two kits.
