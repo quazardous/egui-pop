@@ -147,6 +147,7 @@ pub mod jobs;
 pub mod jobs_centre;
 pub mod layout_controls;
 pub mod links;
+pub mod main_wake;
 pub mod menus;
 pub mod mounts;
 pub mod paint_guard;

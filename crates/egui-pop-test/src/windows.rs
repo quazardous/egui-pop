@@ -137,6 +137,15 @@ pub struct MultiWindow {
     /// The broken invariants already looked at.
     seen_broken: usize,
     time: f64,
+    /// The repaints the application asked for, as eframe hears them
+    /// (the context's repaint callback), not run yet.
+    repaints: Arc<std::sync::Mutex<Vec<egui::RequestRepaintInfo>>>,
+    /// The windows the system sends no redraw.
+    withheld: BTreeSet<ViewportId>,
+    /// The loop's part: the main window's frames owed.
+    wake: egui_pop_api::main_wake::MainWake<ViewportId>,
+    /// The loop's clock at the first pass.
+    started: std::time::Instant,
 }
 
 impl std::fmt::Debug for MultiWindow {
@@ -162,7 +171,19 @@ impl MultiWindow {
         HARNESSES.with_borrow_mut(|h| h.insert(token, Rc::downgrade(&immediate)));
         ctx.data_mut(|d| d.insert_temp(token_id(), token));
         Context::set_immediate_viewport_renderer(render_immediate);
+        let repaints: Arc<std::sync::Mutex<Vec<egui::RequestRepaintInfo>>> = Arc::default();
+        {
+            let repaints = repaints.clone();
+            ctx.set_request_repaint_callback(move |info| {
+                if let Ok(mut r) = repaints.lock() {
+                    r.push(info);
+                }
+            });
+        }
         let app = build(&ctx);
+        let mut wake = egui_pop_api::main_wake::MainWake::new();
+        wake.set_main(ViewportId::ROOT);
+        wake.set_counter(egui_pop_api::main_wake::PassCounter::install(&ctx));
         let mut info = BTreeMap::new();
         info.insert(ViewportId::ROOT, Self::fresh_info());
         Self {
@@ -187,6 +208,10 @@ impl MultiWindow {
             positions_hidden: false,
             seen_broken: 0,
             time: 0.0,
+            repaints,
+            withheld: BTreeSet::new(),
+            wake,
+            started: std::time::Instant::now(),
         }
     }
 
@@ -230,6 +255,147 @@ impl MultiWindow {
             })
             .collect();
         assert!(failing.is_empty(), "window invariants broken: {failing:#?}");
+    }
+
+    /// The windows a repaint is asked for and still due, as eframe keeps
+    /// them: a request heard through the context's repaint callback (or
+    /// an event the system gave the window: [`MultiWindow::request_close`],
+    /// [`MultiWindow::press`], [`MultiWindow::queue`]), dropped once its
+    /// window ran a pass after it, or once its window is gone. Delays are
+    /// ignored: a repaint asked for later comes, with no input. The
+    /// passes the test runs itself pay what was asked before them.
+    pub fn repaints_due(&mut self) -> BTreeSet<ViewportId> {
+        let mut r = self.repaints.lock().unwrap_or_else(|e| e.into_inner());
+        let ctx = &self.ctx;
+        let declared = &self.declared;
+        let immediate = &self.shown_immediate;
+        r.retain(|i| {
+            let v = i.viewport_id;
+            let alive =
+                v == ViewportId::ROOT || declared.contains_key(&v) || immediate.contains(&v);
+            // eframe's rule: a request is current while its window ran
+            // at most the pass it was asked in.
+            alive && ctx.cumulative_pass_nr_for(v) <= i.current_cumulative_pass_nr + 1
+        });
+        r.iter().map(|i| i.viewport_id).collect()
+    }
+
+    /// The system sends `viewport`'s window no redraw while `on` (on
+    /// Wayland, a window the compositor does not show gets no frame
+    /// callback: GNOME's main window covered by the others): the passes
+    /// asked of it run only when the loop paints it itself
+    /// ([`MultiWindow::host_wake`]).
+    pub fn withhold_frames(&mut self, viewport: ViewportId, on: bool) {
+        if on {
+            self.withheld.insert(viewport);
+        } else {
+            self.withheld.remove(&viewport);
+        }
+    }
+
+    /// Whether the event loop paints the main window when its frame is
+    /// owed past `egui_pop_api::main_wake::GRACE` with no redraw from the
+    /// system, as egui-pop's runner and a host using `MainWake` do (on by
+    /// default); off, the loop is eframe's alone.
+    pub fn host_wake(&mut self, on: bool) {
+        self.wake.set_enabled(on);
+    }
+
+    /// The loop's clock, from the passes' time.
+    fn clock(&self) -> std::time::Instant {
+        self.started + std::time::Duration::from_secs_f64(self.time)
+    }
+
+    /// Runs the passes the application itself asked for, as an idle
+    /// event loop with no input does, at most `max`: each window asked
+    /// for, the main window's first; a detached panel's (an immediate
+    /// window) is the main window's. A window whose frames are withheld
+    /// ([`MultiWindow::withhold_frames`]) runs none; its frame owed, the
+    /// loop paints it after the grace when [`MultiWindow::host_wake`] is
+    /// on, the clock moved on by it. The passes run, in order: a window
+    /// still shown (or frozen) after it waits for an outside event (a
+    /// click, Alt+Tab).
+    pub fn run_requested(&mut self, max: usize) -> Vec<ViewportId> {
+        let mut ran = Vec::new();
+        while ran.len() < max {
+            // The main window's frame owed past the grace: the loop
+            // paints it, whatever else is asked.
+            if let Some(main) = self.wake.due(self.clock()) {
+                self.root_pass();
+                ran.push(main);
+                continue;
+            }
+            let due = self.repaints_due();
+            let next = due
+                .contains(&ViewportId::ROOT)
+                .then_some(ViewportId::ROOT)
+                .or_else(|| due.iter().next().copied());
+            let Some(v) = next else {
+                // Nothing asked: the loop sleeps until the main window's
+                // owed frame comes due, if it paints one.
+                let Some(at) = self.wake.next() else { break };
+                let now = self.clock();
+                if at > now {
+                    self.time += (at - now).as_secs_f64();
+                }
+                let now = self.clock();
+                match self.wake.due(now) {
+                    Some(main) => {
+                        self.root_pass();
+                        ran.push(main);
+                    }
+                    None => break,
+                }
+                continue;
+            };
+            // The redraw this request becomes answers what was asked
+            // before it.
+            let before = self.ctx.cumulative_pass_nr_for(v);
+            self.repaints
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .retain(|i| i.viewport_id != v || i.current_cumulative_pass_nr > before);
+            let now = self.clock();
+            if self.withheld.contains(&v) {
+                // No redraw from the system: eframe waits for it.
+                if v == ViewportId::ROOT {
+                    self.wake.asked(now);
+                }
+                continue;
+            }
+            let main_pass = v == ViewportId::ROOT || self.shown_immediate.contains(&v);
+            if main_pass && v != ViewportId::ROOT && self.withheld.contains(&ViewportId::ROOT) {
+                // A detached panel's redraw: eframe asks the main
+                // window's, withheld; it began no pass.
+                self.wake.redrawn(v, false, now);
+                continue;
+            }
+            self.run_pass(v);
+            ran.push(v);
+        }
+        ran
+    }
+
+    /// The system gave `viewport`'s window an event: eframe asks its
+    /// redraw.
+    fn system_event(&mut self, viewport: ViewportId) {
+        let nr = self.ctx.cumulative_pass_nr_for(viewport);
+        self.repaints
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(egui::RequestRepaintInfo {
+                viewport_id: viewport,
+                delay: std::time::Duration::ZERO,
+                current_cumulative_pass_nr: nr,
+            });
+    }
+
+    /// Forgets the repaints asked so far: what follows counts alone.
+    pub fn clear_repaints(&mut self) {
+        self.repaints
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
     }
 
     /// The deferred windows the last main pass declared.
@@ -355,6 +521,7 @@ impl MultiWindow {
     /// Queues an event (a pointer's move or button) for a window's next
     /// pass.
     pub fn queue(&mut self, viewport: ViewportId, event: Event) {
+        self.system_event(viewport);
         self.queued.entry(viewport).or_default().push(event);
     }
 
@@ -408,6 +575,7 @@ impl MultiWindow {
     /// The user asks to close a window (its close button), seen in its
     /// next pass.
     pub fn request_close(&mut self, viewport: ViewportId) {
+        self.system_event(viewport);
         self.info
             .entry(viewport)
             .or_insert_with(Self::fresh_info)
@@ -417,6 +585,7 @@ impl MultiWindow {
 
     /// Queues a key press and release for a window's next pass.
     pub fn press(&mut self, viewport: ViewportId, key: Key, modifiers: Modifiers) {
+        self.system_event(viewport);
         let events = self.queued.entry(viewport).or_default();
         for pressed in [true, false] {
             events.push(Event::Key {
