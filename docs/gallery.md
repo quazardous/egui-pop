@@ -537,6 +537,7 @@ Zones and blocks, the workbench, the layout controls, palettes, arrangements, th
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-edge-inactive-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-edge-inactive-pop-dark.png" width="200" alt="frame-edge-inactive-pop-dark"></a><br>frame-edge-inactive-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-edge-maximized-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-edge-maximized-pop-dark.png" width="200" alt="frame-edge-maximized-pop-dark"></a><br>frame-edge-maximized-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-edge-rounded-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-edge-rounded-pop-dark.png" width="200" alt="frame-edge-rounded-pop-dark"></a><br>frame-edge-rounded-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-empty-centre-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-empty-centre-pop-dark.png" width="200" alt="workbench-empty-centre-pop-dark"></a><br>workbench-empty-centre-pop-dark</td>
   </tr>
 </table>
 
