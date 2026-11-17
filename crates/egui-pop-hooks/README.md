@@ -37,7 +37,9 @@ one failing contribution never breaks the others.
   capability: `ask::<P>` queues a request for the calling thread and
   returns at once; `drain()` runs the thread's asks in ask order and
   reports what each did; `waiting()` counts them. An ask made during a
-  drain waits for the next one.
+  drain waits for the next one. egui-pop's application drains once per
+  pass after its panels and windows are drawn, and before it quits
+  (`AppHandle::ask`, `AppHandle::drain_asks`).
 - **Introspection.** `points()` lists every point and its listeners in
   the order they run, with their owners, constraints, deadlines, missing
   targets and counters (runs, failures, the last failure), for people,

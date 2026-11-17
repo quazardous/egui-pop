@@ -157,6 +157,9 @@ pub use egui_pop_hooks;
 
 mod activate;
 pub use activate::raise_main_window;
+mod commands;
+pub use commands::{COMMAND_POINTS, CommandAsk, CommandRun};
+pub(crate) use commands::{ask as ask_command_run, reason as command_refusal};
 pub mod drag;
 pub use drag::{DRAG_POINTS, DragBegin, DragDelivery, DragDrop, DragStart, TARGET as DRAG_TARGET};
 pub(crate) mod files;
@@ -553,9 +556,9 @@ pub const JOB_POINTS: [&str; 5] = [
 pub const PLUGIN_POINTS: [&str; 2] = [PluginConnect::ID, PluginDisconnect::ID];
 
 /// Every point egui-pop declares: the window, job, plugin, files,
-/// settings, drag, screen, panel state, layout and panel description
-/// points.
-pub const POINTS: [&str; 22] = [
+/// settings, drag, screen, panel state, layout, panel description and
+/// command points.
+pub const POINTS: [&str; 23] = [
     WindowOpen::ID,
     WindowClose::ID,
     WindowReparent::ID,
@@ -578,6 +581,7 @@ pub const POINTS: [&str; 22] = [
     PanelStateSet::ID,
     LayoutChanged::ID,
     PanelDescribe::ID,
+    CommandRun::ID,
 ];
 
 /// egui-pop's contract table (ADR 0030): every point it declares on the
@@ -636,6 +640,10 @@ pub const CONTRACT: &[PointDecl] = &[
     PointDecl::of::<PanelDescribe>(
         "A declared panel is described, by its id: its title, whether it is a palette, and its kind (view, control or mixed: whether it edits), the kind whose mark its chrome shows; asked on the interface's thread.",
     ),
+    PointDecl::of::<CommandRun>(
+        "A command is about to run, whatever asked it (a key, the palette, a menu, a toolbar, an agent): a listener may refuse it with a reason, and the handler does not run; fail-closed, so a listener that fails refuses it too. `command.refused` names who refused and why.",
+    )
+    .fail_closed(),
 ];
 
 /// What owns egui-pop's own listeners.
@@ -849,9 +857,12 @@ impl Bus {
         let wake: Arc<Mutex<Option<egui::Context>>> = Arc::default();
         {
             let wake = wake.clone();
+            // Local listeners queued and requests asked for after the
+            // drawing both wait for the main window's pass, whichever
+            // window asked: it runs them (`run_pending`, `drain_asks`).
             kernel.on_pending(move |_| {
                 if let Some(ctx) = lock(&wake).as_ref() {
-                    ctx.request_repaint();
+                    ctx.request_repaint_of(ViewportId::ROOT);
                 }
             });
         }
@@ -1099,6 +1110,82 @@ impl AppHandle {
             log::error!(target: "egui_pop", "{f}");
         }
         ran
+    }
+
+    /// Asks the request `P` now and hears it after the drawing: its
+    /// listeners run at the bus's next drain on this thread
+    /// ([`AppHandle::drain_asks`]), which the application makes once per
+    /// pass after the panels and windows are drawn, and once more before
+    /// it quits. For code that cannot be re-entered while it draws (a
+    /// panel with its state borrowed). The ask's number; `None` when the
+    /// application's bus does not offer the `Defer` capability
+    /// ([`bus_contract::Bus::defer`]), the caller then asking it at once
+    /// or keeping it.
+    ///
+    /// Asked in a detached panel's window, drawn inside the main window's
+    /// pass, it is heard at the end of that pass. Asked in an application
+    /// window (a deferred viewport, drawn on the same thread after the
+    /// main window), it waits in the same queue for the main window's
+    /// next pass, which is asked for.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn ask<P: Point>(&self, input: P::Input, value: P::Value) -> Option<u64>
+    where
+        P::Value: Clone,
+    {
+        let bus = self.bus();
+        let defer = bus.defer()?;
+        Some(defer.ask::<P>(input, value))
+    }
+
+    /// Runs the requests asked on this thread for after the drawing
+    /// ([`AppHandle::ask`], or [`bus_contract::Defer`] on the
+    /// application's bus), in ask order, with this application as
+    /// [`asking`]; what each did, failures logged and refusals noted.
+    /// An ask made by a listener while it runs waits for the next drain.
+    /// A drain that ran something asks for a pass, so what it changed is
+    /// drawn. Empty when nothing waits or the bus has no `Defer`.
+    ///
+    /// The application calls it once per pass after the panels and
+    /// windows are drawn ([`crate::App::show`]) and before it quits
+    /// ([`crate::App::exit`]); a host drawing the application in its own
+    /// way may call it too.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn drain_asks(&self) -> Vec<bus_contract::PendingRun> {
+        let bus = self.bus();
+        let Some(defer) = bus.defer() else {
+            return Vec::new();
+        };
+        if defer.waiting() == 0 {
+            return Vec::new();
+        }
+        ASKING.with_borrow_mut(|a| a.push(self.downgrade()));
+        let _asking = Asking;
+        let ran = defer.drain();
+        for r in &ran {
+            for f in &r.failures {
+                log::error!(target: "egui_pop", "{f}");
+            }
+            if let Some(refused) = &r.refused {
+                log::info!(target: "egui_pop", "{refused}");
+            }
+        }
+        if !ran.is_empty() {
+            self.egui().request_repaint_of(ViewportId::ROOT);
+        }
+        ran
+    }
+
+    /// How many requests wait for this thread's next drain
+    /// ([`AppHandle::drain_asks`]): zero when the bus has no `Defer`.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn asks_waiting(&self) -> usize {
+        self.bus().defer().map_or(0, |d| d.waiting())
     }
 
     /// The application's bus: the one given to `AppBuilder::bus`, or the

@@ -6674,15 +6674,21 @@ impl App {
         }
     }
 
-    /// The application closes: the `on_exit` functions, then the
-    /// `app.exit` step, whose default writes what is still waiting
+    /// The application closes: the requests still asked for after the
+    /// drawing heard ([`AppHandle::drain_asks`]), the `on_exit`
+    /// functions, then the `app.exit` step, whose default writes what is still waiting
     /// (`App::save`). A vetoed exit writes nothing more: what changed was
     /// written already, a second after it changed.
     pub fn exit(&mut self) -> Outcome {
         let handle = self.handle.clone();
+        // No request asked for after the drawing is lost on the way out:
+        // those waiting are heard before the `on_exit` functions, and
+        // those they ask after them.
+        handle.drain_asks();
         for f in &mut self.on_exit {
             f(&handle);
         }
+        drain_before_exit(&handle);
         let this: &App = self;
         handle.step(&STEP_EXIT, json!({}), |_, _| {
             this.save()
@@ -6881,6 +6887,30 @@ impl App {
                 return Reply::Done(Err(msg));
             }
         };
+        // Its listeners on the bus (`command.run`), in their order, before
+        // the handler: one may refuse it, and a failing one refuses it
+        // (fail-closed). Nobody listening, it goes on as before.
+        let mut ask = crate::bus::CommandAsk::new(command.clone(), args.clone(), origin.clone());
+        if !window.is_empty() {
+            ask = ask.window(window);
+        }
+        if let Some(refused) = crate::bus::ask_command_run(&self.handle, ask) {
+            let msg = crate::bus::command_refusal(&refused);
+            self.handle.publish(
+                &source_of(&origin),
+                None,
+                "command.refused",
+                json!({
+                    "command": command,
+                    "origin": source_of(&origin),
+                    "reason": msg,
+                    "by": refused.listener,
+                    "failed": refused.failed,
+                }),
+            );
+            self.record(command, &args, &origin, Err(msg.clone()));
+            return Reply::Done(Err(msg));
+        }
         let source = source_of(&origin);
         let _running = RunningCommand::new(&self.handle, command, self.reg.commands.owner(command));
         let seq = self.handle.publish_now(
@@ -7357,6 +7387,11 @@ impl App {
         for command in egui_pop_core::indicator::take_commands(&ctx) {
             self.handle.run(command, Json::Null);
         }
+        // The requests asked while the panels and windows drew, heard now
+        // that nothing is borrowed for the drawing (`AppHandle::ask`):
+        // in this pass, after it drew. One asked by them waits for the
+        // next pass's drain.
+        self.handle.drain_asks();
         self.process_requests();
         // What this pass changed (a Settings row, a bound widget), said
         // and followed in it.
@@ -7647,6 +7682,23 @@ const RESOLUTION_CODES: &[&str] = &[
     "unknown-step",
     "step-replaced-twice",
 ];
+
+/// The asks made by the `on_exit` functions, and by the listeners that
+/// hear them, drained before the application closes: a few rounds at
+/// most, so a listener asking again each time cannot hold the exit; what
+/// is left is said.
+fn drain_before_exit(handle: &AppHandle) {
+    const ROUNDS: usize = 8;
+    for _ in 0..ROUNDS {
+        if handle.drain_asks().is_empty() {
+            return;
+        }
+    }
+    let left = handle.asks_waiting();
+    if left > 0 {
+        log::warn!(target: "egui_pop", "{left} request(s) asked for after the drawing still wait at exit");
+    }
+}
 
 #[cfg(feature = "eframe")]
 impl eframe::App for App {

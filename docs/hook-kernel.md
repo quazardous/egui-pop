@@ -120,6 +120,32 @@ assert!(report.failures.is_empty());
   runs the queue in order with `run_pending()`. egui-pop's application
   calls `AppHandle::run_pending` once per pass, before the `On::Pass`
   handlers, and asks for a pass when work is queued.
+- **Requests heard after the drawing** (the contract's `Defer`
+  capability, which the kernel offers): code that cannot be re-entered
+  while it draws (a panel with its state borrowed) asks a request with
+  `AppHandle::ask::<P>` (or `bus.defer()?.ask::<P>`); it returns at once
+  and the listeners run at the thread's next drain. egui-pop's
+  application drains (`AppHandle::drain_asks`) once per pass, after the
+  main window's panels, its detached panels' windows and its zones are
+  drawn, so an ask made while drawing is heard in the same pass; and
+  before it quits (`App::exit`: before the `on_exit` functions, and
+  after them for what they asked), so no ask is lost. An ask made by a
+  listener during a drain waits for the next one. A drain that ran
+  something asks for a pass. An application window (a deferred
+  viewport) is drawn on the same thread after the main window: its asks
+  wait in the same queue, and the main window's next pass is asked for.
+  `AppHandle::asks_waiting` counts what waits; on a bus without `Defer`,
+  `ask` answers `None` and the caller asks at once or keeps its own
+  queue.
+- **Refusals and fail-closed points**: a listener on a request returns
+  `HookError::refuse(reason)` and the request stops there; on a point
+  declared `fail_closed`, a listener's error, panic or missed deadline
+  refuses it too. egui-pop's `command.run` (`bus::CommandRun`) is such a
+  point: every command run (a key, the palette, a menu, a toolbar, an
+  agent) is asked on it before its handler; a refusal stops the run,
+  which never reaches the host, and is journaled as `command.refused`
+  with `by` (the listener), `reason` and `failed`. With nobody listening,
+  commands run as before.
 
 ## Accessibility
 
@@ -141,6 +167,9 @@ ids and mismatched types; `alter` keeping only successful edits;
 `collect` in order; inline and threaded deadlines and their resolution;
 sinks; introspection; `forget` and `unlisten`; re-entry and emits across
 threads; local listeners in order, deferred from another thread, removed
-from any thread. `crates/egui-pop-api/tests/app_bus.rs`: a local listener
+from any thread. `crates/egui-pop-api/tests/bus_defer.rs`: an ask made in a panel heard after
+it in the same pass, asks made before and during exit heard, a palette
+command refused by a `command.run` listener, a failing listener refusing
+on the fail-closed point. `crates/egui-pop-api/tests/app_bus.rs`: a local listener
 on `window.close` in its place, and run at the next pass when the
 request comes from a worker. The README's examples run as doc tests.
