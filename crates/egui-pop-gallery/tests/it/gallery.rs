@@ -5133,6 +5133,99 @@ fn the_sections_page_in_every_pop_theme() {
 }
 
 #[test]
+fn the_folds_page_in_every_pop_theme() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in POP_THEMES {
+        let mut h = harness(options(theme, Density::Comfortable, "folds"));
+        h.run();
+        results.add(h.try_page_shot(format!("folds-{theme}")));
+    }
+}
+
+#[test]
+fn the_folds_page_folds_and_opens_by_click_and_keys() {
+    use egui::accesskit::Role;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "folds"));
+    h.run();
+    // A fold's band is a button named by its title and count, expanded
+    // or not; its actions do not fold it.
+    let expanded = |h: &Harness<'_, Gallery>, label: &str| {
+        h.get_by_label(label).accesskit_node().data().is_expanded()
+    };
+    let _ = h.get_by_role_and_label(Role::Button, "Folders, 8");
+    assert_eq!(expanded(&h, "Folders, 8"), Some(true));
+    assert_eq!(expanded(&h, "Imports"), Some(false));
+    assert!(h.query_by_label("No import yet").is_none());
+    h.get_by_label("Rescan").click();
+    h.run();
+    assert_eq!(expanded(&h, "Folders, 8"), Some(true));
+    assert!(h.query_by_label("Rescan").is_some());
+    // A click opens a fold, its body shown.
+    h.get_by_label("Imports").click();
+    h.run();
+    assert_eq!(expanded(&h, "Imports"), Some(true));
+    assert!(h.query_by_label("No import yet").is_some());
+    // Left folds it and Right opens it while it has the keyboard; Enter
+    // and Space toggle it.
+    h.get_by_label("Albums, 2").focus();
+    h.run();
+    h.key_press(egui::Key::ArrowLeft);
+    h.run();
+    assert_eq!(expanded(&h, "Albums, 2"), Some(false));
+    assert!(h.query_by_label("Summer").is_none());
+    h.key_press(egui::Key::ArrowRight);
+    h.run();
+    assert_eq!(expanded(&h, "Albums, 2"), Some(true));
+    assert!(h.query_by_label("Summer").is_some());
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert_eq!(expanded(&h, "Albums, 2"), Some(false));
+    h.key_press(egui::Key::Space);
+    h.run();
+    assert_eq!(expanded(&h, "Albums, 2"), Some(true));
+}
+
+#[test]
+fn the_folds_page_tree_rows_toggle_and_keep_their_state_by_id() {
+    use egui::accesskit::Role;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "folds"));
+    h.run();
+    // A branch's toggle is a disclosure triangle named after its row; a
+    // leaf has none.
+    let photos = h.get_by_role_and_label(Role::DisclosureTriangle, "Show or hide Photos");
+    assert_eq!(photos.accesskit_node().data().is_expanded(), Some(true));
+    let year = h.get_by_role_and_label(Role::DisclosureTriangle, "Show or hide 2024");
+    assert_eq!(year.accesskit_node().data().is_expanded(), Some(false));
+    assert!(h.query_by_label("Show or hide 2025").is_none());
+    assert!(h.query_by_label("Show or hide Downloads").is_none());
+    assert!(h.query_by_label("Holidays").is_none());
+    // A click opens a branch; Left folds it with the keyboard.
+    h.get_by_label("Show or hide 2024").click();
+    h.run();
+    assert!(h.query_by_label("Holidays").is_some());
+    h.get_by_label("Show or hide 2024").focus();
+    h.run();
+    h.key_press(egui::Key::ArrowLeft);
+    h.run();
+    assert!(h.query_by_label("Holidays").is_none());
+    h.key_press(egui::Key::ArrowRight);
+    h.run();
+    assert!(h.query_by_label("Holidays").is_some());
+    // Folded, a branch stays so on the next passes, its rows gone.
+    h.get_by_label("Show or hide Photos").click();
+    h.run();
+    h.run();
+    assert_eq!(
+        h.get_by_label("Show or hide Photos")
+            .accesskit_node()
+            .data()
+            .is_expanded(),
+        Some(false)
+    );
+    assert!(h.query_by_label("2024").is_none());
+}
+
+#[test]
 fn the_sections_page_folds_opens_and_resizes_its_sections() {
     use egui::accesskit::Role;
     use egui_pop::core::sections::laid_out;
