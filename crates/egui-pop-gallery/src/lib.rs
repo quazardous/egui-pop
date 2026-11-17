@@ -40,7 +40,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 71] = [
+pub const PAGES: [&str; 72] = [
     "overview",
     "tokens",
     "builtins",
@@ -50,6 +50,7 @@ pub const PAGES: [&str; 71] = [
     "icons",
     "indicators",
     "sections",
+    "folds",
     "motion",
     "values",
     "history",
@@ -231,6 +232,16 @@ pub fn builder(options: &Options) -> AppBuilder {
             weight: 32,
             show: pages::sections::show,
             playground: Some(pages::sections::playground),
+        })
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.folds"),
+            story: StoryId::from_static("folds"),
+            title: "Folds",
+            description: "Groups that fold inside a panel under their band (a title, a count, actions at the right end), and a hand-built tree's rows with their toggles, leaves lined up: by click, Left, Right, Space and Enter, kept by id.",
+            group: "Components",
+            weight: 33,
+            show: pages::folds::show,
+            playground: Some(pages::folds::playground),
         })
         .plugin(PagePlugin {
             plugin: PluginId::from_static("gallery.motion"),

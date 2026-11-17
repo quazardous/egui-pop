@@ -1687,6 +1687,8 @@ egui-pop-files-view-grid = Grid
 
 egui-pop-files-view-list = List
 
+egui-pop-fold-toggle = Show or hide { $item }
+
 egui-pop-fonts-numbers = Values line their digits up:
 
 egui-pop-fonts-origin-bundled = Shipped with egui

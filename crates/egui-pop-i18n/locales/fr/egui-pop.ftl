@@ -1511,6 +1511,8 @@ egui-pop-scrollable-content = Contenu défilant
 
 egui-pop-section-resize = Redimensionner { $section }
 
+egui-pop-fold-toggle = Afficher ou masquer { $item }
+
 egui-pop-dialog-resize = Redimensionner { $dialog }
 
 egui-pop-settings-at-default = { $setting } est à sa valeur par défaut
