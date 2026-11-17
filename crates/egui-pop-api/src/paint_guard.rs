@@ -115,7 +115,7 @@ pub(crate) fn painted_since(ctx: &egui::Context, mark: &Mark) -> bool {
                 .into_iter()
                 .filter(|l| mark.0.iter().all(|(m, _)| m != l)),
         )
-        .any(|l| has_content(ctx, l, from(l), None))
+        .any(|l| has_content(ctx, l, from(l), None, &[]))
 }
 
 /// A closed window's page, drawn by its passes until the backend drops
@@ -290,6 +290,10 @@ pub(crate) struct Guard {
     start: Option<(LayerId, usize)>,
     /// The first pass was said in the log.
     first_said: bool,
+    /// What the shell painted in this pass that says it has nothing to
+    /// show (the empty centre's "Drop a panel here"): the shapes' ranges
+    /// in their layer, not counted as content.
+    placeholders: Vec<(LayerId, std::ops::Range<usize>)>,
     /// Since when the window paints nothing, and for how many passes.
     empty: Option<(Instant, u32)>,
     /// The fallback page is shown.
@@ -309,6 +313,7 @@ impl Default for Guard {
             pass_start: None,
             start: None,
             first_said: false,
+            placeholders: Vec::new(),
             empty: None,
             shown: false,
             delay: Some(DEFAULT_DELAY),
@@ -336,14 +341,22 @@ fn shapes(ctx: &egui::Context, layer: LayerId) -> usize {
 }
 
 /// Whether the layer holds content from `from` up to `to` (its end
-/// without one).
-fn has_content(ctx: &egui::Context, layer: LayerId, from: usize, to: Option<usize>) -> bool {
+/// without one), the shapes in `skip` (placeholders) left out.
+fn has_content(
+    ctx: &egui::Context,
+    layer: LayerId,
+    from: usize,
+    to: Option<usize>,
+    skip: &[(LayerId, std::ops::Range<usize>)],
+) -> bool {
+    let skipped = |i: usize| skip.iter().any(|(l, r)| *l == layer && r.contains(&i));
     ctx.graphics(|g| {
         g.get(layer).is_some_and(|l| {
             l.all_entries()
+                .enumerate()
                 .take(to.unwrap_or(usize::MAX))
                 .skip(from)
-                .any(|s| is_content(&s.shape))
+                .any(|(i, s)| !skipped(i) && is_content(&s.shape))
         })
     })
 }
@@ -384,6 +397,23 @@ impl AppHandle {
         let mut g = self.0.paint_guard.borrow_mut();
         g.pass_start = Some((layer, shapes(ui.ctx(), layer)));
         g.start = None;
+        g.placeholders.clear();
+    }
+
+    /// Draws `add`, a placeholder saying there is nothing to show (the
+    /// empty centre's "Drop a panel here"): what it paints is not content
+    /// for the guard, so a window showing only placeholders still gets
+    /// the fallback page and its way back.
+    pub(crate) fn placeholder(&self, ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
+        let layer = ui.layer_id();
+        let from = shapes(ui.ctx(), layer);
+        add(ui);
+        let to = shapes(ui.ctx(), layer);
+        self.0
+            .paint_guard
+            .borrow_mut()
+            .placeholders
+            .push((layer, from..to));
     }
 
     /// The shell's content starts here in `ui`'s layer (what was painted
@@ -422,10 +452,18 @@ impl AppHandle {
 
     fn watch_empty(&self, ui: &Ui, page: bool) {
         let ctx = ui.ctx();
-        let (pass_start, start, delay, shown, first_said) = {
+        let (pass_start, start, delay, shown, first_said, skip) = {
             let mut g = self.0.paint_guard.borrow_mut();
             let first = std::mem::replace(&mut g.first_said, true);
-            (g.pass_start.take(), g.start.take(), g.delay, g.shown, first)
+            let skip = std::mem::take(&mut g.placeholders);
+            (
+                g.pass_start.take(),
+                g.start.take(),
+                g.delay,
+                g.shown,
+                first,
+                skip,
+            )
         };
         // Without a shell (a window's content moved into the main window,
         // a pass that stopped before its title bar), the whole pass is
@@ -435,10 +473,10 @@ impl AppHandle {
         };
         // The title bar drew something: `None` when no shell was drawn.
         let title_bar = match (pass_start, start) {
-            (Some((_, a)), Some((_, b))) => Some(has_content(ctx, layer, a, Some(b))),
+            (Some((_, a)), Some((_, b))) => Some(has_content(ctx, layer, a, Some(b), &skip)),
             _ => None,
         };
-        let content = has_content(ctx, layer, from, None);
+        let content = has_content(ctx, layer, from, None, &skip);
         if !first_said {
             log::info!(
                 target: "egui_pop",
