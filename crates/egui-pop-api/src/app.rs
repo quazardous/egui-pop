@@ -6505,6 +6505,11 @@ impl App {
             LAYOUT_SAVE,
             bus_contract::ListenOpts::new().owner(OWNER),
             move |_, ()| {
+                // Without persistence, nothing is saved (as the autosave
+                // of the settings).
+                if persist.is_none() {
+                    return Ok(());
+                }
                 let Some(app) = asking() else { return Ok(()) };
                 match save_layout(&app, persist.clone()) {
                     Some(Outcome::Done(Err(e))) => Err(format!("saving the layout: {e}").into()),
