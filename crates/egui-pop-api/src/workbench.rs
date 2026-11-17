@@ -631,6 +631,9 @@ pub enum Change {
     /// A floating panel's group is resized (its frame, in points), or
     /// sized by its content again (`None`).
     ResizePalette(PanelId, Option<[f32; 2]>),
+    /// A floating panel's group is resized and moved at once (its size,
+    /// then its place): a left or top edge dragged.
+    ResizePaletteAt(PanelId, [f32; 2], [f32; 2]),
     /// A floating panel rolls up to its header band (`true`) or down.
     Roll(PanelId, bool),
     /// A floating panel is pinned (`true`) or unpinned.
@@ -784,6 +787,10 @@ impl Change {
                 crate::palettes::STEP_RESIZE,
                 json!({ "panel": p, "size": size }),
             ),
+            Change::ResizePaletteAt(p, size, pos) => (
+                crate::palettes::STEP_RESIZE,
+                json!({ "panel": p, "size": size, "pos": pos }),
+            ),
             Change::Roll(p, on) => (
                 crate::palettes::STEP_ROLL,
                 json!({ "panel": p, "rolled": on }),
@@ -817,7 +824,7 @@ impl Change {
             Change::Ungroup(..) | Change::UngroupTabs(..) => "palette.ungrouped",
             Change::CloseGroup(..) => "palette.group_closed",
             Change::MovePalette(..) => "palette.moved",
-            Change::ResizePalette(..) => "palette.resized",
+            Change::ResizePalette(..) | Change::ResizePaletteAt(..) => "palette.resized",
             Change::Roll(..) => "palette.rolled",
             Change::Pin(..) => "palette.pinned",
             _ => return None,
@@ -887,7 +894,10 @@ impl Change {
             "palette.open" => Change::OpenPalette(panel),
             "palette.float" => Change::Float(panel, pos_of(args)?),
             "palette.move" => Change::MovePalette(panel, pos_of(args)?),
-            "palette.resize" => Change::ResizePalette(panel, size_of(args)?),
+            "palette.resize" => match (size_of(args)?, args.get("pos")) {
+                (Some(size), Some(_)) => Change::ResizePaletteAt(panel, size, pos_of(args)?),
+                (size, _) => Change::ResizePalette(panel, size),
+            },
             "palette.ungroup" if flag_off("tabs") => Change::UngroupTabs(panel, pos_of(args)?),
             "palette.ungroup" => Change::Ungroup(panel, pos_of(args)?),
             "palette.close_group" => Change::CloseGroup(panel),
@@ -1662,6 +1672,16 @@ impl Workbench {
                 f.size = *size;
                 self.anchor_palette(p, false);
                 json!({ "panel": p, "size": size })
+            }
+            Change::ResizePaletteAt(p, size, pos) => {
+                let f = self
+                    .layout
+                    .floating_mut(p)
+                    .ok_or_else(|| format!("`{p}` does not float"))?;
+                f.size = Some(*size);
+                f.pos = *pos;
+                self.anchor_palette(p, false);
+                json!({ "panel": p, "size": size, "pos": pos })
             }
             Change::Roll(p, on) => {
                 let m = self

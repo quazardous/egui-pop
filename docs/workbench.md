@@ -813,8 +813,10 @@ assert!(app.handle().layout().floating_of(&TOOLS).is_some());
     back as it does any panel missing from a layout (a palette floats
     again on its own, a panel opening closed stays closed).
 - **Sizes.** A palette is sized by its content until it is resized:
-  its right edge, its bottom edge and the corner between them (the
-  `palette.grip` token's width) drag its size, kept between the
+  each of its four edges and four corners (the `palette.grip` token's
+  width, each with the cursor of its direction) drag its size, a left
+  or top edge keeping the opposite edge where it is (the step
+  `palette.resize` then carries the new place, `pos`), kept between the
   `palette.min-width` and `palette.max-width` tokens (never narrower
   than its panels' least width), `palette.min-height` and
   `palette.max-height`, and inside the workbench. Its content scrolls
