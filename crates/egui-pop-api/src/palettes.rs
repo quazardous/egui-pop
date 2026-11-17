@@ -56,8 +56,8 @@
 //! ([`Member::tabs`]), one level deep, whose band drags it out whole.
 //!
 //! **Sizes.** A palette is sized by its content until the user resizes
-//! it: its right edge, its bottom edge and the corner between them drag
-//! its size (the `palette.grip` token's width), kept between the
+//! it: each of its edges and corners drag its size (a left or top edge
+//! keeping the opposite one where it is) (the `palette.grip` token's width), kept between the
 //! `palette.min-width` and `palette.max-width` tokens (and its panels'
 //! own least width), `palette.min-height` and `palette.max-height`, and
 //! inside the workbench. The size is the group's
@@ -74,7 +74,8 @@
 //! the whole group), `palette.move` (`{panel, pos}`, once a drag is
 //! dropped), `palette.resize` (`{panel, size}`, `size` being
 //! `[width, height]` or `null` for the content's, once an edge is
-//! dropped), `palette.roll` (`{panel, rolled}`), `palette.pin`
+//! dropped; a left or top edge dropped runs `palette.move` after it),
+//! `palette.roll` (`{panel, rolled}`), `palette.pin`
 //! (`{panel, pinned}`), `palette.group` (`{panels, into, at}`),
 //! `palette.ungroup` (`{panel, pos}`, `tabs: true` for a nested tab group
 //! whole) and `palette.close_group` (`{panel}`); `pos` is the top-left
@@ -124,7 +125,8 @@ pub const STEP_DOCK: StepId = StepId::from_static("palette.dock");
 pub const STEP_MOVE: StepId = StepId::from_static("palette.move");
 /// A floating panel's group is resized, once an edge is dropped, or
 /// sized by its content again (`{panel, size}`, `size` being
-/// `[width, height]` in points or `null`).
+/// `[width, height]` in points or `null`; a left or top edge dragged
+/// runs `palette.move` after it, for the place).
 pub const STEP_RESIZE: StepId = StepId::from_static("palette.resize");
 /// A floating panel rolls up or down (`{panel, rolled}`).
 pub const STEP_ROLL: StepId = StepId::from_static("palette.roll");
@@ -502,10 +504,56 @@ pub(crate) struct PaletteResize {
     pub panel: PanelId,
     /// The group's size before the drag (`None`: its content's).
     pub saved: Option<[f32; 2]>,
-    /// The size drawn when the drag started.
-    pub from: [f32; 2],
-    /// The edges dragged: the right one, the bottom one.
-    pub edges: [bool; 2],
+    /// The frame drawn when the drag started.
+    pub from: Rect,
+    /// The edges dragged, on each axis.
+    pub edges: Sides,
+}
+
+/// The edges a resize drags, on each axis (x, then y): `-1` the start
+/// edge (left, top), `1` the end edge (right, bottom), `0` neither.
+pub(crate) type Sides = [i8; 2];
+
+/// A palette's frame once the edges `sides` say are dragged by `delta`
+/// from `start`: a start edge moves its side and keeps the opposite one
+/// where it is. Its size is kept between `least` and `most`, and inside
+/// `bounds`.
+pub(crate) fn resize_rect(
+    start: Rect,
+    delta: Vec2,
+    sides: Sides,
+    least: Vec2,
+    most: Vec2,
+    bounds: Rect,
+) -> Rect {
+    let (mut min, mut max) = (start.min, start.max);
+    for axis in 0..2 {
+        let lo = least[axis];
+        let hi = most[axis].max(lo);
+        match sides[axis] {
+            1 => {
+                let at = start.max[axis] + delta[axis];
+                let top = (min[axis] + hi).min(bounds.max[axis]).max(min[axis] + lo);
+                max[axis] = at.min(top).max(min[axis] + lo);
+            }
+            -1 => {
+                let at = start.min[axis] + delta[axis];
+                let bottom = (max[axis] - hi).max(bounds.min[axis]).min(max[axis] - lo);
+                min[axis] = at.max(bottom).min(max[axis] - lo);
+            }
+            _ => {}
+        }
+    }
+    Rect::from_min_max(min, max)
+}
+
+/// The largest size the `palette.max-width` and `palette.max-height`
+/// tokens give a palette.
+fn max_size(ctx: &egui::Context) -> Vec2 {
+    Vec2::new(
+        palette_dimension(ctx, "palette.max-width", 640.0),
+        palette_dimension(ctx, "palette.max-height", 900.0),
+    )
 }
 
 /// A palette's size once its right edge (`edges[0]`) and bottom edge
@@ -546,12 +594,7 @@ fn size_limits(ctx: &egui::Context, least_width: f32, pos: Pos2, content: Rect) 
         palette_dimension(ctx, "palette.min-width", 120.0).max(least_width),
         palette_dimension(ctx, "palette.min-height", 64.0),
     );
-    let most = Vec2::new(
-        palette_dimension(ctx, "palette.max-width", 640.0),
-        palette_dimension(ctx, "palette.max-height", 900.0),
-    )
-    .min(content.max - pos)
-    .max(least);
+    let most = max_size(ctx).min(content.max - pos).max(least);
     (least, most)
 }
 
@@ -585,66 +628,81 @@ fn scrolled(ui: &mut Ui, id: Id, height: f32, add: impl FnOnce(&mut Ui)) {
 }
 
 /// A palette's resize edges, over its frame drawn at `rect`, `grip`
-/// wide: the right edge, and when it is not rolled up (`vertical`) the
-/// bottom edge and the corner between them; each with the edges it
-/// drags.
+/// wide: the left and right edges, and when it is not rolled up
+/// (`vertical`) the top and bottom edges and the four corners; each with
+/// the edges it drags, and the cursor of its direction.
 fn resize_edges(
     ui: &mut Ui,
     id: Id,
     rect: Rect,
     grip: f32,
     vertical: bool,
-) -> Vec<(egui::Response, [bool; 2])> {
+) -> Vec<(egui::Response, Sides)> {
+    use egui_pop_core::pointer::DragKind as Kind;
     let half = grip.max(2.0) / 2.0;
     let sense = egui::Sense::CLICK | egui::Sense::DRAG;
-    let right = Rect::from_x_y_ranges(
-        rect.right() - half..=rect.right() + half,
-        rect.top()..=rect.bottom(),
-    );
-    let mut out = vec![(
-        ui.interact(right, id.with("resize.right"), sense),
-        [true, false],
-    )];
+    let x = |at: f32| at - half..=at + half;
+    let mut grips: Vec<(Rect, Sides, &str)> = vec![
+        (
+            Rect::from_x_y_ranges(x(rect.left()), rect.y_range()),
+            [-1, 0],
+            "left",
+        ),
+        (
+            Rect::from_x_y_ranges(x(rect.right()), rect.y_range()),
+            [1, 0],
+            "right",
+        ),
+    ];
     if vertical {
-        let bottom = Rect::from_x_y_ranges(
-            rect.left()..=rect.right(),
-            rect.bottom() - half..=rect.bottom() + half,
-        );
-        let corner = Rect::from_center_size(rect.right_bottom(), Vec2::splat(4.0 * half));
-        out.push((
-            ui.interact(bottom, id.with("resize.bottom"), sense),
-            [false, true],
-        ));
-        out.push((
-            ui.interact(corner, id.with("resize.corner"), sense),
-            [true, true],
-        ));
+        let corner = |p: Pos2| Rect::from_center_size(p, Vec2::splat(4.0 * half));
+        grips.extend([
+            (
+                Rect::from_x_y_ranges(rect.x_range(), x(rect.top())),
+                [0, -1],
+                "top",
+            ),
+            (
+                Rect::from_x_y_ranges(rect.x_range(), x(rect.bottom())),
+                [0, 1],
+                "bottom",
+            ),
+            (corner(rect.left_top()), [-1, -1], "corner.left_top"),
+            (corner(rect.right_top()), [1, -1], "corner.right_top"),
+            (corner(rect.left_bottom()), [-1, 1], "corner.left_bottom"),
+            (corner(rect.right_bottom()), [1, 1], "corner"),
+        ]);
     }
-    for (r, edges) in &out {
-        // A click on an edge does nothing: dragging is its only action.
-        egui_pop_core::pointer::drag_cursor(
-            r,
-            match edges {
-                [true, true] => egui_pop_core::pointer::DragKind::ResizeNwSe,
-                [true, false] => egui_pop_core::pointer::DragKind::ResizeHorizontal,
-                _ => egui_pop_core::pointer::DragKind::ResizeVertical,
-            },
-        )
-        .clicks(false);
-    }
-    out
+    grips
+        .into_iter()
+        .map(|(r, sides, name)| {
+            let response = ui.interact(r, id.with(("resize", name)), sense);
+            let kind = match sides {
+                [0, _] => Kind::ResizeVertical,
+                [_, 0] => Kind::ResizeHorizontal,
+                [a, b] if a == b => Kind::ResizeNwSe,
+                _ => Kind::ResizeNeSw,
+            };
+            // A click on an edge does nothing: dragging is its only action.
+            egui_pop_core::pointer::drag_cursor(&response, kind).clicks(false);
+            (response, sides)
+        })
+        .collect()
 }
 
 /// Follows a palette's resize edges: a drag resizes its group live
-/// (between `limits`), the drop resizes it through `palette.resize`
-/// (anchoring it again); a double click gives it its content's size back.
+/// (between `limits`, inside `content`; a left or top edge moves it too,
+/// the opposite edge staying), the drop resizes it through
+/// `palette.resize` (anchoring it again); a double click gives it its
+/// content's size back.
 fn follow_resize(
     app: &AppHandle,
     ctx: &egui::Context,
     g: &FloatingGroup,
     rect: Rect,
-    edges: &[(egui::Response, [bool; 2])],
+    edges: &[(egui::Response, Sides)],
     (least, most): (Vec2, Vec2),
+    content: Rect,
 ) {
     let lead = g.lead().clone();
     if edges.iter().any(|(r, _)| r.double_clicked()) {
@@ -664,15 +722,16 @@ fn follow_resize(
         let (Some(origin), Some(now)) = (origin, now) else {
             return;
         };
-        let from = mine
-            .as_ref()
-            .map_or([rect.width(), rect.height()], |r| r.from);
-        let size = resize_by(Vec2::from(from), now - origin, *e, least, most);
+        let from = mine.as_ref().map_or(rect, |r| r.from);
+        let to = resize_rect(from, now - origin, *e, least, most, content);
+        let size = to.size();
+        let at = to.min - content.min;
         let mut wb = app.workbench_mut();
         let mut changed = false;
         if let Some(fl) = wb.layout.floating_mut(&lead) {
-            changed = fl.size != Some([size.x, size.y]);
+            changed = fl.size != Some([size.x, size.y]) || fl.pos != [at.x, at.y];
             fl.size = Some([size.x, size.y]);
+            fl.pos = [at.x, at.y];
         }
         if mine.is_none() {
             // Measured again from the new drag on: the content may have
@@ -693,16 +752,35 @@ fn follow_resize(
     let Some(r) = mine else {
         return;
     };
-    // Dropped: back to the size it had, then the step decides.
-    let to = {
+    // Dropped: back to the size and the place it had, then the step
+    // decides (with the place, when a left or top edge moved it).
+    let start = r.from.min - content.min;
+    let start = [start.x, start.y];
+    let (to, at) = {
         let mut wb = app.workbench_mut();
         wb.palette_resize = None;
-        wb.layout
-            .floating_mut(&lead)
-            .and_then(|fl| std::mem::replace(&mut fl.size, r.saved))
+        match wb.layout.floating_mut(&lead) {
+            Some(fl) => (
+                std::mem::replace(&mut fl.size, r.saved),
+                std::mem::replace(&mut fl.pos, start),
+            ),
+            None => (None, start),
+        }
     };
-    if to.is_some() && to != r.saved {
-        run(app, &lead, Some(Change::ResizePalette(lead.clone(), to)));
+    let moved = at != start;
+    if to.is_some() && (moved || to != r.saved) {
+        // A left or top edge moved it too: the size, then the place, each
+        // by its own step; the place only once the size went through.
+        let out = app.change_workbench(Change::ResizePalette(lead.clone(), to));
+        match &out {
+            Some(Outcome::Done(Ok(_))) if moved => {
+                run(app, &lead, Some(Change::MovePalette(lead.clone(), at)));
+            }
+            Some(Outcome::Done(Err(e))) => {
+                app.workbench_refused(&format!("palette {lead}"), e);
+            }
+            _ => {}
+        }
     }
     ctx.request_repaint();
 }
@@ -933,7 +1011,7 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
         let mut asked = Asked::default();
         let mut moved: Option<band::Band> = None;
         let mut bands: Vec<MemberBand> = Vec::new();
-        let mut edges: Vec<(egui::Response, [bool; 2])> = Vec::new();
+        let mut edges: Vec<(egui::Response, Sides)> = Vec::new();
         let shown = egui::Area::new(id)
             .order(egui::Order::Middle)
             .fixed_pos(pos)
@@ -1142,7 +1220,7 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
         if let Some(b) = moved {
             follow(app, ctx, &g, rect, &b, &drag);
         }
-        follow_resize(app, ctx, &g, rect, &edges, (least, most));
+        follow_resize(app, ctx, &g, rect, &edges, (least, max_size(ctx)), content);
         for (mb, own) in bands.iter().zip(&own) {
             let kind = if mb.tabs {
                 DragKind::Tabs
@@ -1653,6 +1731,25 @@ pub(crate) fn magnet(ctx: &egui::Context) -> f32 {
 mod tests {
     use super::*;
     use egui::{pos2, vec2};
+
+    #[test]
+    fn resize_rect_keeps_the_opposite_edge() {
+        let (least, most) = (vec2(120.0, 64.0), vec2(640.0, 900.0));
+        let bounds = Rect::from_min_size(pos2(0.0, 0.0), vec2(1000.0, 800.0));
+        let start = Rect::from_min_size(pos2(300.0, 100.0), vec2(200.0, 300.0));
+        // The left edge, 40 out: 40 wider, the right edge still.
+        let r = resize_rect(start, vec2(-40.0, 0.0), [-1, 0], least, most, bounds);
+        assert_eq!(
+            r,
+            Rect::from_min_max(pos2(260.0, 100.0), pos2(500.0, 400.0))
+        );
+        // Never under the least width.
+        let r = resize_rect(start, vec2(500.0, 0.0), [-1, 0], least, most, bounds);
+        assert_eq!((r.width(), r.right()), (120.0, 500.0));
+        // The bottom-right corner, kept inside.
+        let r = resize_rect(start, vec2(900.0, 25.0), [1, 1], least, most, bounds);
+        assert_eq!(r.max, pos2(940.0, 425.0));
+    }
 
     fn bounds(w: f32, h: f32) -> Rect {
         Rect::from_min_size(pos2(10.0, 20.0), vec2(w, h))
