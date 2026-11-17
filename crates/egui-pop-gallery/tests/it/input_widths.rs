@@ -85,10 +85,11 @@ fn panel(width: f32) -> (Harness<'static>, Arc<Mutex<Drawn>>) {
             ui.scope_builder(UiBuilder::new().max_rect(row(2.0, width)), |ui| {
                 ui.set_clip_rect(panel);
                 ui.horizontal(|ui| {
-                    ui.label("Value");
+                    let l = ui.label("Value");
                     let r = NumberInput::new(&mut value, "Value", f64::MIN..=f64::MAX)
                         .unit("EV")
-                        .show(ui);
+                        .show(ui)
+                        .labelled_by(l.id);
                     d.field = Some(r.rect);
                 });
             });
