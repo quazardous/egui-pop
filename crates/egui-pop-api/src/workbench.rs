@@ -1958,7 +1958,9 @@ impl Workbench {
     /// The area a palette dropped at `at` docks in: a side or bottom area
     /// drawn there, or a closed one when the pointer is within `edge` of
     /// the areas' edges (narrower than for tabs: a palette snapped to an
-    /// edge must not dock); `None` over the centre (it floats there).
+    /// edge must not dock); `None` over the centre (it floats there),
+    /// unless the centre is empty: every panel moved out of it, it takes
+    /// the palette as it takes a dragged tab.
     pub fn dock_at(&self, at: Pos2, edge: f32) -> Option<Area> {
         let shown = |a: Area| !self.panels_in(a).is_empty();
         let c = self.content;
@@ -1976,7 +1978,7 @@ impl Workbench {
         }
         self.rects
             .iter()
-            .filter(|(a, _)| **a != Area::Center)
+            .filter(|(a, _)| **a != Area::Center || !shown(Area::Center))
             .find(|(_, r)| r.contains(at))
             .map(|(a, _)| *a)
     }
@@ -3672,6 +3674,17 @@ impl LayoutPainter for ShellPainter<'_> {
     }
 }
 
+/// The centre every panel was moved out of: it stays laid out and stays a
+/// drop target (its empty dock, drawn over it by [`drop_targets`] while a
+/// tab drags; a palette docks there too, [`Workbench::dock_at`]), and says
+/// so, to the eye and to a screen reader.
+fn empty_centre(ui: &mut Ui) {
+    let text = strings::tr(ui.ctx(), &txt::WORKBENCH_DROP_HERE);
+    ui.centered_and_justified(|ui| {
+        ui.weak(text);
+    });
+}
+
 /// The edge of a side or bottom area facing the centre, where its line is.
 fn edge_toward_centre(area: Area, flipped: bool) -> Side {
     match area {
@@ -3750,7 +3763,9 @@ impl ZoneViewer for ShellViewer<'_> {
             }
             frame.show(ui, |ui| {
                 ui.set_min_size(ui.available_size());
-                if self.areas.contains(&Area::Center) && visible_in(app, Area::Center) {
+                if !self.areas.contains(&Area::Center) {
+                    empty_centre(ui);
+                } else if visible_in(app, Area::Center) {
                     draw_area(app, ui, Area::Center);
                 }
             });

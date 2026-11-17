@@ -763,6 +763,9 @@ pub const WORKBENCH_DOCK_BACK: StrKey = StrKey::new("egui-pop-workbench-dock-bac
 /// keyboard, whose drag cannot hold the dock keys).
 pub const WORKBENCH_DOCK_IN: StrKey =
     StrKey::new("egui-pop-workbench-dock-in", "Dock in { $area }");
+/// The centre every panel was moved out of: a drop target, and says so.
+pub const WORKBENCH_DROP_HERE: StrKey =
+    StrKey::new("egui-pop-workbench-drop-here", "Drop a panel here");
 /// A panel's mark while its content is stale or being updated
 /// (`panel.state`).
 pub const PANEL_STATE_UPDATING: StrKey = StrKey::new("egui-pop-panel-state-updating", "Updating…");
@@ -1872,6 +1875,7 @@ pub const ALL: &[StrKey] = &[
     AREA_ACTIVITY_BAR,
     WORKBENCH_MOVE_TO,
     WORKBENCH_DOCK_IN,
+    WORKBENCH_DROP_HERE,
     WORKBENCH_STAYS_OUT,
     WORKBENCH_DETACH,
     WORKBENCH_CLOSE_PANEL,
