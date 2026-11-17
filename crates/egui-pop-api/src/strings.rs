@@ -770,6 +770,13 @@ pub const PANEL_STATE_UPDATING: StrKey = StrKey::new("egui-pop-panel-state-updat
 /// reason.
 pub const PANEL_STATE_FAILED: StrKey =
     StrKey::new("egui-pop-panel-state-failed", "Update failed: { $reason }");
+/// The mark of a control panel (`PanelKind::Control`): what it does.
+pub const PANEL_KIND_CONTROL: StrKey =
+    StrKey::new("egui-pop-panel-kind-control", "Edits your work");
+/// The mark of a mixed panel (`PanelKind::Mixed`): a view with parts
+/// that edit.
+pub const PANEL_KIND_MIXED: StrKey =
+    StrKey::new("egui-pop-panel-kind-mixed", "Parts of it edit your work");
 pub const WORKBENCH_UNFOLD: StrKey = StrKey::new("egui-pop-workbench-unfold", "Unfold { $area }");
 pub const WORKBENCH_FOLD: StrKey = StrKey::new("egui-pop-workbench-fold", "Fold { $area }");
 /// The button of a flyout (a folded area's panel shown over the centre)
@@ -1874,6 +1881,8 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_DOCK_BACK,
     PANEL_STATE_UPDATING,
     PANEL_STATE_FAILED,
+    PANEL_KIND_CONTROL,
+    PANEL_KIND_MIXED,
     WORKBENCH_UNFOLD,
     WORKBENCH_FOLD,
     WORKBENCH_FLYOUT_PIN,

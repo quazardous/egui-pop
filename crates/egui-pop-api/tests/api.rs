@@ -704,10 +704,10 @@ fn settings_persist_and_come_back_with_their_plugin() {
     // The framework's own (light or dark, the accent colour, the focus
     // mode, the interface zoom, the text size and fonts, the toasts'
     // corner, the pointer gestures, the panel's alignment, the side bars'
-    // position, the palettes', the menu icons) come first.
+    // position, the palettes', the menu icons, the dock drag modifier) come first.
     let settings = app.handle().settings();
     let ids: Vec<_> = settings.iter().map(|s| s.id.clone()).collect();
-    assert_eq!(settings.len(), 20, "{ids:?}");
+    assert_eq!(settings.len(), 21, "{ids:?}");
     for id in [
         egui_pop_api::SETTING_THEME_PREFERENCE,
         egui_pop_api::SETTING_ACCENT_COLOR,

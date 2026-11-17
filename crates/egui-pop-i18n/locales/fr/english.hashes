@@ -985,6 +985,8 @@ egui-pop-palette-title f9e5c255cb220019
 egui-pop-palette-unpin 62191ff75366ff5a
 egui-pop-panel-focus-description 2271b1974b5ef7a5
 egui-pop-panel-focus-title b1fd5f71e11c4d4f
+egui-pop-panel-kind-control 0167bf7bbd394580
+egui-pop-panel-kind-mixed 549122ab801c8c69
 egui-pop-panel-state-failed d888c8b768728ef7
 egui-pop-panel-state-updating 66f1001bae90aa29
 egui-pop-panel-toggle-description 240b7cf014fa3086

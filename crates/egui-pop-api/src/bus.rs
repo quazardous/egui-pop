@@ -134,6 +134,8 @@
 //! A panel's state is on it too: whoever knows a panel's content is not
 //! current asks `panel.state` ([`PanelStateSet`], from any thread), and
 //! the workbench's chrome shows it ([`PANEL_CHROME`]), never the panel.
+//! What a declared panel is, its kind (whether it edits) included, is
+//! `panel.describe` ([`PanelDescribe`], answered by [`PANEL_DESCRIBE`]).
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -165,6 +167,8 @@ pub use layout::{
 };
 mod owners;
 pub use owners::OWNER_GONE;
+pub(crate) mod panel_describe;
+pub use panel_describe::{PANEL_DESCRIBE, PANEL_DESCRIBE_POINTS, PanelDescribe, PanelDescription};
 pub(crate) mod panel_state;
 pub use panel_state::{
     PANEL_CHROME, PANEL_STATE_POINTS, PanelState, PanelStateAsk, PanelStateSet, TabMark, mark_id,
@@ -549,8 +553,9 @@ pub const JOB_POINTS: [&str; 5] = [
 pub const PLUGIN_POINTS: [&str; 2] = [PluginConnect::ID, PluginDisconnect::ID];
 
 /// Every point egui-pop declares: the window, job, plugin, files,
-/// settings, drag, screen, panel state and layout points.
-pub const POINTS: [&str; 21] = [
+/// settings, drag, screen, panel state, layout and panel description
+/// points.
+pub const POINTS: [&str; 22] = [
     WindowOpen::ID,
     WindowClose::ID,
     WindowReparent::ID,
@@ -572,6 +577,7 @@ pub const POINTS: [&str; 21] = [
     ScreenRemoved::ID,
     PanelStateSet::ID,
     LayoutChanged::ID,
+    PanelDescribe::ID,
 ];
 
 /// egui-pop's contract table (ADR 0030): every point it declares on the
@@ -626,6 +632,9 @@ pub const CONTRACT: &[PointDecl] = &[
     ),
     PointDecl::of::<LayoutChanged>(
         "The workbench's layout changed (a panel docked, detached, floated, moved, opened or closed, a split or a palette resized, a layout put in): said once per change, once its gesture ended; the layout is saved to the host's document by `layout.save`, an application's copy follows it.",
+    ),
+    PointDecl::of::<PanelDescribe>(
+        "A declared panel is described, by its id: its title, whether it is a palette, and its kind (view, control or mixed: whether it edits), the kind whose mark its chrome shows; asked on the interface's thread.",
     ),
 ];
 
@@ -848,6 +857,7 @@ impl Bus {
         }
         let panel_states = panel_state::States::default();
         panel_state::install(&*kernel, &panel_states, wake.clone());
+        panel_describe::install(&*kernel);
         Bus {
             kernel,
             registry,
@@ -1234,6 +1244,16 @@ impl AppHandle {
     /// (docs/stability.md).</div>
     pub fn request_panel_state(&self, ask: PanelStateAsk) -> Vec<String> {
         emit_with::<PanelStateSet>(self, ask, Vec::new())
+    }
+
+    /// Describes a declared panel (`panel.describe`): its listeners run
+    /// now (the workbench's fills it from the declaration, its kind
+    /// included); `None` for a panel nobody knows.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn describe_panel(&self, panel: &str) -> Option<PanelDescription> {
+        emit_with::<PanelDescribe>(self, panel.to_string(), None)
     }
 
     /// A panel's state as last asked (`panel.state`): ready when never

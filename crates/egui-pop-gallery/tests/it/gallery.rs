@@ -3120,6 +3120,20 @@ fn a_panel_not_current_is_dimmed_with_its_mark() {
     h.run();
     let app = h.state().app.handle().clone();
     let ask = |state| app.request_panel_state(PanelStateAsk::new(PROPERTIES, state, "gallery"));
+    // Properties edits the selection (`PanelKind::Control`): at rest its
+    // tab carries the edits mark, the busy mark taking its slot while it
+    // shows.
+    let edits = indicator::find(&h.ctx, &mark_id(PROPERTIES, true)).expect("the edits mark");
+    assert_eq!(edits.state, "edit");
+    assert_eq!(edits.name.as_deref(), Some("Edits your work"));
+    let kind = app.describe_panel(PROPERTIES).map(|d| d.kind);
+    assert_eq!(kind, Some(egui_pop::model::panels::PanelKind::Control));
+    let at_rest = app
+        .area_rect(egui_pop::model::panels::Area::EndSide)
+        .expect("the end side area")
+        .expand2(egui::vec2(0.0, 8.0));
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_shot_of("panel-kind-tab-pop-dark", at_rest));
     ask(PanelState::Updating);
     h.run();
     assert!(
@@ -3139,7 +3153,6 @@ fn a_panel_not_current_is_dimmed_with_its_mark() {
         .expect("the end side area")
         // The tab's mark overhangs the tab's top corner.
         .expand2(egui::vec2(0.0, 8.0));
-    let mut results = egui_kittest::SnapshotResults::new();
     results.add(h.try_shot_of("panel-state-updating-pop-dark", area));
     ask(PanelState::Failed {
         reason: "the preview could not be rendered".into(),
@@ -3155,6 +3168,36 @@ fn a_panel_not_current_is_dimmed_with_its_mark() {
     ask(PanelState::Ready);
     h.run();
     assert!(indicator::find(&h.ctx, &mark_id(PROPERTIES, false)).is_none());
+    let tab = indicator::find(&h.ctx, &mark_id(PROPERTIES, true)).expect("the edits mark");
+    assert_eq!(tab.state, "edit", "back once the state is ready");
+}
+
+/// A palette that edits (the toolbox, `PanelKind::Control`) carries the
+/// edits mark after its band's title; a view palette (the navigator) none.
+#[test]
+fn a_palette_that_edits_shows_the_mark_in_its_band() {
+    use egui_pop::api::bus::mark_id;
+    use egui_pop::core::indicator;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "palettes"));
+    h.run();
+    h.get_by_label("Open the palettes").click();
+    h.run();
+    h.run();
+    h.remove_cursor();
+    h.run();
+    let toolbox = indicator::find(&h.ctx, &mark_id("gallery.toolbox", true)).expect("its mark");
+    assert!(toolbox.shown);
+    assert_eq!(toolbox.state, "edit");
+    assert!(indicator::find(&h.ctx, &mark_id("gallery.navigator", true)).is_none());
+    egui_pop_test::assert_all_named(&h);
+    // The band around its mark: the title before it, the buttons after.
+    let [x, y, w, hgt] = toolbox.rect;
+    let band = egui::Rect::from_min_max(
+        egui::pos2(x - 150.0, y - 14.0),
+        egui::pos2(x + w + 90.0, y + hgt + 14.0),
+    );
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_shot_of("panel-kind-palette-pop-dark", band));
 }
 
 #[test]
@@ -3176,8 +3219,9 @@ fn the_workbench_page_detaches_a_panel_into_its_own_window() {
     // The Properties tab dragged over the window, held: the window shows
     // its drop zone; let go, it joins the window's tabs.
     let properties = egui_pop::model::ids::PanelId::from_static("gallery.properties");
+    // Its tab's name says its edits mark too (it edits the selection).
     let a = h
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Properties")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Properties, Edits your work")
         .rect()
         .center();
     let b = h.get_by_label("Free notes.").rect().center();

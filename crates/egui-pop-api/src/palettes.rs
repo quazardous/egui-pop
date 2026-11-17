@@ -124,7 +124,7 @@ use egui_pop_model::ids::{CommandId, PanelId, SettingId, StepId};
 use egui_pop_model::keymap::BindOptions;
 use egui_pop_model::keymap::{Button, Pointer};
 use egui_pop_model::layout::{Anchor, AnchorEdge, Arrangement, FloatingGroup, Join, Member};
-use egui_pop_model::panels::Area;
+use egui_pop_model::panels::{Area, PanelKind};
 use egui_pop_model::pointer::{DockDrag, PointerMap, SCOPE_PALETTE, gesture};
 use egui_pop_model::values::Descriptor;
 use serde_json::{Value as Json, json};
@@ -1018,6 +1018,30 @@ fn join_target(
         .find_map(|(p, r)| join_at(*r, at).map(|j| (p.clone(), j, join_rect(*r, j))))
 }
 
+/// What a palette's band rows read: the tokens, and what each panel's
+/// one mark slot shows (`panel.state`, its kind).
+struct RowCx<'a> {
+    t: &'a Tokens,
+    states: &'a crate::bus::panel_state::States,
+    kinds: BTreeMap<PanelId, PanelKind>,
+}
+
+impl RowCx<'_> {
+    fn kind(&self, panel: &PanelId) -> PanelKind {
+        self.kinds.get(panel).copied().unwrap_or_default()
+    }
+
+    /// After a band's title: the panel's mark, inline.
+    fn mark(&self, ui: &mut Ui, panel: &PanelId) {
+        crate::bus::panel_state::add_inline(self.states, ui, panel.as_str(), self.kind(panel));
+    }
+
+    /// On a palette's tab: the panel's mark, on its corner.
+    fn mark_on(&self, tab: &egui::Response, panel: &PanelId) {
+        crate::bus::panel_state::paint_tab(self.states, tab, panel.as_str(), self.kind(panel));
+    }
+}
+
 /// What a palette's band buttons, menu and tabs asked for.
 #[derive(Default)]
 struct Asked {
@@ -1152,6 +1176,11 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
             .panels()
             .map(|p| (p.clone(), app.panel_title(ctx, p)))
             .collect();
+        let row = RowCx {
+            t: &t,
+            states: &app.0.bus.panel_states,
+            kinds: g.panels().map(|p| (p.clone(), app.panel_kind(p))).collect(),
+        };
         // The least width: its panels' declared one, or the width their
         // content took when it could not shrink to the room it was given
         // (a row that does not wrap), whichever is wider.
@@ -1219,7 +1248,7 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
                             let m = &g.members[0];
                             let (_, b) = band::begin(ui, &style, |ui, state| {
                                 let title = &titles[&m.panel];
-                                band_row(ui, &t, title, state, m, Some(g.pinned), &mut asked);
+                                band_row(ui, &row, title, state, m, Some(g.pinned), &mut asked);
                             });
                             if let Some(r) = &b.response {
                                 asked.menus.push((r.clone(), m.shown().clone()));
@@ -1245,7 +1274,7 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
                             .join(" · ");
                         let tabs = g.arrangement == Arrangement::Tabs;
                         let (_, b) = band::begin(ui, &style, |ui, state| {
-                            group_row(ui, &t, &joined, &g, &titles, state, &mut asked);
+                            group_row(ui, &row, &joined, &g, &titles, state, &mut asked);
                         });
                         // The group's band acts on its shown panel.
                         if let Some(r) = &b.response {
@@ -1267,10 +1296,12 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
                                     .push_id(("egui_pop.palette.member", m.panel.as_str()), |ui| {
                                         let (_, mb) = band::begin(ui, &style, |ui, state| {
                                             if m.is_tabs() {
-                                                tabs_row(ui, &t, m, &titles, &mut asked);
+                                                tabs_row(ui, &row, m, &titles, &mut asked);
                                             } else {
                                                 let title = &titles[&m.panel];
-                                                band_row(ui, &t, title, state, m, None, &mut asked);
+                                                band_row(
+                                                    ui, &row, title, state, m, None, &mut asked,
+                                                );
                                             }
                                         });
                                         if !m.rolled {
@@ -1435,14 +1466,14 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
 /// alone (`pinned` is its pin), Pin at its end.
 fn band_row(
     ui: &mut Ui,
-    t: &Tokens,
+    row: &RowCx<'_>,
     title: &str,
     state: State,
     m: &Member,
     pinned: Option<bool>,
     asked: &mut Asked,
 ) {
-    let side = t.size.control_height.max(24.0);
+    let side = row.t.size.control_height.max(24.0);
     let kit = Kit::of(ui.ctx());
     ui.horizontal(|ui| {
         ui.add(
@@ -1454,6 +1485,7 @@ fn band_row(
             .truncate()
             .selectable(false),
         );
+        row.mark(ui, &m.panel);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             // Named with the palette's title: one name per button.
             let named = |ui: &Ui, key: &strings::StrKey| {
@@ -1483,20 +1515,27 @@ fn band_row(
 /// of tabs), then Pin and the group's menu (Close group).
 fn group_row(
     ui: &mut Ui,
-    t: &Tokens,
+    row: &RowCx<'_>,
     title: &str,
     g: &FloatingGroup,
     titles: &BTreeMap<PanelId, String>,
     state: State,
     asked: &mut Asked,
 ) {
-    let side = t.size.control_height.max(24.0);
+    let side = row.t.size.control_height.max(24.0);
     let kit = Kit::of(ui.ctx());
     ui.horizontal(|ui| {
         if g.arrangement == Arrangement::Tabs {
             let shown = g.shown();
             for m in &g.members {
-                tab(ui, &titles[&m.panel], &m.panel, m.panel == *shown, asked);
+                tab(
+                    ui,
+                    row,
+                    &titles[&m.panel],
+                    &m.panel,
+                    m.panel == *shown,
+                    asked,
+                );
             }
         } else {
             ui.add(
@@ -1520,18 +1559,18 @@ fn group_row(
 /// shown tab's Close and the tab group's Roll.
 fn tabs_row(
     ui: &mut Ui,
-    t: &Tokens,
+    row: &RowCx<'_>,
     m: &Member,
     titles: &BTreeMap<PanelId, String>,
     asked: &mut Asked,
 ) {
-    let side = t.size.control_height.max(24.0);
+    let side = row.t.size.control_height.max(24.0);
     let kit = Kit::of(ui.ctx());
     let shown = m.shown().clone();
     let title = titles[&shown].as_str();
     ui.horizontal(|ui| {
         for p in m.panels() {
-            tab(ui, &titles[p], p, *p == shown, asked);
+            tab(ui, row, &titles[p], p, *p == shown, asked);
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let named = |ui: &Ui, key: &strings::StrKey| {
@@ -1555,9 +1594,18 @@ fn tabs_row(
 }
 
 /// A tab of a group of tabs or of a nested tab group: a click shows it,
-/// a drag takes it out of its tabs.
-fn tab(ui: &mut Ui, title: &str, panel: &PanelId, selected: bool, asked: &mut Asked) {
+/// a drag takes it out of its tabs; its panel's one mark on its corner,
+/// as on a docked tab.
+fn tab(
+    ui: &mut Ui,
+    row: &RowCx<'_>,
+    title: &str,
+    panel: &PanelId,
+    selected: bool,
+    asked: &mut Asked,
+) {
     let r = widgets::selectable_label(ui, selected, title).interact(egui::Sense::drag());
+    row.mark_on(&r, panel);
     egui_pop_core::pointer::drag_cursor(&r, egui_pop_core::pointer::DragKind::Carry);
     if r.clicked() {
         asked.show = Some(panel.clone());
