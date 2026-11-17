@@ -33,7 +33,9 @@
 //! crate's native runner and a host running its own loop use it alike,
 //! and the test kit runs it with viewport ids.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use web_time::Instant;
 
 /// How long a frame of the main window may be owed before the loop paints
 /// it: well over a frame at 30 Hz, so a window the system shows always
