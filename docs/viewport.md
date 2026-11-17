@@ -404,8 +404,12 @@ assert_eq!(image_surface::negotiate(&rec2020, &x11).route, Route::Window);
   when it closes (`close_window`, or once egui no longer knows the
   window). `windows.list` shows each window's (`surface`: route, format,
   colour space, why). egui's interface keeps egui-wgpu's one format.
-- Limits: a window whose handles are known (not yet an immediate
-  viewport's, such as a detached panel's); a transparent window; the subsurface is
+- Detached panels' windows: with `AppBuilder::transparent_panel_windows`,
+  built transparent on Wayland (opaque elsewhere, each saying why in
+  `windows.list`'s `transparency`); their handles are paired by the
+  runner, or by a host running its own loop through `runner::host`
+  (`windows.list`'s `handles`).
+- Limits: a window whose handles are known; a transparent window; the subsurface is
   placed on whole logical pixels (at a fractional scale its pixels may
   sit up to one pixel off the interface's); the perceptual intent (the
   one every compositor takes).

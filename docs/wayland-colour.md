@@ -152,7 +152,8 @@ What it costs: a transparent window; one image surface per viewport,
 under its own window's surface (the main window's handles come from
 eframe's creation context, another window's from egui-pop's runner,
 `image_surface::set_window_source`, or the application,
-`install_window`; an immediate viewport's window has none known yet);
+`install_window`; an immediate viewport's, such as a detached panel's,
+paired by the runner or the host's loop through `runner::host`);
 a guess at the driver's rule for the colour surface, conservative and
 switchable off. The swapchain path stays the long-term one for HDR of the
 whole window, once egui-wgpu takes a colour space (see

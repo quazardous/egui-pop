@@ -674,6 +674,16 @@ pub struct WindowRecord {
     /// surface, its format, colour space, route or why it has none.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub surface: Option<serde_json::Value>,
+    /// Whether its native window's handles are known (`runner::window`
+    /// answers for its viewport): what a surface of its own needs.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub handles: bool,
+    /// How its native window was built for a surface below egui:
+    /// transparent, or opaque and why
+    /// (`egui_pop_core::window_surface::transparency`), when its builder
+    /// said it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transparency: Option<egui_pop_core::window_surface::Transparency>,
     /// Its viewport, to read `surface`.
     #[serde(skip)]
     pub(crate) viewport_id: Option<ViewportId>,
@@ -707,6 +717,8 @@ impl Registry {
             opened_because: req.reason,
             active: false,
             surface: None,
+            handles: false,
+            transparency: None,
             viewport_id: viewport,
         });
     }
@@ -1107,6 +1119,15 @@ impl AppHandle {
             w.surface = w
                 .viewport_id
                 .and_then(|v| egui_pop_core::window_surface::get(&ctx, v));
+            w.transparency = w
+                .viewport_id
+                .and_then(|v| egui_pop_core::window_surface::transparency(&ctx, v));
+            #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
+            {
+                w.handles = w
+                    .viewport_id
+                    .is_some_and(|v| crate::runner::window(v).is_some());
+            }
         }
         list
     }

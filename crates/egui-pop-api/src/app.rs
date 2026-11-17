@@ -774,6 +774,9 @@ pub(crate) struct Shared {
     /// The application allows the system's file chooser
     /// (`AppBuilder::system_file_chooser`).
     system_file_chooser: std::cell::Cell<bool>,
+    /// Detached panels' windows are built transparent where the platform
+    /// gives a surface below them (`AppBuilder::transparent_panel_windows`).
+    transparent_panel_windows: std::cell::Cell<bool>,
     /// The window the user worked in last (focused, clicked or typed
     /// in): a dialog opens over it.
     /// The shell panels' starting sizes (`AppBuilder::shell_panel_size`).
@@ -932,6 +935,7 @@ impl AppHandle {
             toast_corner: std::cell::Cell::default(),
             menu_bar: std::cell::Cell::new(true),
             system_file_chooser: std::cell::Cell::new(false),
+            transparent_panel_windows: std::cell::Cell::new(false),
             shell_sizes: RefCell::default(),
             shell_bounds: RefCell::default(),
             centre_min: std::cell::Cell::new(None),
@@ -2902,6 +2906,13 @@ impl AppHandle {
         self.0.system_file_chooser.get()
     }
 
+    /// Whether detached panels' windows are built transparent where the
+    /// platform gives a surface below them
+    /// (`AppBuilder::transparent_panel_windows`): off by default.
+    pub fn transparent_panel_windows(&self) -> bool {
+        self.0.transparent_panel_windows.get()
+    }
+
     pub(crate) fn set_drawing_areas(&self, on: bool) {
         self.0.drawing_areas.set(on);
     }
@@ -3295,6 +3306,7 @@ pub struct AppBuilder {
     layout: Option<egui_pop_model::layout::Layout>,
     menu_bar: bool,
     system_file_chooser: bool,
+    transparent_panel_windows: bool,
     shell_sizes: Vec<(PanelId, f32)>,
     shell_bounds: Vec<(PanelId, crate::workbench::ShellBounds)>,
     centre_min: Option<crate::workbench::ShellSize>,
@@ -3399,6 +3411,7 @@ impl AppBuilder {
             layout: None,
             menu_bar: true,
             system_file_chooser: false,
+            transparent_panel_windows: false,
             shell_sizes: Vec::new(),
             shell_bounds: Vec::new(),
             centre_min: None,
@@ -3585,6 +3598,20 @@ impl AppBuilder {
     /// in-app picker always answers.
     pub fn system_file_chooser(mut self, on: bool) -> Self {
         self.system_file_chooser = on;
+        self
+    }
+
+    /// Builds detached panels' windows transparent where the platform
+    /// gives a surface below a window (Wayland, where the image viewport's
+    /// image surface is a subsurface), so that surface shows through; off
+    /// by default. Elsewhere, and off, they stay opaque. Either way each
+    /// window says how it was built and why
+    /// (`egui_pop_core::window_surface::transparency`, `windows.list`). The
+    /// panel's content fills the window: eframe clears an immediate
+    /// window to transparent, so a panel that leaves part of it unpainted
+    /// shows the desktop there.
+    pub fn transparent_panel_windows(mut self, on: bool) -> Self {
+        self.transparent_panel_windows = on;
         self
     }
 
@@ -4068,6 +4095,10 @@ impl AppBuilder {
             .0
             .system_file_chooser
             .set(self.system_file_chooser);
+        app.handle
+            .0
+            .transparent_panel_windows
+            .set(self.transparent_panel_windows);
         *app.handle.0.shell_sizes.borrow_mut() = self.shell_sizes;
         *app.handle.0.shell_bounds.borrow_mut() = self.shell_bounds;
         app.handle.0.centre_min.set(self.centre_min);

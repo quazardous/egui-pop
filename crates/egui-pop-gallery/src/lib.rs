@@ -137,6 +137,9 @@ pub fn builder(options: &Options) -> AppBuilder {
         // The system's file chooser is a fallback: only when asked for
         // (`--system-file-chooser`), and refused under tests anyway.
         .system_file_chooser(options.system_file_chooser)
+        // Wide gamut: a detached viewer's window is built transparent
+        // where its own image surface can show through (Wayland).
+        .transparent_panel_windows(options.wide_gamut)
         .plugins(egui_pop::api::DefaultPlugins)
         // The desktop's thumbnails in the file picker, for what egui-pop
         // does not preview itself.
@@ -520,7 +523,9 @@ impl Gallery {
                     eprintln!("wide gamut: no image surface: {why}");
                 }
                 // Other windows get their own once their handles are
-                // known: built opaque, they say so (`windows.list`).
+                // known; a detached panel's window says how it was built
+                // (transparent on Wayland), the others are taken as
+                // opaque (`windows.list`).
                 image_surface::set_window_source(
                     &cc.egui_ctx,
                     image_surface::Options::default(),

@@ -558,7 +558,10 @@ pub fn install_window(
 /// (`egui_pop::api::runner::window` on egui-pop's runner), and how such
 /// windows are built (`options`): a window drawing the image gets its own
 /// image surface the first frame its handles are known, freed when it
-/// closes.
+/// closes. A window whose builder said how it was built
+/// (`egui_pop_core::window_surface::set_transparency`) is taken as said:
+/// transparent, it gets a surface whatever `options` say; opaque, none,
+/// with the builder's reason.
 pub fn set_window_source<W>(
     ctx: &Context,
     options: Options,
@@ -663,18 +666,40 @@ pub fn negotiate_window(ctx: &Context, viewport: ViewportId) -> Negotiation {
     for v in closed {
         close_window(ctx, v);
     }
+    // How the window was built, when its builder said it: an opaque
+    // window gets no surface, whatever the source's options say.
+    let built = egui_pop_core::window_surface::transparency(ctx, viewport);
+    let opaque = built
+        .as_ref()
+        .and_then(|t| t.why_opaque())
+        .map(|why| format!("the window is opaque ({why}): the image surface sits below it"));
     let negotiation = {
         let mut s = surfaces.lock();
-        if !s.windows.contains_key(&viewport) && wider_than_srgb(&wanted) {
+        let mut no_render = false;
+        if !s.windows.contains_key(&viewport) && wider_than_srgb(&wanted) && opaque.is_none() {
             let handles = s.source.as_ref().map(|(source, o)| (source(viewport), *o));
-            if let (Some((Some(handles), options)), Some(rs)) = (handles, s.render.clone()) {
-                let w = offer_for(&rs, &handles, options);
-                s.windows.insert(viewport, w);
+            if let Some((Some(handles), mut options)) = handles {
+                if built.as_ref().is_some_and(|t| t.is_transparent()) {
+                    options.transparent_window = true;
+                }
+                match s.render.clone() {
+                    Some(rs) => {
+                        let w = offer_for(&rs, &handles, options);
+                        s.windows.insert(viewport, w);
+                    }
+                    None => no_render = true,
+                }
             }
         }
         match s.windows.get_mut(&viewport) {
             None => window(wider_than_srgb(&wanted).then(|| {
-                if s.source.is_some() {
+                if let Some(why) = &opaque {
+                    why.clone()
+                } else if no_render {
+                    "the image surfaces are not installed (image_surface::install, with the \
+                     main window)"
+                        .to_string()
+                } else if s.source.is_some() {
                     "the window's handles are not known yet".to_string()
                 } else {
                     "no image surface for this window (image_surface::install_window, or \
@@ -1516,6 +1541,31 @@ mod tests {
         set_window_source(&ctx, Options::default(), |_| Some(NoHandles));
         // No render state: install never ran with a GPU.
         assert_eq!(offer_of(&ctx, viewer), None);
+    }
+
+    #[test]
+    fn a_window_built_opaque_says_why_its_builder_gave() {
+        use egui_pop_core::window_surface::{Transparency, set_transparency};
+        let viewer = ViewportId::from_hash_of("viewer");
+        let ctx = context_with(&[viewer]);
+        install_offer(&ctx, ViewportId::ROOT, kwin());
+        display::want(&ctx, viewer, rec2020());
+        set_window_source(&ctx, Options::default(), |_| Some(NoHandles));
+        set_transparency(
+            &ctx,
+            viewer,
+            Some(Transparency::Opaque("X11: no subsurface".into())),
+        );
+        let n = negotiate_window(&ctx, viewer);
+        assert_eq!(n.route, Route::Window);
+        let why = n.why.unwrap();
+        assert!(why.contains("opaque") && why.contains("X11"), "{why}");
+        assert_eq!(offer_of(&ctx, viewer), None);
+        // Transparent, handles known, but no GPU installed: said so, not
+        // "handles not known".
+        set_transparency(&ctx, viewer, Some(Transparency::Transparent));
+        let why = negotiate_window(&ctx, viewer).why.unwrap();
+        assert!(why.contains("not installed"), "{why}");
     }
 
     struct NoHandles;

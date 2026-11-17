@@ -2,199 +2,27 @@
 
 mod pace;
 
-use std::cell::{Cell, RefCell};
-use std::sync::Arc;
+use std::cell::RefCell;
 use std::time::Instant;
 
 use eframe::UserEvent;
-use egui::ViewportId;
-use egui_pop_winit::{Display, WindowHandles};
-use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::platform::run_on_demand::EventLoopExtRunOnDemand;
 use winit::window::WindowId;
 
+use super::host;
 use crate::main_wake::{MainWake, PassCounter};
-
-/// A window eframe painted, and its viewport.
-struct Paired {
-    viewport: ViewportId,
-    window: WindowId,
-    /// Its handles were recorded in the per-viewport registries.
-    recorded: bool,
-}
 
 thread_local! {
     /// winit allows one event loop per process: kept for a second run, as
     /// eframe does for its own.
     static EVENT_LOOP: RefCell<Option<EventLoop<UserEvent>>> = const { RefCell::new(None) };
-    /// The window eframe is painting (set in its `RedrawRequested`, taken
-    /// by the first pass that begins in it).
-    static PAINTING: Cell<Option<WindowId>> = const { Cell::new(None) };
-    static DISPLAY: Cell<Option<Display>> = const { Cell::new(None) };
-    static WINDOWS: RefCell<Vec<Paired>> = const { RefCell::new(Vec::new()) };
-    /// The main window's handle as eframe gives it.
-    static ROOT: Cell<Option<RawWindowHandle>> = const { Cell::new(None) };
-    static VERIFIED: Cell<Option<bool>> = const { Cell::new(None) };
-    /// The main window, as eframe gives it at creation.
-    static ROOT_WINDOW: RefCell<Option<super::Window>> = const { RefCell::new(None) };
-    /// The application's context, to forget a destroyed window's handles.
+    /// The application's context, for the main window's owed frames.
     static CTX: RefCell<Option<egui::Context>> = const { RefCell::new(None) };
     /// The context's passes, counted (`main_wake`).
     static PASSES: RefCell<Option<PassCounter>> = const { RefCell::new(None) };
-    /// The main window's winit id.
-    static ROOT_ID: Cell<Option<WindowId>> = const { Cell::new(None) };
-}
-
-pub(super) fn ids_verified() -> Option<bool> {
-    VERIFIED.get()
-}
-
-fn handles(viewport: ViewportId) -> Option<WindowHandles> {
-    if VERIFIED.get() != Some(true) {
-        return None;
-    }
-    let window =
-        WINDOWS.with_borrow(|w| w.iter().find(|p| p.viewport == viewport).map(|p| p.window))?;
-    DISPLAY.get()?.window(window)
-}
-
-pub(super) fn window_handle(viewport: ViewportId) -> Option<RawWindowHandle> {
-    if viewport == ViewportId::ROOT
-        && let Some(h) = ROOT.get()
-    {
-        return Some(h);
-    }
-    handles(viewport).map(|h| h.raw_window())
-}
-
-pub(super) fn window(viewport: ViewportId) -> Option<super::Window> {
-    if viewport == ViewportId::ROOT {
-        return ROOT_WINDOW.with_borrow(Clone::clone);
-    }
-    handles(viewport).map(|h| super::Window::new(Arc::new(h)))
-}
-
-pub(super) fn windows() -> Vec<ViewportId> {
-    let mut known = Vec::new();
-    if ROOT_WINDOW.with_borrow(Option::is_some) {
-        known.push(ViewportId::ROOT);
-    }
-    if VERIFIED.get() == Some(true) && DISPLAY.get().is_some() {
-        WINDOWS.with_borrow(|w| {
-            known.extend(
-                w.iter()
-                    .map(|p| p.viewport)
-                    .filter(|v| *v != ViewportId::ROOT),
-            )
-        });
-    }
-    known
-}
-
-/// The `on_begin_pass` hook: pairs the window being painted with the
-/// pass's viewport, verifies the ids on the main window, and records the
-/// handles of every paired window once they are verified.
-fn note_viewport(ui: &mut egui::Ui) {
-    let Some(window) = PAINTING.take() else {
-        return;
-    };
-    let ctx = ui.ctx().clone();
-    let viewport = ctx.viewport_id();
-    let new = WINDOWS.with_borrow_mut(|w| {
-        if w.iter()
-            .any(|p| p.window == window || p.viewport == viewport)
-        {
-            return false;
-        }
-        w.push(Paired {
-            viewport,
-            window,
-            recorded: false,
-        });
-        true
-    });
-    if !new {
-        return;
-    }
-    let Some(display) = DISPLAY.get() else {
-        return;
-    };
-    log::debug!(
-        target: "egui_pop::runner",
-        "viewport {viewport:?} is window {:#x}",
-        u64::from(window)
-    );
-    if viewport == ViewportId::ROOT && VERIFIED.get().is_none() {
-        let from_id = display.window_handle(window);
-        let ok = match (from_id, ROOT.get()) {
-            (Some(a), Some(b)) => egui_pop_winit::same_window(&a, &b),
-            _ => false,
-        };
-        VERIFIED.set(Some(ok));
-        if ok {
-            log::debug!(target: "egui_pop::runner", "window ids are the native windows");
-        } else {
-            log::info!(
-                target: "egui_pop::runner",
-                "window ids are not the native windows here ({from_id:?} against {:?}): only the main window's handles are known",
-                ROOT.get()
-            );
-        }
-    }
-    if VERIFIED.get() == Some(true) {
-        record_all(&ctx, display);
-    }
-}
-
-/// Records the handles of the paired windows not recorded yet. The main
-/// window's are eframe's own, recorded at creation.
-fn record_all(ctx: &egui::Context, display: Display) {
-    let todo: Vec<(ViewportId, WindowId)> = WINDOWS.with_borrow_mut(|w| {
-        w.iter_mut()
-            .filter(|p| !p.recorded)
-            .map(|p| {
-                p.recorded = true;
-                (p.viewport, p.window)
-            })
-            .collect()
-    });
-    for (viewport, window) in todo {
-        if viewport == ViewportId::ROOT {
-            continue;
-        }
-        let Some(h) = display.window(window) else {
-            continue;
-        };
-        if let RawWindowHandle::Win32(w) = h.raw_window() {
-            crate::frame::set_native_window(ctx, viewport, w.hwnd.get());
-        }
-        let parent: Arc<dyn crate::files::ParentWindow> = Arc::new(h);
-        crate::files::set_parent_window(ctx, viewport, parent);
-    }
-}
-
-/// A destroyed window's handles go.
-fn forget(window: WindowId) {
-    let gone: Vec<Paired> = WINDOWS.with_borrow_mut(|w| {
-        let (gone, kept) = std::mem::take(w)
-            .into_iter()
-            .partition(|p| p.window == window);
-        *w = kept;
-        gone
-    });
-    CTX.with_borrow(|ctx| {
-        let Some(ctx) = ctx else { return };
-        for p in gone
-            .iter()
-            .filter(|p| p.recorded && p.viewport != ViewportId::ROOT)
-        {
-            crate::files::forget_parent_window(ctx, p.viewport);
-            crate::frame::forget_native_window(ctx, p.viewport);
-        }
-    });
 }
 
 /// Tells egui-pop the monitors (`window::set_screens`), named as winit
@@ -232,19 +60,20 @@ impl Runner<'_> {
     /// Paints `window` now: eframe runs its pass in `RedrawRequested`.
     fn paint(&mut self, event_loop: &ActiveEventLoop, window: WindowId) {
         if self.wake.main().is_none()
-            && let Some(main) = ROOT_ID.get()
+            && let Some(main) = host::main_window_id()
         {
             self.wake.set_main(main);
             if let Some(c) = PASSES.with_borrow(Clone::clone) {
                 self.wake.set_counter(c);
             }
         }
-        let previous = PAINTING.replace(Some(window));
         let eframe = &mut self.eframe;
-        self.wake.redraw(window, || {
-            eframe.window_event(event_loop, window, WindowEvent::RedrawRequested);
+        let wake = &mut self.wake;
+        host::redraw(window, || {
+            wake.redraw(window, || {
+                eframe.window_event(event_loop, window, WindowEvent::RedrawRequested);
+            });
         });
-        PAINTING.set(previous);
     }
 
     /// Paints the windows whose held redraw came due, and the main window
@@ -263,7 +92,7 @@ impl Runner<'_> {
 
 impl ApplicationHandler<UserEvent> for Runner<'_> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        DISPLAY.set(Display::of(event_loop));
+        host::resumed(event_loop);
         tell_screens(event_loop);
         let interval = pace::interval(
             event_loop
@@ -287,7 +116,7 @@ impl ApplicationHandler<UserEvent> for Runner<'_> {
                 self.eframe.window_event(event_loop, id, event);
             }
             WindowEvent::Destroyed => {
-                forget(id);
+                host::window_event(id, &event);
                 self.pacer.forget(id);
                 self.eframe.window_event(event_loop, id, event);
             }
@@ -373,11 +202,7 @@ pub(super) fn run(
     creator: eframe::AppCreator<'_>,
 ) -> eframe::Result {
     // A new run starts clean (a second run in the same process).
-    PAINTING.set(None);
-    ROOT.set(None);
-    ROOT_WINDOW.set(None);
-    VERIFIED.set(None);
-    WINDOWS.with_borrow_mut(Vec::clear);
+    host::detach();
     let wake_enabled = crate::main_wake::paint_safe(options.wgpu_options.surface.present_mode);
     let hook = options.event_loop_builder.take();
     let built = EVENT_LOOP.with_borrow_mut(|slot| -> eframe::Result {
@@ -402,18 +227,9 @@ pub(super) fn run(
     let made = std::rc::Rc::new(RefCell::new(Creation::default()));
     let made_in = made.clone();
     let creator: eframe::AppCreator<'_> = Box::new(move |cc| {
-        if let Ok(h) = cc.window_handle() {
-            ROOT.set(Some(h.as_raw()));
-        }
-        if let Some(w) = cc.winit_window() {
-            ROOT_ID.set(Some(w.id()));
-            let w: Arc<dyn crate::files::ParentWindow> = w.clone();
-            ROOT_WINDOW.set(Some(super::Window::new(w)));
-        }
+        host::created(cc);
         CTX.set(Some(cc.egui_ctx.clone()));
         PASSES.set(Some(PassCounter::install(&cc.egui_ctx)));
-        cc.egui_ctx
-            .on_begin_pass("egui_pop::runner", Arc::new(note_viewport));
         match creator(cc) {
             Ok(app) => {
                 *made_in.borrow_mut() = Creation::Done;
@@ -442,10 +258,7 @@ pub(super) fn run(
     });
     CTX.set(None);
     PASSES.set(None);
-    ROOT_ID.set(None);
-    ROOT_WINDOW.set(None);
-    ROOT.set(None);
-    WINDOWS.with_borrow_mut(Vec::clear);
+    host::detach();
     ran?;
     match std::mem::take(&mut *made.borrow_mut()) {
         Creation::Done => Ok(()),

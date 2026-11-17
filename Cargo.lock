@@ -1621,9 +1621,12 @@ version = "0.11.0"
 dependencies = [
  "eframe",
  "egui",
+ "egui-pop-api",
  "egui-pop-core",
+ "egui-pop-model",
  "egui-pop-test",
  "egui-pop-wayland",
+ "egui-pop-winit",
  "egui-wgpu",
  "egui_kittest",
  "fontdb",
@@ -1638,6 +1641,7 @@ dependencies = [
  "serde_json",
  "svg2pdf",
  "wgpu",
+ "winit",
 ]
 
 [[package]]

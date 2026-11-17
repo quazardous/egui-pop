@@ -542,8 +542,96 @@ fn way_out(ctx: &Context, app: &AppHandle) {
     WAY_OUT.set(ctx, keep);
 }
 
+/// The windowing system the application's windows are on, as the event
+/// loop's display says it (`runner::windowing`): egui-pop's runner reads
+/// it when the loop resumes, a host running its own loop tells it
+/// (`runner::host::resumed`).
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Windowing {
+    /// Wayland: a window can have subsurfaces below it.
+    Wayland,
+    /// X11 (Xlib or XCB).
+    X11,
+    /// Windows.
+    Windows,
+    /// macOS.
+    MacOs,
+    /// Another system, or the web.
+    Other,
+    /// Not told: no event loop seen yet, or egui-pop does not run it and
+    /// the host did not tell.
+    Unknown,
+}
+
+/// How a window that may show a surface below egui (the image viewport's
+/// image surface, a Wayland subsurface) is built on `windowing`:
+/// transparent on Wayland, so that surface shows through; opaque
+/// elsewhere, where there is no such surface to show and a transparent
+/// window only costs the compositor, with the reason.
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
+pub fn surface_below_transparency(
+    windowing: Windowing,
+) -> egui_pop_core::window_surface::Transparency {
+    use egui_pop_core::window_surface::Transparency;
+    let elsewhere = |name: &str| {
+        Transparency::Opaque(format!(
+            "{name}: the image surface is a Wayland subsurface, there is none here"
+        ))
+    };
+    match windowing {
+        Windowing::Wayland => Transparency::Transparent,
+        Windowing::X11 => elsewhere("X11"),
+        Windowing::Windows => elsewhere("Windows"),
+        Windowing::MacOs => elsewhere("macOS"),
+        Windowing::Other => elsewhere("this system"),
+        Windowing::Unknown => Transparency::Opaque(
+            "the windowing system is not known: egui-pop does not run the event loop and the \
+             host did not tell it (runner::host::resumed)"
+                .into(),
+        ),
+    }
+}
+
+/// The windowing system of this run ([`Windowing`]): the runner's, or
+/// [`Windowing::Unknown`] without one (the web, headless, tests).
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
+pub fn windowing() -> Windowing {
+    #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
+    {
+        crate::runner::windowing()
+    }
+    #[cfg(not(all(feature = "eframe", not(target_arch = "wasm32"))))]
+    {
+        Windowing::Unknown
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_window_showing_a_surface_below_is_transparent_on_wayland_only() {
+        use super::{Windowing, surface_below_transparency};
+        assert!(surface_below_transparency(Windowing::Wayland).is_transparent());
+        for (w, name) in [
+            (Windowing::X11, "X11"),
+            (Windowing::Windows, "Windows"),
+            (Windowing::MacOs, "macOS"),
+        ] {
+            let t = surface_below_transparency(w);
+            let why = t.why_opaque().expect("opaque");
+            assert!(why.contains(name) && why.contains("Wayland"), "{why}");
+        }
+        let unknown = surface_below_transparency(Windowing::Unknown);
+        assert!(unknown.why_opaque().unwrap().contains("runner::host"));
+    }
+
     use super::*;
 
     fn state(x: f32, y: f32, w: f32, h: f32) -> WindowState {
