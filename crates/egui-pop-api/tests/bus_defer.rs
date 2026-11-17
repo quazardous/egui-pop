@@ -114,9 +114,8 @@ fn build(b: AppBuilder) -> App {
 /// listener notes what it heard, and whether the panel's state was free.
 fn hear_notes(app: &App, f: &Fixture) {
     let bus = app.handle().bus();
-    for refused in bus_contract::declare_all(&*bus, &[PointDecl::of::<Note>("A test note.")]) {
-        panic!("{refused:?}");
-    }
+    let refused = bus_contract::declare_all(&*bus, &[PointDecl::of::<Note>("A test note.")]);
+    assert!(refused.is_empty(), "{refused:?}");
     let (log, state) = (f.log.clone(), f.state.clone());
     bus.listen_local::<Note>(
         "test.hear",
