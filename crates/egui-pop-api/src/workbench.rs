@@ -1005,6 +1005,26 @@ impl Landing {
     }
 }
 
+/// A detached window's place as the layout keeps it: its rectangle,
+/// maximized, full screen.
+type WindowPlace = ([f32; 4], bool, bool);
+
+/// Who owns a detached window's place (#5241). The system sizes a window
+/// once it is open: the window opens with a place (its builder, kept the
+/// same while the window lives, so the backend asks nothing more of it),
+/// and a place the system tells is followed into the layout, never asked
+/// back. Only a place the application changes on purpose (a layout
+/// applied) is asked, once, by explicit commands.
+#[derive(Clone, Copy, Debug)]
+struct WindowAsk {
+    /// What the window opened with: its builder's place, for its life.
+    opened: WindowState,
+    /// The place last asked of the system (or opened with).
+    asked: WindowPlace,
+    /// The place the system last told, followed into the layout.
+    told: Option<WindowPlace>,
+}
+
 /// The workbench's state, held by the application.
 pub(crate) struct Workbench {
     /// The declared panels, in declaration order (refreshed at rebuild).
@@ -1045,6 +1065,9 @@ pub(crate) struct Workbench {
     /// The place of each panel's detached window when it closed: the
     /// panel detached again opens its window there, as it was.
     closed_windows: BTreeMap<PanelId, Auxiliary>,
+    /// Who set each detached window's place: what its window opened
+    /// with, what the application asked since and what the system told.
+    window_asks: BTreeMap<PanelId, WindowAsk>,
     /// Where each floating panel was docked when it floated (its area,
     /// among which tabs): where Dock back puts it (`workbench.dock_back`).
     floated_from: BTreeMap<PanelId, egui_pop_model::layout::DormantPlace>,
@@ -1121,6 +1144,7 @@ impl Default for Workbench {
             window_drop: None,
             window_outlines: Vec::new(),
             closed_windows: BTreeMap::new(),
+            window_asks: BTreeMap::new(),
             floated_from: BTreeMap::new(),
             hint: None,
             focused: None,
@@ -1148,6 +1172,76 @@ impl Default for Workbench {
 }
 
 impl Workbench {
+    /// A detached window's place for this pass (#5241): the place its
+    /// window opened with, for its builder (the same while it lives), and
+    /// the place the application changed on purpose (from, to), to ask of
+    /// the system once. A place the system told is never asked back.
+    fn window_place(
+        &mut self,
+        panel: &PanelId,
+        now: WindowPlace,
+        screens: &[Rect],
+    ) -> (WindowState, Option<(WindowState, WindowState)>) {
+        let repaired = |(r, maximized, fullscreen): WindowPlace| {
+            let [x, y, w, h] = r;
+            WindowState {
+                position: Some(egui::pos2(x, y)),
+                size: egui::vec2(w, h),
+                maximized,
+                fullscreen,
+            }
+            .repair(screens)
+        };
+        let Some(ask) = self.window_asks.get_mut(panel) else {
+            let opened = repaired(now);
+            log::debug!(
+                target: "egui_pop::window_size",
+                "`{panel}` opens its window at {:?} (maximized {}, full screen {}): its builder's place",
+                opened.size,
+                opened.maximized,
+                opened.fullscreen,
+            );
+            self.window_asks.insert(
+                panel.clone(),
+                WindowAsk {
+                    opened,
+                    asked: now,
+                    told: None,
+                },
+            );
+            return (opened, None);
+        };
+        if ask.asked == now || ask.told == Some(now) {
+            return (ask.opened, None);
+        }
+        // The application changed the place: asked, from where the
+        // window is (as told), once.
+        let was = ask.told.unwrap_or(ask.asked);
+        ask.asked = now;
+        ask.told = None;
+        (ask.opened, Some((repaired(was), repaired(now))))
+    }
+
+    /// A detached window's place as the system told it, followed into the
+    /// layout: never asked back.
+    fn window_told(&mut self, panel: &PanelId, place: WindowPlace) {
+        if let Some(ask) = self.window_asks.get_mut(panel) {
+            ask.told = Some(place);
+        }
+    }
+
+    /// A detached window's place the application asked by its own
+    /// command (a window brought back onto a screen): asked already.
+    pub(crate) fn window_place_asked(&mut self, panel: &PanelId) {
+        let Some(a) = self.layout.auxiliary.iter().find(|a| a.panel == *panel) else {
+            return;
+        };
+        let now = (a.rect, a.maximized, a.fullscreen);
+        if let Some(ask) = self.window_asks.get_mut(panel) {
+            ask.asked = now;
+            ask.told = None;
+        }
+    }
     /// A template by name (the last offered wins).
     pub fn template(&self, name: &str) -> Option<Layout> {
         self.templates
@@ -1959,20 +2053,27 @@ pub(crate) fn windows(
         wb.layout.auxiliary.clone()
     };
     let screens = crate::window::screens();
+    // A window gone: its next one opens with its own place.
+    app.workbench_mut()
+        .window_asks
+        .retain(|p, _| auxiliary.iter().any(|a| a.panel == *p));
     for aux in auxiliary {
         // Titled after the panel it shows.
         let Some(spec) = app.workbench_mut().spec(aux.shown()).cloned() else {
             continue;
         };
-        let [x, y, w, h] = aux.rect;
-        // A place off every screen comes back onto one.
-        let state = WindowState {
-            position: Some(egui::pos2(x, y)),
-            size: egui::vec2(w, h),
-            maximized: aux.maximized,
-            fullscreen: aux.fullscreen,
+        // A place off every screen comes back onto one. The builder keeps
+        // the place the window opened with: one that changed would be
+        // asked of the system again by the backend, a size the system
+        // just set asked back one pass late (#5241).
+        let (state, changed) = app.workbench_mut().window_place(
+            &aux.panel,
+            (aux.rect, aux.maximized, aux.fullscreen),
+            &screens,
+        );
+        if let Some((from, to)) = changed {
+            crate::bus::panels::ask_place(ctx, window_id(&aux.panel), &aux.panel, from, to);
         }
-        .repair(&screens);
         let own = crate::frame::own_frame(app);
         let panel_title = strings::panel_title(ctx, spec.id.as_str(), &spec.title);
         let title = if app_name.is_empty() {
@@ -1991,10 +2092,10 @@ pub(crate) fn windows(
         if let Some(p) = state.position {
             builder = builder.with_position(p);
         }
-        if aux.maximized {
+        if state.maximized {
             builder = builder.with_maximized(true);
         }
-        if aux.fullscreen {
+        if state.fullscreen {
             builder = builder.with_fullscreen(true);
         }
         let panel = aux.panel.clone();
@@ -2138,7 +2239,8 @@ fn keep_window_place(app: &AppHandle, vctx: &egui::Context, panel: &PanelId) {
     let maximized = info.maximized.unwrap_or(false);
     let fullscreen = info.fullscreen.unwrap_or(false);
     let size = info.inner_rect.map_or(size, |r| r.size());
-    let mut wb = app.workbench_mut();
+    let mut guard = app.workbench_mut();
+    let wb = &mut *guard;
     let Some(a) = wb.layout.auxiliary.iter_mut().find(|a| a.panel == *panel) else {
         return;
     };
@@ -2149,14 +2251,29 @@ fn keep_window_place(app: &AppHandle, vctx: &egui::Context, panel: &PanelId) {
     if a.fullscreen != fullscreen {
         a.fullscreen = fullscreen;
     }
-    if maximized || fullscreen || info.minimized == Some(true) || size.x <= 0.0 || size.y <= 0.0 {
-        return;
+    let normal = !(maximized
+        || fullscreen
+        || info.minimized == Some(true)
+        || size.x <= 0.0
+        || size.y <= 0.0);
+    if normal {
+        let [x, y, ..] = a.rect;
+        let (x, y) = info.outer_rect.map_or((x, y), |r| (r.min.x, r.min.y));
+        let rect = [x, y, size.x, size.y];
+        if a.rect != rect {
+            a.rect = rect;
+        }
     }
-    let [x, y, ..] = a.rect;
-    let (x, y) = info.outer_rect.map_or((x, y), |r| (r.min.x, r.min.y));
-    let rect = [x, y, size.x, size.y];
-    if a.rect != rect {
-        a.rect = rect;
+    // The system's place: followed, never asked back (#5241).
+    if a.rect != was.rect || a.maximized != was.maximized || a.fullscreen != was.fullscreen {
+        let told = (a.rect, a.maximized, a.fullscreen);
+        wb.window_told(panel, told);
+    }
+    let Some(a) = wb.layout.auxiliary.iter_mut().find(|a| a.panel == *panel) else {
+        return;
+    };
+    if !normal {
+        return;
     }
     // The screen it is on, by the name the system gives it: unplugged,
     // the window docks back (`screen.removed`).
@@ -2168,7 +2285,7 @@ fn keep_window_place(app: &AppHandle, vctx: &egui::Context, panel: &PanelId) {
         a.screen = name;
     }
     if *a != was {
-        drop(wb);
+        drop(guard);
         app.note_layout("window.place");
     }
 }
