@@ -8,6 +8,14 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.13.1 (2026-11-17)
+
+Published: egui-pop-core 0.12.1, egui-pop-viewport 0.12.1, egui-pop-views 0.12.1, egui-pop 0.13.1.
+
+### Fixes
+
+- egui-pop, egui-pop-core, egui-pop-viewport, egui-pop-views: The library's comparison zooms and pans with the wheel as the image viewport does, through the same wheel path (`egui_pop_core::pointer::view`, where the viewport's `ViewGestures` and `ViewAction` now live, re-exported where they were): the pointer profile's `canvas.image` gestures, so the wheel alone zooms with darktable's profile and Ctrl and the wheel with the default one, where the comparison used to zoom with Ctrl and the wheel whatever the profile. Synced panes no longer drift apart while dragging: every pane moves by the same motion in points (a `PaneView`'s pan is now in pane sizes, not in each photo's fitted size), and a drag follows the pointer from the press, nothing lost to the drag threshold, so the image point under the pointer stays under it in every pane whatever the photos' shapes.
+
 ## 0.13.0 (2026-11-17)
 
 Published: egui-pop-tokens 0.2.9, egui-pop-hooks 0.2.0, egui-pop-winit 0.1.2, egui-pop-model 0.10.0, egui-pop-core 0.12.0, egui-pop-api 0.12.0, egui-pop-test 0.13.0, egui-pop-viewport 0.12.0, egui-pop-i18n 0.12.0, egui-pop-agent 0.7.0, egui-pop-editors 0.12.0, egui-pop-platform 0.12.0, egui-pop-views 0.12.0, egui-pop-imaging 0.12.0, egui-pop 0.13.0.
