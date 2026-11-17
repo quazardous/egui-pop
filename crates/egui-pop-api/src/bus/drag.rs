@@ -372,6 +372,25 @@ pub(crate) fn waiting(ctx: &Context) -> bool {
         .is_some_and(|s| s.released.is_some())
 }
 
+/// Whether the window being drawn (`ctx`'s viewport) has a drag of a `T`
+/// to look at as a target of another window's drag: one begun in another
+/// window and in progress, or one already delivered here and not taken.
+pub(crate) fn from_elsewhere<T: Any + Send + Sync>(ctx: &Context) -> bool {
+    let st = state(ctx);
+    let st = lock(&st);
+    let viewport = ctx.viewport_id();
+    let window = st.window_of(viewport);
+    let in_progress = st
+        .session
+        .as_ref()
+        .is_some_and(|s| s.source != viewport && s.payload.is::<T>());
+    in_progress
+        || st
+            .delivered
+            .iter()
+            .any(|d| d.window == window && d.payload.is::<T>())
+}
+
 /// How the last drag of a `T` ended, and its payload, while no other drag
 /// began: for its source, to handle a drop over no target itself.
 ///
