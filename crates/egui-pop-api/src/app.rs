@@ -4188,8 +4188,7 @@ impl AppBuilder {
             infos,
             modes,
             self.panel_alignment,
-            &self.pointer_profile,
-            self.dock_drag,
+            (&self.pointer_profile, self.dock_drag),
         )
         .expect("the framework's registrations are valid");
         app.install_collectors();
@@ -4645,7 +4644,8 @@ impl App {
         self.reg.keymap.borrow()
     }
 
-    /// The framework's own registrations.
+    /// The framework's own registrations (the pointer profile and the palette
+    /// drag mode by default, as the builder has them).
     fn framework(
         &mut self,
         theme: ThemeSpec,
@@ -4653,8 +4653,7 @@ impl App {
         kits: Vec<egui_pop_core::tokens::kit::KitInfo>,
         modes: FocusModes,
         panel_alignment: crate::workbench::PanelAlignment,
-        pointer_profile: &str,
-        dock_drag: Option<egui_pop_model::pointer::DockDrag>,
+        (pointer_profile, dock_drag): (&str, Option<egui_pop_model::pointer::DockDrag>),
     ) -> Result<(), CtxError> {
         let owner = OwnerId::FRAMEWORK;
         let handle = self.handle.clone();
