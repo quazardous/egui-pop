@@ -23,9 +23,10 @@ use web_time::Instant;
 /// below under their old paths.
 pub use bus_contract;
 pub use bus_contract::{
-    Altered, Collected, DEFAULT_DEADLINE, FAILED_FACT, Failure, FailureKind, HookError, LAST,
-    ListenOpts, ListenerInfo, PLUGIN_DEADLINE, PendingRun, Point, PointDecl, PointInfo, PointKind,
-    PointSpec, Refused, declare_all, missing_targets, order_dump,
+    Altered, Capability, Collected, DEFAULT_DEADLINE, Defer, FAILED_FACT, Failure, FailureKind,
+    HookError, LAST, ListenOpts, ListenerInfo, PLUGIN_DEADLINE, PendingRun, Point, PointDecl,
+    PointInfo, PointKind, PointSpec, Refusal, Refused, declare_all, missing_targets, offers,
+    order_dump,
 };
 use bus_contract::{
     AnyInput, AnyListener, AnyLocalListener, AnyValue, Bus, CloneFn, FailureSink, FreshFn,
@@ -70,11 +71,58 @@ struct Pending {
     work: Work,
     entries: Vec<Arc<Entry>>,
     deadline: Duration,
+    rules: Rules,
 }
 
-/// A point's listeners in order, the point's deadline, and the failures
-/// known before running.
-type Snapshot = (Vec<Arc<Entry>>, Duration, Vec<Failure>);
+/// A request asked through [`Defer`], waiting for its thread's
+/// [`Defer::drain`].
+struct Asked {
+    thread: ThreadId,
+    ask: u64,
+    point: PointKey,
+    input: AnyInput,
+    value: AnyValue,
+    clone: CloneFn,
+}
+
+/// What a point's kind and declaration make of a listener's refusal or
+/// failure.
+#[derive(Clone, Copy, Debug, Default)]
+struct Rules {
+    /// A request: a refusal stops it.
+    request: bool,
+    /// A request declared fail-closed: a failure stops it too.
+    fail_closed: bool,
+}
+
+/// A point's listeners in order, the point's deadline, the failures
+/// known before running, and its rules.
+struct Snapshot {
+    entries: Vec<Arc<Entry>>,
+    deadline: Duration,
+    failures: Vec<Failure>,
+    rules: Rules,
+}
+
+/// What a listener answered instead of a value.
+enum Answer {
+    /// It refused the request ([`HookError::Refuse`]).
+    Refuse(String),
+    /// It failed.
+    Fail(FailureKind),
+}
+
+/// What a listener's answer means for the emit.
+enum Judged {
+    /// Its contribution is dropped; the others run.
+    Dropped(Failure),
+    /// The request stops here, with the failure that stopped it on a
+    /// fail-closed point.
+    Stop(Refusal, Option<Failure>),
+}
+
+/// An alter emit's result and the listeners that ran on this thread.
+type AlterRun = (Altered<AnyValue>, Vec<String>);
 
 struct Entry {
     id: String,
@@ -149,6 +197,9 @@ pub struct Kernel {
     wakers: RwLock<Vec<PendingWaker>>,
     /// Local parts of emits made on another thread than theirs.
     pending: Mutex<Vec<Pending>>,
+    /// Requests asked through [`Defer`], for their thread's drain.
+    asked: Mutex<Vec<Asked>>,
+    next_ask: AtomicU64,
     /// Local listeners removed from another thread than theirs: their
     /// closures are dropped on their thread, at its next local call.
     dropped: Mutex<Vec<(ThreadId, u64)>>,
@@ -187,6 +238,8 @@ impl Kernel {
             sinks: RwLock::new(Vec::new()),
             wakers: RwLock::new(Vec::new()),
             pending: Mutex::new(Vec::new()),
+            asked: Mutex::new(Vec::new()),
+            next_ask: AtomicU64::new(0),
             dropped: Mutex::new(Vec::new()),
             default_deadline: deadline,
             seq: AtomicU64::new(0),
@@ -440,6 +493,7 @@ impl Kernel {
         input: &AnyInput,
         deferred: Vec<Arc<Entry>>,
         deadline: Duration,
+        rules: Rules,
         work: impl Fn() -> Work,
     ) {
         let mut threads: Vec<ThreadId> = Vec::new();
@@ -466,15 +520,21 @@ impl Kernel {
                     work: work(),
                     entries,
                     deadline,
+                    rules,
                 });
-            let wakers: Vec<PendingWaker> = self
-                .wakers
-                .read()
-                .unwrap_or_else(PoisonError::into_inner)
-                .clone();
-            for wake in wakers {
-                let _ = catch_unwind(AssertUnwindSafe(|| wake(thread)));
-            }
+            self.wake(thread);
+        }
+    }
+
+    /// Calls the wakers for `thread`; one that panics is ignored.
+    fn wake(&self, thread: ThreadId) {
+        let wakers: Vec<PendingWaker> = self
+            .wakers
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        for wake in wakers {
+            let _ = catch_unwind(AssertUnwindSafe(|| wake(thread)));
         }
     }
 
@@ -501,6 +561,7 @@ impl Kernel {
     fn run_queued(&self, p: Pending) -> PendingRun {
         let mut ran = Vec::new();
         let mut failures = Vec::new();
+        let mut refused = None;
         let (mut value, fresh) = match p.work {
             Work::Alter(value, clone) => (Some((value, clone)), None),
             Work::Collect(fresh) => (None, Some(fresh)),
@@ -527,17 +588,120 @@ impl Kernel {
                         *old = v;
                     }
                 }
-                Some(Err(kind)) => failures.push(self.failed(p.point, entry, kind)),
+                Some(Err(answer)) => match self.judge(p.point, entry, answer, p.rules) {
+                    Judged::Dropped(f) => failures.push(f),
+                    Judged::Stop(r, f) => {
+                        failures.extend(f);
+                        refused = Some(r);
+                        break;
+                    }
+                },
                 None => {
                     ran.pop();
                 }
             }
         }
-        PendingRun {
-            point: p.point,
-            ran,
-            failures,
+        let mut run = PendingRun::new(p.point);
+        run.ran = ran;
+        run.failures = failures;
+        run.refused = refused;
+        run
+    }
+
+    /// What a listener's refusal or failure means under `rules`; a
+    /// failure is counted and sent to the sinks.
+    fn judge(&self, point: &'static str, entry: &Entry, answer: Answer, rules: Rules) -> Judged {
+        let kind = match answer {
+            Answer::Refuse(reason) if rules.request => {
+                let refusal =
+                    Refusal::new(point, entry.id.clone(), entry.opts.owner.clone(), reason);
+                return Judged::Stop(refusal, None);
+            }
+            Answer::Refuse(reason) => FailureKind::Error(reason),
+            Answer::Fail(kind) => kind,
+        };
+        let failure = self.failed(point, entry, kind);
+        if rules.fail_closed {
+            Judged::Stop(Refusal::from_failure(&failure), Some(failure))
+        } else {
+            Judged::Dropped(failure)
         }
+    }
+
+    /// Asks the request `P` now: its listeners run at the calling
+    /// thread's next [`Kernel::drain`] ([`Defer`]). The ask's number.
+    pub fn ask<P: Point>(&self, input: P::Input, value: P::Value) -> u64
+    where
+        P::Value: Clone,
+    {
+        (self as &dyn Defer).ask::<P>(input, value)
+    }
+
+    /// Queues an alter emit of `point` for the calling thread's next
+    /// [`Kernel::drain`] and calls the wakers ([`Defer::ask_any`]).
+    pub fn ask_any(
+        &self,
+        point: PointKey,
+        input: AnyInput,
+        value: AnyValue,
+        clone: CloneFn,
+    ) -> u64 {
+        let ask = self.next_ask.fetch_add(1, Ordering::Relaxed);
+        let thread = thread::current().id();
+        self.asked
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(Asked {
+                thread,
+                ask,
+                point,
+                input,
+                value,
+                clone,
+            });
+        self.wake(thread);
+        ask
+    }
+
+    /// Runs the requests asked on the calling thread, in ask order, each
+    /// as an alter emit with the listeners registered now; what each did
+    /// ([`Defer::drain`]). An ask made while draining waits for the
+    /// next drain.
+    pub fn drain(&self) -> Vec<PendingRun> {
+        let here = thread::current().id();
+        let mine: Vec<Asked> = {
+            let mut asked = self.asked.lock().unwrap_or_else(PoisonError::into_inner);
+            if asked.is_empty() {
+                return Vec::new();
+            }
+            let (mine, rest) = std::mem::take(&mut *asked)
+                .into_iter()
+                .partition(|a| a.thread == here);
+            *asked = rest;
+            mine
+        };
+        mine.into_iter()
+            .map(|a| {
+                let (out, ran) = self.alter_erased(a.point, a.input, a.value, a.clone);
+                let mut run = PendingRun::new(a.point.id);
+                run.ran = ran;
+                run.failures = out.failures;
+                run.refused = out.refused;
+                run.ask = Some(a.ask);
+                run
+            })
+            .collect()
+    }
+
+    /// How many requests asked on the calling thread wait for its drain.
+    pub fn waiting(&self) -> usize {
+        let here = thread::current().id();
+        self.asked
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .filter(|a| a.thread == here)
+            .count()
     }
 
     /// Adds a sink called with each failure that dropped a contribution
@@ -579,38 +743,60 @@ impl Kernel {
         input: AnyInput,
         value: AnyValue,
         clone: CloneFn,
-    ) -> Altered<AnyValue> {
-        let (entries, deadline, mut failures) = self.snapshot(&key);
+    ) -> AlterRun {
+        let Snapshot {
+            entries,
+            deadline,
+            mut failures,
+            rules,
+        } = self.snapshot(&key);
         let mut value = value;
         let mut deferred = Vec::new();
+        let mut ran = Vec::new();
+        let mut refused = None;
         for entry in &entries {
             if entry.elsewhere() {
                 deferred.push(entry.clone());
                 continue;
             }
-            match self.call(
+            let answer = self.call(
                 key.id,
                 entry,
                 &input,
                 clone(&*value),
                 entry.opts.deadline.unwrap_or(deadline),
-            ) {
+            );
+            if answer.is_some() {
+                ran.push(entry.id.clone());
+            }
+            match answer {
                 Some(Ok(v)) => value = v,
-                Some(Err(kind)) => failures.push(self.failed(key.id, entry, kind)),
+                Some(Err(answer)) => match self.judge(key.id, entry, answer, rules) {
+                    Judged::Dropped(f) => failures.push(f),
+                    Judged::Stop(r, f) => {
+                        failures.extend(f);
+                        refused = Some(r);
+                        break;
+                    }
+                },
                 None => {}
             }
         }
+        if refused.is_some() {
+            // A refused request queues nothing for other threads.
+            deferred.clear();
+        }
         let ids = deferred.iter().map(|e| e.id.clone()).collect();
         if !deferred.is_empty() {
-            self.defer(key.id, &input, deferred, deadline, || {
+            self.defer(key.id, &input, deferred, deadline, rules, || {
                 Work::Alter(clone(&*value), clone)
             });
         }
-        Altered {
-            value,
-            failures,
-            deferred: ids,
-        }
+        let mut out = Altered::new(value);
+        out.failures = failures;
+        out.deferred = ids;
+        out.refused = refused;
+        (out, ran)
     }
 
     fn collect_erased(
@@ -619,8 +805,14 @@ impl Kernel {
         input: AnyInput,
         fresh: FreshFn,
     ) -> Collected<AnyValue> {
-        let (entries, deadline, mut failures) = self.snapshot(&key);
-        let mut parts = Vec::with_capacity(entries.len());
+        let Snapshot {
+            entries,
+            deadline,
+            failures,
+            rules,
+        } = self.snapshot(&key);
+        let mut out = Collected::new();
+        out.failures = failures;
         let mut deferred = Vec::new();
         for entry in &entries {
             if entry.elsewhere() {
@@ -634,20 +826,26 @@ impl Kernel {
                 fresh(),
                 entry.opts.deadline.unwrap_or(deadline),
             ) {
-                Some(Ok(v)) => parts.push((entry.id.clone(), v)),
-                Some(Err(kind)) => failures.push(self.failed(key.id, entry, kind)),
+                Some(Ok(v)) => out.parts.push((entry.id.clone(), v)),
+                Some(Err(answer)) => match self.judge(key.id, entry, answer, rules) {
+                    Judged::Dropped(f) => out.failures.push(f),
+                    Judged::Stop(r, f) => {
+                        out.failures.extend(f);
+                        out.refused = Some(r);
+                        deferred.clear();
+                        break;
+                    }
+                },
                 None => {}
             }
         }
-        let ids = deferred.iter().map(|e| e.id.clone()).collect();
+        out.deferred = deferred.iter().map(|e| e.id.clone()).collect();
         if !deferred.is_empty() {
-            self.defer(key.id, &input, deferred, deadline, || Work::Collect(fresh));
+            self.defer(key.id, &input, deferred, deadline, rules, || {
+                Work::Collect(fresh)
+            });
         }
-        Collected {
-            parts,
-            failures,
-            deferred: ids,
-        }
+        out
     }
 
     /// The listeners of a point in order, the point's deadline, and the
@@ -656,18 +854,24 @@ impl Kernel {
     fn snapshot(&self, key: &PointKey) -> Snapshot {
         let points = self.read();
         let default = self.default_deadline;
+        let empty = |failures| Snapshot {
+            entries: Vec::new(),
+            deadline: default,
+            failures,
+            rules: Rules::default(),
+        };
         let Some(slot) = points.get(key.id) else {
-            return (Vec::new(), default, Vec::new());
+            return empty(Vec::new());
         };
         if slot.type_id != key.type_id {
-            let failure = Failure {
-                point: key.id,
-                listener: "*".to_owned(),
-                owner: None,
-                kind: FailureKind::TypeMismatch,
-            };
-            return (Vec::new(), default, vec![failure]);
+            let failure = Failure::new(key.id, "*", None, FailureKind::TypeMismatch);
+            return empty(vec![failure]);
         }
+        let request = slot.kind == PointKind::Request;
+        let rules = Rules {
+            request,
+            fail_closed: request && slot.spec.as_ref().is_some_and(|s| s.fail_closed),
+        };
         let point_deadline = slot
             .spec
             .as_ref()
@@ -676,27 +880,30 @@ impl Kernel {
         let failures = slot
             .missing
             .iter()
-            .map(|(listener, target)| Failure {
-                point: key.id,
-                listener: listener.clone(),
-                owner: slot
+            .map(|(listener, target)| {
+                let owner = slot
                     .ordered
                     .iter()
                     .find(|e| &e.id == listener)
-                    .and_then(|e| e.opts.owner.clone()),
-                kind: FailureKind::MissingTarget(target.clone()),
+                    .and_then(|e| e.opts.owner.clone());
+                Failure::new(
+                    key.id,
+                    listener.clone(),
+                    owner,
+                    FailureKind::MissingTarget(target.clone()),
+                )
             })
             .collect();
-        (slot.ordered.clone(), point_deadline, failures)
+        Snapshot {
+            entries: slot.ordered.clone(),
+            deadline: point_deadline,
+            failures,
+            rules,
+        }
     }
 
     fn failed(&self, point: &'static str, entry: &Entry, kind: FailureKind) -> Failure {
-        let failure = Failure {
-            point,
-            listener: entry.id.clone(),
-            owner: entry.opts.owner.clone(),
-            kind,
-        };
+        let failure = Failure::new(point, entry.id.clone(), entry.opts.owner.clone(), kind);
         entry.failures.fetch_add(1, Ordering::Relaxed);
         *entry
             .last_failure
@@ -736,44 +943,42 @@ impl Kernel {
             .as_ref()
             .and_then(|s| s.deadline)
             .unwrap_or(self.default_deadline);
-        PointInfo {
-            id,
-            kind: slot.kind,
-            description: slot
-                .spec
-                .as_ref()
-                .map(|s| s.description.clone())
-                .unwrap_or_default(),
-            declared: slot.spec.is_some(),
-            deadline,
-            listeners: slot
-                .ordered
-                .iter()
-                .map(|e| ListenerInfo {
-                    id: e.id.clone(),
-                    owner: e.opts.owner.clone(),
-                    after: e.opts.after.clone(),
-                    before: e.opts.before.clone(),
-                    priority: e.opts.priority,
-                    deadline: e.opts.deadline.unwrap_or(deadline),
-                    threaded: e.opts.threaded,
-                    local: matches!(e.run, Run::Local(_)),
-                    missing: slot
-                        .missing
-                        .iter()
-                        .filter(|(l, _)| *l == e.id)
-                        .map(|(_, t)| t.clone())
-                        .collect(),
-                    runs: e.runs.load(Ordering::Relaxed),
-                    failures: e.failures.load(Ordering::Relaxed),
-                    last_failure: e
-                        .last_failure
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .clone(),
-                })
-                .collect(),
+        let mut info = PointInfo::new(id, slot.kind);
+        if let Some(spec) = &slot.spec {
+            info.description = spec.description.clone();
+            info.declared = true;
+            info.fail_closed = spec.fail_closed;
         }
+        info.deadline = deadline;
+        info.listeners = slot
+            .ordered
+            .iter()
+            .map(|e| {
+                let mut l = ListenerInfo::new(e.id.clone());
+                l.owner = e.opts.owner.clone();
+                l.after = e.opts.after.clone();
+                l.before = e.opts.before.clone();
+                l.priority = e.opts.priority;
+                l.deadline = e.opts.deadline.unwrap_or(deadline);
+                l.threaded = e.opts.threaded;
+                l.local = matches!(e.run, Run::Local(_));
+                l.missing = slot
+                    .missing
+                    .iter()
+                    .filter(|(l, _)| *l == e.id)
+                    .map(|(_, t)| t.clone())
+                    .collect();
+                l.runs = e.runs.load(Ordering::Relaxed);
+                l.failures = e.failures.load(Ordering::Relaxed);
+                l.last_failure = e
+                    .last_failure
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .clone();
+                l
+            })
+            .collect();
+        info
     }
 }
 
@@ -795,7 +1000,7 @@ impl Kernel {
         input: &AnyInput,
         value: AnyValue,
         deadline: Duration,
-    ) -> Option<Result<AnyValue, FailureKind>> {
+    ) -> Option<Result<AnyValue, Answer>> {
         let shared = match &entry.run {
             Run::Shared(run) => run,
             Run::Local(_) => {
@@ -826,15 +1031,15 @@ fn timed(
     input: &AnyInput,
     value: AnyValue,
     deadline: Duration,
-) -> Result<AnyValue, FailureKind> {
+) -> Result<AnyValue, Answer> {
     let start = Instant::now();
     let result = guarded(run, &**input, value);
     let took = start.elapsed();
     match result {
-        Ok(_) if took > deadline => Err(FailureKind::Late {
+        Ok(_) if took > deadline => Err(Answer::Fail(FailureKind::Late {
             deadline,
             took: Some(took),
-        }),
+        })),
         r => r,
     }
 }
@@ -848,18 +1053,9 @@ fn call(
     input: &AnyInput,
     value: AnyValue,
     deadline: Duration,
-) -> Result<AnyValue, FailureKind> {
+) -> Result<AnyValue, Answer> {
     if !entry.opts.threaded {
-        let start = Instant::now();
-        let result = guarded(&**run, &**input, value);
-        let took = start.elapsed();
-        return match result {
-            Ok(_) if took > deadline => Err(FailureKind::Late {
-                deadline,
-                took: Some(took),
-            }),
-            r => r,
-        };
+        return timed(&**run, input, value, deadline);
     }
     let (tx, rx) = sync_channel(1);
     let run = run.clone();
@@ -871,19 +1067,19 @@ fn call(
             let _ = tx.send(guarded(&*run, &*input, value));
         });
     if let Err(e) = spawned {
-        return Err(FailureKind::Error(format!(
+        return Err(Answer::Fail(FailureKind::Error(format!(
             "could not start its thread: {e}"
-        )));
+        ))));
     }
     match rx.recv_timeout(deadline) {
         Ok(result) => result,
-        Err(RecvTimeoutError::Timeout) => Err(FailureKind::Late {
+        Err(RecvTimeoutError::Timeout) => Err(Answer::Fail(FailureKind::Late {
             deadline,
             took: None,
-        }),
-        Err(RecvTimeoutError::Disconnected) => Err(FailureKind::Panic(
+        })),
+        Err(RecvTimeoutError::Disconnected) => Err(Answer::Fail(FailureKind::Panic(
             "its thread ended without an answer".to_owned(),
-        )),
+        ))),
     }
 }
 
@@ -891,11 +1087,14 @@ fn guarded(
     run: &ListenerFn,
     input: &(dyn Any + Send + Sync),
     mut value: AnyValue,
-) -> Result<AnyValue, FailureKind> {
+) -> Result<AnyValue, Answer> {
     match catch_unwind(AssertUnwindSafe(|| run(input, &mut *value))) {
         Ok(Ok(())) => Ok(value),
-        Ok(Err(e)) => Err(FailureKind::Error(e.0)),
-        Err(payload) => Err(FailureKind::Panic(panic_message(payload.as_ref()))),
+        Ok(Err(HookError::Refuse(reason))) => Err(Answer::Refuse(reason)),
+        Ok(Err(e)) => Err(Answer::Fail(FailureKind::Error(e.message().to_owned()))),
+        Err(payload) => Err(Answer::Fail(FailureKind::Panic(panic_message(
+            payload.as_ref(),
+        )))),
     }
 }
 
@@ -957,7 +1156,7 @@ impl Bus for Kernel {
         value: AnyValue,
         clone: CloneFn,
     ) -> Altered<AnyValue> {
-        self.alter_erased(point, input, value, clone)
+        self.alter_erased(point, input, value, clone).0
     }
 
     fn collect_any(&self, point: PointKey, input: AnyInput, fresh: FreshFn) -> Collected<AnyValue> {
@@ -974,5 +1173,23 @@ impl Bus for Kernel {
 
     fn listeners(&self, point: &str) -> Option<Vec<ListenerInfo>> {
         Kernel::listeners(self, point)
+    }
+
+    fn defer(&self) -> Option<&dyn Defer> {
+        Some(self)
+    }
+}
+
+impl Defer for Kernel {
+    fn ask_any(&self, point: PointKey, input: AnyInput, value: AnyValue, clone: CloneFn) -> u64 {
+        Kernel::ask_any(self, point, input, value, clone)
+    }
+
+    fn drain(&self) -> Vec<PendingRun> {
+        Kernel::drain(self)
+    }
+
+    fn waiting(&self) -> usize {
+        Kernel::waiting(self)
     }
 }

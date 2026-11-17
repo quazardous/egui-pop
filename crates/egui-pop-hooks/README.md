@@ -28,6 +28,16 @@ one failing contribution never breaks the others.
   `Send`, bound to the calling thread and ordered with the others. An
   emit from another thread queues it; the thread runs the queue with
   `run_pending()`, and `on_pending` wakers say when there is one.
+- **Refusals on requests.** On a point declared `PointKind::Request`, a
+  listener returning `HookError::refuse(reason)` stops the request: no
+  later listener runs and the result names the refusal (`refused`). On a
+  point declared `fail_closed`, a listener's error, panic or missed
+  deadline refuses the request the same way instead of being dropped.
+- **Deferred requests.** The kernel offers the contract's `Defer`
+  capability: `ask::<P>` queues a request for the calling thread and
+  returns at once; `drain()` runs the thread's asks in ask order and
+  reports what each did; `waiting()` counts them. An ask made during a
+  drain waits for the next one.
 - **Introspection.** `points()` lists every point and its listeners in
   the order they run, with their owners, constraints, deadlines, missing
   targets and counters (runs, failures, the last failure), for people,
