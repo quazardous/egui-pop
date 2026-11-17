@@ -3201,6 +3201,24 @@ fn a_palette_that_edits_shows_the_mark_in_its_band() {
 }
 
 #[test]
+fn the_centre_every_panel_left_says_it_takes_a_drop() {
+    use egui_pop::model::panels::Area;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    // The page itself (the main zone) moved to the end side bar: the
+    // centre is empty.
+    app.move_panel(&egui_pop::api::workbench::PANEL_MAIN, Area::EndSide)
+        .expect("moved");
+    h.run();
+    h.run();
+    assert!(app.layout().areas.iter().all(|(a, _)| *a != Area::Center));
+    assert!(h.query_by_label("Drop a panel here").is_some());
+    let centre = app.area_rect(Area::Center).expect("the centre is laid out");
+    shot::passed(h.try_shot_of("workbench-empty-centre-pop-dark", centre));
+}
+
+#[test]
 fn the_workbench_page_detaches_a_panel_into_its_own_window() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
     h.run();

@@ -2913,6 +2913,8 @@ egui-pop-workbench-dock-back = Dock back
 
 egui-pop-workbench-dock-in = Dock in { $area }
 
+egui-pop-workbench-drop-here = Drop a panel here
+
 egui-pop-workbench-float = Float
 
 egui-pop-workbench-flyout-pin = Pin { $panel }

@@ -2222,6 +2222,8 @@ egui-pop-workbench-dock-back = Réancrer
 
 egui-pop-workbench-dock-in = Ancrer dans { $area }
 
+egui-pop-workbench-drop-here = Déposez un panneau ici
+
 egui-pop-workbench-flyout-pin = Épingler { $panel }
 
 egui-pop-workbench-fold = Replier { $area }
