@@ -7,7 +7,8 @@
   "options": {
     "slider_wheel": "guarded",
     "image_double_click": "fit",
-    "knob_drag": "both"
+    "knob_drag": "both",
+    "dock_drag": "modifier-docks"
   },
   "input": {
     "zoom": "Ctrl",
@@ -127,6 +128,11 @@
       "keys": "Ctrl+PrimaryDrag",
       "command": "gesture.sections.pull",
       "scope": "surface:widget.sections"
+    },
+    {
+      "keys": "Ctrl+PrimaryDrag",
+      "command": "gesture.workbench.dock",
+      "scope": "surface:workbench.palette"
     }
   ]
 }

@@ -13,8 +13,27 @@
 //! its distance to it as the window is resized ([`anchored_pos`]); dragged
 //! away, it no longer is. Dropped on a
 //! side or bottom area (or a closed one's edge, with the workbench's drop
-//! hint), it docks there; a docked floatable panel floats again from its
-//! tab menu (Float). Its band carries Close, Roll up (down to the band)
+//! hint) with the dock keys held, it docks there; a docked floatable
+//! panel floats again from its tab menu (Float).
+//!
+//! **Moving or docking** (`docs/design/drag-move-vs-dock.md`). By
+//! default a plain drag only moves a palette: the drop targets (an area,
+//! another palette's group) show and take it only while the dock keys
+//! are held (`gesture.workbench.dock`, `Ctrl` and the drag, Cmd on
+//! macOS, rebindable in the shortcuts editor), read every pass of the
+//! drag, so pressing or releasing them mid-drag counts. The
+//! `input.dock_drag` setting ([`crate::pointer::SETTING_DOCK_DRAG`]; its
+//! default the application's, `AppBuilder::dock_drag`, else the pointer
+//! profile's) picks the mode ([`DockDrag`]): `modifier-docks` (the
+//! default), `modifier-floats` (a plain drag docks, the keys keep it
+//! floating: Photoshop's profile) or `dwell` (docking arms once the
+//! pointer rests on a target for [`DWELL`]). Whether the targets are
+//! armed shows in [`GroupHint::armed`] and the workbench's
+//! `DropHint::armed`; only armed targets are drawn. While a palette is
+//! dragged over a target, a one-line hint says how to dock or not
+//! ([`drag_hint`]): in the status bar, or under the pointer without one.
+//! A floating panel's menu docks it too (Dock in), for a pointer with no
+//! keyboard. Its band carries Close, Roll up (down to the band)
 //! and Pin (kept in place, in sight and opaque); a double click on the
 //! band rolls it up or down. A right click on its title, or on a tab of
 //! its group, opens the panel menu a docked tab opens
@@ -103,7 +122,10 @@ use egui_pop_core::widgets;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PanelId, SettingId, StepId};
 use egui_pop_model::keymap::BindOptions;
+use egui_pop_model::keymap::{Button, Pointer};
 use egui_pop_model::layout::{Anchor, AnchorEdge, Arrangement, FloatingGroup, Join, Member};
+use egui_pop_model::panels::Area;
+use egui_pop_model::pointer::{DockDrag, PointerMap, SCOPE_PALETTE, gesture};
 use egui_pop_model::values::Descriptor;
 use serde_json::{Value as Json, json};
 
@@ -158,6 +180,10 @@ pub const CONTEXT_HIDDEN: &str = "palettesHidden";
 /// The context key saying some panel floats (shown or hidden): only
 /// then is Tab the palettes' toggle.
 pub const CONTEXT_FLOATING: &str = "palettesFloat";
+
+/// How long the pointer rests on a target before a drag in the `dwell`
+/// mode ([`DockDrag::Dwell`]) docks there, in seconds.
+pub const DWELL: f64 = 0.5;
 
 /// What is left of a palette while a stroke is in progress.
 const STROKE_OPACITY: f32 = 0.15;
@@ -493,6 +519,123 @@ pub(crate) struct PaletteDrag {
     pub pos: [f32; 2],
     /// The pointer.
     pub at: Pos2,
+    /// What it is over: an area it docks in, a palette it joins.
+    pub target: Option<Target>,
+    /// Since when (the input's time) it is over that target.
+    pub since: f64,
+    /// Whether a drop now docks or joins (the mode and the keys held).
+    pub armed: bool,
+}
+
+/// What a dragged palette is over.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum Target {
+    /// An area it docks in.
+    Area(Area),
+    /// Another palette it joins, and where.
+    Join(PanelId, Join),
+}
+
+/// The palette drag mode in force: the `input.dock_drag` setting, else
+/// the pointer profile's.
+fn mode(ctx: &egui::Context) -> DockDrag {
+    egui_pop_core::pointer::map(ctx).options.dock_drag
+}
+
+/// Whether the dock keys (`gesture.workbench.dock`) are held now.
+fn dock_keys_held(ctx: &egui::Context, map: &PointerMap) -> bool {
+    let held = ctx.input(|i| i.modifiers);
+    let chord = egui_pop_core::pointer::chord(held, Pointer::Drag(Button::Primary));
+    map.command(SCOPE_PALETTE, &chord) == Some(&gesture::WORKBENCH_DOCK)
+}
+
+/// Whether a drop now docks or joins: the dock keys held (or not, for
+/// `modifier-floats`), or the pointer resting on the target since
+/// `since` for [`DWELL`].
+fn armed_now(ctx: &egui::Context, since: Option<f64>) -> bool {
+    let map = egui_pop_core::pointer::map(ctx);
+    match map.options.dock_drag {
+        DockDrag::ModifierDocks => dock_keys_held(ctx, &map),
+        DockDrag::ModifierFloats => !dock_keys_held(ctx, &map),
+        DockDrag::Dwell => since.is_some_and(|s| ctx.input(|i| i.time) - s >= DWELL),
+    }
+}
+
+/// A drag's pass over what it is over (a group hint, else an area the
+/// workbench docks in at `at`): its target, since when, and whether it
+/// is armed. A dwell still running asks for the pass that ends it.
+fn track(
+    app: &AppHandle,
+    ctx: &egui::Context,
+    mine: Option<&PaletteDrag>,
+    hint: Option<&GroupHint>,
+    at: Pos2,
+) -> (Option<Target>, f64, bool) {
+    let target = match hint {
+        Some(h) => Some(Target::Join(h.into.clone(), h.at)),
+        None => app
+            .workbench_mut()
+            .dock_at(at, magnet(ctx))
+            .map(Target::Area),
+    };
+    let time = ctx.input(|i| i.time);
+    let since = match mine {
+        Some(x) if x.target == target => x.since,
+        _ => time,
+    };
+    let armed = armed_now(ctx, target.is_some().then_some(since));
+    if target.is_some() && !armed && mode(ctx) == DockDrag::Dwell {
+        let left = (since + DWELL - time).max(0.0);
+        ctx.request_repaint_after(std::time::Duration::from_secs_f64(left));
+    }
+    (target, since, armed)
+}
+
+/// The dock keys as the platform names them (`Ctrl`, `Cmd` on macOS):
+/// the first chord bound to `gesture.workbench.dock`'s modifiers; `None`
+/// when none is bound, or one without modifiers.
+fn dock_keys_text(ctx: &egui::Context, map: &PointerMap) -> Option<String> {
+    let dock = gesture::WORKBENCH_DOCK;
+    let c = map.chords(SCOPE_PALETTE, &dock).next()?.clone();
+    let mac = ctx.os() == egui::os::OperatingSystem::Mac;
+    let parts: Vec<&str> = [
+        (c.ctrl, if mac { "Cmd" } else { "Ctrl" }),
+        (c.alt, if mac { "Option" } else { "Alt" }),
+        (c.shift, "Shift"),
+        (c.meta, "Meta"),
+    ]
+    .into_iter()
+    .filter_map(|(on, name)| on.then_some(name))
+    .collect();
+    (!parts.is_empty()).then(|| parts.join("+"))
+}
+
+/// The hint while a palette is dragged over a target, worded after the
+/// drag mode and the keys bound to `gesture.workbench.dock` (a rebind
+/// changes it): "Hold Ctrl to dock" or "Release Ctrl to move only"
+/// (`modifier-docks`), "Hold Ctrl to move without docking"
+/// (`modifier-floats`, the keys not held), "Rest here to dock" (`dwell`,
+/// while the delay runs). `None` while no palette is dragged over a
+/// target.
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
+pub fn drag_hint(app: &AppHandle) -> Option<String> {
+    let drag = app.try_workbench()?.palette_drag.clone()?;
+    drag.target.as_ref()?;
+    let ctx = app.egui();
+    let map = egui_pop_core::pointer::map(&ctx);
+    let keys = || dock_keys_text(&ctx, &map);
+    let held = dock_keys_held(&ctx, &map);
+    let (key, keys) = match map.options.dock_drag {
+        DockDrag::ModifierDocks if held => (&txt::PALETTE_DRAG_RELEASE_TO_MOVE, keys()?),
+        DockDrag::ModifierDocks => (&txt::PALETTE_DRAG_HOLD_TO_DOCK, keys()?),
+        DockDrag::ModifierFloats if !held => (&txt::PALETTE_DRAG_HOLD_TO_FLOAT, keys()?),
+        DockDrag::ModifierFloats => return None,
+        DockDrag::Dwell if !drag.armed => return Some(strings::tr(&ctx, &txt::PALETTE_DRAG_REST)),
+        DockDrag::Dwell => return None,
+    };
+    Some(strings::tr_args(&ctx, key, &[("keys", &keys)]))
 }
 
 /// A palette's edge being dragged.
@@ -719,6 +862,10 @@ pub struct GroupHint {
     pub at: Join,
     /// Where the hint is drawn, in points.
     pub rect: Rect,
+    /// Whether a drop now joins: the drag mode and the keys held say so
+    /// (`input.dock_drag`). Not armed, the hint is not drawn and a drop
+    /// only moves.
+    pub armed: bool,
 }
 
 /// Where dropping the palettes dragged now would group them, if they
@@ -1424,12 +1571,18 @@ fn follow(
         };
         let start = mine.as_ref().map_or(g.pos, |x| x.start);
         let pos = d.land(ctx, start, rect.size(), origin, now, |p| g.holds(p));
-        let hint = join_target(d.members, now, |p| g.holds(p)).map(|(into, at, r)| GroupHint {
+        let mut hint = join_target(d.members, now, |p| g.holds(p)).map(|(into, at, r)| GroupHint {
             panels: g.panels().cloned().collect(),
             into,
             at,
             rect: r,
+            armed: false,
         });
+        let (target, since, armed) = track(app, ctx, mine.as_ref(), hint.as_ref(), now);
+        if let Some(h) = &mut hint {
+            h.armed = armed;
+        }
+        let rearmed = mine.as_ref().is_some_and(|x| x.armed != armed);
         let mut wb = app.workbench_mut();
         let mut moved = false;
         if let Some(fl) = wb.layout.floating_mut(&lead) {
@@ -1442,10 +1595,14 @@ fn follow(
             start,
             pos,
             at: now,
+            target,
+            since,
+            armed,
         });
         wb.group_hint = hint;
-        // Only a move needs another frame: a held, still pointer does not.
-        if moved {
+        // Only a move (or the targets armed or not) needs another frame:
+        // a held, still pointer does not.
+        if moved || rearmed {
             ctx.request_repaint();
         }
         return;
@@ -1453,12 +1610,14 @@ fn follow(
     let Some(x) = mine else {
         return;
     };
-    // Dropped: back where it started, then the step decides.
+    // Dropped: back where it started, then the step decides; docking or
+    // joining only when armed (the keys held now, the dwell run).
+    let armed = armed_now(ctx, x.target.is_some().then_some(x.since));
     let (to, area, hint) = {
         let mut wb = app.workbench_mut();
         wb.palette_drag = None;
-        let hint = wb.group_hint.take();
-        let area = wb.dock_at(x.at, magnet(ctx));
+        let hint = wb.group_hint.take().filter(|_| armed);
+        let area = wb.dock_at(x.at, magnet(ctx)).filter(|_| armed);
         let fl = wb.layout.floating_mut(&lead);
         let to = fl.map(|fl| std::mem::replace(&mut fl.pos, x.start));
         (to, area, hint)
@@ -1534,21 +1693,31 @@ fn follow_member(
         let from = own.min - d.content.min;
         let start = mine.as_ref().map_or([from.x, from.y], |x| x.start);
         let pos = d.land(ctx, start, own.size(), origin, now, |p| g.holds(p));
-        let hint =
+        let mut hint =
             join_target(d.members, now, |p| mates.contains(p)).map(|(into, at, r)| GroupHint {
                 panels: moving.clone(),
                 into,
                 at,
                 rect: r,
+                armed: false,
             });
+        let (target, since, armed) = track(app, ctx, mine.as_ref(), hint.as_ref(), now);
+        if let Some(h) = &mut hint {
+            h.armed = armed;
+        }
         let mut wb = app.workbench_mut();
-        let moved = mine.as_ref().is_none_or(|x| x.pos != pos || x.at != now);
+        let moved = mine
+            .as_ref()
+            .is_none_or(|x| x.pos != pos || x.at != now || x.armed != armed);
         wb.palette_drag = Some(PaletteDrag {
             panel: panel.clone(),
             kind,
             start,
             pos,
             at: now,
+            target,
+            since,
+            armed,
         });
         wb.group_hint = hint;
         if moved {
@@ -1559,11 +1728,12 @@ fn follow_member(
     let Some(x) = mine else {
         return;
     };
+    let armed = armed_now(ctx, x.target.is_some().then_some(x.since));
     let (area, hint) = {
         let mut wb = app.workbench_mut();
         wb.palette_drag = None;
-        let hint = wb.group_hint.take();
-        (wb.dock_at(x.at, magnet(ctx)), hint)
+        let hint = wb.group_hint.take().filter(|_| armed);
+        (wb.dock_at(x.at, magnet(ctx)).filter(|_| armed), hint)
     };
     let changes = match (hint, area) {
         (Some(h), _) => vec![Change::Group(h.panels, h.into, h.at)],
@@ -1606,9 +1776,17 @@ fn paint_hints(
         let dock = wb
             .palette_drag
             .as_ref()
+            .filter(|d| d.armed)
             .and_then(|d| wb.dock_at(d.at, magnet(ctx)));
-        (wb.palette_drag.clone(), wb.group_hint.clone(), dock)
+        (
+            wb.palette_drag.clone(),
+            wb.group_hint.clone().filter(|h| h.armed),
+            dock,
+        )
     };
+    if drag.is_some() && app.service(&crate::strips::STRIPS).is_none() {
+        paint_drag_hint(app, ctx);
+    }
     let rect = match (&hint, &drag) {
         (Some(h), _) => h.rect,
         (None, Some(d)) if d.kind != DragKind::Group && dock.is_none() => {
@@ -1637,6 +1815,24 @@ fn paint_hints(
             label: None,
         },
     );
+}
+
+/// The drag's hint ([`drag_hint`]) under the pointer, for an application
+/// without a status bar.
+fn paint_drag_hint(app: &AppHandle, ctx: &egui::Context) {
+    let (Some(text), Some(at)) = (drag_hint(app), ctx.input(|i| i.pointer.latest_pos())) else {
+        return;
+    };
+    let t = Tokens::of(ctx);
+    egui::Area::new(Id::unique("egui_pop.palette.drag_hint"))
+        .order(egui::Order::Tooltip)
+        .fixed_pos(at + Vec2::new(t.space.m, t.space.l))
+        .interactable(false)
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.add(egui::Label::new(text).selectable(false).extend());
+            });
+        });
 }
 
 /// The room between the members of a stacked group (`palette.group.gap`).

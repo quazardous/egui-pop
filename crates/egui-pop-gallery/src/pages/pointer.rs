@@ -92,10 +92,11 @@ fn show(ui: &mut Ui, app: &AppHandle) {
 
     section(ui, "Options");
     ui.label(format!(
-        "Wheel over sliders: {}; double click on the image: {}; knob drag: {}; wheel device: {}.",
+        "Wheel over sliders: {}; double click on the image: {}; knob drag: {}; dragging a floating panel: {}; wheel device: {}.",
         map.options.slider_wheel.as_str(),
         map.options.image_double_click.as_str(),
         map.options.knob_drag.as_str(),
+        map.options.dock_drag.as_str(),
         map.wheel_device.as_str()
     ));
     ui.weak("Each option follows the profile unless set in the settings.");

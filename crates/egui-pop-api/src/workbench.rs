@@ -515,8 +515,14 @@ pub struct DropHint {
     /// Its index among the tabs it would join; `None` for a split.
     pub index: Option<usize>,
     /// A palette's: the ghost of its tab where it would land; `None` when
-    /// the drop is refused, and for a tab (the drop zone shows it).
+    /// the drop is refused or not armed, and for a tab (the drop zone
+    /// shows it).
     pub preview: Option<TabPreview>,
+    /// Whether a drop now docks: always for a tab; for a palette, as its
+    /// drag mode and the dock keys held say (`input.dock_drag`,
+    /// `gesture.workbench.dock`). Not armed, nothing is drawn and a drop
+    /// only moves the palette.
+    pub armed: bool,
 }
 
 /// Where a drop hint draws a dragged palette's tab (the kit's
@@ -4849,6 +4855,7 @@ fn publish_hint(app: &AppHandle, ctx: &egui::Context) {
             zone,
             index,
             preview: None,
+            armed: true,
         });
         return;
     }
@@ -4859,9 +4866,9 @@ fn publish_hint(app: &AppHandle, ctx: &egui::Context) {
         .filter(|_| wb.group_hint.is_none())
         .and_then(|d| {
             let edge = crate::palettes::magnet(ctx);
-            wb.dock_at(d.at, edge).map(|to| (d.panel, to))
+            wb.dock_at(d.at, edge).map(|to| (d.panel, to, d.armed))
         });
-    let Some((panel, to)) = target else {
+    let Some((panel, to, armed)) = target else {
         return;
     };
     let Some(spec) = wb.spec(&panel).cloned() else {
@@ -4877,7 +4884,7 @@ fn publish_hint(app: &AppHandle, ctx: &egui::Context) {
     let kit = Kit::of(ctx);
     // The ghost: the panel's tab, laid out once per drag (a cache of its
     // own, as the areas' tabs are), where a drop puts it.
-    let ghost = if why.is_none() {
+    let ghost = if why.is_none() && armed {
         let cache_id = TAB_CACHE.keyed("ghost");
         let mut cache = cache_id.update(ctx, std::mem::take);
         cache.prepare(app, ctx, &kit, std::slice::from_ref(&panel));
@@ -4902,7 +4909,12 @@ fn publish_hint(app: &AppHandle, ctx: &egui::Context) {
             index: joined,
             rect: *at,
         }),
+        armed,
     });
+    // Not armed (a plain drag that only moves): nothing drawn.
+    if !armed {
+        return;
+    }
     // The kit's `dock-preview`: at rest where the panel may go, disabled
     // with its label saying why where it may not.
     let t = egui_pop_core::theme::Tokens::of(ctx);

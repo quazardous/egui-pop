@@ -1594,7 +1594,8 @@ impl AppHandle {
                 OverlayRect { kind, id, rect }
             })
             .collect();
-        if let Some(hint) = self.drop_hint() {
+        // A drop hint not armed is not drawn.
+        if let Some(hint) = self.drop_hint().filter(|h| h.armed) {
             out.push(OverlayRect {
                 kind: OverlayKind::DropHint,
                 id: hint.name(),
@@ -3319,6 +3320,7 @@ pub struct AppBuilder {
     panel_alignment: crate::workbench::PanelAlignment,
     toast_corner: crate::toasts::Corner,
     pointer_profile: String,
+    dock_drag: Option<egui_pop_model::pointer::DockDrag>,
     kits: Vec<KitSource>,
     user_kits: bool,
     cache: Option<egui_pop_core::tokens::cache::Cache>,
@@ -3424,6 +3426,7 @@ impl AppBuilder {
             panel_alignment: crate::workbench::PanelAlignment::Center,
             toast_corner: crate::toasts::Corner::default(),
             pointer_profile: egui_pop_model::pointer::DEFAULT_PROFILE.into(),
+            dock_drag: None,
             kits: Vec::new(),
             user_kits: false,
             cache: None,
@@ -3456,6 +3459,24 @@ impl AppBuilder {
     /// the default kept.
     pub fn pointer_profile(mut self, id: &str) -> Self {
         self.pointer_profile = id.into();
+        self
+    }
+
+    /// What a plain drag of a floating palette does by default (the
+    /// `input.dock_drag` setting's default; the pointer profile's unless
+    /// given, which is [`DockDrag::ModifierDocks`] but for Photoshop's):
+    /// a Visual Studio-like application picks
+    /// [`DockDrag::ModifierFloats`], a touch-first one [`DockDrag::Dwell`].
+    /// The user changes it in the settings.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    ///
+    /// [`DockDrag::ModifierDocks`]: egui_pop_model::pointer::DockDrag::ModifierDocks
+    /// [`DockDrag::ModifierFloats`]: egui_pop_model::pointer::DockDrag::ModifierFloats
+    /// [`DockDrag::Dwell`]: egui_pop_model::pointer::DockDrag::Dwell
+    pub fn dock_drag(mut self, mode: egui_pop_model::pointer::DockDrag) -> Self {
+        self.dock_drag = Some(mode);
         self
     }
 
@@ -4168,6 +4189,7 @@ impl AppBuilder {
             modes,
             self.panel_alignment,
             &self.pointer_profile,
+            self.dock_drag,
         )
         .expect("the framework's registrations are valid");
         app.install_collectors();
@@ -4632,6 +4654,7 @@ impl App {
         modes: FocusModes,
         panel_alignment: crate::workbench::PanelAlignment,
         pointer_profile: &str,
+        dock_drag: Option<egui_pop_model::pointer::DockDrag>,
     ) -> Result<(), CtxError> {
         let owner = OwnerId::FRAMEWORK;
         let handle = self.handle.clone();
@@ -4937,7 +4960,12 @@ impl App {
         crate::scroll_bars::register(&mut ctx)?;
         crate::toasts::register(&mut ctx, handle.0.toast_corner.get())?;
         crate::sliders::register(&mut ctx)?;
-        crate::pointer::register(&mut ctx, pointer_profile, handle.system_wheel_lines())?;
+        crate::pointer::register(
+            &mut ctx,
+            pointer_profile,
+            handle.system_wheel_lines(),
+            dock_drag,
+        )?;
         ctx.setting(
             crate::workbench::SETTING_PANEL_ALIGNMENT,
             egui_pop_model::values::Descriptor::choice(
@@ -5519,6 +5547,7 @@ impl App {
                         "refusal": h.refusal,
                         "zone": format!("{:?}", h.zone).to_lowercase(),
                         "index": h.index,
+                        "armed": h.armed,
                         "preview": h.preview.as_ref().map(|p| json!({
                             "area": p.area,
                             "index": p.index,

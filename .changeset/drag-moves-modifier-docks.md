@@ -1,0 +1,8 @@
+---
+egui-pop-model: major
+egui-pop-api: major
+egui-pop-core: major
+egui-pop-viewport: major
+---
+
+Behaviour change: a plain drag of a floating palette (its band, a member's band, a floating tab) now only moves it; it docks in an area or joins another palette's group only while the dock keys are held (`Ctrl`, Cmd on macOS), read every pass of the drag, so pressing or releasing them mid-drag counts. Snapping and anchoring stay on a plain drag; docked tabs, tab groups and detached windows are unchanged. The mode is a setting, `input.dock_drag` (`pointer::SETTING_DOCK_DRAG`: `profile`, `modifier-docks`, `modifier-floats` where a plain drag docks and the keys keep the palette floating, `dwell` where docking arms after resting on a target for `palettes::DWELL`), its default picked by the application with `AppBuilder::dock_drag` or by the pointer profile (`DockDrag` in `pointer::Options::dock_drag`, a new field: `modifier-floats` for Photoshop, `modifier-docks` for the others); a change is said once as `settings.changed`. The keys are the `gesture.workbench.dock` gesture (`Ctrl+PrimaryDrag` in every shipped profile, in the new `pointer::SCOPE_PALETTE` scope: `pointer::SCOPES` now has 5 entries), rebindable in the shortcuts editor. While a palette is dragged over a target, a hint says how to dock or not (`palettes::drag_hint`, in the status bar or under the pointer). `palettes::GroupHint` and `workbench::DropHint` gain `armed` (a new field of `GroupHint`), also in the `workbench` collector; a drop hint not armed is not drawn nor listed in `overlay_rects`. A floating panel's menu gains Dock in the start side bar, the end side bar and the bottom panel. Tests that docked with a plain drag now hold the dock keys.

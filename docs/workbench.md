@@ -222,17 +222,20 @@ bar) over its whole rect: dropped there, the tab joins its tabs. Once
 the tab is dropped in another area, the move goes through the
 `workbench.move` step (`panel`, `area`): a plugin's veto puts the tab
 back where it was, a redirect sends it to the area the step names. A
-palette dragged over an area it docks in shows the hint with a ghost of
-its tab (the kit's `tab-preview`) after the area's first tabs.
+palette dragged over an area it docks in, with the dock keys held (see
+Palettes, Dragging), shows the hint with a ghost of its tab (the kit's
+`tab-preview`) after the area's first tabs.
 
 The hint is published like an overlay: `AppHandle::drop_hint` (panel,
 area, rect, refusal, `zone`, the egui_stack `DropZone` (`Center` to join
 tabs, an edge to split), `index` among the tabs it would join, and for a
-palette `preview`, its ghost's area, index and rect), `overlay_rects`
-(kind `DropHint`, named `drop:<panel>:<area>`), and the debug bridge's
-`workbench` collector (`drop_hint: {name, panel, area, rect, refusal,
-zone, index, preview}`), which also shows the layout, each area's rect,
-the focused panel and the tab being dragged.
+palette `preview`, its ghost's area, index and rect, and `armed`:
+whether a drop now docks, always for a tab), `overlay_rects` (kind
+`DropHint`, named `drop:<panel>:<area>`, only while armed: a hint not
+armed is not drawn), and the debug bridge's `workbench` collector
+(`drop_hint: {name, panel, area, rect, refusal, zone, index, armed,
+preview}`), which also shows the layout, each area's rect, the focused
+panel and the tab being dragged.
 
 ### The focused panel
 
@@ -720,9 +723,36 @@ assert!(app.handle().layout().floating_of(&TOOLS).is_some());
 - **Dragging.** The band drags the palette, kept inside the workbench
   (again when the window is resized) and snapping to the workbench's
   edges and to the other palettes within the `palette.magnet` token.
-  Dropped on a side bar or the bottom panel (or a closed one's edge),
-  with the drop hint the tabs use, it docks there. A docked floatable
-  panel floats again from its tab menu (Float).
+  Dropped on a side bar or the bottom panel (or a closed one's edge)
+  with the dock keys held, with the drop hint the tabs use, it docks
+  there. A docked floatable panel floats again from its tab menu
+  (Float).
+- **Moving or docking** (decided on 2026-11-17,
+  [design](design/drag-move-vs-dock.md)). A plain drag of a floating
+  palette (its band, a member's band, a floating tab) only moves it:
+  the drop targets (an area, another palette's group) show and take it
+  only while the dock keys are held, the `gesture.workbench.dock`
+  gesture (`Ctrl+PrimaryDrag`, Cmd on macOS, in every shipped pointer
+  profile, rebindable in the shortcuts editor). The keys are read every
+  pass of the drag: pressed or let go mid-drag, the targets show or go.
+  Snapping and anchoring stay on a plain drag. The mode is the
+  `input.dock_drag` setting (said once as `settings.changed`):
+  `modifier-docks` (the default), `modifier-floats` (a plain drag
+  docks, the keys keep it floating: Photoshop's and Visual Studio's
+  way, the Photoshop pointer profile's), `dwell` (docking arms once the
+  pointer rests on a target for `palettes::DWELL`, half a second: for
+  touch and pen), or `profile` (the pointer profile's, its
+  `options.dock_drag`); an application picks the default with
+  `AppBuilder::dock_drag`. While a palette is dragged over a target, a
+  one-line hint says how to dock or not, worded after the mode and the
+  keys bound ("Hold Ctrl to dock", "Release Ctrl to move only", "Hold
+  Ctrl to move without docking", "Rest here to dock"): in the status
+  bar, or under the pointer without one (`palettes::drag_hint`).
+  `palettes::GroupHint::armed` and `DropHint::armed` say whether a drop
+  now docks or joins; only armed targets are drawn. The panel menu of a
+  floating palette (a right click on its title) docks it too: Dock in
+  the start side bar, the end side bar or the bottom panel, for a
+  pointer with no keyboard.
 - **Sticky edges.** Dropped on an edge of the workbench (snapped onto it
   or kept against it), a palette is anchored there: `FloatingGroup::anchor`
   holds, on each axis, the start edge, the end edge or none, and the

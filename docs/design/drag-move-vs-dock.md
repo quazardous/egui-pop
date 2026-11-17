@@ -1,6 +1,7 @@
 # Moving a floating panel vs docking it
 
-Status: **design note, decided** (study and decision 2026-11-17). A
+Status: **design note, decided and built** (study and decision
+2026-11-17; built in egui-pop 0.13, [workbench.md](../workbench.md)). A
 plain drag of a floating panel only moves it; the dock modifier (Ctrl,
 Cmd on macOS) shows the drop targets and docks (option A, section 4).
 A is egui-pop's default, not a fixed rule: the mode is a declared

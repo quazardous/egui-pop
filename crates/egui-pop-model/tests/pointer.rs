@@ -5,8 +5,9 @@ use egui_pop_model::keymap::{
     Action, BindOptions, Button, Chord, Keymap, KeymapDoc, Keys, Layer, Pointer,
 };
 use egui_pop_model::pointer::{
-    self, GESTURES, ImageDoubleClick, KnobDrag, PROFILE_OWNER, PointerMap, SCOPE_GRAPH,
-    SCOPE_IMAGE, SCOPE_SECTIONS, SCOPE_VALUE, SCOPES, SliderWheel, ValueKeys, gesture,
+    self, DockDrag, GESTURES, ImageDoubleClick, KnobDrag, PROFILE_OWNER, PointerMap, SCOPE_GRAPH,
+    SCOPE_IMAGE, SCOPE_PALETTE, SCOPE_SECTIONS, SCOPE_VALUE, SCOPES, SliderWheel, ValueKeys,
+    gesture,
 };
 use egui_pop_model::values::{SettingsDoc, settings_schema};
 
@@ -175,6 +176,20 @@ fn the_six_profiles_ship_with_known_gestures_in_their_scopes() {
             "{}",
             p.id
         );
+        // Every profile docks a dragged palette with Ctrl (Cmd on macOS);
+        // Photoshop docks on a plain drag, the others move.
+        assert_eq!(
+            map.command(SCOPE_PALETTE, &chord("Ctrl+PrimaryDrag")),
+            Some(&gesture::WORKBENCH_DOCK),
+            "{}",
+            p.id
+        );
+        let mode = if p.id == "photoshop" {
+            DockDrag::ModifierFloats
+        } else {
+            DockDrag::ModifierDocks
+        };
+        assert_eq!(map.options.dock_drag, mode, "{}", p.id);
     }
 }
 

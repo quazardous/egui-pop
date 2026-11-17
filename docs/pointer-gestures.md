@@ -34,6 +34,7 @@ scope of a canvas kind:
 | `surface:canvas.graph` (the node graph) | `gesture.graph.zoom`, `pan`, `pan_x`, `pan_y`, `fit` |
 | `surface:widget.value` (sliders) | `gesture.value.step` (its wheel's modifiers step a slider without the focus), `fine` and `coarse` (their drag's modifiers: ten times finer or coarser, for drags, arrows and the wheel), `panel` (its wheel's modifiers leave the wheel to the panel), `reset` (a primary click with its modifiers, `Ctrl+PrimaryClick` for one, puts the value back to its default; bound by no shipped profile) |
 | `surface:widget.sections` (stacked sections) | `gesture.sections.pull` (a drag on a boundary or a title moves the sections below as a block; its keys also make the arrows on a boundary do so, [sections.md](sections.md)) |
+| `surface:workbench.palette` (a floating palette's drag) | `gesture.workbench.dock` (its keys, held while a palette is dragged, dock it or join another palette, or keep it floating, as `input.dock_drag` says; [workbench.md](workbench.md)) |
 
 The keymap's layers, removals, conflicts and resolution trace apply
 unchanged ([plugins.md](plugins.md)); the key dispatcher never sees a
@@ -92,7 +93,12 @@ slider under the pointer) and `input.image_double_click` (`fit`,
 `leave`, `nothing`). A third, `knob_drag`, is in each profile's
 `options` (`vertical`, `horizontal`, `both`, `circular`; `vertical` in
 every shipped profile): how a drag turns a knob that does not say
-(`Knob::drag`), carried to the widgets in the sliders' `Gestures`. `input.wheel_device` settles what sends wheel
+(`Knob::drag`), carried to the widgets in the sliders' `Gestures`.
+`input.dock_drag` (`profile`, `modifier-docks`, `modifier-floats`,
+`dwell`; the profile's `options.dock_drag`, `modifier-floats` in
+Photoshop's, `modifier-docks` in the others) says what a plain drag of
+a floating palette does; an application picks its default with
+`AppBuilder::dock_drag` ([workbench.md](workbench.md)). `input.wheel_device` settles what sends wheel
 events: `auto` takes lines for a mouse wheel and points for a
 trackpad, `mouse` and `trackpad` say it outright (some mice send
 points). `input.wheel_speed` multiplies how far a notch goes, in scroll areas

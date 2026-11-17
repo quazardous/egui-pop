@@ -53,8 +53,16 @@ pub const SCOPE_GRAPH: &str = "canvas.graph";
 pub const SCOPE_VALUE: &str = "widget.value";
 /// Stacked sections' scope.
 pub const SCOPE_SECTIONS: &str = "widget.sections";
+/// Floating palettes' scope: the drag of a palette's band or tab.
+pub const SCOPE_PALETTE: &str = "workbench.palette";
 /// Every scope a profile binds, in the order the editor shows them.
-pub const SCOPES: [&str; 4] = [SCOPE_IMAGE, SCOPE_GRAPH, SCOPE_VALUE, SCOPE_SECTIONS];
+pub const SCOPES: [&str; 5] = [
+    SCOPE_IMAGE,
+    SCOPE_GRAPH,
+    SCOPE_VALUE,
+    SCOPE_SECTIONS,
+    SCOPE_PALETTE,
+];
 
 /// The profile a library or an application gets unless it picks one.
 pub const DEFAULT_PROFILE: &str = "document";
@@ -124,6 +132,10 @@ pub mod gesture {
     pub const VALUE_RESET: CommandId = CommandId::from_static("gesture.value.reset");
     /// A drag on a boundary or a title moves the sections below as a block.
     pub const SECTIONS_PULL: CommandId = CommandId::from_static("gesture.sections.pull");
+    /// The keys held while a floating palette is dragged that dock it
+    /// (or join another palette's group), or keep it floating, as the
+    /// palette's drag mode says ([`super::DockDrag`]).
+    pub const WORKBENCH_DOCK: CommandId = CommandId::from_static("gesture.workbench.dock");
 }
 
 /// A gesture command as declared: its id, its scope, its title and what
@@ -251,6 +263,12 @@ pub const GESTURES: &[GestureSpec] = &[
         scope: SCOPE_SECTIONS,
         title: "Sections: pull as a block",
         description: "A drag on a boundary or a title with these keys moves the sections below as a block, keeping their heights.",
+    },
+    GestureSpec {
+        id: gesture::WORKBENCH_DOCK,
+        scope: SCOPE_PALETTE,
+        title: "Palettes: dock while dragging",
+        description: "Held while a floating palette is dragged, these keys show where it docks or joins another palette, and let go there it does; with the drag mode modifier-floats, they keep it floating instead.",
     },
 ];
 
@@ -403,6 +421,44 @@ impl WheelDevice {
     }
 }
 
+/// What a plain drag of a floating palette does, and what the dock keys
+/// (`gesture.workbench.dock`) change (`docs/design/drag-move-vs-dock.md`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockDrag {
+    /// A plain drag only moves; the dock keys held show the targets and
+    /// dock (egui-pop's default).
+    #[default]
+    ModifierDocks,
+    /// A plain drag docks over a target; the dock keys held keep the
+    /// palette floating (Photoshop, Visual Studio).
+    ModifierFloats,
+    /// Docking arms once the pointer rested on a target for a moment
+    /// (touch and pen, with no key at hand).
+    Dwell,
+}
+
+impl DockDrag {
+    pub const CHOICES: [&'static str; 3] = ["modifier-docks", "modifier-floats", "dwell"];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DockDrag::ModifierDocks => "modifier-docks",
+            DockDrag::ModifierFloats => "modifier-floats",
+            DockDrag::Dwell => "dwell",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<DockDrag> {
+        match text {
+            "modifier-docks" => Some(DockDrag::ModifierDocks),
+            "modifier-floats" => Some(DockDrag::ModifierFloats),
+            "dwell" => Some(DockDrag::Dwell),
+            _ => None,
+        }
+    }
+}
+
 /// The options a profile gives its default for (each also a setting).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(default)]
@@ -412,6 +468,8 @@ pub struct Options {
     /// How a drag turns a knob, unless the knob says
     /// (`Knob::drag`).
     pub knob_drag: KnobDrag,
+    /// What a plain drag of a floating palette does.
+    pub dock_drag: DockDrag,
 }
 
 /// The modifiers egui's own scrolling follows (`egui::InputOptions`),
