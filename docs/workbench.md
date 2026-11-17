@@ -424,6 +424,35 @@ A foreground layer nobody ranked stays above every ranked one; a host
 drawing its own surface lying over the centre makes it a sublayer of
 `layers::base(ctx, Rank::Over)`.
 
+## A panel's state
+
+A panel whose content follows something it does not hold (the photo
+selected, a document) may show content that no longer matches it. Whoever
+knows says so on the bus, never the panel: `panel.state`
+(`bus::PanelStateSet`) with the panel's id and its `bus::PanelState`:
+
+| State | What the chrome shows |
+|---|---|
+| `Stale` (no longer matches, its work not started) or `Updating` | the content dimmed and a busy mark on the panel's corner and its tab, once the state has lasted `motion.spinner.delay`, then for at least `motion.spinner.min`: a fast update shows nothing |
+| `Failed { reason }` | the content dimmed and a failed mark at once, read "Update failed: reason" |
+| `Ready` | nothing |
+
+```rust
+use egui_pop::api::AppHandle;
+use egui_pop::api::bus::{PanelState, PanelStateAsk};
+
+fn photo_selected(app: &AppHandle) {
+    app.request_panel_state(PanelStateAsk::new("app.histogram", PanelState::Stale, "app"));
+}
+# let _ = photo_selected;
+```
+
+The state may be asked from any thread, on the application's bus too.
+Stale then updating is one wait, its delay going on. A tab holds one mark
+(`bus::TabMark`): when a panel has several, the highest rank wins, the
+busy mark first. The marks are indicators named by `bus::mark_id`, for
+tests and agents (`indicator::find`).
+
 ## Auxiliary windows
 
 A detachable panel moves to an OS window of its own, with its own scale

@@ -1951,6 +1951,10 @@ egui-pop-panel-focus-description = Shows { $panel } and gives it the keyboard.
 
 egui-pop-panel-focus-title = Focus { $panel }
 
+egui-pop-panel-state-failed = Update failed: { $reason }
+
+egui-pop-panel-state-updating = Updating…
+
 egui-pop-panel-toggle-description = Opens { $panel } where it was, or closes it.
 
 egui-pop-panel-toggle-title = Show or hide { $panel }
