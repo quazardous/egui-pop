@@ -883,10 +883,17 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
         if !g.anchor.is_none() && !dragging && !resizing && drawn.is_some() {
             // Its place follows the edges (not a move: no step).
             let at = [pos.x - content.min.x, pos.y - content.min.y];
-            if at != g.pos
-                && let Some(fl) = app.workbench_mut().layout.floating_mut(&lead)
-            {
-                fl.pos = at;
+            if at != g.pos {
+                let moved = match app.workbench_mut().layout.floating_mut(&lead) {
+                    Some(fl) => {
+                        fl.pos = at;
+                        true
+                    }
+                    None => false,
+                };
+                if moved {
+                    app.note_layout("palette.place");
+                }
             }
         }
         let hovered = before
