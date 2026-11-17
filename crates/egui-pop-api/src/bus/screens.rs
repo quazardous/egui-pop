@@ -287,6 +287,9 @@ impl AppHandle {
             {
                 a.screen = name;
             }
+            // Asked by the command just sent: not asked again.
+            let panel = a.panel.clone();
+            wb.window_place_asked(&panel);
         }
     }
 }

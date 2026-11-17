@@ -397,7 +397,9 @@ fn a_detached_window_keeps_its_size_and_maximized_where_positions_are_hidden() {
     m.root_pass();
     m.root_pass();
     assert_eq!(log_rect(m.app())[2..], [500.0, 300.0], "its normal size");
-    assert_eq!(builder(&m, v).maximized, Some(true));
+    // Followed into the layout, not asked back of the system (#5241).
+    assert!(m.app().layout().window_of(&LOG).unwrap().maximized);
+    assert_eq!(builder(&m, v).maximized, None);
     // Closed and detached again: its window opens as it was.
     close_log(&mut m, v);
     let b = reopen_log(&mut m);
