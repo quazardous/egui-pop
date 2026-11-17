@@ -425,6 +425,21 @@ const ROUNDING: Slot<bool> = Slot::new("core.frame.rounding");
 /// transparent, so that [`window_edge`] may round their corners.
 pub fn set_rounding(ctx: &Context, on: bool) {
     ROUNDING.set(ctx, on);
+    if on {
+        // Ready before the first pass that rounds (a plugin added during
+        // a pass only runs from the next).
+        install_rounding(ctx);
+    }
+}
+
+/// Installs the end-of-pass rounding once per context.
+fn install_rounding(ctx: &Context) {
+    let st = crate::state::shared::<RoundState>(ctx, "core.frame.round_state");
+    let mut st = lock(&st);
+    if !st.installed {
+        st.installed = true;
+        ctx.add_plugin(RoundCorners);
+    }
 }
 
 /// Whether [`set_rounding`] turned rounded corners on.
@@ -477,13 +492,7 @@ pub fn paint_window_edge(ctx: &Context, edge: WindowEdge) {
         .rect_stroke(rect, edge.corners, edge.stroke, egui::StrokeKind::Inside);
     }
     if edge.corners != egui::CornerRadius::ZERO {
-        let st = crate::state::shared::<RoundState>(ctx, "core.frame.round_state");
-        let mut st = lock(&st);
-        if !st.installed {
-            st.installed = true;
-            ctx.add_plugin(RoundCorners);
-        }
-        drop(st);
+        install_rounding(ctx);
         ROUND.keyed(ctx.viewport_id()).set(ctx, edge.corners);
     }
 }
@@ -1619,5 +1628,41 @@ mod tests {
         let before = inner.clone();
         round_shape(&mut inner, window, corners);
         assert_eq!(format!("{inner:?}"), format!("{before:?}"));
+    }
+
+    #[test]
+    fn what_is_painted_over_a_corner_is_rounded_at_the_end_of_the_pass() {
+        let ctx = Context::default();
+        let fill = Color32::from_rgb(10, 20, 30);
+        let corners = egui::CornerRadius::same(8);
+        let mut run = || {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
+                let ctx = ui.ctx().clone();
+                ctx.layer_painter(egui::LayerId::background()).rect_filled(
+                    ctx.content_rect(),
+                    0.0,
+                    fill,
+                );
+                paint_window_edge(
+                    &ctx,
+                    WindowEdge {
+                        stroke: egui::Stroke::NONE,
+                        corners,
+                    },
+                );
+            })
+        };
+        // The first pass installs the rounding; the next ones round.
+        run().drop_without_applying_deltas();
+        let out = run();
+        let window = ctx.content_rect();
+        let rounded = out.shapes.iter().any(|c| match &c.shape {
+            egui::Shape::Rect(r) => {
+                r.fill == fill && r.rect == window && r.corner_radius == corners
+            }
+            _ => false,
+        });
+        assert!(rounded, "{:?}", out.shapes);
+        out.drop_without_applying_deltas();
     }
 }

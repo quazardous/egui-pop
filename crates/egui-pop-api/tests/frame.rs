@@ -335,6 +335,9 @@ fn edge_line(h: &Harness<'static, App>) -> Option<(egui::Stroke, egui::CornerRad
     })
 }
 
+/// What the host paints under the application, over the whole window.
+const HOST_FILL: egui::Color32 = egui::Color32::from_rgb(10, 20, 30);
+
 fn place(h: &mut Harness<'static, App>, focused: bool, maximized: bool) {
     let v = h
         .input_mut()
@@ -349,7 +352,26 @@ fn place(h: &mut Harness<'static, App>, focused: bool, maximized: bool) {
 
 #[test]
 fn the_window_has_a_line_dimmer_when_inactive_and_rounds_only_while_floating() {
-    let mut h = harness(1.0);
+    let app = App::builder()
+        .plugins(DefaultPlugins)
+        .plugin(FramePlugin::own().name("Demo"))
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(800.0, 600.0))
+        .build_ui_state(
+            |ui, app: &mut App| {
+                let ctx = ui.ctx().clone();
+                ctx.layer_painter(egui::LayerId::background()).rect_filled(
+                    ctx.content_rect(),
+                    0.0,
+                    HOST_FILL,
+                );
+                app.show(ui);
+            },
+            app,
+        );
+    h.run();
     let kit = egui_pop_core::kit::Kit::of(&h.ctx);
     let (outline, inactive) = (kit.window.outline, kit.window_edge.inactive);
     place(&mut h, true, false);
@@ -364,18 +386,15 @@ fn the_window_has_a_line_dimmer_when_inactive_and_rounds_only_while_floating() {
     place(&mut h, true, false);
     let round = egui::CornerRadius::same(kit.window_edge.radius as u8);
     assert_eq!(edge_line(&h), Some((outline, round)));
+    // The host's background over the whole window: rounded with it.
     let window = h.ctx.content_rect();
     let at_top_left = h.output().shapes.iter().any(|c| match &c.shape {
-        egui::Shape::Rect(r) => {
-            r.fill != egui::Color32::TRANSPARENT
-                && (r.rect.min - window.min).length() < 2.0
-                && r.corner_radius.nw > 0
-        }
+        egui::Shape::Rect(r) => r.fill == HOST_FILL && r.rect == window && r.corner_radius == round,
         _ => false,
     });
     assert!(
         at_top_left,
-        "a background at the top left corner is rounded"
+        "the background painted over the corners is rounded"
     );
     // Maximized: square again, the line kept.
     place(&mut h, true, true);
