@@ -766,6 +766,13 @@ pub const WORKBENCH_STAYS_DOCKED: StrKey = StrKey::new(
     "{ $panel } cannot go into a window",
 );
 pub const WORKBENCH_FLOAT: StrKey = StrKey::new("egui-pop-workbench-float", "Float");
+/// A panel's mark while its content is stale or being updated
+/// (`panel.state`).
+pub const PANEL_STATE_UPDATING: StrKey = StrKey::new("egui-pop-panel-state-updating", "Updating…");
+/// A panel's mark when its update failed (`panel.state`), with the
+/// reason.
+pub const PANEL_STATE_FAILED: StrKey =
+    StrKey::new("egui-pop-panel-state-failed", "Update failed: { $reason }");
 pub const WORKBENCH_UNFOLD: StrKey = StrKey::new("egui-pop-workbench-unfold", "Unfold { $area }");
 pub const WORKBENCH_FOLD: StrKey = StrKey::new("egui-pop-workbench-fold", "Fold { $area }");
 /// The button of a flyout (a folded area's panel shown over the centre)
@@ -1846,6 +1853,8 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_NEW_WINDOW,
     WORKBENCH_STAYS_DOCKED,
     WORKBENCH_FLOAT,
+    PANEL_STATE_UPDATING,
+    PANEL_STATE_FAILED,
     WORKBENCH_UNFOLD,
     WORKBENCH_FOLD,
     WORKBENCH_FLYOUT_PIN,

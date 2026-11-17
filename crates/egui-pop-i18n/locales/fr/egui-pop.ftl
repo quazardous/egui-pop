@@ -1485,6 +1485,10 @@ egui-pop-panel-focus-description = Affiche le panneau { $panel } et lui donne le
 
 egui-pop-panel-focus-title = Aller à { $panel }
 
+egui-pop-panel-state-failed = Échec de la mise à jour : { $reason }
+
+egui-pop-panel-state-updating = Mise à jour…
+
 egui-pop-panel-toggle-description = Rouvre le panneau { $panel } à sa place, ou le ferme.
 
 egui-pop-panel-toggle-title = Afficher ou masquer { $panel }
