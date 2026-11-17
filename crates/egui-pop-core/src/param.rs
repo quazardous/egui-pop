@@ -153,6 +153,7 @@ pub fn param_shown(
                         }
                     })
                     .response;
+                crate::a11y::input(ui.ctx(), r.id, &d.label);
                 if picked != v.0 {
                     v.0 = picked;
                 }

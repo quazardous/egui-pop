@@ -265,6 +265,7 @@ impl<'a> NumberInput<'a> {
                 .align(Align2::RIGHT_CENTER),
         );
 
+        crate::a11y::input(&ctx, field.id, &self.label);
         if field.changed() {
             typing.edited = true;
         }

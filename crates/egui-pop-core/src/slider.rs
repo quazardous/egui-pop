@@ -1826,6 +1826,15 @@ pub(crate) fn state_of(ui: &Ui, responses: &[&Response], spec: &Spec, kind: &str
     if let Some(r) = responses.first() {
         crate::field::record(ui.ctx(), r.id, &spec.label, kind, &spec.state);
     }
+    match responses {
+        [r] => crate::a11y::input(ui.ctx(), r.id, &spec.label),
+        // A range's thumbs are named each by its end ("Focal, minimum").
+        thumbs => {
+            for r in thumbs {
+                crate::a11y::drawn(ui.ctx(), r.id);
+            }
+        }
+    }
 }
 
 /// The AccessKit node beyond egui's slider info: the range, the step,
