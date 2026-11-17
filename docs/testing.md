@@ -253,8 +253,10 @@ JSON lines (`ready` with the panel detached, `resize`, `quit` after every
 frame; the first line of each counts) and its exit code, within four minutes. The size the window had
 when it closed is printed, not checked: a window manager may refuse it.
 
-Each job's summary says whether the tests and the smoke run passed; the
-JUnit report and any snapshot differences are kept as artifacts.
+Each job's summary says whether the tests and the smoke run passed, and
+names the failed tests; a failed job also leaves an error annotation on
+the run's page, since the run itself stays green. The JUnit report and
+any snapshot differences are kept as artifacts.
 
 Known failures and differences (2026-11-11): none fail. What is left
 out, by platform:

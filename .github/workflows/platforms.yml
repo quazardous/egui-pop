@@ -79,16 +79,34 @@ jobs:
         id: smoke
         continue-on-error: true
         run: python tools/window-smoke.py target/debug/egui-pop-gallery
+      # The job is continue-on-error, so the run stays green when it
+      # fails: the failure is said in the summary's title and as an error
+      # annotation on the run's page, with the failed tests' names.
       - name: Summary
         if: always()
         shell: bash
         run: |
+          tests="${{ steps.tests.outcome }}"
+          smoke="${{ steps.smoke.outcome }}"
+          failed=""
+          for f in target/nextest/ci/junit*.xml; do
+            [ -f "$f" ] || continue
+            failed+=$(grep -B1 -E '<(failure|error)[ >]' "$f" \
+              | sed -n 's/.*<testcase name="\([^"]*\)".*/\1/p' | sort -u | tr '\n' ' ') || true
+          done
+          if [ "$tests" = success ] && [ "$smoke" = success ]; then
+            status=passed
+          else
+            status=FAILED
+            echo "::error title=${{ matrix.name }} failed (non-blocking job)::tests: $tests; window smoke run: $smoke; failed: ${failed:-see the Tests step}"
+          fi
           {
-            echo "### ${{ matrix.name }}"
-            echo "- tests: ${{ steps.tests.outcome }}"
-            echo "- window smoke run: ${{ steps.smoke.outcome }}"
+            echo "### ${{ matrix.name }}: $status"
+            echo "- tests: $tests"
+            [ -n "$failed" ] && echo "- failed tests: \`$failed\`"
+            echo "- window smoke run: $smoke"
           } >> "$GITHUB_STEP_SUMMARY"
-          [ "${{ steps.tests.outcome }}" = success ] && [ "${{ steps.smoke.outcome }}" = success ]
+          [ "$status" = passed ]
       - name: Upload the test report
         if: always()
         uses: actions/upload-artifact@v4

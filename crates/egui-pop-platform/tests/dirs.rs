@@ -82,8 +82,16 @@ fn the_logs_and_crash_reports_sit_under_the_state() {
 
 #[test]
 fn the_cache_is_the_apps_own_egui_pop_folder() {
+    // Windows keeps the cache beside the state, under the application's
+    // folder: `%LOCALAPPDATA%\<app>\cache\egui-pop` (docs/dirs.md).
+    let tail = if cfg!(windows) {
+        "demo/cache/egui-pop"
+    } else {
+        "demo/egui-pop"
+    };
     if let Some(c) = cache_dir("demo") {
-        assert!(c.ends_with("demo/egui-pop"), "{c:?}");
+        assert!(c.is_absolute(), "{c:?}");
+        assert!(c.ends_with(tail), "{c:?} should end with {tail}");
     }
 }
 
