@@ -897,7 +897,11 @@ pub fn set_default_target(ctx: &Context, target: DisplayTarget) {
 /// What the application wants for the window being drawn (sRGB until
 /// said).
 pub fn wanted(ctx: &Context) -> DisplayTarget {
-    let viewport = ctx.viewport_id();
+    wanted_of(ctx, ctx.viewport_id())
+}
+
+/// What the application wants for a window (sRGB until said).
+pub fn wanted_of(ctx: &Context, viewport: ViewportId) -> DisplayTarget {
     WANTED.keyed(viewport).get_or_default(ctx)
 }
 

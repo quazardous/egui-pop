@@ -397,7 +397,15 @@ assert_eq!(image_surface::negotiate(&rec2020, &x11).route, Route::Window);
 - `EGUI_POP_IMAGE_SURFACE=off` turns it off; `=no-tag` keeps the
   driver's colour spaces only (for a driver that would hold the colour
   of surfaces beyond Mesa's rule).
-- Limits: the main window only; a transparent window; the subsurface is
+- Per window: each window drawing the image has its own image surface,
+  negotiated for what that window wants (`display::want`), set up from
+  its handles (`image_surface::install_window`, or the first frame it
+  draws once `set_window_source` says where handles are read) and freed
+  when it closes (`close_window`, or once egui no longer knows the
+  window). `windows.list` shows each window's (`surface`: route, format,
+  colour space, why). egui's interface keeps egui-wgpu's one format.
+- Limits: a window whose handles are known (not yet an immediate
+  viewport's, such as a detached panel's); a transparent window; the subsurface is
   placed on whole logical pixels (at a fractional scale its pixels may
   sit up to one pixel off the interface's); the perceptual intent (the
   one every compositor takes).
