@@ -2957,7 +2957,7 @@ impl AppHandle {
         let screens: Vec<&str> = names.iter().map(String::as_str).collect();
         let notes = self.workbench_mut().set_layout(layout, &screens);
         self.sync_panel_windows(&before);
-        self.egui().request_repaint();
+        self.note_layout("layout.set");
         notes
     }
 
@@ -3044,6 +3044,10 @@ impl AppHandle {
         });
         if self.focused_panel() != focused {
             self.publish_focused();
+        }
+        // Said on the bus once its gesture ended (`layout.changed`).
+        if matches!(out, Outcome::Done(Ok(_))) {
+            self.note_layout(step.as_str());
         }
         // A palette's change, once done, is news.
         if let (Some(event), Outcome::Done(Ok(result))) = (change.event(), &out) {
@@ -4178,6 +4182,7 @@ impl AppBuilder {
         app.rebuild();
         app.autosave_baseline();
         app.listen_settings();
+        app.listen_layout();
         app.install_theme();
         app.emit(&Lifecycle::Started);
         app.started = true;
@@ -4478,29 +4483,42 @@ struct Removed {
     undo: Vec<egui_pop_model::values::DroppedSteps>,
 }
 
-/// What the debounced saving of the settings, the keymap and the layout
-/// last saw.
+/// What the debounced saving of the settings and the keymap last saw
+/// (the layout is saved on `layout.changed`).
 #[derive(Debug, Default)]
 struct AutoSave {
     /// The store's sequence number last offered.
     store_seq: std::cell::Cell<Option<u64>>,
     /// The rebuild count when the keymap was last offered.
     rebuilds: std::cell::Cell<Option<u64>>,
-    /// The layout's document and fingerprint, as last saved (or loaded).
-    layout_saved: RefCell<Option<(String, u64)>>,
-    /// The layout's fingerprint unsaved: when it first changed, when it
-    /// last did.
-    layout_seen: std::cell::Cell<Option<(u64, f64, f64)>>,
 }
 
-/// A layout's fingerprint.
-fn layout_print(layout: &egui_pop_model::layout::Layout) -> u64 {
-    use std::hash::{Hash as _, Hasher as _};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    serde_json::to_string(layout)
-        .unwrap_or_default()
-        .hash(&mut h);
-    h.finish()
+/// Saves the layout to the document the host names now, through the
+/// `layout.save` step; `None` when the host keeps the layout. Done, the
+/// layout as it stands is the one said (`layout.changed`).
+fn save_layout(handle: &AppHandle, persist: Option<Persist>) -> Option<Outcome> {
+    let document = handle.with_host(|h| h.layout_document()).flatten()?;
+    let out = handle.step(
+        &STEP_LAYOUT_SAVE,
+        json!({ "document": document }),
+        move |app, args| {
+            let document = args["document"].as_str().ok_or("`document` is missing")?;
+            let Some(p) = persist else {
+                return Ok(json!({ "document": document, "saved": false }));
+            };
+            p.save(
+                document,
+                &egui_pop_model::layout::schema(),
+                &app.saved_layout(),
+            )
+            .map_err(|e| e.to_string())?;
+            Ok(json!({ "document": document, "saved": true }))
+        },
+    );
+    if out.ok() {
+        handle.layout_said_now();
+    }
+    Some(out)
 }
 
 /// A run waiting for its result.
@@ -6158,6 +6176,7 @@ impl App {
         let names = self.handle.layout_screens();
         let screens: Vec<&str> = names.iter().map(String::as_str).collect();
         let notes = self.handle.workbench_mut().refresh(specs, &screens);
+        self.handle.note_layout("layout.repair");
         for note in notes {
             log::info!(target: "egui_pop", "layout: {note}");
         }
@@ -6375,17 +6394,14 @@ impl App {
 
     /// The layout as it stands is the one on disk (just loaded or saved).
     fn layout_baseline(&self) {
-        let document = self.layout_document();
-        let print = layout_print(&self.handle.layout());
-        *self.autosave.layout_saved.borrow_mut() = document.map(|d| (d, print));
-        self.autosave.layout_seen.set(None);
+        self.handle.layout_said_now();
     }
 
     /// Saves what changed a short while after it changed: the settings,
-    /// the user's keymap, the layout (through `layout.save`, to the
-    /// document the host names now) and the documents plugins offered.
-    /// Saving never waits for the exit, so a crash loses at most the
-    /// last second.
+    /// the user's keymap and the documents plugins offered. Saving never
+    /// waits for the exit, so a crash loses at most the last second. The
+    /// layout is saved when it changed, by the `layout.save` listener of
+    /// `layout.changed` (`crate::bus::layout`).
     fn autosave(&mut self, ctx: &Context) {
         if self.persist.is_none() {
             return;
@@ -6399,36 +6415,6 @@ impl App {
             if let Ok((settings, keymap)) = self.document_texts() {
                 self.handle.save_later("settings", settings);
                 self.handle.save_later("keymap", keymap);
-            }
-        }
-        let mut wake: Option<f64> = None;
-        if let Some(document) = self.layout_document() {
-            let print = layout_print(&self.handle.layout());
-            let saved = self.autosave.layout_saved.borrow().clone();
-            match saved {
-                // Another document (the host switched workspaces): what
-                // is shown is not a change of this one.
-                Some((d, _)) if d != document => self.layout_baseline(),
-                Some((_, p)) if p == print => self.autosave.layout_seen.set(None),
-                None => self.layout_baseline(),
-                Some(_) => {
-                    let delay = egui_pop_core::persist::DEBOUNCE;
-                    let (since, last) = match self.autosave.layout_seen.get() {
-                        Some((p, since, last)) if p == print => (since, last),
-                        Some((_, since, _)) => (since, now),
-                        None => (now, now),
-                    };
-                    self.autosave.layout_seen.set(Some((print, since, last)));
-                    let due = (last + delay).min(since + 5.0 * delay);
-                    if now >= due {
-                        if let Some(Outcome::Done(Err(e))) = self.save_layout() {
-                            log::warn!(target: "egui_pop", "saving the layout: {e}");
-                        }
-                        self.layout_baseline();
-                    } else {
-                        wake = Some(due);
-                    }
-                }
             }
         }
         let due = {
@@ -6445,7 +6431,7 @@ impl App {
                 None => None,
             }
         };
-        for d in [due, wake].into_iter().flatten() {
+        for d in due.into_iter() {
             if d > now {
                 ctx.request_repaint_after(std::time::Duration::from_secs_f64((d - now).max(0.05)));
             }
@@ -6506,30 +6492,34 @@ impl App {
     /// Saves the layout to the host's document, through the
     /// `layout.save` step. `None` when the host keeps the layout.
     pub fn save_layout(&self) -> Option<Outcome> {
-        let document = self.layout_document()?;
+        save_layout(&self.handle, self.persist.clone())
+    }
+
+    /// Registers egui-pop's listener of `layout.changed`, local to the
+    /// interface's thread: the layout saved to the host's document
+    /// ([`crate::bus::LAYOUT_SAVE`]).
+    fn listen_layout(&mut self) {
+        use crate::bus::{LAYOUT_SAVE, LayoutChanged, OWNER, asking};
         let persist = self.persist.clone();
-        Some(self.handle.step(
-            &STEP_LAYOUT_SAVE,
-            json!({ "document": document }),
-            move |app, args| {
-                let document = args["document"].as_str().ok_or("`document` is missing")?;
-                let Some(p) = persist else {
-                    return Ok(json!({ "document": document, "saved": false }));
-                };
-                p.save(
-                    document,
-                    &egui_pop_model::layout::schema(),
-                    &app.saved_layout(),
-                )
-                .map_err(|e| e.to_string())?;
-                Ok(json!({ "document": document, "saved": true }))
+        let listened = self.handle.bus().listen_local::<LayoutChanged>(
+            LAYOUT_SAVE,
+            bus_contract::ListenOpts::new().owner(OWNER),
+            move |_, ()| {
+                // Without persistence, nothing is saved (as the autosave
+                // of the settings).
+                if persist.is_none() {
+                    return Ok(());
+                }
+                let Some(app) = asking() else { return Ok(()) };
+                match save_layout(&app, persist.clone()) {
+                    Some(Outcome::Done(Err(e))) => Err(format!("saving the layout: {e}").into()),
+                    _ => Ok(()),
+                }
             },
-        ))
-        .inspect(|o| {
-            if o.ok() {
-                self.layout_baseline();
-            }
-        })
+        );
+        if let Err(e) = listened {
+            log::error!(target: "egui_pop", "{LAYOUT_SAVE}: {e}");
+        }
     }
 
     /// Declares a command now (see `AppHandle::declare`).
@@ -7179,6 +7169,8 @@ impl App {
             self.process_requests();
         }
         self.publish_pointer(ctx);
+        // The layout's changes noted since, said once (`layout.changed`).
+        self.handle.settle_layout(ctx);
         self.autosave(ctx);
     }
 

@@ -125,6 +125,12 @@
 //! back ([`WORKBENCH_SCREENS`]) and every other window left off every
 //! screen moves onto one ([`PLACE`]).
 //!
+//! The layout is on it too: every real change of the workbench's layout
+//! is said once, when the gesture that made it ends, as `layout.changed`
+//! ([`LayoutChanged`], a [`LayoutChange`] naming its causes); the layout
+//! is saved by its listener ([`LAYOUT_SAVE`]), an application's copy of
+//! it follows after.
+//!
 //! A panel's state is on it too: whoever knows a panel's content is not
 //! current asks `panel.state` ([`PanelStateSet`], from any thread), and
 //! the workbench's chrome shows it ([`PANEL_CHROME`]), never the panel.
@@ -153,6 +159,10 @@ pub mod drag;
 pub use drag::{DRAG_POINTS, DragBegin, DragDelivery, DragDrop, DragStart, TARGET as DRAG_TARGET};
 pub(crate) mod files;
 pub use files::{BROWSER as FILES_BROWSER, FILES_POINTS, FileDrop, FilesDrop};
+pub(crate) mod layout;
+pub use layout::{
+    LAYOUT_POINTS, LAYOUT_SAVE, LayoutChange, LayoutChanged, SETTLE as LAYOUT_SETTLE,
+};
 mod owners;
 pub use owners::OWNER_GONE;
 pub(crate) mod panel_state;
@@ -539,8 +549,8 @@ pub const JOB_POINTS: [&str; 5] = [
 pub const PLUGIN_POINTS: [&str; 2] = [PluginConnect::ID, PluginDisconnect::ID];
 
 /// Every point egui-pop declares: the window, job, plugin, files,
-/// settings, drag, screen and panel state points.
-pub const POINTS: [&str; 20] = [
+/// settings, drag, screen, panel state and layout points.
+pub const POINTS: [&str; 21] = [
     WindowOpen::ID,
     WindowClose::ID,
     WindowReparent::ID,
@@ -561,6 +571,7 @@ pub const POINTS: [&str; 20] = [
     ScreenAdded::ID,
     ScreenRemoved::ID,
     PanelStateSet::ID,
+    LayoutChanged::ID,
 ];
 
 /// egui-pop's contract table (ADR 0030): every point it declares on the
@@ -612,6 +623,9 @@ pub const CONTRACT: &[PointDecl] = &[
     ),
     PointDecl::of::<PanelStateSet>(
         "A panel's state is asked, from any thread: its content stale, updating, failed (with the reason) or ready again; the panel's chrome shows it (content dimmed, a delayed busy mark on its corner and tab), never the panel.",
+    ),
+    PointDecl::of::<LayoutChanged>(
+        "The workbench's layout changed (a panel docked, detached, floated, moved, opened or closed, a split or a palette resized, a layout put in): said once per change, once its gesture ended; the layout is saved to the host's document by `layout.save`, an application's copy follows it.",
     ),
 ];
 

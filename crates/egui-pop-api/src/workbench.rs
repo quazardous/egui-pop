@@ -1080,6 +1080,11 @@ pub(crate) struct Workbench {
     /// The sizes the user gave the side and bottom areas, by zone name
     /// (`shell_sizes`); `None` until loaded.
     shell_sizes: Option<BTreeMap<String, f32>>,
+    /// Layout changes noted and not said yet (`layout.changed`).
+    pub(crate) unsaid: Option<crate::bus::layout::Unsaid>,
+    /// The layout as said, loaded or saved last; `None` before the
+    /// first pass.
+    pub(crate) said: Option<egui_pop_model::layout::SavedLayout>,
 }
 
 impl Default for Workbench {
@@ -1120,6 +1125,8 @@ impl Default for Workbench {
             no_drop: Vec::new(),
             flipped: false,
             shell_sizes: None,
+            unsaid: None,
+            said: None,
         }
     }
 }
@@ -2065,6 +2072,16 @@ pub(crate) fn windows(
             // Its place, kept in the layout.
             if own_window {
                 keep_window_place(app, &vctx, &panel);
+                // A tab moved among its tabs, or another gesture its dock
+                // made: read back and said if it changed (`layout.changed`).
+                if vctx.input(|i| {
+                    i.pointer.any_released()
+                        || i.events
+                            .iter()
+                            .any(|e| matches!(e, egui::Event::Key { pressed: true, .. }))
+                }) {
+                    app.note_layout("input");
+                }
             }
         });
     }
@@ -2083,6 +2100,7 @@ fn keep_window_place(app: &AppHandle, vctx: &egui::Context, panel: &PanelId) {
     let Some(a) = wb.layout.auxiliary.iter_mut().find(|a| a.panel == *panel) else {
         return;
     };
+    let was = a.clone();
     if a.maximized != maximized {
         a.maximized = maximized;
     }
@@ -2106,6 +2124,10 @@ fn keep_window_place(app: &AppHandle, vctx: &egui::Context, panel: &PanelId) {
         && a.screen != name
     {
         a.screen = name;
+    }
+    if *a != was {
+        drop(wb);
+        app.note_layout("window.place");
     }
 }
 
