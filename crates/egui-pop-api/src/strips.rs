@@ -63,6 +63,10 @@
 //!
 //! Steps (ADR 0011): `workbench.fold` (`{ "area", "folded" }`): an area
 //! folded to its strip or unfolded.
+//!
+//! While a floating palette is dragged over a place it docks in, the
+//! bar's start says how to dock it or not
+//! ([`crate::palettes::drag_hint`]).
 
 use std::fmt;
 use std::ops::Range;
@@ -848,6 +852,11 @@ impl Plugin for StripsPlugin {
                         status_context(ui, app);
                     }
                     start_items(ui, app);
+                    // While a palette is dragged over a target: how to
+                    // dock it or not.
+                    if let Some(hint) = crate::palettes::drag_hint(app) {
+                        ui.add(egui::Label::new(RichText::new(hint).weak()).selectable(false));
+                    }
                 },
             ),
         );

@@ -1,6 +1,7 @@
 //! Palettes: floating panels over the workbench, opened floating, docked
 //! and floated again, dragged (snapped, clamped), docked by a drop over
-//! an area, hidden and shown by Tab, rolled up, pinned, giving the
+//! an area with the dock keys held (a plain drag only moves, as the
+//! `input.dock_drag` setting says), hidden and shown by Tab, rolled up, pinned, giving the
 //! keyboard back on Escape (and the focus a widget inside took), resized
 //! by their edges, every change through its step.
 
@@ -132,6 +133,26 @@ fn drag_by(h: &mut Harness<'static, App>, from: egui::Pos2, by: egui::Vec2) {
     h.run();
 }
 
+/// Holds the dock keys (`gesture.workbench.dock`: Ctrl, Cmd on macOS),
+/// or lets them go.
+fn dock_keys(h: &mut Harness<'static, App>, held: bool) {
+    let m = if held {
+        egui::Modifiers::COMMAND
+    } else {
+        egui::Modifiers::NONE
+    };
+    h.event(egui::Event::ModifiersChanged(m));
+    h.run();
+}
+
+/// [`drag_by`] with the dock keys held: a drop over an area docks, over
+/// another palette joins it.
+fn dock_by(h: &mut Harness<'static, App>, from: egui::Pos2, by: egui::Vec2) {
+    dock_keys(h, true);
+    drag_by(h, from, by);
+    dock_keys(h, false);
+}
+
 #[test]
 fn a_palette_opens_floating_docks_and_floats_again() {
     let mut h = harness(false);
@@ -199,10 +220,10 @@ fn a_palette_is_dragged_by_its_band_snaps_and_docks_on_an_area() {
     drag_by(&mut h, title, egui::vec2(0.0, -400.0));
     let pos = floating(&h, &TOOLS).unwrap().pos;
     assert!(pos[0] >= 0.0 && pos[1] >= 0.0, "{pos:?}");
-    // Dropped over the bottom panel: docked there.
+    // Dropped over the bottom panel with the dock keys held: docked there.
     let title = h.get_by_label("Tools").rect().center();
     let target = h.get_by_label("log body").rect().center();
-    drag_by(&mut h, title, target - title);
+    dock_by(&mut h, title, target - title);
     assert!(floating(&h, &TOOLS).is_none());
     assert_eq!(
         h.state().handle().layout().area_of(&TOOLS),
@@ -289,7 +310,7 @@ fn hooks_veto_a_dock_and_redirect_a_move_and_reset_puts_palettes_back() {
     );
     let title = h.get_by_label("Tools").rect().center();
     let target = h.get_by_label("log body").rect().center();
-    drag_by(&mut h, title, target - title);
+    dock_by(&mut h, title, target - title);
     assert_eq!(
         floating(&h, &TOOLS).unwrap().pos,
         [100.0, 100.0],
@@ -374,24 +395,30 @@ fn stacked(h: &mut Harness<'static, App>) {
     assert_eq!(members(h, &TOOLS), [TOOLS, NAV]);
 }
 
-/// Drags from a point to another, in four moves, checking the group hint
-/// before the drop with `check`.
+/// Drags from a point to another with the dock keys held, in four
+/// moves, checking the group hint before the drop with `check` (armed,
+/// when there is one).
 fn drag_to(
     h: &mut Harness<'static, App>,
     from: egui::Pos2,
     to: egui::Pos2,
     check: impl FnOnce(&Harness<'static, App>),
 ) {
+    dock_keys(h, true);
     h.drag_at(from);
     h.run();
     for i in 1..=4 {
         h.hover_at(from + (to - from) * (i as f32 / 4.0));
         h.run();
     }
+    if let Some(hint) = palettes::group_hint(h.state().handle()) {
+        assert!(hint.armed, "{hint:?}");
+    }
     check(h);
     h.drop_at(to);
     h.run();
     h.run();
+    dock_keys(h, false);
 }
 
 #[test]
@@ -581,7 +608,7 @@ fn a_group_docks_whole_as_tabs_and_floats_back_as_a_group() {
     let before = h.state().handle().last_event();
     let band = h.get_by_label("Tools · Navigator").rect().center();
     let target = h.get_by_label("log body").rect().center();
-    drag_by(&mut h, band, target - band);
+    dock_by(&mut h, band, target - band);
     let layout = h.state().handle().layout();
     assert!(layout.floating.is_empty(), "{:?}", layout.floating);
     assert_eq!(layout.area_of(&TOOLS), Some(Area::Bottom));
@@ -704,6 +731,93 @@ fn a_palette_is_resized_by_its_edges_and_keeps_its_size() {
     assert_eq!(floating(&h, &TOOLS).unwrap().size, None);
     let back = frame(&h, &TOOLS);
     assert!(near(back.height(), start.height()), "{start:?} {back:?}");
+}
+
+/// Its left and top edges (and every corner) resize it too, the
+/// opposite edges staying where they are, never under its least width.
+#[test]
+fn a_palette_is_resized_by_its_left_and_top_edges_keeping_the_opposite_ones() {
+    let mut h = harness(false);
+    h.state()
+        .handle()
+        .change_workbench(Change::MovePalette(TOOLS, [300.0, 150.0]));
+    h.run();
+    h.run();
+    let start = frame(&h, &TOOLS);
+    let before = h.state().handle().last_event();
+    // The left edge, 40 points out: 40 wider, the right edge still.
+    drag_by(
+        &mut h,
+        egui::pos2(start.left() + 1.0, start.center().y),
+        egui::vec2(-40.0, 0.0),
+    );
+    let r = frame(&h, &TOOLS);
+    assert!(near(r.width(), start.width() + 40.0), "{start:?} {r:?}");
+    assert!(near(r.right(), start.right()), "{start:?} {r:?}");
+    assert!(near(r.height(), start.height()), "{start:?} {r:?}");
+    assert!(
+        events(&h, before).contains(&"palette.resized".to_string()),
+        "{:?}",
+        events(&h, before)
+    );
+    // The top edge, 40 points up: 40 taller, the bottom edge still.
+    drag_by(
+        &mut h,
+        egui::pos2(r.center().x, r.top() + 1.0),
+        egui::vec2(0.0, -40.0),
+    );
+    let t = frame(&h, &TOOLS);
+    assert!(near(t.height(), r.height() + 40.0), "{r:?} {t:?}");
+    assert!(near(t.bottom(), r.bottom()), "{r:?} {t:?}");
+    assert!(
+        near(t.left(), r.left()) && near(t.right(), r.right()),
+        "{r:?} {t:?}"
+    );
+    // The top-left corner: both ways, the bottom-right corner still.
+    drag_by(
+        &mut h,
+        t.left_top() + egui::vec2(1.0, 1.0),
+        egui::vec2(-20.0, -20.0),
+    );
+    let c = frame(&h, &TOOLS);
+    assert!(near(c.width(), t.width() + 20.0), "{t:?} {c:?}");
+    assert!(near(c.height(), t.height() + 20.0), "{t:?} {c:?}");
+    assert!(near(c.right(), t.right()) && near(c.bottom(), t.bottom()));
+    // The other corners and the bottom edge: each its own two edges.
+    drag_by(
+        &mut h,
+        c.right_top() + egui::vec2(-1.0, 1.0),
+        egui::vec2(10.0, -10.0),
+    );
+    let d = frame(&h, &TOOLS);
+    assert!(near(d.width(), c.width() + 10.0) && near(d.height(), c.height() + 10.0));
+    assert!(
+        near(d.left(), c.left()) && near(d.bottom(), c.bottom()),
+        "{c:?} {d:?}"
+    );
+    drag_by(
+        &mut h,
+        d.left_bottom() + egui::vec2(1.0, -1.0),
+        egui::vec2(-10.0, 10.0),
+    );
+    let e = frame(&h, &TOOLS);
+    assert!(near(e.width(), d.width() + 10.0) && near(e.height(), d.height() + 10.0));
+    assert!(
+        near(e.right(), d.right()) && near(e.top(), d.top()),
+        "{d:?} {e:?}"
+    );
+    // Never under its least width (160): the right edge stays.
+    drag_by(
+        &mut h,
+        egui::pos2(e.left() + 1.0, e.center().y),
+        egui::vec2(1000.0, 0.0),
+    );
+    let least = frame(&h, &TOOLS);
+    assert!(
+        least.width() >= 160.0 && least.width() < e.width(),
+        "{least:?}"
+    );
+    assert!(near(least.right(), e.right()), "{e:?} {least:?}");
 }
 
 #[test]
@@ -1218,4 +1332,303 @@ fn a_palette_narrowed_below_its_content_keeps_its_buttons_inside() {
 
 fn floating_wide(h: &Harness<'_, App>) -> FloatingGroup {
     floating(h, &WIDE).expect("the strip floats")
+}
+
+// Moving or docking (`docs/design/drag-move-vs-dock.md`): a plain drag
+// only moves, the dock keys dock; the mode is the `input.dock_drag`
+// setting.
+
+/// A drag from `from` to `to` in four moves, `during` called before the
+/// drop and between the moves (with the move's number, 1 to 4), one pass
+/// a step.
+fn drag_with(
+    h: &mut Harness<'static, App>,
+    from: egui::Pos2,
+    to: egui::Pos2,
+    mut during: impl FnMut(&mut Harness<'static, App>, usize),
+) {
+    h.drag_at(from);
+    h.run();
+    for i in 1..=4 {
+        h.hover_at(from + (to - from) * (i as f32 / 4.0));
+        h.run();
+        during(h, i);
+    }
+    h.drop_at(to);
+    h.run();
+    h.run();
+}
+
+fn docked_at_bottom(h: &Harness<'_, App>) -> bool {
+    floating(h, &TOOLS).is_none()
+        && h.state().handle().layout().area_of(&TOOLS) == Some(Area::Bottom)
+}
+
+#[test]
+fn a_plain_drag_over_an_area_only_moves_and_the_dock_keys_dock_even_pressed_mid_drag() {
+    let mut h = harness(false);
+    let title = h.get_by_label("Tools").rect().center();
+    let target = h.get_by_label("log body").rect().center();
+    let before = h.state().handle().last_event();
+    let mut seen = None;
+    drag_with(&mut h, title, target, |h, i| {
+        if i == 4 {
+            let app = h.state().handle();
+            seen = Some((
+                app.drop_hint(),
+                palettes::drag_hint(app),
+                app.overlay_rects(),
+            ));
+        }
+    });
+    let (hint, text, overlays) = seen.unwrap();
+    let hint = hint.expect("over the bottom area: a drop hint");
+    assert_eq!(hint.area, "bottom");
+    assert!(!hint.armed, "a plain drag does not arm the targets");
+    assert!(hint.preview.is_none(), "nothing drawn");
+    assert_eq!(text.as_deref(), Some("Hold Ctrl to dock"));
+    assert!(
+        !overlays
+            .iter()
+            .any(|o| o.kind == egui_pop_api::app::OverlayKind::DropHint),
+        "{overlays:?}"
+    );
+    let names = events(&h, before);
+    assert!(floating(&h, &TOOLS).is_some(), "still floating");
+    assert!(names.contains(&"palette.moved".to_string()), "{names:?}");
+    assert!(!names.contains(&"palette.docked".to_string()), "{names:?}");
+    // The dock keys pressed only mid-drag, before the drop: docked.
+    let title = h.get_by_label("Tools").rect().center();
+    let target = h.get_by_label("log body").rect().center();
+    let mut armed = None;
+    drag_with(&mut h, title, target, |h, i| {
+        if i == 2 {
+            dock_keys(h, true);
+        }
+        if i == 4 {
+            let app = h.state().handle();
+            armed = app.drop_hint().map(|d| (d.armed, palettes::drag_hint(app)));
+        }
+    });
+    dock_keys(&mut h, false);
+    assert_eq!(
+        armed,
+        Some((true, Some("Release Ctrl to move only".to_string())))
+    );
+    assert!(docked_at_bottom(&h));
+}
+
+#[test]
+fn the_dock_keys_let_go_before_the_drop_only_move() {
+    let mut h = harness(false);
+    dock_keys(&mut h, true);
+    let title = h.get_by_label("Tools").rect().center();
+    let target = h.get_by_label("log body").rect().center();
+    drag_with(&mut h, title, target, |h, i| {
+        if i == 4 {
+            assert!(h.state().handle().drop_hint().is_some_and(|d| d.armed));
+            dock_keys(h, false);
+            assert!(h.state().handle().drop_hint().is_some_and(|d| !d.armed));
+        }
+    });
+    assert!(floating(&h, &TOOLS).is_some(), "still floating");
+}
+
+#[test]
+fn a_palette_joins_another_only_with_the_dock_keys_and_snapped_to_an_edge_stays_floating() {
+    let mut h = harness(false);
+    open_nav(&mut h, [400.0, 100.0]);
+    let to = h.get_by_label("Brush").rect().center();
+    let from = h.get_by_label("Navigator").rect().center();
+    let before = h.state().handle().last_event();
+    drag_with(&mut h, from, to, |h, i| {
+        if i == 4 {
+            let hint = palettes::group_hint(h.state().handle()).expect("a group hint");
+            assert_eq!(
+                (hint.into.clone(), hint.at, hint.armed),
+                (TOOLS, Join::Tab, false)
+            );
+        }
+    });
+    assert_eq!(members(&h, &TOOLS), [TOOLS], "not joined");
+    assert!(floating(&h, &NAV).unwrap().is_lone());
+    let names = events(&h, before);
+    assert!(!names.contains(&"palette.grouped".to_string()), "{names:?}");
+    // With the keys: joined.
+    let from = h.get_by_label("Navigator").rect().center();
+    let to = h.get_by_label("Brush").rect().center();
+    drag_to(&mut h, from, to, |_| {});
+    assert_eq!(members(&h, &TOOLS), [TOOLS, NAV]);
+    // A palette dragged against the start edge (the pointer by the edge,
+    // over the closed side bar's edge) is snapped there and stays
+    // floating.
+    let mut h = harness(false);
+    let title = h.get_by_label("Tools").rect().center();
+    drag_by(&mut h, title, egui::vec2(-title.x + 3.0, 0.0));
+    let g = floating(&h, &TOOLS).expect("still floating");
+    assert_eq!(g.pos[0], 0.0, "snapped");
+    assert_eq!(g.anchor.x, AnchorEdge::Start);
+}
+
+#[test]
+fn the_modifier_floats_mode_docks_on_a_plain_drag_and_the_keys_keep_it_floating() {
+    let mut h = harness(false);
+    palettes_mode(&mut h, "modifier-floats");
+    let title = h.get_by_label("Tools").rect().center();
+    let target = h.get_by_label("log body").rect().center();
+    let mut text = None;
+    dock_keys(&mut h, true);
+    drag_with(&mut h, title, target, |h, i| {
+        if i == 4 {
+            let app = h.state().handle();
+            assert!(app.drop_hint().is_some_and(|d| !d.armed));
+            text = Some(palettes::drag_hint(app));
+        }
+    });
+    dock_keys(&mut h, false);
+    assert_eq!(text, Some(None), "the keys held: no hint");
+    assert!(floating(&h, &TOOLS).is_some(), "the keys kept it floating");
+    let title = h.get_by_label("Tools").rect().center();
+    let target = h.get_by_label("log body").rect().center();
+    drag_with(&mut h, title, target, |h, i| {
+        if i == 4 {
+            assert_eq!(
+                palettes::drag_hint(h.state().handle()).as_deref(),
+                Some("Hold Ctrl to move without docking")
+            );
+        }
+    });
+    assert!(docked_at_bottom(&h), "a plain drag docks");
+}
+
+#[test]
+fn the_dwell_mode_docks_only_after_a_rest_on_the_target() {
+    let mut h = harness(false);
+    palettes_mode(&mut h, "dwell");
+    // Passing over the area: dropped there at once, it stays floating.
+    let title = h.get_by_label("Tools").rect().center();
+    let target = h.get_by_label("log body").rect().center();
+    h.drag_at(title);
+    h.step();
+    h.step();
+    h.hover_at(title + egui::vec2(10.0, 10.0));
+    h.step();
+    h.hover_at(target);
+    h.step();
+    assert!(h.state().handle().drop_hint().is_some_and(|d| !d.armed));
+    assert_eq!(
+        palettes::drag_hint(h.state().handle()).as_deref(),
+        Some("Rest here to dock")
+    );
+    h.drop_at(target);
+    h.step();
+    h.run();
+    assert!(
+        floating(&h, &TOOLS).is_some(),
+        "passed over: still floating"
+    );
+    // Resting on it past the delay (the harness's clock): docked.
+    let title = h.get_by_label("Tools").rect().center();
+    let target = h.get_by_label("log body").rect().center();
+    h.drag_at(title);
+    h.step();
+    h.step();
+    h.hover_at(title + egui::vec2(10.0, 10.0));
+    h.step();
+    h.hover_at(target);
+    h.step();
+    for _ in 0..3 {
+        h.step();
+    }
+    assert!(h.state().handle().drop_hint().is_some_and(|d| d.armed));
+    h.drop_at(target);
+    h.step();
+    h.run();
+    assert!(docked_at_bottom(&h));
+}
+
+/// Sets the palette drag mode (`input.dock_drag`) and lets the pass
+/// that follows it run.
+fn palettes_mode(h: &mut Harness<'static, App>, mode: &str) {
+    egui_pop_api::pointer::set_dock_drag(h.state().handle(), mode).unwrap();
+    h.run();
+    h.run();
+}
+
+#[test]
+fn the_drag_mode_setting_is_said_once_and_photoshop_docks_on_a_plain_drag() {
+    use egui_pop_api::bus::SettingsChanged;
+    use egui_pop_model::pointer::DockDrag;
+    let mut h = harness(false);
+    let app = h.state().handle().clone();
+    let said: Arc<Mutex<Vec<String>>> = Arc::default();
+    {
+        let said = said.clone();
+        app.bus()
+            .listen::<SettingsChanged>(
+                "test.said",
+                egui_pop_api::bus::bus_contract::ListenOpts::new(),
+                move |c, ()| {
+                    said.lock().unwrap().push(c.id().to_string());
+                    Ok(())
+                },
+            )
+            .unwrap();
+    }
+    assert_eq!(
+        egui_pop_core::pointer::map(&h.ctx).options.dock_drag,
+        DockDrag::ModifierDocks
+    );
+    palettes_mode(&mut h, "dwell");
+    assert_eq!(*said.lock().unwrap(), ["input.dock_drag"], "said once");
+    assert_eq!(
+        egui_pop_core::pointer::map(&h.ctx).options.dock_drag,
+        DockDrag::Dwell
+    );
+    assert!(egui_pop_api::pointer::set_dock_drag(&app, "sideways").is_err());
+    // Back to the profile's: Photoshop's docks on a plain drag.
+    palettes_mode(&mut h, "profile");
+    egui_pop_api::pointer::set_profile(&app, "photoshop").unwrap();
+    h.run();
+    h.run();
+    assert_eq!(
+        egui_pop_core::pointer::map(&h.ctx).options.dock_drag,
+        DockDrag::ModifierFloats
+    );
+    let title = h.get_by_label("Tools").rect().center();
+    let target = h.get_by_label("log body").rect().center();
+    drag_by(&mut h, title, target - title);
+    assert!(docked_at_bottom(&h), "Photoshop docks on a plain drag");
+}
+
+#[test]
+fn an_application_picks_the_drag_mode_and_the_band_menu_docks_in_an_area() {
+    use egui_pop_model::pointer::DockDrag;
+    let app = App::builder()
+        .plugin(Demo { hooks: false })
+        .dock_drag(DockDrag::ModifierFloats)
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 600.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    assert_eq!(
+        egui_pop_core::pointer::map(&h.ctx).options.dock_drag,
+        DockDrag::ModifierFloats
+    );
+    // The band's menu: Dock in each side and the bottom.
+    h.get_by_label("Tools").click_secondary();
+    h.run();
+    for entry in [
+        "Dock in the start side bar",
+        "Dock in the end side bar",
+        "Dock in the bottom panel",
+    ] {
+        assert!(h.query_by_label(entry).is_some(), "the menu lists {entry}");
+    }
+    h.get_by_label("Dock in the bottom panel").click();
+    h.run();
+    h.run();
+    assert!(docked_at_bottom(&h));
 }

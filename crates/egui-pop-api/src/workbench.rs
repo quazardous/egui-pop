@@ -515,8 +515,14 @@ pub struct DropHint {
     /// Its index among the tabs it would join; `None` for a split.
     pub index: Option<usize>,
     /// A palette's: the ghost of its tab where it would land; `None` when
-    /// the drop is refused, and for a tab (the drop zone shows it).
+    /// the drop is refused or not armed, and for a tab (the drop zone
+    /// shows it).
     pub preview: Option<TabPreview>,
+    /// Whether a drop now docks: always for a tab; for a palette, as its
+    /// drag mode and the dock keys held say (`input.dock_drag`,
+    /// `gesture.workbench.dock`). Not armed, nothing is drawn and a drop
+    /// only moves the palette.
+    pub armed: bool,
 }
 
 /// Where a drop hint draws a dragged palette's tab (the kit's
@@ -625,6 +631,9 @@ pub enum Change {
     /// A floating panel's group is resized (its frame, in points), or
     /// sized by its content again (`None`).
     ResizePalette(PanelId, Option<[f32; 2]>),
+    /// A floating panel's group is resized and moved at once (its size,
+    /// then its place): a left or top edge dragged.
+    ResizePaletteAt(PanelId, [f32; 2], [f32; 2]),
     /// A floating panel rolls up to its header band (`true`) or down.
     Roll(PanelId, bool),
     /// A floating panel is pinned (`true`) or unpinned.
@@ -778,6 +787,10 @@ impl Change {
                 crate::palettes::STEP_RESIZE,
                 json!({ "panel": p, "size": size }),
             ),
+            Change::ResizePaletteAt(p, size, pos) => (
+                crate::palettes::STEP_RESIZE,
+                json!({ "panel": p, "size": size, "pos": pos }),
+            ),
             Change::Roll(p, on) => (
                 crate::palettes::STEP_ROLL,
                 json!({ "panel": p, "rolled": on }),
@@ -811,7 +824,7 @@ impl Change {
             Change::Ungroup(..) | Change::UngroupTabs(..) => "palette.ungrouped",
             Change::CloseGroup(..) => "palette.group_closed",
             Change::MovePalette(..) => "palette.moved",
-            Change::ResizePalette(..) => "palette.resized",
+            Change::ResizePalette(..) | Change::ResizePaletteAt(..) => "palette.resized",
             Change::Roll(..) => "palette.rolled",
             Change::Pin(..) => "palette.pinned",
             _ => return None,
@@ -881,7 +894,10 @@ impl Change {
             "palette.open" => Change::OpenPalette(panel),
             "palette.float" => Change::Float(panel, pos_of(args)?),
             "palette.move" => Change::MovePalette(panel, pos_of(args)?),
-            "palette.resize" => Change::ResizePalette(panel, size_of(args)?),
+            "palette.resize" => match (size_of(args)?, args.get("pos")) {
+                (Some(size), Some(_)) => Change::ResizePaletteAt(panel, size, pos_of(args)?),
+                (size, _) => Change::ResizePalette(panel, size),
+            },
             "palette.ungroup" if flag_off("tabs") => Change::UngroupTabs(panel, pos_of(args)?),
             "palette.ungroup" => Change::Ungroup(panel, pos_of(args)?),
             "palette.close_group" => Change::CloseGroup(panel),
@@ -1656,6 +1672,16 @@ impl Workbench {
                 f.size = *size;
                 self.anchor_palette(p, false);
                 json!({ "panel": p, "size": size })
+            }
+            Change::ResizePaletteAt(p, size, pos) => {
+                let f = self
+                    .layout
+                    .floating_mut(p)
+                    .ok_or_else(|| format!("`{p}` does not float"))?;
+                f.size = Some(*size);
+                f.pos = *pos;
+                self.anchor_palette(p, false);
+                json!({ "panel": p, "size": size, "pos": pos })
             }
             Change::Roll(p, on) => {
                 let m = self
@@ -4849,6 +4875,7 @@ fn publish_hint(app: &AppHandle, ctx: &egui::Context) {
             zone,
             index,
             preview: None,
+            armed: true,
         });
         return;
     }
@@ -4859,9 +4886,9 @@ fn publish_hint(app: &AppHandle, ctx: &egui::Context) {
         .filter(|_| wb.group_hint.is_none())
         .and_then(|d| {
             let edge = crate::palettes::magnet(ctx);
-            wb.dock_at(d.at, edge).map(|to| (d.panel, to))
+            wb.dock_at(d.at, edge).map(|to| (d.panel, to, d.armed))
         });
-    let Some((panel, to)) = target else {
+    let Some((panel, to, armed)) = target else {
         return;
     };
     let Some(spec) = wb.spec(&panel).cloned() else {
@@ -4877,7 +4904,7 @@ fn publish_hint(app: &AppHandle, ctx: &egui::Context) {
     let kit = Kit::of(ctx);
     // The ghost: the panel's tab, laid out once per drag (a cache of its
     // own, as the areas' tabs are), where a drop puts it.
-    let ghost = if why.is_none() {
+    let ghost = if why.is_none() && armed {
         let cache_id = TAB_CACHE.keyed("ghost");
         let mut cache = cache_id.update(ctx, std::mem::take);
         cache.prepare(app, ctx, &kit, std::slice::from_ref(&panel));
@@ -4902,7 +4929,12 @@ fn publish_hint(app: &AppHandle, ctx: &egui::Context) {
             index: joined,
             rect: *at,
         }),
+        armed,
     });
+    // Not armed (a plain drag that only moves): nothing drawn.
+    if !armed {
+        return;
+    }
     // The kit's `dock-preview`: at rest where the panel may go, disabled
     // with its label saying why where it may not.
     let t = egui_pop_core::theme::Tokens::of(ctx);

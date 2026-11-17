@@ -530,6 +530,7 @@ Zones and blocks, the workbench, the layout controls, palettes, arrangements, th
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-detached-drop-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-detached-drop-pop-dark.png" width="200" alt="workbench-detached-drop-pop-dark"></a><br>workbench-detached-drop-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/palette-panel-menu-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/palette-panel-menu-pop-dark.png" width="200" alt="palette-panel-menu-pop-dark"></a><br>palette-panel-menu-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/palettes-drag-hint-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/palettes-drag-hint-pop-dark.png" width="200" alt="palettes-drag-hint-pop-dark"></a><br>palettes-drag-hint-pop-dark</td>
   </tr>
 </table>
 

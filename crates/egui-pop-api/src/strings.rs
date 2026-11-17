@@ -759,6 +759,10 @@ pub const WORKBENCH_FLOAT: StrKey = StrKey::new("egui-pop-workbench-float", "Flo
 /// The panel menu's entry docking a floating or detached panel back
 /// where it floated from.
 pub const WORKBENCH_DOCK_BACK: StrKey = StrKey::new("egui-pop-workbench-dock-back", "Dock back");
+/// A floating panel's menu: dock it in an area (for a pointer with no
+/// keyboard, whose drag cannot hold the dock keys).
+pub const WORKBENCH_DOCK_IN: StrKey =
+    StrKey::new("egui-pop-workbench-dock-in", "Dock in { $area }");
 /// A panel's mark while its content is stale or being updated
 /// (`panel.state`).
 pub const PANEL_STATE_UPDATING: StrKey = StrKey::new("egui-pop-panel-state-updating", "Updating…");
@@ -785,6 +789,28 @@ pub const PALETTE_GROUP_MENU: StrKey =
 /// The entry of a group's menu closing every palette of the group.
 pub const PALETTE_CLOSE_GROUP: StrKey = StrKey::new("egui-pop-palette-close-group", "Close group");
 pub const PALETTE_PIN: StrKey = StrKey::new("egui-pop-palette-pin", "Pin { $palette }");
+/// While a floating palette is dragged over a place it docks in (or a
+/// palette it joins), the dock keys not held: holding them docks it.
+pub const PALETTE_DRAG_HOLD_TO_DOCK: StrKey = StrKey::new(
+    "egui-pop-palette-drag-hold-to-dock",
+    "Hold { $keys } to dock",
+);
+/// While a floating palette is dragged over a target with the dock keys
+/// held: letting them go only moves it.
+pub const PALETTE_DRAG_RELEASE_TO_MOVE: StrKey = StrKey::new(
+    "egui-pop-palette-drag-release-to-move",
+    "Release { $keys } to move only",
+);
+/// A palette's drag that docks on a plain drag, over a target: holding
+/// the keys keeps it floating.
+pub const PALETTE_DRAG_HOLD_TO_FLOAT: StrKey = StrKey::new(
+    "egui-pop-palette-drag-hold-to-float",
+    "Hold { $keys } to move without docking",
+);
+/// A palette's drag that docks after a rest on the target, while the
+/// delay runs.
+pub const PALETTE_DRAG_REST: StrKey =
+    StrKey::new("egui-pop-palette-drag-rest", "Rest here to dock");
 pub const PALETTE_UNPIN: StrKey = StrKey::new("egui-pop-palette-unpin", "Unpin { $palette }");
 /// A detached panel's window title, with the application's.
 pub const WORKBENCH_WINDOW_TITLE: StrKey = StrKey::new(
@@ -1838,6 +1864,7 @@ pub const ALL: &[StrKey] = &[
     AREA_RESIZE,
     AREA_ACTIVITY_BAR,
     WORKBENCH_MOVE_TO,
+    WORKBENCH_DOCK_IN,
     WORKBENCH_STAYS_OUT,
     WORKBENCH_DETACH,
     WORKBENCH_CLOSE_PANEL,
@@ -1856,6 +1883,10 @@ pub const ALL: &[StrKey] = &[
     PALETTE_ROLL_UP,
     PALETTE_ROLL_DOWN,
     PALETTE_PIN,
+    PALETTE_DRAG_HOLD_TO_DOCK,
+    PALETTE_DRAG_RELEASE_TO_MOVE,
+    PALETTE_DRAG_HOLD_TO_FLOAT,
+    PALETTE_DRAG_REST,
     PALETTE_UNPIN,
     WORKBENCH_WINDOW_TITLE,
     ZEN_HINT,

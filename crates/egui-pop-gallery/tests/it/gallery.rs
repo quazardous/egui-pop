@@ -2974,7 +2974,8 @@ fn the_palettes_page_floats_a_toolbox_a_colour_palette_and_a_navigator() {
     assert!(h.query_by_label_contains("Tool: Brush").is_some());
     let mut results = egui_kittest::SnapshotResults::new();
     results.add(h.try_page_shot("palettes-pop-dark"));
-    // The navigator, dropped on the playground's side bar, docks there.
+    // The navigator, dragged over the playground's side bar: a plain
+    // drag only moves, the hint says how to dock.
     let a = h.get_by_label("Navigator").rect().center();
     let b = h.get_by_label("Playground").rect().center();
     h.drag_at(a);
@@ -2983,12 +2984,27 @@ fn the_palettes_page_floats_a_toolbox_a_colour_palette_and_a_navigator() {
         h.hover_at(a + (b - a) * (i as f32 / 4.0));
         h.run();
     }
+    let hint = app.drop_hint().expect("a hint while dragging");
+    assert!(!hint.armed && hint.preview.is_none(), "{hint:?}");
+    assert_eq!(
+        egui_pop::api::palettes::drag_hint(&app).as_deref(),
+        Some("Hold Ctrl to dock")
+    );
+    // In the status bar, the gallery having one.
+    assert!(h.query_by_label("Hold Ctrl to dock").is_some());
+    results.add(h.try_body_shot("palettes-drag-hint-pop-dark"));
+    // The dock keys pressed mid-drag: dropped there, it docks.
+    h.event(egui::Event::ModifiersChanged(egui::Modifiers::COMMAND));
+    h.run();
     // Before the drop, the ghost of its tab where it would land.
     let hint = app.drop_hint().expect("a hint while dragging");
+    assert!(hint.armed);
     let ghost = hint.preview.expect("a ghost tab where it may dock");
     assert_eq!(ghost.area, "end_side");
     h.drop_at(b);
     h.run();
+    h.run();
+    h.event(egui::Event::ModifiersChanged(egui::Modifiers::NONE));
     h.run();
     assert!(app.layout().floating_of(&navigator).is_none());
     assert_eq!(

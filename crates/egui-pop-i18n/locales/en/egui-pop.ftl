@@ -475,6 +475,10 @@ command-gesture-value-step =
     .description = The wheel with these keys steps the slider under the pointer, focused or not.
     .title = Values: step with the wheel
 
+command-gesture-workbench-dock =
+    .description = Held while a floating palette is dragged, these keys show where it docks or joins another palette, and let go there it does; with the drag mode modifier-floats, they keep it floating instead.
+    .title = Palettes: dock while dragging
+
 command-help-report =
     .description = Opens a new issue in the browser, prefilled with the version info, the platform, the page shown and the last element inspected.
     .title = Report a problem
@@ -1945,6 +1949,14 @@ egui-pop-palette-close = Close { $palette }
 
 egui-pop-palette-close-group = Close group
 
+egui-pop-palette-drag-hold-to-dock = Hold { $keys } to dock
+
+egui-pop-palette-drag-hold-to-float = Hold { $keys } to move without docking
+
+egui-pop-palette-drag-release-to-move = Release { $keys } to move only
+
+egui-pop-palette-drag-rest = Rest here to dock
+
 egui-pop-palette-group-menu = { $palette } menu
 
 egui-pop-palette-hint = Type a command
@@ -2895,6 +2907,8 @@ egui-pop-workbench-detach = Detach into a window
 
 egui-pop-workbench-dock-back = Dock back
 
+egui-pop-workbench-dock-in = Dock in { $area }
+
 egui-pop-workbench-float = Float
 
 egui-pop-workbench-flyout-pin = Pin { $panel }
@@ -3218,6 +3232,18 @@ setting-files-native =
 setting-files-preview =
     .description = egui-pop's file picker shows the selected file's preview and facts beside the list; Alt+P shows or hides it.
     .label = Previews in the file picker
+
+setting-input-dock-drag =
+    .description = A floating panel dragged by its title: modifier-docks moves it, docking only with the dock keys held (Ctrl, or Cmd on macOS); modifier-floats docks it, the keys keep it floating; dwell docks it after a rest on a target; profile as the pointer profile says.
+    .label = Dragging a floating panel
+
+setting-input-dock-drag-choice-dwell = dwell
+
+setting-input-dock-drag-choice-modifier-docks = modifier-docks
+
+setting-input-dock-drag-choice-modifier-floats = modifier-floats
+
+setting-input-dock-drag-choice-profile = profile
 
 setting-input-image-double-click =
     .description = What a double click on the image does: fit it, leave the view (back to the browser, as darktable does), or nothing; profile: as the pointer profile says.

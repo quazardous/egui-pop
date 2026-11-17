@@ -1455,6 +1455,14 @@ egui-pop-palette-close = Fermer { $palette }
 
 egui-pop-palette-close-group = Fermer le groupe
 
+egui-pop-palette-drag-hold-to-dock = Maintenez { $keys } pour ancrer
+
+egui-pop-palette-drag-hold-to-float = Maintenez { $keys } pour déplacer sans ancrer
+
+egui-pop-palette-drag-release-to-move = Relâchez { $keys } pour seulement déplacer
+
+egui-pop-palette-drag-rest = Restez ici pour ancrer
+
 egui-pop-palette-group-menu = Menu de { $palette }
 
 egui-pop-palette-hint = Tapez une commande
@@ -2208,6 +2216,8 @@ egui-pop-workbench-detach = Détacher dans une fenêtre
 egui-pop-workbench-float = Faire flotter
 egui-pop-workbench-dock-back = Réancrer
 
+egui-pop-workbench-dock-in = Ancrer dans { $area }
+
 egui-pop-workbench-flyout-pin = Épingler { $panel }
 
 egui-pop-workbench-fold = Replier { $area }
@@ -2646,6 +2656,10 @@ command-gesture-sections-pull =
     .description = Un glissement sur une limite ou un titre avec ces touches déplace les sections du dessous d’un bloc, sans changer leurs hauteurs.
     .title = Sections : tirer d’un bloc
 
+command-gesture-workbench-dock =
+    .description = Maintenues pendant qu’on glisse une palette flottante, ces touches montrent où elle s’ancre ou rejoint une autre palette, et elle s’y ancre une fois lâchée ; avec le mode touche pour flotter, elles la gardent flottante.
+    .title = Palettes : ancrer en glissant
+
 command-gesture-value-coarse =
     .description = Ces touches rendent le glissement, les flèches et la molette d’un curseur dix fois plus grossiers.
     .title = Valeurs : plus grossier
@@ -2737,6 +2751,18 @@ setting-input-slider-wheel-choice-profile = profil
 setting-input-slider-wheel-choice-guarded = protégée
 
 setting-input-slider-wheel-choice-value = valeur
+
+setting-input-dock-drag =
+    .description = Un panneau flottant tiré par son titre : touche pour ancrer le déplace, et ne l’ancre qu’avec les touches d’ancrage tenues (Ctrl, ou Cmd sur macOS) ; touche pour flotter l’ancre, les touches le gardent flottant ; attente l’ancre après un arrêt sur une cible ; profil : comme le dit le profil de pointeur.
+    .label = Glisser un panneau flottant
+
+setting-input-dock-drag-choice-profile = profil
+
+setting-input-dock-drag-choice-modifier-docks = touche pour ancrer
+
+setting-input-dock-drag-choice-modifier-floats = touche pour flotter
+
+setting-input-dock-drag-choice-dwell = attente
 
 setting-input-image-double-click =
     .description = Ce que fait un double clic sur l’image : l’ajuster, quitter la vue (retour au navigateur, comme dans darktable) ou rien ; profil : comme le dit le profil de pointeur.

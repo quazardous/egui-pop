@@ -5,7 +5,9 @@
 //! [`AppBuilder::pointer_profile`]; a retired id such as `adobe` names
 //! its successor, `lightroom`), the options
 //! each profile gives its default for (`input.slider_wheel`,
-//! `input.image_double_click`), the wheel device (`input.wheel_device`) and
+//! `input.image_double_click`, `input.dock_drag`: what a plain drag of a
+//! floating palette does, its default the application's with
+//! [`AppBuilder::dock_drag`]), the wheel device (`input.wheel_device`) and
 //! speed (`input.wheel_speed`),
 //! and the gesture commands (`gesture.image.zoom`...) the profile binds
 //! to pointer chords in the keymap's default layer
@@ -25,6 +27,7 @@
 //! or of these settings: the canvases read it.
 //!
 //! [`AppBuilder::pointer_profile`]: crate::AppBuilder::pointer_profile
+//! [`AppBuilder::dock_drag`]: crate::AppBuilder::dock_drag
 
 use std::sync::Arc;
 
@@ -34,7 +37,8 @@ use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, SettingId};
 use egui_pop_model::keymap::{Keymap, Layer};
 use egui_pop_model::pointer::{
-    self, GESTURES, ImageDoubleClick, PROFILE_OWNER, PointerMap, Profile, SliderWheel, WheelDevice,
+    self, DockDrag, GESTURES, ImageDoubleClick, PROFILE_OWNER, PointerMap, Profile, SliderWheel,
+    WheelDevice,
 };
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
 use serde_json::json;
@@ -52,6 +56,10 @@ pub const SETTING_SLIDER_WHEEL: SettingId = SettingId::from_static("input.slider
 /// `nothing`).
 pub const SETTING_IMAGE_DOUBLE_CLICK: SettingId =
     SettingId::from_static("input.image_double_click");
+/// The setting: what a plain drag of a floating palette does
+/// (`profile`, `modifier-docks`, `modifier-floats`, `dwell`;
+/// [`DockDrag`]).
+pub const SETTING_DOCK_DRAG: SettingId = SettingId::from_static("input.dock_drag");
 /// The setting: what sends wheel events (`auto`, `mouse`, `trackpad`).
 pub const SETTING_WHEEL_DEVICE: SettingId = SettingId::from_static("input.wheel_device");
 /// The setting: what a mouse wheel's lines are multiplied by.
@@ -97,6 +105,26 @@ pub fn profile(app: &AppHandle) -> &'static Profile {
     pointer::profile(&profile_id(app)).unwrap_or_else(pointer::default_profile)
 }
 
+/// Asks for a palette drag mode (the `input.dock_drag` setting:
+/// `profile` or one of [`DockDrag::CHOICES`]), said once as
+/// `settings.changed` and in force from the next pass.
+pub fn set_dock_drag(app: &AppHandle, value: &str) -> Result<(), String> {
+    if value != FROM_PROFILE && DockDrag::parse(value).is_none() {
+        return Err(format!("`{value}` is not a palette drag mode"));
+    }
+    lock(&app.store())
+        .set(
+            Set::new(
+                &path(&SETTING_DOCK_DRAG),
+                Change::To(Value::Choice(value.into())),
+                Origin::User,
+            )
+            .by(&egui_pop_model::ids::OwnerId::FRAMEWORK),
+        )
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
 /// Asks for a profile (the setting), applied before the next frame. An
 /// alias (`adobe`) asks for the profile it names (`lightroom`).
 pub fn set_profile(app: &AppHandle, id: &str) -> Result<(), String> {
@@ -128,6 +156,9 @@ pub fn options(app: &AppHandle, profile: &Profile) -> (pointer::Options, WheelDe
         choice(app, &SETTING_IMAGE_DOUBLE_CLICK).and_then(|c| ImageDoubleClick::parse(&c))
     {
         o.image_double_click = d;
+    }
+    if let Some(d) = choice(app, &SETTING_DOCK_DRAG).and_then(|c| DockDrag::parse(&c)) {
+        o.dock_drag = d;
     }
     let device = choice(app, &SETTING_WHEEL_DEVICE)
         .and_then(|c| WheelDevice::parse(&c))
@@ -200,6 +231,7 @@ pub(crate) fn settings_print(app: &AppHandle) -> String {
         &SETTING_PROFILE,
         &SETTING_SLIDER_WHEEL,
         &SETTING_IMAGE_DOUBLE_CLICK,
+        &SETTING_DOCK_DRAG,
         &SETTING_WHEEL_DEVICE,
     ]
     .iter()
@@ -247,11 +279,13 @@ pub(crate) fn ask_about_overrides(app: &AppHandle, profile: &Profile) {
 
 /// The framework's registrations: the settings, the gesture commands,
 /// the default profile's bindings. The wheel speed's default is the system's
-/// lines a notch.
+/// lines a notch; the palette drag mode's the application's, else the
+/// profile's.
 pub(crate) fn register(
     ctx: &mut Ctx<'_>,
     default_profile: &str,
     system_wheel_lines: u32,
+    dock_drag: Option<DockDrag>,
 ) -> Result<(), CtxError> {
     let ids = pointer::ids();
     let default_profile = pointer::canonical_id(default_profile);
@@ -285,6 +319,19 @@ pub(crate) fn register(
         SETTING_IMAGE_DOUBLE_CLICK,
         Descriptor::choice("Double click on the image", &double, FROM_PROFILE).description(
             "What a double click on the image does: fit it, leave the view (back to the browser, as darktable does), or nothing; profile: as the pointer profile says.",
+        ),
+    )?;
+    let mut drag = vec![FROM_PROFILE];
+    drag.extend(DockDrag::CHOICES);
+    ctx.setting(
+        SETTING_DOCK_DRAG,
+        Descriptor::choice(
+            "Dragging a floating panel",
+            &drag,
+            dock_drag.map_or(FROM_PROFILE, DockDrag::as_str),
+        )
+        .description(
+            "A floating panel dragged by its title: modifier-docks moves it, docking only with the dock keys held (Ctrl, or Cmd on macOS); modifier-floats docks it, the keys keep it floating; dwell docks it after a rest on a target; profile as the pointer profile says.",
         ),
     )?;
     ctx.setting(

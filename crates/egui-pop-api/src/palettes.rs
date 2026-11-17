@@ -13,8 +13,27 @@
 //! its distance to it as the window is resized ([`anchored_pos`]); dragged
 //! away, it no longer is. Dropped on a
 //! side or bottom area (or a closed one's edge, with the workbench's drop
-//! hint), it docks there; a docked floatable panel floats again from its
-//! tab menu (Float). Its band carries Close, Roll up (down to the band)
+//! hint) with the dock keys held, it docks there; a docked floatable
+//! panel floats again from its tab menu (Float).
+//!
+//! **Moving or docking** (`docs/design/drag-move-vs-dock.md`). By
+//! default a plain drag only moves a palette: the drop targets (an area,
+//! another palette's group) show and take it only while the dock keys
+//! are held (`gesture.workbench.dock`, `Ctrl` and the drag, Cmd on
+//! macOS, rebindable in the shortcuts editor), read every pass of the
+//! drag, so pressing or releasing them mid-drag counts. The
+//! `input.dock_drag` setting ([`crate::pointer::SETTING_DOCK_DRAG`]; its
+//! default the application's, `AppBuilder::dock_drag`, else the pointer
+//! profile's) picks the mode ([`DockDrag`]): `modifier-docks` (the
+//! default), `modifier-floats` (a plain drag docks, the keys keep it
+//! floating: Photoshop's profile) or `dwell` (docking arms once the
+//! pointer rests on a target for [`DWELL`]). Whether the targets are
+//! armed shows in [`GroupHint::armed`] and the workbench's
+//! `DropHint::armed`; only armed targets are drawn. While a palette is
+//! dragged over a target, a one-line hint says how to dock or not
+//! ([`drag_hint`]): in the status bar, or under the pointer without one.
+//! A floating panel's menu docks it too (Dock in), for a pointer with no
+//! keyboard. Its band carries Close, Roll up (down to the band)
 //! and Pin (kept in place, in sight and opaque); a double click on the
 //! band rolls it up or down. A right click on its title, or on a tab of
 //! its group, opens the panel menu a docked tab opens
@@ -56,8 +75,8 @@
 //! ([`Member::tabs`]), one level deep, whose band drags it out whole.
 //!
 //! **Sizes.** A palette is sized by its content until the user resizes
-//! it: its right edge, its bottom edge and the corner between them drag
-//! its size (the `palette.grip` token's width), kept between the
+//! it: each of its edges and corners drag its size (a left or top edge
+//! keeping the opposite one where it is) (the `palette.grip` token's width), kept between the
 //! `palette.min-width` and `palette.max-width` tokens (and its panels'
 //! own least width), `palette.min-height` and `palette.max-height`, and
 //! inside the workbench. The size is the group's
@@ -74,7 +93,7 @@
 //! the whole group), `palette.move` (`{panel, pos}`, once a drag is
 //! dropped), `palette.resize` (`{panel, size}`, `size` being
 //! `[width, height]` or `null` for the content's, once an edge is
-//! dropped), `palette.roll` (`{panel, rolled}`), `palette.pin`
+//! dropped; with `pos` too when a left or top edge moved it), `palette.roll` (`{panel, rolled}`), `palette.pin`
 //! (`{panel, pinned}`), `palette.group` (`{panels, into, at}`),
 //! `palette.ungroup` (`{panel, pos}`, `tabs: true` for a nested tab group
 //! whole) and `palette.close_group` (`{panel}`); `pos` is the top-left
@@ -103,7 +122,10 @@ use egui_pop_core::widgets;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, PanelId, SettingId, StepId};
 use egui_pop_model::keymap::BindOptions;
+use egui_pop_model::keymap::{Button, Pointer};
 use egui_pop_model::layout::{Anchor, AnchorEdge, Arrangement, FloatingGroup, Join, Member};
+use egui_pop_model::panels::Area;
+use egui_pop_model::pointer::{DockDrag, PointerMap, SCOPE_PALETTE, gesture};
 use egui_pop_model::values::Descriptor;
 use serde_json::{Value as Json, json};
 
@@ -124,7 +146,8 @@ pub const STEP_DOCK: StepId = StepId::from_static("palette.dock");
 pub const STEP_MOVE: StepId = StepId::from_static("palette.move");
 /// A floating panel's group is resized, once an edge is dropped, or
 /// sized by its content again (`{panel, size}`, `size` being
-/// `[width, height]` in points or `null`).
+/// `[width, height]` in points or `null`; with `pos`, the place too,
+/// for a left or top edge dragged).
 pub const STEP_RESIZE: StepId = StepId::from_static("palette.resize");
 /// A floating panel rolls up or down (`{panel, rolled}`).
 pub const STEP_ROLL: StepId = StepId::from_static("palette.roll");
@@ -158,6 +181,10 @@ pub const CONTEXT_HIDDEN: &str = "palettesHidden";
 /// The context key saying some panel floats (shown or hidden): only
 /// then is Tab the palettes' toggle.
 pub const CONTEXT_FLOATING: &str = "palettesFloat";
+
+/// How long the pointer rests on a target before a drag in the `dwell`
+/// mode ([`DockDrag::Dwell`]) docks there, in seconds.
+pub const DWELL: f64 = 0.5;
 
 /// What is left of a palette while a stroke is in progress.
 const STROKE_OPACITY: f32 = 0.15;
@@ -493,6 +520,123 @@ pub(crate) struct PaletteDrag {
     pub pos: [f32; 2],
     /// The pointer.
     pub at: Pos2,
+    /// What it is over: an area it docks in, a palette it joins.
+    pub target: Option<Target>,
+    /// Since when (the input's time) it is over that target.
+    pub since: f64,
+    /// Whether a drop now docks or joins (the mode and the keys held).
+    pub armed: bool,
+}
+
+/// What a dragged palette is over.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum Target {
+    /// An area it docks in.
+    Area(Area),
+    /// Another palette it joins, and where.
+    Join(PanelId, Join),
+}
+
+/// The palette drag mode in force: the `input.dock_drag` setting, else
+/// the pointer profile's.
+fn mode(ctx: &egui::Context) -> DockDrag {
+    egui_pop_core::pointer::map(ctx).options.dock_drag
+}
+
+/// Whether the dock keys (`gesture.workbench.dock`) are held now.
+fn dock_keys_held(ctx: &egui::Context, map: &PointerMap) -> bool {
+    let held = ctx.input(|i| i.modifiers);
+    let chord = egui_pop_core::pointer::chord(held, Pointer::Drag(Button::Primary));
+    map.command(SCOPE_PALETTE, &chord) == Some(&gesture::WORKBENCH_DOCK)
+}
+
+/// Whether a drop now docks or joins: the dock keys held (or not, for
+/// `modifier-floats`), or the pointer resting on the target since
+/// `since` for [`DWELL`].
+fn armed_now(ctx: &egui::Context, since: Option<f64>) -> bool {
+    let map = egui_pop_core::pointer::map(ctx);
+    match map.options.dock_drag {
+        DockDrag::ModifierDocks => dock_keys_held(ctx, &map),
+        DockDrag::ModifierFloats => !dock_keys_held(ctx, &map),
+        DockDrag::Dwell => since.is_some_and(|s| ctx.input(|i| i.time) - s >= DWELL),
+    }
+}
+
+/// A drag's pass over what it is over (a group hint, else an area the
+/// workbench docks in at `at`): its target, since when, and whether it
+/// is armed. A dwell still running asks for the pass that ends it.
+fn track(
+    app: &AppHandle,
+    ctx: &egui::Context,
+    mine: Option<&PaletteDrag>,
+    hint: Option<&GroupHint>,
+    at: Pos2,
+) -> (Option<Target>, f64, bool) {
+    let target = match hint {
+        Some(h) => Some(Target::Join(h.into.clone(), h.at)),
+        None => app
+            .workbench_mut()
+            .dock_at(at, magnet(ctx))
+            .map(Target::Area),
+    };
+    let time = ctx.input(|i| i.time);
+    let since = match mine {
+        Some(x) if x.target == target => x.since,
+        _ => time,
+    };
+    let armed = armed_now(ctx, target.is_some().then_some(since));
+    if target.is_some() && !armed && mode(ctx) == DockDrag::Dwell {
+        let left = (since + DWELL - time).max(0.0);
+        ctx.request_repaint_after(std::time::Duration::from_secs_f64(left));
+    }
+    (target, since, armed)
+}
+
+/// The dock keys as the platform names them (`Ctrl`, `Cmd` on macOS):
+/// the first chord bound to `gesture.workbench.dock`'s modifiers; `None`
+/// when none is bound, or one without modifiers.
+fn dock_keys_text(ctx: &egui::Context, map: &PointerMap) -> Option<String> {
+    let dock = gesture::WORKBENCH_DOCK;
+    let c = map.chords(SCOPE_PALETTE, &dock).next()?.clone();
+    let mac = ctx.os() == egui::os::OperatingSystem::Mac;
+    let parts: Vec<&str> = [
+        (c.ctrl, if mac { "Cmd" } else { "Ctrl" }),
+        (c.alt, if mac { "Option" } else { "Alt" }),
+        (c.shift, "Shift"),
+        (c.meta, "Meta"),
+    ]
+    .into_iter()
+    .filter_map(|(on, name)| on.then_some(name))
+    .collect();
+    (!parts.is_empty()).then(|| parts.join("+"))
+}
+
+/// The hint while a palette is dragged over a target, worded after the
+/// drag mode and the keys bound to `gesture.workbench.dock` (a rebind
+/// changes it): "Hold Ctrl to dock" or "Release Ctrl to move only"
+/// (`modifier-docks`), "Hold Ctrl to move without docking"
+/// (`modifier-floats`, the keys not held), "Rest here to dock" (`dwell`,
+/// while the delay runs). `None` while no palette is dragged over a
+/// target.
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
+pub fn drag_hint(app: &AppHandle) -> Option<String> {
+    let drag = app.try_workbench()?.palette_drag.clone()?;
+    drag.target.as_ref()?;
+    let ctx = app.egui();
+    let map = egui_pop_core::pointer::map(&ctx);
+    let keys = || dock_keys_text(&ctx, &map);
+    let held = dock_keys_held(&ctx, &map);
+    let (key, keys) = match map.options.dock_drag {
+        DockDrag::ModifierDocks if held => (&txt::PALETTE_DRAG_RELEASE_TO_MOVE, keys()?),
+        DockDrag::ModifierDocks => (&txt::PALETTE_DRAG_HOLD_TO_DOCK, keys()?),
+        DockDrag::ModifierFloats if !held => (&txt::PALETTE_DRAG_HOLD_TO_FLOAT, keys()?),
+        DockDrag::ModifierFloats => return None,
+        DockDrag::Dwell if !drag.armed => return Some(strings::tr(&ctx, &txt::PALETTE_DRAG_REST)),
+        DockDrag::Dwell => return None,
+    };
+    Some(strings::tr_args(&ctx, key, &[("keys", &keys)]))
 }
 
 /// A palette's edge being dragged.
@@ -502,10 +646,74 @@ pub(crate) struct PaletteResize {
     pub panel: PanelId,
     /// The group's size before the drag (`None`: its content's).
     pub saved: Option<[f32; 2]>,
-    /// The size drawn when the drag started.
-    pub from: [f32; 2],
-    /// The edges dragged: the right one, the bottom one.
-    pub edges: [bool; 2],
+    /// The frame drawn when the drag started.
+    pub from: Rect,
+    /// The edges dragged, on each axis.
+    pub edges: Sides,
+}
+
+/// The edges a resize drags, on each axis (x, then y): `-1` the start
+/// edge (left, top), `1` the end edge (right, bottom), `0` neither.
+pub type Sides = [i8; 2];
+
+/// A palette's frame once the edges `sides` say are dragged by `delta`
+/// from `start`: a start edge moves its side and keeps the opposite one
+/// where it is. Its size is kept between `least` and `most`, and inside
+/// `bounds`.
+///
+/// ```
+/// use egui::{Rect, pos2, vec2};
+/// use egui_pop_api::palettes::resize_rect;
+///
+/// let (least, most) = (vec2(120.0, 64.0), vec2(640.0, 900.0));
+/// let bounds = Rect::from_min_size(pos2(0.0, 0.0), vec2(1000.0, 800.0));
+/// let start = Rect::from_min_size(pos2(300.0, 100.0), vec2(200.0, 300.0));
+/// // The left edge, 40 out: 40 wider, the right edge still.
+/// let r = resize_rect(start, vec2(-40.0, 0.0), [-1, 0], least, most, bounds);
+/// assert_eq!(r, Rect::from_min_max(pos2(260.0, 100.0), pos2(500.0, 400.0)));
+/// // Never under the least width.
+/// let r = resize_rect(start, vec2(500.0, 0.0), [-1, 0], least, most, bounds);
+/// assert_eq!((r.width(), r.right()), (120.0, 500.0));
+/// // The bottom-right corner, kept inside.
+/// let r = resize_rect(start, vec2(900.0, 25.0), [1, 1], least, most, bounds);
+/// assert_eq!(r.max, pos2(940.0, 425.0));
+/// ```
+pub fn resize_rect(
+    start: Rect,
+    delta: Vec2,
+    sides: Sides,
+    least: Vec2,
+    most: Vec2,
+    bounds: Rect,
+) -> Rect {
+    let (mut min, mut max) = (start.min, start.max);
+    for axis in 0..2 {
+        let lo = least[axis];
+        let hi = most[axis].max(lo);
+        match sides[axis] {
+            1 => {
+                let at = start.max[axis] + delta[axis];
+                let top = (min[axis] + hi).min(bounds.max[axis]).max(min[axis] + lo);
+                max[axis] = at.min(top).max(min[axis] + lo);
+            }
+            -1 => {
+                let at = start.min[axis] + delta[axis];
+                let bottom = (max[axis] - hi).max(bounds.min[axis]).min(max[axis] - lo);
+                min[axis] = at.max(bottom).min(max[axis] - lo);
+            }
+            _ => {}
+        }
+    }
+    Rect::from_min_max(min, max)
+}
+
+/// The largest size the `palette.max-width` and `palette.max-height`
+/// tokens give a palette.
+fn max_size(ctx: &egui::Context) -> Vec2 {
+    Vec2::new(
+        palette_dimension(ctx, "palette.max-width", 640.0),
+        palette_dimension(ctx, "palette.max-height", 900.0),
+    )
 }
 
 /// A palette's size once its right edge (`edges[0]`) and bottom edge
@@ -546,12 +754,7 @@ fn size_limits(ctx: &egui::Context, least_width: f32, pos: Pos2, content: Rect) 
         palette_dimension(ctx, "palette.min-width", 120.0).max(least_width),
         palette_dimension(ctx, "palette.min-height", 64.0),
     );
-    let most = Vec2::new(
-        palette_dimension(ctx, "palette.max-width", 640.0),
-        palette_dimension(ctx, "palette.max-height", 900.0),
-    )
-    .min(content.max - pos)
-    .max(least);
+    let most = max_size(ctx).min(content.max - pos).max(least);
     (least, most)
 }
 
@@ -585,66 +788,81 @@ fn scrolled(ui: &mut Ui, id: Id, height: f32, add: impl FnOnce(&mut Ui)) {
 }
 
 /// A palette's resize edges, over its frame drawn at `rect`, `grip`
-/// wide: the right edge, and when it is not rolled up (`vertical`) the
-/// bottom edge and the corner between them; each with the edges it
-/// drags.
+/// wide: the left and right edges, and when it is not rolled up
+/// (`vertical`) the top and bottom edges and the four corners; each with
+/// the edges it drags, and the cursor of its direction.
 fn resize_edges(
     ui: &mut Ui,
     id: Id,
     rect: Rect,
     grip: f32,
     vertical: bool,
-) -> Vec<(egui::Response, [bool; 2])> {
+) -> Vec<(egui::Response, Sides)> {
+    use egui_pop_core::pointer::DragKind as Kind;
     let half = grip.max(2.0) / 2.0;
     let sense = egui::Sense::CLICK | egui::Sense::DRAG;
-    let right = Rect::from_x_y_ranges(
-        rect.right() - half..=rect.right() + half,
-        rect.top()..=rect.bottom(),
-    );
-    let mut out = vec![(
-        ui.interact(right, id.with("resize.right"), sense),
-        [true, false],
-    )];
+    let x = |at: f32| at - half..=at + half;
+    let mut grips: Vec<(Rect, Sides, &str)> = vec![
+        (
+            Rect::from_x_y_ranges(x(rect.left()), rect.y_range()),
+            [-1, 0],
+            "left",
+        ),
+        (
+            Rect::from_x_y_ranges(x(rect.right()), rect.y_range()),
+            [1, 0],
+            "right",
+        ),
+    ];
     if vertical {
-        let bottom = Rect::from_x_y_ranges(
-            rect.left()..=rect.right(),
-            rect.bottom() - half..=rect.bottom() + half,
-        );
-        let corner = Rect::from_center_size(rect.right_bottom(), Vec2::splat(4.0 * half));
-        out.push((
-            ui.interact(bottom, id.with("resize.bottom"), sense),
-            [false, true],
-        ));
-        out.push((
-            ui.interact(corner, id.with("resize.corner"), sense),
-            [true, true],
-        ));
+        let corner = |p: Pos2| Rect::from_center_size(p, Vec2::splat(4.0 * half));
+        grips.extend([
+            (
+                Rect::from_x_y_ranges(rect.x_range(), x(rect.top())),
+                [0, -1],
+                "top",
+            ),
+            (
+                Rect::from_x_y_ranges(rect.x_range(), x(rect.bottom())),
+                [0, 1],
+                "bottom",
+            ),
+            (corner(rect.left_top()), [-1, -1], "corner.left_top"),
+            (corner(rect.right_top()), [1, -1], "corner.right_top"),
+            (corner(rect.left_bottom()), [-1, 1], "corner.left_bottom"),
+            (corner(rect.right_bottom()), [1, 1], "corner"),
+        ]);
     }
-    for (r, edges) in &out {
-        // A click on an edge does nothing: dragging is its only action.
-        egui_pop_core::pointer::drag_cursor(
-            r,
-            match edges {
-                [true, true] => egui_pop_core::pointer::DragKind::ResizeNwSe,
-                [true, false] => egui_pop_core::pointer::DragKind::ResizeHorizontal,
-                _ => egui_pop_core::pointer::DragKind::ResizeVertical,
-            },
-        )
-        .clicks(false);
-    }
-    out
+    grips
+        .into_iter()
+        .map(|(r, sides, name)| {
+            let response = ui.interact(r, id.with(("resize", name)), sense);
+            let kind = match sides {
+                [0, _] => Kind::ResizeVertical,
+                [_, 0] => Kind::ResizeHorizontal,
+                [a, b] if a == b => Kind::ResizeNwSe,
+                _ => Kind::ResizeNeSw,
+            };
+            // A click on an edge does nothing: dragging is its only action.
+            egui_pop_core::pointer::drag_cursor(&response, kind).clicks(false);
+            (response, sides)
+        })
+        .collect()
 }
 
 /// Follows a palette's resize edges: a drag resizes its group live
-/// (between `limits`), the drop resizes it through `palette.resize`
-/// (anchoring it again); a double click gives it its content's size back.
+/// (between `limits`, inside `content`; a left or top edge moves it too,
+/// the opposite edge staying), the drop resizes it through
+/// `palette.resize` (anchoring it again); a double click gives it its
+/// content's size back.
 fn follow_resize(
     app: &AppHandle,
     ctx: &egui::Context,
     g: &FloatingGroup,
     rect: Rect,
-    edges: &[(egui::Response, [bool; 2])],
+    edges: &[(egui::Response, Sides)],
     (least, most): (Vec2, Vec2),
+    content: Rect,
 ) {
     let lead = g.lead().clone();
     if edges.iter().any(|(r, _)| r.double_clicked()) {
@@ -664,15 +882,16 @@ fn follow_resize(
         let (Some(origin), Some(now)) = (origin, now) else {
             return;
         };
-        let from = mine
-            .as_ref()
-            .map_or([rect.width(), rect.height()], |r| r.from);
-        let size = resize_by(Vec2::from(from), now - origin, *e, least, most);
+        let from = mine.as_ref().map_or(rect, |r| r.from);
+        let to = resize_rect(from, now - origin, *e, least, most, content);
+        let size = to.size();
+        let at = to.min - content.min;
         let mut wb = app.workbench_mut();
         let mut changed = false;
         if let Some(fl) = wb.layout.floating_mut(&lead) {
-            changed = fl.size != Some([size.x, size.y]);
+            changed = fl.size != Some([size.x, size.y]) || fl.pos != [at.x, at.y];
             fl.size = Some([size.x, size.y]);
+            fl.pos = [at.x, at.y];
         }
         if mine.is_none() {
             // Measured again from the new drag on: the content may have
@@ -693,16 +912,31 @@ fn follow_resize(
     let Some(r) = mine else {
         return;
     };
-    // Dropped: back to the size it had, then the step decides.
-    let to = {
+    // Dropped: back to the size and the place it had, then the step
+    // decides (with the place, when a left or top edge moved it).
+    let start = r.from.min - content.min;
+    let start = [start.x, start.y];
+    let (to, at) = {
         let mut wb = app.workbench_mut();
         wb.palette_resize = None;
-        wb.layout
-            .floating_mut(&lead)
-            .and_then(|fl| std::mem::replace(&mut fl.size, r.saved))
+        match wb.layout.floating_mut(&lead) {
+            Some(fl) => (
+                std::mem::replace(&mut fl.size, r.saved),
+                std::mem::replace(&mut fl.pos, start),
+            ),
+            None => (None, start),
+        }
     };
-    if to.is_some() && to != r.saved {
-        run(app, &lead, Some(Change::ResizePalette(lead.clone(), to)));
+    match to {
+        Some(size) if at != start => run(
+            app,
+            &lead,
+            Some(Change::ResizePaletteAt(lead.clone(), size, at)),
+        ),
+        Some(_) if to != r.saved => {
+            run(app, &lead, Some(Change::ResizePalette(lead.clone(), to)));
+        }
+        _ => {}
     }
     ctx.request_repaint();
 }
@@ -719,6 +953,10 @@ pub struct GroupHint {
     pub at: Join,
     /// Where the hint is drawn, in points.
     pub rect: Rect,
+    /// Whether a drop now joins: the drag mode and the keys held say so
+    /// (`input.dock_drag`). Not armed, the hint is not drawn and a drop
+    /// only moves.
+    pub armed: bool,
 }
 
 /// Where dropping the palettes dragged now would group them, if they
@@ -940,7 +1178,7 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
         let mut asked = Asked::default();
         let mut moved: Option<band::Band> = None;
         let mut bands: Vec<MemberBand> = Vec::new();
-        let mut edges: Vec<(egui::Response, [bool; 2])> = Vec::new();
+        let mut edges: Vec<(egui::Response, Sides)> = Vec::new();
         let shown = egui::Area::new(id)
             .order(egui::Order::Middle)
             .fixed_pos(pos)
@@ -1149,7 +1387,7 @@ pub(crate) fn show(app: &AppHandle, ctx: &egui::Context) {
         if let Some(b) = moved {
             follow(app, ctx, &g, rect, &b, &drag);
         }
-        follow_resize(app, ctx, &g, rect, &edges, (least, most));
+        follow_resize(app, ctx, &g, rect, &edges, (least, max_size(ctx)), content);
         for (mb, own) in bands.iter().zip(&own) {
             let kind = if mb.tabs {
                 DragKind::Tabs
@@ -1424,12 +1662,18 @@ fn follow(
         };
         let start = mine.as_ref().map_or(g.pos, |x| x.start);
         let pos = d.land(ctx, start, rect.size(), origin, now, |p| g.holds(p));
-        let hint = join_target(d.members, now, |p| g.holds(p)).map(|(into, at, r)| GroupHint {
+        let mut hint = join_target(d.members, now, |p| g.holds(p)).map(|(into, at, r)| GroupHint {
             panels: g.panels().cloned().collect(),
             into,
             at,
             rect: r,
+            armed: false,
         });
+        let (target, since, armed) = track(app, ctx, mine.as_ref(), hint.as_ref(), now);
+        if let Some(h) = &mut hint {
+            h.armed = armed;
+        }
+        let rearmed = mine.as_ref().is_some_and(|x| x.armed != armed);
         let mut wb = app.workbench_mut();
         let mut moved = false;
         if let Some(fl) = wb.layout.floating_mut(&lead) {
@@ -1442,10 +1686,14 @@ fn follow(
             start,
             pos,
             at: now,
+            target,
+            since,
+            armed,
         });
         wb.group_hint = hint;
-        // Only a move needs another frame: a held, still pointer does not.
-        if moved {
+        // Only a move (or the targets armed or not) needs another frame:
+        // a held, still pointer does not.
+        if moved || rearmed {
             ctx.request_repaint();
         }
         return;
@@ -1453,12 +1701,14 @@ fn follow(
     let Some(x) = mine else {
         return;
     };
-    // Dropped: back where it started, then the step decides.
+    // Dropped: back where it started, then the step decides; docking or
+    // joining only when armed (the keys held now, the dwell run).
+    let armed = armed_now(ctx, x.target.is_some().then_some(x.since));
     let (to, area, hint) = {
         let mut wb = app.workbench_mut();
         wb.palette_drag = None;
-        let hint = wb.group_hint.take();
-        let area = wb.dock_at(x.at, magnet(ctx));
+        let hint = wb.group_hint.take().filter(|_| armed);
+        let area = wb.dock_at(x.at, magnet(ctx)).filter(|_| armed);
         let fl = wb.layout.floating_mut(&lead);
         let to = fl.map(|fl| std::mem::replace(&mut fl.pos, x.start));
         (to, area, hint)
@@ -1534,21 +1784,31 @@ fn follow_member(
         let from = own.min - d.content.min;
         let start = mine.as_ref().map_or([from.x, from.y], |x| x.start);
         let pos = d.land(ctx, start, own.size(), origin, now, |p| g.holds(p));
-        let hint =
+        let mut hint =
             join_target(d.members, now, |p| mates.contains(p)).map(|(into, at, r)| GroupHint {
                 panels: moving.clone(),
                 into,
                 at,
                 rect: r,
+                armed: false,
             });
+        let (target, since, armed) = track(app, ctx, mine.as_ref(), hint.as_ref(), now);
+        if let Some(h) = &mut hint {
+            h.armed = armed;
+        }
         let mut wb = app.workbench_mut();
-        let moved = mine.as_ref().is_none_or(|x| x.pos != pos || x.at != now);
+        let moved = mine
+            .as_ref()
+            .is_none_or(|x| x.pos != pos || x.at != now || x.armed != armed);
         wb.palette_drag = Some(PaletteDrag {
             panel: panel.clone(),
             kind,
             start,
             pos,
             at: now,
+            target,
+            since,
+            armed,
         });
         wb.group_hint = hint;
         if moved {
@@ -1559,11 +1819,12 @@ fn follow_member(
     let Some(x) = mine else {
         return;
     };
+    let armed = armed_now(ctx, x.target.is_some().then_some(x.since));
     let (area, hint) = {
         let mut wb = app.workbench_mut();
         wb.palette_drag = None;
-        let hint = wb.group_hint.take();
-        (wb.dock_at(x.at, magnet(ctx)), hint)
+        let hint = wb.group_hint.take().filter(|_| armed);
+        (wb.dock_at(x.at, magnet(ctx)).filter(|_| armed), hint)
     };
     let changes = match (hint, area) {
         (Some(h), _) => vec![Change::Group(h.panels, h.into, h.at)],
@@ -1606,9 +1867,17 @@ fn paint_hints(
         let dock = wb
             .palette_drag
             .as_ref()
+            .filter(|d| d.armed)
             .and_then(|d| wb.dock_at(d.at, magnet(ctx)));
-        (wb.palette_drag.clone(), wb.group_hint.clone(), dock)
+        (
+            wb.palette_drag.clone(),
+            wb.group_hint.clone().filter(|h| h.armed),
+            dock,
+        )
     };
+    if drag.is_some() && app.service(&crate::strips::STRIPS).is_none() {
+        paint_drag_hint(app, ctx);
+    }
     let rect = match (&hint, &drag) {
         (Some(h), _) => h.rect,
         (None, Some(d)) if d.kind != DragKind::Group && dock.is_none() => {
@@ -1637,6 +1906,24 @@ fn paint_hints(
             label: None,
         },
     );
+}
+
+/// The drag's hint ([`drag_hint`]) under the pointer, for an application
+/// without a status bar.
+fn paint_drag_hint(app: &AppHandle, ctx: &egui::Context) {
+    let (Some(text), Some(at)) = (drag_hint(app), ctx.input(|i| i.pointer.latest_pos())) else {
+        return;
+    };
+    let t = Tokens::of(ctx);
+    egui::Area::new(Id::unique("egui_pop.palette.drag_hint"))
+        .order(egui::Order::Tooltip)
+        .fixed_pos(at + Vec2::new(t.space.m, t.space.l))
+        .interactable(false)
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.add(egui::Label::new(text).selectable(false).extend());
+            });
+        });
 }
 
 /// The room between the members of a stacked group (`palette.group.gap`).

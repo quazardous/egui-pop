@@ -230,6 +230,8 @@ command-gesture-value-reset.description e3ba6e8525cca652
 command-gesture-value-reset.title 541b6d2d007eaa37
 command-gesture-value-step.description 28dd8dd569518e78
 command-gesture-value-step.title 547562cb851b7b85
+command-gesture-workbench-dock.description 4f4c800a1bdf4b47
+command-gesture-workbench-dock.title 5fc6e4d2ca023c9c
 command-help-report.description 5efdd9aa299ac6f8
 command-help-report.title 0f49e08b86c19aef
 command-help-suggest.description 5f9e3fbf9f1f5ab3
@@ -964,6 +966,10 @@ egui-pop-palette-argument-help 7d846686818b8139
 egui-pop-palette-argument-title d3fe37537802bde3
 egui-pop-palette-close 102491ca00281644
 egui-pop-palette-close-group a5f517ecf21ee8c6
+egui-pop-palette-drag-hold-to-dock af39f5aff1c0a948
+egui-pop-palette-drag-hold-to-float 211c07faae5fc0c9
+egui-pop-palette-drag-release-to-move 83abb7c3c035821e
+egui-pop-palette-drag-rest 1199ce42abd5a2b7
 egui-pop-palette-group-menu 4de338214c9cb7b1
 egui-pop-palette-hint ea358ba38bab7dbf
 egui-pop-palette-no-match b35d6729c46fa10e
@@ -1439,6 +1445,7 @@ egui-pop-window-placed-by-system 7d6602d8b693cd66
 egui-pop-workbench-close-panel d48094548e62ca0f
 egui-pop-workbench-detach f12827392b3d10f9
 egui-pop-workbench-dock-back 908d7f6794dcc75d
+egui-pop-workbench-dock-in 6f9fb7702cb4a7ec
 egui-pop-workbench-float eb7e945b1415bcc5
 egui-pop-workbench-flyout-pin 4ebe2494b850fd48
 egui-pop-workbench-fold 873472b4101d195d
@@ -1576,6 +1583,12 @@ setting-files-native.description ce2b615f40df8940
 setting-files-native.label f2b00b77262f7a75
 setting-files-preview.description 01859a4b86882382
 setting-files-preview.label e0cc8d653f6bd4d6
+setting-input-dock-drag-choice-dwell 7ee22a581ef5da9b
+setting-input-dock-drag-choice-modifier-docks d08d69e1062484d9
+setting-input-dock-drag-choice-modifier-floats 26d029725481f046
+setting-input-dock-drag-choice-profile 96d3f8614647fc44
+setting-input-dock-drag.description 41ecc39a775ab4ce
+setting-input-dock-drag.label 5e01219f5893e4f1
 setting-input-image-double-click-choice-fit aaf7329c6791a00a
 setting-input-image-double-click-choice-leave 82fe79b528d256f6
 setting-input-image-double-click-choice-nothing 08ea6d1866d64918

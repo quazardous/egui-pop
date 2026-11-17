@@ -11,7 +11,8 @@
 //! panel in its arguments:
 //!
 //! - docked: Move to each area its rules allow, and Float when it may;
-//!   floating or detached: Dock back (where it floated from);
+//!   floating or detached: Dock back (where it floated from); floating:
+//!   Dock in each side bar and the bottom panel (`palette.dock`);
 //! - Detach into a window; Move to window ▸ (the detached windows, by
 //!   their panels' titles); Move group to window ▸ (its tab group whole,
 //!   to a window or a new one);
@@ -301,7 +302,8 @@ fn with_panel(
 }
 
 /// Docked: Move to each area (greyed where its rules keep it out), and
-/// Float when it may float; floating or detached: Dock back.
+/// Float when it may float; floating or detached: Dock back; floating:
+/// Dock in each side and the bottom (greyed where its rules keep it out).
 fn place_entries(app: &AppHandle, panel: &PanelId) -> Vec<ListItem> {
     let Some(spec) = app.workbench_mut().spec(panel).cloned() else {
         return Vec::new();
@@ -312,11 +314,36 @@ fn place_entries(app: &AppHandle, panel: &PanelId) -> Vec<ListItem> {
         if layout.floating_of(panel).is_none() && layout.window_of(panel).is_none() {
             return Vec::new();
         }
-        return vec![ListItem::new(
+        let mut out = vec![ListItem::new(
             &strings::tr(&ctx, &txt::WORKBENCH_DOCK_BACK),
             CMD_PANEL_DOCK_BACK,
             json!({ "panel": panel }),
         )];
+        // Floating: Dock in each side and the bottom, the way to dock
+        // for a pointer whose drag cannot hold the dock keys.
+        if layout.floating_of(panel).is_some() {
+            out.extend(
+                [Area::StartSide, Area::EndSide, Area::Bottom]
+                    .into_iter()
+                    .map(|area| {
+                        let item = ListItem::new(
+                            &strings::tr_args(
+                                &ctx,
+                                &txt::WORKBENCH_DOCK_IN,
+                                &[("area", &area_text(&ctx, area))],
+                            ),
+                            CMD_PANEL_MOVE,
+                            json!({ "panel": panel, "area": area_name(area) }),
+                        );
+                        if spec.allows(area) {
+                            item
+                        } else {
+                            item.disabled()
+                        }
+                    }),
+            );
+        }
+        return out;
     }
     let mut out: Vec<ListItem> = Area::ALL
         .into_iter()
