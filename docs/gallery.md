@@ -187,7 +187,7 @@ Themes, design tokens, the theme editor, icons and scaling.
 
 ### Widgets
 
-Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, the history (its list, an agent's step, one undone), sliders, faders and knobs, compact controls (scrub fields, cells, value marks and bars, menu rows), inputs (decorators, field states, Tab order), menus, toolbars (icons, titles, More tools, a tool palette), dialogs (movable ones, a clear backdrop), file choosing (and an image's preview), toasts, micro-indicators (still under reduced motion), collapsible sections (folded, resized, a windowed one scrolled to its end, pulled with empty room under the last), folds inside a panel and a hand-built tree's rows, and progress (bars, rings, meters, spinners; still under reduced motion).
+Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, the history (its list, an agent's step, one undone), sliders, faders and knobs, compact controls (scrub fields, cells, value marks and bars, menu rows), inputs keeping to a narrow panel (a slider's value, a number's field), inputs (decorators, field states, Tab order), menus, toolbars (icons, titles, More tools, a tool palette), dialogs (movable ones, a clear backdrop), file choosing (and an image's preview), toasts, micro-indicators (still under reduced motion), collapsible sections (folded, resized, a windowed one scrolled to its end, pulled with empty room under the last), folds inside a panel and a hand-built tree's rows, and progress (bars, rings, meters, spinners; still under reduced motion).
 
 <table>
   <tr>
@@ -313,6 +313,8 @@ Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, 
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/compact-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/compact-pop-dark.png" width="200" alt="compact-pop-dark"></a><br>compact-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/compact-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/compact-pop-light.png" width="200" alt="compact-pop-light"></a><br>compact-pop-light</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/input-widths-narrow-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/input-widths-narrow-pop-dark.png" width="200" alt="input-widths-narrow-pop-dark"></a><br>input-widths-narrow-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/input-widths-wide-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/input-widths-wide-pop-dark.png" width="200" alt="input-widths-wide-pop-dark"></a><br>input-widths-wide-pop-dark</td>
   </tr>
 </table>
 
