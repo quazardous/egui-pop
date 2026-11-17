@@ -1,12 +1,15 @@
 //! The kernel's behaviours: ordering, both emits, the error boundary,
-//! panics, deadlines, failure sinks, introspection and removal.
+//! panics, deadlines, failure sinks, introspection and removal;
+//! refusals, fail-closed requests and deferred requests.
 
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use egui_pop_hooks::bus_contract::Bus;
 use egui_pop_hooks::{
-    DEFAULT_DEADLINE, FailureKind, Kernel, ListenOpts, PLUGIN_DEADLINE, Point, PointSpec, Refused,
+    Capability, DEFAULT_DEADLINE, FailureKind, HookError, Kernel, ListenOpts, PLUGIN_DEADLINE,
+    Point, PointDecl, PointSpec, Refused, declare_all, offers,
 };
 
 struct Trail;
@@ -619,4 +622,290 @@ fn a_deferred_collect_fills_fresh_values() {
     assert_eq!(out.deferred, ["ui.badge"]);
     assert_eq!(k.run_pending()[0].ran, ["ui.badge"]);
     assert_eq!(*got.borrow(), [vec![7]]);
+}
+
+/// A request whose listeners may refuse it.
+struct Run;
+impl Point for Run {
+    const ID: &'static str = "test.run";
+    const KIND: egui_pop_hooks::PointKind = egui_pop_hooks::PointKind::Request;
+    type Input = String;
+    type Value = Vec<String>;
+}
+
+/// `policy` (answering with `policy`), then `handler`.
+fn guarded(k: &Kernel, policy: impl Fn(&str) -> Result<(), HookError> + Send + Sync + 'static) {
+    k.listen::<Run>(
+        "policy",
+        ListenOpts::new().owner("policy"),
+        move |cmd, did| {
+            did.push("policy".into());
+            policy(cmd)
+        },
+    )
+    .unwrap();
+    k.listen::<Run>("handler", ListenOpts::new().after("policy"), |cmd, did| {
+        did.push(format!("ran {cmd}"));
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn a_refusal_stops_a_request_and_is_not_a_failure() {
+    let k = Kernel::new();
+    guarded(&k, |cmd| {
+        if cmd == "delete" {
+            Err(HookError::refuse("agents may not delete"))
+        } else {
+            Ok(())
+        }
+    });
+    let sunk = Arc::new(Mutex::new(0));
+    let s = sunk.clone();
+    k.on_failure(move |_| *s.lock().unwrap() += 1);
+
+    assert_eq!(
+        k.alter::<Run>("open".into(), vec![]).value,
+        ["policy", "ran open"]
+    );
+    let out = k.alter::<Run>("delete".into(), vec![]);
+    assert!(out.value.is_empty(), "the refusing edit is dropped too");
+    assert!(out.failures.is_empty());
+    let refusal = out.refused.unwrap();
+    assert_eq!(
+        (refusal.listener.as_str(), refusal.owner.as_deref()),
+        ("policy", Some("policy"))
+    );
+    assert_eq!(
+        refusal.to_string(),
+        "hook `test.run`: refused by `policy`: agents may not delete"
+    );
+    assert_eq!(*sunk.lock().unwrap(), 0);
+    let info = k.listeners("test.run").unwrap();
+    assert_eq!((info[0].runs, info[0].failures), (2, 0));
+    assert_eq!(info[1].runs, 1, "the handler ran once, not for the refusal");
+
+    // A collect on a request stops the same way.
+    let out = k.collect::<Run>("delete".into());
+    assert!(out.parts.is_empty());
+    assert_eq!(out.refused.unwrap().reason, "agents may not delete");
+}
+
+#[test]
+fn a_refusal_off_a_request_counts_as_a_failure() {
+    let k = Kernel::new();
+    k.listen::<Trail>("picky", ListenOpts::new(), |_, _| {
+        Err(HookError::refuse("no"))
+    })
+    .unwrap();
+    push(&k, "after", ListenOpts::new().after("picky"));
+    let out = k.alter::<Trail>((), vec![]);
+    assert_eq!(out.value, ["after"]);
+    assert!(out.refused.is_none());
+    assert_eq!(out.failures[0].kind, FailureKind::Error("no".into()));
+}
+
+#[test]
+fn a_fail_closed_request_refuses_on_an_error_a_panic_or_a_missed_deadline() {
+    // Open: the failing policy is dropped and the handler runs.
+    let k = Kernel::new();
+    guarded(&k, |_| Err("policy table unreadable".into()));
+    let out = k.alter::<Run>("delete".into(), vec![]);
+    assert_eq!(out.value, ["ran delete"]);
+    assert!(out.refused.is_none());
+
+    // Closed: an error.
+    let k = Kernel::new();
+    k.declare::<Run>(PointSpec::new("runs").fail_closed())
+        .unwrap();
+    guarded(&k, |_| Err("policy table unreadable".into()));
+    let out = k.alter::<Run>("delete".into(), vec![]);
+    assert!(out.value.is_empty(), "the handler did not run");
+    assert_eq!(out.failures.len(), 1, "the failure is still reported");
+    let refusal = out.refused.unwrap();
+    assert!(refusal.failed);
+    assert_eq!(refusal.reason, "policy table unreadable");
+    assert!(k.points()[0].fail_closed);
+
+    // Closed: a panic.
+    let k = Kernel::new();
+    k.declare::<Run>(PointSpec::new("runs").fail_closed())
+        .unwrap();
+    guarded(&k, |_| panic!("policy bug"));
+    let out = k.alter::<Run>("x".into(), vec![]);
+    assert!(out.value.is_empty());
+    assert_eq!(out.refused.unwrap().reason, "policy bug");
+
+    // Closed: a threaded listener past its deadline.
+    let k = Kernel::new();
+    k.declare::<Run>(PointSpec::new("runs").fail_closed())
+        .unwrap();
+    k.listen::<Run>(
+        "policy",
+        ListenOpts::new()
+            .threaded()
+            .deadline(Duration::from_millis(20)),
+        |_, _| {
+            thread::sleep(Duration::from_secs(2));
+            Ok(())
+        },
+    )
+    .unwrap();
+    k.listen::<Run>("handler", ListenOpts::new().after("policy"), |_, did| {
+        did.push("ran".into());
+        Ok(())
+    })
+    .unwrap();
+    let start = Instant::now();
+    let out = k.alter::<Run>("x".into(), vec![]);
+    assert!(start.elapsed() < Duration::from_secs(1));
+    assert!(out.value.is_empty());
+    let refusal = out.refused.unwrap();
+    assert!(refusal.failed);
+    assert!(matches!(
+        out.failures[0].kind,
+        FailureKind::Late { took: None, .. }
+    ));
+}
+
+#[test]
+fn a_refused_request_queues_nothing_and_a_queued_refusal_stops_the_rest() {
+    let k = Arc::new(Kernel::new());
+    k.listen_local::<Run>("ui.confirm", ListenOpts::new(), |cmd, did| {
+        if cmd == "delete" {
+            return Err(HookError::refuse("the user said no"));
+        }
+        did.push("confirmed".into());
+        Ok(())
+    })
+    .unwrap();
+    k.listen_local::<Run>(
+        "ui.after",
+        ListenOpts::new().after("ui.confirm"),
+        |_, did| {
+            did.push("after".into());
+            Ok(())
+        },
+    )
+    .unwrap();
+    k.listen::<Run>("gate", ListenOpts::new().after("ui.after"), |cmd, _| {
+        if cmd == "format" {
+            Err(HookError::refuse("never"))
+        } else {
+            Ok(())
+        }
+    })
+    .unwrap();
+
+    let other = k.clone();
+    let out = thread::spawn(move || other.alter::<Run>("format".into(), vec![]))
+        .join()
+        .unwrap();
+    assert_eq!(out.refused.unwrap().listener, "gate");
+    assert!(out.deferred.is_empty());
+    assert!(k.run_pending().is_empty());
+
+    let other = k.clone();
+    let out = thread::spawn(move || other.alter::<Run>("delete".into(), vec![]))
+        .join()
+        .unwrap();
+    assert_eq!(out.deferred, ["ui.confirm", "ui.after"]);
+    let ran = k.run_pending();
+    assert_eq!(ran[0].ran, ["ui.confirm"]);
+    assert_eq!(ran[0].refused.as_ref().unwrap().reason, "the user said no");
+    assert_eq!(ran[0].ask, None);
+}
+
+#[test]
+fn the_kernel_offers_defer() {
+    let k = Kernel::new();
+    let bus: &dyn Bus = &k;
+    assert!(offers(bus, Capability::Defer));
+    const NEEDS: &[PointDecl] = &[PointDecl::of::<Run>("runs").needs(&[Capability::Defer])];
+    assert!(declare_all(bus, NEEDS).is_empty());
+}
+
+#[test]
+fn asks_run_at_the_drain_in_order_and_an_ask_while_draining_waits() {
+    let k = Arc::new(Kernel::new());
+    k.declare::<Run>(PointSpec::new("writes")).unwrap();
+    let heard: Arc<Mutex<Vec<String>>> = Arc::default();
+    let h = heard.clone();
+    let again = Arc::downgrade(&k);
+    k.listen::<Run>("persist", ListenOpts::new(), move |what, did| {
+        match what.as_str() {
+            "locked" => return Err(HookError::refuse("read-only")),
+            "broken" => return Err("disk full".into()),
+            _ => {}
+        }
+        h.lock().unwrap().push(what.clone());
+        did.push(format!("wrote {what}"));
+        if what == "rename"
+            && let Some(k) = again.upgrade()
+        {
+            k.ask::<Run>("reindex".into(), vec![]);
+        }
+        Ok(())
+    })
+    .unwrap();
+    let woken = Arc::new(Mutex::new(Vec::new()));
+    let w = woken.clone();
+    k.on_pending(move |t| w.lock().unwrap().push(t));
+
+    let first = k.ask::<Run>("rename".into(), vec![]);
+    let second = k.ask::<Run>("locked".into(), vec![]);
+    k.ask::<Run>("broken".into(), vec![]);
+    assert!(second > first);
+    assert_eq!(woken.lock().unwrap().len(), 3);
+    assert_eq!(woken.lock().unwrap()[0], thread::current().id());
+    assert_eq!(k.waiting(), 3);
+    assert!(heard.lock().unwrap().is_empty());
+    assert!(k.run_pending().is_empty(), "asks wait for the drain");
+
+    // An immediate emit after the asks runs first.
+    k.alter::<Run>("now".into(), vec![]);
+
+    let ran = k.drain();
+    assert_eq!(ran.len(), 3);
+    assert_eq!(
+        (ran[0].ask, ran[0].ran.as_slice()),
+        (Some(first), &["persist".to_string()][..])
+    );
+    assert_eq!(ran[1].refused.as_ref().unwrap().reason, "read-only");
+    assert_eq!(
+        ran[2].failures[0].kind,
+        FailureKind::Error("disk full".into())
+    );
+    assert_eq!(*heard.lock().unwrap(), ["now", "rename"]);
+
+    assert_eq!(k.waiting(), 1, "the ask made while draining waits");
+    let bus: &dyn Bus = &*k;
+    assert_eq!(bus.defer().unwrap().drain().len(), 1);
+    assert_eq!(*heard.lock().unwrap(), ["now", "rename", "reindex"]);
+    assert!(k.drain().is_empty());
+}
+
+#[test]
+fn asks_belong_to_the_asking_thread() {
+    let k = Arc::new(Kernel::new());
+    let heard: Arc<Mutex<Vec<String>>> = Arc::default();
+    let h = heard.clone();
+    k.listen::<Run>("persist", ListenOpts::new(), move |what, _| {
+        h.lock().unwrap().push(what.clone());
+        Ok(())
+    })
+    .unwrap();
+    k.ask::<Run>("here".into(), vec![]);
+    let other = k.clone();
+    let there = thread::spawn(move || {
+        other.ask::<Run>("there".into(), vec![]);
+        (other.waiting(), other.drain().len())
+    })
+    .join()
+    .unwrap();
+    assert_eq!(there, (1, 1));
+    assert_eq!(*heard.lock().unwrap(), ["there"]);
+    assert_eq!(k.drain().len(), 1);
+    assert_eq!(*heard.lock().unwrap(), ["there", "here"]);
 }
