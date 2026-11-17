@@ -620,7 +620,8 @@ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 [[package]]
 name = "bus-contract"
 version = "0.3.0"
-source = "git+https://github.com/quazardous/bus-contract?branch=release%2F0.3.0#c400282c76624503bc1e686e5ac15e00f4168f9b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4743245bbe3eb96a63b922da4bc696462c7161db0c2f02f6fe6066b11f9bd5bb"
 
 [[package]]
 name = "bytemuck"
