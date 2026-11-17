@@ -133,6 +133,9 @@ pub struct FoldResponse<R> {
     pub body: Option<InnerResponse<R>>,
 }
 
+/// What a fold's band shows at its right end.
+type Actions<'a> = Box<dyn FnOnce(&mut Ui) + 'a>;
+
 /// A group inside a panel whose header row folds and opens its body: a
 /// section band (disclosure mark, title, count) with optional actions at
 /// its right end, its body indented below it when open. Its open state
@@ -145,7 +148,7 @@ pub struct Fold<'a> {
     count: Option<u64>,
     default_open: bool,
     indent: bool,
-    actions: Option<Box<dyn FnOnce(&mut Ui) + 'a>>,
+    actions: Option<Actions<'a>>,
 }
 
 impl std::fmt::Debug for Fold<'_> {
