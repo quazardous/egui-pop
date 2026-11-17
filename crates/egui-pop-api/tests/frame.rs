@@ -320,3 +320,67 @@ fn the_setting_off_hides_the_bar_in_full_screen() {
     full_screen(&mut h, false);
     assert!(h.query_by_label("Close").is_some());
 }
+
+/// The window's own edge line among the pass's shapes: its stroke and
+/// corners.
+fn edge_line(h: &Harness<'static, App>) -> Option<(egui::Stroke, egui::CornerRadius)> {
+    let window = h.ctx.content_rect();
+    h.output().shapes.iter().find_map(|c| match &c.shape {
+        egui::Shape::Rect(r)
+            if r.rect == window && r.stroke.width > 0.0 && r.fill == egui::Color32::TRANSPARENT =>
+        {
+            Some((r.stroke, r.corner_radius))
+        }
+        _ => None,
+    })
+}
+
+fn place(h: &mut Harness<'static, App>, focused: bool, maximized: bool) {
+    let v = h
+        .input_mut()
+        .viewports
+        .entry(egui::ViewportId::ROOT)
+        .or_default();
+    v.focused = Some(focused);
+    v.maximized = Some(maximized);
+    v.fullscreen = Some(false);
+    h.run();
+}
+
+#[test]
+fn the_window_has_a_line_dimmer_when_inactive_and_rounds_only_while_floating() {
+    let mut h = harness(1.0);
+    let kit = egui_pop_core::kit::Kit::of(&h.ctx);
+    let (outline, inactive) = (kit.window.outline, kit.window_edge.inactive);
+    place(&mut h, true, false);
+    // Square without a transparent window (kittest: no windowing system).
+    assert_eq!(edge_line(&h), Some((outline, egui::CornerRadius::ZERO)));
+    place(&mut h, false, false);
+    assert_eq!(edge_line(&h).unwrap().0, inactive);
+    assert_ne!(outline, inactive);
+    // Built transparent: rounded while floating, and what is painted at
+    // the corners (the bar's and the shell's backgrounds) rounded too.
+    frame::set_rounding(&h.ctx, true);
+    place(&mut h, true, false);
+    let round = egui::CornerRadius::same(kit.window_edge.radius as u8);
+    assert_eq!(edge_line(&h), Some((outline, round)));
+    let window = h.ctx.content_rect();
+    let at_top_left = h.output().shapes.iter().any(|c| match &c.shape {
+        egui::Shape::Rect(r) => {
+            r.fill != egui::Color32::TRANSPARENT
+                && (r.rect.min - window.min).length() < 2.0
+                && r.corner_radius.nw > 0
+        }
+        _ => false,
+    });
+    assert!(
+        at_top_left,
+        "a background at the top left corner is rounded"
+    );
+    // Maximized: square again, the line kept.
+    place(&mut h, true, true);
+    assert_eq!(edge_line(&h), Some((outline, egui::CornerRadius::ZERO)));
+    // Full screen: no line.
+    full_screen(&mut h, true);
+    assert_eq!(edge_line(&h), None);
+}

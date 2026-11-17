@@ -497,6 +497,8 @@ pub struct Gallery {
     announce: bool,
     dump_debug: bool,
     persists: bool,
+    /// Built transparent for rounded corners: cleared to transparent.
+    transparent: bool,
 }
 
 impl Gallery {
@@ -593,6 +595,11 @@ impl Gallery {
     pub fn new(ctx: &egui::Context, options: Options) -> Result<Gallery, BuildError> {
         let persists = options.persists();
         let app = builder(&options).build(ctx)?;
+        // Built transparent (`--rounded-windows`, main.rs): the frame's
+        // corners round while the window floats free.
+        if options.rounded_windows {
+            egui_pop::core::frame::set_rounding(ctx, true);
+        }
         // The theme asked for is shown, whatever the system's light or
         // dark mode: the switcher's "Mode" offers to follow it.
         let service = app.handle().theme();
@@ -642,6 +649,7 @@ impl Gallery {
             announce: options.announce,
             dump_debug: options.dump_debug,
             persists,
+            transparent: options.rounded_windows,
         })
     }
 
@@ -736,6 +744,15 @@ impl eframe::App for Gallery {
 
     fn persist_egui_memory(&self) -> bool {
         self.persists
+    }
+
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        if self.transparent {
+            [0.0; 4]
+        } else {
+            // eframe's own default.
+            egui::Color32::from_rgba_unmultiplied(12, 12, 12, 180).to_normalized_gamma_f32()
+        }
     }
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {

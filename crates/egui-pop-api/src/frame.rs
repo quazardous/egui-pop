@@ -86,8 +86,15 @@
 //! `frame` collector (`corners`), never silent. Elsewhere nothing is
 //! asked: no other system has a portable request for a window's
 //! corners (Wayland and X11 leave them to the compositor or the window
-//! manager, macOS rounds its own windows), and drawing them would need
-//! a transparent window.
+//! manager, macOS rounds its own windows), so egui-pop draws them:
+//! every window it decorates gets a line around it (the kit's
+//! `window.rest.border-*`, dimmer while another window has the focus)
+//! and, where it is built transparent (`AppBuilder::rounded_windows`, by
+//! default on Wayland), rounded corners while it floats free
+//! ([`egui_pop_core::frame::Placement`]): square when maximized, in full
+//! screen or on a side against a screen's edge. Wayland does not tell a
+//! tiled window (no position, and winit 0.30 keeps the tiled states):
+//! there one keeps its rounded corners.
 
 use egui::{Context, Rect, Ui, Vec2, ViewportCommand};
 use egui_pop_core::frame::{FrameRequest, HitTable, TitleBar};
@@ -637,6 +644,11 @@ pub(crate) fn window_frame(
         }
     } else {
         egui_pop_core::frame::resize_edges(&ctx);
+        // Its edge (the main window's is the shell's, `App::outlined`).
+        egui_pop_core::frame::paint_window_edge(
+            &ctx,
+            egui_pop_core::frame::window_edge(&ctx, &crate::window::screens()),
+        );
     }
     let full = ui.max_rect();
     let out = ui

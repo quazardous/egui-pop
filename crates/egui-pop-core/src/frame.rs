@@ -308,13 +308,273 @@ pub fn regions(ctx: &Context) -> Option<Arc<HitRegions>> {
 }
 
 /// The line the kit draws around a window the application draws
-/// (`window.rest.border-width`), or none: maximized and full screen
-/// windows have no edges to draw.
+/// (`window.rest.border-width`), dimmer while another window has the
+/// focus (`window.inactive.border-color`), or none in full screen. A
+/// maximized window keeps it.
 pub fn outline(ctx: &Context) -> egui::Stroke {
-    if resizable(ctx) {
-        crate::kit::Kit::of(ctx).window.outline
+    if full_screen(ctx) {
+        return egui::Stroke::NONE;
+    }
+    let kit = crate::kit::Kit::of(ctx);
+    // Unknown (a backend that does not say): drawn as the active one.
+    if ctx.input(|i| i.viewport().focused).unwrap_or(true) {
+        kit.window.outline
     } else {
-        egui::Stroke::NONE
+        kit.window_edge.inactive
+    }
+}
+
+/// The sides of a window against an edge of its screen (tiled or
+/// snapped there): its corners on those sides stay square.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Stuck {
+    pub left: bool,
+    pub top: bool,
+    pub right: bool,
+    pub bottom: bool,
+}
+
+impl Stuck {
+    /// The sides of `outer` (the window with its frame, in points)
+    /// within a point of an edge of the screen it overlaps most, among
+    /// `screens`; none without screens.
+    pub fn against(outer: Rect, screens: &[Rect]) -> Stuck {
+        let area = |s: &Rect| {
+            let i = s.intersect(outer);
+            if i.is_positive() { i.area() } else { 0.0 }
+        };
+        let Some(screen) = screens
+            .iter()
+            .filter(|s| area(s) > 0.0)
+            .max_by(|a, b| area(a).total_cmp(&area(b)))
+        else {
+            return Stuck::default();
+        };
+        const NEAR: f32 = 1.0;
+        Stuck {
+            left: (outer.left() - screen.left()).abs() <= NEAR,
+            top: (outer.top() - screen.top()).abs() <= NEAR,
+            right: (screen.right() - outer.right()).abs() <= NEAR,
+            bottom: (screen.bottom() - outer.bottom()).abs() <= NEAR,
+        }
+    }
+}
+
+/// Where a window stands, for its corners: maximized, in full screen,
+/// against a screen's edges. `None` is a state the backend does not
+/// tell.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Placement {
+    pub maximized: Option<bool>,
+    pub fullscreen: Option<bool>,
+    pub stuck: Stuck,
+}
+
+impl Placement {
+    /// The current window's, its sides against `screens` (in points) as
+    /// far as the system tells where it is: X11 and Windows do, Wayland
+    /// does not (no window position, and winit 0.30 keeps the
+    /// compositor's tiled states to itself), so a window tiled there
+    /// counts as free.
+    pub fn of(ctx: &Context, screens: &[Rect]) -> Placement {
+        ctx.input(|i| {
+            let v = i.viewport();
+            Placement {
+                maximized: v.maximized,
+                fullscreen: v.fullscreen,
+                stuck: v
+                    .outer_rect
+                    .map(|r| Stuck::against(r, screens))
+                    .unwrap_or_default(),
+            }
+        })
+    }
+
+    /// Whether the window floats free: known not maximized and not in
+    /// full screen.
+    pub fn floating(&self) -> bool {
+        self.maximized == Some(false) && self.fullscreen == Some(false)
+    }
+}
+
+/// A window's corners from its theme's `radius` (in points) and where it
+/// stands: rounded only while it floats free, a corner square on a side
+/// against a screen's edge; all square when maximized, in full screen,
+/// or when the backend does not tell those states.
+pub fn corner_radius(radius: f32, place: &Placement) -> egui::CornerRadius {
+    if radius <= 0.0 || !place.floating() {
+        return egui::CornerRadius::ZERO;
+    }
+    let r = radius.round().clamp(0.0, f32::from(u8::MAX)) as u8;
+    let s = place.stuck;
+    let at = |a: bool, b: bool| if a || b { 0 } else { r };
+    egui::CornerRadius {
+        nw: at(s.left, s.top),
+        ne: at(s.right, s.top),
+        sw: at(s.left, s.bottom),
+        se: at(s.right, s.bottom),
+    }
+}
+
+/// Whether the windows this context decorates may have rounded corners:
+/// they are built transparent (what shows outside a rounded corner is
+/// the desktop). Off unless said ([`set_rounding`]).
+const ROUNDING: Slot<bool> = Slot::new("core.frame.rounding");
+
+/// Says whether the windows the application decorates are built
+/// transparent, so that [`window_edge`] may round their corners.
+pub fn set_rounding(ctx: &Context, on: bool) {
+    ROUNDING.set(ctx, on);
+}
+
+/// Whether [`set_rounding`] turned rounded corners on.
+pub fn rounding(ctx: &Context) -> bool {
+    ROUNDING.get(ctx).unwrap_or(false)
+}
+
+/// The line and corners of the current window's own edge
+/// ([`window_edge`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct WindowEdge {
+    /// The line around the window ([`outline`]).
+    pub stroke: egui::Stroke,
+    /// Its corners ([`corner_radius`]); square without [`rounding`].
+    pub corners: egui::CornerRadius,
+}
+
+/// The current window's edge as the kit and its placement say, its sides
+/// against `screens` (in points) square.
+pub fn window_edge(ctx: &Context, screens: &[Rect]) -> WindowEdge {
+    let corners = if rounding(ctx) {
+        corner_radius(
+            crate::kit::Kit::of(ctx).window_edge.radius,
+            &Placement::of(ctx, screens),
+        )
+    } else {
+        egui::CornerRadius::ZERO
+    };
+    WindowEdge {
+        stroke: outline(ctx),
+        corners,
+    }
+}
+
+/// The corners to round in the current window at the end of this pass.
+const ROUND: Slot<egui::CornerRadius> = Slot::new("core.frame.round");
+
+/// Draws the current window's edge: its line over everything, inside
+/// the window, and, with rounded corners, rounds at the end of the pass
+/// what egui painted at the window's corners (the panels' and bars'
+/// backgrounds), so the transparent window shows through outside them.
+/// A mesh there (a picture) is left as painted.
+pub fn paint_window_edge(ctx: &Context, edge: WindowEdge) {
+    let rect = ctx.content_rect();
+    if edge.stroke.width > 0.0 {
+        ctx.layer_painter(egui::LayerId::new(
+            egui::Order::Foreground,
+            egui::Id::unique("egui_pop.window_edge"),
+        ))
+        .rect_stroke(rect, edge.corners, edge.stroke, egui::StrokeKind::Inside);
+    }
+    if edge.corners != egui::CornerRadius::ZERO {
+        let st = crate::state::shared::<RoundState>(ctx, "core.frame.round_state");
+        let mut st = lock(&st);
+        if !st.installed {
+            st.installed = true;
+            ctx.add_plugin(RoundCorners);
+        }
+        drop(st);
+        ROUND.keyed(ctx.viewport_id()).set(ctx, edge.corners);
+    }
+}
+
+#[derive(Debug, Default)]
+struct RoundState {
+    installed: bool,
+}
+
+/// Rounds, at the end of a window's pass, the rectangles painted over
+/// its corners ([`paint_window_edge`]).
+#[derive(Debug)]
+struct RoundCorners;
+
+impl egui::plugin::Plugin for RoundCorners {
+    fn debug_name(&self) -> &'static str {
+        "egui_pop_core::frame::round_corners"
+    }
+
+    fn on_end_pass(&mut self, ui: &mut Ui) {
+        let ctx = ui.ctx().clone();
+        let slot = ROUND.keyed(ctx.viewport_id());
+        // Said again each pass it is wanted.
+        let Some(corners) = slot.remove(&ctx) else {
+            return;
+        };
+        let window = ctx.content_rect();
+        let mut layers: Vec<egui::LayerId> = ctx.memory(|m| m.layer_ids().collect());
+        layers.push(egui::LayerId::background());
+        ctx.graphics_mut(|g| {
+            for layer in layers {
+                if let Some(list) = g.get_mut(layer) {
+                    for i in 0..list.next_idx().0 {
+                        list.mutate_shape(egui::layers::ShapeIdx(i), |c| {
+                            round_shape(&mut c.shape, window, corners);
+                        });
+                    }
+                }
+            }
+        });
+    }
+}
+
+/// Rounds `shape`'s corners that cover `window`'s, by `corners`: a
+/// rectangle (and those in a list of shapes) over a corner of the window
+/// or within a line's width of it (the shell inside the window's line),
+/// its radius less what it stands in from the corner. A plain fill
+/// reaching past the window is cut back to it first; a line, a picture
+/// or a shadow keeps its place.
+pub fn round_shape(shape: &mut egui::Shape, window: Rect, corners: egui::CornerRadius) {
+    /// How far in from a corner a rectangle still counts as on it.
+    const NEAR: f32 = 2.0;
+    match shape {
+        egui::Shape::Vec(shapes) => {
+            for s in shapes {
+                round_shape(s, window, corners);
+            }
+        }
+        egui::Shape::Rect(r) => {
+            let fixed = r.stroke.width > 0.0 || r.brush.is_some() || r.blur_width > 0.0;
+            // Per corner: how far in the rectangle stands (negative: past
+            // the window's edge), on each axis.
+            let insets = |rect: Rect| {
+                let (l, t) = (rect.left() - window.left(), rect.top() - window.top());
+                let (rt, b) = (
+                    window.right() - rect.right(),
+                    window.bottom() - rect.bottom(),
+                );
+                [(l, t), (rt, t), (l, b), (rt, b)]
+            };
+            let want = [corners.nw, corners.ne, corners.sw, corners.se];
+            let on = |(x, y): (f32, f32), w: u8| {
+                w > 0 && x <= NEAR && y <= NEAR && (!fixed || (x >= -NEAR && y >= -NEAR))
+            };
+            if !insets(r.rect).iter().zip(want).any(|(i, w)| on(*i, w)) {
+                return;
+            }
+            if !fixed {
+                r.rect = r.rect.intersect(window);
+            }
+            let c = &mut r.corner_radius;
+            let mine = [&mut c.nw, &mut c.ne, &mut c.sw, &mut c.se];
+            for ((inset, w), mine) in insets(r.rect).into_iter().zip(want).zip(mine) {
+                if on(inset, w) {
+                    let less = inset.0.max(inset.1).max(0.0);
+                    let radius = (f32::from(w) - less).round().max(0.0) as u8;
+                    *mine = (*mine).max(radius);
+                }
+            }
+        }
+        _ => {}
     }
 }
 
@@ -1220,5 +1480,144 @@ mod tests {
             }
         );
         assert!(r.contains(0, 1) && !r.contains(13, 1));
+    }
+
+    fn floating() -> Placement {
+        Placement {
+            maximized: Some(false),
+            fullscreen: Some(false),
+            stuck: Stuck::default(),
+        }
+    }
+
+    #[test]
+    fn corners_round_only_while_the_window_floats_free() {
+        let r = egui::CornerRadius::same(8);
+        assert_eq!(corner_radius(8.0, &floating()), r);
+        // No radius: square.
+        assert_eq!(corner_radius(0.0, &floating()), egui::CornerRadius::ZERO);
+        // Maximized, full screen, or a state not told: square.
+        for p in [
+            Placement {
+                maximized: Some(true),
+                ..floating()
+            },
+            Placement {
+                fullscreen: Some(true),
+                ..floating()
+            },
+            Placement {
+                maximized: None,
+                ..floating()
+            },
+            Placement {
+                fullscreen: None,
+                ..floating()
+            },
+        ] {
+            assert_eq!(corner_radius(8.0, &p), egui::CornerRadius::ZERO, "{p:?}");
+        }
+        // Tiled against the left edge: the left corners square.
+        let left = Placement {
+            stuck: Stuck {
+                left: true,
+                ..Stuck::default()
+            },
+            ..floating()
+        };
+        assert_eq!(
+            corner_radius(8.0, &left),
+            egui::CornerRadius {
+                nw: 0,
+                ne: 8,
+                sw: 0,
+                se: 8
+            }
+        );
+        // In a quarter, top right: only the bottom left corner rounds.
+        let quarter = Placement {
+            stuck: Stuck {
+                top: true,
+                right: true,
+                ..Stuck::default()
+            },
+            ..floating()
+        };
+        assert_eq!(
+            corner_radius(8.0, &quarter),
+            egui::CornerRadius {
+                nw: 0,
+                ne: 0,
+                sw: 8,
+                se: 0
+            }
+        );
+    }
+
+    #[test]
+    fn the_sides_against_a_screen_are_read_on_the_screen_it_is_on() {
+        let screens = [
+            Rect::from_min_size(pos2(0.0, 0.0), vec2(1920.0, 1080.0)),
+            Rect::from_min_size(pos2(1920.0, 0.0), vec2(1280.0, 1024.0)),
+        ];
+        // The left half of the second screen.
+        let half = Rect::from_min_size(pos2(1920.0, 0.0), vec2(640.0, 1024.0));
+        assert_eq!(
+            Stuck::against(half, &screens),
+            Stuck {
+                left: true,
+                top: true,
+                right: false,
+                bottom: true
+            }
+        );
+        // Free in the middle of the first.
+        let free = Rect::from_min_size(pos2(200.0, 100.0), vec2(800.0, 600.0));
+        assert_eq!(Stuck::against(free, &screens), Stuck::default());
+        // No screens told (Wayland gives no position either): free.
+        assert_eq!(Stuck::against(half, &[]), Stuck::default());
+    }
+
+    #[test]
+    fn a_background_over_a_corner_is_rounded_and_cut_to_the_window() {
+        let window = Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0));
+        let corners = egui::CornerRadius::same(8);
+        // A panel's fill reaching past the window's top left corner.
+        let mut fill = egui::Shape::rect_filled(
+            Rect::from_min_max(pos2(-1.0, -1.0), pos2(100.0, 300.0)),
+            0.0,
+            Color32::RED,
+        );
+        round_shape(&mut fill, window, corners);
+        let egui::Shape::Rect(r) = &fill else {
+            unreachable!()
+        };
+        assert_eq!(
+            r.corner_radius,
+            egui::CornerRadius {
+                nw: 8,
+                ne: 0,
+                sw: 8,
+                se: 0
+            }
+        );
+        assert_eq!(r.rect.min, Pos2::ZERO);
+        // The shell inside a 1 pt line: one less, so it stays inside the
+        // line's curve.
+        let mut shell = egui::Shape::rect_filled(window.shrink(1.0), 0.0, Color32::RED);
+        round_shape(&mut shell, window, corners);
+        let egui::Shape::Rect(r) = &shell else {
+            unreachable!()
+        };
+        assert_eq!(r.corner_radius, egui::CornerRadius::same(7));
+        // A button in the middle is left alone, also in a list.
+        let mut inner = egui::Shape::Vec(vec![egui::Shape::rect_filled(
+            Rect::from_min_size(pos2(50.0, 50.0), vec2(20.0, 20.0)),
+            2.0,
+            Color32::RED,
+        )]);
+        let before = inner.clone();
+        round_shape(&mut inner, window, corners);
+        assert_eq!(format!("{inner:?}"), format!("{before:?}"));
     }
 }
