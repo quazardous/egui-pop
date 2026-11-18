@@ -377,11 +377,15 @@ impl Action {
     }
 }
 
-/// Where a binding listens.
+/// Where a binding listens. Each window dispatches its own keys and
+/// bubbles outwards: a surface holding the focus, then the window's
+/// focused panel, then the window, then the whole application
+/// ([`KeyScope::tier`]); a binding of a narrower scope wins over one of a
+/// wider scope on the same keys.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum KeyScope {
-    /// Whatever has the focus (a text input may keep the key, see
-    /// [`Typing`]).
+    /// Any window, whatever has the focus (a text input may keep the key,
+    /// see [`Typing`]); a modal open in the window blocks it.
     #[default]
     Global,
     /// Only while the surface (a focus scope of that name) holds the
@@ -392,6 +396,13 @@ pub enum KeyScope {
     /// reads [`Keymap::system_bindings`]). Inside the window it fires as
     /// a [`KeyScope::Global`] binding does.
     System,
+    /// Only in that application window (the context key `appWindow`:
+    /// `main` for the main window and its detached panels).
+    Window(String),
+    /// Only while that panel is the focused panel of the window the keys
+    /// are pressed in (the context key `focusedPanel`, which each window
+    /// keeps for itself): never from another window.
+    Panel(String),
 }
 
 impl KeyScope {
@@ -399,21 +410,61 @@ impl KeyScope {
         KeyScope::Surface(name.into())
     }
 
-    /// As in files and traces: `global`, `surface:<name>`, `system`.
+    pub fn window(id: &str) -> KeyScope {
+        KeyScope::Window(id.into())
+    }
+
+    pub fn panel(id: &str) -> KeyScope {
+        KeyScope::Panel(id.into())
+    }
+
+    /// As in files and traces: `global`, `surface:<name>`, `system`,
+    /// `window:<id>`, `panel:<id>`.
     pub fn parse(text: &str) -> Result<KeyScope, String> {
-        match text.trim() {
+        let t = text.trim();
+        let named = |prefix: &str| t.strip_prefix(prefix).filter(|n| !n.is_empty());
+        match t {
             "" | "global" => Ok(KeyScope::Global),
             "system" => Ok(KeyScope::System),
-            t => match t.strip_prefix("surface:") {
-                Some(n) if !n.is_empty() => Ok(KeyScope::Surface(n.into())),
-                _ => Err(format!(
-                    "`{t}` is neither `global`, `system` nor `surface:<name>`"
-                )),
-            },
+            _ => {
+                if let Some(n) = named("surface:") {
+                    Ok(KeyScope::Surface(n.into()))
+                } else if let Some(n) = named("window:") {
+                    Ok(KeyScope::Window(n.into()))
+                } else if let Some(n) = named("panel:") {
+                    Ok(KeyScope::Panel(n.into()))
+                } else {
+                    Err(format!(
+                        "`{t}` is none of `global`, `system`, `surface:<name>`, `window:<id>`, `panel:<id>`"
+                    ))
+                }
+            }
         }
     }
 
-    /// Whether it listens in the whole window (`global`, and `system`
+    /// The scope a binding declared without one gets, from its clause:
+    /// a clause requiring `focusedPanel == '<id>'` (alone or in a
+    /// conjunction) is the panel's ([`KeyScope::Panel`]); any other is
+    /// [`KeyScope::Global`]. What keymaps written before scopes existed
+    /// load as.
+    pub fn infer(when: &When) -> KeyScope {
+        fn panel(w: &When) -> Option<&str> {
+            match w {
+                When::Eq(k, v) if k == "focusedPanel" && !v.is_empty() => Some(v),
+                When::And(a, b) => panel(a).or_else(|| panel(b)),
+                _ => None,
+            }
+        }
+        panel(when).map_or(KeyScope::Global, KeyScope::panel)
+    }
+
+    /// [`KeyScope::infer`] from a clause's text; a clause that does not
+    /// parse is global.
+    pub fn infer_from(when: &str) -> KeyScope {
+        When::parse(when).map_or(KeyScope::Global, |w| KeyScope::infer(&w))
+    }
+
+    /// Whether it listens in every window (`global`, and `system`
     /// inside the window).
     pub fn is_global(&self) -> bool {
         matches!(self, KeyScope::Global | KeyScope::System)
@@ -424,6 +475,17 @@ impl KeyScope {
     pub fn is_system(&self) -> bool {
         matches!(self, KeyScope::System)
     }
+
+    /// Its place in the bubble order, nearer the focus higher: a surface
+    /// 3, a panel 2, a window 1, global and system 0.
+    pub fn tier(&self) -> u8 {
+        match self {
+            KeyScope::Surface(_) => 3,
+            KeyScope::Panel(_) => 2,
+            KeyScope::Window(_) => 1,
+            KeyScope::Global | KeyScope::System => 0,
+        }
+    }
 }
 
 impl fmt::Display for KeyScope {
@@ -432,6 +494,8 @@ impl fmt::Display for KeyScope {
             KeyScope::Global => write!(f, "global"),
             KeyScope::Surface(n) => write!(f, "surface:{n}"),
             KeyScope::System => write!(f, "system"),
+            KeyScope::Window(n) => write!(f, "window:{n}"),
+            KeyScope::Panel(n) => write!(f, "panel:{n}"),
         }
     }
 }
@@ -501,6 +565,23 @@ impl BindOptions {
     pub fn surface(name: &str) -> BindOptions {
         BindOptions {
             scope: KeyScope::surface(name),
+            ..BindOptions::default()
+        }
+    }
+
+    /// Only in that application window ([`KeyScope::Window`]).
+    pub fn window(id: &str) -> BindOptions {
+        BindOptions {
+            scope: KeyScope::window(id),
+            ..BindOptions::default()
+        }
+    }
+
+    /// Only while that panel is its window's focused panel
+    /// ([`KeyScope::Panel`]).
+    pub fn panel(id: &str) -> BindOptions {
+        BindOptions {
+            scope: KeyScope::panel(id),
             ..BindOptions::default()
         }
     }
@@ -583,9 +664,18 @@ pub enum Verdict {
     SurfaceNotFocused {
         surface: String,
     },
+    /// The keys were pressed in another application window.
+    OtherWindow {
+        window: String,
+    },
+    /// Its panel is not the focused panel of the window the keys were
+    /// pressed in.
+    PanelNotFocused {
+        panel: String,
+    },
     /// A text input has the focus and keeps the key.
     LeftToTyping,
-    /// A modal is open and the binding is global.
+    /// A modal is open in the window and the binding is not a surface's.
     BlockedByModal,
 }
 
@@ -650,6 +740,12 @@ impl fmt::Display for Verdict {
             Verdict::SurfaceNotFocused { surface } => {
                 write!(f, "its surface `{surface}` does not have the focus")
             }
+            Verdict::OtherWindow { window } => {
+                write!(f, "it listens in the window `{window}` only")
+            }
+            Verdict::PanelNotFocused { panel } => {
+                write!(f, "its panel `{panel}` is not this window's focused panel")
+            }
             Verdict::LeftToTyping => write!(f, "left to the text input"),
             Verdict::BlockedByModal => write!(f, "blocked by a modal"),
         }
@@ -695,7 +791,9 @@ pub struct DocBinding {
     pub command: Option<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub when: String,
-    /// `global` (when empty) or `surface:<name>`.
+    /// `global`, `surface:<name>`, `system`, `window:<id>` or
+    /// `panel:<id>`; empty or `global` with a clause requiring a panel
+    /// is that panel's ([`KeyScope::infer`]).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub scope: String,
     #[serde(default, skip_serializing_if = "is_auto")]
@@ -721,7 +819,8 @@ impl Keymap {
         Self::default()
     }
 
-    /// Adds a global binding; its keys and clause must parse.
+    /// Adds a binding, its scope inferred from its clause (see
+    /// [`Keymap::bind_with`]); its keys and clause must parse.
     pub fn bind(
         &mut self,
         owner: &OwnerId,
@@ -733,7 +832,10 @@ impl Keymap {
         self.bind_with(owner, layer, keys, action, when, BindOptions::global())
     }
 
-    /// Adds a binding with its scope and typing rule.
+    /// Adds a binding with its scope and typing rule. A global scope is
+    /// narrowed to the panel its clause requires ([`KeyScope::infer`]:
+    /// `focusedPanel == '<id>'`), which fires exactly where the clause
+    /// holds and wins over the wider scopes.
     pub fn bind_with(
         &mut self,
         owner: &OwnerId,
@@ -751,6 +853,10 @@ impl Keymap {
             Keys::parse(keys)?
         };
         let w = When::parse(when).map_err(|e| format!("`{keys}`: {e}"))?;
+        let mut options = options;
+        if options.scope == KeyScope::Global {
+            options.scope = KeyScope::infer(&w);
+        }
         self.rules.push(
             owner,
             Rule {
@@ -842,14 +948,18 @@ impl Keymap {
     fn depth(r: &Rule, cx: &WhenContext) -> u32 {
         let surface = match &r.binding.options.scope {
             KeyScope::Surface(n) => cx.depth_of(&format!("{n}Focus")).unwrap_or(0),
-            KeyScope::Global | KeyScope::System => 0,
+            _ => 0,
         };
         surface.max(r.when.depth(cx))
     }
 
-    fn rank(r: &Rule, order: u64, cx: &WhenContext) -> (u32, Layer, usize, u64) {
+    /// Nearer the focus first (its depth, then its scope's place in the
+    /// bubble order), then the higher layer, the more specific clause,
+    /// the last declared.
+    fn rank(r: &Rule, order: u64, cx: &WhenContext) -> (u32, u8, Layer, usize, u64) {
         (
             Self::depth(r, cx),
+            r.binding.options.scope.tier(),
             r.binding.layer,
             r.when.specificity(),
             order,
@@ -867,6 +977,16 @@ impl Keymap {
         {
             return Some(Verdict::SurfaceNotFocused { surface: n.clone() });
         }
+        if let KeyScope::Window(w) = &o.scope
+            && cx.get("appWindow") != w
+        {
+            return Some(Verdict::OtherWindow { window: w.clone() });
+        }
+        if let KeyScope::Panel(p) = &o.scope
+            && cx.get("focusedPanel") != p
+        {
+            return Some(Verdict::PanelNotFocused { panel: p.clone() });
+        }
         // A clause testing `textInputFocus` decides for itself.
         let about_typing = r.when.keys().contains(&"textInputFocus");
         if o.typing.effective(&r.binding.keys) == Typing::UnlessTyping
@@ -875,7 +995,9 @@ impl Keymap {
         {
             return Some(Verdict::LeftToTyping);
         }
-        if o.scope.is_global() && !o.through_modal && truthy("modalOpen") {
+        // A modal blocks every binding but a surface's (a surface under a
+        // modal does not hold the focus).
+        if !matches!(o.scope, KeyScope::Surface(_)) && !o.through_modal && truthy("modalOpen") {
             return Some(Verdict::BlockedByModal);
         }
         None
@@ -986,8 +1108,10 @@ impl Keymap {
                         let because = if rank.0 != mine.0 {
                             "nearer the focus"
                         } else if rank.1 != mine.1 {
-                            "higher layer"
+                            "narrower scope"
                         } else if rank.2 != mine.2 {
+                            "higher layer"
+                        } else if rank.3 != mine.3 {
                             "more specific clause"
                         } else {
                             "declared later"
@@ -1289,7 +1413,8 @@ fn doc_binding(b: &Binding) -> DocBinding {
         keys: b.keys.to_string(),
         command: b.action.to_file(),
         when: b.when.clone(),
-        scope: if o.scope == KeyScope::Global {
+        // Left out when loading would infer it from the clause.
+        scope: if o.scope == KeyScope::infer_from(&b.when) {
             String::new()
         } else {
             o.scope.to_string()

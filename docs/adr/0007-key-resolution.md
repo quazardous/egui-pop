@@ -59,3 +59,31 @@ leaves plain keys to it), and an open modal blocks global bindings
 unless they go through it. Escape is taken in a fixed order: a focused
 text input lets go first (and swallows that press), then egui's drag,
 the top overlay, the key bindings, the widgets (`egui_pop_core::focus`).
+
+## Addendum (2026-11-18): scopes per window
+
+Every binding has a scope, and each window dispatches its own keys,
+bubbling from the focus outwards:
+
+| Scope | In files | Fires |
+|---|---|---|
+| Surface | `surface:<name>` | while that focus scope is in the window's focus chain |
+| Panel | `panel:<id>` | while that panel is the focused panel of the window the key is pressed in |
+| Window | `window:<id>` | only in that application window (`main`: the main window and its detached panels) |
+| Global | `global` (or none) | in every window |
+| System | `system` | as global, and from the system while the application is not focused |
+
+`focusedPanel` belongs to each window: the main window and its detached
+panels share the workbench's, an application window keeps the panel
+focused last in it (empty while none was), so a panel's keys never fire
+from another window. Among the bindings of the pressed keys that may
+fire, the winner is the greatest `(depth, scope, layer, specificity,
+order)`: nearer the focus first, then the narrower scope (surface, panel,
+window, global), then as before. A modal open in a window blocks every
+binding there but a surface's, unless it goes through modals.
+
+A binding declared without a scope (or `global`) whose clause requires a
+panel (`focusedPanel == '<id>'`, alone or in a conjunction) is that
+panel's: keymaps written before scopes load unchanged, and are saved
+without the inferred scope. `when` keeps the other conditions. The
+focused widget before the keymap is a later step.

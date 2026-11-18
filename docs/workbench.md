@@ -239,7 +239,12 @@ panel and the tab being dragged.
 
 ### The focused panel
 
-There is one: the panel the widget focus is in, or the last one it was in.
+There is one per window: the panel the widget focus is in, or the last one
+it was in. The main window and its detached panels share the workbench's;
+an application window keeps its own (empty while none of its panels was
+focused), so the keys of a panel bound in the `panel:<id>` scope, or with a
+`when` testing `focusedPanel`, never fire from another window ([key
+scopes](adr/0007-key-resolution.md#addendum-2026-11-18-scopes-per-window)).
 `when` clauses reading `focusedPanel` follow the keyboard.
 
 | What happens | `focusedPanel` | The widget focus |
