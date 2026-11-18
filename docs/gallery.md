@@ -325,7 +325,8 @@ timeline's time: its cursor the playhead, a stepped line, an error band, the ran
 values at the pointer, two million samples decimated per pixel column), a text log (after Rerun's: level chips and a text filter, the rows
 at the playhead highlighted, a click moving the playhead, a multi-line body unfolded), and the
 photo library (a thumbnail grid
-and filmstrip, marks, filter chips, a comparison; a cell's stars
+and filmstrip, marks, filter chips, a comparison of one to many images,
+a loupe and surveys of two, four and six; a cell's stars
 previewing a lower rating over the current one, [Rating stars](rating.md)).
 
 <table>
@@ -334,6 +335,12 @@ previewing a lower rating over the current one, [Rating stars](rating.md)).
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/table-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/table-pop-dark.png" width="200" alt="table-pop-dark"></a><br>table-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-pop-dark.png" width="200" alt="library-pop-dark"></a><br>library-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-compare-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-compare-pop-dark.png" width="200" alt="library-compare-pop-dark"></a><br>library-compare-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-compare-1-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-compare-1-pop-dark.png" width="200" alt="library-compare-1-pop-dark"></a><br>library-compare-1-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-compare-2-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-compare-2-pop-dark.png" width="200" alt="library-compare-2-pop-dark"></a><br>library-compare-2-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-compare-4-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-compare-4-pop-dark.png" width="200" alt="library-compare-4-pop-dark"></a><br>library-compare-4-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-compare-6-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-compare-6-pop-dark.png" width="200" alt="library-compare-6-pop-dark"></a><br>library-compare-6-pop-dark</td>
   </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/table-kit-rows.png"><img src="../crates/egui-pop-gallery/tests/snapshots/table-kit-rows.png" width="200" alt="table-kit-rows"></a><br>table-kit-rows</td>
