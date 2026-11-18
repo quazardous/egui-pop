@@ -1308,6 +1308,10 @@ egui-pop-views-blue 4993860c16de56cd
 egui-pop-views-clear-filters 156f78772c58594f
 egui-pop-views-collapse-stack f4e9855715e7ef31
 egui-pop-views-compare 0b2cb0ac030421c2
+egui-pop-views-compare-empty df371e767e81595a
+egui-pop-views-compare-full 0fb09778523e0b56
+egui-pop-views-compare-not-images bb2007191643a6e8
+egui-pop-views-compare-remove 28e803d931dd1d0a
 egui-pop-views-empty 43004eaa0e260734
 egui-pop-views-expand-stack 6d41329bc7d7be14
 egui-pop-views-failed 2648f0a77a9febff
