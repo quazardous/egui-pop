@@ -271,3 +271,112 @@ fn keys_go_to_the_workspace_when_asked_and_each_says_where_it_comes_from() {
     h.run();
     assert_eq!(handle.keys_for(&CMD_UNDO), ["Ctrl+U"]);
 }
+
+/// A plugin with settings documented at length, for the search's tests.
+struct Notes;
+
+impl egui_pop_api::Plugin for Notes {
+    fn id(&self) -> egui_pop_model::ids::PluginId {
+        egui_pop_model::ids::PluginId::from_static("notes")
+    }
+
+    fn title(&self) -> String {
+        "Notes".into()
+    }
+
+    fn connect(
+        &mut self,
+        ctx: &mut egui_pop_api::Ctx<'_>,
+    ) -> Result<(), egui_pop_api::PluginError> {
+        use egui_pop_model::ids::SettingId;
+        use egui_pop_model::values::Descriptor;
+        // Its description holds s…p…e…c…i…m…e…n scattered over its words.
+        ctx.setting(
+            SettingId::from_static("notes.wrap"),
+            Descriptor::bool("Soft wrap", true).description(
+                "Soft wrap: lines break at the pane's edge, so a paragraph reads without \
+                 scrolling; the file itself remains unchanged on disk.",
+            ),
+        )?;
+        // Declared first, found by a word of its description only.
+        ctx.setting(
+            SettingId::from_static("notes.ruler"),
+            Descriptor::bool("Ruler", false)
+                .description("A line drawn down the column the zoom keeps in view."),
+        )?;
+        ctx.setting(
+            SettingId::from_static("notes.zoom"),
+            Descriptor::int("Text zoom", 50, 400, 100).description("The text's size, in percent."),
+        )?;
+        Ok(())
+    }
+}
+
+fn notes_harness() -> Harness<'static, App> {
+    let app = App::builder()
+        .plugins(DefaultPlugins)
+        .plugin(Notes)
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1000.0, 1400.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    h
+}
+
+/// Types in the search field, clicked first as a person would.
+fn type_search(h: &mut Harness<'_, App>, text: &str) {
+    h.get_by_role_and_label(Role::TextInput, "Settings").click();
+    h.run();
+    h.get_by_role_and_label(Role::TextInput, "Settings")
+        .type_text(text);
+    h.run();
+    h.run();
+}
+
+#[test]
+fn a_long_description_does_not_match_a_word_as_scattered_letters() {
+    let mut h = notes_harness();
+    open(&mut h);
+    type_search(&mut h, "specimen");
+    // The letters are all there in order, spread over the description's
+    // words: no match. Nor do the built-in settings documented at length
+    // (the accent colour, the pointer profile) hold the word.
+    assert!(h.query_by_label("Reset Soft wrap").is_none());
+    assert!(h.query_by_label("Reset Accent colour").is_none());
+    assert!(h.query_by_label("Reset Pointer profile").is_none());
+}
+
+#[test]
+fn a_description_matches_by_words_and_word_prefixes() {
+    let mut h = notes_harness();
+    open(&mut h);
+    // A word's start in the description finds it.
+    type_search(&mut h, "parag");
+    assert!(h.query_by_label("Reset Soft wrap").is_some());
+    assert!(h.query_by_label("Reset Ruler").is_none());
+}
+
+#[test]
+fn a_label_still_matches_fuzzily() {
+    let mut h = notes_harness();
+    open(&mut h);
+    // "swrp": s…w…r…p in the label, Soft wrap.
+    type_search(&mut h, "swrp");
+    assert!(h.query_by_label("Reset Soft wrap").is_some());
+    assert!(h.query_by_label("Reset Text zoom").is_none());
+}
+
+#[test]
+fn a_label_match_comes_before_a_description_match() {
+    let mut h = notes_harness();
+    open(&mut h);
+    type_search(&mut h, "zoom");
+    // Ruler is declared first, but "zoom" is only in its description.
+    let top = |h: &Harness<'_, App>, label: &str| h.get_by_label(label).rect().min.y;
+    assert!(
+        top(&h, "Reset Text zoom") < top(&h, "Reset Ruler"),
+        "the label match is listed first"
+    );
+}
