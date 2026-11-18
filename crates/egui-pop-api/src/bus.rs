@@ -157,6 +157,7 @@ pub use egui_pop_hooks;
 
 mod activate;
 pub use activate::raise_main_window;
+pub(crate) mod budget;
 mod commands;
 pub use commands::{COMMAND_POINTS, CommandAsk, CommandRun};
 pub(crate) use commands::{ask as ask_command_run, reason as command_refusal};
@@ -824,6 +825,8 @@ pub(crate) struct Bus {
     pub(crate) overlays: RefCell<overlays::Overlays>,
     /// Each panel's state not ready (`panel.state`), for its chrome.
     pub(crate) panel_states: panel_state::States,
+    /// Passes over a point's budget, to say (`bus.overBudget`).
+    pub(crate) over_budget: budget::Heard,
 }
 
 impl std::fmt::Debug for Bus {
@@ -869,6 +872,7 @@ impl Bus {
         let panel_states = panel_state::States::default();
         panel_state::install(&*kernel, &panel_states, wake.clone());
         panel_describe::install(&*kernel);
+        let over_budget = budget::install(&*kernel);
         Bus {
             kernel,
             registry,
@@ -884,6 +888,7 @@ impl Bus {
             wake,
             overlays: RefCell::default(),
             panel_states,
+            over_budget,
         }
     }
 

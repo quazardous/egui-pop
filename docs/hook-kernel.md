@@ -137,6 +137,22 @@ assert!(report.failures.is_empty());
   `AppHandle::asks_waiting` counts what waits; on a bus without `Defer`,
   `ask` answers `None` and the caller asks at once or keeps its own
   queue.
+- **Listener times and budgets** (the contract's `Timings` capability,
+  which the kernel offers): every listener run is timed (the two clock
+  reads the deadlines already make, then a few relaxed atomic adds into
+  a log histogram of √2 steps), per listener and per pass. A pass is
+  what one emit's listeners ran on one thread (an inline emit, a queued
+  run, a drained ask). `bus.timings()?.points()` gives count, total,
+  max, p50 and p95 (within a bucket) and `PointTimings::slowest`;
+  `reset()` starts a new window; `Kernel::set_timing(false)` stops
+  counting. A point may declare a budget for a pass
+  (`PointDecl::budget`); a pass over it goes to the `on_over_budget`
+  sinks and its results are kept: a budget is not a deadline. egui-pop's
+  application says it as the `bus.overBudget` fact (point, `took_us`,
+  `budget_us`, each listener's time, `slowest`, and `unsaid`: the passes
+  over budget not said since) and one warning in the log, at most once a
+  minute per point. The debug collector `bus` shows each point's budget
+  and passes, each listener's runs, and `slowest` across points.
 - **Refusals and fail-closed points**: a listener on a request returns
   `HookError::refuse(reason)` and the request stops there; on a point
   declared `fail_closed`, a listener's error, panic or missed deadline
