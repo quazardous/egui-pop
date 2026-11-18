@@ -100,84 +100,78 @@ fn title(h: &Harness<'_, Gallery>, page: &str) -> String {
         .title
 }
 
-// Every page under one theme and one density, a test per pair: each runs
-// in a process of its own, side by side, and stays well under CI's
-// timeout as pages are added.
-fn every_page_renders(theme: &str, density: Density) {
-    for page in PAGES {
-        let mut h = harness(options(theme, density, page));
-        run_page(&mut h, page);
-        // In the side bar and as the page's heading.
-        let titles = h.query_all_by_label(&title(&h, page)).count();
-        assert_eq!(titles, 2, "{theme} {page}");
-        let tokens = Tokens::of(&h.ctx);
-        assert!(tokens.resolved().problems().is_empty());
-        assert_eq!(tokens.resolved().spec().base, theme);
-        assert!(
-            h.state().app.handle().diagnostics().is_empty(),
-            "{:?}",
-            h.state().app.handle().diagnostics()
-        );
-        h.render().expect("render");
-    }
-}
+// The tests walking every page are a test per page (`per_page!`), each in a
+// process of its own under nextest: none grows with the gallery, and a slow
+// page shows by name. A page added to `PAGES` gets its tests.
 
-macro_rules! every_page_renders {
-    ($($name:ident: $theme:literal, $density:ident;)*) => {
-        $(
-            #[test]
-            fn $name() {
-                every_page_renders($theme, Density::$density);
-            }
-        )*
-
-        #[test]
-        fn every_theme_and_density_has_its_render_test() {
-            let covered = [$(($theme, Density::$density)),*];
-            for theme in POP_THEMES {
-                for density in Density::ALL {
-                    assert!(covered.contains(&(*theme, density)), "{theme} {density:?}");
-                }
-            }
-        }
+/// The pages `for_each_page!` gives, for the check below.
+macro_rules! generated_pages {
+    ({} $($id:ident $page:literal;)*) => {
+        const GENERATED_PAGES: &[&str] = &[$($page),*];
     };
 }
+for_each_page!(generated_pages! {});
 
-every_page_renders! {
-    every_page_renders_in_pop_dark_comfortable: "pop-dark", Comfortable;
-    every_page_renders_in_pop_dark_compact: "pop-dark", Compact;
-    every_page_renders_in_pop_light_comfortable: "pop-light", Comfortable;
-    every_page_renders_in_pop_light_compact: "pop-light", Compact;
-    every_page_renders_in_pop_high_contrast_comfortable: "pop-high-contrast", Comfortable;
-    every_page_renders_in_pop_high_contrast_compact: "pop-high-contrast", Compact;
+#[test]
+fn every_page_has_its_generated_tests() {
+    assert_eq!(GENERATED_PAGES, PAGES, "build.rs read another page list");
 }
 
-// Not critical: it renders every page (over 30 s on CI); it runs whenever
-// the gallery or a crate it uses changes.
-#[test]
-fn every_interactive_node_of_every_page_has_a_name() {
-    for page in PAGES {
-        let mut h = harness(options("pop-dark", Density::Comfortable, page));
-        run_page(&mut h, page);
-        egui_pop_test::assert_all_named(&h);
+// One page under every theme and density.
+fn page_renders(page: &str) {
+    for theme in POP_THEMES {
+        for density in Density::ALL {
+            let mut h = harness(options(theme, density, page));
+            run_page(&mut h, page);
+            // In the side bar and as the page's heading.
+            let titles = h.query_all_by_label(&title(&h, page)).count();
+            assert_eq!(titles, 2, "{theme} {density:?} {page}");
+            let tokens = Tokens::of(&h.ctx);
+            assert!(
+                tokens.resolved().problems().is_empty(),
+                "{theme} {density:?}"
+            );
+            assert_eq!(tokens.resolved().spec().base, *theme);
+            assert!(
+                h.state().app.handle().diagnostics().is_empty(),
+                "{theme} {density:?}: {:?}",
+                h.state().app.handle().diagnostics()
+            );
+            h.render().expect("render");
+        }
     }
 }
+
+for_each_page!(per_page! { every_page_renders, super::page_renders });
+
+// Not critical: each renders a page; they run whenever the gallery or a
+// crate it uses changes.
+fn interactive_nodes_have_a_name(page: &str) {
+    let mut h = harness(options("pop-dark", Density::Comfortable, page));
+    run_page(&mut h, page);
+    egui_pop_test::assert_all_named(&h);
+}
+
+for_each_page!(
+    per_page! { every_interactive_node_has_a_name, super::interactive_nodes_have_a_name }
+);
 
 // Every input brick (a text input, a number input, a slider, a
 // descriptor's drop-down) drawn by a page has a name, and is drawn by a
 // brick that records itself. Not critical, as above.
-#[test]
-fn every_input_brick_of_every_page_has_a_name() {
-    let mut seen = 0;
-    for page in PAGES {
-        let mut h = harness(options("pop-dark", Density::Comfortable, page));
-        run_page(&mut h, page);
-        seen += egui_pop::core::a11y::inputs(&h.ctx).len();
-        let unnamed = egui_pop_test::unnamed_inputs(&h);
-        assert!(unnamed.is_empty(), "{page}: {unnamed:#?}");
+fn input_bricks_have_a_name(page: &str) {
+    let mut h = harness(options("pop-dark", Density::Comfortable, page));
+    run_page(&mut h, page);
+    let seen = egui_pop::core::a11y::inputs(&h.ctx).len();
+    let unnamed = egui_pop_test::unnamed_inputs(&h);
+    assert!(unnamed.is_empty(), "{page}: {unnamed:#?}");
+    // Not all of it for nothing: the inputs page draws input bricks.
+    if page == "inputs" {
+        assert!(seen > 0, "the gallery draws input bricks");
     }
-    assert!(seen > 0, "the gallery draws input bricks");
 }
+
+for_each_page!(per_page! { every_input_brick_has_a_name, super::input_bricks_have_a_name });
 
 #[test]
 fn snapshots_per_theme() {
@@ -8084,83 +8078,64 @@ fn check_short_page(theme: &str, density: Density, page: &str) -> Result<bool, S
     Ok(scrolls)
 }
 
-/// The pages of [`every_page_ends_in_a_short_window`], in two halves: each
-/// page opens two windows, and a whole walk in one test outgrows CI's
-/// limit on a test's time as pages are added.
-fn half(second: bool) -> &'static [&'static str] {
-    let (first, rest) = PAGES.split_at(PAGES.len() / 2);
-    if second { rest } else { first }
+/// A page in a short window, under the dark and the high-contrast themes
+/// (`check_short_page`).
+fn page_ends_in_a_short_window(page: &str) {
+    let problems: Vec<String> = ["pop-dark", "pop-high-contrast"]
+        .into_iter()
+        .filter_map(|theme| {
+            check_short_page(theme, Density::Comfortable, page)
+                .err()
+                .map(|problem| format!("{theme}: {problem}"))
+        })
+        .collect();
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
 
-fn every_page_ends_in_a_short_window(theme: &str, density: Density, pages: &[&str]) {
-    let mut problems = Vec::new();
-    let mut scrolling = 0;
-    for page in pages {
-        match check_short_page(theme, density, page) {
-            Ok(true) => scrolling += 1,
-            Ok(false) => {}
-            Err(problem) => problems.push(problem),
-        }
-    }
-    assert!(
-        problems.is_empty(),
-        "{theme} {density:?}:\n{}",
-        problems.join("\n")
-    );
-    // Not all of it for nothing: many pages are longer than this window.
-    assert!(
-        scrolling * 3 >= pages.len(),
-        "only {scrolling} of {} pages scrolled",
-        pages.len()
-    );
-}
+for_each_page!(per_page! { every_page_ends_in_a_short_window, super::page_ends_in_a_short_window });
 
+// Not all of it for nothing: pages longer than the short window scroll
+// there, so the check above sees a scroll through to the end.
 #[test]
-fn every_page_ends_in_a_short_window_in_pop_dark_first_half() {
-    every_page_ends_in_a_short_window("pop-dark", Density::Comfortable, half(false));
-}
-
-#[test]
-fn every_page_ends_in_a_short_window_in_pop_dark_second_half() {
-    every_page_ends_in_a_short_window("pop-dark", Density::Comfortable, half(true));
-}
-
-#[test]
-fn every_page_ends_in_a_short_window_in_pop_high_contrast_first_half() {
-    every_page_ends_in_a_short_window("pop-high-contrast", Density::Comfortable, half(false));
-}
-
-#[test]
-fn every_page_ends_in_a_short_window_in_pop_high_contrast_second_half() {
-    every_page_ends_in_a_short_window("pop-high-contrast", Density::Comfortable, half(true));
-}
-
-#[test]
-fn every_playground_ends_in_a_short_window() {
-    let mut problems = Vec::new();
-    for page in PAGES {
-        let mut h = short_window(page);
-        run_page(&mut h, page);
-        let nav = h
-            .state()
-            .app
-            .handle()
-            .service(&egui_pop_gallery::shell::NAV);
-        let nav = nav.unwrap();
-        let view = nav.playground_view().expect("a playground was drawn");
-        let id = view.scroll.expect("every playground scrolls");
-        assert!(
-            egui_pop::core::ui::set_scroll_offset(&h.ctx, id, egui::vec2(0.0, 100_000.0)),
-            "its scroll"
+fn a_short_window_scrolls_long_pages() {
+    for page in ["builtins", "inputs", "settings"] {
+        assert_eq!(
+            check_short_page("pop-dark", Density::Comfortable, page),
+            Ok(true),
+            "{page}"
         );
-        let _ = h.run_ok();
-        let view = nav.playground_view().expect("a playground was drawn");
-        if view.content.bottom() > view.zone.bottom() + 1.0 {
-            problems.push(format!("{page}: {:?} past {:?}", view.content, view.zone));
-        }
     }
-    assert!(problems.is_empty(), "{problems:?}");
 }
+
+/// A page's playground in a short window: its end comes into view.
+fn playground_ends_in_a_short_window(page: &str) {
+    let mut h = short_window(page);
+    run_page(&mut h, page);
+    let nav = h
+        .state()
+        .app
+        .handle()
+        .service(&egui_pop_gallery::shell::NAV);
+    let nav = nav.unwrap();
+    let view = nav.playground_view().expect("a playground was drawn");
+    let id = view.scroll.expect("every playground scrolls");
+    assert!(
+        egui_pop::core::ui::set_scroll_offset(&h.ctx, id, egui::vec2(0.0, 100_000.0)),
+        "its scroll"
+    );
+    let _ = h.run_ok();
+    let view = nav.playground_view().expect("a playground was drawn");
+    assert!(
+        view.content.bottom() <= view.zone.bottom() + 1.0,
+        "{page}: {:?} past {:?}",
+        view.content,
+        view.zone
+    );
+}
+
+for_each_page!(
+    per_page! { every_playground_ends_in_a_short_window, super::playground_ends_in_a_short_window }
+);
 
 #[test]
 fn a_page_scrolls_by_the_wheel_in_a_short_window_and_a_canvas_keeps_it() {
