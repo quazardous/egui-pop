@@ -21,7 +21,13 @@
 //! ([`DataTable::header_menu`]).
 //!
 //! The application owns the rows: it sorts them as [`TableState::sort`]
-//! (or the store) says and gives them through [`TableRows`].
+//! (or the store) says and gives them through [`TableRows`]. An order
+//! decided elsewhere (a sort command) is shown with
+//! [`TableState::set_sort`], without a store.
+//!
+//! Enter or a double click on a row activates it ([`Signal::Activate`]);
+//! built with [`DataTable::drag_out`], a drag from a row carries rows out
+//! ([`Signal::DragOut`]).
 //!
 //! ```
 //! use egui_pop_views::table::{Column, DataTable, TableRows, TableState};
@@ -64,7 +70,9 @@ use egui_pop_model::values::{Change, DeclareError, Descriptor, Set, Value};
 use egui_table::{CellInfo, HeaderCellInfo, HeaderRow, PrefetchInfo, TableDelegate};
 use serde_json::{Value as Json, json};
 
-use crate::list::{self, Signal};
+use crate::list;
+/// What happened in a table this pass: the list's signals.
+pub use crate::list::Signal;
 use crate::nav::{self, TypeAhead};
 use crate::rows;
 use crate::select::{Key, Mode, Proposal, Selection};
@@ -240,6 +248,8 @@ pub struct TableState<K: Key> {
     hovered_column: Option<String>,
     /// The shared selection's revision last followed (columns).
     seen: Option<u64>,
+    /// How many rows a drag out carries, while it lasts.
+    carry: Option<usize>,
 }
 
 impl<K: Key> Default for TableState<K> {
@@ -257,6 +267,7 @@ impl<K: Key> Default for TableState<K> {
             column_anchor: None,
             hovered_column: None,
             seen: None,
+            carry: None,
         }
     }
 }
@@ -280,9 +291,25 @@ impl<K: Key> TableState<K> {
         self.sort.as_ref()
     }
 
+    /// Sets the order shown in the header (its arrow) without running a
+    /// step or writing a store: for an order the application decides
+    /// elsewhere. A table with a store ([`DataTable::store`]) shows the
+    /// store's order instead.
+    pub fn set_sort(&mut self, sort: Option<Sort>) {
+        self.sort = sort;
+    }
+
     /// The columns' widths as last shown.
     pub fn widths(&self) -> &[f32] {
         &self.widths
+    }
+
+    /// Sets the columns' widths, one per column, shown at the next pass
+    /// without running a step or writing a store (widths of another
+    /// count are replaced by the columns' own). A table with a store
+    /// ([`DataTable::store`]) shows the store's widths instead.
+    pub fn set_widths(&mut self, widths: Vec<f32>) {
+        self.widths = widths;
     }
 
     /// The selected columns' ids ([`DataTable::select_columns`]).
@@ -365,6 +392,7 @@ pub struct DataTable<'a> {
     header_menu: Option<HeaderMenu<'a>>,
     shared_columns: Option<&'a SelectionService>,
     stick_to_bottom: bool,
+    drag_out: bool,
 }
 
 impl<'a> DataTable<'a> {
@@ -383,7 +411,18 @@ impl<'a> DataTable<'a> {
             header_menu: None,
             shared_columns: None,
             stick_to_bottom: false,
+            drag_out: false,
         }
+    }
+
+    /// A drag that starts on a row carries rows out (off by default):
+    /// the table signals [`Signal::DragOut`] as it starts, for the
+    /// application to set its payload (`egui::DragAndDrop::set_payload`)
+    /// and its drop targets to take it; while it lasts the cursor shows a
+    /// carry and the pointer how many rows go.
+    pub fn drag_out(mut self, on: bool) -> Self {
+        self.drag_out = on;
+        self
     }
 
     /// Keeps the last row in view as rows are added, until the user
@@ -530,8 +569,9 @@ impl<'a> DataTable<'a> {
         let row_h = self.row_height.unwrap_or_else(|| rows::height(ui));
         let focused = ui.memory(|m| m.has_focus(id));
         let mut proposals = Vec::new();
+        let mut late = Vec::new();
         if focused {
-            let (p, reveal) = nav::flat(
+            let (p, reveal, activate) = nav::flat(
                 ui,
                 &state.selection,
                 self.mode,
@@ -545,6 +585,7 @@ impl<'a> DataTable<'a> {
             if reveal.is_some() {
                 state.reveal = reveal;
             }
+            late.extend(activate.map(|key| Signal::Activate { key }));
         }
 
         let columns: Vec<egui_table::Column> = self
@@ -579,6 +620,9 @@ impl<'a> DataTable<'a> {
             len,
             focused,
             proposals: &mut proposals,
+            late: &mut late,
+            drag_out: self.drag_out,
+            carry: state.carry.take(),
             sort_to: None,
             page: state.page,
             take_focus: false,
@@ -638,7 +682,10 @@ impl<'a> DataTable<'a> {
         let column_click = delegate.column_click.take();
         let visible_rows = delegate.visible_rows.clone();
         let page = delegate.page;
+        let mut carry = delegate.carry.take();
         drop(delegate);
+        rows::carry(ui, &mut carry);
+        state.carry = carry;
         if hovered_column != state.hovered_column {
             state.hovered_column = hovered_column.clone();
             ui.ctx().request_repaint();
@@ -830,6 +877,7 @@ impl<'a> DataTable<'a> {
                 }
             }
         }
+        signals.extend(late);
         if !signals.is_empty() || sorted || resized || columns_selected {
             ui.ctx().request_repaint();
         }
@@ -898,6 +946,11 @@ struct Delegate<'a, K: Key> {
     len: usize,
     focused: bool,
     proposals: &'a mut Vec<Proposal<K>>,
+    /// Activations and drags out, after the selection's signals.
+    late: &'a mut Vec<Signal<K>>,
+    drag_out: bool,
+    /// How many rows a drag out carries, while it lasts.
+    carry: Option<usize>,
     sort_to: Option<Option<Sort>>,
     page: usize,
     take_focus: bool,
@@ -1062,7 +1115,12 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
         }
         let key = self.rows.key(row);
         let rect = ui.max_rect();
-        let r = ui.interact(rect, ui.scope_id().with("select"), Sense::CLICK);
+        let sense = if self.drag_out {
+            rows::ROW_SENSE
+        } else {
+            Sense::CLICK
+        };
+        let r = ui.interact(rect, ui.scope_id().with("select"), sense);
         let selected = self.selection.contains(&key);
         let cursor = self.focused && self.selection.cursor() == Some(&key);
         let state = rows::state(selected, r.hovered(), cursor);
@@ -1087,7 +1145,9 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
         }
         let name = self.rows.label(row);
         r.widget_info(move || WidgetInfo::selected(Role::Button, true, selected, &name));
-        if r.clicked() {
+        if r.double_clicked() {
+            self.late.push(Signal::Activate { key: key.clone() });
+        } else if r.clicked() {
             self.take_focus = true;
             let mods = ui.input(|i| i.modifiers);
             let rows = &*self.rows;
@@ -1098,6 +1158,11 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
                 row,
                 mods,
             ));
+        }
+        if self.drag_out && r.drag_started() {
+            let keys = rows::carried(self.selection, key);
+            self.carry = Some(keys.len());
+            self.late.push(Signal::DragOut { keys });
         }
     }
 

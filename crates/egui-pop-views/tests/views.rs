@@ -11,7 +11,7 @@ use egui_pop_api::steps::Before;
 use egui_pop_api::{App, AppHandle, Ctx, Plugin, PluginError};
 use egui_pop_core::icon::Icon;
 use egui_pop_model::ids::{OwnerId, PluginId};
-use egui_pop_views::list::{ListRows, ListState, ListView};
+use egui_pop_views::list::{self, ListRows, ListState, ListView};
 use egui_pop_views::steps::{TABLE_SORT, TREE_DROP};
 use egui_pop_views::table::{self, Column, DataTable, TableRows, TableState};
 use egui_pop_views::tree::{
@@ -1439,4 +1439,149 @@ fn a_click_on_a_cell_s_text_selects_its_row() {
             h.state().0.selection()
         );
     }
+}
+
+/// Drags from `a` to `b` in a few moves, as a hand does.
+fn drag_rows<S>(h: &mut Harness<'_, S>, a: egui::Pos2, b: egui::Pos2) {
+    h.drag_at(a);
+    h.run();
+    for i in 1..=4 {
+        h.hover_at(a + (b - a) * (i as f32 / 4.0));
+        h.run();
+    }
+    h.drop_at(b);
+    h.run();
+}
+
+type Flat<S> = (S, Rows, Vec<list::Signal<u32>>);
+
+fn flat_list() -> Harness<'static, Flat<ListState<u32>>> {
+    Harness::builder()
+        .with_size(egui::vec2(400.0, 400.0))
+        .build_ui_state(
+            |ui, (state, rows, signals): &mut Flat<ListState<u32>>| {
+                let out = ListView::new("rows")
+                    .mode(Mode::Multiple)
+                    .drag_out(true)
+                    .show(ui, state, rows);
+                signals.extend(out.signals);
+            },
+            (ListState::new(), rows(20), Vec::new()),
+        )
+}
+
+fn flat_table() -> Harness<'static, Flat<TableState<u32>>> {
+    Harness::builder()
+        .with_size(egui::vec2(400.0, 400.0))
+        .build_ui_state(
+            |ui, (state, rows, signals): &mut Flat<TableState<u32>>| {
+                let columns = COLUMNS();
+                let out = DataTable::new("files", &columns)
+                    .mode(Mode::Multiple)
+                    .drag_out(true)
+                    .show(ui, state, rows);
+                signals.extend(out.signals);
+            },
+            (TableState::new(), rows(20), Vec::new()),
+        )
+}
+
+/// Enter on the cursor's row and a double click on a row activate it.
+fn activates<S>(mut h: Harness<'_, Flat<S>>) {
+    h.run();
+    row(&h, "Row 00002").click();
+    h.run();
+    h.key_press(Key::ArrowDown);
+    h.run();
+    h.state_mut().2.clear();
+    h.key_press(Key::Enter);
+    h.run();
+    assert_eq!(h.state().2, [list::Signal::Activate { key: 3 }]);
+    h.state_mut().2.clear();
+    let at = row(&h, "Row 00005").rect().center();
+    egui_pop_test::double_click_at(&mut h, at);
+    h.run();
+    assert!(
+        h.state().2.contains(&list::Signal::Activate { key: 5 }),
+        "{:?}",
+        h.state().2
+    );
+}
+
+#[test]
+fn enter_and_a_double_click_activate_a_list_row() {
+    activates(flat_list());
+}
+
+#[test]
+fn enter_and_a_double_click_activate_a_table_row() {
+    activates(flat_table());
+}
+
+/// A drag from a selected row carries the selection, from another row
+/// that row alone; the selection stays.
+fn drags_out<S>(mut h: Harness<'_, Flat<S>>, selection: fn(&S) -> Vec<u32>) {
+    h.run();
+    row(&h, "Row 00002").click();
+    h.run();
+    row(&h, "Row 00004").click_modifiers(Modifiers::SHIFT);
+    h.run();
+    assert_eq!(selection(&h.state().0), [2, 3, 4]);
+    h.state_mut().2.clear();
+    let (a, b) = (
+        row(&h, "Row 00003").rect().center(),
+        row(&h, "Row 00008").rect().center(),
+    );
+    drag_rows(&mut h, a, b);
+    assert_eq!(
+        h.state().2,
+        [list::Signal::DragOut {
+            keys: vec![2, 3, 4]
+        }]
+    );
+    h.state_mut().2.clear();
+    let (a, b) = (
+        row(&h, "Row 00007").rect().center(),
+        row(&h, "Row 00001").rect().center(),
+    );
+    drag_rows(&mut h, a, b);
+    assert_eq!(h.state().2, [list::Signal::DragOut { keys: vec![7] }]);
+    assert_eq!(selection(&h.state().0), [2, 3, 4]);
+}
+
+#[test]
+fn a_drag_from_a_list_row_carries_the_selection_or_that_row() {
+    drags_out(flat_list(), |s| s.selection().keys().to_vec());
+}
+
+#[test]
+fn a_drag_from_a_table_row_carries_the_selection_or_that_row() {
+    drags_out(flat_table(), |s| s.selection().keys().to_vec());
+}
+
+/// An order decided by the application shows in the header, without a
+/// store, and widths set by it reach the columns.
+#[test]
+fn a_sort_and_widths_set_by_the_application_show_without_a_store() {
+    let mut h = flat_table();
+    h.run();
+    assert!(h.query_by_label("Name, sorted descending").is_none());
+    h.state_mut().0.set_sort(Some(table::Sort {
+        column: "name".into(),
+        descending: true,
+    }));
+    h.state_mut().0.set_widths(vec![220.0, 90.0]);
+    h.run();
+    h.run();
+    assert!(h.query_by_label("Name, sorted descending").is_some());
+    assert_eq!(h.state().0.widths(), [220.0, 90.0]);
+    let name = h.get_by_label("Name, sorted descending").rect();
+    assert!(
+        (name.width() - 220.0).abs() < 2.0,
+        "the name column is 220 wide: {name:?}"
+    );
+    h.state_mut().0.set_sort(None);
+    h.run();
+    assert!(h.query_by_label("Name").is_some());
+    assert!(h.state().2.is_empty(), "no step, no signal");
 }

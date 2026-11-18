@@ -9,7 +9,10 @@
 //! type-ahead searches), and draws each row in view. The list does the
 //! selection (single or multiple, Ctrl, Shift), the keyboard (arrows,
 //! Page Up/Down, Home/End, Space, Ctrl+A, type-ahead) and scrolling;
-//! a selection runs the `list.select` step.
+//! a selection runs the `list.select` step. Enter or a double click on
+//! a row activates it ([`Signal::Activate`]); built with
+//! [`ListView::drag_out`], a drag from a row carries rows out
+//! ([`Signal::DragOut`]).
 //!
 //! ```
 //! use egui_pop_views::list::{ListRows, ListState, ListView};
@@ -107,6 +110,8 @@ pub struct ListState<K: Key> {
     len: Option<usize>,
     /// The shared selection's revision and the row count last followed.
     seen: Option<(u64, u64)>,
+    /// How many rows a drag out carries, while it lasts.
+    carry: Option<usize>,
 }
 
 impl<K: Key> Default for ListState<K> {
@@ -117,6 +122,7 @@ impl<K: Key> Default for ListState<K> {
             type_ahead: TypeAhead::default(),
             len: None,
             seen: None,
+            carry: None,
         }
     }
 }
@@ -143,10 +149,23 @@ impl<K: Key> ListState<K> {
 
 /// What happened in a list (or a table) this pass.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Signal<K> {
     Select {
         keys: Vec<K>,
         cursor: Option<K>,
+    },
+    /// A row opened: Enter on the cursor's row, or a double click.
+    Activate {
+        key: K,
+    },
+    /// A drag started on a row of a view built with `drag_out`
+    /// ([`ListView::drag_out`], `DataTable::drag_out`): these rows go,
+    /// the selection when the row is in it, else that row alone (the
+    /// selection is left as it is). The application sets its drag
+    /// payload (`egui::DragAndDrop::set_payload`).
+    DragOut {
+        keys: Vec<K>,
     },
     /// A step was vetoed.
     Vetoed {
@@ -175,6 +194,7 @@ pub struct ListView<'a> {
     height: Option<f32>,
     row_height: Option<f32>,
     shared: Option<&'a SelectionService>,
+    drag_out: bool,
 }
 
 impl<'a> ListView<'a> {
@@ -188,7 +208,18 @@ impl<'a> ListView<'a> {
             height: None,
             row_height: None,
             shared: None,
+            drag_out: false,
         }
+    }
+
+    /// A drag that starts on a row carries rows out (off by default):
+    /// the list signals [`Signal::DragOut`] as it starts, for the
+    /// application to set its payload (`egui::DragAndDrop::set_payload`)
+    /// and its drop targets to take it; while it lasts the cursor shows a
+    /// carry and the pointer how many rows go.
+    pub fn drag_out(mut self, on: bool) -> Self {
+        self.drag_out = on;
+        self
     }
 
     /// Its accessible name.
@@ -265,8 +296,9 @@ impl<'a> ListView<'a> {
         let row_h = self.row_height.unwrap_or_else(|| rows::height(ui));
         let focused = ui.memory(|m| m.has_focus(id));
         let mut proposals = Vec::new();
+        let mut late = Vec::new();
         if focused {
-            let (p, reveal) = nav::flat(
+            let (p, reveal, activate) = nav::flat(
                 ui,
                 &state.selection,
                 self.mode,
@@ -280,6 +312,7 @@ impl<'a> ListView<'a> {
             if reveal.is_some() {
                 state.scroll.reveal = reveal;
             }
+            late.extend(activate.map(|key| Signal::Activate { key }));
         }
         let label = self.label.clone().unwrap_or_else(|| tr(ui.ctx(), &s::LIST));
         let selection = &state.selection;
@@ -287,6 +320,8 @@ impl<'a> ListView<'a> {
         let mut take_focus = false;
         let shared = self.shared;
         let mut hovering: Option<SelectionItem> = None;
+        let drag_out = self.drag_out;
+        let mut carry = state.carry.take();
         let (_, response, _) = rows::show(
             ui,
             id,
@@ -357,14 +392,23 @@ impl<'a> ListView<'a> {
                         Some(label) => item::full_label_tip(r, &label),
                         None => r,
                     };
-                    if r.clicked() {
+                    if r.double_clicked() {
+                        late.push(Signal::Activate { key: key.clone() });
+                    } else if r.clicked() {
                         take_focus = true;
                         let mods = ui.input(|i| i.modifiers);
                         proposals.push(selection.click(mode, len, &|i| rows.key(i), i, mods));
                     }
+                    if drag_out && r.drag_started() {
+                        let keys = rows::carried(selection, key);
+                        carry = Some(keys.len());
+                        late.push(Signal::DragOut { keys });
+                    }
                 }
             },
         );
+        rows::carry(ui, &mut carry);
+        state.carry = carry;
         if take_focus {
             response.request_focus();
         }
@@ -372,7 +416,7 @@ impl<'a> ListView<'a> {
             service.hover(&self.id, hovering.as_ref());
         }
         let before = state.selection.keys().to_vec();
-        let signals = run(
+        let mut signals = run(
             self.app,
             &LIST_SELECT,
             "list",
@@ -398,6 +442,7 @@ impl<'a> ListView<'a> {
             shared::write(service, &self.id, &before, keys, keep_others, &item_of);
             state.seen = Some((service.revision(), len as u64));
         }
+        signals.extend(late);
         if !signals.is_empty() {
             ui.ctx().request_repaint();
         }

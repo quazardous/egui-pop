@@ -1054,7 +1054,7 @@ impl<'a> ThumbGrid<'a> {
         mem.band = band;
         mem.carry = carry;
         if let Some(count) = carry {
-            carry_count(ui, count);
+            rows::carry_count(ui, count);
         }
         egui_pop_core::ui::contain_wheel(ui, &out);
         if grid {
@@ -1602,29 +1602,6 @@ fn overlay(
 /// The modifiers of this pass's last pointer button event (a click's
 /// own, even when the keys were let go in the same pass), else those
 /// held now.
-/// How many images a drag out carries, beside the pointer.
-fn carry_count(ui: &Ui, count: usize) {
-    let ctx = ui.ctx();
-    let Some(at) = ctx.pointer_latest_pos() else {
-        return;
-    };
-    let t = Tokens::of(ctx);
-    let painter = ctx.layer_painter(egui::LayerId::new(
-        egui::Order::Tooltip,
-        Id::unique("egui_pop_views::library::carry"),
-    ));
-    let visuals = ui.visuals().clone();
-    let galley = painter.layout_no_wrap(
-        count.to_string(),
-        TextStyle::Small.resolve(ui.style()),
-        visuals.selection.stroke.color,
-    );
-    let pad = vec2(t.space.xs * 2.0, t.space.xs);
-    let rect = Rect::from_min_size(at + vec2(14.0, 14.0), galley.size() + pad * 2.0);
-    painter.rect_filled(rect, rect.height() / 2.0, visuals.selection.bg_fill);
-    painter.galley(rect.min + pad, galley, visuals.selection.stroke.color);
-}
-
 fn click_modifiers(ui: &Ui) -> Modifiers {
     ui.input(|i| {
         i.events
