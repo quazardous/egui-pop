@@ -1,0 +1,24 @@
+$description: "The `switch` component of the default kit (docs/kit.md), layered into pop-dark."
+switch:
+  $description: "An on/off switch's track (a kit component), its round thumb in `text`, its label in the `text` of the same state off; `selected` while on. Based on `checkbox`, drawn by the `pill` handler with a large radius: a track with round ends. `width` is the track's height (egui's icon width when not given)."
+  based-on:
+    $type: "string"
+    $value: "checkbox"
+  shape:
+    $type: "string"
+    $value: "pill"
+  rest:
+    radius:
+      $type: "dimension"
+      $value: {value: 999, unit: "px"}
+  # On: the accent track, the thumb in the text drawn on the accent.
+  selected:
+    fill:
+      $type: "color"
+      $value: "{accent.default}"
+    border-color:
+      $type: "color"
+      $value: "{accent.default}"
+    text:
+      $type: "color"
+      $value: "{text.on-accent}"

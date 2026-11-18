@@ -1,6 +1,7 @@
 //! egui's own widgets, drawn with the theme and no per-widget code, and
 //! the ones egui-pop draws through the kit in their place (checkbox,
-//! radio, selectable rows, toggle chips, the combo box's arrow).
+//! radio, selectable rows, toggle chips, the combo box's arrow), and the
+//! switch egui lacks.
 
 use egui::Ui;
 use egui_pop::core::ui::UiPop as _;
@@ -25,6 +26,9 @@ pub struct State {
     /// The kit's toggle chips.
     pub case: bool,
     pub word: bool,
+    /// The kit's switches.
+    pub wifi: bool,
+    pub sync: bool,
 }
 
 impl Default for State {
@@ -42,6 +46,8 @@ impl Default for State {
             choice: 0,
             case: true,
             word: false,
+            wifi: true,
+            sync: false,
         }
     }
 }
@@ -106,6 +112,11 @@ fn widgets(ui: &mut Ui, state: &mut State) {
         }
         ui.add(ToggleChip::new(&mut state.case, "Aa").name("Match case"));
         ui.add(ToggleChip::new(&mut state.word, "W").name("Whole word"));
+    });
+    ui.horizontal_wrapped(|ui| {
+        widgets::switch(ui, &mut state.wifi, "Wi-Fi");
+        widgets::switch(ui, &mut state.sync, "Sync");
+        ui.add(widgets::Switch::without_text(&mut state.wifi).name("Wi-Fi, no label"));
     });
     widgets::combo_box_labelled("builtins.kit-combo", "Kit combo box")
         .selected_text(CHOICES[state.choice])

@@ -1,7 +1,8 @@
 //! The text helpers of `UiPop` beside the roles (`egui_pop_core::ui`): code
 //! in the monospace style and the body's colour, text in a tone's colour
-//! from the tokens, a divider across the layout in `border.default`. Each
-//! label is named by its words for assistive technologies.
+//! from the tokens, inline emphasis at the body's size in a heavier weight,
+//! a divider across the layout in `border.default`. Each label is named by
+//! its words for assistive technologies.
 
 use egui::accesskit::Role;
 use egui::epaint::{Shape, TextShape};
@@ -28,6 +29,7 @@ fn texts() -> Harness<'static, Texts> {
                 ui.text_tone(Tone::Danger, "Failed: disk full");
                 ui.text_tone(Tone::Success, "Done");
                 ui.text_tone(Tone::Muted, "Skipped");
+                ui.strong("Two copies");
                 s.rule = Some(ui.divider().rect);
                 ui.horizontal(|ui| {
                     ui.label("left");
@@ -87,6 +89,7 @@ fn each_line_is_a_label_named_by_its_words() {
         "Failed: disk full",
         "Done",
         "Skipped",
+        "Two copies",
     ] {
         assert_eq!(h.get_by_label(name).accesskit_node().role(), Role::Label);
     }
@@ -144,4 +147,54 @@ fn a_divider_crosses_the_layout_in_the_border_colour() {
         )
         .count();
     assert!(lines >= 2, "both rules painted in border.default: {lines}");
+}
+
+#[test]
+fn strong_text_is_the_body_s_size_in_a_heavier_weight() {
+    let h = texts();
+    let t = Tokens::of(&h.ctx);
+    let strong = &t.text_role.strong;
+    assert_eq!(strong.size, t.text_role.body.size, "the body's size");
+    assert!(
+        strong.weight > t.text_role.body.weight,
+        "heavier than the body"
+    );
+    let shape = shape_of(&h, "Two copies");
+    assert_eq!(
+        shape.galley.job.sections[0].format.font_id.size,
+        strong.size
+    );
+    assert_eq!(colour(&shape), strong.color);
+}
+
+#[test]
+fn strong_text_is_drawn_in_the_weighted_family_once_the_fonts_are_in() {
+    // A plain context: the theme's weighted families are in use from the
+    // pass after they are installed.
+    let ctx = egui::Context::default();
+    let t = theme::install(&ctx, &ThemeSpec::new("pop-dark"));
+    let mut family = None;
+    for _ in 0..2 {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let mut job = egui::text::LayoutJob::default();
+            egui_pop_core::ui::strong_text(ui, "Two copies").append_to(
+                &mut job,
+                ui.style(),
+                egui::FontSelection::Default,
+                egui::Align::Center,
+            );
+            family = job
+                .sections
+                .first()
+                .map(|s| s.format.font_id.family.clone());
+        });
+        out.textures_delta.clear();
+    }
+    assert_eq!(
+        family,
+        Some(egui_pop_core::fonts::family(
+            egui_pop_core::fonts::Role::Ui,
+            t.text_role.strong.weight
+        ))
+    );
 }

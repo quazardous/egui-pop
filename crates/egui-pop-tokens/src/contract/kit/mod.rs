@@ -82,6 +82,7 @@ mod slider_value;
 mod spinner;
 mod splitter;
 mod status_indicator;
+mod switch;
 mod tab;
 mod tab_bar;
 mod tab_preview;
@@ -188,6 +189,7 @@ pub(super) const GROUPS: &[&[Required]] = &[
     spinner::CONTRACT,
     splitter::CONTRACT,
     status_indicator::CONTRACT,
+    switch::CONTRACT,
     tab::CONTRACT,
     tab_bar::CONTRACT,
     tab_preview::CONTRACT,

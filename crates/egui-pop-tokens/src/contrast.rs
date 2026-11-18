@@ -91,6 +91,8 @@ pub const PAIRS: &[Pair] = &[
     text("text-role.section.color", "surface.raised"),
     text("text-role.body.color", "surface.panel"),
     text("text-role.body.color", "surface.raised"),
+    text("text-role.strong.color", "surface.panel"),
+    text("text-role.strong.color", "surface.raised"),
     text("text-role.muted.color", "surface.panel"),
     text("text-role.muted.color", "surface.raised"),
     text("text-role.meta.color", "surface.panel"),

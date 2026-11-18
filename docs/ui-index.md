@@ -26,6 +26,7 @@ To add an entry, give the item a doc line
 | monospace text, a log or console line, a path or code | `ui.code_text(..)`<br>`egui_pop::core::ui::UiPop::code_text` | Monospace text: a log's or a console's line, a path, a piece of code. |
 | secondary text, a hint or a description | `ui.muted(..)`<br>`egui_pop::core::ui::UiPop::muted` | Secondary text: a hint, a description (`text-role.muted`). |
 | small print about an item, a date or a size | `ui.meta(..)`<br>`egui_pop::core::ui::UiPop::meta` | Small print about an item: a date, a size (`text-role.meta`). |
+| strong or bold text inline, a word that must stand out | `ui.strong(..)`<br>`egui_pop::core::ui::UiPop::strong` | Inline emphasis: a word or a value that must stand out in running text, at the body's size in a heavier weight (`text-role.strong`, `strong_text`). |
 | text in a tone, a failed state or an error in the danger colour | `ui.text_tone(..)`<br>`egui_pop::core::ui::UiPop::text_tone` | Text in a tone: a failed state, an error, a warning, a success. |
 
 ## Spacing, cards and scrolling
@@ -36,7 +37,10 @@ To add an entry, give the item a doc line
 | a divider, a rule between two sections (separator) | `ui.divider(..)`<br>`egui_pop::core::ui::UiPop::divider` | A divider: a rule across the layout between two sections, in `border.default`, one point wide on whole physical pixels, centred in a space of `Space::Group`. |
 | a group that folds and opens inside a panel (a disclosure, a collapsing header) | `Fold`<br>`egui_pop::core::fold::Fold` | A group inside a panel whose header row folds and opens its body: a section band (disclosure mark, title, count) with optional actions at its right end, its body indented below it when open. |
 | a scrolling region | `ui.scroll_area(..)`<br>`egui_pop::core::ui::UiPop::scroll_area` | Shows egui's scroll area with its bars drawn from the kit's `scroll-bar` (`Stock::ScrollBar`: the thumb's fills and corners, the track), `add` its content, drawn in this `Ui`'s own style. |
+| a widget of a fixed size, filling its box (add_sized) | `ui.sized(..)`<br>`egui_pop::core::ui::UiPop::sized` | `widget` in a box of `size` at the layout's cursor, filling it (centred and justified along the layout's direction): a row the width of its room, a field of a set width. |
 | collapsible sections in a panel | `Sections`<br>`egui_pop::core::sections::Sections` | A stack of collapsible sections filling the room it is given (a panel's height), named for its memory and for agents. |
+| content in a box of a fixed size (allocate_ui_with_layout) | `ui.sized_ui(..)`<br>`egui_pop::core::ui::UiPop::sized_ui` | `add` in a box of exactly `size` at the layout's cursor, laid out by `layout` (`Layout::centered_and_justified` to fill it): a cell of a set width in a row. |
+| content placed in a given rectangle, clipped to it (put) | `ui.rect_ui(..)`<br>`egui_pop::core::ui::UiPop::rect_ui` | `add` in `rect`, laid out by `layout` and clipped to it, for what places its parts by rectangles (a card laid out by a layout engine, a slot): nothing it draws goes past `rect`. |
 | one of egui's own widgets, styled by the kit | `ui.scoped(..)`<br>`egui_pop::core::ui::UiPop::scoped` | `add` in a scope where egui's own widgets of a `Stock` kind (buttons, combo boxes, text fields, buttons shown on or off) are drawn from the kit's component, in a tone: its states become egui's widget visuals, so egui keeps drawing the widget (`Kit::scope`). |
 | space between blocks, by intent (never a number of points) | `ui.space_role(..)`<br>`egui_pop::core::ui::UiPop::space_role` | Space by intent along the layout's direction (`Space`); egui's own `add_space` takes points. |
 
@@ -71,6 +75,7 @@ To add an entry, give the item a doc line
 | a text area that grows with its text | `Input::multiline(..)`<br>`egui_pop::core::input::Input::multiline` | A multi-line text field: `rows` lines tall, growing with its text up to `max_rows`, then scrolling; Enter starts a new line, Ctrl+Enter submits (see `submit_on_enter`). |
 | a text field with a placeholder | `Input::text(..)`<br>`egui_pop::core::input::Input::text` | A text field named `label` (for assistive technologies and agents; the label itself is drawn by the form around it). |
 | a toggle chip, a filter turned on or off | `ToggleChip`<br>`egui_pop::core::widgets::ToggleChip` | A small toggle showing a short text or a glyph, on while `selected`: its box is the kit's `toggle-chip` component (based on `selectable-row`), its text or glyph in the state's `text`. |
+| an on/off switch (a toggle with a track and a thumb) | `Switch`<br>`egui_pop::core::widgets::Switch` | An on/off switch: a track (the kit's `switch` component, `selected` while on) and a round thumb, at the track's start while off and at its end while on, in the state's `text`; its label after it, in the `text` of the same state off. |
 | one choice among a few (radio buttons) | `widgets::radio_value(..)`<br>`egui_pop::core::widgets::radio_value` | A radio button setting `current` to `alternative` when clicked: `ui.radio_value`, drawn through the kit. |
 
 ## Loading, empty and progress

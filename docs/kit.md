@@ -654,7 +654,8 @@ compiled at install.
   pointer profile, then the widget, can still change them
   ([drag cursors](pointer-gestures.md#three-levels)).
 - **egui's small widgets** (`checkbox`, `radio`, `combo-arrow`,
-  `selectable-row`, `toggle-chip`), [below](#eguis-small-widgets).
+  `selectable-row`, `toggle-chip`), and the switch (`switch`),
+  [below](#eguis-small-widgets).
 - **egui's widgets in a scope** (`combo-box`, `toggle-button`, and
   `button` and `field` by tone), handler `scoped`,
   [below](#eguis-widgets-in-a-scope).
@@ -687,6 +688,7 @@ call:
 | `ui.selectable_label(on, text)`, `ui.selectable_value(..)` | `widgets::selectable_label(ui, on, text)`, `widgets::selectable_value(ui, ..)` |
 | `egui::ComboBox::from_id_salt(id)`, `ComboBox::new(id, label)` | `widgets::combo_box(id)`, `widgets::combo_box_labelled(id, label)` |
 | a selectable label used as an on/off option | `ui.add(widgets::ToggleChip::new(&mut on, "Aa").name("Match case"))` |
+| a checkbox drawn as a switch (egui has none) | `widgets::switch(ui, &mut on, text)`, or `ui.add(widgets::Switch::new(..))` |
 
 ```rust
 use egui_pop::core::widgets;
@@ -710,6 +712,7 @@ fn options(ui: &mut egui_pop::egui::Ui, wrap: &mut bool, mode: &mut usize) {
 | `combo-arrow` | the box under a combo box's arrow (transparent); the `dropdown` glyph in its `text` | `selected` while the list is open | |
 | `selectable-row` | a row picked from a short list: a combo box's choices, the assist card's completions and actions, small tab strips | `selected` for the chosen one, never `hover` then | `list-row` |
 | `toggle-chip` | a small on/off option showing a text or a glyph: the find bar's case, whole word, regular expression and replace toggles | `selected` while on | `selectable-row` |
+| `switch` | an on/off switch's track (handler `pill`, radius 999), 1.8 times as wide as high; its round thumb in `text`, at the start while off, at the end while on | `selected` while on (the accent track, the thumb in `text.on-accent`) | `checkbox` |
 
 - A checkbox's and a radio button's mark is in the box's `text`, and
   its label in the `text` of the same state without `selected` (a kit
@@ -725,6 +728,10 @@ fn options(ui: &mut egui_pop::egui::Ui, wrap: &mut bool, mode: &mut usize) {
   `indeterminate` must differ (`DISTINCT_GLYPHS`).
 - A toggle chip is a checkbox for assistive technology, named by
   `ToggleChip::name`; `ToggleChip::glyph` draws an icon on it.
+- A switch is a switch for assistive technology (AccessKit's `Switch`
+  role, toggled while on), named by its label or `Switch::name`; Space
+  and Enter toggle it when focused. Its `width` is the track's height
+  (egui's icon width when not given); the thumb does not animate.
 - The combo box's box, and its list's frame, are egui's: they follow
   `button` and egui's popup through `Visuals`, and the box follows
   `combo-box` when shown with `UiPop::combo_box` (a scope,

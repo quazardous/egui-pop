@@ -56,6 +56,8 @@ pub(super) fn built_in(shapes: &mut Shapes) {
     shapes.insert("pill", "pill", Arc::new(pill::Pill));
     shapes.insert("radio", "box", Arc::new(cell::BoxCell));
     shapes.insert("radio", "pill", Arc::new(pill::Pill));
+    shapes.insert("switch", "box", Arc::new(cell::BoxCell));
+    shapes.insert("switch", "pill", Arc::new(pill::Pill));
     shapes.insert("scroll-bar", "scoped", Arc::new(scoped::Scoped));
     shapes.insert("section-band", "section", Arc::new(section::SectionBand));
     shapes.insert("rating-star", "star", Arc::new(star::Star));
