@@ -708,7 +708,7 @@ fn settings_persist_and_come_back_with_their_plugin() {
     // group gestures and the float move) come first.
     let settings = app.handle().settings();
     let ids: Vec<_> = settings.iter().map(|s| s.id.clone()).collect();
-    assert_eq!(settings.len(), 27, "{ids:?}");
+    assert_eq!(settings.len(), 28, "{ids:?}");
     for id in [
         egui_pop_api::SETTING_THEME_PREFERENCE,
         egui_pop_api::SETTING_ACCENT_COLOR,
@@ -719,6 +719,7 @@ fn settings_persist_and_come_back_with_their_plugin() {
         egui_pop_api::workbench::SETTING_PANEL_ALIGNMENT,
         egui_pop_api::workbench::SETTING_GROUP_DRAG_MODIFIER,
         egui_pop_api::workbench::SETTING_GROUP_GRIP,
+        egui_pop_api::workbench::SETTING_GROUP_MENU,
         egui_pop_api::workbench::SETTING_GROUP_MOVE_WINDOW,
         egui_pop_api::workbench::SETTING_FLOAT_MOVE,
         egui_pop_api::layout_controls::SETTING_SIDE_BAR_POSITION,
