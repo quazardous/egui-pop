@@ -162,6 +162,38 @@ assert!(report.failures.is_empty());
   over budget not said since) and one warning in the log, at most once a
   minute per point. The debug collector `bus` shows each point's budget
   and passes, each listener's runs, and `slowest` across points.
+- **A journal and a relay from the host** (the contract's `Journal`
+  and `Relay` capabilities, which the kernel delegates): a host that
+  runs a fact bus (entries numbered, read again from a number, relayed
+  between processes) hands it to the kernel with
+  `Kernel::with_journal` and `Kernel::with_relay`; `bus.journal()` and
+  `bus.relay()` then answer, and points may be declared journaled
+  (`PointDecl::journaled`) or relayable (`PointDecl::relayable(codec)`).
+  Without them such points are refused (`Refused::Unsupported`), by
+  `declare_all` and by `Kernel::declare_point` alike, and a relay with
+  no journal is not offered. The kernel checks each publish itself: a
+  point it does not hold declared journaled, or under another type, is
+  refused (`Refused::NotJournaled`, `Refused::TypeMismatch`) before the
+  host sees it. The host keeps the entries and runs the pump: each entry
+  of a journaled point is delivered by a collect emit on the kernel
+  (`Bus::collect_any`) from the pump's thread, never the publisher's, in
+  number order; every rule of an emit holds (order, deadlines, failures,
+  local listeners queued for their thread's `run_pending`). The host
+  reads a point's declaration (its journaled flag, its codec) with
+  `Kernel::declaration`. A host journal that needs the kernel to deliver
+  is built with `Arc::new_cyclic`, holding a `Weak` of the kernel:
+
+  ```rust,ignore
+  let kernel = Arc::new_cyclic(|me: &Weak<Kernel>| {
+      let host = Arc::new(MyJournal::new(me.clone()));
+      Kernel::new().with_journal(host.clone()).with_relay(host)
+  });
+  ```
+
+  Given to the application (`AppBuilder::bus`), it is the bus
+  `AppHandle::bus` returns. The debug collector `bus` shows each point's
+  `journaled` and `relayable`, the bus's `capabilities` and its
+  `journal_seq`.
 - **Refusals and fail-closed points**: a listener on a request returns
   `HookError::refuse(reason)` and the request stops there; on a point
   declared `fail_closed`, a listener's error, panic or missed deadline
@@ -192,9 +224,16 @@ ids and mismatched types; `alter` keeping only successful edits;
 `collect` in order; inline and threaded deadlines and their resolution;
 sinks; introspection; `forget` and `unlisten`; re-entry and emits across
 threads; local listeners in order, deferred from another thread, removed
-from any thread. `crates/egui-pop-api/tests/bus_defer.rs`: an ask made in a panel heard after
+from any thread. `crates/egui-pop-hooks/tests/journal.rs`: journaled
+and relayable points refused without a host journal or relay, shown by
+introspection; with an in-memory host journal, entries delivered once
+in order off the publisher's thread, local listeners at their thread's
+`run_pending`, a slow listener not holding the publisher, publishes on
+other points refused by the kernel, and a relay's resume and ingest
+between two kernels (a restart and refusals included). `crates/egui-pop-api/tests/bus_defer.rs`: an ask made in a panel heard after
 it in the same pass, asks made before and during exit heard, a palette
 command refused by a `command.run` listener, a failing listener refusing
 on the fail-closed point. `crates/egui-pop-api/tests/app_bus.rs`: a local listener
 on `window.close` in its place, and run at the next pass when the
-request comes from a worker. The README's examples run as doc tests.
+request comes from a worker, and a host's journal reachable from
+`AppHandle::bus` and shown by the `bus` collector. The README's examples run as doc tests.

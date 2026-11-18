@@ -9,9 +9,9 @@ use std::sync::{Arc, Mutex};
 
 use egui_pop_api::admin::AdminPlugin;
 use egui_pop_api::bus::bus_contract::{
-    Altered, AnyInput, AnyListener, AnyLocalListener, AnyValue, Bus, CloneFn, Collected,
-    FailureSink, FreshFn, ListenOpts, ListenerInfo, PendingRun, PendingWaker, Point, PointInfo,
-    PointKey, PointKind, PointSpec, Refused,
+    self, Altered, AnyInput, AnyListener, AnyLocalListener, AnyValue, Bus, CloneFn, Collected,
+    FailureSink, FreshFn, Journal, JournalEntry, ListenOpts, ListenerInfo, PendingRun,
+    PendingWaker, Point, PointDecl, PointInfo, PointKey, PointKind, PointSpec, Refused, Since,
 };
 use egui_pop_api::bus::egui_pop_hooks::Kernel;
 use egui_pop_api::bus::{
@@ -444,4 +444,94 @@ fn timings_show_in_the_collector_and_a_pass_over_budget_is_said() {
     let slowest = snapshot["slowest"].as_array().unwrap();
     assert_eq!(slowest[0]["point"], "health.report");
     assert_eq!(slowest[0]["id"], "app.slow");
+}
+
+/// The application's fact: a photo was imported, journaled by its host.
+struct PhotoImported;
+impl Point for PhotoImported {
+    const ID: &'static str = "photo.imported";
+    const KIND: PointKind = PointKind::Event;
+    type Input = String;
+    type Value = ();
+}
+
+/// A host's journal reduced to what it was given.
+#[derive(Default)]
+struct HostJournal {
+    published: Mutex<Vec<&'static str>>,
+}
+
+impl Journal for HostJournal {
+    fn last_seq(&self) -> u64 {
+        self.published.lock().unwrap().len() as u64
+    }
+
+    fn since(&self, _: u64, _: usize) -> Since {
+        Since::new(Vec::new(), self.last_seq())
+    }
+
+    fn wait(&self, _: &[&str], _: u64, _: std::time::Duration) -> Option<JournalEntry> {
+        None
+    }
+
+    fn publish_any(
+        &self,
+        point: PointKey,
+        _: AnyInput,
+        _: FreshFn,
+        _: Option<u64>,
+    ) -> Result<u64, Refused> {
+        let mut published = self.published.lock().unwrap();
+        published.push(point.id);
+        Ok(published.len() as u64)
+    }
+
+    fn flush(&self, _: std::time::Duration) -> bool {
+        true
+    }
+}
+
+/// A journal the host supplies to the kernel is the one the
+/// application's bus offers: reachable from `AppHandle::bus`, its points
+/// shown journaled by the `bus` collector.
+#[test]
+fn a_host_journal_given_to_the_kernel_is_reachable_from_the_apps_bus() {
+    let host = Arc::new(HostJournal::default());
+    let shared: Arc<dyn Bus> = Arc::new(Kernel::new().with_journal(host.clone()));
+    assert!(
+        bus_contract::declare_all(
+            &*shared,
+            &[PointDecl::of::<PhotoImported>("A photo was imported.").journaled()],
+        )
+        .is_empty()
+    );
+    let m = multi(shared);
+    let bus = m.app().bus();
+    let journal = bus.journal().expect("the host's journal");
+    assert_eq!(journal.publish::<PhotoImported>("/a.raw".into()), Ok(1));
+    assert_eq!(*host.published.lock().unwrap(), ["photo.imported"]);
+    assert!(bus.relay().is_none());
+
+    let snapshot = m.app().debug_snapshot()["bus"].clone();
+    assert_eq!(snapshot["capabilities"]["journal"], true);
+    assert_eq!(snapshot["capabilities"]["relay"], false);
+    assert_eq!(snapshot["capabilities"]["defer"], true);
+    assert_eq!(snapshot["journal_seq"], 1);
+    let photo = snapshot["points"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["point"] == "photo.imported")
+        .unwrap()
+        .clone();
+    assert_eq!(photo["journaled"], true);
+    assert_eq!(photo["relayable"], false);
+    let close = snapshot["points"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["point"] == WindowClose::ID)
+        .unwrap()
+        .clone();
+    assert_eq!(close["journaled"], false);
 }
