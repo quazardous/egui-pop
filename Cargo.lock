@@ -1401,7 +1401,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "egui",
  "egui-pop-api",
@@ -1422,7 +1422,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-agent"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "egui",
  "egui-pop-agent",
@@ -1440,7 +1440,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-api"
-version = "0.12.1"
+version = "0.13.0"
 dependencies = [
  "bus-contract",
  "eframe",
@@ -1477,7 +1477,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-core"
-version = "0.12.2"
+version = "0.13.0"
 dependencies = [
  "egui",
  "egui-pop-model",
@@ -1496,7 +1496,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-editors"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "egui",
  "egui-pop-api",
@@ -1526,7 +1526,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-fit"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "proptest",
  "serde",
@@ -1552,7 +1552,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-hooks"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "bus-contract",
  "web-time",
@@ -1560,7 +1560,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-i18n"
-version = "0.12.1"
+version = "0.13.0"
 dependencies = [
  "egui",
  "egui-pop-agent",
@@ -1586,7 +1586,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-imaging"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "base64 0.22.1",
  "egui",
@@ -1598,7 +1598,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-model"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "egui-pop-test-macros",
  "idna",
@@ -1619,7 +1619,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-platform"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "arboard",
  "ashpd",
@@ -1647,7 +1647,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-test"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "egui",
  "egui-pop-api",
@@ -1669,7 +1669,7 @@ version = "0.1.0"
 
 [[package]]
 name = "egui-pop-tokens"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "egui-pop-test-macros",
  "flate2",
@@ -1680,7 +1680,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-viewport"
-version = "0.12.1"
+version = "0.13.0"
 dependencies = [
  "eframe",
  "egui",
@@ -1709,7 +1709,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-views"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "egui",
  "egui-pop-api",
