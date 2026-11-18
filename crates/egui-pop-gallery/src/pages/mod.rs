@@ -52,6 +52,7 @@ pub mod plot_time;
 pub mod pointer;
 pub mod preview;
 pub mod progress;
+pub mod regions;
 pub mod roles;
 pub mod scale;
 pub mod scoped;

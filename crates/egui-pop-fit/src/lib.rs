@@ -33,6 +33,11 @@
 //! - **Hysteresis.** Pass the previous [`Layout`] to keep its column count,
 //!   forms and orientations while the box stays within half a unit of a
 //!   threshold.
+//! - **Regions.** [`layout_regions`] places cards in named [`Region`]s
+//!   around and over a [`Surface`] (an image): corners, edges, the centre
+//!   and an overlay, each with an [`Anchor`], a gap and a priority. Each
+//!   region packs its cards with the engine in the room the regions before
+//!   it left, and folds its lowest-priority cards when room runs out.
 //!
 //! ```
 //! use egui_pop_fit::{layout, Axis, Container, Element, Size, Size2, SizePolicy};
@@ -66,12 +71,17 @@ mod dump;
 mod element;
 mod group;
 mod layout;
+mod regions;
 mod size;
 
 pub use element::{AspectRatio, Axis, Cell, Element, Grow, Orientation, Size2, SizePolicy};
 pub use group::{Group, GroupPlacement};
 pub use layout::{
     Container, GridRect, Layout, Placement, PointRect, Reason, Status, layout, layout_grouped,
+};
+pub use regions::{
+    Anchor, Card, CardPlacement, CardStatus, Region, RegionLayout, RegionPlacement, Side, Surface,
+    layout_regions,
 };
 pub use size::{InvalidSize, Size, TWELFTHS_PER_UNIT};
 

@@ -207,6 +207,16 @@ pub fn builder(options: &Options) -> AppBuilder {
             playground: None,
         })
         .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.regions"),
+            story: StoryId::from_static("regions"),
+            title: "Slot regions",
+            description: "Read-outs and tool chips in named regions around and over an image (corners, edges, centre, overlay), each with an anchor, a gap and a priority; lower-priority cards fold when room runs out.",
+            group: "Layout",
+            weight: 201,
+            show: pages::regions::show,
+            playground: None,
+        })
+        .plugin(PagePlugin {
             plugin: PluginId::from_static("gallery.icons"),
             story: StoryId::from_static("icons"),
             title: "Icons",
