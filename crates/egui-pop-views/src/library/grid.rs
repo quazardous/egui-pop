@@ -12,8 +12,9 @@
 //!   source is told which images are in view ([`ThumbSource::wanted`])
 //!   so it loads those first, and asks for a repaint when one arrives.
 //!
-//! The grid does the layout (the thumbnails' size by zoom: Ctrl and the
-//! wheel, or + and -), the keyboard (arrows, Page Up and Page Down, Home
+//! The grid does the layout (the zoom, [`Zoom`], is a count of
+//! thumbnails per row that share the panel's width, so it survives a
+//! resize: Ctrl and the wheel, or + and -), the keyboard (arrows, Page Up and Page Down, Home
 //! and End, Space, Ctrl+A, Enter), the selection (a click, Shift for a
 //! range, Ctrl to toggle, a rubber band dragged across the cells), the
 //! culling keys ([`CullKeymap`]: ratings, flags, labels, auto-advance),
@@ -82,17 +83,122 @@ use crate::select::{self, Key, Mode, Proposal, Selection};
 use crate::strings as s;
 use crate::{nav, rows};
 
-/// The smallest and largest thumbnails, in points.
+/// The smallest thumbnail in a grid, in points: it bounds how many fit
+/// in a row ([`Zoom::most_per_row`]).
 pub const MIN_SIZE: f32 = 48.0;
-pub const MAX_SIZE: f32 = 512.0;
-/// The thumbnails' size at first, in points.
-pub const DEFAULT_SIZE: f32 = 128.0;
-/// One zoom step (+, -) multiplies the size by this.
-pub const ZOOM_STEP: f32 = 1.25;
+/// The zoom at first: this many thumbnails per row.
+pub const DEFAULT_PER_ROW: u32 = 5;
+/// The counts per row the zoom steps through (+, -, Ctrl and the wheel);
+/// past the last, each step out adds a quarter.
+pub const PER_ROW_STEPS: [u32; 13] = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32];
+/// One step of a [`Zoom::Points`] zoom multiplies its size by this.
+const POINTS_STEP: f32 = 1.25;
 /// How far the pointer moves before a drag draws a rubber band.
 const BAND_MIN: f32 = 4.0;
 /// Below this size a cell shows no overlays.
 const OVERLAY_MIN: f32 = 64.0;
+
+/// A grid's zoom: how many thumbnails fill a row.
+///
+/// The cells share the panel's inner width, gaps aside, so the zoom
+/// survives a resize: a panel made wider shows the same count of larger
+/// thumbnails. `PerRow(1)` fills the panel. A panel too narrow for `n`
+/// cells of [`MIN_SIZE`] shows as many as fit, and keeps `n` for when it
+/// grows again.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Zoom {
+    /// This many thumbnails per row (at least one).
+    PerRow(u32),
+    /// A size in points, as an older setting kept it: the grid's next
+    /// pass turns it into the count per row it gave at the panel's width
+    /// ([`Zoom::from_points`]) and signals [`Signal::Zoom`], for the
+    /// application to store the count instead.
+    Points(f32),
+}
+
+impl Default for Zoom {
+    fn default() -> Self {
+        Zoom::PerRow(DEFAULT_PER_ROW)
+    }
+}
+
+impl Zoom {
+    /// The count per row a size in `points` gave in a panel `width`
+    /// points wide (its inner width, the scroll bar aside) with `gap`
+    /// points between cells (the theme's `space.s`): what an application
+    /// converts a stored size in points with, once.
+    pub fn from_points(points: f32, width: f32, gap: f32) -> Zoom {
+        let points = if points.is_finite() {
+            points.max(MIN_SIZE)
+        } else {
+            MIN_SIZE
+        };
+        Zoom::PerRow(per_row_fitting(points, width, gap))
+    }
+
+    /// How many thumbnails of at least [`MIN_SIZE`] fit in a row of a
+    /// panel `width` points wide with `gap` points between cells: the
+    /// most a zoom shows there (at least one).
+    pub fn most_per_row(width: f32, gap: f32) -> u32 {
+        per_row_fitting(MIN_SIZE, width, gap)
+    }
+
+    /// The width of a cell when `per_row` share a panel `width` points
+    /// wide with `gap` points between cells and at both ends.
+    pub fn cell_width(per_row: u32, width: f32, gap: f32) -> f32 {
+        ((width - gap) / per_row.max(1) as f32 - gap).max(1.0)
+    }
+
+    /// The count per row, unless it is still a size in points.
+    pub fn per_row(self) -> Option<u32> {
+        match self {
+            Zoom::PerRow(n) => Some(n.max(1)),
+            Zoom::Points(_) => None,
+        }
+    }
+
+    /// One step closer: fewer, larger thumbnails per row (down to one).
+    #[must_use]
+    pub fn zoomed_in(self) -> Zoom {
+        match self {
+            Zoom::PerRow(n) => Zoom::PerRow(
+                PER_ROW_STEPS
+                    .iter()
+                    .rev()
+                    .copied()
+                    .find(|&s| s < n)
+                    .unwrap_or(1),
+            ),
+            Zoom::Points(p) => Zoom::Points(p * POINTS_STEP),
+        }
+    }
+
+    /// One step out: more, smaller thumbnails per row.
+    #[must_use]
+    pub fn zoomed_out(self) -> Zoom {
+        match self {
+            Zoom::PerRow(n) => Zoom::PerRow(
+                PER_ROW_STEPS
+                    .iter()
+                    .copied()
+                    .find(|&s| s > n)
+                    .unwrap_or_else(|| (n as f32 * 1.25).ceil() as u32),
+            ),
+            Zoom::Points(p) => Zoom::Points((p / POINTS_STEP).max(MIN_SIZE)),
+        }
+    }
+}
+
+/// How many cells `size` points wide fit in `width` with `gap` between
+/// them and at both ends (at least one).
+fn per_row_fitting(size: f32, width: f32, gap: f32) -> u32 {
+    let n = ((width - gap) / (size + gap)).floor();
+    if n.is_finite() && n >= 1.0 {
+        n as u32
+    } else {
+        1
+    }
+}
 
 /// A thumbnail, as the source has it now.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -214,6 +320,11 @@ struct ViewMem {
     extent: f32,
     reveal: Option<usize>,
     cols: usize,
+    /// How many cells of [`MIN_SIZE`] fit in a row, as of the last pass.
+    fit: usize,
+    /// Ctrl and the wheel, or a pinch, gathered (the log of the zoom
+    /// factor) until it makes a step.
+    pinch: f32,
     /// A rubber band: where it started and where it is, in content
     /// coordinates, and the modifiers it started with.
     band: Option<(Vec2, Vec2, Modifiers)>,
@@ -222,13 +333,14 @@ struct ViewMem {
 }
 
 /// A library's state between passes: the selection, the stacks
-/// expanded, the thumbnails' size, each view's scrolling.
+/// expanded, the grid's zoom, each view's scrolling.
 #[derive(Debug)]
 pub struct LibraryState<K: Key> {
     id: String,
     selection: Selection<K>,
     expanded: HashSet<K>,
     expanded_gen: u64,
+    zoom: Zoom,
     size: f32,
     order: Order,
     views: HashMap<String, ViewMem>,
@@ -244,7 +356,8 @@ impl<K: Key> LibraryState<K> {
             selection: Selection::default(),
             expanded: HashSet::new(),
             expanded_gen: 0,
-            size: DEFAULT_SIZE,
+            zoom: Zoom::default(),
+            size: 0.0,
             order: Order::default(),
             views: HashMap::new(),
             len: None,
@@ -266,13 +379,25 @@ impl<K: Key> LibraryState<K> {
         self.published = false;
     }
 
-    /// The thumbnails' size in points.
-    pub fn size(&self) -> f32 {
-        self.size
+    /// The grid's zoom: how many thumbnails per row.
+    pub fn zoom(&self) -> Zoom {
+        self.zoom
     }
 
-    pub fn set_size(&mut self, size: f32) {
-        self.size = size.clamp(MIN_SIZE, MAX_SIZE);
+    /// Sets the grid's zoom (at least one per row) without a signal. A
+    /// [`Zoom::Points`] is turned into a count at the grid's next pass.
+    pub fn set_zoom(&mut self, zoom: Zoom) {
+        self.zoom = match zoom {
+            Zoom::PerRow(n) => Zoom::PerRow(n.max(1)),
+            Zoom::Points(p) if p.is_finite() => Zoom::Points(p.max(MIN_SIZE)),
+            Zoom::Points(_) => Zoom::default(),
+        };
+    }
+
+    /// The grid's thumbnails' size in points, as of its last pass (0
+    /// before it): what the zoom gave at the panel's width.
+    pub fn size(&self) -> f32 {
+        self.size
     }
 
     pub fn is_expanded(&self, top: &K) -> bool {
@@ -377,9 +502,10 @@ pub enum Signal<K> {
     DragOut {
         keys: Vec<K>,
     },
-    /// The thumbnails' size changed (zoom).
+    /// The grid's zoom changed: this many thumbnails per row, for the
+    /// application to keep (a stored size in points converted included).
     Zoom {
-        size: f32,
+        per_row: u32,
     },
     /// A step was vetoed.
     Vetoed {
@@ -418,7 +544,8 @@ enum Op<K> {
     Activate(K),
     /// A drag out of the view started with these images.
     DragOut(Vec<K>),
-    Zoom(f32),
+    /// A zoom step: closer (`true`, fewer per row) or out.
+    Zoom(bool),
 }
 
 /// The thumbnail grid, or the filmstrip ([`ThumbGrid::filmstrip`]).
@@ -558,21 +685,31 @@ impl<'a> ThumbGrid<'a> {
             0.0
         };
         let strip_h = self.height.unwrap_or(120.0);
+        let mut mem = state.views.remove(&self.view).unwrap_or_default();
+        // A zoom still in points becomes the count it gave at this width.
+        let mut converted = None;
         let size = if grid {
-            state.size
+            let width = ui.available_width() - ui.spacing().scroll.allocated_width();
+            let fit = Zoom::most_per_row(width, gap);
+            if let Zoom::Points(p) = state.zoom
+                && width >= MIN_SIZE + 2.0 * gap
+            {
+                state.zoom = Zoom::from_points(p, width, gap);
+                converted = state.zoom.per_row();
+            }
+            let per_row = state.zoom.per_row().unwrap_or(1).min(fit);
+            mem.cols = per_row as usize;
+            mem.fit = fit as usize;
+            let size = Zoom::cell_width(per_row, width, gap);
+            state.size = size;
+            size
         } else {
+            mem.cols = 1;
             (strip_h - caption_h - 2.0 * gap - ui.spacing().scroll.allocated_width())
                 .max(MIN_SIZE / 2.0)
         };
         let cell = vec2(size, size + caption_h);
         let line = if grid { cell.y + gap } else { cell.x + gap };
-        let mut mem = state.views.remove(&self.view).unwrap_or_default();
-        if grid {
-            let width = ui.available_width() - ui.spacing().scroll.allocated_width();
-            mem.cols = (((width - gap) / (cell.x + gap)).floor().max(1.0)) as usize;
-        } else {
-            mem.cols = 1;
-        }
         let cols = mem.cols;
         let lines = if grid { n.div_ceil(cols) } else { n };
         let line_of = |p: usize| if grid { p / cols } else { p };
@@ -1095,15 +1232,26 @@ impl<'a> ThumbGrid<'a> {
         // Zoom: Ctrl and the wheel over a grid.
         if grid && ui.rect_contains_pointer(out.inner_rect) {
             let z = ui.input(|i| i.zoom_delta());
-            if (z - 1.0).abs() > f32::EPSILON {
-                ops.push(Op::Zoom(state.size * z));
+            if (z - 1.0).abs() > f32::EPSILON && z > 0.0 {
+                // A wheel notch makes a step; a pinch steps as it grows.
+                mem.pinch += z.ln();
+                let step = POINTS_STEP.ln() * 0.5;
+                if mem.pinch.abs() >= step {
+                    ops.push(Op::Zoom(mem.pinch > 0.0));
+                    mem.pinch = 0.0;
+                }
             }
         }
         if !wanted.is_empty() {
             source.wanted(&wanted, px);
         }
 
-        let signals = self.run_ops(ops, state, items, &mut mem);
+        let mut signals = self.run_ops(ops, state, items, &mut mem);
+        if let Some(per_row) = converted
+            && !signals.iter().any(|s| matches!(s, Signal::Zoom { .. }))
+        {
+            signals.insert(0, Signal::Zoom { per_row });
+        }
         if focused && let Some(reg) = &registry {
             reg.set_focused(&state.id);
         }
@@ -1185,11 +1333,19 @@ impl<'a> ThumbGrid<'a> {
                     out.push(Signal::DragOut { keys });
                     continue;
                 }
-                Op::Zoom(size) => {
-                    let before = state.size;
-                    state.set_size(size);
-                    if state.size != before {
-                        out.push(Signal::Zoom { size: state.size });
+                Op::Zoom(closer) => {
+                    // From what the view shows: a count wider than the
+                    // panel fits steps from what fits.
+                    let shown = Zoom::PerRow(mem.cols.max(1) as u32);
+                    let to = if closer {
+                        shown.zoomed_in()
+                    } else {
+                        shown.zoomed_out()
+                    };
+                    let to = to.per_row().unwrap_or(1).min(mem.fit.max(1) as u32);
+                    if Some(to) != shown.per_row() {
+                        state.zoom = Zoom::PerRow(to);
+                        out.push(Signal::Zoom { per_row: to });
                     }
                     continue;
                 }
@@ -1340,11 +1496,11 @@ fn cull<K: Key>(
             None
         }
         CullAction::ZoomIn if grid => {
-            ops.push(Op::Zoom(state.size * ZOOM_STEP));
+            ops.push(Op::Zoom(true));
             None
         }
         CullAction::ZoomOut if grid => {
-            ops.push(Op::Zoom(state.size / ZOOM_STEP));
+            ops.push(Op::Zoom(false));
             None
         }
         CullAction::ZoomIn | CullAction::ZoomOut => None,

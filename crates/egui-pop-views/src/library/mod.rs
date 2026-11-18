@@ -29,7 +29,7 @@ pub mod tags;
 pub use grid::change;
 pub use grid::{
     Badge, Change, LibraryItems, LibraryOutput, LibraryState, Signal, Stack, Thumb, ThumbGrid,
-    ThumbSource, Tone,
+    ThumbSource, Tone, Zoom,
 };
 pub use marks::{ColorLabel, CullAction, CullKeymap, Flag, Labels, Marks};
 pub use paint::{LabelStyle, LibraryTokens};

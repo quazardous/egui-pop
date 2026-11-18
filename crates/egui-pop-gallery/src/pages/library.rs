@@ -227,6 +227,9 @@ pub struct PageState {
     auto_advance: bool,
     /// Empty stars on every cell, not only under the pointer.
     empty_stars: bool,
+    /// The grid's panel, a share of the page's width: the zoom (a count
+    /// per row) survives its resize.
+    panel: f32,
     best: Option<u32>,
     thumbs: Option<Thumbs>,
     log: Vec<String>,
@@ -259,6 +262,7 @@ impl Default for PageState {
             synced: true,
             auto_advance: false,
             empty_stars: false,
+            panel: 1.0,
             best: None,
             thumbs: None,
             log: Vec::new(),
@@ -333,7 +337,7 @@ impl PageState {
             ),
             Signal::Activate { key } => format!("activate {key}"),
             Signal::DragOut { keys } => format!("drag out: {}", keys.len()),
-            Signal::Zoom { size } => format!("zoom {size:.0}"),
+            Signal::Zoom { per_row } => format!("zoom {per_row} per row"),
             Signal::Vetoed { step, reason } => format!("{step} vetoed: {reason}"),
         };
         self.log.push(line);
@@ -412,7 +416,7 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
             new: Cell::new(false),
         });
     }
-    ui.label("Click an image, then 0 to 5 rate it, P picks, X rejects, U unflags, 6 to 9 toggle a label, S opens a stack, + and - zoom. Drag across the cells to select with a band.");
+    ui.label("Click an image, then 0 to 5 rate it, P picks, X rejects, U unflags, 6 to 9 toggle a label, S opens a stack, + and - zoom (a count per row, kept when the panel is resized). Drag across the cells to select with a band.");
     ui.horizontal(|ui| {
         let out = SearchField::new(LIBRARY)
             .label("Search images")
@@ -454,6 +458,24 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
 
 fn library(ui: &mut Ui, app: &AppHandle, p: &mut PageState, thumbs: &Thumbs) {
     section(ui, &format!("Images ({} of {IMAGES})", p.shown.len()));
+    // The zoom is a count per row: resize the panel, it stays.
+    ui.horizontal(|ui| {
+        ui.label("Panel width");
+        for (name, share) in [("Narrow", 0.35), ("Half", 0.6), ("Full", 1.0)] {
+            if widgets::selectable_label(ui, p.panel == share, name).clicked() {
+                p.panel = share;
+            }
+        }
+        if ui.button("Zoom in").clicked() {
+            p.state.set_zoom(p.state.zoom().zoomed_in());
+        }
+        if ui.button("Zoom out").clicked() {
+            p.state.set_zoom(p.state.zoom().zoomed_out());
+        }
+        if let Some(n) = p.state.zoom().per_row() {
+            ui.label(format!("{n} per row"));
+        }
+    });
     let keymap = CullKeymap::lightroom().auto_advance(p.auto_advance);
     let signals = {
         let items = Shown {
@@ -462,18 +484,25 @@ fn library(ui: &mut Ui, app: &AppHandle, p: &mut PageState, thumbs: &Thumbs) {
             stacks: p.filter.is_empty(),
             revision: p.revision,
         };
-        let mut signals = ThumbGrid::new("grid")
-            .label("Images")
-            .app(app)
-            .keymap(keymap.clone())
-            .empty_stars(if p.empty_stars {
-                EmptyStars::Always
-            } else {
-                EmptyStars::OnHover
+        let height = super::fitted_height(ui, 300.0);
+        let width = ui.available_width() * p.panel;
+        let mut signals = ui
+            .allocate_ui(egui::vec2(width, height), |ui| {
+                ui.set_width(width);
+                ThumbGrid::new("grid")
+                    .label("Images")
+                    .app(app)
+                    .keymap(keymap.clone())
+                    .empty_stars(if p.empty_stars {
+                        EmptyStars::Always
+                    } else {
+                        EmptyStars::OnHover
+                    })
+                    .height(height)
+                    .show(ui, &mut p.state, &items, thumbs)
+                    .signals
             })
-            .height(super::fitted_height(ui, 300.0))
-            .show(ui, &mut p.state, &items, thumbs)
-            .signals;
+            .inner;
         signals.extend(
             ThumbGrid::filmstrip("strip")
                 .app(app)
