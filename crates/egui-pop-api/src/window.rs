@@ -328,11 +328,17 @@ pub fn from_settings(doc: &SettingsDoc) -> Option<WindowState> {
 /// position far away dropped. Returns the place given, if one was kept.
 /// `AppBuilder::run_native` does it; an application running eframe
 /// itself calls it.
+///
+/// The window's place then has one owner, egui-pop: eframe's own copy
+/// (`NativeOptions::persist_window`, kept with its `persistence` feature)
+/// is turned off, kept place or not, or it would be put over this one as
+/// the window is created.
 #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
 pub fn restore(
     dir: impl Into<std::path::PathBuf>,
     options: &mut eframe::NativeOptions,
 ) -> Option<WindowState> {
+    options.persist_window = false;
     let p = egui_pop_core::persist::Persist::new(dir);
     let read = p
         .load::<SettingsDoc>("settings", &egui_pop_model::values::settings_schema())
@@ -735,5 +741,37 @@ mod tests {
         let back = WindowState::from_store(&s.to_store(), false, true, false).unwrap();
         assert_eq!(back, s);
         assert!(WindowState::from_store(&[0.0, 0.0, 0.0, 0.0], true, false, false).is_none());
+    }
+
+    /// One owner for the main window's place: once egui-pop restores it,
+    /// eframe keeps none of its own, whether a place was kept or not.
+    #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
+    #[test]
+    fn restoring_the_place_turns_eframes_copy_off() {
+        let dir =
+            std::env::temp_dir().join(format!("egui-pop-window-restore-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        // Nothing kept yet: eframe's copy is off all the same.
+        let mut options = eframe::NativeOptions::default();
+        assert!(options.persist_window);
+        assert_eq!(restore(&dir, &mut options), None);
+        assert!(!options.persist_window);
+        // A place kept: given, eframe's copy off.
+        let mut doc = SettingsDoc::default();
+        doc.values
+            .insert(RECT.into(), json!([40.0, 30.0, 900.0, 700.0]));
+        doc.values.insert(PLACED.into(), json!(true));
+        let text = egui_pop_model::values::settings_schema()
+            .save(&doc)
+            .unwrap();
+        egui_pop_core::persist::Persist::new(&dir)
+            .save_text("settings", &text)
+            .unwrap();
+        let mut options = eframe::NativeOptions::default();
+        let state = restore(&dir, &mut options).expect("a place was kept");
+        assert_eq!(state.position, Some(Pos2::new(40.0, 30.0)));
+        assert_eq!(options.viewport.inner_size, Some(Vec2::new(900.0, 700.0)));
+        assert!(!options.persist_window);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
