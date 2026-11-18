@@ -1,6 +1,6 @@
 //! A command run on the bus (ADR 0029): every run of a command, whatever
 //! asked it (a key, the palette, a menu, a toolbar, a toast's action, an
-//! agent), is asked on `command.run` ([`CommandRun`]) before its handler
+//! agent), is asked on `pop.command.run` ([`CommandRun`]) before its handler
 //! runs. The point is declared fail-closed: a listener may refuse the run
 //! with a reason (`HookError::refuse`), and a listener that fails, panics
 //! or misses its deadline refuses it too. A refused run never reaches the
@@ -55,7 +55,7 @@ impl CommandAsk {
     }
 }
 
-/// A command is about to run (`command.run`): its listeners run in their
+/// A command is about to run (`pop.command.run`): its listeners run in their
 /// declared order before the handler; one may refuse the run with a
 /// reason. Fail-closed: a listener's failure refuses it too. The value
 /// is what the listeners noted, one line each.
@@ -63,7 +63,7 @@ impl CommandAsk {
 pub struct CommandRun;
 impl Point for CommandRun {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "command.run";
+    const ID: &'static str = "pop.command.run";
     type Input = CommandAsk;
     type Value = Vec<String>;
 }
@@ -71,7 +71,7 @@ impl Point for CommandRun {
 /// The command points, in the order [`super::order_dump`] prints them.
 pub const COMMAND_POINTS: [&str; 1] = [CommandRun::ID];
 
-/// Asks `command.run` for `app`, inline: the refusal that stopped the
+/// Asks `pop.command.run` for `app`, inline: the refusal that stopped the
 /// run, if one did; the listeners' failures logged.
 pub(crate) fn ask(app: &AppHandle, ask: CommandAsk) -> Option<Refusal> {
     ASKING.with_borrow_mut(|a| a.push(app.downgrade()));

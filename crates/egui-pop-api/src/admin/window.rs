@@ -1,8 +1,8 @@
 //! The Settings app's window on the bus (ADR 0029, slice 3): the app is
 //! the owner of its application window ([`super::APP_WINDOW`]) and asks
-//! for it, `window.open` and `window.close`, whenever what it wants
+//! for it, `pop.window.open` and `pop.window.close`, whenever what it wants
 //! changes (opened, closed, moved between the overlay and its window); its
-//! listener (`admin.window`) keeps the app's state with the window,
+//! listener (`pop.admin.window`) keeps the app's state with the window,
 //! whoever asked. The registry ([`AppHandle::windows_list`]) is the one
 //! truth for whether the window is there: no flag, nothing followed from
 //! a pass.
@@ -28,9 +28,9 @@ fn wanted(app: &AppHandle, admin: &Admin) -> bool {
     admin.is_open() && in_window(app) && !app.egui().embed_viewports()
 }
 
-/// Asks the bus for the window the app wants now: `window.open` when it
+/// Asks the bus for the window the app wants now: `pop.window.open` when it
 /// wants one not there (or, `raise`, one there: brought to the front),
-/// `window.close` when one is there it no longer wants (moved over the
+/// `pop.window.close` when one is there it no longer wants (moved over the
 /// main window: it stays open). Called where what it wants changes, in
 /// the same call.
 pub(super) fn settle(app: &AppHandle, admin: &Admin, raise: bool) {
@@ -45,13 +45,13 @@ pub(super) fn settle(app: &AppHandle, admin: &Admin, raise: bool) {
     }
 }
 
-/// Asks `window.close` of the app's window, the app asking.
+/// Asks `pop.window.close` of the app's window, the app asking.
 pub(super) fn close(app: &AppHandle) -> bool {
     app.close_entry(&WindowId::new(APP_WINDOW), Some(OWNER), Reason::Command)
 }
 
-/// `admin.window`: the Settings app's listener on `window.open` (first:
-/// the app is open when its window is) and `window.close` (after the
+/// `pop.admin.window`: the Settings app's listener on `pop.window.open` (first:
+/// the app is open when its window is) and `pop.window.close` (after the
 /// window's children, before the focus moves and the registry lets the
 /// window go: the app closes in the same call, whoever asked, unless it
 /// is moving over the main window).

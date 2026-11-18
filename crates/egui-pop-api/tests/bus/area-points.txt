@@ -1,2 +1,2 @@
-ui.areas
-  1. ui.area_registry (owner egui_pop): nothing
+pop.ui.areas
+  1. pop.ui.area_registry (owner egui_pop): nothing

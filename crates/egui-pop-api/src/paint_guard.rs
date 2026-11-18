@@ -134,7 +134,7 @@ thread_local! {
         const { std::cell::RefCell::new(std::collections::BTreeMap::new()) };
 }
 
-/// An application window closed (`window.registry`): its passes until
+/// An application window closed (`pop.window.registry`): its passes until
 /// the main window's next one draw its last page.
 pub(crate) fn closing(viewport: egui::ViewportId, title: String) {
     LAST_PAGES.with_borrow_mut(|p| {

@@ -1,16 +1,16 @@
 //! Popups and native windows on the bus (ADR 0029, slice 5): dialogs and
 //! file choices.
 //!
-//! - A popup opens by its `popup.open` ([`AppHandle::request_popup_open`])
-//!   and closes by its `popup.close` ([`AppHandle::request_popup_close`]),
+//! - A popup opens by its `pop.popup.open` ([`AppHandle::request_popup_open`])
+//!   and closes by its `pop.popup.close` ([`AppHandle::request_popup_close`]),
 //!   whoever asks: its owner when it is answered, a window closing under
-//!   it. Its owner's listener on `popup.close` ends what it showed (a
+//!   it. Its owner's listener on `pop.popup.close` ends what it showed (a
 //!   dialog cancelled, a file choice cancelled), in that call.
 //! - A native window egui does not paint (the system's file chooser)
-//!   opens by its `window.open` ([`AppHandle::request_native_open`]) and
-//!   closes by its `window.close`.
+//!   opens by its `pop.window.open` ([`AppHandle::request_native_open`]) and
+//!   closes by its `pop.window.close`.
 //! - A window closing closes its popups and native windows first, each by
-//!   its own request (`window.children`, reason `parent-closed`, or `quit`
+//!   its own request (`pop.window.children`, reason `parent-closed`, or `quit`
 //!   when the application quits), so none is left with a parent gone.
 //! - A window's content moving into the main window takes its popups and
 //!   native windows with it: they become the main window's.
@@ -22,7 +22,7 @@ use super::{CHILDREN, PopupClose, PopupOpen, Reason, WindowKind, WindowOpen, Win
 use crate::app::AppHandle;
 use egui_pop_core::lock;
 
-/// `window.children`'s part on any window: its popups and native windows
+/// `pop.window.children`'s part on any window: its popups and native windows
 /// are closed, each by its own request, before it goes.
 pub(super) fn close_children(app: &AppHandle, req: &WindowRequest, did: &mut Vec<String>) {
     let reason = if req.reason == Reason::Quit {
@@ -114,7 +114,7 @@ impl AppHandle {
         data
     }
 
-    /// Asks for a popup (`popup.open`, kind [`WindowKind::Popup`]) in its
+    /// Asks for a popup (`pop.popup.open`, kind [`WindowKind::Popup`]) in its
     /// parent window, which must be open, with an owner: its listeners all
     /// run now, the registry holding it, and `popup.opened` follows. A
     /// popup of that id already held is held again under this request. A
@@ -124,7 +124,7 @@ impl AppHandle {
     /// (docs/stability.md).</div>
     pub fn request_popup_open(&self, request: WindowRequest) -> bool {
         if let Some(why) = self.open_refusal(&request, WindowKind::Popup) {
-            self.refuse("popup", "popup.open", &request, why);
+            self.refuse("popup", PopupOpen::ID, &request, why);
             return false;
         }
         let did = emit::<PopupOpen>(self, request.clone());
@@ -137,7 +137,7 @@ impl AppHandle {
         true
     }
 
-    /// Asks for a popup's close (`popup.close`): its listeners all run
+    /// Asks for a popup's close (`pop.popup.close`): its listeners all run
     /// now, its owner's first (what it showed ends: a dialog or a file
     /// choice cancelled), then the registry; `popup.closed` follows. A
     /// popup not open is refused (`popup.refused`). Whether it closed.
@@ -146,7 +146,12 @@ impl AppHandle {
     /// (docs/stability.md).</div>
     pub fn request_popup_close(&self, request: WindowRequest) -> bool {
         if !self.holds(&request.window) {
-            self.refuse("popup", "popup.close", &request, "no open popup of this id");
+            self.refuse(
+                "popup",
+                PopupClose::ID,
+                &request,
+                "no open popup of this id",
+            );
             return false;
         }
         let did = emit::<PopupClose>(self, request.clone());
@@ -160,11 +165,11 @@ impl AppHandle {
         closed
     }
 
-    /// Asks for a native window egui does not paint (`window.open`, kind
+    /// Asks for a native window egui does not paint (`pop.window.open`, kind
     /// [`WindowKind::Native`]: the system's file chooser, a web view's own
     /// window) as a child of an open window, with an owner: the registry
     /// holds it and `window.opened` follows. It closes by its
-    /// `window.close` ([`AppHandle::request_window_close`]), and with its
+    /// `pop.window.close` ([`AppHandle::request_window_close`]), and with its
     /// parent. A refusal is said as `window.refused`. Whether it opened.
     ///
     /// <div class="warning">Experimental: may change in any release

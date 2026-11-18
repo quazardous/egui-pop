@@ -16,7 +16,7 @@ use super::{Admin, write};
 use crate::app::AppHandle;
 
 /// Who wrote a change the store read or another of its clients made, as
-/// `settings.changed` says it.
+/// `pop.settings.changed` says it.
 pub(crate) const BY_STORE: &str = "store";
 
 /// What the store's threads (its worker, its watchers) hand to the UI

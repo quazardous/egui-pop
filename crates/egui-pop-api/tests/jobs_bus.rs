@@ -102,8 +102,8 @@ fn a_job_driven_through_the_bus_changes_only_on_its_events() {
     assert_eq!(
         did,
         [
-            "jobs.model: `export` waits for the answer",
-            "jobs.host: `job.cancel` asked"
+            "pop.jobs.model: `export` waits for the answer",
+            "pop.jobs.host: `job.cancel` asked"
         ]
     );
     assert_eq!(jobs.job("export").unwrap().requested, Some(Request::Cancel));
@@ -113,7 +113,7 @@ fn a_job_driven_through_the_bus_changes_only_on_its_events() {
     assert_eq!(jobs.job("export").unwrap().state, JobState::Running);
 
     // The host answers: the model follows its event, and a listener after
-    // `jobs.model` finds it followed already.
+    // `pop.jobs.model` finds it followed already.
     assert_eq!(host.release(), 1);
     pass(&mut app);
     pass(&mut app);

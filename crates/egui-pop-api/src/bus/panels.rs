@@ -2,14 +2,14 @@
 //! workbench owns them.
 //!
 //! - Detaching a panel into a window of its own is that window's
-//!   `window.open` (`panel:<id>`, kind [`WindowKind::Panel`], owner
+//!   `pop.window.open` (`panel:<id>`, kind [`WindowKind::Panel`], owner
 //!   [`WORKBENCH_OWNER`]).
 //! - Docking a detached panel back (`workbench.attach`, or moving it to an
-//!   area, as a tab dragged there does) is its window's `window.reparent`
+//!   area, as a tab dragged there does) is its window's `pop.window.reparent`
 //!   into the main window.
 //! - Closing a detached panel's window (its title bar, the system's
-//!   close, `workbench.close_window`, or anyone asking `window.close` of
-//!   it) is its `window.close`; its panels dock back.
+//!   close, `workbench.close_window`, or anyone asking `pop.window.close` of
+//!   it) is its `pop.window.close`; its panels dock back.
 //!
 //! The workbench's listener on the three points ([`WORKBENCH_WINDOW`])
 //! changes the layout, whoever asked, before the registry holds or lets
@@ -43,7 +43,7 @@ use crate::workbench::Change;
 pub const WORKBENCH_OWNER: &str = "egui_pop.workbench";
 /// The workbench's listener on the window points: the layout follows the
 /// request, whoever asked.
-pub const WORKBENCH_WINDOW: &str = "workbench.window";
+pub const WORKBENCH_WINDOW: &str = "pop.workbench.window";
 
 /// A detached panel's window id in the registry (`panel:<id>`).
 pub(crate) fn window_of_panel(panel: &PanelId) -> String {
@@ -60,8 +60,8 @@ fn request(id: &str, reason: Reason) -> WindowRequest {
     WindowRequest::new(id, WindowKind::Panel, WORKBENCH_OWNER, reason)
 }
 
-/// Registers the workbench's listener on `window.open`, `window.close`
-/// and `window.reparent`.
+/// Registers the workbench's listener on `pop.window.open`, `pop.window.close`
+/// and `pop.window.reparent`.
 pub(super) fn install(kernel: &dyn Bus) {
     let mine = || ListenOpts::new().owner(WORKBENCH_OWNER);
     let listened = [
@@ -97,7 +97,7 @@ pub(super) fn install(kernel: &dyn Bus) {
         kernel.listen::<WindowReparent>(WORKBENCH_WINDOW, mine().before(REGISTRY), |req, did| {
             if req.kind == WindowKind::Panel && req.parent.as_deref() != Some(WindowId::MAIN) {
                 return Err(format!(
-                    "`{}` moves only into the main window; detaching a panel is `window.open`",
+                    "`{}` moves only into the main window; detaching a panel is `pop.window.open`",
                     req.window
                 )
                 .into());
@@ -119,7 +119,7 @@ fn panel_request(req: &WindowRequest) -> Option<(AppHandle, PanelId)> {
     Some((asking()?, panel_of_window(&req.window)?))
 }
 
-/// `workbench.window` on a window closed or moved into the main window:
+/// `pop.workbench.window` on a window closed or moved into the main window:
 /// its panels dock back in their areas, while the layout still has it.
 fn dock_back(
     req: &WindowRequest,
@@ -219,7 +219,7 @@ pub(crate) fn ask(app: &AppHandle, change: &Change) -> Option<Result<serde_json:
     }
 }
 
-/// `window.registry`'s part when a detached panel's window leaves it:
+/// `pop.window.registry`'s part when a detached panel's window leaves it:
 /// the backend lists its viewport until the main pass after the one that
 /// last showed it.
 pub(super) fn left(app: &AppHandle, id: &str) {
@@ -242,7 +242,7 @@ pub(crate) fn shown(app: &AppHandle) -> Vec<String> {
         .collect()
 }
 
-/// `window.registry`'s part when a window's content moves into the main
+/// `pop.window.registry`'s part when a window's content moves into the main
 /// window (`into_main`), or back out: the detached panels' windows go
 /// from the screen with the shell, and come back with it. What it did.
 pub(super) fn follow_shell(
@@ -271,7 +271,7 @@ pub(super) fn follow_shell(
 }
 
 impl AppHandle {
-    /// Asks `window.open` of a panel's own window, the workbench asking:
+    /// Asks `pop.window.open` of a panel's own window, the workbench asking:
     /// its listener detaches the panel, the registry holds the window, and
     /// `window.opened` follows.
     fn request_panel_window_open(&self, panel: &PanelId, reason: Reason) {
@@ -287,9 +287,9 @@ impl AppHandle {
 
     /// The detached panels' windows after a workbench change made by the
     /// workbench itself (`before`: the windows it had): each window come
-    /// is its `window.open`; each gone its `window.reparent` into the main
+    /// is its `pop.window.open`; each gone its `pop.window.reparent` into the main
     /// window when one of its panels is docked now, else its
-    /// `window.close`. Asked in the call that changed the layout, never
+    /// `pop.window.close`. Asked in the call that changed the layout, never
     /// from a later pass.
     pub(crate) fn sync_panel_windows(&self, before: &[Auxiliary]) {
         if self.root_has_content() {
@@ -326,7 +326,7 @@ impl AppHandle {
 }
 
 /// Shows a detached panel's window for this pass: an immediate viewport
-/// (the registry holds it, `window.open` asked it).
+/// (the registry holds it, `pop.window.open` asked it).
 pub(crate) fn show_window<T>(
     ctx: &Context,
     viewport: ViewportId,
@@ -375,7 +375,7 @@ pub(crate) fn ask_place(
 }
 
 /// The system asked a detached panel's window to close and its
-/// `window.close` was refused: the system's close is cancelled.
+/// `pop.window.close` was refused: the system's close is cancelled.
 pub(crate) fn keep_open(vctx: &Context) {
     vctx.send_viewport_cmd(ViewportCommand::CancelClose);
 }

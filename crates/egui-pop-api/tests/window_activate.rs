@@ -1,11 +1,11 @@
-//! The active window on the bus (ADR 0029, `window.activate`): the window
+//! The active window on the bus (ADR 0029, `pop.window.activate`): the window
 //! the person works in is one truth, held by the registry. A press in a
 //! window asks it active (`user`), and `window.activated` is said once
 //! per change; `windows.list` marks it; a dialog opened from outside any
 //! window comes up over it; a window closing while active hands the
-//! activation back to the window worked in before it (`window.focus`),
+//! activation back to the window worked in before it (`pop.window.focus`),
 //! whatever its kind. A command asking a window to the front raises it
-//! through the bus's `window.raise`, the one place `ViewportCommand::Focus`
+//! through the bus's `pop.window.raise`, the one place `ViewportCommand::Focus`
 //! is sent.
 
 use std::path::Path;
@@ -205,7 +205,7 @@ fn an_application_window_closing_activates_the_one_worked_in_before() {
 }
 
 /// A command asking a window to the front activates it and raises it,
-/// through `window.raise`; a window not open is refused.
+/// through `pop.window.raise`; a window not open is refused.
 #[test]
 fn a_command_raises_the_window_through_the_bus() {
     let (mut m, _, editor) = three_windows();
@@ -232,11 +232,11 @@ fn a_command_raises_the_window_through_the_bus() {
             .iter()
             .any(|e| e.name == "window.refused"
                 && e.data["window"] == "nowhere"
-                && e.data["request"] == "window.activate")
+                && e.data["request"] == "pop.window.activate")
     );
 }
 
-/// No crate sends `ViewportCommand::Focus` but the bus's `window.raise`:
+/// No crate sends `ViewportCommand::Focus` but the bus's `pop.window.raise`:
 /// the active window is asked, never set behind the registry's back.
 /// `egui-pop-core`'s overlay, used without an application (it has no
 /// bus), is the one other place, and asks through a callback when an
@@ -286,7 +286,7 @@ fn no_raw_focus_outside_the_bus() {
     }
     assert!(
         found.is_empty(),
-        "raw `ViewportCommand::Focus` outside the bus: ask `window.activate` (reason `command`) instead\n{}",
+        "raw `ViewportCommand::Focus` outside the bus: ask `pop.window.activate` (reason `command`) instead\n{}",
         found.join("\n")
     );
 }

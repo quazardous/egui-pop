@@ -1019,7 +1019,7 @@ fn join_target(
 }
 
 /// What a palette's band rows read: the tokens, and what each panel's
-/// one mark slot shows (`panel.state`, its kind).
+/// one mark slot shows (`pop.panel.state`, its kind).
 struct RowCx<'a> {
     t: &'a Tokens,
     states: &'a crate::bus::panel_state::States,

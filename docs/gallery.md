@@ -659,7 +659,7 @@ A tab dragged over a detached panel's window: its drop frame where the window se
 
 ### A panel's state
 
-A panel whose content is not current (`panel.state`, [the workbench](workbench.md#a-panels-state)): updating, dimmed with the busy mark on its corner and its tab once the delay passed; failed, with the failed mark.
+A panel whose content is not current (`pop.panel.state`, [the workbench](workbench.md#a-panels-state)): updating, dimmed with the busy mark on its corner and its tab once the delay passed; failed, with the failed mark.
 
 <table>
   <tr>

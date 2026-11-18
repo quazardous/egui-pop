@@ -23,13 +23,13 @@
 //! it was open) goes to the main window's queue.
 //!
 //! A dialog is a popup on the bus (ADR 0029): coming up, it asks its
-//! `popup.open` (`dialog:<id>`, owned by the plugin that opened it or by
+//! `pop.popup.open` (`dialog:<id>`, owned by the plugin that opened it or by
 //! this one, its parent the window of its group); answered, cancelled, or
-//! its plugin gone, its `popup.close`. Its window closing asks that
-//! `popup.close` (`parent-closed`), and this plugin's listener on it
+//! its plugin gone, its `pop.popup.close`. Its window closing asks that
+//! `pop.popup.close` (`parent-closed`), and this plugin's listener on it
 //! ([`POPUP_LISTENER`]) cancels the dialog in that call; the dialogs still
 //! waiting in that window's queue are cancelled by [`CANCEL_ON_CLOSE`], a
-//! listener of `window.close`. The dialogs' block is in the `WINDOW_OVERLAYS` zone, drawn in
+//! listener of `pop.window.close`. The dialogs' block is in the `WINDOW_OVERLAYS` zone, drawn in
 //! every window.
 //!
 //! [`Dialogs::current`], [`Dialogs::answer`] and the `dialogs` collector
@@ -209,12 +209,12 @@ pub const CMD_MOVE: CommandId = CommandId::from_static("dialogs.move");
 /// The plugin's id, owner of the positions it keeps.
 pub const PLUGIN: PluginId = PluginId::from_static("egui_pop.dialogs");
 
-/// The dialogs' listener on `popup.close`: the dialog of that popup is
+/// The dialogs' listener on `pop.popup.close`: the dialog of that popup is
 /// cancelled, whoever asked (its window closing, among others).
-pub const POPUP_LISTENER: &str = "dialogs.popup";
-/// The dialogs' listener on `window.close`: the dialogs waiting in the
+pub const POPUP_LISTENER: &str = "pop.dialogs.popup";
+/// The dialogs' listener on `pop.window.close`: the dialogs waiting in the
 /// closing window's queue (never shown, so no popup yet) are cancelled.
-pub const CANCEL_ON_CLOSE: &str = "dialogs.cancel-on-close";
+pub const CANCEL_ON_CLOSE: &str = "pop.dialogs.cancel-on-close";
 /// A dialog's popup id in the registry: `dialog:<id>`.
 pub const POPUP_PREFIX: &str = "dialog:";
 /// What is left of the backdrop while a dialog is dragged.
@@ -1084,7 +1084,7 @@ struct Open {
     body: Json,
     /// The owner it was opened under (`values::current_scope`), if any.
     opener: Option<OwnerId>,
-    /// Its `popup.open` was asked (it came up): its end asks `popup.close`.
+    /// Its `pop.popup.open` was asked (it came up): its end asks `pop.popup.close`.
     on_bus: bool,
 }
 
@@ -1734,8 +1734,8 @@ fn answer_step(
 }
 
 /// Registers the dialogs' listeners on the bus, replacing those of an
-/// earlier connection: [`POPUP_LISTENER`] on `popup.close`,
-/// [`CANCEL_ON_CLOSE`] on `window.close`.
+/// earlier connection: [`POPUP_LISTENER`] on `pop.popup.close`,
+/// [`CANCEL_ON_CLOSE`] on `pop.window.close`.
 fn listen(app: &AppHandle) {
     let bus = app.bus();
     bus.unlisten(PopupClose::ID, POPUP_LISTENER);

@@ -194,10 +194,19 @@ assert!(report.failures.is_empty());
   `AppHandle::bus` returns. The debug collector `bus` shows each point's
   `journaled` and `relayable`, the bus's `capabilities` and its
   `journal_seq`.
+- **Names**: several libraries share one bus, so a point's id starts
+  with the prefix of the crate declaring it (bus-contract's "Naming
+  points": `<crate>.<subject>.<moment>`). egui-pop's prefix is `pop.`:
+  every point it declares (`pop.window.close`, `pop.command.run`,
+  `pop.layout.changed`…) and every listener it registers
+  (`pop.window.registry`, `pop.jobs.model`…) carries it; egui_stack's
+  are `stack.*`. A test fails on an egui-pop point or listener without
+  it. An application names its own points and listeners under its own
+  prefix, never `pop.`.
 - **Refusals and fail-closed points**: a listener on a request returns
   `HookError::refuse(reason)` and the request stops there; on a point
   declared `fail_closed`, a listener's error, panic or missed deadline
-  refuses it too. egui-pop's `command.run` (`bus::CommandRun`) is such a
+  refuses it too. egui-pop's `pop.command.run` (`bus::CommandRun`) is such a
   point: every command run (a key, the palette, a menu, a toolbar, an
   agent) is asked on it before its handler; a refusal stops the run,
   which never reaches the host, and is journaled as `command.refused`
@@ -232,8 +241,8 @@ in order off the publisher's thread, local listeners at their thread's
 other points refused by the kernel, and a relay's resume and ingest
 between two kernels (a restart and refusals included). `crates/egui-pop-api/tests/bus_defer.rs`: an ask made in a panel heard after
 it in the same pass, asks made before and during exit heard, a palette
-command refused by a `command.run` listener, a failing listener refusing
+command refused by a `pop.command.run` listener, a failing listener refusing
 on the fail-closed point. `crates/egui-pop-api/tests/app_bus.rs`: a local listener
-on `window.close` in its place, and run at the next pass when the
+on `pop.window.close` in its place, and run at the next pass when the
 request comes from a worker, and a host's journal reachable from
 `AppHandle::bus` and shown by the `bus` collector. The README's examples run as doc tests.

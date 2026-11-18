@@ -27,7 +27,7 @@
 //! order:
 //!
 //! 1. [`CHILDREN`]: what belongs to the window goes with it (its dialogs);
-//! 2. the owner's listener (`admin.window` for the Settings app): the
+//! 2. the owner's listener (`pop.admin.window` for the Settings app): the
 //!    state the window showed closes;
 //! 3. [`FOCUS`]: the window worked in before becomes the active one;
 //! 4. [`REGISTRY`]: the window is closed, no longer declared to the
@@ -41,36 +41,36 @@
 //! bridge shows it too.
 //!
 //! The Settings app's window is wholly on the bus: the app asks
-//! `window.open` and `window.close` for it as its owner, in the call that
-//! changed what it wants, and its listener (`admin.window`) keeps the
+//! `pop.window.open` and `pop.window.close` for it as its owner, in the call that
+//! changed what it wants, and its listener (`pop.admin.window`) keeps the
 //! app's state with the window on both points. A plugin disconnected has
 //! its windows closed ([`OWNER_GONE`], reason `owner-gone`).
 //!
 //! The shell's windows are on the bus too: opening an application window
-//! is its `window.open` ([`AppHandle::request_window_open`], the
+//! is its `pop.window.open` ([`AppHandle::request_window_open`], the
 //! application as owner for [`AppHandle::open_window`]); the main
 //! window's close, whatever asked (the system, its title bar's Close,
 //! [`AppHandle::close_window`], [`AppHandle::quit`] with the reason
-//! `quit`), is its `window.close`, which closes every other window by its
-//! own `window.close` first; a window's content moving into the main
+//! `quit`), is its `pop.window.close`, which closes every other window by its
+//! own `pop.window.close` first; a window's content moving into the main
 //! window when it closes, and back when the main window is asked to its
-//! front, is a `window.reparent` ([`AppHandle::request_window_reparent`]).
+//! front, is a `pop.window.reparent` ([`AppHandle::request_window_reparent`]).
 //! Detached panels' windows are the workbench's: detaching a panel is its
-//! window's `window.open`, docking it back its `window.reparent` into the
-//! main window, closing its window its `window.close`, the workbench's
+//! window's `pop.window.open`, docking it back its `pop.window.reparent` into the
+//! main window, closing its window its `pop.window.close`, the workbench's
 //! listener ([`WORKBENCH_WINDOW`]) changing the layout whoever asked.
 //! Dialogs and file choices are on the bus too: a dialog coming up is its
-//! `popup.open` (`dialog:<n>`, parent: its window), a file choice started
-//! its `popup.open` (`file:<n>`), or `window.open` of a native window for
+//! `pop.popup.open` (`dialog:<n>`, parent: its window), a file choice started
+//! its `pop.popup.open` (`file:<n>`), or `pop.window.open` of a native window for
 //! the system's chooser ([`AppHandle::request_native_open`]); each ends by
-//! its `popup.close` or `window.close`. A window closing closes its
+//! its `pop.popup.close` or `pop.window.close`. A window closing closes its
 //! popups and native windows first, each by its own request (reason
-//! `parent-closed`), and their owners' listeners (`dialogs.popup`,
-//! `files.choice`) cancel what they showed in the same call. The overlay
+//! `parent-closed`), and their owners' listeners (`pop.dialogs.popup`,
+//! `pop.files.choice`) cancel what they showed in the same call. The overlay
 //! stack's overlays (the palette, menus, flyouts, popovers) and the egui
 //! popups it follows (context menus, the menu bar's menus, hover cards)
-//! are popups too: each opening and closing is its `popup.open` or
-//! `popup.close`, asked in that call with how it closed (`how`), and a
+//! are popups too: each opening and closing is its `pop.popup.open` or
+//! `pop.popup.close`, asked in that call with how it closed (`how`), and a
 //! close asked by anyone closes it in the stack ([`OVERLAY_STACK`]);
 //! tooltips and a field's lists stay off, per-frame painting.
 //!
@@ -88,9 +88,9 @@
 //! a [`JobAsk`], asked by [`AppHandle::request_job`]); whoever runs the
 //! job does the work and answers with its `job.*` events. Those events,
 //! and the job commands' `command.*` events, are delivered to the
-//! listeners of [`JobEvents`] (`job.*`) in journal order, once each
+//! listeners of [`JobEvents`] (`pop.job.*`) in journal order, once each
 //! ([`AppHandle::deliver_events`]): the jobs plugin's model is one of them
-//! (`jobs.model`), so no job state changes but on the bus. A plugin
+//! (`pop.jobs.model`), so no job state changes but on the bus. A plugin
 //! connecting or disconnecting is asked on [`PluginConnect`] and
 //! [`PluginDisconnect`] (a [`PluginChange`]), the disconnection before
 //! `plugin.disconnected` is said: the jobs a plugin leaves are cancelled
@@ -98,12 +98,12 @@
 //! one of its connection.
 //!
 //! Files dropped from another program are on it too: every window's pass
-//! reads the files dropped on it once, as its `files.drop` ([`FilesDrop`],
+//! reads the files dropped on it once, as its `pop.files.drop` ([`FilesDrop`],
 //! a [`FileDrop`] naming the window); whoever takes them listens, and
 //! nobody taking them is said as `files.refused`.
 //!
 //! Settings are on it too: every change of a setting's value is said
-//! once by the value store, its one writer, as `settings.changed`
+//! once by the value store, its one writer, as `pop.settings.changed`
 //! ([`SettingsChanged`], a [`SettingChange`]: path, scope, by), whether
 //! it was made here or by another client of the host's store; the theme,
 //! the pointer profile and the main window's frame are its listeners
@@ -111,34 +111,34 @@
 //! application's part that follows a setting listens there too.
 //!
 //! A drag across windows is on it too ([`drag`]): a drag begins as
-//! `drag.start` ([`DragStart`], its kind and window); let go over a drop
-//! target that takes it, in its window or another, it is `drag.drop`
+//! `pop.drag.start` ([`DragStart`], its kind and window); let go over a drop
+//! target that takes it, in its window or another, it is `pop.drag.drop`
 //! ([`DragDrop`]) and `drag.dropped`; refused, let go over nothing or
 //! cancelled, `drag.refused` with the reason. Where it hovers each pass
 //! stays off the bus (per-frame painting).
 //!
 //! The screens are on it too: a screen plugged in or
 //! unplugged, as told by whatever runs the event loop
-//! ([`crate::window::set_screens`]), is said as `screen.added`
-//! ([`ScreenAdded`]) or `screen.removed` ([`ScreenRemoved`]), by its
-//! name; on `screen.removed` a detached panel's window kept on it docks
+//! ([`crate::window::set_screens`]), is said as `pop.screen.added`
+//! ([`ScreenAdded`]) or `pop.screen.removed` ([`ScreenRemoved`]), by its
+//! name; on `pop.screen.removed` a detached panel's window kept on it docks
 //! back ([`WORKBENCH_SCREENS`]) and every other window left off every
 //! screen moves onto one ([`PLACE`]).
 //!
 //! The layout is on it too: every real change of the workbench's layout
-//! is said once, when the gesture that made it ends, as `layout.changed`
+//! is said once, when the gesture that made it ends, as `pop.layout.changed`
 //! ([`LayoutChanged`], a [`LayoutChange`] naming its causes); the layout
 //! is saved by its listener ([`LAYOUT_SAVE`]), an application's copy of
 //! it follows after.
 //!
 //! A panel's state is on it too: whoever knows a panel's content is not
-//! current asks `panel.state` ([`PanelStateSet`], from any thread), and
+//! current asks `pop.panel.state` ([`PanelStateSet`], from any thread), and
 //! the workbench's chrome shows it ([`PANEL_CHROME`]), never the panel.
 //! What a declared panel is, its kind (whether it edits) included, is
-//! `panel.describe` ([`PanelDescribe`], answered by [`PANEL_DESCRIBE`]).
+//! `pop.panel.describe` ([`PanelDescribe`], answered by [`PANEL_DESCRIBE`]).
 //! The interactive areas each window's last pass registered, what each
 //! writes (display, navigate, edit) and whether an edit area is inert,
-//! are `ui.areas` ([`UiAreas`], answered by [`AREA_REGISTRY`]).
+//! are `pop.ui.areas` ([`UiAreas`], answered by [`AREA_REGISTRY`]).
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -312,58 +312,58 @@ impl WindowRequest {
     }
 }
 
-/// A window opens (`window.open`); its listeners say what they did, one
+/// A window opens (`pop.window.open`); its listeners say what they did, one
 /// line each, in the value.
 #[derive(Debug)]
 pub struct WindowOpen;
 impl Point for WindowOpen {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "window.open";
+    const ID: &'static str = "pop.window.open";
     type Input = WindowRequest;
     type Value = Vec<String>;
 }
 
-/// A window closes (`window.close`).
+/// A window closes (`pop.window.close`).
 #[derive(Debug)]
 pub struct WindowClose;
 impl Point for WindowClose {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "window.close";
+    const ID: &'static str = "pop.window.close";
     type Input = WindowRequest;
     type Value = Vec<String>;
 }
 
-/// A window's content moves to another window (`window.reparent`).
+/// A window's content moves to another window (`pop.window.reparent`).
 #[derive(Debug)]
 pub struct WindowReparent;
 impl Point for WindowReparent {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "window.reparent";
+    const ID: &'static str = "pop.window.reparent";
     type Input = WindowRequest;
     type Value = Vec<String>;
 }
 
-/// A popup opens in a window (`popup.open`).
+/// A popup opens in a window (`pop.popup.open`).
 #[derive(Debug)]
 pub struct PopupOpen;
 impl Point for PopupOpen {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "popup.open";
+    const ID: &'static str = "pop.popup.open";
     type Input = WindowRequest;
     type Value = Vec<String>;
 }
 
-/// A popup closes (`popup.close`).
+/// A popup closes (`pop.popup.close`).
 #[derive(Debug)]
 pub struct PopupClose;
 impl Point for PopupClose {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "popup.close";
+    const ID: &'static str = "pop.popup.close";
     type Input = WindowRequest;
     type Value = Vec<String>;
 }
 
-/// A window becomes the active one, the window worked in (`window.activate`):
+/// A window becomes the active one, the window worked in (`pop.window.activate`):
 /// the person pressed or typed in it (`user`), the system gave it the
 /// focus (`system`), or the application asks it to the front (`command`,
 /// raised by [`RAISE`]).
@@ -371,7 +371,7 @@ impl Point for PopupClose {
 pub struct WindowActivate;
 impl Point for WindowActivate {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "window.activate";
+    const ID: &'static str = "pop.window.activate";
     type Input = WindowRequest;
     type Value = Vec<String>;
 }
@@ -439,55 +439,55 @@ impl JobAsk {
     }
 }
 
-/// A job is asked to stop (`job.cancel`); its listeners say what they
+/// A job is asked to stop (`pop.job.cancel`); its listeners say what they
 /// did, one line each, in the value.
 #[derive(Debug)]
 pub struct JobCancel;
 impl Point for JobCancel {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "job.cancel";
+    const ID: &'static str = "pop.job.cancel";
     type Input = JobAsk;
     type Value = Vec<String>;
 }
 
-/// A job is asked to pause (`job.pause`).
+/// A job is asked to pause (`pop.job.pause`).
 #[derive(Debug)]
 pub struct JobPause;
 impl Point for JobPause {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "job.pause";
+    const ID: &'static str = "pop.job.pause";
     type Input = JobAsk;
     type Value = Vec<String>;
 }
 
-/// A paused job is asked to go on (`job.resume`).
+/// A paused job is asked to go on (`pop.job.resume`).
 #[derive(Debug)]
 pub struct JobResume;
 impl Point for JobResume {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "job.resume";
+    const ID: &'static str = "pop.job.resume";
     type Input = JobAsk;
     type Value = Vec<String>;
 }
 
-/// A failed or cancelled job is asked to run again (`job.retry`).
+/// A failed or cancelled job is asked to run again (`pop.job.retry`).
 #[derive(Debug)]
 pub struct JobRetry;
 impl Point for JobRetry {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "job.retry";
+    const ID: &'static str = "pop.job.retry";
     type Input = JobAsk;
     type Value = Vec<String>;
 }
 
-/// A job event was said (`job.*`): each `job.*` event of the journal, and
+/// A job event was said (`pop.job.*`): each `job.*` event of the journal, and
 /// each `command.*` event of a job command, delivered once, in journal
 /// order ([`AppHandle::deliver_events`]).
 #[derive(Debug)]
 pub struct JobEvents;
 impl Point for JobEvents {
     const KIND: PointKind = PointKind::Event;
-    const ID: &'static str = "job.*";
+    const ID: &'static str = "pop.job.*";
     type Input = Event;
     type Value = ();
 }
@@ -525,18 +525,18 @@ impl PluginChange {
     }
 }
 
-/// A plugin is connected (`plugin.connect`), what it registers in
+/// A plugin is connected (`pop.plugin.connect`), what it registers in
 /// place; its listeners take back what it had left.
 #[derive(Debug)]
 pub struct PluginConnect;
 impl Point for PluginConnect {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "plugin.connect";
+    const ID: &'static str = "pop.plugin.connect";
     type Input = PluginChange;
     type Value = Vec<String>;
 }
 
-/// A plugin is disconnected (`plugin.disconnect`), what it registered
+/// A plugin is disconnected (`pop.plugin.disconnect`), what it registered
 /// removed, before `plugin.disconnected` is said: each listener adds what
 /// it did to the value (`jobs_cancelled`…), which the event's `removed`
 /// carries.
@@ -544,7 +544,7 @@ impl Point for PluginConnect {
 pub struct PluginDisconnect;
 impl Point for PluginDisconnect {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "plugin.disconnect";
+    const ID: &'static str = "pop.plugin.disconnect";
     type Input = PluginChange;
     type Value = serde_json::Map<String, serde_json::Value>;
 }
@@ -659,24 +659,24 @@ pub const CONTRACT: &[PointDecl] = &[
 /// What owns egui-pop's own listeners.
 pub const OWNER: &str = "egui_pop";
 /// What belongs to a closing window goes with it: its dialogs.
-pub const CHILDREN: &str = "window.children";
+pub const CHILDREN: &str = "pop.window.children";
 /// The window worked in before a closing one becomes the active one.
-pub const FOCUS: &str = "window.focus";
-/// A window asked to the front by a command (`window.activate`, reason
+pub const FOCUS: &str = "pop.window.focus";
+/// A window asked to the front by a command (`pop.window.activate`, reason
 /// `command`) is shown, restored and given the system's focus: the one
 /// place egui-pop sends `ViewportCommand::Focus`.
-pub const RAISE: &str = "window.raise";
+pub const RAISE: &str = "pop.window.raise";
 /// Another window becoming the active one drops every window's shortcut
 /// in progress: a chord begun in one window is never finished in another
 /// (a local listener: the windows' key dispatchers are the interface's).
-pub const KEYS: &str = "window.keys";
+pub const KEYS: &str = "pop.window.keys";
 /// The one list of windows and popups ([`AppHandle::windows_list`]).
-pub const REGISTRY: &str = "window.registry";
+pub const REGISTRY: &str = "pop.window.registry";
 /// A window's place, kept when it closes, and moved onto a screen left
-/// when its screen is unplugged (`screen.removed`).
-pub const PLACE: &str = "window.place";
+/// when its screen is unplugged (`pop.screen.removed`).
+pub const PLACE: &str = "pop.window.place";
 /// Checks, last, the window invariants ([`crate::window_invariants`]).
-pub const INVARIANTS: &str = "window.invariants";
+pub const INVARIANTS: &str = "pop.window.invariants";
 
 /// A window or popup as the registry holds it.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -694,7 +694,7 @@ pub struct WindowRecord {
     /// The reason of the request that opened it.
     pub opened_because: Reason,
     /// Whether it is the active window, the one worked in
-    /// (`window.activate`): one window of the list is.
+    /// (`pop.window.activate`): one window of the list is.
     pub active: bool,
     /// What draws into its own surface besides egui, as that part says it
     /// (`egui_pop_core::window_surface`): the image viewport's image
@@ -728,7 +728,7 @@ impl WindowRecord {
 #[derive(Debug, Default)]
 pub(crate) struct Registry {
     records: Vec<WindowRecord>,
-    /// The windows activated (`window.activate`), the active one last.
+    /// The windows activated (`pop.window.activate`), the active one last.
     activated: Vec<String>,
 }
 
@@ -810,7 +810,7 @@ pub(crate) struct Bus {
     /// The screens this application follows ([`screens`]).
     pub(crate) screens: RefCell<screens::Seen>,
     /// Whether each window had the system's focus at its last pass: a
-    /// window gaining it asks `window.activate` (`system`) once.
+    /// window gaining it asks `pop.window.activate` (`system`) once.
     focus_seen: RefCell<std::collections::BTreeMap<ViewportId, bool>>,
     /// Application windows raised by a command, asked the focus again
     /// from their own next pass (one not drawn yet has no system window).
@@ -832,7 +832,7 @@ pub(crate) struct Bus {
     wake: Arc<Mutex<Option<egui::Context>>>,
     /// The overlays of the stack the registry holds as popups.
     pub(crate) overlays: RefCell<overlays::Overlays>,
-    /// Each panel's state not ready (`panel.state`), for its chrome.
+    /// Each panel's state not ready (`pop.panel.state`), for its chrome.
     pub(crate) panel_states: panel_state::States,
     /// Passes over a point's budget, to say (`bus.overBudget`).
     pub(crate) over_budget: budget::Heard,
@@ -920,7 +920,7 @@ thread_local! {
 
 /// The application whose request runs now, for a listener (listeners
 /// are `Send + Sync` and keep no handle): an application's listener of
-/// `files.drop` runs its import command on it. `None` outside a request.
+/// `pop.files.drop` runs its import command on it. `None` outside a request.
 ///
 /// <div class="warning">Experimental: may change in any release
 /// (docs/stability.md).</div>
@@ -989,7 +989,7 @@ fn install(kernel: &dyn bus_contract::Bus, registry: &Arc<Mutex<Registry>>) {
         log::error!(target: "egui_pop", "{refused}: one egui-pop application per bus");
     }
     let mine = || ListenOpts::new().owner(OWNER);
-    // `window.close`, in the ADR's order.
+    // `pop.window.close`, in the ADR's order.
     let listened = [
         kernel.listen::<WindowClose>(CHILDREN, mine().before(FOCUS).priority(1000), |req, did| {
             let Some(app) = asking() else { return Ok(()) };
@@ -1313,7 +1313,7 @@ impl AppHandle {
         order_dump(&*self.0.bus.kernel, &WINDOW_POINTS)
     }
 
-    /// Asks for an application window's close (`window.close`): its
+    /// Asks for an application window's close (`pop.window.close`): its
     /// listeners all run now, in their declared order, the owner's state
     /// closing with it; `window.closed` is said after the last one. A
     /// before-hook on the `window.close` step may veto it, and a window
@@ -1348,7 +1348,7 @@ impl AppHandle {
             let req = serde_json::from_value::<WindowRequest>(args.clone())
                 .map_err(|e| format!("not a window request: {e}"))?;
             // The main window's close with another window open moves
-            // that window into it (ADR 0025): a `window.reparent`.
+            // that window into it (ADR 0025): a `pop.window.reparent`.
             if let Some(moved) = shell::move_in_instead(app, &req) {
                 return Ok(moved);
             }
@@ -1397,7 +1397,7 @@ impl AppHandle {
         order_dump(&*self.0.bus.kernel, points)
     }
 
-    /// Asks a panel's state (`panel.state`): its listeners run now, in
+    /// Asks a panel's state (`pop.panel.state`): its listeners run now, in
     /// their declared order (the workbench's keeps it for the panel's
     /// chrome). What they did, one line each. An application holding the
     /// bus may ask it there, from any thread.
@@ -1408,7 +1408,7 @@ impl AppHandle {
         emit_with::<PanelStateSet>(self, ask, Vec::new())
     }
 
-    /// Describes a declared panel (`panel.describe`): its listeners run
+    /// Describes a declared panel (`pop.panel.describe`): its listeners run
     /// now (the workbench's fills it from the declaration, its kind
     /// included); `None` for a panel nobody knows.
     ///
@@ -1418,7 +1418,7 @@ impl AppHandle {
         emit_with::<PanelDescribe>(self, panel.to_string(), None)
     }
 
-    /// The interactive areas of each window's last pass (`ui.areas`):
+    /// The interactive areas of each window's last pass (`pop.ui.areas`):
     /// what each writes, an edit area's control, value and grips, and
     /// whether it is inert.
     ///
@@ -1428,7 +1428,7 @@ impl AppHandle {
         emit_with::<UiAreas>(self, (), Vec::new())
     }
 
-    /// A panel's state as last asked (`panel.state`): ready when never
+    /// A panel's state as last asked (`pop.panel.state`): ready when never
     /// asked.
     ///
     /// <div class="warning">Experimental: may change in any release
@@ -1439,8 +1439,8 @@ impl AppHandle {
             .map_or(PanelState::Ready, |k| k.state.clone())
     }
 
-    /// Asks about a job (`job.cancel`, `job.pause`, `job.resume`,
-    /// `job.retry`): its listeners run now, in their declared order (the
+    /// Asks about a job (`pop.job.cancel`, `pop.job.pause`, `pop.job.resume`,
+    /// `pop.job.retry`): its listeners run now, in their declared order (the
     /// jobs plugin's: the job shows as asked, then whoever runs it is
     /// asked); the answer comes as the runner's `job.*` events. What they
     /// did, one line each; with nobody listening (no jobs plugin) it is
@@ -1518,7 +1518,7 @@ impl AppHandle {
         emit_with::<PluginDisconnect>(self, change, serde_json::Map::new())
     }
 
-    /// `window.registry`'s part on an application window: marked closed,
+    /// `pop.window.registry`'s part on an application window: marked closed,
     /// so the main window's next pass no longer declares its viewport and
     /// the backend lets its system window go; hidden at once where the
     /// system allows it; forgotten by the window shim, the paint guard and
@@ -1559,7 +1559,7 @@ pub(crate) fn declare(ctx: &mut crate::Ctx<'_>) -> Result<(), crate::ctx::CtxErr
     ctx.step(
         crate::steps::StepSpec::new(
             STEP_WINDOW_CLOSE,
-            "A window closes (`window`, `kind`, `owner`, `reason`, `cause`): its listeners on the bus run in their declared order; `window.closed` follows. The main window's, with another window open and not quitting, moves that window into it instead (`window.reparent`).",
+            "A window closes (`window`, `kind`, `owner`, `reason`, `cause`): its listeners on the bus run in their declared order; `window.closed` follows. The main window's, with another window open and not quitting, moves that window into it instead (`pop.window.reparent`).",
         )
         .args(json!({ "window": "settings", "kind": "app", "owner": "egui_pop.admin", "reason": "user" })),
     )?;

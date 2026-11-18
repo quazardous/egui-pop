@@ -1,10 +1,10 @@
 //! Jobs, as a plugin ([`JobsPlugin`], opt-in): the host's background
 //! work, followed on the bus ([ADR 0029](crate::bus)). The host publishes
 //! `job.*` events (see [`egui_pop_model::jobs`] for their data); the bus
-//! delivers each once, in journal order, to the listeners of `job.*`
+//! delivers each once, in journal order, to the listeners of `pop.job.*`
 //! (each pass, and before a read that must see them all), and the
 //! [`Jobs`] model behind the [`JOBS`] service is one of them
-//! ([`MODEL`], `jobs.model`): no job state changes but on a bus event or
+//! ([`MODEL`], `pop.jobs.model`): no job state changes but on a bus event or
 //! request. Nothing polls: without events, nothing is read.
 //!
 //! <div class="warning">Experimental: may change in any release
@@ -19,7 +19,7 @@
 //!   when a plugin hooks it, once per pass for each job that moved, so
 //!   a job's progress does not double the journal.
 //! - Cancel, pause, resume and retry are requests on the bus
-//!   (`job.cancel`, `job.pause`, `job.resume`, `job.retry`,
+//!   (`pop.job.cancel`, `pop.job.pause`, `pop.job.resume`, `pop.job.retry`,
 //!   [`AppHandle::request_job`]; [`ask`] asks one): [`MODEL`] marks the
 //!   job as waiting for the answer, then [`HOST`] runs its command (each
 //!   `{ "id" }`), declared for the host to run, or run in-process by a
@@ -28,7 +28,7 @@
 //! - A job belongs to a plugin when its `job.started` names it (`owner`,
 //!   or `command`, a command of the plugin), or when the plugin
 //!   published it itself. When that plugin is disconnected (ADR 0028),
-//!   [`CANCEL_ON_DISCONNECT`] (a listener of `plugin.disconnect`, run
+//!   [`CANCEL_ON_DISCONNECT`] (a listener of `pop.plugin.disconnect`, run
 //!   before `plugin.disconnected` is said) asks the host to cancel its
 //!   jobs that can be (`job.cancel` with `{ "id", "reason" }`, from
 //!   `egui_pop`; the job
@@ -36,7 +36,7 @@
 //!   the others, which go on, marked ([`Job::orphaned`]: the jobs centre
 //!   says "its plugin is off") until they end or the plugin is back
 //!   (`job.adopted`, said by [`ADOPT_ON_CONNECT`], a listener of
-//!   `plugin.connect`). `plugin.disconnected` counts both
+//!   `pop.plugin.connect`). `plugin.disconnected` counts both
 //!   (`jobs_cancelled`, `jobs_orphaned`). An orphaned job is not waited
 //!   on: [`JobsService::idle`] leaves it out (nothing owns it, it may
 //!   never end) and [`JobsService::orphans`] lists it.
@@ -116,18 +116,18 @@ pub const CMD_RETRY: CommandId = CommandId::from_static("job.retry");
 /// it to the model.
 pub const STEP_ESTIMATE: StepId = StepId::from_static("jobs.estimate");
 
-/// The jobs model's listener: of `job.*` (it folds each event), and of
+/// The jobs model's listener: of `pop.job.*` (it folds each event), and of
 /// the job requests (the job shows as asked).
-pub const MODEL: &str = "jobs.model";
+pub const MODEL: &str = "pop.jobs.model";
 /// Runs a job request's command, after [`MODEL`]: the host (or the
 /// application's runner) answers with its events.
-pub const HOST: &str = "jobs.host";
-/// Of `plugin.disconnect`: the jobs a plugin leaves are cancelled, or
+pub const HOST: &str = "pop.jobs.host";
+/// Of `pop.plugin.disconnect`: the jobs a plugin leaves are cancelled, or
 /// said orphaned.
-pub const CANCEL_ON_DISCONNECT: &str = "jobs.cancel-on-disconnect";
-/// Of `plugin.connect`: the jobs a plugin had left are its own again
+pub const CANCEL_ON_DISCONNECT: &str = "pop.jobs.cancel-on-disconnect";
+/// Of `pop.plugin.connect`: the jobs a plugin had left are its own again
 /// (`job.adopted`).
-pub const ADOPT_ON_CONNECT: &str = "jobs.adopt-on-connect";
+pub const ADOPT_ON_CONNECT: &str = "pop.jobs.adopt-on-connect";
 
 /// The command asking `request`.
 pub fn command_of(request: Request) -> CommandId {
@@ -293,7 +293,7 @@ impl JobsService {
         s.jobs.take_changed()
     }
 
-    /// Folds one event the bus delivered ([`MODEL`] on `job.*`).
+    /// Folds one event the bus delivered ([`MODEL`] on `pop.job.*`).
     fn follow(&self, app: &AppHandle, e: &Event) {
         let time = egui_pop_core::motion::now(&app.egui());
         lock(&self.state).now = time;

@@ -2,8 +2,8 @@
 //!
 //! Every real change of the workbench's layout (a panel docked, detached,
 //! floated, moved, resized, opened or closed) is said once as
-//! `layout.changed`, once the gesture that made it ended; the layout is
-//! saved by its listener (`layout.save`), not by a comparison each pass.
+//! `pop.layout.changed`, once the gesture that made it ended; the layout is
+//! saved by its listener (`pop.layout.save`), not by a comparison each pass.
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
@@ -144,7 +144,7 @@ fn a_tab_dragged_saves_nothing_until_it_is_let_go_then_once() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// What `layout.changed` said, by a test listener after egui-pop's save.
+/// What `pop.layout.changed` said, by a test listener after egui-pop's save.
 fn said(h: &Harness<'_, App>) -> std::sync::Arc<std::sync::Mutex<Vec<Vec<String>>>> {
     use egui_pop_api::bus::{LAYOUT_SAVE, LayoutChanged, bus_contract::ListenOpts};
     let said: std::sync::Arc<std::sync::Mutex<Vec<Vec<String>>>> = std::sync::Arc::default();

@@ -1,7 +1,7 @@
 //! The window lifecycle on the bus (ADR 0029): the window points and
 //! their listeners in a declared, reviewed order; the registry as the one
 //! list of windows (`windows.list`); and a part that cares about a
-//! window closing listening to `window.close` at a declared place,
+//! window closing listening to `pop.window.close` at a declared place,
 //! finding what runs before it done.
 
 use std::fs;
@@ -54,7 +54,7 @@ fn the_window_points_run_in_their_reviewed_order() {
         "the window points' order changed: review it, then UPDATE_BUS_ORDER=1 writes {}",
         path.display()
     );
-    // `window.close`, as the ADR orders it.
+    // `pop.window.close`, as the ADR orders it.
     let close: Vec<String> = m
         .app()
         .bus()
@@ -66,15 +66,15 @@ fn the_window_points_run_in_their_reviewed_order() {
     assert_eq!(
         close,
         [
-            "window.children",
-            "workbench.window",
-            "admin.window",
-            "dialogs.cancel-on-close",
-            "files.choice",
-            "window.focus",
-            "window.registry",
-            "window.place",
-            "window.invariants"
+            "pop.window.children",
+            "pop.workbench.window",
+            "pop.admin.window",
+            "pop.dialogs.cancel-on-close",
+            "pop.files.choice",
+            "pop.window.focus",
+            "pop.window.registry",
+            "pop.window.place",
+            "pop.window.invariants"
         ]
     );
 }
@@ -95,7 +95,7 @@ fn no_window_listener_orders_itself_against_a_missing_one() {
         .unwrap();
     assert_eq!(
         bus::missing_targets(&m.app().bus(), &WINDOW_POINTS),
-        ["window.close: test.ghost -> nobody"]
+        ["pop.window.close: test.ghost -> nobody"]
     );
     // A second listener last on a point is refused.
     assert!(
@@ -162,7 +162,7 @@ fn the_registry_lists_every_window_with_its_kind_and_owner() {
     );
 }
 
-/// A part listening to `window.close` after the owner and before the
+/// A part listening to `pop.window.close` after the owner and before the
 /// registry finds the Settings app closed and the window still held:
 /// the same call, in the declared order, whoever asked.
 #[test]

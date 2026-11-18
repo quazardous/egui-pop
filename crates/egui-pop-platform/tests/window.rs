@@ -1,7 +1,7 @@
 //! `window::raise`'s contract: the commands it sends the main window,
 //! read from a frame's output on a bare context; in an application,
-//! `window::raise_app` asks the bus's `window.activate` of the main
-//! window, whose `window.raise` listener sends the same. Whether the session is
+//! `window::raise_app` asks the bus's `pop.window.activate` of the main
+//! window, whose `pop.window.raise` listener sends the same. Whether the session is
 //! a Wayland one is read from the environment: the attention request
 //! is checked against `wayland()`, whatever it says here. What the
 //! window manager then does with the commands needs a display and is

@@ -189,7 +189,7 @@ thread_local! {
         const { std::cell::RefCell::new(Vec::new()) };
     /// How many times the screens were told on this thread: an
     /// application follows them from its main window's pass when it
-    /// changed (`screen.added`, `screen.removed`).
+    /// changed (`pop.screen.added`, `pop.screen.removed`).
     static TOLD: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
@@ -226,10 +226,10 @@ pub fn screen_list() -> Vec<Screen> {
 /// list says none are known (only sizes are bounded).
 ///
 /// Each application of the thread follows the change from its main
-/// window's next pass: a screen gone is said as `screen.removed`, a new
-/// one as `screen.added` (by name; [`crate::bus::ScreenRemoved`]), and
+/// window's next pass: a screen gone is said as `pop.screen.removed`, a new
+/// one as `pop.screen.added` (by name; [`crate::bus::ScreenRemoved`]), and
 /// every window on a screen gone moves onto one that is left, a detached
-/// panel's window docking back (`window.place`).
+/// panel's window docking back (`pop.window.place`).
 pub fn set_screens(screens: Vec<Screen>) {
     log::debug!(target: "egui_pop::window", "screens: {screens:?}");
     SCREENS.set(screens);

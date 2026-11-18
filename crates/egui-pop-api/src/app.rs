@@ -547,7 +547,7 @@ impl Drop for ActingFor<'_> {
 pub(crate) struct Registries {
     /// Declarations, each with its in-process handler if it has one.
     pub commands: Commands<Option<CommandFn>>,
-    /// Shared with the `pointer.profile` listener, which loads the
+    /// Shared with the `pop.pointer.profile` listener, which loads the
     /// profile's bindings into it.
     pub keymap: Rc<RefCell<Keymap>>,
     pub menus: Menus,
@@ -2155,7 +2155,7 @@ impl AppHandle {
     /// The window the user worked in last (focused, clicked or typed
     /// in), still open: the main window (`ViewportId::ROOT`), a detached
     /// panel's or an application window's. A dialog opens over it. The
-    /// registry holds it (`window.activate`, [`AppHandle::active_window_id`]).
+    /// registry holds it (`pop.window.activate`, [`AppHandle::active_window_id`]).
     pub fn active_window(&self) -> egui::ViewportId {
         let (id, kind) = self.active_window_record();
         self.still_open(
@@ -2695,12 +2695,12 @@ impl AppHandle {
                     );
                 };
                 // Its edit areas are inert while what it shows is not
-                // current (`panel.state` stale, updating or failed).
+                // current (`pop.panel.state` stale, updating or failed).
                 let inert = self.panel_state(id.as_str()) != crate::bus::PanelState::Ready;
                 egui_pop_core::areas::scope(ui, id.as_str(), inert, |ui| {
                     fault::boundary_reporting(ui, "panel", title, |ui| draw(ui, self), failed);
                 });
-                // Its state (`panel.state`), drawn by the chrome over what
+                // Its state (`pop.panel.state`), drawn by the chrome over what
                 // the panel drew.
                 crate::bus::panel_state::paint_content(
                     &self.0.bus.panel_states,
@@ -3098,7 +3098,7 @@ impl AppHandle {
         if self.focused_panel() != focused {
             self.publish_focused();
         }
-        // Said on the bus once its gesture ended (`layout.changed`).
+        // Said on the bus once its gesture ended (`pop.layout.changed`).
         if matches!(out, Outcome::Done(Ok(_))) {
             self.note_layout(step.as_str());
         }
@@ -4455,7 +4455,7 @@ fn load_pointer_profile(
     }
 }
 
-/// The settings the theme follows (`theme.install`).
+/// The settings the theme follows (`pop.theme.install`).
 const THEME_SETTINGS: [SettingId; 6] = [
     SETTING_ACCENT_COLOR,
     SETTING_THEME_PREFERENCE,
@@ -4466,7 +4466,7 @@ const THEME_SETTINGS: [SettingId; 6] = [
 ];
 
 /// The theme installed and the settings it follows, shared by the
-/// application and its `theme.install` listener.
+/// application and its `pop.theme.install` listener.
 #[derive(Default)]
 struct ThemeFollow {
     /// The settings were read once.
@@ -4579,7 +4579,7 @@ pub struct App {
     dirty: bool,
     started: bool,
     /// The theme installed and the settings it follows, shared with its
-    /// listener on `settings.changed` ([`crate::bus::THEME_INSTALL`]).
+    /// listener on `pop.settings.changed` ([`crate::bus::THEME_INSTALL`]).
     theme: Rc<RefCell<ThemeFollow>>,
     persist: Option<Persist>,
     /// The kits added: their faces and handlers are registered in each
@@ -4596,9 +4596,9 @@ pub struct App {
     /// Rebuilds so far (the keymap may have changed).
     rebuilds: u64,
     /// The pointer profile loaded and the map published, shared with the
-    /// `pointer.profile` listener.
+    /// `pop.pointer.profile` listener.
     pointer: Rc<RefCell<crate::pointer::Sync>>,
-    /// The `pointer.profile` listener changed the keymap: rebuilt with
+    /// The `pop.pointer.profile` listener changed the keymap: rebuilt with
     /// the application's next requests.
     keymap_changed: Rc<std::cell::Cell<bool>>,
     /// The pass the logic last ran in (`App::logic`).
@@ -4616,7 +4616,7 @@ struct Removed {
 }
 
 /// What the debounced saving of the settings and the keymap last saw
-/// (the layout is saved on `layout.changed`).
+/// (the layout is saved on `pop.layout.changed`).
 #[derive(Debug, Default)]
 struct AutoSave {
     /// The store's sequence number last offered.
@@ -4627,7 +4627,7 @@ struct AutoSave {
 
 /// Saves the layout to the document the host names now, through the
 /// `layout.save` step; `None` when the host keeps the layout. Done, the
-/// layout as it stands is the one said (`layout.changed`).
+/// layout as it stands is the one said (`pop.layout.changed`).
 fn save_layout(handle: &AppHandle, persist: Option<Persist>) -> Option<Outcome> {
     let document = handle.with_host(|h| h.layout_document()).flatten()?;
     let out = handle.step(
@@ -6570,8 +6570,8 @@ impl App {
     /// Saves what changed a short while after it changed: the settings,
     /// the user's keymap and the documents plugins offered. Saving never
     /// waits for the exit, so a crash loses at most the last second. The
-    /// layout is saved when it changed, by the `layout.save` listener of
-    /// `layout.changed` (`crate::bus::layout`).
+    /// layout is saved when it changed, by the `pop.layout.save` listener of
+    /// `pop.layout.changed` (`crate::bus::layout`).
     fn autosave(&mut self, ctx: &Context) {
         if self.persist.is_none() {
             return;
@@ -6665,7 +6665,7 @@ impl App {
         save_layout(&self.handle, self.persist.clone())
     }
 
-    /// Registers egui-pop's listener of `layout.changed`, local to the
+    /// Registers egui-pop's listener of `pop.layout.changed`, local to the
     /// interface's thread: the layout saved to the host's document
     /// ([`crate::bus::LAYOUT_SAVE`]).
     fn listen_layout(&mut self) {
@@ -6815,7 +6815,7 @@ impl App {
 
     /// Installs the theme where it is not yet (the kits' faces with it),
     /// or again when the theme service's spec changed; the settings are
-    /// read once here, then followed by the `theme.install` listener.
+    /// read once here, then followed by the `pop.theme.install` listener.
     fn install_theme(&mut self) {
         let ctx = self.handle.egui();
         let here = THEME_INSTALLED.get(&ctx).unwrap_or(false);
@@ -6831,7 +6831,7 @@ impl App {
         follow.install(&self.handle, !here);
     }
 
-    /// Registers egui-pop's listeners of `settings.changed`, local to the
+    /// Registers egui-pop's listeners of `pop.settings.changed`, local to the
     /// interface's thread: the theme, the pointer profile, the main
     /// window's frame.
     fn listen_settings(&mut self) {
@@ -6990,7 +6990,7 @@ impl App {
                 return Reply::Done(Err(msg));
             }
         };
-        // Its listeners on the bus (`command.run`), in their order, before
+        // Its listeners on the bus (`pop.command.run`), in their order, before
         // the handler: one may refuse it, and a failing one refuses it
         // (fail-closed). Nobody listening, it goes on as before.
         let mut ask = crate::bus::CommandAsk::new(command.clone(), args.clone(), origin.clone());
@@ -7356,7 +7356,7 @@ impl App {
             self.emit(&Lifecycle::Pass);
         }
         if self.pointer.borrow().loaded.is_none() {
-            // Read once; then followed by `pointer.profile`.
+            // Read once; then followed by `pop.pointer.profile`.
             load_pointer_profile(
                 &self.handle,
                 &self.reg.keymap,
@@ -7371,7 +7371,7 @@ impl App {
             self.process_requests();
         }
         self.publish_pointer(ctx);
-        // The layout's changes noted since, said once (`layout.changed`).
+        // The layout's changes noted since, said once (`pop.layout.changed`).
         self.handle.settle_layout(ctx);
         self.autosave(ctx);
     }
@@ -7430,15 +7430,15 @@ impl App {
             ui.set_style(now);
         }
         self.handle.note_window(&ctx);
-        // The screens told since the last pass: `screen.added`,
-        // `screen.removed`, the windows on a screen gone moved or docked.
+        // The screens told since the last pass: `pop.screen.added`,
+        // `pop.screen.removed`, the windows on a screen gone moved or docked.
         self.handle.follow_screens(&ctx);
         // The files the system says over the main window, read once.
         crate::bus::files::begin_pass(&ctx, crate::windows::WindowId::MAIN);
         // A drag begun here followed; let go, delivered (`bus::drag`).
         crate::bus::drag::begin_pass(&ctx, crate::windows::WindowId::MAIN);
         crate::workbench::forget_closed_windows(&self.handle, &ctx);
-        // The system asks the main window's close: a `window.close` of
+        // The system asks the main window's close: a `pop.window.close` of
         // the main window (another window moving into it when one is
         // open, ADR 0025), unless one already ran.
         if ctx.viewport_id() == egui::ViewportId::ROOT {
@@ -7480,7 +7480,7 @@ impl App {
         self.panel_keys.retain(|v, _| drawn.contains(v));
         handle.show_zone(ui, &zones::OVERLAYS);
         handle.show_zone(ui, &zones::WINDOW_OVERLAYS);
-        // Files dropped on the main window: its `files.drop`.
+        // Files dropped on the main window: its `pop.files.drop`.
         crate::bus::files::end_pass(&handle, ui);
         crate::bus::drag::end_pass(&handle, &ctx);
         // A focus screen without its page, a window that painted nothing:

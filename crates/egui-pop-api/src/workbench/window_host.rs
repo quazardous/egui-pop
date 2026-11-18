@@ -335,7 +335,7 @@ impl ViewportHost for PanelWindows<'_> {
             body(ui);
             if own_window {
                 app.show_zone(ui, &crate::zones::WINDOW_OVERLAYS);
-                // Files dropped on this window: its `files.drop`.
+                // Files dropped on this window: its `pop.files.drop`.
                 crate::bus::files::end_pass(app, ui);
                 crate::bus::drag::end_pass(app, &vctx);
                 crate::menus::draw_popup(&vctx, app);
@@ -343,7 +343,7 @@ impl ViewportHost for PanelWindows<'_> {
             // In a window of its own, egui_stack asks the close of the
             // workbench's viewer (`close_policy`), which runs the step.
             if !own_window && vctx.input(|i| i.viewport().close_requested()) {
-                // The step decides, then the window's `window.close`: the
+                // The step decides, then the window's `pop.window.close`: the
                 // default docks its panels back. Refused, it stays.
                 app.change_workbench(Change::CloseWindow(panel.clone()));
                 let kept = (app.workbench_mut().layout.auxiliary.iter()).any(|a| a.panel == panel);
@@ -355,7 +355,7 @@ impl ViewportHost for PanelWindows<'_> {
             if own_window {
                 super::keep_window_place(app, &vctx, &panel);
                 // A tab moved among its tabs, or another gesture its dock
-                // made: read back and said if it changed (`layout.changed`).
+                // made: read back and said if it changed (`pop.layout.changed`).
                 if vctx.input(|i| {
                     i.pointer.any_released()
                         || i.events
@@ -369,7 +369,7 @@ impl ViewportHost for PanelWindows<'_> {
     }
 
     /// None: egui-pop brings its windows back onto the screens itself
-    /// (`window_place`, `screen.removed` docking a window back), so
+    /// (`window_place`, `pop.screen.removed` docking a window back), so
     /// egui_stack's own repair is left off. The floats' places are read on
     /// [`stack_screens`].
     fn screens(&self) -> Vec<Screen> {

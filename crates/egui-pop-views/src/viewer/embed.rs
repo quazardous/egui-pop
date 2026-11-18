@@ -36,11 +36,11 @@
 //!   window: drawing the page again opens it again, from the start.
 //! - **On the bus** (ADR 0029): the web view is a native window of the
 //!   registry (`web-view:<n>`, [`WEB_VIEW_PREFIX`]), owned by the viewer, a
-//!   child of the window its page is drawn in. It opens by its `window.open`
+//!   child of the window its page is drawn in. It opens by its `pop.window.open`
 //!   (`AppHandle::request_native_open`), asked before the backend is, and each
 //!   place it is dropped (its page left or hidden, a panel too small, a
 //!   failure, its own window closed, its page drawn in another window) asks
-//!   its `window.close`. The viewer's local listener on `window.close`
+//!   its `pop.window.close`. The viewer's local listener on `pop.window.close`
 //!   ([`WEB_VIEW_LISTENER`]) drops it in that call, on the interface's thread:
 //!   its window closing closes it first (`parent-closed`), none left behind.
 
@@ -73,10 +73,10 @@ pub const DEFAULT_REFERRER: &str = "https://localhost/";
 pub const MIN_PLAYER: f32 = 200.0;
 /// How often the web view's loop is turned while it is open.
 pub const PUMP: Duration = Duration::from_millis(15);
-/// The viewer's local listener on `window.close`: the web view of that
+/// The viewer's local listener on `pop.window.close`: the web view of that
 /// native window is dropped, whoever asked (its page left, its window
 /// closing, among others).
-pub const WEB_VIEW_LISTENER: &str = "viewer.web_view";
+pub const WEB_VIEW_LISTENER: &str = "pop.viewer.web_view";
 /// A web view's id in the registry: `web-view:<n>`.
 pub const WEB_VIEW_PREFIX: &str = "web-view:";
 /// The application's passes without the page before its panel counts as
@@ -192,8 +192,8 @@ struct Session {
     own_window: bool,
     /// The user closed its own window: it opens again on a click only.
     closed: bool,
-    /// Its native window's registry id, from its `window.open` until its
-    /// `window.close`.
+    /// Its native window's registry id, from its `pop.window.open` until its
+    /// `pop.window.close`.
     bus: Option<String>,
     /// The registry window it is a child of.
     parent: Option<String>,
@@ -285,7 +285,7 @@ impl Viewer {
         );
     }
 
-    /// Leaves the YouTube page: the web view closes, by its `window.close`
+    /// Leaves the YouTube page: the web view closes, by its `pop.window.close`
     /// for `reason`.
     pub(super) fn stop_embed(&self, app: &AppHandle, reason: Reason) {
         self.close_web_view(app, reason);
@@ -298,7 +298,7 @@ impl Viewer {
         self.fail(app, target, Failure::Playback, detail);
     }
 
-    /// Asks the `window.close` of the web view's native window, if one is
+    /// Asks the `pop.window.close` of the web view's native window, if one is
     /// open: the viewer's listener drops the view in that call. Whether a
     /// view was open.
     fn close_web_view(&self, app: &AppHandle, reason: Reason) -> bool {
@@ -315,7 +315,7 @@ impl Viewer {
         let mut req = WindowRequest::new(window, WindowKind::Native, PLUGIN.as_str(), reason);
         req.parent = parent;
         if !app.request_window_close(req) {
-            log::warn!(target: "egui_pop", "viewer: the web view's `window.close` did not close it");
+            log::warn!(target: "egui_pop", "viewer: the web view's `pop.window.close` did not close it");
         }
         had
     }
@@ -642,7 +642,7 @@ fn too_small(ui: &mut Ui, place: &Placement, native: f32) -> bool {
     ui.button(tr(&ctx, &api_txt::LINKS_OPEN_OUTSIDE)).clicked()
 }
 
-/// Registers the viewer's [`WEB_VIEW_LISTENER`] on `window.close`, replacing
+/// Registers the viewer's [`WEB_VIEW_LISTENER`] on `pop.window.close`, replacing
 /// that of an earlier connection: a local listener, run on this (the
 /// interface's) thread, as a web view is dropped on the thread it was made
 /// on.

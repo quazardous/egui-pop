@@ -4469,8 +4469,8 @@ impl FileBrowser {
                     if accepted {
                         match origin {
                             DropOrigin::App => egui::DragAndDrop::clear_payload(ui.ctx()),
-                            // Said on the window's `files.drop` by the
-                            // browser's listener (`files.browser`).
+                            // Said on the window's `pop.files.drop` by the
+                            // browser's listener (`pop.files.browser`).
                             DropOrigin::System => crate::bus::files::take(
                                 ui.ctx(),
                                 match &offer.target {

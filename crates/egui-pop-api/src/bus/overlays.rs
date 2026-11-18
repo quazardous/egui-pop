@@ -4,13 +4,13 @@
 //! - Every overlay of every window's stack (`egui_pop_core::overlay`) and
 //!   every egui popup the stack follows (a context menu, a menu bar's
 //!   menu, the jobs popover, a hover card) is a popup of the registry: its
-//!   opening is its `popup.open`, its closing its `popup.close`, asked in
+//!   opening is its `pop.popup.open`, its closing its `pop.popup.close`, asked in
 //!   the call that opened or closed it ([`overlay::watch`]), with how it
 //!   closed (`how`: `escape`, `outside`, `chosen`, `owner`, `below`,
 //!   `gone`).
 //! - A popup's close asked by anyone else (its window closing under it,
-//!   `window.children` with `parent-closed`) closes it in the stack
-//!   ([`STACK`], a listener of `popup.close`), with what was above it.
+//!   `pop.window.children` with `parent-closed`) closes it in the stack
+//!   ([`STACK`], a listener of `pop.popup.close`), with what was above it.
 //! - An owner names its overlay's popup and itself
 //!   ([`AppHandle::name_overlay`]); an overlay not named is
 //!   `overlay:<id>@<window>`, owned by [`OVERLAY_OWNER`].
@@ -34,8 +34,8 @@ use crate::app::{AppHandle, WeakApp};
 
 /// The owner of an overlay its owner did not name.
 pub const OVERLAY_OWNER: &str = "egui_pop.overlay";
-/// Closes in the stack a popup closed by a request (`popup.close`).
-pub const STACK: &str = "overlay.stack";
+/// Closes in the stack a popup closed by a request (`pop.popup.close`).
+pub const STACK: &str = "pop.overlay.stack";
 /// The start of an unnamed overlay's popup id.
 pub const POPUP_PREFIX: &str = "overlay:";
 
@@ -77,7 +77,7 @@ pub(crate) fn watch(ctx: &egui::Context, app: &AppHandle) {
     );
 }
 
-/// Registers the stack's listener on `popup.close`.
+/// Registers the stack's listener on `pop.popup.close`.
 pub(super) fn install(kernel: &dyn bus_contract::Bus) {
     let l = kernel.listen::<PopupClose>(
         STACK,
@@ -143,7 +143,7 @@ impl AppHandle {
         self.0.bus.overlays.borrow_mut().own.insert(id);
     }
 
-    /// Closes an overlay by its popup's `popup.close`, the person having
+    /// Closes an overlay by its popup's `pop.popup.close`, the person having
     /// closed it (`how`: Escape, an item chosen), or by itself when the
     /// registry does not hold it. Whether the request closed it.
     pub(crate) fn close_overlay(&self, ctx: &egui::Context, id: Id, how: Closing) -> bool {

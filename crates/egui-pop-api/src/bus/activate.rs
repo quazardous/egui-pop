@@ -1,14 +1,14 @@
-//! The active window on the bus (`window.activate`, ADR 0029): the window
+//! The active window on the bus (`pop.window.activate`, ADR 0029): the window
 //! the person works in, one truth held by the registry.
 //!
 //! A press, a key or text in a window asks it (`user`), a window gaining
 //! the system's focus asks it (`system`), the application asking a window
-//! to the front asks it (`command`). `window.registry` holds it as the
+//! to the front asks it (`command`). `pop.window.registry` holds it as the
 //! active window; [`RAISE`] shows, restores and focuses a window asked by
 //! a command, the one place egui-pop sends `ViewportCommand::Focus`;
 //! `window.activated` is said after the last listener when the active
 //! window changed. A window closing while active hands the activation to
-//! the window worked in before it (`window.focus`, a `system` request).
+//! the window worked in before it (`pop.window.focus`, a `system` request).
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -26,7 +26,7 @@ use super::{
 use crate::app::AppHandle;
 use crate::windows::WindowId;
 
-/// Registers `window.activate`'s listeners: the registry, then the raise
+/// Registers `pop.window.activate`'s listeners: the registry, then the raise
 /// (the invariants, last, are the bus's).
 pub(super) fn install(kernel: &dyn Bus, registry: &Arc<Mutex<Registry>>) {
     let mine = || ListenOpts::new().owner(OWNER);
@@ -62,7 +62,7 @@ pub(super) fn install(kernel: &dyn Bus, registry: &Arc<Mutex<Registry>>) {
     }
 }
 
-/// Registers [`KEYS`], a local listener on `window.activate` after the
+/// Registers [`KEYS`], a local listener on `pop.window.activate` after the
 /// registry: when the active window changes, `epoch` counts it, and each
 /// window's key dispatcher drops its shortcut in progress at its next
 /// pass. A chord begun in one window is never finished in another.
@@ -105,8 +105,8 @@ fn raise(ctx: &Context, v: ViewportId, main: bool) {
 
 /// The main window shown, restored and focused, for a program without an
 /// egui-pop application (the platform readers used standalone): what
-/// [`RAISE`] does for a `window.activate` of the main window. An
-/// application asks `window.activate` instead
+/// [`RAISE`] does for a `pop.window.activate` of the main window. An
+/// application asks `pop.window.activate` instead
 /// ([`AppHandle::request_window_activate`]).
 ///
 /// <div class="warning">Experimental: may change in any release
@@ -124,7 +124,7 @@ fn wayland() -> bool {
 
 impl AppHandle {
     /// Asks for a window to become the active one, the window worked in
-    /// (`window.activate`, ADR 0029): the registry holds it as active, and
+    /// (`pop.window.activate`, ADR 0029): the registry holds it as active, and
     /// with the reason `command` it is brought to the front. Its listeners
     /// run now, in their declared order; `window.activated` is said after
     /// the last one when the active window changed. A window not in the
@@ -205,7 +205,7 @@ impl AppHandle {
             .map(|r| (r.id.clone(), r.kind))
     }
 
-    /// Asks a window to the front (`window.activate`, reason `command`):
+    /// Asks a window to the front (`pop.window.activate`, reason `command`):
     /// the window a viewport draws.
     pub(crate) fn raise_viewport(&self, v: ViewportId, owner: &str) {
         if let Some((id, kind)) = self.registry_window_at(v) {
@@ -215,7 +215,7 @@ impl AppHandle {
 
     /// A window blocked by a modal open in another of its group
     /// ([`egui_pop_core::overlay::block_window_raising`]): a click on its
-    /// backdrop asks the modal's window to the front (`window.activate`).
+    /// backdrop asks the modal's window to the front (`pop.window.activate`).
     pub(crate) fn block_window(
         &self,
         ctx: &Context,
@@ -261,7 +261,7 @@ impl AppHandle {
     }
 
     /// From an application window's own pass: the focus asked again when
-    /// a command raised it since (`window.raise`), so a window not yet
+    /// a command raised it since (`pop.window.raise`), so a window not yet
     /// drawn when it was raised gets it too.
     pub(crate) fn raise_in_pass(&self, ctx: &Context) {
         if self
@@ -284,7 +284,7 @@ impl AppHandle {
         }
     }
 
-    /// `window.focus`'s part on a window closing: when it is the active
+    /// `pop.window.focus`'s part on a window closing: when it is the active
     /// one, the window worked in before it becomes active (a `system`
     /// request). The window made active, if one was.
     pub(crate) fn focus_before_close(&self, closing: &str) -> Option<String> {

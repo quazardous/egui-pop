@@ -147,7 +147,7 @@ impl Admin {
 
     /// Opens a wizard as [`Admin::open_wizard`] does, as a focus screen:
     /// the main window's whole page, whatever the app's window setting
-    /// (`admin.window`), with the shell's menus, status bar and centre
+    /// (`pop.admin.window`), with the shell's menus, status bar and centre
     /// hidden until it ends; the title bar stays, to move or quit. For a
     /// setup run before anything else (a first launch).
     pub fn open_focus_wizard(

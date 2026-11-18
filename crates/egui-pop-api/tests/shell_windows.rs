@@ -1,8 +1,8 @@
 //! The shell's windows on the bus (ADR 0029, slice 4): opening an
-//! application window is its `window.open`; the main window's close,
-//! whatever asked it, is its `window.close`, which moves another window
-//! into it as a `window.reparent` when one is open, and closes every other
-//! window by its own `window.close` when it does close; quitting is that
+//! application window is its `pop.window.open`; the main window's close,
+//! whatever asked it, is its `pop.window.close`, which moves another window
+//! into it as a `pop.window.reparent` when one is open, and closes every other
+//! window by its own `pop.window.close` when it does close; quitting is that
 //! close with the reason `quit`. The registry is the one list throughout.
 
 use std::cell::Cell;
@@ -92,19 +92,19 @@ fn did(data: &serde_json::Value) -> Vec<String> {
         .collect()
 }
 
-/// The listeners of a `window.reparent`, in their order: the registry,
+/// The listeners of a `pop.window.reparent`, in their order: the registry,
 /// the place (when the move left places to keep: moving in), the focus,
 /// then the invariants.
 fn assert_reparent_order(did: &[String], registry: &str, place: bool) {
     let mut want = vec![registry.to_string()];
     if place {
-        want.push("window.place: each keeps its place".into());
+        want.push("pop.window.place: each keeps its place".into());
     }
-    want.push("window.focus: the main window is active".into());
+    want.push("pop.window.focus: the main window is active".into());
     assert_eq!(did.len(), want.len() + 1, "{did:?}");
     assert_eq!(did[..want.len()], want[..]);
     assert!(
-        did[want.len()].starts_with("window.invariants: "),
+        did[want.len()].starts_with("pop.window.invariants: "),
         "{did:?}"
     );
 }
@@ -117,8 +117,8 @@ fn opening_an_application_window_is_a_window_open_with_its_owner() {
     assert_eq!(opened.len(), 1);
     assert_eq!(opened[0].data["owner"], "app");
     let did = did(&opened[0].data["did"]);
-    assert_eq!(did[0], "window.registry: holds it", "{did:?}");
-    assert!(did[1].starts_with("window.invariants: "), "{did:?}");
+    assert_eq!(did[0], "pop.window.registry: holds it", "{did:?}");
+    assert!(did[1].starts_with("pop.window.invariants: "), "{did:?}");
     // An owner of its own: the registry holds it under that owner.
     m.app().request_window_open(
         WindowSpec::new("b", "B"),
@@ -151,7 +151,7 @@ fn closing_the_main_window_with_a_window_open_moves_it_in_as_a_reparent() {
         m.commands(ViewportId::ROOT)
             .contains(&ViewportCommand::CancelClose)
     );
-    // One `window.close` of the main window, answered by a move.
+    // One `pop.window.close` of the main window, answered by a move.
     let close = events(m.app(), "window.close");
     assert_eq!(close.len(), 1);
     assert_eq!(close[0].data["args"]["kind"], "main");
@@ -162,7 +162,7 @@ fn closing_the_main_window_with_a_window_open_moves_it_in_as_a_reparent() {
     assert_eq!(reparent[0].data["args"]["parent"], "main");
     assert_reparent_order(
         &did(&reparent[0].data["result"]["did"]),
-        "window.registry: `a` drawn in the main window",
+        "pop.window.registry: `a` drawn in the main window",
         true,
     );
     // Nothing closed; A's own window left the registry, the main window
@@ -197,7 +197,7 @@ fn raising_the_main_window_reparents_the_content_back_to_its_own_window() {
     assert!(reparent[1].data["args"].get("parent").is_none());
     assert_reparent_order(
         &did(&reparent[1].data["result"]["did"]),
-        "window.registry: `a` in a window of its own",
+        "pop.window.registry: `a` in a window of its own",
         false,
     );
     assert_eq!(
@@ -246,7 +246,7 @@ fn quitting_closes_every_window_by_its_own_close_then_the_main_one() {
     let main = close.last().unwrap();
     assert_eq!(
         did(&main.data["result"]["did"])[0],
-        "window.children: 2 windows closed"
+        "pop.window.children: 2 windows closed"
     );
     // The system is asked, once; its close request is then let through.
     m.root_pass();
@@ -331,7 +331,7 @@ fn the_shell_has_no_direct_window_path() {
         for raw in ["ViewportCommand::Close", "CancelClose", "take_quitting()"] {
             assert!(
                 !text.contains(raw),
-                "{file} uses `{raw}`: ask the bus (`window.close`)"
+                "{file} uses `{raw}`: ask the bus (`pop.window.close`)"
             );
         }
         for call in ["move_into_root(", "move_out_of_root(", "take_going_home("] {
@@ -339,7 +339,7 @@ fn the_shell_has_no_direct_window_path() {
             let defined = text.matches(&format!("fn {call}")).count();
             assert_eq!(
                 calls, defined,
-                "{file} calls `{call}`: ask the bus (`window.reparent`)"
+                "{file} calls `{call}`: ask the bus (`pop.window.reparent`)"
             );
         }
     }

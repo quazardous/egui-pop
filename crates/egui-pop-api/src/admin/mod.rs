@@ -106,10 +106,10 @@ pub use wizard::{
 pub const CMD_OPEN: CommandId = CommandId::from_static("admin.open");
 /// Closes it.
 pub const CMD_CLOSE: CommandId = CommandId::from_static("admin.close");
-/// The Settings app's listener on the bus's `window.open` and
-/// `window.close`: the app is open while its window is, and its window
+/// The Settings app's listener on the bus's `pop.window.open` and
+/// `pop.window.close`: the app is open while its window is, and its window
 /// closing closes the app, whoever asked (ADR 0029).
-pub const WINDOW_LISTENER: &str = "admin.window";
+pub const WINDOW_LISTENER: &str = "pop.admin.window";
 /// The plugin owning the Settings app (its window, its listeners).
 pub const OWNER: &str = "egui_pop.admin";
 /// Moves it between the overlay and a window of its own.
@@ -300,7 +300,7 @@ impl Admin {
         }
         lock(&self.state).open = true;
         self.refresh();
-        // In its window: opened, or brought to the front (`window.open`).
+        // In its window: opened, or brought to the front (`pop.window.open`).
         window::settle(app, self, true);
         Ok(())
     }
@@ -318,7 +318,7 @@ impl Admin {
     }
 
     /// Closes it, and the wizard running with it. In its window, it is
-    /// the window's close (`window.close`, the app asking): the app closes
+    /// the window's close (`pop.window.close`, the app asking): the app closes
     /// in that call, its window's listeners after it.
     pub fn close(&self, app: &AppHandle) {
         if window::held(app) {
@@ -328,7 +328,7 @@ impl Admin {
     }
 
     /// The app's state closed: by [`Admin::close`], or by its window's
-    /// close (`admin.window`).
+    /// close (`pop.admin.window`).
     fn close_state(&self) {
         lock(&self.wizard).take();
         let mut s = lock(&self.state);

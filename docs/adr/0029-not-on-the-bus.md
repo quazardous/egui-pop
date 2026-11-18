@@ -6,6 +6,11 @@ decision under GOVERNANCE, without the comment period).
 This ADR decides and lists; it changes no behaviour. Each slice at the
 end is its own change.
 
+Since egui-pop 0.15, every point and listener id this ADR names carries
+the `pop.` prefix (`window.close` is now `pop.window.close`,
+`window.registry` is `pop.window.registry`); see the hook kernel's
+"Names". The ids below are kept as they were decided.
+
 ## Context
 
 An application (Helios) reported a black window without a title bar

@@ -348,10 +348,10 @@ pub(crate) struct Windows {
     /// The application quits ([`AppHandle::quit`]): the main window's
     /// next close quits instead of moving a window into it.
     quitting: bool,
-    /// The places a `window.reparent` leaves to `window.place`, each
+    /// The places a `pop.window.reparent` leaves to `pop.window.place`, each
     /// under its own id.
     pub(crate) moved_places: Vec<(WindowId, Geometry)>,
-    /// What a `window.reparent` says once its last listener ran.
+    /// What a `pop.window.reparent` says once its last listener ran.
     pub(crate) moved_events: Vec<(&'static str, serde_json::Value)>,
 }
 
@@ -484,7 +484,7 @@ impl AppHandle {
     /// window's id (`main`, or a window moved into it) cannot be opened
     /// again.
     ///
-    /// It is the `window.open` request ([`AppHandle::request_window_open`])
+    /// It is the `pop.window.open` request ([`AppHandle::request_window_open`])
     /// with the application (`app`) as its owner.
     pub fn open_window(
         &self,
@@ -496,13 +496,13 @@ impl AppHandle {
         id
     }
 
-    /// The `window.open` request of an application window its owner asks
+    /// The `pop.window.open` request of an application window its owner asks
     /// for (ADR 0029): opened, or, open already, brought to the front;
     /// either way its listeners run now, in their declared order (the
     /// owner's first), and `window.opened` is said after the last one
     /// when it opened. What they did, one line each. The owner (a plugin's
     /// id, `app`) is who the window's closes are asked for and whose
-    /// listener on `window.close` closes the state it shows.
+    /// listener on `pop.window.close` closes the state it shows.
     ///
     /// <div class="warning">Experimental: may change in any release
     /// (docs/stability.md).</div>
@@ -585,7 +585,7 @@ impl AppHandle {
     /// Closes an application window (the main one: as its close button
     /// does, another window moving into it when one is open).
     ///
-    /// A window's close is the `window.close` request
+    /// A window's close is the `pop.window.close` request
     /// ([`AppHandle::request_window_close`]): its owner's state closes
     /// with it, in this call.
     pub fn close_window(&self, id: &WindowId) {
@@ -599,7 +599,7 @@ impl AppHandle {
 
     /// The one way an application window closes, whatever asked (its
     /// close button, its content, [`AppHandle::close_window`], the
-    /// system): the `window.close` request, asked by `owner` (`None`: the
+    /// system): the `pop.window.close` request, asked by `owner` (`None`: the
     /// window's own owner, for what happens in the window itself).
     /// Whether a window was open under that id and closed.
     pub(crate) fn close_entry(&self, id: &WindowId, owner: Option<&str>, reason: Reason) -> bool {
@@ -623,7 +623,7 @@ impl AppHandle {
         ))
     }
 
-    /// `window.place`'s part: a closed window's place, kept to be written
+    /// `pop.window.place`'s part: a closed window's place, kept to be written
     /// with the others. Whether there was one.
     pub(crate) fn keep_closing_place(&self, id: &WindowId) -> bool {
         let geometry = self
@@ -665,8 +665,8 @@ impl AppHandle {
                 w.entry(id).map(|e| e.id.deferred_viewport())
             }
         };
-        // `window.activate` (`command`): the registry holds it as the
-        // active window, `window.raise` brings it to the front.
+        // `pop.window.activate` (`command`): the registry holds it as the
+        // active window, `pop.window.raise` brings it to the front.
         if let Some(v) = viewport {
             self.raise_viewport(v, "app");
         }
@@ -874,10 +874,10 @@ impl AppHandle {
             .find(|id| self.windows_ref().entry(id).is_some())
     }
 
-    /// `window.registry`'s part of a `window.reparent` into the main
+    /// `pop.window.registry`'s part of a `pop.window.reparent` into the main
     /// window: `id`'s content is drawn by the main window from its next
     /// pass, which takes its geometry; its own window is no longer
-    /// declared. The places each keeps are left to `window.place`, what is
+    /// declared. The places each keeps are left to `pop.window.place`, what is
     /// said to the request. Whether it moved.
     pub(crate) fn move_into_root(&self, id: &WindowId) -> bool {
         let moved = {
@@ -935,7 +935,7 @@ impl AppHandle {
         true
     }
 
-    /// `window.place`'s part of a `window.reparent`: the places the move
+    /// `pop.window.place`'s part of a `pop.window.reparent`: the places the move
     /// left, each kept under its own id. How many.
     pub(crate) fn keep_moved_places(&self) -> usize {
         let places = std::mem::take(&mut self.windows_mut().moved_places);
@@ -979,9 +979,9 @@ impl AppHandle {
 
     /// Quits the application: the main window closes, and the other
     /// windows with it, none moving into the main window as closing it
-    /// does otherwise. It is the `window.close` request of the main window
+    /// does otherwise. It is the `pop.window.close` request of the main window
     /// with the reason `quit`: each other window is closed by its own
-    /// `window.close` (`quit`), its owner's state with it. A close vetoed
+    /// `pop.window.close` (`quit`), its owner's state with it. A close vetoed
     /// (a before-hook on the `window.close` step: unsaved work) leaves the
     /// application as it was.
     pub fn quit(&self) {
@@ -1012,7 +1012,7 @@ impl AppHandle {
         (going && w.root.id != w.root.home && w.root.content.is_some()).then(|| w.root.id.clone())
     }
 
-    /// `window.registry`'s part of a `window.reparent` out of the main
+    /// `pop.window.registry`'s part of a `pop.window.reparent` out of the main
     /// window, the inverse of [`AppHandle::move_into_root`]: the content
     /// it holds goes back to a window of its own, and the main window
     /// draws the shell again. Whether one went back.
@@ -1174,7 +1174,7 @@ impl AppHandle {
         drawn
     }
 
-    /// An application window moved to `at` by `window.place` (its screen
+    /// An application window moved to `at` by `pop.window.place` (its screen
     /// gone): its builder asks that place from now on, so the next pass
     /// does not move it back.
     pub(crate) fn app_window_moved(&self, viewport: ViewportId, at: egui::Pos2) {
@@ -1462,7 +1462,7 @@ fn window_pass(viewport: ViewportId, ui: &mut Ui, class: ViewportClass) {
     }
     if own_window {
         app.show_zone(ui, &crate::zones::WINDOW_OVERLAYS);
-        // Files dropped on this window: its `files.drop`.
+        // Files dropped on this window: its `pop.files.drop`.
         crate::bus::files::end_pass(&app, ui);
         // A drag's target under the pointer kept; what it did said.
         crate::bus::drag::end_pass(&app, &ctx);

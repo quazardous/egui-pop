@@ -1,4 +1,4 @@
-//! The Settings app in its window mode (`admin.window`): an application
+//! The Settings app in its window mode (`pop.admin.window` listener): an application
 //! window of its own (`settings`), opened and closed with the app; its
 //! page drawn in the window's own pass; its close button, Escape and the
 //! page's Close close the app and only its window; "Pop in" takes it back
@@ -8,7 +8,7 @@
 //! these tests drive real viewports (`egui_pop_test::windows::MultiWindow`).
 //!
 //! On the bus (ADR 0029, slice 3): every way the window opens is one
-//! `window.open` and every way it closes one `window.close`, asked in the
+//! `pop.window.open` and every way it closes one `pop.window.close`, asked in the
 //! call that changed the app, their listeners acting in the same reviewed
 //! order whoever asked; the registry and the backend agree after each.
 
@@ -174,22 +174,22 @@ fn pop_in_takes_it_back_over_the_main_window() {
     );
 }
 
-/// What `window.open`'s listeners did, opening the Settings app's window:
+/// What `pop.window.open`'s listeners did, opening the Settings app's window:
 /// the same whatever opened it.
 const OPENED: [&str; 3] = [
-    "admin.window: the Settings app is open in its window",
-    "window.registry: holds it",
-    "window.invariants: held",
+    "pop.admin.window: the Settings app is open in its window",
+    "pop.window.registry: holds it",
+    "pop.window.invariants: held",
 ];
 
-/// What `window.close`'s listeners did, closing it while it was the
+/// What `pop.window.close`'s listeners did, closing it while it was the
 /// window worked in: the same whatever closed it.
 const CLOSED: [&str; 5] = [
-    "admin.window: the Settings app closed",
-    "window.focus: the window worked in before is active",
-    "window.registry: closed",
-    "window.place: its place kept",
-    "window.invariants: held",
+    "pop.admin.window: the Settings app closed",
+    "pop.window.focus: the window worked in before is active",
+    "pop.window.registry: closed",
+    "pop.window.place: its place kept",
+    "pop.window.invariants: held",
 ];
 
 fn events(app: &AppHandle, name: &str) -> Vec<Event> {
@@ -248,7 +248,7 @@ fn closed_in_the_call(m: &mut MultiWindow, closes: usize, reason: &str) {
     assert!(!admin::is_open(&app), "the app closed in the same call");
     assert!(!held(&app), "the registry let its window go");
     let (did, n) = did(&app, "window.close");
-    assert_eq!(n, closes, "one `window.close`");
+    assert_eq!(n, closes, "one `pop.window.close`");
     assert_eq!(did, CLOSED, "its listeners, in their order");
     let closed = events(&app, "window.closed");
     assert_eq!(closed.last().unwrap().data["reason"], reason);
@@ -366,7 +366,7 @@ fn pop_in_is_a_close_the_app_survives() {
     assert!(admin::is_open(m.app()));
     assert!(!held(m.app()));
     let mut moved = CLOSED.map(String::from).to_vec();
-    moved[0] = "admin.window: the Settings app moves over the main window".into();
+    moved[0] = "pop.admin.window: the Settings app moves over the main window".into();
     assert_eq!(did(m.app(), "window.close"), (moved, 1));
     m.root_pass();
     assert!(m.declared().is_empty());

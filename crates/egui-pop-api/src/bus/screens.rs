@@ -4,17 +4,17 @@
 //! ([`crate::window::set_screens`]: egui-pop's native runner, or a host
 //! running eframe on its own winit loop), at start and again when they
 //! may have changed. Each application follows the change from its main
-//! window's next pass: a screen come is said as `screen.added`
-//! ([`ScreenAdded`]), a screen gone as `screen.removed`
+//! window's next pass: a screen come is said as `pop.screen.added`
+//! ([`ScreenAdded`]), a screen gone as `pop.screen.removed`
 //! ([`ScreenRemoved`]), each a [`ScreenChange`] naming the screen as
 //! winit names it.
 //!
-//! egui-pop's listeners of `screen.removed`, local (they touch the
+//! egui-pop's listeners of `pop.screen.removed`, local (they touch the
 //! interface's state), in this order:
 //!
 //! 1. [`WORKBENCH_SCREENS`]: a detached panel's window kept on the screen
 //!    gone docks back (the layout's rule: "a window on a screen that is
-//!    gone comes back docked"), by its window's `window.reparent`;
+//!    gone comes back docked"), by its window's `pop.window.reparent`;
 //! 2. [`super::PLACE`]: every other window (the main window, the
 //!    application windows, a detached panel's window on a screen it
 //!    cannot name) that no longer meets a screen moves onto one that is
@@ -57,23 +57,23 @@ impl From<&Screen> for ScreenChange {
     }
 }
 
-/// A screen was plugged in (`screen.added`).
+/// A screen was plugged in (`pop.screen.added`).
 #[derive(Debug)]
 pub struct ScreenAdded;
 impl Point for ScreenAdded {
     const KIND: PointKind = PointKind::Event;
-    const ID: &'static str = "screen.added";
+    const ID: &'static str = "pop.screen.added";
     type Input = ScreenChange;
     type Value = ();
 }
 
-/// A screen was unplugged (`screen.removed`): the windows on it move onto
+/// A screen was unplugged (`pop.screen.removed`): the windows on it move onto
 /// a screen left, or dock back.
 #[derive(Debug)]
 pub struct ScreenRemoved;
 impl Point for ScreenRemoved {
     const KIND: PointKind = PointKind::Event;
-    const ID: &'static str = "screen.removed";
+    const ID: &'static str = "pop.screen.removed";
     type Input = ScreenChange;
     type Value = ();
 }
@@ -81,9 +81,9 @@ impl Point for ScreenRemoved {
 /// The screen points, in the order [`super::order_dump`] prints them.
 pub const SCREEN_POINTS: [&str; 2] = [ScreenAdded::ID, ScreenRemoved::ID];
 
-/// The workbench's listener of `screen.removed`: a detached panel's
+/// The workbench's listener of `pop.screen.removed`: a detached panel's
 /// window kept on the screen gone docks back.
-pub const WORKBENCH_SCREENS: &str = "workbench.screens";
+pub const WORKBENCH_SCREENS: &str = "pop.workbench.screens";
 
 /// What an application knows of the screens it follows.
 #[derive(Debug, Default)]
@@ -104,7 +104,7 @@ fn same(a: &Screen, b: &Screen) -> bool {
     }
 }
 
-/// Registers egui-pop's listeners of `screen.removed`.
+/// Registers egui-pop's listeners of `pop.screen.removed`.
 pub(super) fn install(kernel: &dyn Bus) {
     let mine = || ListenOpts::new().owner(OWNER);
     let listened = [
@@ -128,10 +128,10 @@ pub(super) fn install(kernel: &dyn Bus) {
 
 impl AppHandle {
     /// From the main window's pass: the screens told since the last pass
-    /// followed. Each screen gone is said as `screen.removed`, each come
-    /// as `screen.added`; the screens first told (to an application that
+    /// followed. Each screen gone is said as `pop.screen.removed`, each come
+    /// as `pop.screen.added`; the screens first told (to an application that
     /// knew none) are not said, the windows kept on a screen gone since
-    /// are repaired as on `screen.removed`.
+    /// are repaired as on `pop.screen.removed`.
     pub(crate) fn follow_screens(&self, ctx: &Context) {
         if ctx.viewport_id() != ViewportId::ROOT {
             return;
@@ -190,7 +190,7 @@ impl AppHandle {
 
     /// [`WORKBENCH_SCREENS`]: the detached panels' windows kept on a
     /// screen no longer told dock back, each by its window's
-    /// `window.reparent` into the main window. How many windows docked.
+    /// `pop.window.reparent` into the main window. How many windows docked.
     pub(crate) fn dock_windows_off_screens(&self) -> usize {
         let names = self.layout_screens();
         let screens: Vec<&str> = names.iter().map(String::as_str).collect();
@@ -215,7 +215,7 @@ impl AppHandle {
         gone
     }
 
-    /// `window.place` on `screen.removed`: every window whose position the
+    /// `pop.window.place` on `pop.screen.removed`: every window whose position the
     /// system tells and that meets no screen told (the main window, the
     /// application windows, the detached panels' windows) moves onto the
     /// nearest screen left, and keeps that place. Where positions are

@@ -4,7 +4,7 @@
 //! detached panel's window) reads the files the system says over it or
 //! dropped on it **once, here**: nothing else in egui-pop reads egui's
 //! `hovered_files` or `dropped_files`. Files dropped on a window are its
-//! `files.drop` request ([`FilesDrop`], a [`FileDrop`] naming the window),
+//! `pop.files.drop` request ([`FilesDrop`], a [`FileDrop`] naming the window),
 //! asked at the end of that window's pass; whoever takes them is one of its
 //! listeners and says so in the value. Taken, `files.dropped` is said;
 //! taken by nobody, `files.refused` (ADR 0003: never lost without a word).
@@ -62,14 +62,14 @@ impl FileDrop {
     }
 }
 
-/// Files are dropped on a window (`files.drop`): each listener that takes
+/// Files are dropped on a window (`pop.files.drop`): each listener that takes
 /// them says what it did, one line, in the value. Nobody taking them is a
 /// refusal.
 #[derive(Debug)]
 pub struct FilesDrop;
 impl Point for FilesDrop {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "files.drop";
+    const ID: &'static str = "pop.files.drop";
     type Input = FileDrop;
     type Value = Vec<String>;
 }
@@ -77,9 +77,9 @@ impl Point for FilesDrop {
 /// The files points, in the order [`super::order_dump`] prints them.
 pub const FILES_POINTS: [&str; 1] = [FilesDrop::ID];
 
-/// egui-pop's listener of `files.drop`, first: what the widgets of the
+/// egui-pop's listener of `pop.files.drop`, first: what the widgets of the
 /// window's pass took (the file browser over one of its targets).
-pub const BROWSER: &str = "files.browser";
+pub const BROWSER: &str = "pop.files.browser";
 
 /// What a window's pass knows of the files from another program.
 #[derive(Clone, Debug, Default)]
@@ -177,7 +177,7 @@ fn in_pass(ctx: &Context, change: impl FnOnce(&mut Pass)) {
     });
 }
 
-/// A window's pass ends: files dropped on it are its `files.drop`; files
+/// A window's pass ends: files dropped on it are its `pop.files.drop`; files
 /// hovering it that no widget placed show whether anything takes files.
 pub(crate) fn end_pass(app: &AppHandle, ui: &Ui) {
     let ctx = ui.ctx();
@@ -246,7 +246,7 @@ fn paint_hover(app: &AppHandle, ui: &Ui) {
     });
 }
 
-/// The listeners of `files.drop` but egui-pop's own.
+/// The listeners of `pop.files.drop` but egui-pop's own.
 fn takers(app: &AppHandle) -> usize {
     app.bus()
         .listeners(FilesDrop::ID)
@@ -256,7 +256,7 @@ fn takers(app: &AppHandle) -> usize {
         .count()
 }
 
-/// Registers egui-pop's listener of `files.drop`.
+/// Registers egui-pop's listener of `pop.files.drop`.
 pub(super) fn install(kernel: &dyn Bus) {
     let listened = kernel.listen::<FilesDrop>(
         BROWSER,
@@ -272,7 +272,7 @@ pub(super) fn install(kernel: &dyn Bus) {
 }
 
 impl AppHandle {
-    /// Asks for files dropped on a window (`files.drop`): its listeners run
+    /// Asks for files dropped on a window (`pop.files.drop`): its listeners run
     /// now, in their declared order, each that takes them saying so; then
     /// `files.dropped` is said with what they did, or `files.refused` when
     /// none took them or the window is not open. What they did, one line

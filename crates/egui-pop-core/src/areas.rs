@@ -32,7 +32,7 @@
 //! edit cursor, and is listed as inert.
 //!
 //! [`list`] gives the areas of each window's last pass, for agents and
-//! tests (the application API carries them on its bus as `ui.areas`).
+//! tests (the application API carries them on its bus as `pop.ui.areas`).
 //!
 //! ```
 //! use egui_pop_core::areas::{self, AreaSpec, Grip};

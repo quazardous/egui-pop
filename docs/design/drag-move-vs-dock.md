@@ -123,8 +123,8 @@ by its decorations, or by egui-pop's own title bar through
 manager. egui-pop sees none of it, so moving it never docks. Its panels
 dock back with `workbench.attach`, on closing the window, or by
 dragging their tabs out of it. A tab or a group dragged across windows
-goes through the drag session of `bus::drag` (`drag.start`,
-`drag.drop`, `drag.dropped`, `drag.refused`); a detached window is a
+goes through the drag session of `bus::drag` (`pop.drag.start`,
+`pop.drag.drop`, `drag.dropped`, `drag.refused`); a detached window is a
 drop target of it.
 
 **egui_stack's own floating windows** are off:
@@ -194,7 +194,7 @@ modes), as it has `slider_wheel`; a profile without it reads A. The
 application picks its default with a builder option (`dock_drag` on the
 app builder, as `pointer_profile` is), which sets the setting's
 default; the user changes it in the settings, like any other. A change
-is said once on the bus as `settings.changed`, and the palettes read
+is said once on the bus as `pop.settings.changed`, and the palettes read
 the mode in force from the setting, as the pointer options are read.
 
 **The gesture**: `gesture.workbench.dock`, a pointer gesture in the
@@ -277,7 +277,7 @@ default features):
 - mode C (`dwell`): a drag passing over the area without stopping stays
   floating; one resting on it past the delay (the harness's clock)
   docks;
-- the setting changed is said once as `settings.changed`; the Photoshop
+- the setting changed is said once as `pop.settings.changed`; the Photoshop
   profile with the setting at `profile` gives B;
 - the existing `a_palette_is_dragged_by_its_band_snaps_and_docks_on_an_area`
   and the grouping tests hold Ctrl where they dock or join.
