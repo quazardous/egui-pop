@@ -3,6 +3,14 @@
 //! keys that resolve are consumed before widgets see them, and so is what such
 //! a key sends while it is held.
 //!
+//! A focused widget that reads keys itself
+//! ([`crate::focus::reads_keys`]: a list's or a grid's arrows) gets them
+//! before a global binding of theirs pressed without Ctrl or Alt: the
+//! dispatcher names them in the context
+//! ([`CONTEXT_WIDGET_KEYS`](egui_pop_model::keymap::CONTEXT_WIDGET_KEYS)),
+//! and such a binding resolves nothing. Bindings scoped to the widget's
+//! surface, panel or window were declared for that place and go first.
+//!
 //! While a text input owns the keyboard
 //! ([`crate::focus::text_input_owns_keyboard`]: a text field has the
 //! focus, or an open input such as a slider's typed entry claimed it),
@@ -135,6 +143,23 @@ impl KeyDispatcher {
             self.pending.clear();
         }
         let owned = crate::focus::text_input_owns_keyboard(ctx);
+        let read = crate::focus::keys_read_by_focus(ctx);
+        let widened;
+        let cx = if read.is_empty() {
+            cx
+        } else {
+            let names: Vec<String> = read
+                .iter()
+                .map(|k| chord_of(*k, Modifiers::NONE).key)
+                .collect();
+            let mut c = cx.clone();
+            c.set(
+                egui_pop_model::keymap::CONTEXT_WIDGET_KEYS,
+                &names.join(" "),
+            );
+            widened = c;
+            &widened
+        };
         let presses: Vec<(usize, Key, Modifiers)> = ctx.input(|i| {
             i.events
                 .iter()

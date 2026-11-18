@@ -294,6 +294,7 @@ impl<'a> ListView<'a> {
             );
         }
         let row_h = self.row_height.unwrap_or_else(|| rows::height(ui));
+        egui_pop_core::focus::reads_keys(ui.ctx(), id, &nav::READS);
         let focused = ui.memory(|m| m.has_focus(id));
         let mut proposals = Vec::new();
         let mut late = Vec::new();

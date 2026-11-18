@@ -988,6 +988,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                 model.nodes().map(|n| (n.key.clone(), source.item(&n.key))),
             );
         }
+        egui_pop_core::focus::reads_keys(ui.ctx(), id, &nav::READS);
         let focused = ui.memory(|m| m.has_focus(id));
         // Ctrl+F or `/` (`tree.filter`) asked for the field.
         if focused && state.field.is_some() && filter::take_request(ui.ctx()) {

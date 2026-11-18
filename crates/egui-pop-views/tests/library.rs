@@ -762,3 +762,125 @@ fn colour_labels_are_swatches_unless_the_app_or_theme_asks_for_shapes() {
     LabelStyle::set(&ctx, Some(LabelStyle::Swatch));
     assert_eq!(LabelStyle::of(&ctx), LabelStyle::Swatch);
 }
+
+/// The commands that ran, by id.
+type Ran = std::rc::Rc<std::cell::RefCell<Vec<String>>>;
+
+/// A global Right and Home, and a Left bound in the window `import`.
+struct Globals(Ran);
+
+impl Plugin for Globals {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("globals")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        use egui_pop_model::commands::CommandSpec;
+        use egui_pop_model::ids::CommandId;
+        use egui_pop_model::keymap::BindOptions;
+        for (id, keys, options) in [
+            ("demo.next", "Right", BindOptions::global()),
+            ("demo.first", "Home", BindOptions::global()),
+            ("demo.import_left", "Left", BindOptions::window("import")),
+        ] {
+            let ran = self.0.clone();
+            ctx.command(
+                CommandSpec::new(CommandId::from_static(id), id, "Demo").key_with(keys, options),
+                move |_| {
+                    ran.borrow_mut().push(id.to_string());
+                    Ok(serde_json::Value::Null)
+                },
+            )?;
+        }
+        Ok(())
+    }
+}
+
+/// The widget before the keymap: in an application window, a focused grid
+/// reads its own arrows and ends before a global binding of theirs, which
+/// still runs where no widget reads them; a binding scoped to the window
+/// still goes first.
+#[test]
+fn a_focused_grid_gets_its_arrows_before_a_global_binding() {
+    use egui_pop_api::DefaultPlugins;
+    use egui_pop_api::windows::WindowSpec;
+    use egui_pop_test::windows::MultiWindow;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let ran = Ran::default();
+    let r = ran.clone();
+    let mut m = MultiWindow::new(move |ctx| {
+        App::builder()
+            .name("Import")
+            .plugins(DefaultPlugins)
+            .plugin(Globals(r))
+            .build(ctx)
+            .unwrap()
+    });
+    m.root_pass();
+    let state = Rc::new(RefCell::new(LibraryState::<u32>::new("import")));
+    let s = state.clone();
+    m.app()
+        .open_window(WindowSpec::new("import", "Import"), move |ui, _| {
+            let shoot = Shoot {
+                n: 20,
+                stacked: false,
+            };
+            ThumbGrid::new("grid").show(ui, &mut s.borrow_mut(), &shoot, &Thumbs);
+        });
+    m.root_pass();
+    let import = m.app().window_viewport(&"import".into()).unwrap();
+    m.window_pass(import);
+    m.window_pass(import);
+    let cursor = || state.borrow().selection().cursor().copied();
+    let take = || std::mem::take(&mut *ran.borrow_mut());
+    let press = |m: &mut MultiWindow, v: egui::ViewportId, key: Key| {
+        m.focus(v);
+        m.press(v, key, Modifiers::NONE);
+        if v == egui::ViewportId::ROOT {
+            m.root_pass();
+        } else {
+            m.window_pass(v);
+            m.window_pass(v);
+        }
+        m.root_pass();
+        m.root_pass();
+    };
+
+    // Nothing focused in the window: the global binding runs.
+    press(&mut m, import, Key::ArrowRight);
+    assert_eq!(take(), ["demo.next"]);
+    assert_eq!(cursor(), None);
+
+    let (rect, _) = m.node(import, "IMG_00000").expect("the first cell");
+    m.focus(import);
+    m.click(import, rect.center());
+    m.window_pass(import);
+    m.window_pass(import);
+    m.root_pass();
+    assert_eq!(cursor(), Some(0));
+
+    // The grid focused: its Right and End are its own.
+    press(&mut m, import, Key::ArrowRight);
+    assert_eq!(
+        cursor(),
+        Some(1),
+        "Right in the focused grid ran {:?} instead",
+        ran.borrow()
+    );
+    assert!(take().is_empty(), "a global binding took the grid's key");
+    press(&mut m, import, Key::End);
+    assert_eq!(cursor(), Some(19));
+    press(&mut m, import, Key::Home);
+    assert_eq!(cursor(), Some(0));
+    assert!(take().is_empty());
+
+    // A binding scoped to the window goes first.
+    press(&mut m, import, Key::ArrowLeft);
+    assert_eq!(take(), ["demo.import_left"]);
+
+    // In the main window, where no widget reads Right, the global runs.
+    press(&mut m, egui::ViewportId::ROOT, Key::ArrowRight);
+    assert_eq!(take(), ["demo.next"]);
+}

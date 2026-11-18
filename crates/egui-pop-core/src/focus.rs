@@ -132,6 +132,10 @@ struct State {
     remembered: HashMap<String, Id>,
     /// The widgets that said this pass that they read navigation keys.
     taking: Vec<Id>,
+    /// The keys each widget said it reads itself while focused
+    /// ([`reads_keys`]), this pass and the previous.
+    reading: Vec<(Id, Vec<egui::Key>)>,
+    reading_last: Vec<(Id, Vec<egui::Key>)>,
 }
 
 /// What a scope is besides its record, by the same index: not part of
@@ -275,6 +279,7 @@ fn rotate(ctx: &Context, s: &mut State) {
     s.drawn_last = std::mem::take(&mut s.drawn);
     s.passing_last = std::mem::take(&mut s.passing);
     s.taking.clear();
+    s.reading_last = std::mem::take(&mut s.reading);
     s.open.clear();
     if let Some(pos) = ctx.input(|i| {
         i.pointer
@@ -667,6 +672,49 @@ pub(crate) fn keys_taken_count(ctx: &Context) -> usize {
     let mut s = lock(&st);
     rotate(ctx, &mut s);
     s.taking.len()
+}
+
+/// Says that a widget reads these keys itself while it has the focus (call
+/// it each pass it is drawn): pressed without Ctrl or Alt while it is
+/// focused, they reach it before a global key binding of theirs, as a text
+/// field keeps the keys it types. A list or a grid says so of its arrows,
+/// Home, End, Page Up and Page Down, Space and Enter.
+///
+/// The key dispatcher runs before the widgets are drawn, so it reads what
+/// the focused widget said in this pass or the last
+/// ([`keys_read_by_focus`]). A binding scoped to the widget's surface, its
+/// panel or its window was declared for that place and still goes first; a
+/// binding that fires `always` (`Typing::Always`) does too.
+pub fn reads_keys(ctx: &Context, id: Id, keys: &[egui::Key]) {
+    let st = state(ctx);
+    let mut s = lock(&st);
+    rotate(ctx, &mut s);
+    match s.reading.iter_mut().find(|(w, _)| *w == id) {
+        Some((_, k)) => k.extend_from_slice(keys),
+        None => s.reading.push((id, keys.to_vec())),
+    }
+}
+
+/// The keys the widget holding the focus in this window said it reads
+/// itself ([`reads_keys`]), this pass or the last; none when nothing has
+/// the focus.
+pub fn keys_read_by_focus(ctx: &Context) -> Vec<egui::Key> {
+    let Some(focused) = ctx.memory(|m| m.focused()) else {
+        return Vec::new();
+    };
+    let st = state(ctx);
+    let mut s = lock(&st);
+    rotate(ctx, &mut s);
+    let mut keys: Vec<egui::Key> = s
+        .reading
+        .iter()
+        .chain(&s.reading_last)
+        .filter(|(w, _)| *w == focused)
+        .flat_map(|(_, k)| k.iter().copied())
+        .collect();
+    keys.sort_by_key(|k| k.name());
+    keys.dedup();
+    keys
 }
 
 /// Lets Escape through a text input (call it each pass it is drawn):

@@ -1,11 +1,28 @@
 //! Keyboard navigation shared by the views: the keys a focused view
 //! reads, where they move the cursor, and type-ahead.
 //!
-//! A view reads its keys only while it has the focus, and after the
-//! key dispatcher: a key bound to a command in the application's keymap
-//! runs the command and never reaches the view.
+//! A view reads its keys only while it has the focus. It says which
+//! ([`READS`], through `focus::reads_keys`), so that they reach it before
+//! a global binding of theirs; a key bound in the view's surface, panel or
+//! window, or with Ctrl or Alt, runs its command and never reaches the
+//! view.
 
 use egui::{Event, Key, Modifiers, Ui};
+
+/// The keys a focused view reads itself: the arrows, Page Up and Page
+/// Down, Home and End, Space and Enter.
+pub(crate) const READS: [Key; 10] = [
+    Key::ArrowUp,
+    Key::ArrowDown,
+    Key::ArrowLeft,
+    Key::ArrowRight,
+    Key::PageUp,
+    Key::PageDown,
+    Key::Home,
+    Key::End,
+    Key::Space,
+    Key::Enter,
+];
 
 /// What a key asks a view to do.
 #[derive(Clone, Debug, PartialEq, Eq)]

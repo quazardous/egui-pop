@@ -714,6 +714,34 @@ impl<'a> ThumbGrid<'a> {
         let lines = if grid { n.div_ceil(cols) } else { n };
         let line_of = |p: usize| if grid { p / cols } else { p };
         let key_at = |p: usize| items.key(state.index(p));
+        // Its arrows (Up and Down in a grid), pages, ends, Space and Enter
+        // reach it before a global binding of theirs.
+        let reads: &[EKey] = if grid {
+            &[
+                EKey::ArrowUp,
+                EKey::ArrowDown,
+                EKey::ArrowLeft,
+                EKey::ArrowRight,
+                EKey::PageUp,
+                EKey::PageDown,
+                EKey::Home,
+                EKey::End,
+                EKey::Space,
+                EKey::Enter,
+            ]
+        } else {
+            &[
+                EKey::ArrowLeft,
+                EKey::ArrowRight,
+                EKey::PageUp,
+                EKey::PageDown,
+                EKey::Home,
+                EKey::End,
+                EKey::Space,
+                EKey::Enter,
+            ]
+        };
+        egui_pop_core::focus::reads_keys(ui.ctx(), id, reads);
         let focused = ui.memory(|m| m.has_focus(id));
         let mut ops: Vec<Op<K>> = Vec::new();
 
