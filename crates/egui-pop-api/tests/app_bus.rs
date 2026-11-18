@@ -377,3 +377,71 @@ fn a_local_listener_on_a_window_point_runs_in_order_on_the_interface_thread() {
     assert_eq!(heard[1].0, "nowhere");
     assert!(app.run_pending().is_empty(), "run once");
 }
+
+/// With a bus that offers timings, the debug collector shows each
+/// point's budget and passes and each listener's runs, and `slowest`
+/// names who costs what; a pass over its point's budget is said once as
+/// `bus.overBudget` (the next ones within a minute counted, not said),
+/// its results kept.
+#[test]
+fn timings_show_in_the_collector_and_a_pass_over_budget_is_said() {
+    use std::time::Duration;
+    let shared: Arc<dyn Bus> = Arc::new(Kernel::new());
+    shared
+        .declare::<HealthReport>(
+            PointSpec::new("The application's health checks.").budget(Duration::ZERO),
+        )
+        .unwrap();
+    shared
+        .listen::<HealthReport>("app.slow", ListenOpts::new(), |_, v| {
+            std::thread::sleep(Duration::from_millis(2));
+            v.push("slow".into());
+            Ok(())
+        })
+        .unwrap();
+    shared
+        .listen::<HealthReport>("app.quick", ListenOpts::new(), |_, _| Ok(()))
+        .unwrap();
+    let mut m = multi(shared.clone());
+    for _ in 0..3 {
+        let out = shared.collect::<HealthReport>(());
+        assert_eq!(out.parts.len(), 2, "a budget drops nothing");
+    }
+    m.root_pass();
+
+    let said: Vec<_> = m
+        .app()
+        .events_since(Default::default())
+        .into_iter()
+        .filter(|e| e.name == "bus.overBudget" && e.data["point"] == "health.report")
+        .collect();
+    assert_eq!(said.len(), 1, "once a minute per point");
+    let data = &said[0].data;
+    assert_eq!(data["budget_us"], 0);
+    assert_eq!(data["slowest"], "app.slow");
+    assert!(data["took_us"].as_u64().unwrap() >= 2000);
+    assert_eq!(data["listeners"].as_array().unwrap().len(), 2);
+    assert_eq!(data["unsaid"], 0);
+
+    let snapshot = m.app().debug_snapshot()["bus"].clone();
+    let health = snapshot["points"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["point"] == "health.report")
+        .unwrap()
+        .clone();
+    assert_eq!(health["budget_us"], 0);
+    assert_eq!(health["timing"]["count"], 3);
+    assert_eq!(health["timing"]["over_budget"], 3);
+    let slow = &health["listeners"][0];
+    assert_eq!(slow["id"], "app.slow");
+    assert_eq!(slow["timing"]["count"], 3);
+    assert!(slow["timing"]["max_us"].as_u64().unwrap() >= 2000);
+    assert_eq!(slow["local"], false);
+    assert_eq!(slow["threaded"], false);
+    assert_eq!(slow["deadline_ms"], 1000);
+    let slowest = snapshot["slowest"].as_array().unwrap();
+    assert_eq!(slowest[0]["point"], "health.report");
+    assert_eq!(slowest[0]["id"], "app.slow");
+}

@@ -5407,30 +5407,40 @@ impl App {
         b.register(
             FnCollector::new(
                 "bus",
-                "The bus (ADR 0029): every point on it, egui-pop's and the application's (`by`), with its kind and its listeners in the order they run (owner, after, before, priority, missing targets, runs, failures), the ordering constraints naming a listener not there, the order as text, the window registry (`windows.list`), and the window invariants broken now and said.",
+                "The bus (ADR 0029): every point on it, egui-pop's and the application's (`by`), with its kind, deadline and budget and its listeners in the order they run (owner, after, before, priority, deadline, threaded, local, missing targets, runs, failures), the ordering constraints naming a listener not there, the order as text, the window registry (`windows.list`), and the window invariants broken now and said. When the bus offers timings: each point's passes (`timing`: count, p50, p95, max in µs, passes over budget) and each listener's runs, and `slowest`: every listener timed, the slowest first by p95.",
             )
             .snapshot(move |_| {
                 let Ok(app) = up(&w) else { return Json::Null };
                 let kernel = app.bus();
                 let infos = kernel.points();
                 let ids: Vec<&str> = infos.iter().map(|p| p.id).collect();
+                let timings: Vec<crate::bus::bus_contract::PointTimings> =
+                    kernel.timings().map(|t| t.points()).unwrap_or_default();
                 let points: Vec<Json> = infos
                     .iter()
                     .map(|p| {
+                        let timed = timings.iter().find(|t| t.point == p.id);
                         let listeners: Vec<Json> = p
                             .listeners
                             .iter()
                             .map(|l| {
+                                let timing = timed
+                                    .and_then(|t| t.listeners.iter().find(|x| x.id == l.id))
+                                    .map(|x| crate::bus::budget::stats(&x.stats));
                                 json!({
                                     "id": l.id,
                                     "owner": l.owner,
                                     "after": l.after,
                                     "before": l.before,
                                     "priority": l.priority,
+                                    "deadline_ms": l.deadline.as_millis(),
+                                    "threaded": l.threaded,
+                                    "local": l.local,
                                     "missing": l.missing,
                                     "runs": l.runs,
                                     "failures": l.failures,
                                     "last_failure": l.last_failure,
+                                    "timing": timing,
                                 })
                             })
                             .collect();
@@ -5439,18 +5449,27 @@ impl App {
                         } else {
                             "application"
                         };
+                        let timing = timed.map(|t| {
+                            let mut j = crate::bus::budget::stats(&t.passes);
+                            j["over_budget"] = json!(t.over_budget);
+                            j
+                        });
                         json!({
                             "point": p.id,
                             "kind": p.kind.as_str(),
                             "by": by,
                             "declared": p.declared,
                             "description": p.description,
+                            "deadline_ms": p.deadline.as_millis(),
+                            "budget_us": p.budget.map(crate::bus::budget::us),
+                            "timing": timing,
                             "listeners": listeners,
                         })
                     })
                     .collect();
                 json!({
                     "points": points,
+                    "slowest": crate::bus::budget::slowest(&timings),
                     "missing_targets": crate::bus::missing_targets(&*kernel, &ids),
                     "order": app.bus_order_of(&ids),
                     "windows": app.windows_list(),
@@ -7290,6 +7309,8 @@ impl App {
             // Local listeners queued by emits on other threads, in their
             // order, before the pass's handlers.
             self.handle.run_pending();
+            // Passes over a point's budget since the last pass, said.
+            self.handle.say_over_budget();
             self.emit(&Lifecycle::Pass);
         }
         if self.pointer.borrow().loaded.is_none() {
