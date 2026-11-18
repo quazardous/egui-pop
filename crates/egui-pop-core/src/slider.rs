@@ -7,6 +7,12 @@
 //! - [`Slider`]: one value, linear or logarithmic ([`Curve`]), on a plain
 //!   or a gradient track ([`Gradient`]: hue, temperature), with an
 //!   optional quad button at its end (a colour picker, a toggle).
+//! - A **colour ramp** ([`Ramp`], [`Slider::ramp`], `Knob::ramp`): a
+//!   colour for the minimum and one for the maximum (and stops between),
+//!   the value drawn in the colour between them, blended in Oklab; the
+//!   colour at the value ([`RampMode::Value`]) or the whole ramp on the
+//!   track ([`RampMode::Track`]). The number and the thumb still say the
+//!   value; a high-contrast theme keeps the theme's own fill.
 //! - [`RangeSlider`]: two values on one bar, a low and a high thumb.
 //!
 //! Gestures:
@@ -80,9 +86,11 @@
 
 pub mod expr;
 mod gradient;
+pub(crate) mod ramp;
 mod range;
 
 pub use gradient::Gradient;
+pub use ramp::{Ramp, RampColor, RampMode, oklab_mix};
 pub use range::RangeSlider;
 
 use std::fmt;
@@ -398,6 +406,9 @@ pub(crate) struct Spec {
     pub signed: bool,
     pub curve: Curve,
     pub gradient: Option<Gradient>,
+    /// The colour ramp ([`Ramp`]), over the gradient.
+    pub ramp: Option<Ramp>,
+    pub ramp_mode: RampMode,
     /// The field's state ([`crate::field`]).
     pub state: FieldState,
 }
@@ -419,6 +430,8 @@ impl Spec {
             signed: false,
             curve: Curve::Linear,
             gradient: None,
+            ramp: None,
+            ramp_mode: RampMode::Value,
             state: FieldState::default(),
         }
     }
@@ -620,6 +633,48 @@ macro_rules! spec_builders {
 }
 pub(crate) use spec_builders;
 
+/// The colour ramp's builders, shared by [`Slider`] and
+/// [`Knob`](crate::knob::Knob).
+macro_rules! ramp_builders {
+    () => {
+        /// A colour for the minimum and one for the maximum, the value
+        /// drawn in the colour between them, blended in Oklab over the
+        /// soft range ([`Ramp`](crate::slider::Ramp)): a token path
+        /// (`"danger"`) or a [`Color32`](egui::Color32) each.
+        /// Drawn in [`RampMode::Value`](crate::slider::RampMode) unless
+        /// [`ramp_track`](Self::ramp_track) says otherwise; a
+        /// high-contrast theme draws the theme's own fill instead.
+        pub fn ramp(
+            self,
+            min: impl Into<$crate::slider::RampColor>,
+            max: impl Into<$crate::slider::RampColor>,
+        ) -> Self {
+            self.ramp_with($crate::slider::Ramp::new(min, max))
+        }
+
+        /// A colour ramp through stops `(place, colour)`, places from 0
+        /// (the soft start) to 1 (its end): for hue-like scales.
+        pub fn ramp_stops(self, stops: &[(f32, $crate::slider::RampColor)]) -> Self {
+            self.ramp_with($crate::slider::Ramp::stops(stops))
+        }
+
+        /// A colour ramp built beforehand.
+        pub fn ramp_with(mut self, ramp: $crate::slider::Ramp) -> Self {
+            self.spec.ramp = Some(ramp);
+            self
+        }
+
+        /// The ramp across the whole track, the value marked on it by
+        /// the thumb or the pointer ([`RampMode::Track`](crate::slider::RampMode)),
+        /// so the scale reads before a touch; nothing without a ramp.
+        pub fn ramp_track(mut self) -> Self {
+            self.spec.ramp_mode = $crate::slider::RampMode::Track;
+            self
+        }
+    };
+}
+pub(crate) use ramp_builders;
+
 /// A slider over an `f64`.
 ///
 /// Need (input): a slider over a number.
@@ -687,6 +742,7 @@ impl<'a> Slider<'a> {
     }
 
     spec_builders!();
+    ramp_builders!();
 
     /// What a double click goes back to.
     pub fn default(mut self, default: f64) -> Self {
@@ -1607,11 +1663,23 @@ pub(crate) fn paint_bar_fitted(
         let x_of = |v: f64| rect.left() + rect.width() * spec.frac(v).clamp(0.0, 1.0) as f32;
         // The fill is a strip along the bottom, so the label and the value
         // stay on the track's colour (one contrast pair).
-        if let Some(g) = &spec.gradient {
-            // A gradient's colours are the content: a taller strip.
+        // A ramp colours one value's bar (a range has none).
+        let tokens = Tokens::of(ui.ctx());
+        let ramp = match thumbs {
+            [_] => ramp::active(spec.ramp.as_ref(), &tokens),
+            _ => None,
+        };
+        let taller = || {
             let strip = (rect.height() * 0.3).max(4.0);
-            let r = Rect::from_min_max(pos2(rect.left(), rect.bottom() - strip), rect.max);
-            g.paint(&painter, r);
+            Rect::from_min_max(pos2(rect.left(), rect.bottom() - strip), rect.max)
+        };
+        if let (Some(r), RampMode::Track) = (ramp, spec.ramp_mode) {
+            // The ramp across the track, as a gradient: the thumb marks
+            // the value on it.
+            r.paint(&painter, taller(), &tokens, false);
+        } else if let (Some(g), None) = (&spec.gradient, ramp) {
+            // A gradient's colours are the content: a taller strip.
+            g.paint(&painter, taller());
         } else {
             let fill = &kit.slider_fill;
             let strip = match fill.data.height {
@@ -1625,15 +1693,24 @@ pub(crate) fn paint_bar_fitted(
             };
             let strip =
                 Rect::from_min_max(pos2(from, rect.bottom() - strip), pos2(to, rect.bottom()));
-            fill.paint_part(
-                &cx,
-                &Part {
-                    rect: strip,
-                    room: rect,
-                    state,
-                    label: None,
-                },
-            );
+            match (ramp, thumbs) {
+                // The fill in the ramp's colour at the value, standing
+                // against the track.
+                (Some(r), [v]) => {
+                    let track = backdrop(kit.slider.style(state).fill, &tokens);
+                    let color = r.value_color(spec.frac(*v) as f32, &tokens, track);
+                    painter.rect_filled(strip, fill.style(state).radius, color);
+                }
+                _ => fill.paint_part(
+                    &cx,
+                    &Part {
+                        rect: strip,
+                        room: rect,
+                        state,
+                        label: None,
+                    },
+                ),
+            }
         }
         let thumb = &kit.slider_thumb;
         let width = thumb.data.width.max(0.0);
@@ -1739,13 +1816,29 @@ fn paint_vertical(
             h if h > 0.0 => h.min(track.width()),
             _ => (track.width() * 0.15).max(3.0),
         };
-        if let Some(g) = &spec.gradient {
-            // A gradient's colours run along the bar: a side strip.
-            let r = Rect::from_min_max(
-                pos2(track.left(), track.top()),
-                pos2(track.left() + strip.max(4.0), track.bottom()),
+        let tokens = Tokens::of(ui.ctx());
+        let ramp = ramp::active(spec.ramp.as_ref(), &tokens);
+        let side = Rect::from_min_max(
+            pos2(track.left(), track.top()),
+            pos2(track.left() + strip.max(4.0), track.bottom()),
+        );
+        if let (Some(r), RampMode::Track) = (ramp, spec.ramp_mode) {
+            // The ramp along the bar: a side strip, the thumb on it.
+            r.paint(&painter, side, &tokens, true);
+        } else if let Some(r) = ramp {
+            let back = backdrop(style.fill, &tokens);
+            let color = r.value_color(spec.frac(v) as f32, &tokens, back);
+            painter.rect_filled(
+                Rect::from_min_max(
+                    pos2(track.left(), y),
+                    pos2(track.left() + strip, track.bottom()),
+                ),
+                kit.slider_fill.style(state).radius,
+                color,
             );
-            g.paint_vertical(&painter, r);
+        } else if let Some(g) = &spec.gradient {
+            // A gradient's colours run along the bar: a side strip.
+            g.paint_vertical(&painter, side);
         } else {
             kit.slider_fill.paint_part(
                 &cx,
@@ -1779,6 +1872,16 @@ fn paint_vertical(
     painter.galley(at(value_band, &value), value.clone(), style.text);
     painter.galley(at(label_band, &label), label.clone(), style.text);
     label_shown
+}
+
+/// What a ramp's colour must stand against: the track's fill, or the
+/// panel under a transparent track.
+pub(crate) fn backdrop(fill: Color32, tokens: &Tokens) -> Color32 {
+    if fill.a() < 128 {
+        tokens.surface.panel
+    } else {
+        fill
+    }
 }
 
 /// Paints the field state on the bar: the edge, and the markers after
