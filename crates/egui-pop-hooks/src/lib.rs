@@ -24,10 +24,12 @@ use web_time::Instant;
 /// below under their old paths.
 pub use bus_contract;
 pub use bus_contract::{
-    Altered, Capability, Collected, DEFAULT_DEADLINE, Defer, FAILED_FACT, Failure, FailureKind,
-    HookError, LAST, ListenOpts, ListenerInfo, ListenerTimings, OVER_BUDGET_FACT, OverBudget,
-    PLUGIN_DEADLINE, PendingRun, Point, PointDecl, PointInfo, PointKind, PointSpec, PointTimings,
-    Refusal, Refused, TimingStats, Timings, declare_all, missing_targets, offers, order_dump,
+    Altered, Capability, Codec, Collected, Cursor, DEFAULT_DEADLINE, Defer, FAILED_FACT, Failure,
+    FailureKind, HookError, IngestError, Journal, JournalEntry, LAST, ListenOpts, ListenerInfo,
+    ListenerTimings, Lost, OVER_BUDGET_FACT, OverBudget, PLUGIN_DEADLINE, PendingRun, Point,
+    PointDecl, PointInfo, PointKind, PointSpec, PointTimings, Refusal, Refused, Relay, Relayed,
+    RelayedEntry, Resumed, Since, TimingStats, Timings, declare_all, kind_matches, missing_targets,
+    offers, order_dump,
 };
 use bus_contract::{
     AnyInput, AnyListener, AnyLocalListener, AnyValue, BudgetSink, Bus, CloneFn, FailureSink,
@@ -197,6 +199,8 @@ impl fmt::Debug for Entry {
 struct Slot {
     type_id: TypeId,
     kind: PointKind,
+    /// The point type's name, for the key [`Kernel::declaration`] gives.
+    type_name: &'static str,
     spec: Option<PointSpec>,
     /// In the order they run.
     ordered: Vec<Arc<Entry>>,
@@ -211,6 +215,7 @@ impl Slot {
         Slot {
             type_id: key.type_id,
             kind: key.kind,
+            type_name: key.type_name,
             spec: None,
             ordered: Vec::new(),
             missing: Vec::new(),
@@ -259,6 +264,10 @@ pub struct Kernel {
     /// Whether listener runs are timed ([`Kernel::set_timing`]).
     timing: AtomicBool,
     budget_sinks: RwLock<Vec<BudgetSink>>,
+    /// The host's journal ([`Kernel::with_journal`]).
+    journal: Option<Arc<dyn Journal>>,
+    /// The host's relay ([`Kernel::with_relay`]).
+    relay: Option<Arc<dyn Relay>>,
 }
 
 impl fmt::Debug for Kernel {
@@ -267,6 +276,8 @@ impl fmt::Debug for Kernel {
         f.debug_struct("Kernel")
             .field("points", &points.keys().collect::<Vec<_>>())
             .field("default_deadline", &self.default_deadline)
+            .field("journal", &self.journal.is_some())
+            .field("relay", &self.relay.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -299,7 +310,67 @@ impl Kernel {
             seq: AtomicU64::new(0),
             timing: AtomicBool::new(true),
             budget_sinks: RwLock::new(Vec::new()),
+            journal: None,
+            relay: None,
         }
+    }
+
+    /// The kernel with the host's journal: it offers the contract's
+    /// [`Journal`] capability ([`Bus::journal`]), so points may be
+    /// declared journaled ([`PointDecl::journaled`]).
+    ///
+    /// The kernel answers [`Journal`] itself: a publish to a point it
+    /// does not hold declared journaled, or under another type, is
+    /// refused there ([`Refused::NotJournaled`], [`Refused::TypeMismatch`]);
+    /// everything else goes to `journal`. The host's journal keeps the
+    /// entries and runs the pump: each entry of a journaled point is
+    /// delivered by a collect emit on this kernel
+    /// ([`Bus::collect_any`]) from the pump's thread, never the
+    /// publisher's, so local listeners run at their thread's
+    /// [`Kernel::run_pending`]. It reads a point's declaration with
+    /// [`Kernel::declaration`]. A journal that needs the kernel to
+    /// deliver is built with [`Arc::new_cyclic`], holding a
+    /// [`std::sync::Weak`] of it:
+    ///
+    /// ```ignore
+    /// let kernel = Arc::new_cyclic(|me: &Weak<Kernel>| {
+    ///     let journal = Arc::new(MyJournal::new(me.clone()));
+    ///     Kernel::new().with_journal(journal.clone()).with_relay(journal)
+    /// });
+    /// ```
+    pub fn with_journal(mut self, journal: Arc<dyn Journal>) -> Kernel {
+        self.journal = Some(journal);
+        self
+    }
+
+    /// The kernel with the host's relay: it offers the contract's
+    /// [`Relay`] capability ([`Bus::relay`]) when it has a journal too
+    /// ([`Kernel::with_journal`]), so points may be declared relayable
+    /// ([`PointDecl::relayable`]). [`Relay::resume`] and
+    /// [`Relay::ingest`] go to `relay`, which finds each point's codec
+    /// in [`Kernel::declaration`] and records what it takes in through
+    /// its journal.
+    pub fn with_relay(mut self, relay: Arc<dyn Relay>) -> Kernel {
+        self.relay = Some(relay);
+        self
+    }
+
+    /// The declaration of the point `point`: its key and spec (whether it
+    /// is journaled, its relay codec); `None` for a point nobody
+    /// declared. What a host's [`Journal`] and [`Relay`] read.
+    pub fn declaration(&self, point: &str) -> Option<(PointKey, PointSpec)> {
+        let points = self.read();
+        let (id, slot) = points.get_key_value(point)?;
+        let spec = slot.spec.clone()?;
+        Some((
+            PointKey {
+                id,
+                kind: slot.kind,
+                type_id: slot.type_id,
+                type_name: slot.type_name,
+            },
+            spec,
+        ))
     }
 
     fn read(&self) -> std::sync::RwLockReadGuard<'_, BTreeMap<&'static str, Slot>> {
@@ -316,8 +387,30 @@ impl Kernel {
         self.declare_point(PointKey::of::<P>(), spec)
     }
 
-    /// Declares a point by its key ([`Bus::declare_point`]).
+    /// Declares a point by its key ([`Bus::declare_point`]). A journaled
+    /// point that is not an event, or a journaled or relayable point the
+    /// kernel cannot serve (no journal or relay from the host), is
+    /// refused, as [`declare_all`] would.
     pub fn declare_point(&self, key: PointKey, spec: PointSpec) -> Result<(), Refused> {
+        if spec.journaled && key.kind != PointKind::Event {
+            return Err(Refused::NotEvent { point: key.id });
+        }
+        if spec.relay.is_some_and(|c| c.point != key.id) {
+            return Err(Refused::TypeMismatch { point: key.id });
+        }
+        let needs = [
+            (spec.journaled || spec.relay.is_some(), Capability::Journal),
+            (spec.relay.is_some(), Capability::Relay),
+        ];
+        if let Some((_, capability)) = needs
+            .into_iter()
+            .find(|(needed, c)| *needed && !offers(self, *c))
+        {
+            return Err(Refused::Unsupported {
+                point: key.id,
+                capability,
+            });
+        }
         let mut points = self.write();
         let slot = points.entry(key.id).or_insert_with(|| Slot::new(&key));
         if slot.type_id != key.type_id {
@@ -1058,6 +1151,8 @@ impl Kernel {
             info.declared = true;
             info.fail_closed = spec.fail_closed;
             info.budget = spec.budget;
+            info.journaled = spec.journaled;
+            info.relayable = spec.relay.is_some();
         }
         info.deadline = deadline;
         info.listeners = slot
@@ -1370,6 +1465,80 @@ impl Bus for Kernel {
 
     fn timings(&self) -> Option<&dyn Timings> {
         Some(self)
+    }
+
+    fn journal(&self) -> Option<&dyn Journal> {
+        self.journal.as_ref().map(|_| self as &dyn Journal)
+    }
+
+    fn relay(&self) -> Option<&dyn Relay> {
+        match (&self.journal, &self.relay) {
+            (Some(_), Some(_)) => Some(self as &dyn Relay),
+            _ => None,
+        }
+    }
+}
+
+/// The host's journal ([`Kernel::with_journal`]), behind the kernel's
+/// own check of what may be published.
+impl Journal for Kernel {
+    fn last_seq(&self) -> u64 {
+        self.journal.as_ref().map_or(0, |j| j.last_seq())
+    }
+
+    fn since(&self, seq: u64, limit: usize) -> Since {
+        match &self.journal {
+            Some(j) => j.since(seq, limit),
+            None => Since::new(Vec::new(), 0),
+        }
+    }
+
+    fn wait(&self, patterns: &[&str], seq: u64, timeout: Duration) -> Option<JournalEntry> {
+        self.journal.as_ref()?.wait(patterns, seq, timeout)
+    }
+
+    fn publish_any(
+        &self,
+        point: PointKey,
+        input: AnyInput,
+        fresh: FreshFn,
+        cause: Option<u64>,
+    ) -> Result<u64, Refused> {
+        let Some(journal) = &self.journal else {
+            return Err(Refused::NotJournaled { point: point.id });
+        };
+        match self.declaration(point.id) {
+            Some((key, _)) if key.type_id != point.type_id => {
+                Err(Refused::TypeMismatch { point: point.id })
+            }
+            Some((_, spec)) if spec.journaled => journal.publish_any(point, input, fresh, cause),
+            _ => Err(Refused::NotJournaled { point: point.id }),
+        }
+    }
+
+    fn flush(&self, timeout: Duration) -> bool {
+        self.journal.as_ref().is_none_or(|j| j.flush(timeout))
+    }
+}
+
+/// The host's relay ([`Kernel::with_relay`]).
+impl Relay for Kernel {
+    fn cursor(&self) -> Cursor {
+        self.relay.as_ref().map_or(Cursor::START, |r| r.cursor())
+    }
+
+    fn resume(&self, from: Cursor, limit: usize) -> Resumed {
+        match &self.relay {
+            Some(r) => r.resume(from, limit),
+            None => Resumed::new(Vec::new(), from),
+        }
+    }
+
+    fn ingest(&self, source: &str, entry: RelayedEntry) -> Result<u64, IngestError> {
+        match &self.relay {
+            Some(r) => r.ingest(source, entry),
+            None => Err(IngestError::NotRelayable { kind: entry.kind }),
+        }
     }
 }
 

@@ -47,6 +47,14 @@ one failing contribution never breaks the others.
   `set_timing(false)` to stop counting). A pass over its point's budget
   (`PointSpec::budget`) goes to the `on_over_budget` sinks, its results
   kept.
+- **A journal and a relay from the host.** The contract's `Journal` and
+  `Relay` capabilities are the host's: `with_journal(journal)` and
+  `with_relay(relay)` hand them to the kernel, which then accepts points
+  declared journaled or relayable (refused without them) and refuses a
+  publish on a point not declared journaled before the host sees it.
+  The host's pump delivers each entry with a collect emit on the kernel,
+  off the publisher's thread; `declaration(id)` gives it a point's spec
+  and codec.
 - **Introspection.** `points()` lists every point and its listeners in
   the order they run, with their owners, constraints, deadlines, missing
   targets and counters (runs, failures, the last failure), for people,

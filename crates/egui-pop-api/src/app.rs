@@ -5407,7 +5407,7 @@ impl App {
         b.register(
             FnCollector::new(
                 "bus",
-                "The bus (ADR 0029): every point on it, egui-pop's and the application's (`by`), with its kind, deadline and budget and its listeners in the order they run (owner, after, before, priority, deadline, threaded, local, missing targets, runs, failures), the ordering constraints naming a listener not there, the order as text, the window registry (`windows.list`), and the window invariants broken now and said. When the bus offers timings: each point's passes (`timing`: count, p50, p95, max in µs, passes over budget) and each listener's runs, and `slowest`: every listener timed, the slowest first by p95.",
+                "The bus (ADR 0029): every point on it, egui-pop's and the application's (`by`), with its kind, deadline and budget, whether it is journaled or relayable, and its listeners in the order they run (owner, after, before, priority, deadline, threaded, local, missing targets, runs, failures), the ordering constraints naming a listener not there, the order as text, the window registry (`windows.list`), and the window invariants broken now and said. The capabilities the bus offers (`capabilities`: defer, timings, journal, relay) and, with a journal, its last number (`journal_seq`). When the bus offers timings: each point's passes (`timing`: count, p50, p95, max in µs, passes over budget) and each listener's runs, and `slowest`: every listener timed, the slowest first by p95.",
             )
             .snapshot(move |_| {
                 let Ok(app) = up(&w) else { return Json::Null };
@@ -5462,12 +5462,23 @@ impl App {
                             "description": p.description,
                             "deadline_ms": p.deadline.as_millis(),
                             "budget_us": p.budget.map(crate::bus::budget::us),
+                            "journaled": p.journaled,
+                            "relayable": p.relayable,
                             "timing": timing,
                             "listeners": listeners,
                         })
                     })
                     .collect();
+                let offers = |c| crate::bus::bus_contract::offers(&*kernel, c);
+                use crate::bus::bus_contract::Capability;
                 json!({
+                    "capabilities": {
+                        "defer": offers(Capability::Defer),
+                        "timings": offers(Capability::Timings),
+                        "journal": offers(Capability::Journal),
+                        "relay": offers(Capability::Relay),
+                    },
+                    "journal_seq": kernel.journal().map(|j| j.last_seq()),
                     "points": points,
                     "slowest": crate::bus::budget::slowest(&timings),
                     "missing_targets": crate::bus::missing_targets(&*kernel, &ids),
