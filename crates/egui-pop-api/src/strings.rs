@@ -449,6 +449,17 @@ pub const SHORTCUTS_FROM_USER: StrKey = StrKey::new("egui-pop-shortcuts-from-use
 /// A key and where it comes from.
 pub const SHORTCUTS_KEY_FROM: StrKey =
     StrKey::new("egui-pop-shortcuts-key-from", "{ $keys } ({ $source })");
+/// A key and the place it listens in, when that is not every window.
+pub const SHORTCUTS_KEY_IN: StrKey =
+    StrKey::new("egui-pop-shortcuts-key-in", "{ $keys } in { $scope }");
+/// The places a binding listens in: the main window, another window, a
+/// panel.
+pub const SHORTCUTS_SCOPE_MAIN_WINDOW: StrKey =
+    StrKey::new("egui-pop-shortcuts-scope-main-window", "the main window");
+pub const SHORTCUTS_SCOPE_WINDOW: StrKey =
+    StrKey::new("egui-pop-shortcuts-scope-window", "the { $window } window");
+pub const SHORTCUTS_SCOPE_PANEL: StrKey =
+    StrKey::new("egui-pop-shortcuts-scope-panel", "the { $panel } panel");
 /// The keys whose command went with a disconnected plugin.
 pub const SHORTCUTS_DORMANT: StrKey = StrKey::new("egui-pop-shortcuts-dormant", "Dormant keys");
 pub const SHORTCUTS_DORMANT_NOTE: StrKey = StrKey::new(
@@ -1734,6 +1745,10 @@ pub const ALL: &[StrKey] = &[
     SHORTCUTS_FROM_WORKSPACE,
     SHORTCUTS_FROM_USER,
     SHORTCUTS_KEY_FROM,
+    SHORTCUTS_KEY_IN,
+    SHORTCUTS_SCOPE_MAIN_WINDOW,
+    SHORTCUTS_SCOPE_WINDOW,
+    SHORTCUTS_SCOPE_PANEL,
     SHORTCUTS_DORMANT,
     SHORTCUTS_DORMANT_NOTE,
     SHORTCUTS_DORMANT_PLUGIN,

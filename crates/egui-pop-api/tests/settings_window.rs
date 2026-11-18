@@ -379,3 +379,18 @@ fn a_label_match_comes_before_a_description_match() {
         "the label match is listed first"
     );
 }
+
+#[test]
+fn the_shortcuts_editor_says_where_a_binding_listens() {
+    let mut h = harness();
+    open(&mut h);
+    h.get_by_label(SHORTCUTS).click();
+    h.run();
+    h.run();
+    // The area toggles listen in the main window.
+    assert!(
+        h.query_by_label("Ctrl+B in the main window").is_some(),
+        "the primary side bar's toggle does not say its window"
+    );
+    assert!(h.query_by_label("Ctrl+Alt+B in the main window").is_some());
+}
