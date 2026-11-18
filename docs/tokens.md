@@ -133,7 +133,8 @@ without it.
    shows, 500 ms at least once shown, a spinner's turn),
    `motion.progress.travel`, `motion.skeleton.shimmer`,
    `motion.toast.slide` (a toast sliding in and out; none under reduced
-   motion), `opacity.scrim`.
+   motion), `motion.submenu.delay` (200 ms of the pointer resting on a
+   submenu item before its submenu opens), `opacity.scrim`.
 
 3. **Component**: one component's tokens, each an alias of a system token
    (or, for a component based on another, of its base's token under the

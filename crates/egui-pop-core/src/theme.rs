@@ -303,6 +303,9 @@ pub struct MotionTokens {
     /// A toast sliding in from its corner's side, and out again
     /// (`motion.toast.slide`; none under reduced motion).
     pub toast_slide: f32,
+    /// The pointer rests this long on a submenu item before its submenu
+    /// opens (`motion.submenu.delay`).
+    pub submenu_delay: f32,
 }
 
 /// The data palettes (`palette.*`): colours for charts and data views.
@@ -607,6 +610,7 @@ impl Tokens {
                         .unwrap_or(3.0)
                         .clamp(0.0, 100.0) as u32,
                     toast_slide: s("motion.toast.slide"),
+                    submenu_delay: s("motion.submenu.delay"),
                 }
             },
             resolved: Arc::new(resolved),

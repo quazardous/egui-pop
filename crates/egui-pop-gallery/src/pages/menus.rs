@@ -185,9 +185,49 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     if popup.clicked() {
         menus::popup_at(app, &CARD_MENU, popup.rect);
     }
+    section(ui, "A menu drawn by hand, with a submenu");
+    hand_drawn(ui, app);
     section(ui, "The same menu, drawn in place");
     egui::Frame::menu(ui.style()).show(ui, |ui| {
         ui.set_max_width(260.0);
         menus::show(ui, app, &CARD_MENU);
+    });
+}
+
+/// The hand-drawn menu's choice, in the app's context: `"off"`, `"plug"`
+/// or `"new"`.
+const AUTO: &str = "galleryAuto";
+
+/// A source row whose context menu is drawn in a closure, its "Import
+/// automatically" submenu a radio group ([`menus::submenu`]).
+fn hand_drawn(ui: &mut Ui, app: &AppHandle) {
+    let cx = app.context();
+    let auto = match cx.get(AUTO) {
+        "" => "off".to_string(),
+        a => a.to_string(),
+    };
+    let row = ui.add(
+        egui::Button::new(format!("Card reader (import automatically: {auto})"))
+            .sense(egui::Sense::click()),
+    );
+    egui_pop::core::pointer::claim::context_menu(&row, |ui| {
+        if ui.button("Import now").clicked() {
+            ui.close();
+        }
+        menus::submenu(ui, "Import automatically", |ui| {
+            for (key, label) in [
+                ("off", "Off"),
+                ("plug", "On plug-in"),
+                ("new", "On new files"),
+            ] {
+                if ui.radio(auto == key, label).clicked() {
+                    app.set_context(AUTO, key);
+                    ui.close();
+                }
+            }
+        });
+        if ui.button("Forget this source").clicked() {
+            ui.close();
+        }
     });
 }
