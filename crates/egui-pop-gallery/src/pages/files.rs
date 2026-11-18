@@ -73,6 +73,10 @@ impl Plugin for FilesPage {
                 SidecarRule::new("gallery.photos", &["cr3", "jpg", "png"], &["xmp", "jpg"])
                     .badge("jpg", "JPEG");
             f.groupings().register(Arc::new(photos));
+            // A photo import's own sources, as an application adds them:
+            // listed under the picker's places and in the file browser
+            // page's panel.
+            f.place_providers().register(Arc::new(ImportSources));
         }
         ctx.story(
             Story::new(StoryId::from_static("files"), "Choosing files", show)
@@ -80,6 +84,31 @@ impl Plugin for FilesPage {
                 .group("Components", 52),
         )?;
         Ok(())
+    }
+}
+
+/// A photo import's sources beside the system's places: its exports, and
+/// a service that is no folder (the file browser page's panel says what it
+/// would do).
+#[derive(Debug)]
+struct ImportSources;
+
+impl files::places::PlaceProvider for ImportSources {
+    fn id(&self) -> &str {
+        "gallery.import"
+    }
+
+    fn sections(&self) -> Vec<files::places::PlaceSection> {
+        use files::places::{PlaceItem, PlaceSection};
+        vec![
+            PlaceSection::new("gallery.import", "Import")
+                .item(PlaceItem::folder("Exports", demo_root().join("Exports")).badge("new"))
+                .item(
+                    PlaceItem::new("gallery.service", "Photo service")
+                        .icon("phosphor:cloud")
+                        .detail("Not a folder: the application acts on it"),
+                ),
+        ]
     }
 }
 

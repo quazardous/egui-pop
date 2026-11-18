@@ -6,8 +6,10 @@
 //! thumbnails' size slider and quick look
 //! (`Ctrl+Y`, or Space on an entry), the agenda by day, month or year, and
 //! drops: a file dragged from the page (or from the system) onto a folder,
-//! the folder shown or the page's own target. The mode is kept in the
-//! host's store under this page's dialog id, as a file dialog's is.
+//! the folder shown or the page's own target. A panel of places beside it
+//! (the picker's, with the gallery's own "Import" section) opens a folder
+//! in the browser. The mode is kept in the host's store under this page's
+//! dialog id, as a file dialog's is.
 
 use std::sync::{Arc, Mutex};
 
@@ -15,6 +17,7 @@ use egui::Ui;
 use egui_pop::api::files::browser::{
     AppDropTarget, DraggedPaths, DropTarget, FileBrowser, FsSource, PreviewThumbnails, ViewModes,
 };
+use egui_pop::api::files::places::PlacesPanel;
 use egui_pop::api::files::{self, FILES};
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
@@ -50,7 +53,7 @@ impl Plugin for FileBrowserPage {
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         ctx.story(
             Story::new(StoryId::from_static("file-browser"), "File browser", show)
-                .description("One file browser, many views: the entries of a folder from a source (here held in memory), shown by a mode chosen in the switcher or with Ctrl+1 to Ctrl+6 (details, thumbnails, filmstrip, Finder's columns, a carousel, an agenda by day, month or year), the order chosen in the sort menu (name, modified, taken, size or type, up or down, folders first or among the files, files grouped or not: in Photos/2026 a RAW with its sidecar and its JPEG is one entry badged +XMP +JPEG), the thumbnails' size on a slider, a rubber band dragged from the room around the thumbnails, quick look with Ctrl+Y or Space, drops onto a folder, the folder shown or an application's target, the mode remembered per dialog.")
+                .description("One file browser, many views: the entries of a folder from a source (here held in memory), shown by a mode chosen in the switcher or with Ctrl+1 to Ctrl+6 (details, thumbnails, filmstrip, Finder's columns, a carousel, an agenda by day, month or year), the order chosen in the sort menu (name, modified, taken, size or type, up or down, folders first or among the files, files grouped or not: in Photos/2026 a RAW with its sidecar and its JPEG is one entry badged +XMP +JPEG), the thumbnails' size on a slider, a rubber band dragged from the room around the thumbnails, quick look with Ctrl+Y or Space, drops onto a folder, the folder shown or an application's target, the mode remembered per dialog, and a panel of places beside it: the picker's places and an application's own section, driven by the keyboard (Up, Down, Enter).")
                 .group("Components", 53),
         )?;
         Ok(())
@@ -59,6 +62,9 @@ impl Plugin for FileBrowserPage {
 
 /// The browser, made once per context.
 const BROWSER: Slot<Arc<Mutex<FileBrowser>>> = Slot::new("gallery.file_browser.browser");
+
+/// The item last chosen in the panel of places, by id.
+const PLACE: Slot<Arc<Mutex<Option<String>>>> = Slot::new("gallery.file_browser.place");
 
 /// What the last drop was, said under the browser.
 const LAST_DROP: Slot<Arc<Mutex<String>>> = Slot::new("gallery.file_browser.last_drop");
@@ -110,21 +116,41 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     });
     let mut b = browser.lock().unwrap_or_else(|e| e.into_inner());
     let height = ui.available_height().clamp(160.0, 360.0);
+    let place = PLACE.get_or_insert_with(ui.ctx(), Arc::default);
+    let sections = f.places(app).sections(ui.ctx());
     ui.allocate_ui(egui::vec2(ui.available_width(), height), |ui| {
-        let out = b.show_in(ui, app, DIALOG);
-        if let Some(drop) = &out.dropped {
-            let into = match &drop.target {
-                DropTarget::Folder(p) | DropTarget::Place(p) => p.display().to_string(),
-                DropTarget::App(id) => id.clone(),
-            };
-            *last_drop.lock().unwrap_or_else(|e| e.into_inner()) =
-                format!("{} file(s) into {into}", drop.paths.len());
-        }
-        if let Some(path) = out.activated
-            && b.entries().iter().any(|e| e.path == path && e.is_dir())
-        {
-            b.open(path);
-        }
+        ui.horizontal_top(|ui| {
+            // The places, as an import window's sources column.
+            ui.allocate_ui(egui::vec2(150.0, height), |ui| {
+                ui.set_width(150.0);
+                let mut at = place.lock().unwrap_or_else(|e| e.into_inner());
+                let out = PlacesPanel::new("gallery.file_browser.places", &sections)
+                    .selected(at.as_deref())
+                    .show(ui);
+                if let Some((_, item)) = out.chosen {
+                    if let Some(path) = &item.path {
+                        b.open(path.clone());
+                    }
+                    *at = Some(item.id);
+                }
+            });
+            ui.vertical(|ui| {
+                let out = b.show_in(ui, app, DIALOG);
+                if let Some(drop) = &out.dropped {
+                    let into = match &drop.target {
+                        DropTarget::Folder(p) | DropTarget::Place(p) => p.display().to_string(),
+                        DropTarget::App(id) => id.clone(),
+                    };
+                    *last_drop.lock().unwrap_or_else(|e| e.into_inner()) =
+                        format!("{} file(s) into {into}", drop.paths.len());
+                }
+                if let Some(path) = out.activated
+                    && b.entries().iter().any(|e| e.path == path && e.is_dir())
+                {
+                    b.open(path);
+                }
+            });
+        });
     });
     section(ui, "State");
     ui.label(format!(

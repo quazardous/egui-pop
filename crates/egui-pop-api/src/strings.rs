@@ -510,6 +510,8 @@ pub const FILES_MUSIC: StrKey = StrKey::new("egui-pop-files-music", "Music");
 pub const FILES_VIDEOS: StrKey = StrKey::new("egui-pop-files-videos", "Videos");
 /// The heading of the volumes mounted, in the picker's side bar.
 pub const FILES_DEVICES: StrKey = StrKey::new("egui-pop-files-devices", "Devices");
+/// The section of home and the system's folders, in a panel of places.
+pub const FILES_PLACES: StrKey = StrKey::new("egui-pop-files-places", "Places");
 /// A bookmark's menu.
 pub const FILES_RENAME_BOOKMARK: StrKey = StrKey::new("egui-pop-files-rename-bookmark", "Rename…");
 pub const FILES_MOVE_UP: StrKey = StrKey::new("egui-pop-files-move-up", "Move up");
@@ -1777,6 +1779,7 @@ pub const ALL: &[StrKey] = &[
     FILES_MUSIC,
     FILES_VIDEOS,
     FILES_DEVICES,
+    FILES_PLACES,
     FILES_RENAME_BOOKMARK,
     FILES_MOVE_UP,
     FILES_MOVE_DOWN,

@@ -345,6 +345,25 @@ which swaps the first two (`SetFolder`).
   keeps the old one; an empty name gives back the folder's. The functions
   `files::rename_bookmark`, `files::move_bookmark` and `files::set_bookmark` do
   the same for an application.
+- **An application's sections.** A `files::places::PlaceProvider`
+  registered on `Files::place_providers` (or with `FilesPlugin::places`)
+  adds `PlaceSection`s of `PlaceItem`s: a photo import's cards, services and
+  history. An item has a name, an icon of the icon registry, a detail (its
+  tip), a badge said with its name ("EOS_DIGITAL, 214") and, for a folder, its
+  path. The picker lists the folders of each section under its bookmarks,
+  each title a heading. A provider answers from what it holds: it is asked
+  each time a picker or a panel is drawn. egui-pop knows nothing more of an
+  item: an account of a service is an item without a path, the application's
+  to act on.
+- **A panel of places on its own.** `files::places::PlacesPanel` draws
+  sections anywhere (an import window's sources column): one Tab stop, Up and
+  Down from item to item across the sections, Enter, Space or a click
+  chooses (`PlacesOutput::chosen`, with the section's id), the item shown
+  selected by id, a context menu per item (`PlacesPanel::menu`).
+  `Files::places` and `Places::sections` give every place the picker lists
+  as sections (`files.places`, `files.devices`, `files.recent`,
+  `files.bookmarks`, then the application's). The gallery's file browser page
+  shows one beside the browser.
 - **Kept** in the host's store with the settings: `settings/files.recent`,
   `settings/files.bookmarks`, and the names given in
   `settings/files.bookmark_names`.

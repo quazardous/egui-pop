@@ -183,7 +183,7 @@ pub mod sort;
 use browser::ViewMode as _;
 use fs::{Meta, SharedFs};
 use groups::{FileGroup, FileGrouping, Groupings};
-use places::SystemPlaces;
+use places::{PlaceProvider, PlaceProviders, PlaceSection, SystemPlaces};
 use preview::Previews;
 
 /// The file chooser, as a service.
@@ -722,6 +722,8 @@ struct State {
     fs: Option<SharedFs>,
     previews: Previews,
     groupings: Groupings,
+    /// The application's sections of places.
+    place_providers: PlaceProviders,
     /// The system's places, as read when a picker last opened.
     system: Option<SystemPlaces>,
     /// Where they come from (none: the system, [`places::system_places`]).
@@ -927,6 +929,21 @@ impl Files {
     /// ([`Groupings::register`]).
     pub fn groupings(&self) -> Groupings {
         lock(&self.0).groupings.clone()
+    }
+
+    /// The application's sections of places, listed by the in-app picker
+    /// under its own and by a [`places::PlacesPanel`]: a plugin declares
+    /// its own here ([`PlaceProviders::register`]).
+    pub fn place_providers(&self) -> PlaceProviders {
+        lock(&self.0).place_providers.clone()
+    }
+
+    /// The places as the in-app picker lists them now: home, the system's
+    /// folders and volumes (read when a picker last opened), recent places,
+    /// bookmarks and the application's sections. [`Places::sections`] gives
+    /// them as one list of sections, for a [`places::PlacesPanel`].
+    pub fn places(&self, app: &AppHandle) -> Places {
+        places(app, self)
     }
 
     /// The groups the paths of a finished choice head: none saving, choosing a
@@ -1274,6 +1291,7 @@ impl Files {
             "last": s.last.iter().cloned().collect::<Vec<_>>(),
             "previews": s.previews.describe(),
             "groupings": s.groupings.ids(),
+            "place_providers": s.place_providers.ids(),
         })
     }
 
@@ -1531,6 +1549,7 @@ pub struct FilesPlugin {
     fs: Option<SharedFs>,
     builtin_previews: bool,
     groupings: Vec<Arc<dyn FileGrouping>>,
+    places: Vec<Arc<dyn PlaceProvider>>,
 }
 
 impl Default for FilesPlugin {
@@ -1541,6 +1560,7 @@ impl Default for FilesPlugin {
             fs: None,
             builtin_previews: true,
             groupings: Vec::new(),
+            places: Vec::new(),
         }
     }
 }
@@ -1573,6 +1593,14 @@ impl FilesPlugin {
         self.groupings.push(grouping);
         self
     }
+
+    /// Sections of places of the application's, listed by the in-app picker
+    /// under its own and by a [`places::PlacesPanel`] ([`places`]).
+    /// Several come in the order given.
+    pub fn places(mut self, provider: Arc<dyn PlaceProvider>) -> Self {
+        self.places.push(provider);
+        self
+    }
 }
 
 impl Plugin for FilesPlugin {
@@ -1598,6 +1626,9 @@ impl Plugin for FilesPlugin {
         }
         for grouping in &self.groupings {
             files.groupings().register(grouping.clone());
+        }
+        for provider in &self.places {
+            files.place_providers().register(provider.clone());
         }
         // Only where the application allows the system's chooser: elsewhere
         // the setting would change nothing.
@@ -2180,6 +2211,7 @@ fn places(app: &AppHandle, files: &Files) -> Places {
         recent: recent(app),
         bookmarks: bookmarks(app),
         bookmark_names: bookmark_names(app),
+        app_sections: files.place_providers().sections(),
     }
 }
 
@@ -2610,9 +2642,43 @@ pub struct Places {
     pub bookmarks: Vec<PathBuf>,
     /// The names given to bookmarks ([`rename_bookmark`]).
     pub bookmark_names: Vec<(PathBuf, String)>,
+    /// The application's sections ([`Files::place_providers`]): the picker
+    /// lists their folders under its own places.
+    pub app_sections: Vec<PlaceSection>,
 }
 
 impl Places {
+    /// Every place as sections, the way the picker lists them: home and
+    /// the system's folders (`files.places`), the devices (`files.devices`),
+    /// recent places (`files.recent`), bookmarks (`files.bookmarks`), then
+    /// the application's; empty ones left out. For a [`places::PlacesPanel`].
+    pub fn sections(&self, ctx: &egui::Context) -> Vec<PlaceSection> {
+        use places::PlaceItem;
+        let mut own = Vec::new();
+        if let Some(h) = &self.home {
+            own.push(PlaceItem::folder(strings::tr(ctx, &txt::FILES_HOME), h));
+        }
+        for (folder, dir) in &self.system.folders {
+            own.push(PlaceItem::folder(strings::tr(ctx, folder.title()), dir));
+        }
+        let mut out = vec![
+            PlaceSection::new("files.places", strings::tr(ctx, &txt::FILES_PLACES)).items(own),
+            PlaceSection::new("files.devices", strings::tr(ctx, &txt::FILES_DEVICES))
+                .items((self.system.volumes.iter()).map(|v| PlaceItem::folder(&v.name, &v.path))),
+            PlaceSection::new("files.recent", strings::tr(ctx, &txt::FILES_RECENT)).items(
+                self.recent
+                    .iter()
+                    .map(|d| PlaceItem::folder(folder_name(d), d)),
+            ),
+            PlaceSection::new("files.bookmarks", strings::tr(ctx, &txt::FILES_BOOKMARKS)).items(
+                (self.bookmarks.iter()).map(|d| PlaceItem::folder(self.bookmark_name(d), d)),
+            ),
+        ];
+        out.extend(self.app_sections.iter().cloned());
+        out.retain(|s| !s.items.is_empty());
+        out
+    }
+
     /// A bookmark's name: the one given, else its folder's.
     pub fn bookmark_name(&self, dir: &Path) -> String {
         self.bookmark_names
@@ -4796,9 +4862,38 @@ impl FilePicker {
                 self.place(ui, &folder_name(d), d);
             }
         }
-        if places.bookmarks.is_empty() {
-            return None;
+        if !places.bookmarks.is_empty() {
+            out = self.bookmarks(ui, places);
         }
+        // The application's sections: their folders.
+        for section in &places.app_sections {
+            let folders: Vec<_> = (section.items.iter())
+                .filter_map(|i| i.path.as_ref().map(|p| (i, p)))
+                .collect();
+            if folders.is_empty() {
+                continue;
+            }
+            ui.add_space(t.space.s);
+            places::section_title(ui, &section.title);
+            for (item, path) in folders {
+                let r = ui
+                    .push_id((&section.id, &item.id), |ui| {
+                        places::place_row(ui, item, self.dir == *path)
+                    })
+                    .inner;
+                if r.clicked() {
+                    self.go(path.clone());
+                }
+            }
+        }
+        out
+    }
+
+    /// The bookmarks, each with a menu to rename, move or remove it.
+    fn bookmarks(&mut self, ui: &mut Ui, places: &Places) -> Option<PickerAnswer> {
+        let t = Tokens::of(ui.ctx());
+        let ctx = ui.ctx().clone();
+        let mut out = None;
         ui.add_space(t.space.s);
         ui.weak(strings::tr(&ctx, &txt::FILES_BOOKMARKS));
         let last = places.bookmarks.len() - 1;
