@@ -750,6 +750,12 @@ pub const WORKBENCH_CLOSE_PANEL: StrKey =
     StrKey::new("egui-pop-workbench-close-panel", "Close { $panel }");
 /// The "Move group to window" submenu's entry opening a new window.
 pub const WORKBENCH_NEW_WINDOW: StrKey = StrKey::new("egui-pop-workbench-new-window", "New window");
+/// The grip at the end of a tab bar, which moves the whole tab group,
+/// and the tab menu's submenu of where the group can go.
+pub const WORKBENCH_MOVE_GROUP: StrKey = StrKey::new("egui-pop-workbench-move-group", "Move group");
+/// A floating window's move handle, which moves the window.
+pub const WORKBENCH_MOVE_WINDOW: StrKey =
+    StrKey::new("egui-pop-workbench-move-window", "Move window");
 /// Why a dragged tab may not go into a detached window.
 pub const WORKBENCH_STAYS_DOCKED: StrKey = StrKey::new(
     "egui-pop-workbench-stays-docked",
@@ -1880,6 +1886,8 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_DETACH,
     WORKBENCH_CLOSE_PANEL,
     WORKBENCH_NEW_WINDOW,
+    WORKBENCH_MOVE_GROUP,
+    WORKBENCH_MOVE_WINDOW,
     WORKBENCH_STAYS_DOCKED,
     WORKBENCH_FLOAT,
     WORKBENCH_DOCK_BACK,

@@ -338,6 +338,206 @@ pub fn panel_alignment(app: &AppHandle) -> PanelAlignment {
         .unwrap_or_default()
 }
 
+pub use egui_stack::{FloatMove, GroupHandles};
+
+/// The setting: the key held while dragging a tab to carry its whole
+/// group (Shift, Ctrl or Alt; see [`GroupModifier`]).
+pub const SETTING_GROUP_DRAG_MODIFIER: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.group_drag_modifier");
+/// The setting: whether the empty part of a tab bar drags its group.
+pub const SETTING_GROUP_EMPTY_SPACE: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.group_handle.empty_space");
+/// The setting: whether a grip at the end of each tab bar drags its group.
+pub const SETTING_GROUP_GRIP: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.group_handle.grip");
+/// The setting: whether a tab dragged with the group modifier
+/// ([`SETTING_GROUP_DRAG_MODIFIER`]) carries its group.
+pub const SETTING_GROUP_MODIFIER_DRAG: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.group_handle.modifier_drag");
+/// The setting: whether the tab menu offers "Move group".
+pub const SETTING_GROUP_MENU: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.group_handle.menu");
+/// The setting: whether a floating window shows a move handle.
+pub const SETTING_GROUP_MOVE_WINDOW: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.group_handle.move_window");
+/// The setting: what moving a floating window does (see
+/// [`float_move`]).
+pub const SETTING_FLOAT_MOVE: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.float_move");
+
+/// The group handles an application allows unless it says otherwise
+/// ([`AppBuilder::group_handles`](crate::AppBuilder::group_handles)):
+/// every handle but the tab menu's "Move group", whose list names the
+/// docks by their internal names; the panel menu's own entries (Move to,
+/// Detach, Move to group) move a group instead.
+pub const DEFAULT_GROUP_HANDLES: GroupHandles = GroupHandles::ALL.with(GroupHandles::MENU, false);
+
+/// Each group handle, its setting and its label and description.
+const HANDLE_SETTINGS: [(GroupHandles, egui_pop_model::ids::SettingId, &str, &str); 5] = [
+    (
+        GroupHandles::EMPTY_SPACE,
+        SETTING_GROUP_EMPTY_SPACE,
+        "Drag a group by its tab bar",
+        "Whether dragging the empty part of a tab bar moves its whole group of tabs.",
+    ),
+    (
+        GroupHandles::GRIP,
+        SETTING_GROUP_GRIP,
+        "Group grip",
+        "Whether each tab bar ends with a grip that moves its whole group of tabs, even when the bar is full.",
+    ),
+    (
+        GroupHandles::MODIFIER_DRAG,
+        SETTING_GROUP_MODIFIER_DRAG,
+        "Drag a group with a key held",
+        "Whether a tab dragged with the group key held (Group drag key) carries its whole group.",
+    ),
+    (
+        GroupHandles::MENU,
+        SETTING_GROUP_MENU,
+        "Move group in the tab menu",
+        "Whether a tab's menu offers to move its whole group to another area or a new window.",
+    ),
+    (
+        GroupHandles::MOVE_WINDOW,
+        SETTING_GROUP_MOVE_WINDOW,
+        "Window move handle",
+        "Whether a floating window shows a handle at the end of its tab bar that moves the window.",
+    ),
+];
+
+/// The key held while dragging a tab to carry its whole group
+/// ([`SETTING_GROUP_DRAG_MODIFIER`]).
+///
+/// It never clashes with the workbench's other keys: Ctrl docks a
+/// floating palette (`gesture.workbench.dock`), a palette's own drag,
+/// never a tab's; Shift on a tab bar's buttons is a click, not a drag.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GroupModifier {
+    /// Shift (the default).
+    #[default]
+    Shift,
+    /// Ctrl (Cmd on macOS).
+    Ctrl,
+    /// Alt (Option on macOS).
+    Alt,
+}
+
+impl GroupModifier {
+    /// The setting's choices, in order.
+    pub const CHOICES: [&'static str; 3] = ["shift", "ctrl", "alt"];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            GroupModifier::Shift => "shift",
+            GroupModifier::Ctrl => "ctrl",
+            GroupModifier::Alt => "alt",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<GroupModifier> {
+        [
+            GroupModifier::Shift,
+            GroupModifier::Ctrl,
+            GroupModifier::Alt,
+        ]
+        .into_iter()
+        .find(|m| m.as_str() == s)
+    }
+
+    /// egui's modifiers for it (Ctrl is the command key).
+    pub fn modifiers(self) -> egui::Modifiers {
+        match self {
+            GroupModifier::Shift => egui::Modifiers::SHIFT,
+            GroupModifier::Ctrl => egui::Modifiers::COMMAND,
+            GroupModifier::Alt => egui::Modifiers::ALT,
+        }
+    }
+}
+
+/// The float move setting's choices: [`FloatMove::Move`], [`FloatMove::Dock`].
+const FLOAT_MOVE_CHOICES: [&str; 2] = ["move", "dock"];
+
+/// Declares the group handles' settings (those of the handles the
+/// application allows, `allowed`), the group drag key and the float move.
+pub(crate) fn register_group_settings(
+    ctx: &mut crate::ctx::Ctx<'_>,
+    allowed: GroupHandles,
+) -> Result<(), crate::ctx::CtxError> {
+    use egui_pop_model::values::Descriptor;
+    if allowed.contains(GroupHandles::MODIFIER_DRAG) {
+        ctx.setting(
+            SETTING_GROUP_DRAG_MODIFIER,
+            Descriptor::choice(
+                "Group drag key",
+                &GroupModifier::CHOICES,
+                GroupModifier::default().as_str(),
+            )
+            .description(
+                "The key held while dragging a tab to move its whole group of tabs: shift, ctrl (cmd on macOS) or alt.",
+            ),
+        )?;
+    }
+    for (flag, id, label, description) in HANDLE_SETTINGS {
+        if allowed.contains(flag) {
+            ctx.setting(id, Descriptor::bool(label, true).description(description))?;
+        }
+    }
+    if allowed.contains(GroupHandles::MOVE_WINDOW) {
+        ctx.setting(
+            SETTING_FLOAT_MOVE,
+            Descriptor::choice("Moving a window", &FLOAT_MOVE_CHOICES, "move").description(
+                "What moving a floating window by its title bar or move handle does: only move it (move), or dock it into the area it is let go over, highlighted while it moves (dock; where the system hides window positions it only moves).",
+            ),
+        )?;
+    }
+    Ok(())
+}
+
+/// A setting's value from the store, read by `read`.
+fn setting_value<T>(
+    app: &AppHandle,
+    id: &egui_pop_model::ids::SettingId,
+    read: impl FnOnce(&egui_pop_model::values::Value) -> Option<T>,
+) -> Option<T> {
+    egui_pop_core::lock(&app.store())
+        .get(&format!("settings/{id}"))
+        .and_then(|e| read(&e.value))
+}
+
+/// The handles that move a whole tab group: those the application
+/// allows ([`AppBuilder::group_handles`](crate::AppBuilder::group_handles))
+/// that the user left on in the settings.
+pub fn group_handles(app: &AppHandle) -> GroupHandles {
+    let allowed = app.0.group_handles.get();
+    let mut user = GroupHandles::ALL;
+    for (flag, id, _, _) in HANDLE_SETTINGS {
+        let on = setting_value(app, &id, egui_pop_model::values::Value::as_bool).unwrap_or(true);
+        user = user.with(flag, on);
+    }
+    allowed.intersection(user)
+}
+
+/// The key held while dragging a tab to carry its group, as the setting
+/// says now.
+pub fn group_drag_modifier(app: &AppHandle) -> GroupModifier {
+    setting_value(app, &SETTING_GROUP_DRAG_MODIFIER, |v| {
+        v.as_choice().and_then(GroupModifier::parse)
+    })
+    .unwrap_or_default()
+}
+
+/// What moving a floating window does, as the setting says now:
+/// [`FloatMove::Move`] (only moves it) unless the user chose `dock`.
+pub fn float_move(app: &AppHandle) -> FloatMove {
+    match setting_value(app, &SETTING_FLOAT_MOVE, |v| {
+        v.as_choice().map(str::to_owned)
+    }) {
+        Some(choice) if choice == "dock" => FloatMove::Dock,
+        _ => FloatMove::Move,
+    }
+}
+
 /// Where a panel detached without a known place opens, and its size.
 pub const DETACHED: [f32; 4] = [80.0, 80.0, 480.0, 360.0];
 
@@ -2329,10 +2529,9 @@ fn window_tabs(app: &AppHandle, ui: &mut Ui, aux: &Auxiliary) {
         app,
         prepared: &cache.tabs,
     };
-    DockArea::new(&mut dock)
-        .id(id)
-        .style(style)
-        .painter(&*kit)
+    dock.translations = dock_translations(&ctx);
+    let area = DockArea::new(&mut dock).id(id).style(style).painter(&*kit);
+    group_gestures(area, app, &ctx)
         .allowed_splits(egui_stack::AllowedSplits::None)
         .show_close_buttons(false)
         .show_add_buttons(false)
@@ -3526,10 +3725,11 @@ fn drop_targets(app: &AppHandle, ui: &mut Ui, zen: bool) {
             app,
             prepared: &prepared,
         };
-        DockArea::dock(&mut space, dock)
+        space.state_mut().translations = dock_translations(&ctx);
+        let area = DockArea::dock(&mut space, dock)
             .style(style.clone())
-            .painter(&painter)
-            .show_inside(&mut target, &mut viewer);
+            .painter(&painter);
+        group_gestures(area, app, &ctx).show_inside(&mut target, &mut viewer);
         let mut wb = app.workbench_mut();
         wb.put_space(space);
         wb.note_landing(seen);
@@ -4687,9 +4887,11 @@ fn draw_dock(app: &AppHandle, ui: &mut Ui, area: Area) {
     // drag across the areas (the first dock drawn in a pass resolves it
     // for all of them); the kit measures and paints the tabs, bars,
     // bodies, separators and drop zones (`egui_pop_core::kit`).
-    DockArea::dock(&mut space, area_name(area))
+    space.state_mut().translations = dock_translations(&ctx);
+    let dock = DockArea::dock(&mut space, area_name(area))
         .style(style)
-        .painter(&painter)
+        .painter(&painter);
+    group_gestures(dock, app, &ctx)
         .show_close_buttons(false)
         .show_add_buttons(false)
         .show_leaf_close_all_buttons(false)
@@ -4741,6 +4943,32 @@ fn first_bar(
         end,
         tabs: leaf.tabs.len(),
     })
+}
+
+/// A dock's group gestures, as the application allows and the user
+/// set them ([`group_handles`], [`group_drag_modifier`]), and the names
+/// of its grip and move handle, translated.
+fn group_gestures<'a>(
+    area: DockArea<'a, PanelId>,
+    app: &AppHandle,
+    ctx: &egui::Context,
+) -> DockArea<'a, PanelId> {
+    let mut labels = egui_stack::Labels::default();
+    labels.move_group = strings::tr(ctx, &txt::WORKBENCH_MOVE_GROUP).into();
+    labels.move_window = strings::tr(ctx, &txt::WORKBENCH_MOVE_WINDOW).into();
+    area.group_handles(group_handles(app))
+        .group_drag_modifiers(group_drag_modifier(app).modifiers())
+        .labels(labels)
+}
+
+/// A dock's menu texts, translated: its tab menu's "Move group" and that
+/// submenu's "New window".
+fn dock_translations(ctx: &egui::Context) -> egui_stack::Translations {
+    let mut translations = egui_stack::Translations::english();
+    let menu = &mut translations.tab_context_menu;
+    menu.move_group_menu = strings::tr(ctx, &txt::WORKBENCH_MOVE_GROUP);
+    menu.move_group_new_window = strings::tr(ctx, &txt::WORKBENCH_NEW_WINDOW);
+    translations
 }
 
 /// The kit as an area's dock painter: everything as the kit paints it,
@@ -4872,6 +5100,13 @@ fn dock_style(style: &egui::Style, kit: &Kit) -> egui_stack::Style {
     s.overlay.zone_stroke = egui::Stroke::new(zone.border_width, zone.border_color);
     s.overlay.zone_corner_radius =
         egui::CornerRadius::same(zone.radius.round().clamp(0.0, 255.0) as u8);
+    // The group grip at the end of a tab bar, in the tabs' colours: a
+    // tab's text at rest, and its text and fill under the pointer.
+    let rest = kit.tab.style(egui_pop_core::kit::State::REST);
+    let hover = kit.tab.style(egui_pop_core::kit::State::HOVER);
+    s.buttons.group_grip_color = rest.text;
+    s.buttons.group_grip_active_color = hover.text;
+    s.buttons.group_grip_bg_fill = hover.fill;
     s
 }
 
