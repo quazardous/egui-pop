@@ -305,19 +305,6 @@ fn grid(n: usize, size: Vec2, gap: f32) -> (usize, usize) {
     }
 }
 
-/// Where images let go at `at` go in among `panes`: before the pane under
-/// the pointer when on its left half, else after it; off every pane, by
-/// the nearest one.
-fn insertion(panes: &[Rect], at: Pos2) -> usize {
-    let Some((i, r)) = panes.iter().enumerate().min_by(|(_, a), (_, b)| {
-        a.distance_sq_to_pos(at)
-            .total_cmp(&b.distance_sq_to_pos(at))
-    }) else {
-        return 0;
-    };
-    if at.x < r.center().x { i } else { i + 1 }
-}
-
 impl<K: Key> CompareView<K> {
     pub fn new(id: impl Into<String>) -> Self {
         Self {
@@ -772,9 +759,22 @@ mod carry {
     use egui_pop_core::strings::tr;
     use egui_pop_core::theme::Tokens;
 
-    use super::{Intent, Pane, insertion};
+    use super::{Intent, Pane};
     use crate::select::Key;
     use crate::strings as s;
+
+    /// Where images let go at `at` go in among `panes`: before the pane under
+    /// the pointer when on its left half, else after it; off every pane, by
+    /// the nearest one.
+    fn insertion(panes: &[Rect], at: Pos2) -> usize {
+        let Some((i, r)) = panes.iter().enumerate().min_by(|(_, a), (_, b)| {
+            a.distance_sq_to_pos(at)
+                .total_cmp(&b.distance_sq_to_pos(at))
+        }) else {
+            return 0;
+        };
+        if at.x < r.center().x { i } else { i + 1 }
+    }
 
     /// What a target sees of a drag of images, whatever the payload.
     pub(super) enum Over<K> {
