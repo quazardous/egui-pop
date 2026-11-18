@@ -1704,6 +1704,10 @@ fn the_settings_window_shows_the_gallerys_custom_page() {
         .type_text("specimen");
     h.run();
     h.run();
+    // Long descriptions holding the word's letters scattered over their
+    // words (the accent colour's, the pointer profile's) do not match.
+    assert!(h.query_by_label("Reset Accent colour").is_none());
+    assert!(h.query_by_label("Reset Pointer profile").is_none());
     h.get_by_label("Open the Greeting preview page").click();
     h.run();
     h.run();

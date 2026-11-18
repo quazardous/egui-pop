@@ -710,9 +710,10 @@ fn hits(
             .find(|e| e.id.as_str() == id)
             .is_some_and(|e| {
                 settings_window::matches(ctx, app, e, query)
-                    || query
-                        .split_whitespace()
-                        .all(|w| fuzzy::score(w, e.id.as_str()).is_some())
+                    || fuzzy::Fields::new()
+                        .keyword(e.id.as_str())
+                        .find(query)
+                        .is_some()
             })
     };
     let mut out = Vec::new();
