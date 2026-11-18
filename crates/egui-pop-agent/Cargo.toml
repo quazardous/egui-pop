@@ -37,10 +37,17 @@ name = "egui-pop-agent-mcp"
 path = "src/bin/egui-pop-agent-mcp.rs"
 required-features = ["mcp"]
 
+[target.'cfg(unix)'.dependencies]
+# MIT: the socket peer's user (`SO_PEERCRED`, `getpeereid`) through a
+# safe API (the workspace forbids `unsafe`).
+nix = { version = "0.31", default-features = false, features = ["socket", "user"] }
+
 [target.'cfg(windows)'.dependencies]
 # MIT OR Apache-2.0: Windows named pipes through a safe API (the
 # workspace forbids `unsafe`).
-interprocess = { version = "2", default-features = false }
+interprocess = { version = "2.4", default-features = false }
+# MIT OR Apache-2.0: the pipe's security descriptor string (SDDL).
+widestring = "1"
 
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }

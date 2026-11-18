@@ -1433,9 +1433,11 @@ dependencies = [
  "egui_kittest",
  "interprocess",
  "log",
+ "nix 0.31.3",
  "rmcp",
  "serde_json",
  "tokio",
+ "widestring",
 ]
 
 [[package]]
@@ -3959,6 +3961,7 @@ dependencies = [
  "cfg-if",
  "cfg_aliases 0.2.2",
  "libc",
+ "memoffset",
 ]
 
 [[package]]

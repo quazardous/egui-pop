@@ -1,4 +1,5 @@
-//! The Unix socket: private to the user, or not started.
+//! The Unix socket: private to the user, or not started; a client that
+//! is not the user's own process is refused before any request.
 
 use std::io::{self, BufReader, ErrorKind};
 use std::os::unix::fs::{FileTypeExt as _, PermissionsExt as _};
@@ -8,6 +9,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 
+use crate::limits::Connections;
+use crate::rpc::{self, RpcError};
 use crate::{Job, Waker};
 
 /// A socket being served; dropping it stops listening and removes the
@@ -23,6 +26,7 @@ impl Listening {
         let listener = bind_private(path)?;
         let stop = Arc::new(AtomicBool::new(false));
         let stopping = stop.clone();
+        let connections = Connections::default();
         std::thread::Builder::new()
             .name("egui-pop-agent".into())
             .spawn(move || {
@@ -31,13 +35,32 @@ impl Listening {
                         break;
                     }
                     let Ok(stream) = stream else { continue };
+                    match same_user(&stream) {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            log::warn!(target: "egui_pop_agent", "agent client refused: another user's process");
+                            rpc::refuse(&stream, RpcError::not_the_user());
+                            continue;
+                        }
+                        Err(e) => {
+                            log::warn!(target: "egui_pop_agent", "agent client refused: its user is unknown ({e})");
+                            rpc::refuse(&stream, RpcError::not_the_user());
+                            continue;
+                        }
+                    }
+                    let Some(slot) = connections.take() else {
+                        log::warn!(target: "egui_pop_agent", "agent client refused: too many connected");
+                        rpc::refuse(&stream, RpcError::too_many_connections());
+                        continue;
+                    };
                     let tx = tx.clone();
                     let wake = wake.clone();
                     let _ = std::thread::Builder::new()
                         .name("egui-pop-agent-conn".into())
                         .spawn(move || {
+                            let _slot = slot;
                             let Ok(read) = stream.try_clone() else { return };
-                            crate::rpc::serve(BufReader::new(read), stream, &tx, &wake);
+                            rpc::serve(BufReader::new(read), stream, &tx, &wake);
                         });
                 }
             })?;
@@ -104,4 +127,61 @@ pub(crate) fn bind_private(path: &Path) -> io::Result<UnixListener> {
         ));
     }
     Ok(listener)
+}
+
+/// Whether the process at the other end of `stream` runs as this one's
+/// user (its effective uid). Unknown on a platform without peer
+/// credentials, which refuses every client.
+pub(crate) fn same_user(stream: &UnixStream) -> io::Result<bool> {
+    peer_uid(stream).map(|uid| uid == nix::unistd::geteuid().as_raw())
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
+    use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
+    Ok(getsockopt(stream, PeerCredentials)
+        .map_err(io::Error::from)?
+        .uid())
+}
+
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd",
+    target_os = "dragonfly"
+))]
+fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
+    let (uid, _) = nix::unistd::getpeereid(stream).map_err(io::Error::from)?;
+    Ok(uid.as_raw())
+}
+
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd",
+    target_os = "dragonfly"
+)))]
+fn peer_uid(_: &UnixStream) -> io::Result<u32> {
+    Err(io::Error::new(
+        ErrorKind::Unsupported,
+        "no peer credentials on this platform",
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_client_of_this_process_is_the_same_user() {
+        let (a, b) = UnixStream::pair().unwrap();
+        assert!(same_user(&a).unwrap());
+        assert!(same_user(&b).unwrap());
+    }
 }

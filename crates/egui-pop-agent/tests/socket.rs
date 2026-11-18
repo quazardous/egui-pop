@@ -265,3 +265,91 @@ fn a_shared_directory_is_refused() {
     let _h = app(App::builder(), &path);
     assert!(!path.exists());
 }
+
+/// The line the socket sends a client it closes, and that it closed.
+fn refused_and_closed(read: &mut BufReader<UnixStream>) -> Json {
+    let mut line = String::new();
+    read.read_line(&mut line).expect("a response line");
+    let r: Json = serde_json::from_str(&line).expect("JSON");
+    let mut rest = String::new();
+    assert_eq!(
+        read.read_line(&mut rest).unwrap_or(0),
+        0,
+        "closed after it: {rest}"
+    );
+    r
+}
+
+#[test]
+fn one_client_over_the_cap_is_refused_and_a_freed_place_is_given_again() {
+    let dir = private_dir("cap");
+    let path = dir.join("app.sock");
+    let mut h = app(App::builder(), &path);
+    let p = path.clone();
+    with_client(&mut h, move || {
+        // Each one answered: each one holds its place.
+        let mut held: Vec<Client> = (0..egui_pop_agent::MAX_CONNECTIONS)
+            .map(|_| {
+                let mut c = Client::connect(&p);
+                c.result("describe", json!({}));
+                c
+            })
+            .collect();
+
+        let over = Client::connect(&p);
+        let mut read = over.read;
+        let r = refused_and_closed(&mut read);
+        assert_eq!(r["error"]["code"], egui_pop_agent::RpcError::LIMIT, "{r}");
+        assert!(r["id"].is_null(), "{r}");
+
+        // One closes: its place is given to the next client, once the
+        // socket saw it close.
+        drop(held.pop());
+        let start = Instant::now();
+        loop {
+            let mut c = Client::connect(&p);
+            writeln!(c.write, r#"{{"jsonrpc":"2.0","id":1,"method":"describe"}}"#).unwrap();
+            let mut line = String::new();
+            c.read.read_line(&mut line).unwrap();
+            let r: Json = serde_json::from_str(&line).unwrap();
+            if r.get("error").is_none() {
+                break;
+            }
+            // Refused while the closed one still held its place.
+            assert_eq!(r["error"]["code"], egui_pop_agent::RpcError::LIMIT, "{r}");
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "the place was never freed"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        // The ones held still work.
+        held[0].result("describe", json!({}));
+    });
+}
+
+#[test]
+fn a_request_too_long_is_refused_and_its_connection_closed() {
+    let dir = private_dir("long");
+    let path = dir.join("app.sock");
+    let mut h = app(App::builder(), &path);
+    let p = path.clone();
+    with_client(&mut h, move || {
+        let mut c = Client::connect(&p);
+        // Exactly the cap: still a request (not JSON, so a parse error).
+        let line = "x".repeat(egui_pop_agent::MAX_REQUEST_BYTES);
+        writeln!(c.write, "{line}").unwrap();
+        let mut answer = String::new();
+        c.read.read_line(&mut answer).unwrap();
+        let r: Json = serde_json::from_str(&answer).unwrap();
+        assert_eq!(r["error"]["code"], -32700, "{r}");
+        c.result("describe", json!({}));
+
+        // One byte more: refused, and closed.
+        let line = "x".repeat(egui_pop_agent::MAX_REQUEST_BYTES + 1);
+        // The socket may close before reading it all.
+        let _ = writeln!(c.write, "{line}");
+        let r = refused_and_closed(&mut c.read);
+        assert_eq!(r["error"]["code"], egui_pop_agent::RpcError::LIMIT, "{r}");
+    });
+}

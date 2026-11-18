@@ -53,6 +53,21 @@ application chose no mode, the setting on or off.
   either fails, or another instance answers on the path, the socket is
   not started and the reason is logged (the application still starts).
   A socket file left by an instance that is gone is replaced.
+- **The user's own processes only.** On Linux and macOS, a client whose
+  process runs as another user (the socket's peer credentials:
+  `SO_PEERCRED`, `getpeereid`) is answered `-32001` and closed before
+  any request; on a platform without peer credentials, every client is.
+  On Windows, the pipe's access list (SDDL `D:P(A;;GA;;;OW)(A;;GA;;;SY)`)
+  lets in only its owner, the user the application runs as, and the
+  system; remote clients are rejected, and the first instance is created
+  with `FILE_FLAG_FIRST_PIPE_INSTANCE`, so a pipe another process made
+  first under the name is never served. Every client of that user is
+  the same agent for now (`Origin::Agent("agent-socket")`).
+- **Limits.** At most 8 clients at once (`MAX_CONNECTIONS`): one more is
+  answered `-32004` and closed. A request line longer than 1 MiB
+  (`MAX_REQUEST_BYTES`) is answered `-32004` and its connection closed.
+  A connection serves one request at a time, so at most 8 waits are
+  held at once, each 120 s at most.
 - **Read-only by default.** When the application chose no bridge mode,
   turning the socket on makes the bridge `ReadOnly`: snapshots, actions
   that do not mutate and read-only commands. An application that offers
@@ -120,7 +135,8 @@ Errors: `-32700` (not JSON), `-32600` (not a request), `-32601` (no such
 method), `-32602` (bad params), `-32001` (the bridge refused `describe`,
 `snapshot` or `wait`; `data` is the feedback block, when there is one), `-32002` (the application did
 not answer: it ran no frame, or it closed), `-32003` (`ui` found no
-node, or more than one, to act on).
+node, or more than one, to act on), `-32004` (a transport limit: too
+many clients, a request too long; the connection closes).
 
 ```console
 $ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"wait","params":{"settled":true}}' \
@@ -190,5 +206,6 @@ application's own (`settled` stays reachable).
 - **No `ui.*`.** Tree, screenshots and input go through eframe's
   `inspection` feature ([inspection.md](inspection.md)), a second
   connection.
-- **Windows** is compile-checked only; the pipe keeps the system's
-  default access (the user, administrators and the system).
+- **Windows** is compile-checked only.
+- **One agent.** Every client is `Origin::Agent("agent-socket")`: agents
+  cannot yet be told apart nor granted differently.
