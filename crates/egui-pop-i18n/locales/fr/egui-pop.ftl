@@ -1157,6 +1157,10 @@ egui-pop-files-column-modified = Modifié
 
 egui-pop-files-column-type = Type
 
+egui-pop-files-column-taken = Prise de vue
+
+egui-pop-files-sort-by = Trier par
+
 egui-pop-files-kind-folder = Dossier
 
 egui-pop-files-kind-file = Fichier

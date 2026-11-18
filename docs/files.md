@@ -576,6 +576,16 @@ its own list and grid (columns to sort by, groups) for its two modes.
   on a neighbour does too. The middle one asks for its thumbnail first,
   then the neighbours outwards, then the next one beyond each side
   (`Near`). Each entry is an option named by its name for screen readers.
+- **Order.** Entries come folders first, then by name as people read them
+  (`IMG_9` before `IMG_10`). The toolbar's sort menu, or
+  `FileBrowser::set_sort` with a `sort::PickerSort`, orders them by name,
+  by when they last changed, by when they were taken
+  (`SortColumn::Taken`: `SourceEntry::taken`, else when they last changed),
+  by size or by type, up or down. What has no value in that order goes last
+  either way, and names settle ties. "Folders first" can be turned off
+  (`set_folders_first`). The selection and the focus stay on their
+  entries. A mode that orders by time on its own (`ModeNeeds::time`, the
+  agenda) shows no menu.
 - **Agenda.** `agenda` files the entries by day, the newest first: one
   heading per day (a screen reader's heading, `2026-11-08`), its entries
   under it in a grid, the newest of the day first, and the entries without

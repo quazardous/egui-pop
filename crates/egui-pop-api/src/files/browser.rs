@@ -31,7 +31,7 @@ use egui_pop_core::widgets;
 
 use super::fs::{Meta, SharedFs};
 use super::preview::{Previews, Shown};
-use super::sort::natural_cmp;
+use super::sort::{PickerSort, SortColumn, SortFacts, sort_by};
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -3192,14 +3192,26 @@ pub struct FileBrowser {
     quick_look: bool,
     /// The application's marks of each entry.
     marks: Option<Arc<MarkEntries>>,
+    /// The entries' order ([`FileBrowser::set_sort`]).
+    sort: PickerSort,
+    folders_first: bool,
 }
 
-/// The browser's order: folders first, then names as people read them.
+/// The browser's default order: folders first, then names as people read
+/// them; a side column's order whatever the place's.
 fn sort_entries(entries: &mut [SourceEntry]) {
-    entries.sort_by(|a, b| {
-        b.is_dir()
-            .cmp(&a.is_dir())
-            .then_with(|| natural_cmp(&a.name, &b.name))
+    sort_in(entries, PickerSort::default(), true);
+}
+
+/// Puts entries in `sort`'s order, folders first when asked
+/// ([`FileBrowser::set_sort`]).
+fn sort_in(entries: &mut [SourceEntry], sort: PickerSort, folders_first: bool) {
+    sort_by(entries, sort, folders_first, |e| SortFacts {
+        name: &e.name,
+        is_dir: e.is_dir(),
+        size: e.size,
+        modified: e.modified,
+        taken: e.taken,
     });
 }
 
@@ -3437,6 +3449,8 @@ impl FileBrowser {
             focus_first: false,
             quick_look: false,
             marks: None,
+            sort: PickerSort::default(),
+            folders_first: true,
         };
         b.reload();
         b
@@ -3470,6 +3484,57 @@ impl FileBrowser {
     ) -> Self {
         self.marks = Some(Arc::new(marks));
         self
+    }
+
+    /// Sorts the entries by `sort` from the start: by name upwards unless
+    /// told otherwise.
+    pub fn with_sort(mut self, sort: PickerSort) -> Self {
+        self.set_sort(sort);
+        self
+    }
+
+    /// Whether folders come before files whatever the order (they do
+    /// unless told otherwise).
+    pub fn with_folders_first(mut self, on: bool) -> Self {
+        self.set_folders_first(on);
+        self
+    }
+
+    /// The entries' order: by name, when they last changed, when they were
+    /// taken ([`SourceEntry::taken`], else when they last changed), size or
+    /// type, up or down. What has no value in that order goes last either
+    /// way, and names settle ties. The toolbar's sort menu sets it too, in
+    /// every mode that does not order by time on its own (an agenda). The
+    /// selection and the focus stay on their entries, and the focus is
+    /// brought into view.
+    pub fn set_sort(&mut self, sort: PickerSort) {
+        if sort != self.sort {
+            self.sort = sort;
+            self.resort();
+        }
+    }
+
+    pub fn sort(&self) -> PickerSort {
+        self.sort
+    }
+
+    /// Folders before files in every order, or among them.
+    pub fn set_folders_first(&mut self, on: bool) {
+        if on != self.folders_first {
+            self.folders_first = on;
+            self.resort();
+        }
+    }
+
+    pub fn folders_first(&self) -> bool {
+        self.folders_first
+    }
+
+    /// Puts the entries in the order asked, the focus brought into view.
+    fn resort(&mut self) {
+        sort_in(&mut self.entries, self.sort, self.folders_first);
+        self.generation += 1;
+        self.reveal = self.focus.is_some();
     }
 
     /// Selects these entries alone (the first of them with
@@ -3814,7 +3879,7 @@ impl FileBrowser {
             }
         }
         if changed {
-            sort_entries(&mut self.entries);
+            sort_in(&mut self.entries, self.sort, self.folders_first);
             self.generation += 1;
         }
         if done {
@@ -4036,6 +4101,73 @@ impl FileBrowser {
         out
     }
 
+    /// The toolbar's sort menu: each order, the one shown ticked (a click
+    /// on it turns it the other way), and whether folders come first; then
+    /// the direction, a button that turns it.
+    fn sort_menu(&mut self, ui: &mut Ui) {
+        let ctx = ui.ctx().clone();
+        let said = |sort: PickerSort| {
+            let column = strings::tr(&ctx, sort.column.title());
+            let key = if sort.descending {
+                &crate::strings::FILES_SORTED_DOWN
+            } else {
+                &crate::strings::FILES_SORTED_UP
+            };
+            strings::tr_args(&ctx, key, &[("column", &column)])
+        };
+        let name = strings::tr(&ctx, &crate::strings::FILES_SORT_BY);
+        let shown = strings::tr(&ctx, self.sort.column.title());
+        let mut sort = self.sort;
+        let mut folders_first = self.folders_first;
+        let r = widgets::combo_box(self.id.with("sort"))
+            .selected_text(shown)
+            .show_ui(ui, |ui| {
+                for column in SortColumn::ALL {
+                    let on = sort.column == column;
+                    let label = strings::tr(&ctx, column.title());
+                    let r = widgets::selectable_label(ui, on, label.as_str());
+                    r.widget_info(|| {
+                        egui::WidgetInfo::selected(egui::Role::MenuItemRadio, true, on, &label)
+                    });
+                    if r.clicked() {
+                        sort = sort.click(column);
+                    }
+                }
+                ui.separator();
+                widgets::checkbox(
+                    ui,
+                    &mut folders_first,
+                    strings::tr(&ctx, &crate::strings::FILES_FOLDERS_FIRST),
+                );
+            });
+        let current = said(self.sort);
+        r.response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::Role::ComboBox, true, format!("{name}: {current}"))
+        });
+        r.response.on_hover_text(name);
+        // The direction, a button of its own that turns it: the kit's sort
+        // glyph, named by the order it shows.
+        let side = ui.spacing().interact_size.y;
+        let (rect, r) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::click());
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &current));
+        let visuals = ui.style().interact(&r);
+        if r.hovered() {
+            ui.painter()
+                .rect_filled(rect, visuals.corner_radius, visuals.bg_fill);
+        }
+        let glyph = egui_pop_core::kit::Kit::of(&ctx).glyph(if self.sort.descending {
+            egui_pop_core::kit::Glyph::SortDescending
+        } else {
+            egui_pop_core::kit::Glyph::SortAscending
+        });
+        glyph.paint(ui.painter(), rect.shrink(side * 0.25), visuals.text_color());
+        if r.clicked() {
+            sort.descending = !sort.descending;
+        }
+        self.set_sort(sort);
+        self.set_folders_first(folders_first);
+    }
+
     /// Draws the toolbar's mode switcher and the entries.
     pub fn show(&mut self, ui: &mut Ui) -> BrowserOutput {
         let mut out = BrowserOutput::default();
@@ -4065,6 +4197,10 @@ impl FileBrowser {
                     .show_value(false)
                     .text(name),
                 );
+            }
+            // The order, unless the mode orders by time on its own.
+            if !infos.iter().any(|m| m.id == self.mode_id && m.needs.time) {
+                self.sort_menu(ui);
             }
             // The mode's own controls (the agenda's level).
             if self.mode.toolbar(ui, &mut self.settings) {

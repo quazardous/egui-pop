@@ -1509,6 +1509,8 @@ egui-pop-files-column-name = Name
 
 egui-pop-files-column-size = Size
 
+egui-pop-files-column-taken = Taken
+
 egui-pop-files-column-type = Type
 
 egui-pop-files-create = Create
@@ -1670,6 +1672,8 @@ egui-pop-files-selected-none = Nothing selected: Enter or the button acts on the
 egui-pop-files-selected-not-shown = Selected: { $count } ({ $hidden } not shown)
 
 egui-pop-files-size = Size
+
+egui-pop-files-sort-by = Sort by
 
 egui-pop-files-sort-ranked = While the field filters, the best matches come first
 

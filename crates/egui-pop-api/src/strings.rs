@@ -640,6 +640,10 @@ pub const FILES_COLUMN_NAME: StrKey = StrKey::new("egui-pop-files-column-name", 
 pub const FILES_COLUMN_SIZE: StrKey = StrKey::new("egui-pop-files-column-size", "Size");
 pub const FILES_COLUMN_MODIFIED: StrKey = StrKey::new("egui-pop-files-column-modified", "Modified");
 pub const FILES_COLUMN_TYPE: StrKey = StrKey::new("egui-pop-files-column-type", "Type");
+/// When a photo was taken: the file browser's sort by capture time.
+pub const FILES_COLUMN_TAKEN: StrKey = StrKey::new("egui-pop-files-column-taken", "Taken");
+/// The file browser's sort menu, as a screen reader names it.
+pub const FILES_SORT_BY: StrKey = StrKey::new("egui-pop-files-sort-by", "Sort by");
 pub const FILES_KIND_FOLDER: StrKey = StrKey::new("egui-pop-files-kind-folder", "Folder");
 pub const FILES_KIND_FILE: StrKey = StrKey::new("egui-pop-files-kind-file", "File");
 /// A column's header as a screen reader says it.
@@ -1800,6 +1804,8 @@ pub const ALL: &[StrKey] = &[
     FILES_COLUMN_SIZE,
     FILES_COLUMN_MODIFIED,
     FILES_COLUMN_TYPE,
+    FILES_COLUMN_TAKEN,
+    FILES_SORT_BY,
     FILES_KIND_FOLDER,
     FILES_KIND_FILE,
     FILES_SORTED_UP,
