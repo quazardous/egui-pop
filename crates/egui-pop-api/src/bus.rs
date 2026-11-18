@@ -136,6 +136,9 @@
 //! the workbench's chrome shows it ([`PANEL_CHROME`]), never the panel.
 //! What a declared panel is, its kind (whether it edits) included, is
 //! `panel.describe` ([`PanelDescribe`], answered by [`PANEL_DESCRIBE`]).
+//! The interactive areas each window's last pass registered, what each
+//! writes (display, navigate, edit) and whether an edit area is inert,
+//! are `ui.areas` ([`UiAreas`], answered by [`AREA_REGISTRY`]).
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -157,6 +160,8 @@ pub use egui_pop_hooks;
 
 mod activate;
 pub use activate::raise_main_window;
+pub(crate) mod areas;
+pub use areas::{AREA_POINTS, AREA_REGISTRY, UiAreas};
 pub(crate) mod budget;
 mod commands;
 pub use commands::{COMMAND_POINTS, CommandAsk, CommandRun};
@@ -558,8 +563,8 @@ pub const PLUGIN_POINTS: [&str; 2] = [PluginConnect::ID, PluginDisconnect::ID];
 
 /// Every point egui-pop declares: the window, job, plugin, files,
 /// settings, drag, screen, panel state, layout, panel description and
-/// command points.
-pub const POINTS: [&str; 23] = [
+/// command and area points.
+pub const POINTS: [&str; 24] = [
     WindowOpen::ID,
     WindowClose::ID,
     WindowReparent::ID,
@@ -583,6 +588,7 @@ pub const POINTS: [&str; 23] = [
     LayoutChanged::ID,
     PanelDescribe::ID,
     CommandRun::ID,
+    UiAreas::ID,
 ];
 
 /// egui-pop's contract table (ADR 0030): every point it declares on the
@@ -645,6 +651,9 @@ pub const CONTRACT: &[PointDecl] = &[
         "A command is about to run, whatever asked it (a key, the palette, a menu, a toolbar, an agent): a listener may refuse it with a reason, and the handler does not run; fail-closed, so a listener that fails refuses it too. `command.refused` names who refused and why.",
     )
     .fail_closed(),
+    PointDecl::of::<UiAreas>(
+        "The interactive areas are listed, each window's last pass: each one's kind (display, navigate or edit), for an edit area the control it writes, its value and path, its panel, its grips, and whether it is inert (its panel's state not current); asked on the interface's thread.",
+    ),
 ];
 
 /// What owns egui-pop's own listeners.
@@ -872,6 +881,7 @@ impl Bus {
         let panel_states = panel_state::States::default();
         panel_state::install(&*kernel, &panel_states, wake.clone());
         panel_describe::install(&*kernel);
+        areas::install(&*kernel, wake.clone());
         let over_budget = budget::install(&*kernel);
         Bus {
             kernel,
@@ -1406,6 +1416,16 @@ impl AppHandle {
     /// (docs/stability.md).</div>
     pub fn describe_panel(&self, panel: &str) -> Option<PanelDescription> {
         emit_with::<PanelDescribe>(self, panel.to_string(), None)
+    }
+
+    /// The interactive areas of each window's last pass (`ui.areas`):
+    /// what each writes, an edit area's control, value and grips, and
+    /// whether it is inert.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn ui_areas(&self) -> Vec<egui_pop_core::areas::AreaRecord> {
+        emit_with::<UiAreas>(self, (), Vec::new())
     }
 
     /// A panel's state as last asked (`panel.state`): ready when never

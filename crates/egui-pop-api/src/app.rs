@@ -2694,7 +2694,12 @@ impl AppHandle {
                         json!({ "panel": id.as_str(), "owner": owner.as_str(), "message": fault.message }),
                     );
                 };
-                fault::boundary_reporting(ui, "panel", title, |ui| draw(ui, self), failed);
+                // Its edit areas are inert while what it shows is not
+                // current (`panel.state` stale, updating or failed).
+                let inert = self.panel_state(id.as_str()) != crate::bus::PanelState::Ready;
+                egui_pop_core::areas::scope(ui, id.as_str(), inert, |ui| {
+                    fault::boundary_reporting(ui, "panel", title, |ui| draw(ui, self), failed);
+                });
                 // Its state (`panel.state`), drawn by the chrome over what
                 // the panel drew.
                 crate::bus::panel_state::paint_content(

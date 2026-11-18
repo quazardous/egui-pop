@@ -97,14 +97,21 @@ pub fn show(ui: &mut Ui, state: &mut State) {
     .log(state.log)
     .clipping(clipping)
     .draggable(true)
+    .edits("Exposure", format!("{:+.2} EV", state.exposure))
     .size(vec2(ui.available_width().min(480.0), 140.0))
     .show(ui);
     // Four stops per width of the histogram.
     state.exposure += f64::from(out.moved()) * 4.0;
     ui.label(format!(
-        "Drag the histogram (or focus it and use the arrows): exposure {:+.2} EV",
+        "Drag the histogram by its grip (or focus it and use the arrows): exposure {:+.2} EV",
         state.exposure
     ));
+    section(ui, "A scope that only shows: no grip, no hover card");
+    Histogram::new([Channel::new("Luminance", g, Color32::from_gray(190))])
+        .log(state.log)
+        .label("Scope")
+        .size(vec2(ui.available_width().min(480.0), 80.0))
+        .show(ui);
     section(
         ui,
         &format!("Thumbnails: {COUNT} in a virtualised grid (placeholders where no image yet)"),

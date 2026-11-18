@@ -18,6 +18,13 @@
 //!   moved, in widths of the histogram). Ctrl (Cmd) is ten times finer,
 //!   Shift ten times coarser; Escape gives the gesture up. When focused,
 //!   the left and right arrows move by a step.
+//! - **Edit area**: a draggable histogram registers as an edit area
+//!   (`egui_pop_core::areas`): the framework draws its grip at rest on
+//!   its right edge, and a hover card naming what the drag writes
+//!   ([`Histogram::edits`]: "Exposure +0.30 EV"); a histogram that is not
+//!   draggable registers as a display area, without a grip. Inside a
+//!   panel whose state is not current the drag is inert: no grip, no
+//!   drag, and a drag under way is given up.
 //!
 //! The changes in [`HistogramOutput::changes`] say how far the gesture
 //! has moved so far, from `from` to `to`: applying `to.delta -
@@ -50,6 +57,7 @@ use egui::{
     Color32, Pos2, Rect, Response, Role, Sense, Shape, Stroke, StrokeKind, Ui, Vec2, Widget,
     WidgetInfo, pos2, vec2,
 };
+use egui_pop_core::areas::{self, AreaSpec, Grip};
 use egui_pop_core::state::Slot;
 use egui_pop_core::strings::{self, Arg};
 use egui_pop_core::theme::Tokens;
@@ -141,6 +149,7 @@ pub struct Histogram<'a> {
     draggable: bool,
     step: f32,
     hook: Option<Hook<'a, Drag>>,
+    edits: Option<(String, Option<String>)>,
 }
 
 /// What the histogram did in a frame.
@@ -177,6 +186,7 @@ impl<'a> Histogram<'a> {
             draggable: false,
             step: 0.01,
             hook: None,
+            edits: None,
         }
     }
 
@@ -214,6 +224,17 @@ impl<'a> Histogram<'a> {
         self
     }
 
+    /// Names what the drag writes, for the area registry
+    /// (`egui_pop_core::areas`): the control ("Exposure") and its value
+    /// now ("+0.30 EV"), which its hover card shows. Without it the card
+    /// names the histogram alone.
+    /// An empty value leaves it out.
+    pub fn edits(mut self, control: impl Into<String>, value: impl Into<String>) -> Histogram<'a> {
+        let value: String = value.into();
+        self.edits = Some((control.into(), (!value.is_empty()).then_some(value)));
+        self
+    }
+
     /// How far an arrow key moves, in widths (a hundredth by default;
     /// Ctrl finer, Shift coarser).
     pub fn step(mut self, step: f32) -> Histogram<'a> {
@@ -244,7 +265,12 @@ impl<'a> Histogram<'a> {
             draggable,
             step,
             mut hook,
+            edits,
         } = self;
+        // An edit area is inert while its panel is not current: no drag,
+        // no grip, nothing edited from a picture of the previous state.
+        let inert = draggable && areas::inert(ui);
+        let draggable = draggable && !inert;
         let size = size.unwrap_or_else(|| {
             let w = ui.available_width().clamp(120.0, 600.0);
             vec2(w, (w / 3.0).round())
@@ -264,14 +290,33 @@ impl<'a> Histogram<'a> {
                 egui_pop_core::pointer::DragKind::ResizeHorizontal,
             )
             .clicks(false);
-            if !changes.is_empty() {
-                response.mark_changed();
-            }
+        } else if inert {
+            give_up(ui, &response, &mut changes);
+        }
+        if !changes.is_empty() {
+            response.mark_changed();
         }
         paint(ui, rect, &response, &channels, log, clipping, draggable);
         let names: Vec<&str> = channels.iter().map(|c| c.name).collect();
         let bins = channels.first().map_or(0, |c| c.bins.len());
         let label = label.unwrap_or_else(|| strings::tr(ui.ctx(), &crate::strings::HISTOGRAM));
+        let id = format!("histogram:{label}");
+        let area = if draggable || inert {
+            // Its grip at rest, on the edge whose drag moves the
+            // exposure (as the white handle of a Levels tool).
+            let (control, value) = edits.unwrap_or_else(|| (label.clone(), None));
+            let mut a = AreaSpec::edit(id, control).grip(Grip::horizontal(pos2(
+                rect.right() - GRIP_INSET,
+                rect.center().y,
+            )));
+            if let Some(v) = value {
+                a = a.value(v);
+            }
+            a
+        } else {
+            AreaSpec::display(id)
+        };
+        areas::register(ui, &response, area);
         let value = value_text(ui.ctx(), &names, bins, log, clipping);
         let kind = if draggable {
             Role::Slider
@@ -310,8 +355,25 @@ fn change_of(from: Drag, to: Drag, cause: Cause, done: bool) -> Change<Drag> {
     }
 }
 
+/// How far the grip's centre sits inside the right edge, in points.
+const GRIP_INSET: f32 = 6.0;
+
 /// A drag under way, per histogram.
 const DRAG: Slot<Drag> = Slot::new("viewport.histogram.drag");
+
+/// A drag under way when the histogram turned inert is given up: a change
+/// back to where it began, as Escape would.
+fn give_up(ui: &Ui, response: &Response, changes: &mut Vec<Change<Drag>>) {
+    if let Some(total) = DRAG.keyed(response.id).remove(ui.ctx())
+        && total.delta != 0.0
+    {
+        let start = Drag {
+            delta: 0.0,
+            ..total
+        };
+        changes.push(change_of(total, start, Cause::Drag, true));
+    }
+}
 
 /// The drag, the keys and assistive actions, written to `changes`.
 fn drag(

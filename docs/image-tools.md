@@ -62,6 +62,13 @@ fn histogram(ui: &mut egui::Ui, red: &[f32], green: &[f32], blue: &[f32], exposu
   back to 0 comes then). Where it began (`at`) lets the application
   drag the black level from the left and the exposure from the right.
   Focused, the left and right arrows move it by a step.
+- **Edit area**: draggable, it registers as an edit area
+  (`egui_pop_core::areas`, see the workbench's interactive areas): the
+  framework draws its grip at rest on its right edge and a hover card
+  naming what the drag writes (`edits("Exposure", "+0.30 EV")`);
+  not draggable, it is a display area, without a grip. In a panel whose
+  state is not current the drag is inert, and a drag under way is given
+  up.
 
 ## Curve editor
 

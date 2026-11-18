@@ -502,6 +502,53 @@ describes a declared panel on the bus: its title, whether it is a
 palette, and its kind (`bus::PanelDescription`), for agents and tests
 without a screenshot.
 
+## Interactive areas
+
+Inside a panel, each interactive area says what it writes, to the area
+registry (`egui_pop_core::areas`), each pass it is drawn, after its
+widget: a **display** area only shows (a scope's picture), a
+**navigate** area moves what is shown (pan, zoom, a scope's mode), an
+**edit** area writes what the application edits, with the control it
+writes and its value now. The framework, never the widget, draws what
+tells them apart:
+
+- an edit area's **grips at rest** (`areas::Grip`), small handles where
+  a drag takes it, as a Levels tool's: a graph with grips edits, a graph
+  without is a picture (the histogram's exposure grip on its right
+  edge; a waveform or a vectorscope has none);
+- the **edit cursor** of its drag (`AreaSpec::cursor`);
+- a **hover card** naming the control and its value ("Exposure +0.30
+  EV"), also the area's accessible description.
+
+```rust
+use egui_pop::core::areas::{self, AreaSpec, Grip};
+use egui_pop::egui;
+
+fn exposure(ui: &mut egui::Ui, ev: &mut f32) {
+    // Ask before sensing: inert while the panel is not current.
+    let sense = if areas::inert(ui) { egui::Sense::hover() } else { egui::Sense::drag() };
+    let (rect, r) = ui.allocate_exact_size(egui::vec2(160.0, 40.0), sense);
+    *ev += r.drag_delta().x / rect.width() * 4.0;
+    areas::register(
+        ui,
+        &r,
+        AreaSpec::edit("app.exposure", "Exposure")
+            .value(format!("{ev:+.2} EV"))
+            .path("exposure")
+            .grip(Grip::horizontal(rect.right_center())),
+    );
+}
+```
+
+An edit area is **inert** while its panel's state is not current
+(`panel.state` stale, updating or failed): the workbench draws the
+panel's content in an `areas::scope` that says so, and the area senses
+no edit and shows no grip, no card, no edit cursor (the histogram of the
+previous photo is not dragged). `ui.areas` (`bus::UiAreas`,
+`AppHandle::ui_areas`) lists the areas of each window's last pass: id,
+kind, control, value, path, rectangle, panel, grips, and whether it is
+inert, for agents and tests without a screenshot.
+
 ## Auxiliary windows
 
 A detachable panel moves to an OS window of its own, with its own scale
