@@ -918,10 +918,11 @@ impl Keymap {
     /// command of [`Keymap::set_dormant`] that no higher layer removed
     /// (what a shortcuts editor lists apart, with the plugin's name).
     pub fn dormant(&self) -> Vec<Binding> {
+        let removals = Removals::of(self);
         self.rules
             .iter()
             .map(|s| &s.item.binding)
-            .filter(|b| self.asleep(b) && self.removed_by(b).is_none())
+            .filter(|b| self.asleep(b) && !removals.removes(b))
             .cloned()
             .collect()
     }
@@ -933,12 +934,17 @@ impl Keymap {
     /// The bindings in force, after removals and without the dormant
     /// ones, with their order.
     fn live(&self) -> impl Iterator<Item = (u64, &Rule)> {
+        // The removals are indexed once: a binding is out when a higher
+        // layer removes its command or unbinds its keys (what
+        // `removed_by` says), found without a pass over every rule for
+        // each binding.
+        let removals = Removals::of(self);
         self.rules
             .iter()
-            .filter(|s| {
+            .filter(move |s| {
                 matches!(s.item.binding.action, Action::Run(_))
                     && !self.asleep(&s.item.binding)
-                    && self.removed_by(&s.item.binding).is_none()
+                    && !removals.removes(&s.item.binding)
             })
             .map(|s| (s.order, &s.item))
     }
@@ -1403,6 +1409,41 @@ impl Keymap {
                 .map(|s| doc_binding(&s.item.binding))
                 .collect(),
         }
+    }
+}
+
+/// The highest layer removing each command and unbinding each set of
+/// keys: whether a binding is taken away, in one lookup.
+struct Removals<'a> {
+    commands: std::collections::HashMap<&'a CommandId, Layer>,
+    keys: std::collections::HashMap<&'a Keys, Layer>,
+}
+
+impl<'a> Removals<'a> {
+    fn of(keymap: &'a Keymap) -> Removals<'a> {
+        let mut out = Removals {
+            commands: std::collections::HashMap::new(),
+            keys: std::collections::HashMap::new(),
+        };
+        for r in keymap.rules.iter().map(|s| &s.item.binding) {
+            let slot = match &r.action {
+                Action::Remove(c) => out.commands.entry(c).or_insert(r.layer),
+                Action::Unbind => out.keys.entry(&r.keys).or_insert(r.layer),
+                Action::Run(_) => continue,
+            };
+            *slot = (*slot).max(r.layer);
+        }
+        out
+    }
+
+    /// Whether a higher layer removes the binding's command or unbinds
+    /// its keys (as `Keymap::removed_by` finds).
+    fn removes(&self, b: &Binding) -> bool {
+        b.action
+            .command()
+            .and_then(|c| self.commands.get(c))
+            .is_some_and(|l| *l > b.layer)
+            || self.keys.get(&b.keys).is_some_and(|l| *l > b.layer)
     }
 }
 
