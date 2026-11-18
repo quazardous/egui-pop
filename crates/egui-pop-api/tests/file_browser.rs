@@ -1545,3 +1545,191 @@ fn a_rubber_band_from_the_room_around_the_thumbnails_selects_what_it_crosses() {
     h.run();
     assert_eq!(h.state().selection().len(), 1);
 }
+
+/// Photos grouped as an application declares it: a RAW heads its sidecars
+/// and its JPEG.
+fn photo_groupings() -> egui_pop_api::files::groups::Groupings {
+    use egui_pop_api::files::groups::{Groupings, SidecarRule};
+    let groupings = Groupings::default();
+    groupings.register(Arc::new(
+        SidecarRule::new("test.photos", &["cr3", "nef"], &["xmp", "jpg"]).badge("jpg", "JPEG"),
+    ));
+    groupings
+}
+
+fn shoot_fs() -> Arc<dyn FileSource> {
+    let mut fs = MemoryFs::new().dir("/g");
+    for name in ["a.cr3", "a.cr3.xmp", "a.jpg", "b.jpg", "c.nef", "c.xmp"] {
+        fs = fs.file(format!("/g/{name}"), vec![1]);
+    }
+    Arc::new(FsSource::new(Arc::new(fs)))
+}
+
+#[test]
+fn a_raw_and_its_sidecars_are_one_entry_badged_and_said_with_its_members() {
+    let browser = FileBrowser::new("groups", shoot_fs(), "/g")
+        .with_modes(ViewModes::built_in())
+        .with_grouping(photo_groupings());
+    let mut h = harness(browser);
+    assert_eq!(names(h.state()), ["a.cr3", "b.jpg", "c.nef"]);
+    let group = h.state().group_of(Path::new("/g/a.cr3")).unwrap();
+    assert_eq!(group.badges, ["XMP", "JPEG"]);
+    assert_eq!(group.member_names(), ["a.cr3.xmp", "a.jpg"]);
+    for mode in ["details", "thumbnails", "filmstrip", "agenda"] {
+        assert!(h.state_mut().set_mode(mode));
+        h.run();
+        assert!(
+            h.query_by_label("a.cr3 · Grouped with a.cr3.xmp, a.jpg")
+                .is_some(),
+            "{mode}: a group is said with its members"
+        );
+        assert!(h.query_by_label("b.jpg").is_some(), "{mode}");
+    }
+    // Each its own entry again; a member selected then leaves it for its
+    // group's entry once grouped.
+    h.state_mut().set_grouped(false);
+    assert_eq!(names(h.state()).len(), 6);
+    assert!(h.state().group_of(Path::new("/g/a.cr3")).is_none());
+    h.state_mut().set_mode("details");
+    h.run();
+    h.get_by_label("a.jpg").click();
+    h.run();
+    h.state_mut().set_grouped(true);
+    assert_eq!(names(h.state()), ["a.cr3", "b.jpg", "c.nef"]);
+    assert_eq!(h.state().focus(), Some(Path::new("/g/a.cr3")));
+    assert!(h.state().selection().contains(Path::new("/g/a.cr3")));
+    assert_eq!(h.state().selection().len(), 1);
+}
+
+#[test]
+fn the_sort_menu_turns_grouping_when_a_grouping_is_declared() {
+    let mut h = harness(FileBrowser::new("group-menu", shoot_fs(), "/g"));
+    h.get_by_label_contains("Sort by").click();
+    h.run();
+    assert!(
+        h.query_by_label("Group files").is_none(),
+        "no grouping, no switch"
+    );
+    let mut h =
+        harness(FileBrowser::new("group-menu", shoot_fs(), "/g").with_grouping(photo_groupings()));
+    h.get_by_label_contains("Sort by").click();
+    h.run();
+    h.get_by_label("Group files").click();
+    h.run();
+    assert!(!h.state().grouped());
+    assert_eq!(names(h.state()).len(), 6);
+}
+
+#[test]
+fn groups_follow_the_pages_as_they_come() {
+    let gated = Arc::new(Gated {
+        inner: FsSource::new(Arc::new(MemoryFs::new())),
+        slow: vec![PathBuf::from("/s")],
+        fed: Default::default(),
+    });
+    let mut b =
+        FileBrowser::new("group-pages", gated.clone(), "/s").with_grouping(photo_groupings());
+    let tx = gated.sender("/s");
+    tx.send(browser::Page::Entries(vec![
+        entry("/s/a.cr3"),
+        entry("/s/b.jpg"),
+    ]));
+    b.pump();
+    assert_eq!(names(&b), ["a.cr3", "b.jpg"]);
+    assert!(b.group_of(Path::new("/s/a.cr3")).is_none());
+    // Its JPEG comes on the next page: taken into the RAW's entry.
+    tx.send(browser::Page::Entries(vec![
+        entry("/s/a.jpg"),
+        entry("/s/c.cr3"),
+    ]));
+    b.pump();
+    assert_eq!(names(&b), ["a.cr3", "b.jpg", "c.cr3"]);
+    assert_eq!(b.group_of(Path::new("/s/a.cr3")).unwrap().badges, ["JPEG"]);
+    // The member gone, the group goes; the main gone, so does its entry.
+    tx.send(browser::Page::Removed(vec![PathBuf::from("/s/a.jpg")]));
+    b.pump();
+    assert!(b.group_of(Path::new("/s/a.cr3")).is_none());
+    assert_eq!(names(&b), ["a.cr3", "b.jpg", "c.cr3"]);
+    tx.send(browser::Page::Entries(vec![entry("/s/c.xmp")]));
+    tx.send(browser::Page::Done);
+    b.pump();
+    assert_eq!(names(&b), ["a.cr3", "b.jpg", "c.cr3"]);
+    assert_eq!(b.group_of(Path::new("/s/c.cr3")).unwrap().badges, ["XMP"]);
+    assert!(!b.loading());
+}
+
+#[test]
+fn a_large_place_is_grouped_off_the_frame() {
+    let gated = Arc::new(Gated {
+        inner: FsSource::new(Arc::new(MemoryFs::new())),
+        slow: vec![PathBuf::from("/big")],
+        fed: Default::default(),
+    });
+    let mut b =
+        FileBrowser::new("group-big", gated.clone(), "/big").with_grouping(photo_groupings());
+    let tx = gated.sender("/big");
+    // 3,000 RAWs and their JPEGs, in pages of 500.
+    let all: Vec<_> = (0..3000)
+        .flat_map(|i| {
+            [
+                entry(&format!("/big/{i:05}.cr3")),
+                entry(&format!("/big/{i:05}.jpg")),
+            ]
+        })
+        .collect();
+    for page in all.chunks(500) {
+        tx.send(browser::Page::Entries(page.to_vec()));
+        b.pump();
+    }
+    tx.send(browser::Page::Done);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        b.pump();
+        if !b.groups_pending() {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the groups never came"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(b.entries().len(), 3000);
+    assert!(b.entries().iter().all(|e| e.name.ends_with(".cr3")));
+    assert_eq!(
+        b.group_of(Path::new("/big/02999.cr3")).unwrap().badges,
+        ["JPEG"]
+    );
+}
+
+/// Has no image for a RAW or an XMP, and is making one for the rest.
+#[derive(Debug, Default)]
+struct NoRaw(std::sync::Mutex<Vec<PathBuf>>);
+
+impl ThumbnailProvider for NoRaw {
+    fn request(&self, _ctx: &egui::Context, r: &browser::ThumbRequest<'_>) -> browser::ThumbState {
+        self.0.lock().unwrap().push(r.entry.path.clone());
+        if r.entry.name.ends_with(".cr3") || r.entry.name.ends_with(".xmp") {
+            browser::ThumbState::None
+        } else {
+            browser::ThumbState::Loading
+        }
+    }
+}
+
+#[test]
+fn a_group_without_an_image_of_its_own_shows_its_members() {
+    let provider = Arc::new(NoRaw::default());
+    let mut b = FileBrowser::new("group-thumbs", shoot_fs(), "/g")
+        .with_grouping(photo_groupings())
+        .with_thumbnails(provider.clone());
+    b.set_mode("thumbnails");
+    let _h = harness(b);
+    let asked = provider.0.lock().unwrap().clone();
+    assert!(asked.contains(&PathBuf::from("/g/a.cr3")));
+    // Its XMP has no image either: its JPEG stands in.
+    assert!(asked.contains(&PathBuf::from("/g/a.cr3.xmp")));
+    assert!(asked.contains(&PathBuf::from("/g/a.jpg")));
+    // A group whose main has an image asks nothing of its members.
+    assert!(!asked.contains(&PathBuf::from("/g/c.xmp")));
+}

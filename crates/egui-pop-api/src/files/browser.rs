@@ -30,6 +30,7 @@ use egui_pop_core::thumbnail::{Band, ThumbnailGrid};
 use egui_pop_core::widgets;
 
 use super::fs::{Meta, SharedFs};
+use super::groups::{FileGroup, Groupings};
 use super::preview::{Previews, Shown};
 use super::sort::{PickerSort, SortColumn, SortFacts, sort_by};
 
@@ -3216,6 +3217,16 @@ pub struct FileBrowser {
     folders_first: bool,
     /// The selection a rubber band adds to while it is drawn.
     band_base: Option<BTreeSet<PathBuf>>,
+    /// The groupings files go together by ([`FileBrowser::with_grouping`]).
+    groupings: Option<Groupings>,
+    /// Whether files go together now, with groupings declared.
+    grouped: bool,
+    /// Finds the place's groups as its pages come.
+    grouper: Option<Grouper>,
+    /// The place's groups, by main file (shared with a frame's marks).
+    groups: Arc<HashMap<PathBuf, FileGroup>>,
+    /// The groups' members, out of the entries while their group shows.
+    absorbed: HashMap<PathBuf, SourceEntry>,
 }
 
 /// The browser's default order: folders first, then names as people read
@@ -3404,6 +3415,223 @@ impl ColumnListings {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Grouping
+// ---------------------------------------------------------------------------
+
+/// What the grouping worker is told of a place's files.
+#[derive(Debug)]
+enum GroupWork {
+    Add(Vec<String>),
+    Remove(Vec<String>),
+}
+
+/// The thread a large place's groups are found on.
+#[derive(Debug)]
+struct GroupWorker {
+    tx: mpsc::Sender<GroupWork>,
+    rx: mpsc::Receiver<(u64, Vec<FileGroup>)>,
+}
+
+/// Finds a place's groups ([`FileBrowser::with_grouping`]) as its pages
+/// come: each page's file names are told to it, and it answers the groups
+/// among every name so far. A small place is grouped in the frame, at
+/// once; past [`Grouper::INLINE_NAMES`] names, on a thread of its own (off
+/// the web), whose answers coalesce: a slow grouping skips pages, never the
+/// last one. Dropping it ends its thread.
+#[derive(Debug)]
+struct Grouper {
+    dir: PathBuf,
+    groupings: Groupings,
+    /// The names so far, while it groups in the frame.
+    names: Vec<String>,
+    worker: Option<GroupWorker>,
+    /// Pieces of work told to the worker, and the last it answered.
+    sent: u64,
+    answered: u64,
+    /// The last groups found in the frame, not taken yet.
+    ready: Option<Vec<FileGroup>>,
+}
+
+impl Grouper {
+    /// The most names a place is grouped with in the frame.
+    const INLINE_NAMES: usize = 2048;
+
+    fn new(dir: PathBuf, groupings: Groupings) -> Self {
+        Self {
+            dir,
+            groupings,
+            names: Vec::new(),
+            worker: None,
+            sent: 0,
+            answered: 0,
+            ready: None,
+        }
+    }
+
+    /// The names a grouping reads among these entries: files, not hidden.
+    fn names_of<'a>(entries: impl IntoIterator<Item = &'a SourceEntry>) -> Vec<String> {
+        entries
+            .into_iter()
+            .filter(|e| !e.is_dir() && !e.name.starts_with('.'))
+            .map(|e| e.name.clone())
+            .collect()
+    }
+
+    fn tell(&mut self, work: GroupWork) {
+        if let Some(w) = &self.worker {
+            if w.tx.send(work).is_ok() {
+                self.sent += 1;
+            }
+            return;
+        }
+        match work {
+            GroupWork::Add(mut names) => self.names.append(&mut names),
+            GroupWork::Remove(names) => {
+                let gone: HashSet<String> = names.into_iter().collect();
+                self.names.retain(|n| !gone.contains(n));
+            }
+        }
+        if self.names.len() > Self::INLINE_NAMES && self.spawn() {
+            return;
+        }
+        let names: Vec<&str> = self.names.iter().map(String::as_str).collect();
+        self.ready = Some(self.groupings.in_folder(&self.dir, &names));
+    }
+
+    /// Moves the work to a thread of its own, the names so far with it;
+    /// `false` where there are no threads.
+    fn spawn(&mut self) -> bool {
+        if cfg!(target_arch = "wasm32") {
+            return false;
+        }
+        let (tx, work) = mpsc::channel::<GroupWork>();
+        let (answer, rx) = mpsc::channel();
+        let (dir, groupings) = (self.dir.clone(), self.groupings.clone());
+        let spawned = std::thread::Builder::new()
+            .name("egui-pop-file-groups".into())
+            .spawn(move || {
+                let mut names: Vec<String> = Vec::new();
+                let mut seen = 0u64;
+                while let Ok(first) = work.recv() {
+                    // What came meanwhile is taken in one answer.
+                    for w in std::iter::once(first).chain(work.try_iter()) {
+                        seen += 1;
+                        match w {
+                            GroupWork::Add(mut more) => names.append(&mut more),
+                            GroupWork::Remove(gone) => {
+                                let gone: HashSet<String> = gone.into_iter().collect();
+                                names.retain(|n| !gone.contains(n));
+                            }
+                        }
+                    }
+                    let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+                    if answer
+                        .send((seen, groupings.in_folder(&dir, &refs)))
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+            });
+        if spawned.is_err() {
+            return false;
+        }
+        let names = std::mem::take(&mut self.names);
+        self.worker = Some(GroupWorker { tx, rx });
+        self.ready = None;
+        self.tell(GroupWork::Add(names));
+        true
+    }
+
+    /// The groups last found, when they are new.
+    fn poll(&mut self) -> Option<Vec<FileGroup>> {
+        let Some(w) = &self.worker else {
+            return self.ready.take();
+        };
+        let mut last = None;
+        for (seen, groups) in w.rx.try_iter() {
+            self.answered = seen;
+            last = Some(groups);
+        }
+        last
+    }
+
+    /// Whether the worker has not answered all it was told yet.
+    fn pending(&self) -> bool {
+        self.worker.is_some() && self.answered < self.sent
+    }
+}
+
+/// A frame's thumbnails with groups: a group's entry without an image of
+/// its own (a RAW the provider cannot read) shows its first member's that
+/// has one (its JPEG).
+struct GroupThumbnails<'a> {
+    inner: &'a dyn ThumbnailProvider,
+    groups: &'a HashMap<PathBuf, FileGroup>,
+    absorbed: &'a HashMap<PathBuf, SourceEntry>,
+}
+
+impl ThumbnailProvider for GroupThumbnails<'_> {
+    fn begin_frame(&self, ctx: &egui::Context) {
+        self.inner.begin_frame(ctx);
+    }
+
+    fn request(&self, ctx: &egui::Context, request: &ThumbRequest<'_>) -> ThumbState {
+        let own = self.inner.request(ctx, request);
+        if !matches!(own, ThumbState::None | ThumbState::Failed(_)) {
+            return own;
+        }
+        let Some(group) = self.groups.get(&request.entry.path) else {
+            return own;
+        };
+        for member in group.members.iter().filter_map(|m| self.absorbed.get(m)) {
+            let state = self.inner.request(
+                ctx,
+                &ThumbRequest {
+                    entry: member,
+                    ..*request
+                },
+            );
+            if matches!(state, ThumbState::Ready(_) | ThumbState::Loading) {
+                return state;
+            }
+        }
+        own
+    }
+
+    fn end_frame(&self, ctx: &egui::Context) {
+        self.inner.end_frame(ctx);
+    }
+
+    fn cancel(&self, path: &Path) {
+        self.inner.cancel(path);
+    }
+}
+
+/// The chip a group's entry carries: its members' badges (`+XMP +JPEG`),
+/// or how many they are past two, named by its members for screen readers
+/// and in its tip.
+fn group_chip(ctx: &egui::Context, group: &FileGroup) -> MarkChip {
+    let text = if !group.badges.is_empty() && group.badges.len() <= 2 {
+        group
+            .badges
+            .iter()
+            .map(|b| format!("+{b}"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    } else {
+        format!("+{}", group.members.len())
+    };
+    let members = group.member_names().join(", ");
+    let name = strings::tr_args(
+        ctx,
+        &crate::strings::FILES_GROUP_WITH,
+        &[("members", &members)],
+    );
+    MarkChip::text(text, name)
+}
+
 impl fmt::Debug for FileBrowser {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FileBrowser")
@@ -3473,6 +3701,11 @@ impl FileBrowser {
             sort: PickerSort::default(),
             folders_first: true,
             band_base: None,
+            groupings: None,
+            grouped: true,
+            grouper: None,
+            groups: Arc::default(),
+            absorbed: HashMap::new(),
         };
         b.reload();
         b
@@ -3557,6 +3790,134 @@ impl FileBrowser {
         sort_in(&mut self.entries, self.sort, self.folders_first);
         self.generation += 1;
         self.reveal = self.focus.is_some();
+    }
+
+    /// Files that go together are one entry, by these groupings
+    /// ([`super::groups`]; an application's [`Files::groupings`](super::Files::groupings)):
+    /// a RAW with its sidecars and its JPEG shows as the RAW, its members'
+    /// badges on it (`+XMP +JPEG`), named for screen readers ("Grouped with
+    /// …"), and showing its first member's thumbnail when it has none of its
+    /// own. The members leave [`FileBrowser::entries`]; the group of an entry
+    /// is [`FileBrowser::group_of`]. The groups are found as the listing's
+    /// pages come, a large place's off the interface thread. egui-pop declares
+    /// no grouping: what goes together is the application's rule.
+    pub fn with_grouping(mut self, groupings: Groupings) -> Self {
+        self.groupings = Some(groupings);
+        self.regroup();
+        self
+    }
+
+    /// Groups files, with groupings declared, or lets each be an entry of
+    /// its own (they are grouped unless told otherwise). The toolbar's sort
+    /// menu turns it too. A member selected or focused leaves it for its
+    /// group's entry.
+    pub fn set_grouped(&mut self, on: bool) {
+        if on != self.grouped {
+            self.grouped = on;
+            self.regroup();
+        }
+    }
+
+    pub fn grouped(&self) -> bool {
+        self.grouped
+    }
+
+    /// Whether files go together now: grouped, with a grouping declared.
+    fn grouping_on(&self) -> bool {
+        self.grouped && self.groupings.as_ref().is_some_and(|g| !g.is_empty())
+    }
+
+    /// The group an entry heads, as last found.
+    pub fn group_of(&self, path: &Path) -> Option<&FileGroup> {
+        self.groups.get(path)
+    }
+
+    /// Whether the groups of what was listed are still being looked for.
+    pub fn groups_pending(&self) -> bool {
+        self.grouper.as_ref().is_some_and(Grouper::pending)
+    }
+
+    /// Starts finding the groups again, from the entries listed so far:
+    /// the members come back among the entries until it answers.
+    fn regroup(&mut self) {
+        self.grouper = None;
+        self.apply_groups(Vec::new());
+        if self.grouping_on()
+            && let Some(groupings) = self.groupings.clone()
+        {
+            let mut grouper = Grouper::new(self.place.clone(), groupings);
+            grouper.tell(GroupWork::Add(Grouper::names_of(&self.entries)));
+            self.grouper = Some(grouper);
+            self.take_groups();
+        }
+    }
+
+    /// Takes the groups the grouper last found.
+    fn take_groups(&mut self) {
+        if let Some(found) = self.grouper.as_mut().and_then(Grouper::poll) {
+            self.apply_groups(found);
+        }
+    }
+
+    /// Shows these groups: their members leave the entries, the members of
+    /// groups no longer found come back, and a member selected or focused
+    /// leaves it for its group's entry.
+    fn apply_groups(&mut self, found: Vec<FileGroup>) {
+        let groups: HashMap<PathBuf, FileGroup> =
+            found.into_iter().map(|g| (g.main.clone(), g)).collect();
+        if groups == *self.groups {
+            return;
+        }
+        let main_of: HashMap<&PathBuf, &PathBuf> = groups
+            .values()
+            .flat_map(|g| g.members.iter().map(move |m| (m, &g.main)))
+            .collect();
+        let back: Vec<PathBuf> = (self.absorbed.keys())
+            .filter(|p| !main_of.contains_key(p))
+            .cloned()
+            .collect();
+        let restored = !back.is_empty();
+        for p in back {
+            if let Some(e) = self.absorbed.remove(&p) {
+                self.entries.push(e);
+            }
+        }
+        let absorbed = &mut self.absorbed;
+        self.entries.retain(|e| {
+            if main_of.contains_key(&e.path) {
+                absorbed.insert(e.path.clone(), e.clone());
+                false
+            } else {
+                true
+            }
+        });
+        let to_main = |p: &mut PathBuf| {
+            if let Some(main) = main_of.get(p) {
+                *p = (*main).clone();
+            }
+        };
+        if let Some(f) = &mut self.focus {
+            to_main(f);
+        }
+        if let Some(a) = &mut self.selection.anchor {
+            to_main(a);
+        }
+        if self.selection.paths.iter().any(|p| main_of.contains_key(p)) {
+            let paths = std::mem::take(&mut self.selection.paths);
+            self.selection.paths = paths
+                .into_iter()
+                .map(|mut p| {
+                    to_main(&mut p);
+                    p
+                })
+                .collect();
+        }
+        drop(main_of);
+        self.groups = Arc::new(groups);
+        if restored {
+            sort_in(&mut self.entries, self.sort, self.folders_first);
+        }
+        self.generation += 1;
     }
 
     /// Selects these entries alone (the first of them with
@@ -3771,7 +4132,7 @@ impl FileBrowser {
 
     /// Draws quick look over `rect`: the focused entry as large as it fits,
     /// its name under it.
-    fn show_quick_look(&self, ui: &mut Ui, rect: egui::Rect) {
+    fn show_quick_look(&self, ui: &mut Ui, rect: egui::Rect, thumbnails: &dyn ThumbnailProvider) {
         let Some(e) = self.focus_index().map(|i| &self.entries[i]) else {
             return;
         };
@@ -3805,7 +4166,7 @@ impl FileBrowser {
                 if image.width() < 1.0 || image.height() < 1.0 {
                     return;
                 }
-                let state = self.thumbnails.request(
+                let state = thumbnails.request(
                     &ctx,
                     &ThumbRequest {
                         entry: e,
@@ -3854,15 +4215,19 @@ impl FileBrowser {
     /// Lists the place again, keeping the selection and the focus by path.
     pub fn reload(&mut self) {
         self.entries.clear();
+        self.absorbed.clear();
+        self.groups = Arc::default();
         self.generation += 1;
         self.error = None;
         self.listing = Some(self.source.list(&self.place, &self.options));
+        self.regroup();
         self.pump();
     }
 
     /// Takes what the listing delivered.
     pub fn pump(&mut self) {
         let Some(listing) = &self.listing else {
+            self.take_groups();
             return;
         };
         let mut done = false;
@@ -3870,12 +4235,18 @@ impl FileBrowser {
         for page in listing.poll() {
             match page {
                 Page::Entries(mut e) => {
+                    if let Some(g) = &mut self.grouper {
+                        g.tell(GroupWork::Add(Grouper::names_of(&e)));
+                    }
                     self.entries.append(&mut e);
                     changed = true;
                 }
                 Page::Updated(e) => {
                     for u in e {
-                        if let Some(old) = self.entries.iter_mut().find(|o| o.path == u.path) {
+                        if let Some(old) = self.absorbed.get_mut(&u.path) {
+                            *old = u;
+                        } else if let Some(old) = self.entries.iter_mut().find(|o| o.path == u.path)
+                        {
                             *old = u;
                         }
                     }
@@ -3883,9 +4254,18 @@ impl FileBrowser {
                     changed = true;
                 }
                 Page::Removed(paths) => {
+                    if let Some(g) = &mut self.grouper {
+                        let names = paths
+                            .iter()
+                            .filter_map(|p| p.file_name())
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .collect();
+                        g.tell(GroupWork::Remove(names));
+                    }
                     self.entries.retain(|e| !paths.contains(&e.path));
                     self.generation += 1;
                     for p in &paths {
+                        self.absorbed.remove(p);
                         self.selection.paths.remove(p);
                     }
                 }
@@ -3907,6 +4287,7 @@ impl FileBrowser {
         if done {
             self.listing = None;
         }
+        self.take_groups();
         self.settle_focus();
     }
 
@@ -3919,6 +4300,8 @@ impl FileBrowser {
         self.error.as_ref()
     }
 
+    /// The entries shown, in order: a group's members are not among them
+    /// ([`FileBrowser::group_of`]).
     pub fn entries(&self) -> &[SourceEntry] {
         &self.entries
     }
@@ -4175,6 +4558,8 @@ impl FileBrowser {
         let shown = strings::tr(&ctx, self.sort.column.title());
         let mut sort = self.sort;
         let mut folders_first = self.folders_first;
+        let mut grouped = self.grouped;
+        let can_group = self.groupings.as_ref().is_some_and(|g| !g.is_empty());
         let r = widgets::combo_box(self.id.with("sort"))
             .selected_text(shown)
             .show_ui(ui, |ui| {
@@ -4195,6 +4580,14 @@ impl FileBrowser {
                     &mut folders_first,
                     strings::tr(&ctx, &crate::strings::FILES_FOLDERS_FIRST),
                 );
+                if can_group {
+                    widgets::checkbox(
+                        ui,
+                        &mut grouped,
+                        strings::tr(&ctx, &crate::strings::FILES_GROUP),
+                    )
+                    .on_hover_text(strings::tr(&ctx, &crate::strings::FILES_GROUP_TIP));
+                }
             });
         let current = said(self.sort);
         r.response.widget_info(|| {
@@ -4222,13 +4615,14 @@ impl FileBrowser {
         }
         self.set_sort(sort);
         self.set_folders_first(folders_first);
+        self.set_grouped(grouped);
     }
 
     /// Draws the toolbar's mode switcher and the entries.
     pub fn show(&mut self, ui: &mut Ui) -> BrowserOutput {
         let mut out = BrowserOutput::default();
         self.pump();
-        if self.loading() {
+        if self.loading() || self.groups_pending() {
             ui.ctx().request_repaint();
         }
         // The switcher.
@@ -4375,7 +4769,29 @@ impl FileBrowser {
         }
         let focus = self.focus_index();
         let reveal = std::mem::take(&mut self.reveal);
-        self.thumbnails.begin_frame(ui.ctx());
+        // A group's entry carries its members' chip, after the
+        // application's marks, and stands in with a member's thumbnail.
+        let (groups, app_marks) = (self.groups.clone(), self.marks.clone());
+        let ctx = ui.ctx().clone();
+        let with_groups = move |e: &SourceEntry| {
+            let mut marks = app_marks.as_ref().map(|m| m(e)).unwrap_or_default();
+            if let Some(g) = groups.get(&e.path) {
+                marks.chips.push(group_chip(&ctx, g));
+            }
+            marks
+        };
+        let grouped_thumbnails = GroupThumbnails {
+            inner: self.thumbnails.as_ref(),
+            groups: &self.groups,
+            absorbed: &self.absorbed,
+        };
+        let (marks, thumbnails): (Option<&MarkEntries>, &dyn ThumbnailProvider) =
+            if self.groups.is_empty() {
+                (self.marks.as_deref(), self.thumbnails.as_ref())
+            } else {
+                (Some(&with_groups), &grouped_thumbnails)
+            };
+        thumbnails.begin_frame(ui.ctx());
         let inner = ui.scope(|ui| {
             self.mode.show(
                 ui,
@@ -4383,7 +4799,7 @@ impl FileBrowser {
                     entries: &self.entries,
                     selection: &self.selection,
                     focus,
-                    thumbnails: self.thumbnails.as_ref(),
+                    thumbnails,
                     settings: &mut self.settings,
                     id: self.id,
                     reveal_focus: reveal,
@@ -4396,7 +4812,7 @@ impl FileBrowser {
                     peek: self.columns.peek(),
                     loading: self.listing.is_some(),
                     generation: self.generation,
-                    marks: self.marks.as_deref(),
+                    marks,
                 },
             )
         });
@@ -4405,9 +4821,9 @@ impl FileBrowser {
             self.quick_look = false;
         }
         if self.quick_look {
-            self.show_quick_look(ui, inner.response.rect);
+            self.show_quick_look(ui, inner.response.rect, thumbnails);
         }
-        self.thumbnails.end_frame(ui.ctx());
+        thumbnails.end_frame(ui.ctx());
         let mode_out = inner.inner;
         // A rubber band selects as it goes, the focus on its last entry once
         // let go.

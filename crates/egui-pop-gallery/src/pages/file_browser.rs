@@ -1,7 +1,9 @@
 //! The file browser page: a `FileBrowser` over the demo images held in
 //! memory, its mode switcher (details, thumbnails, filmstrip, columns,
 //! carousel, agenda; `Ctrl+1` to `Ctrl+6`), the sort menu (name, modified,
-//! taken, size, type; folders first or not), the thumbnails' size slider and quick look
+//! taken, size, type; folders first or not; files grouped or not, a RAW with
+//! its sidecars and its JPEG one entry by the gallery's grouping), the
+//! thumbnails' size slider and quick look
 //! (`Ctrl+Y`, or Space on an entry), the agenda by day, month or year, and
 //! drops: a file dragged from the page (or from the system) onto a folder,
 //! the folder shown or the page's own target. The mode is kept in the
@@ -48,7 +50,7 @@ impl Plugin for FileBrowserPage {
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         ctx.story(
             Story::new(StoryId::from_static("file-browser"), "File browser", show)
-                .description("One file browser, many views: the entries of a folder from a source (here held in memory), shown by a mode chosen in the switcher or with Ctrl+1 to Ctrl+6 (details, thumbnails, filmstrip, Finder's columns, a carousel, an agenda by day, month or year), the order chosen in the sort menu (name, modified, taken, size or type, up or down, folders first or among the files), the thumbnails' size on a slider, a rubber band dragged from the room around the thumbnails, quick look with Ctrl+Y or Space, drops onto a folder, the folder shown or an application's target, the mode remembered per dialog.")
+                .description("One file browser, many views: the entries of a folder from a source (here held in memory), shown by a mode chosen in the switcher or with Ctrl+1 to Ctrl+6 (details, thumbnails, filmstrip, Finder's columns, a carousel, an agenda by day, month or year), the order chosen in the sort menu (name, modified, taken, size or type, up or down, folders first or among the files, files grouped or not: in Photos/2026 a RAW with its sidecar and its JPEG is one entry badged +XMP +JPEG), the thumbnails' size on a slider, a rubber band dragged from the room around the thumbnails, quick look with Ctrl+Y or Space, drops onto a folder, the folder shown or an application's target, the mode remembered per dialog.")
                 .group("Components", 53),
         )?;
         Ok(())
@@ -80,6 +82,8 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                 .with_root(demo_root())
                 .with_modes(ViewModes::built_in())
                 .with_thumbnails(thumbnails)
+                // The gallery's photos grouping: a RAW heads its sidecars.
+                .with_grouping(f.groupings())
                 // Every drop is taken but one onto the Documents folder:
                 // the refusal shows too.
                 .with_drops(|offer| {
