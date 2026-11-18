@@ -2240,6 +2240,10 @@ egui-pop-workbench-fold = Replier { $area }
 egui-pop-workbench-move-to = Déplacer vers { $area }
 
 
+egui-pop-workbench-move-group = Déplacer le groupe
+
+egui-pop-workbench-move-window = Déplacer la fenêtre
+
 egui-pop-workbench-new-window = Nouvelle fenêtre
 
 egui-pop-workbench-stays-docked = { $panel } ne peut pas aller dans une fenêtre
@@ -2591,6 +2595,40 @@ setting-window-frame =
 setting-window-frame-choice-own = propre
 
 setting-window-frame-choice-system = système
+
+setting-workbench-float-move =
+    .description = Ce que fait le déplacement d’une fenêtre flottante par sa barre de titre ou sa poignée : seulement la déplacer (déplacer), ou l’ancrer dans la zone où elle est lâchée, mise en évidence pendant le déplacement (ancrer ; là où le système cache la position des fenêtres, elle est seulement déplacée).
+    .label = Déplacer une fenêtre
+
+setting-workbench-float-move-choice-dock = ancrer
+
+setting-workbench-float-move-choice-move = déplacer
+
+setting-workbench-group-drag-modifier =
+    .description = La touche maintenue en faisant glisser un onglet pour déplacer tout son groupe d’onglets : shift, ctrl (cmd sur macOS) ou alt.
+    .label = Touche de déplacement du groupe
+
+setting-workbench-group-drag-modifier-choice-alt = alt
+
+setting-workbench-group-drag-modifier-choice-ctrl = ctrl
+
+setting-workbench-group-drag-modifier-choice-shift = shift
+
+setting-workbench-group-handle-empty-space =
+    .description = Si faire glisser la partie vide d’une barre d’onglets déplace tout son groupe d’onglets.
+    .label = Déplacer un groupe par sa barre d’onglets
+
+setting-workbench-group-handle-grip =
+    .description = Si chaque barre d’onglets se termine par une poignée qui déplace tout son groupe d’onglets, même quand la barre est pleine.
+    .label = Poignée de groupe
+
+setting-workbench-group-handle-modifier-drag =
+    .description = Si un onglet glissé avec la touche de groupe maintenue (Touche de déplacement du groupe) emporte tout son groupe.
+    .label = Déplacer un groupe avec une touche maintenue
+
+setting-workbench-group-handle-move-window =
+    .description = Si une fenêtre flottante affiche au bout de sa barre d’onglets une poignée qui déplace la fenêtre.
+    .label = Poignée de déplacement de fenêtre
 
 setting-workbench-panel-alignment =
     .description = Comment le panneau du bas s’aligne sur les barres latérales : toute la largeur (justifié), entre elles (centré), sous celle du début (début) ou sous celle de la fin (fin).

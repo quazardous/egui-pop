@@ -2929,7 +2929,11 @@ egui-pop-workbench-flyout-pin = Pin { $panel }
 
 egui-pop-workbench-fold = Fold { $area }
 
+egui-pop-workbench-move-group = Move group
+
 egui-pop-workbench-move-to = Move to { $area }
+
+egui-pop-workbench-move-window = Move window
 
 egui-pop-workbench-new-window = New window
 
@@ -3374,6 +3378,40 @@ setting-window-frame =
 setting-window-frame-choice-own = own
 
 setting-window-frame-choice-system = system
+
+setting-workbench-float-move =
+    .description = What moving a floating window by its title bar or move handle does: only move it (move), or dock it into the area it is let go over, highlighted while it moves (dock; where the system hides window positions it only moves).
+    .label = Moving a window
+
+setting-workbench-float-move-choice-dock = dock
+
+setting-workbench-float-move-choice-move = move
+
+setting-workbench-group-drag-modifier =
+    .description = The key held while dragging a tab to move its whole group of tabs: shift, ctrl (cmd on macOS) or alt.
+    .label = Group drag key
+
+setting-workbench-group-drag-modifier-choice-alt = alt
+
+setting-workbench-group-drag-modifier-choice-ctrl = ctrl
+
+setting-workbench-group-drag-modifier-choice-shift = shift
+
+setting-workbench-group-handle-empty-space =
+    .description = Whether dragging the empty part of a tab bar moves its whole group of tabs.
+    .label = Drag a group by its tab bar
+
+setting-workbench-group-handle-grip =
+    .description = Whether each tab bar ends with a grip that moves its whole group of tabs, even when the bar is full.
+    .label = Group grip
+
+setting-workbench-group-handle-modifier-drag =
+    .description = Whether a tab dragged with the group key held (Group drag key) carries its whole group.
+    .label = Drag a group with a key held
+
+setting-workbench-group-handle-move-window =
+    .description = Whether a floating window shows a handle at the end of its tab bar that moves the window.
+    .label = Window move handle
 
 setting-workbench-panel-alignment =
     .description = How the bottom panel lines up with the side bars: the whole width (justify), between them (center), under the start one (start) or under the end one (end).

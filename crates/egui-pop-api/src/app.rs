@@ -769,6 +769,12 @@ pub(crate) struct Shared {
     system_wheel_lines: std::cell::Cell<u32>,
     /// Where the toasts show by default (`AppBuilder::toast_corner`).
     toast_corner: std::cell::Cell<crate::toasts::Corner>,
+    /// The group handles the application allows
+    /// (`AppBuilder::group_handles`).
+    pub(crate) group_handles: std::cell::Cell<crate::workbench::GroupHandles>,
+    /// The layout's changes egui_stack said on the bus
+    /// (`stack.layout.changed`) and the shell has not read yet.
+    pub(crate) stack_changes: RefCell<Vec<egui_stack::bus::LayoutChange>>,
     /// The main menu drawn as a bar under the title.
     menu_bar: std::cell::Cell<bool>,
     /// The application allows the system's file chooser
@@ -936,6 +942,8 @@ impl AppHandle {
             system_scroll_bars: std::cell::Cell::default(),
             system_wheel_lines: std::cell::Cell::new(crate::pointer::SYSTEM_WHEEL_LINES),
             toast_corner: std::cell::Cell::default(),
+            group_handles: std::cell::Cell::new(crate::workbench::DEFAULT_GROUP_HANDLES),
+            stack_changes: RefCell::new(Vec::new()),
             menu_bar: std::cell::Cell::new(true),
             system_file_chooser: std::cell::Cell::new(false),
             transparent_panel_windows: std::cell::Cell::new(false),
@@ -3348,6 +3356,7 @@ pub struct AppBuilder {
     app_id: Option<String>,
     panel_alignment: crate::workbench::PanelAlignment,
     toast_corner: crate::toasts::Corner,
+    group_handles: crate::workbench::GroupHandles,
     pointer_profile: String,
     dock_drag: Option<egui_pop_model::pointer::DockDrag>,
     kits: Vec<KitSource>,
@@ -3455,6 +3464,7 @@ impl AppBuilder {
             app_id: None,
             panel_alignment: crate::workbench::PanelAlignment::Center,
             toast_corner: crate::toasts::Corner::default(),
+            group_handles: crate::workbench::DEFAULT_GROUP_HANDLES,
             pointer_profile: egui_pop_model::pointer::DEFAULT_PROFILE.into(),
             dock_drag: None,
             kits: Vec::new(),
@@ -3479,6 +3489,19 @@ impl AppBuilder {
     /// setting's default; the bottom-right corner unless given).
     pub fn toast_corner(mut self, corner: crate::toasts::Corner) -> Self {
         self.toast_corner = corner;
+        self
+    }
+
+    /// The handles that may move a whole tab group, and a floating
+    /// window's move handle (`MOVE_WINDOW`): the user turns off any of
+    /// them in the settings, never on one left out here. By default
+    /// [`DEFAULT_GROUP_HANDLES`](crate::workbench::DEFAULT_GROUP_HANDLES),
+    /// every handle but the tab menu's "Move group".
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn group_handles(mut self, allowed: crate::workbench::GroupHandles) -> Self {
+        self.group_handles = allowed;
         self
     }
 
@@ -4155,6 +4178,7 @@ impl AppBuilder {
         app.handle.0.system_scroll_bars.set(self.system_scroll_bars);
         app.handle.0.system_wheel_lines.set(self.system_wheel_lines);
         app.handle.0.toast_corner.set(self.toast_corner);
+        app.handle.0.group_handles.set(self.group_handles);
         app.handle.0.menu_bar.set(self.menu_bar);
         app.handle
             .0
@@ -4283,6 +4307,7 @@ impl AppBuilder {
         app.autosave_baseline();
         app.listen_settings();
         app.listen_layout();
+        crate::workbench::listen_stack(&app.handle);
         app.install_theme();
         app.emit(&Lifecycle::Started);
         app.started = true;
@@ -5026,6 +5051,7 @@ impl App {
                 "How the bottom panel lines up with the side bars: the whole width (justify), between them (center), under the start one (start) or under the end one (end).",
             ),
         )?;
+        crate::workbench::register_group_settings(&mut ctx, handle.0.group_handles.get())?;
         ctx.setting(
             crate::menus::SETTING_ICONS,
             egui_pop_model::values::Descriptor::choice(

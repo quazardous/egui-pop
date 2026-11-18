@@ -158,10 +158,8 @@ use egui_stack::layout::{
     LayoutEvent, LayoutPainter, LayoutStyle, SashPaint, Shown, Size, SnapGuidePaint, StripPaint,
     Zone, ZoneName, ZoneViewer,
 };
-use egui_stack::tab_viewer::DropVerdict;
 use egui_stack::{
-    DockArea, DockDrop, DockRules, DockSpace, DockState, DropZone, NodeIndex, PartState, Split,
-    TabViewer,
+    DockArea, DockRules, DockSpace, DockState, DropZone, NodeIndex, PartState, Split, TabViewer,
 };
 use serde_json::{Value as Json, json};
 
@@ -336,6 +334,288 @@ pub fn panel_alignment(app: &AppHandle) -> PanelAlignment {
         .get(&format!("settings/{SETTING_PANEL_ALIGNMENT}"))
         .and_then(|e| e.value.as_choice().and_then(PanelAlignment::parse))
         .unwrap_or_default()
+}
+
+pub use egui_stack::{FloatMove, GroupHandles};
+
+/// The setting: the key held while dragging a tab to carry its whole
+/// group (Shift, Ctrl or Alt; see [`GroupModifier`]).
+pub const SETTING_GROUP_DRAG_MODIFIER: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.group_drag_modifier");
+/// The setting: whether the empty part of a tab bar drags its group.
+pub const SETTING_GROUP_EMPTY_SPACE: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.group_handle.empty_space");
+/// The setting: whether a grip at the end of each tab bar drags its group.
+pub const SETTING_GROUP_GRIP: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.group_handle.grip");
+/// The setting: whether a tab dragged with the group modifier
+/// ([`SETTING_GROUP_DRAG_MODIFIER`]) carries its group.
+pub const SETTING_GROUP_MODIFIER_DRAG: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.group_handle.modifier_drag");
+/// The setting: whether the tab menu offers "Move group".
+pub const SETTING_GROUP_MENU: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.group_handle.menu");
+/// The setting: whether a floating window shows a move handle.
+pub const SETTING_GROUP_MOVE_WINDOW: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.group_handle.move_window");
+/// The setting: what moving a floating window does (see
+/// [`float_move`]).
+pub const SETTING_FLOAT_MOVE: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.float_move");
+
+/// The group handles an application allows unless it says otherwise
+/// ([`AppBuilder::group_handles`](crate::AppBuilder::group_handles)):
+/// every handle but the tab menu's "Move group", whose list names the
+/// docks by their internal names; the panel menu's own entries (Move to,
+/// Detach, Move to group) move a group instead.
+pub const DEFAULT_GROUP_HANDLES: GroupHandles = GroupHandles::ALL.with(GroupHandles::MENU, false);
+
+/// Each group handle, its setting and its label and description.
+const HANDLE_SETTINGS: [(GroupHandles, egui_pop_model::ids::SettingId, &str, &str); 5] = [
+    (
+        GroupHandles::EMPTY_SPACE,
+        SETTING_GROUP_EMPTY_SPACE,
+        "Drag a group by its tab bar",
+        "Whether dragging the empty part of a tab bar moves its whole group of tabs.",
+    ),
+    (
+        GroupHandles::GRIP,
+        SETTING_GROUP_GRIP,
+        "Group grip",
+        "Whether each tab bar ends with a grip that moves its whole group of tabs, even when the bar is full.",
+    ),
+    (
+        GroupHandles::MODIFIER_DRAG,
+        SETTING_GROUP_MODIFIER_DRAG,
+        "Drag a group with a key held",
+        "Whether a tab dragged with the group key held (Group drag key) carries its whole group.",
+    ),
+    (
+        GroupHandles::MENU,
+        SETTING_GROUP_MENU,
+        "Move group in the tab menu",
+        "Whether a tab's menu offers to move its whole group to another area or a new window.",
+    ),
+    (
+        GroupHandles::MOVE_WINDOW,
+        SETTING_GROUP_MOVE_WINDOW,
+        "Window move handle",
+        "Whether a floating window shows a handle at the end of its tab bar that moves the window.",
+    ),
+];
+
+/// The key held while dragging a tab to carry its whole group
+/// ([`SETTING_GROUP_DRAG_MODIFIER`]).
+///
+/// It never clashes with the workbench's other keys: Ctrl docks a
+/// floating palette (`gesture.workbench.dock`), a palette's own drag,
+/// never a tab's; Shift on a tab bar's buttons is a click, not a drag.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GroupModifier {
+    /// Shift (the default).
+    #[default]
+    Shift,
+    /// Ctrl (Cmd on macOS).
+    Ctrl,
+    /// Alt (Option on macOS).
+    Alt,
+}
+
+impl GroupModifier {
+    /// The setting's choices, in order.
+    pub const CHOICES: [&'static str; 3] = ["shift", "ctrl", "alt"];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            GroupModifier::Shift => "shift",
+            GroupModifier::Ctrl => "ctrl",
+            GroupModifier::Alt => "alt",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<GroupModifier> {
+        [
+            GroupModifier::Shift,
+            GroupModifier::Ctrl,
+            GroupModifier::Alt,
+        ]
+        .into_iter()
+        .find(|m| m.as_str() == s)
+    }
+
+    /// egui's modifiers for it (Ctrl is the command key).
+    pub fn modifiers(self) -> egui::Modifiers {
+        match self {
+            GroupModifier::Shift => egui::Modifiers::SHIFT,
+            GroupModifier::Ctrl => egui::Modifiers::COMMAND,
+            GroupModifier::Alt => egui::Modifiers::ALT,
+        }
+    }
+}
+
+/// The float move setting's choices: [`FloatMove::Move`], [`FloatMove::Dock`].
+const FLOAT_MOVE_CHOICES: [&str; 2] = ["move", "dock"];
+
+/// Declares the group handles' settings (those of the handles the
+/// application allows, `allowed`), the group drag key and the float move.
+pub(crate) fn register_group_settings(
+    ctx: &mut crate::ctx::Ctx<'_>,
+    allowed: GroupHandles,
+) -> Result<(), crate::ctx::CtxError> {
+    use egui_pop_model::values::Descriptor;
+    if allowed.contains(GroupHandles::MODIFIER_DRAG) {
+        ctx.setting(
+            SETTING_GROUP_DRAG_MODIFIER,
+            Descriptor::choice(
+                "Group drag key",
+                &GroupModifier::CHOICES,
+                GroupModifier::default().as_str(),
+            )
+            .description(
+                "The key held while dragging a tab to move its whole group of tabs: shift, ctrl (cmd on macOS) or alt.",
+            ),
+        )?;
+    }
+    for (flag, id, label, description) in HANDLE_SETTINGS {
+        if allowed.contains(flag) {
+            ctx.setting(id, Descriptor::bool(label, true).description(description))?;
+        }
+    }
+    if allowed.contains(GroupHandles::MOVE_WINDOW) {
+        ctx.setting(
+            SETTING_FLOAT_MOVE,
+            Descriptor::choice("Moving a window", &FLOAT_MOVE_CHOICES, "move").description(
+                "What moving a floating window by its title bar or move handle does: only move it (move), or dock it into the area it is let go over, highlighted while it moves (dock; where the system hides window positions it only moves).",
+            ),
+        )?;
+    }
+    Ok(())
+}
+
+/// A setting's value from the store, read by `read`.
+fn setting_value<T>(
+    app: &AppHandle,
+    id: &egui_pop_model::ids::SettingId,
+    read: impl FnOnce(&egui_pop_model::values::Value) -> Option<T>,
+) -> Option<T> {
+    egui_pop_core::lock(&app.store())
+        .get(&format!("settings/{id}"))
+        .and_then(|e| read(&e.value))
+}
+
+/// The handles that move a whole tab group: those the application
+/// allows ([`AppBuilder::group_handles`](crate::AppBuilder::group_handles))
+/// that the user left on in the settings.
+pub fn group_handles(app: &AppHandle) -> GroupHandles {
+    let allowed = app.0.group_handles.get();
+    let mut user = GroupHandles::ALL;
+    for (flag, id, _, _) in HANDLE_SETTINGS {
+        let on = setting_value(app, &id, egui_pop_model::values::Value::as_bool).unwrap_or(true);
+        user = user.with(flag, on);
+    }
+    allowed.intersection(user)
+}
+
+/// The key held while dragging a tab to carry its group, as the setting
+/// says now.
+pub fn group_drag_modifier(app: &AppHandle) -> GroupModifier {
+    setting_value(app, &SETTING_GROUP_DRAG_MODIFIER, |v| {
+        v.as_choice().and_then(GroupModifier::parse)
+    })
+    .unwrap_or_default()
+}
+
+/// What moving a floating window does, as the setting says now:
+/// [`FloatMove::Move`] (only moves it) unless the user chose `dock`.
+pub fn float_move(app: &AppHandle) -> FloatMove {
+    match setting_value(app, &SETTING_FLOAT_MOVE, |v| {
+        v.as_choice().map(str::to_owned)
+    }) {
+        Some(choice) if choice == "dock" => FloatMove::Dock,
+        _ => FloatMove::Move,
+    }
+}
+
+/// The workbench's listener of `stack.dock.drop`: the panels' rules
+/// refuse a tab dragged into an area it stays out of, with the reason.
+pub const STACK_DROP: &str = "workbench.dock_drop";
+/// The workbench's listener of `stack.layout.changed`: the shell follows
+/// the zones the user resized, folded and unfolded, and the flyouts.
+pub const STACK_LAYOUT: &str = "workbench.stack_layout";
+
+/// A panel as egui_stack's points name it: its id.
+fn stack_key(panel: &PanelId) -> String {
+    panel.as_str().to_owned()
+}
+
+/// Gives the space the application's bus (egui_stack's `stack.*` points,
+/// declared on it) and registers the workbench's listeners, local to the
+/// interface's thread: the drop veto ([`STACK_DROP`]) and the shell's
+/// changes ([`STACK_LAYOUT`]).
+pub(crate) fn listen_stack(app: &AppHandle) {
+    use bus_contract::{HookError, ListenOpts};
+    use egui_stack::bus::{DockDrop, LayoutChanged, POINTS};
+    let bus = app.bus();
+    // A second space on the bus finds them declared.
+    let _ = bus_contract::declare_all(&*bus, POINTS);
+    {
+        let mut wb = app.workbench_mut();
+        wb.bus = Some(bus.clone());
+        if let Some(space) = wb.space.as_mut() {
+            space.set_bus(bus.clone(), stack_key);
+        }
+    }
+    let mine = || ListenOpts::new().owner(crate::bus::OWNER);
+    let weak = app.downgrade();
+    let drop = bus.listen_local::<DockDrop>(STACK_DROP, mine(), move |ask, ()| {
+        let Ok(app) = weak.get() else { return Ok(()) };
+        match drop_refusal(&app, ask) {
+            Some(why) => Err(HookError::refuse(why)),
+            None => Ok(()),
+        }
+    });
+    let weak = app.downgrade();
+    let layout = bus.listen_local::<LayoutChanged>(STACK_LAYOUT, mine(), move |change, ()| {
+        if let Ok(app) = weak.get() {
+            app.0.stack_changes.borrow_mut().push(change.clone());
+        }
+        Ok(())
+    });
+    for listened in [drop, layout] {
+        if let Err(e) = listened {
+            log::error!(target: "egui_pop", "the workbench's stack listeners: {e}");
+        }
+    }
+}
+
+/// The panels' rules for a drop egui_stack asks about (`stack.dock.drop`):
+/// the reason a tab may not go there (empty when there is none to say),
+/// `None` when it may. Moving inside its own area is always allowed;
+/// over a detached window, the window takes the drop; a detached window's
+/// own tabs (not the space's) move freely. For a group, the first of its
+/// tabs refused.
+fn drop_refusal(app: &AppHandle, ask: &egui_stack::bus::DropAsk) -> Option<String> {
+    if ask.from.is_none() && ask.to.is_none() {
+        return None;
+    }
+    let Some((area, _)) = ask.to.as_deref().and_then(dock_area) else {
+        return Some(String::new());
+    };
+    if app.workbench_mut().window_drop.is_some() {
+        return Some(String::new());
+    }
+    let from = ask.from.as_deref().and_then(dock_area).map(|(a, _)| a);
+    if from == Some(area) {
+        return None;
+    }
+    let ctx = app.egui();
+    ask.tabs.iter().find_map(|key| {
+        let panel = PanelId::new(key.as_str()).ok()?;
+        let spec = app.workbench_mut().spec(&panel).cloned()?;
+        let title = strings::panel_title(&ctx, spec.id.as_str(), &spec.title);
+        refusal(&ctx, &spec, &title, area)
+            .or_else(|| spec.refuses(&crate::mounts::panel_host(Place::Area(area))))
+    })
 }
 
 /// Where a panel detached without a known place opens, and its size.
@@ -1124,6 +1404,10 @@ pub(crate) struct Workbench {
     /// The layout as said, loaded or saved last; `None` before the
     /// first pass.
     pub(crate) said: Option<egui_pop_model::layout::SavedLayout>,
+    /// The application's bus, which the space asks its drop veto on
+    /// (`stack.dock.drop`) and tells its changes to
+    /// (`stack.layout.changed`).
+    bus: Option<Arc<dyn bus_contract::Bus>>,
 }
 
 impl Default for Workbench {
@@ -1167,6 +1451,7 @@ impl Default for Workbench {
             shell_sizes: None,
             unsaid: None,
             said: None,
+            bus: None,
         }
     }
 }
@@ -1318,7 +1603,11 @@ impl Workbench {
         if !self.stale {
             return;
         }
-        self.space = Some(to_space(&self.layout));
+        let mut space = to_space(&self.layout);
+        if let Some(bus) = &self.bus {
+            space.set_bus(bus.clone(), stack_key);
+        }
+        self.space = Some(space);
         self.stale = false;
     }
 
@@ -2004,10 +2293,40 @@ impl Workbench {
     }
 
     /// Keeps where a dock painted the dragged tab's drop zone, if it did.
-    fn note_landing(&mut self, seen: Mutex<Option<Rect>>) {
-        if let Some(rect) = seen.into_inner().ok().flatten() {
-            self.landing_rect = Some(rect);
-        }
+    fn note_landing(&mut self, seen: Mutex<Option<Painted>>) {
+        let Some(painted) = seen.into_inner().ok().flatten() else {
+            return;
+        };
+        self.landing_rect = Some(painted.rect);
+        // The dock it would go into (another than the one drawn, which may
+        // have resolved the drag for every dock), as an area.
+        let surface = match &painted.destination {
+            egui_stack::TabDestination::Node(path, _) => path.surface,
+            egui_stack::TabDestination::EmptySurface(surface) => *surface,
+            egui_stack::TabDestination::Window(_) => return,
+        };
+        let Some((area, bare)) = self
+            .space
+            .as_ref()
+            .and_then(|space| space.dock_name(surface))
+            .and_then(dock_area)
+        else {
+            return;
+        };
+        let Some(landing) = Landing::of(&painted.destination, bare) else {
+            return;
+        };
+        // The tab dragged, as the last pass followed it (the hint is
+        // published only for a drag followed).
+        let Some((dragged, _, _)) = &self.dragging else {
+            return;
+        };
+        self.landing = Some(Seen {
+            panel: dragged.lead().clone(),
+            area,
+            landing,
+            refusal: painted.refusal,
+        });
     }
 
     /// Where a drop hint for `area` is drawn when no dock draws it: the
@@ -2329,10 +2648,9 @@ fn window_tabs(app: &AppHandle, ui: &mut Ui, aux: &Auxiliary) {
         app,
         prepared: &cache.tabs,
     };
-    DockArea::new(&mut dock)
-        .id(id)
-        .style(style)
-        .painter(&*kit)
+    dock.translations = dock_translations(&ctx);
+    let area = DockArea::new(&mut dock).id(id).style(style).painter(&*kit);
+    group_gestures(area, app, &ctx)
         .allowed_splits(egui_stack::AllowedSplits::None)
         .show_close_buttons(false)
         .show_add_buttons(false)
@@ -3198,9 +3516,12 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         saved.insert(zone.name.0.clone(), size);
         resized = true;
     }
-    for event in &laid.events {
+    // What the user changed, as egui_stack says it on the bus
+    // (`stack.layout.changed`, said as the space is bound to the layout).
+    let events = shell_events(app, &laid, &layout);
+    for event in &events {
         match event {
-            LayoutEvent::Resized { zone, size } => {
+            ShellEvent::Resized { zone, size } => {
                 // An area lying over the centre, from where the pointer is on
                 // its edge rather than from the layout's sum of moves, which
                 // a pass egui discards and runs again would count twice.
@@ -3224,10 +3545,10 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
                 saved.insert(zone.0.clone(), size);
                 resized = true;
             }
-            LayoutEvent::Reset { zone } => {
+            ShellEvent::Reset { zone } => {
                 resized |= saved.remove(&zone.0).is_some();
             }
-            LayoutEvent::Folded { zone } => {
+            ShellEvent::Folded { zone } => {
                 // Its sash dragged past its fold point: it keeps the size it
                 // had before the drag, not the least size the drag reached.
                 let Some(area) = area_from(&zone.0) else {
@@ -3239,7 +3560,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
                 }
                 app.fold_area(area, true);
             }
-            LayoutEvent::Unfolded { zone } => {
+            ShellEvent::Unfolded { zone } => {
                 let Some(area) = area_from(&zone.0) else {
                     continue;
                 };
@@ -3260,7 +3581,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
                 }
                 app.fold_area(area, open.contains(&area));
             }
-            LayoutEvent::FlyoutResized { key, size } => {
+            ShellEvent::FlyoutResized { key, size } => {
                 // The width follows the edge for now, and is saved through
                 // its step once the edge is let go (below). From where the
                 // pointer is, not from the layout's sum of moves, which a
@@ -3282,7 +3603,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
                     ctx.data_mut(|d| d.insert_temp(live, width.clamp(min, max)));
                 }
             }
-            LayoutEvent::FlyoutClosed { key } => {
+            ShellEvent::FlyoutClosed { key } => {
                 let Some((panel, area)) = flyout.as_ref().filter(|(p, _)| p.as_str() == key) else {
                     continue;
                 };
@@ -3303,7 +3624,6 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
                     app.fold_area(*area, false);
                 }
             }
-            _ => {}
         }
     }
     if let Some((panel, _)) = &flyout {
@@ -3322,10 +3642,6 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     if resized {
         ctx.data_mut(|d| d.insert_persisted(sizes_id(), saved.clone()));
         app.workbench_mut().shell_sizes = Some(saved.clone());
-    }
-    if let Some(space) = app.workbench_mut().space.as_mut() {
-        // The zones holding no dock refuse a tab's drop on the next pass.
-        space.bind(&laid);
     }
     {
         let mut wb = app.workbench_mut();
@@ -3526,10 +3842,11 @@ fn drop_targets(app: &AppHandle, ui: &mut Ui, zen: bool) {
             app,
             prepared: &prepared,
         };
-        DockArea::dock(&mut space, dock)
+        space.state_mut().translations = dock_translations(&ctx);
+        let area = DockArea::dock(&mut space, dock)
             .style(style.clone())
-            .painter(&painter)
-            .show_inside(&mut target, &mut viewer);
+            .painter(&painter);
+        group_gestures(area, app, &ctx).show_inside(&mut target, &mut viewer);
         let mut wb = app.workbench_mut();
         wb.put_space(space);
         wb.note_landing(seen);
@@ -3581,6 +3898,103 @@ fn strip_width(app: &AppHandle, ctx: &egui::Context, kit: &Kit, area: Area) -> f
     }
     let t = egui_pop_core::theme::Tokens::of(ctx);
     grip.max(t.size.icon_inline + 2.0 * t.space.s)
+}
+
+/// A change of the shell's layout the workbench follows: a zone resized,
+/// reset, folded or unfolded, a flyout resized or closed.
+#[derive(Clone, Debug)]
+enum ShellEvent {
+    Resized { zone: ZoneName, size: f32 },
+    Reset { zone: ZoneName },
+    Folded { zone: ZoneName },
+    Unfolded { zone: ZoneName },
+    FlyoutResized { key: String, size: f32 },
+    FlyoutClosed { key: String },
+}
+
+impl ShellEvent {
+    /// A change said on the bus, its sizes read from the layout it was
+    /// made in; `None` for one the shell does not follow.
+    fn of_change(change: &egui_stack::bus::LayoutChange, layout: &ZoneLayout) -> Option<Self> {
+        use egui_stack::bus::Change;
+        let name = change.zone.clone()?;
+        Some(match change.change {
+            Change::Resized => ShellEvent::Resized {
+                size: layout.zone(&name)?.state.size?,
+                zone: ZoneName(name),
+            },
+            Change::Reset => ShellEvent::Reset {
+                zone: ZoneName(name),
+            },
+            Change::Folded => ShellEvent::Folded {
+                zone: ZoneName(name),
+            },
+            Change::Unfolded => ShellEvent::Unfolded {
+                zone: ZoneName(name),
+            },
+            Change::FlyoutResized => ShellEvent::FlyoutResized {
+                size: *layout.flyouts.get(&name)?,
+                key: name,
+            },
+            Change::FlyoutClosed => ShellEvent::FlyoutClosed { key: name },
+            _ => return None,
+        })
+    }
+
+    /// A change as the layout pass reported it.
+    fn of_event(event: &LayoutEvent) -> Option<Self> {
+        Some(match event {
+            LayoutEvent::Resized { zone, size } => ShellEvent::Resized {
+                zone: zone.clone(),
+                size: *size,
+            },
+            LayoutEvent::Reset { zone } => ShellEvent::Reset { zone: zone.clone() },
+            LayoutEvent::Folded { zone } => ShellEvent::Folded { zone: zone.clone() },
+            LayoutEvent::Unfolded { zone } => ShellEvent::Unfolded { zone: zone.clone() },
+            LayoutEvent::FlyoutResized { key, size } => ShellEvent::FlyoutResized {
+                key: key.clone(),
+                size: *size,
+            },
+            LayoutEvent::FlyoutClosed { key } => ShellEvent::FlyoutClosed { key: key.clone() },
+            _ => return None,
+        })
+    }
+}
+
+/// Binds the space to the shell's layout, as laid out this pass (the
+/// zones holding no dock refuse a tab's drop on the next pass), and reads
+/// what the user changed: egui_stack says it on the bus as it is bound
+/// (`stack.layout.changed`, [`STACK_LAYOUT`] keeps it), or, when the
+/// space is not there to say it, from the pass itself.
+fn shell_events(
+    app: &AppHandle,
+    laid: &egui_stack::layout::Laid,
+    layout: &ZoneLayout,
+) -> Vec<ShellEvent> {
+    app.0.stack_changes.borrow_mut().clear();
+    // Taken out while bound: a listener may read the workbench.
+    let space = app.workbench_mut().take_space();
+    let said = match space {
+        Some(mut space) => {
+            space.bind(laid);
+            let said = space.bus().is_some();
+            app.workbench_mut().put_space(space);
+            said
+        }
+        None => false,
+    };
+    let changes = std::mem::take(&mut *app.0.stack_changes.borrow_mut());
+    if !said {
+        return laid
+            .events
+            .iter()
+            .filter_map(ShellEvent::of_event)
+            .collect();
+    }
+    changes
+        .iter()
+        .filter_map(|change| ShellEvent::of_change(change, layout))
+        .collect()
 }
 
 /// The layout's labels, translated: its sashes ("Resize the start side
@@ -4687,9 +5101,11 @@ fn draw_dock(app: &AppHandle, ui: &mut Ui, area: Area) {
     // drag across the areas (the first dock drawn in a pass resolves it
     // for all of them); the kit measures and paints the tabs, bars,
     // bodies, separators and drop zones (`egui_pop_core::kit`).
-    DockArea::dock(&mut space, area_name(area))
+    space.state_mut().translations = dock_translations(&ctx);
+    let dock = DockArea::dock(&mut space, area_name(area))
         .style(style)
-        .painter(&painter)
+        .painter(&painter);
+    group_gestures(dock, app, &ctx)
         .show_close_buttons(false)
         .show_add_buttons(false)
         .show_leaf_close_all_buttons(false)
@@ -4743,6 +5159,41 @@ fn first_bar(
     })
 }
 
+/// A dock's group gestures, as the application allows and the user
+/// set them ([`group_handles`], [`group_drag_modifier`]), and the names
+/// of its grip and move handle, translated.
+fn group_gestures<'a>(
+    area: DockArea<'a, PanelId>,
+    app: &AppHandle,
+    ctx: &egui::Context,
+) -> DockArea<'a, PanelId> {
+    let mut labels = egui_stack::Labels::default();
+    labels.move_group = strings::tr(ctx, &txt::WORKBENCH_MOVE_GROUP).into();
+    labels.move_window = strings::tr(ctx, &txt::WORKBENCH_MOVE_WINDOW).into();
+    area.group_handles(group_handles(app))
+        .group_drag_modifiers(group_drag_modifier(app).modifiers())
+        .labels(labels)
+}
+
+/// A dock's menu texts, translated: its tab menu's "Move group" and that
+/// submenu's "New window".
+fn dock_translations(ctx: &egui::Context) -> egui_stack::Translations {
+    let mut translations = egui_stack::Translations::english();
+    let menu = &mut translations.tab_context_menu;
+    menu.move_group_menu = strings::tr(ctx, &txt::WORKBENCH_MOVE_GROUP);
+    menu.move_group_new_window = strings::tr(ctx, &txt::WORKBENCH_NEW_WINDOW);
+    translations
+}
+
+/// A dragged tab's drop zone as an area's painter painted it: where, the
+/// destination, and the reason it is refused (empty when the veto gave
+/// none).
+struct Painted {
+    rect: Rect,
+    destination: egui_stack::TabDestination,
+    refusal: Option<String>,
+}
+
 /// The kit as an area's dock painter: everything as the kit paints it,
 /// except the panels' bodies in a frameless area, which have no border
 /// there (`AppBuilder::frameless`). It notes where the drop zone of a
@@ -4753,11 +5204,16 @@ struct AreaPainter<'a> {
     frameless: bool,
     /// The dragged tab is over a detached window.
     quiet: bool,
-    seen: &'a Mutex<Option<Rect>>,
+    seen: &'a Mutex<Option<Painted>>,
 }
 
 impl<'a> AreaPainter<'a> {
-    fn new(app: &AppHandle, kit: &'a Kit, frameless: bool, seen: &'a Mutex<Option<Rect>>) -> Self {
+    fn new(
+        app: &AppHandle,
+        kit: &'a Kit,
+        frameless: bool,
+        seen: &'a Mutex<Option<Painted>>,
+    ) -> Self {
         let quiet = app.workbench_mut().window_drop.is_some();
         Self {
             kit,
@@ -4812,7 +5268,16 @@ impl egui_stack::DockPainter for AreaPainter<'_> {
             return;
         }
         if let Ok(mut seen) = self.seen.lock() {
-            *seen = Some(drop.rect);
+            let refusal = drop.refusal.map(|r| {
+                r.reason
+                    .as_ref()
+                    .map_or_else(String::new, |g| g.text().to_owned())
+            });
+            *seen = Some(Painted {
+                rect: drop.rect,
+                destination: drop.destination.clone(),
+                refusal,
+            });
         }
         self.kit.drop_preview(painter, drop);
     }
@@ -4872,6 +5337,13 @@ fn dock_style(style: &egui::Style, kit: &Kit) -> egui_stack::Style {
     s.overlay.zone_stroke = egui::Stroke::new(zone.border_width, zone.border_color);
     s.overlay.zone_corner_radius =
         egui::CornerRadius::same(zone.radius.round().clamp(0.0, 255.0) as u8);
+    // The group grip at the end of a tab bar, in the tabs' colours: a
+    // tab's text at rest, and its text and fill under the pointer.
+    let rest = kit.tab.style(egui_pop_core::kit::State::REST);
+    let hover = kit.tab.style(egui_pop_core::kit::State::HOVER);
+    s.buttons.group_grip_color = rest.text;
+    s.buttons.group_grip_active_color = hover.text;
+    s.buttons.group_grip_bg_fill = hover.fill;
     s
 }
 
@@ -5020,49 +5492,6 @@ impl TabViewer for Viewer<'_> {
         // Detached panels get windows of their own (a step), not
         // egui_stack's floating windows.
         false
-    }
-
-    /// The panel's rules, as the drop zone shows them: an area it stays
-    /// out of refuses it, with the reason. Moving inside its own area is
-    /// always allowed; over a detached window, the window takes the drop.
-    /// A detached window's own tabs (not the space's) move freely.
-    fn dock_drop_allowed(&self, tab: &PanelId, drop: &DockDrop<'_>) -> DropVerdict {
-        if drop.from.is_none() && drop.to.is_none() {
-            return DropVerdict::Allow;
-        }
-        let Some((area, bare)) = drop.to.and_then(dock_area) else {
-            return DropVerdict::Refuse(None);
-        };
-        let from = drop.from.and_then(dock_area).map(|(a, _)| a);
-        let (spec, over_window) = {
-            let wb = self.app.workbench_mut();
-            let over = wb.window_drop.is_some();
-            (wb.spec(tab).cloned(), over)
-        };
-        if over_window {
-            return DropVerdict::Refuse(None);
-        }
-        let refusal = match (&spec, from == Some(area)) {
-            (Some(spec), false) => {
-                let ctx = self.app.egui();
-                let title = strings::panel_title(&ctx, spec.id.as_str(), &spec.title);
-                refusal(&ctx, spec, &title, area)
-                    .or_else(|| spec.refuses(&crate::mounts::panel_host(Place::Area(area))))
-            }
-            _ => None,
-        };
-        if let Some(landing) = Landing::of(drop.destination, bare) {
-            self.app.workbench_mut().landing = Some(Seen {
-                panel: tab.clone(),
-                area,
-                landing,
-                refusal: refusal.clone(),
-            });
-        }
-        match refusal {
-            Some(why) => DropVerdict::Refuse(Some(why.into())),
-            None => DropVerdict::Allow,
-        }
     }
 }
 

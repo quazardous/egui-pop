@@ -422,3 +422,57 @@ fn a_layout_saved_before_the_space_reads_into_it_and_saves_the_same() {
     );
     assert_eq!(group(tree(&h, Area::Bottom)), Some(vec![PINNED]));
 }
+
+#[test]
+fn a_listener_of_stack_dock_drop_refuses_a_drop_with_its_reason() {
+    use bus_contract::{HookError, ListenOpts, Point as _};
+    use egui_stack::bus::DockDrop;
+    let (mut h, moves) = harness(false);
+    let app = h.state().handle().clone();
+    // The workbench asks egui_stack's veto on the application's bus: an
+    // application's listener refuses the console in the start side bar.
+    let asked = Arc::new(AtomicUsize::new(0));
+    let counted = asked.clone();
+    app.bus()
+        .listen::<DockDrop>(
+            "test.no_console_aside",
+            ListenOpts::new(),
+            move |ask, ()| {
+                counted.fetch_add(1, Ordering::SeqCst);
+                if ask.tabs == ["demo.console"] && ask.to.as_deref() == Some("start_side") {
+                    return Err(HookError::refuse("the console stays down"));
+                }
+                Ok(())
+            },
+        )
+        .unwrap();
+    let before = app.layout();
+    let from = tab(&h, "Console").center();
+    let to = area(&h, Area::StartSide).center();
+    drag(&mut h, from, to);
+    let hint = app.drop_hint().expect("the refused zone while dragging");
+    assert_eq!((hint.panel.clone(), hint.area), (CONSOLE, "start_side"));
+    assert_eq!(hint.refusal.as_deref(), Some("the console stays down"));
+    let hovering = asked.load(Ordering::SeqCst);
+    assert!(hovering > 0, "asked while the tab hovers");
+    drag_on(&mut h, to);
+    assert_eq!(
+        asked.load(Ordering::SeqCst),
+        hovering,
+        "not asked again while the destination stays the same"
+    );
+    release(&mut h, to);
+    assert!(
+        asked.load(Ordering::SeqCst) > hovering,
+        "asked again at release"
+    );
+    assert_eq!(app.layout().areas, before.areas, "back where it was");
+    assert_eq!(moves.load(Ordering::SeqCst), 0, "no step for a refusal");
+    // The workbench's own listener still says the panels' rules.
+    assert!(
+        app.bus().listeners(DockDrop::ID).is_some_and(|l| l
+            .iter()
+            .any(|l| l.id == egui_pop_api::workbench::STACK_DROP)),
+        "egui-pop's veto listens on the bus"
+    );
+}

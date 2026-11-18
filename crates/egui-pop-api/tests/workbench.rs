@@ -813,3 +813,127 @@ fn the_shell_takes_no_room_below_the_window() {
     assert!(max.is_positive(), "{max:?}");
     assert!(used.bottom() <= max.bottom(), "{used:?} past {max:?}");
 }
+
+/// Sets the setting `id` to `value`, as the user would.
+fn set_setting(h: &mut Harness<'_, App>, id: &str, value: egui_pop_model::values::Value) {
+    egui_pop_core::lock(&h.state().handle().store())
+        .set(egui_pop_model::values::Set::new(
+            &format!("settings/{id}"),
+            egui_pop_model::values::Change::To(value),
+            Origin::User,
+        ))
+        .unwrap();
+    h.run();
+    h.run();
+}
+
+#[test]
+fn the_group_handles_are_those_the_app_allows_that_the_user_left_on() {
+    use egui_pop_api::workbench::{
+        DEFAULT_GROUP_HANDLES, GroupHandles, SETTING_GROUP_GRIP, SETTING_GROUP_MENU,
+        SETTING_GROUP_MOVE_WINDOW, group_handles,
+    };
+    use egui_pop_model::values::Value;
+    let declared = |h: &Harness<'_, App>, id: &egui_pop_model::ids::SettingId| {
+        h.state().handle().settings().iter().any(|s| s.id == *id)
+    };
+    // By default every handle but the tab menu's, whose setting is not
+    // offered.
+    let mut h = harness(builder(false));
+    assert_eq!(group_handles(h.state().handle()), DEFAULT_GROUP_HANDLES);
+    assert!(!DEFAULT_GROUP_HANDLES.contains(GroupHandles::MENU));
+    assert!(declared(&h, &SETTING_GROUP_GRIP));
+    assert!(!declared(&h, &SETTING_GROUP_MENU));
+    // The grips are drawn, translated names and all.
+    assert!(h.query_all_by_label("Move group").count() > 0);
+    // The user turns the grip off: it is gone from every tab bar.
+    set_setting(&mut h, SETTING_GROUP_GRIP.as_str(), Value::Bool(false));
+    let handles = group_handles(h.state().handle());
+    assert!(!handles.contains(GroupHandles::GRIP));
+    assert!(handles.contains(GroupHandles::EMPTY_SPACE));
+    assert_eq!(h.query_all_by_label("Move group").count(), 0);
+    set_setting(&mut h, SETTING_GROUP_GRIP.as_str(), Value::Bool(true));
+    assert!(h.query_all_by_label("Move group").count() > 0);
+    // An application allowing the menu offers its setting; one leaving
+    // the grip and the move handle out offers neither, and a user
+    // setting cannot turn them back on.
+    let allowed = GroupHandles::ALL
+        .with(GroupHandles::GRIP, false)
+        .with(GroupHandles::MOVE_WINDOW, false);
+    let mut h = harness(builder(false).group_handles(allowed));
+    assert!(declared(&h, &SETTING_GROUP_MENU));
+    assert!(!declared(&h, &SETTING_GROUP_GRIP));
+    assert!(!declared(&h, &SETTING_GROUP_MOVE_WINDOW));
+    assert_eq!(group_handles(h.state().handle()), allowed);
+    assert_eq!(h.query_all_by_label("Move group").count(), 0);
+    let refused =
+        egui_pop_core::lock(&h.state().handle().store()).set(egui_pop_model::values::Set::new(
+            &format!("settings/{SETTING_GROUP_GRIP}"),
+            egui_pop_model::values::Change::To(Value::Bool(true)),
+            Origin::User,
+        ));
+    assert!(refused.is_err(), "no setting for a handle left out");
+    assert!(!group_handles(h.state().handle()).contains(GroupHandles::GRIP));
+    set_setting(&mut h, SETTING_GROUP_MENU.as_str(), Value::Bool(false));
+    assert!(!group_handles(h.state().handle()).contains(GroupHandles::MENU));
+}
+
+#[test]
+fn the_group_drag_key_is_the_one_the_user_chose() {
+    use egui_pop_api::workbench::{
+        GroupModifier, SETTING_GROUP_DRAG_MODIFIER, group_drag_modifier,
+    };
+    use egui_pop_model::values::Value;
+    let mut h = harness(builder(false));
+    assert_eq!(
+        group_drag_modifier(h.state().handle()),
+        GroupModifier::Shift
+    );
+    assert_eq!(GroupModifier::Shift.modifiers(), egui::Modifiers::SHIFT);
+    for (choice, key, modifiers) in [
+        ("alt", GroupModifier::Alt, egui::Modifiers::ALT),
+        ("ctrl", GroupModifier::Ctrl, egui::Modifiers::COMMAND),
+        ("shift", GroupModifier::Shift, egui::Modifiers::SHIFT),
+    ] {
+        set_setting(
+            &mut h,
+            SETTING_GROUP_DRAG_MODIFIER.as_str(),
+            Value::Choice(choice.into()),
+        );
+        assert_eq!(group_drag_modifier(h.state().handle()), key);
+        assert_eq!(key.modifiers(), modifiers);
+        assert_eq!(GroupModifier::parse(key.as_str()), Some(key));
+    }
+    // A choice the setting does not have is refused; the key stays.
+    let refused =
+        egui_pop_core::lock(&h.state().handle().store()).set(egui_pop_model::values::Set::new(
+            &format!("settings/{SETTING_GROUP_DRAG_MODIFIER}"),
+            egui_pop_model::values::Change::To(Value::Choice("hyper".into())),
+            Origin::User,
+        ));
+    assert!(refused.is_err());
+    assert_eq!(
+        group_drag_modifier(h.state().handle()),
+        GroupModifier::Shift
+    );
+}
+
+#[test]
+fn moving_a_window_only_moves_it_unless_the_user_chose_to_dock() {
+    use egui_pop_api::workbench::{FloatMove, SETTING_FLOAT_MOVE, float_move};
+    use egui_pop_model::values::Value;
+    let mut h = harness(builder(false));
+    assert_eq!(float_move(h.state().handle()), FloatMove::Move);
+    set_setting(
+        &mut h,
+        SETTING_FLOAT_MOVE.as_str(),
+        Value::Choice("dock".into()),
+    );
+    assert_eq!(float_move(h.state().handle()), FloatMove::Dock);
+    set_setting(
+        &mut h,
+        SETTING_FLOAT_MOVE.as_str(),
+        Value::Choice("move".into()),
+    );
+    assert_eq!(float_move(h.state().handle()), FloatMove::Move);
+}

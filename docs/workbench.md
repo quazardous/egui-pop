@@ -221,8 +221,15 @@ nothing. A closed side or bottom area is offered along the areas' edge
 bar) over its whole rect: dropped there, the tab joins its tabs. Once
 the tab is dropped in another area, the move goes through the
 `workbench.move` step (`panel`, `area`): a plugin's veto puts the tab
-back where it was, a redirect sends it to the area the step names. A
-palette dragged over an area it docks in, with the dock keys held (see
+back where it was, a redirect sends it to the area the step names.
+The refusal itself is asked on the application's bus: the space has it
+(egui_stack's `bus` feature), and the workbench's listener of
+egui_stack's `stack.dock.drop` (`workbench.dock_drop`) says the panels'
+rules; any listener of the point may refuse a drop, its reason shown on
+the zone, asked when the drop's destination changes and again at
+release. The workbench follows the zones the user resized, folded or
+unfolded, and the flyouts, from `stack.layout.changed`
+(`workbench.stack_layout`), on the same bus. A palette dragged over an area it docks in, with the dock keys held (see
 Palettes, Dragging), shows the hint with a ghost of its tab (the kit's
 `tab-preview`) after the area's first tabs.
 
@@ -535,8 +542,18 @@ tabs in windows opens the first panel there and docks the others in
 their default areas.
 
 **A whole tab group.** The empty part of a tab bar, right of its tabs,
-drags the whole group, as an editor group is dragged by its tab bar in
-established IDEs: all its tabs move together, in order, the shown one
+the grip at the end of the bar, or a tab dragged with the group key
+held (Shift by default) drags the whole group, as an editor group is
+dragged by its tab bar in established IDEs. Each of these handles is a
+setting the user turns off (`workbench.group_handle.empty_space`,
+`.grip`, `.modifier_drag`; the key is `workbench.group_drag_modifier`:
+shift, ctrl or alt), among those the application allows
+(`AppBuilder::group_handles`; the tab menu's "Move group",
+`GroupHandles::MENU`, is left out by default, the panel menu moving a
+group instead). A floating window's move handle
+(`workbench.group_handle.move_window`) and what moving the window does
+(`workbench.float_move`: `move`, the default, or `dock`) are settings
+too, for egui_stack's floats. Dragged whole, all its tabs move together, in order, the shown one
 kept (egui_stack's `DockArea::dragged_node`). Inside the main window it
 takes the same zones as a tab (the middle of a group joins its tabs, an
 edge splits the group), each tab dropped in another area running its
