@@ -771,6 +771,29 @@ limit.
 
 ### Drafted requests (not filed)
 
+**egui-wgpu / eframe: a present mode per window.**
+
+> Title: Let each viewport's surface have its own present mode
+>
+> `WgpuConfiguration::surface` and `Frame::set_wgpu_surface_config` set
+> one `SurfaceConfig` for every surface (`egui-wgpu/src/winit.rs`
+> reconfigures them all). An application with several windows on
+> Wayland must pick `AutoNoVsync` for all of them: a FIFO present on a
+> window the compositor does not show (minimised, on another workspace)
+> waits for a frame callback that never comes, and with one UI thread
+> every other window waits behind it. With a mode per surface, the
+> windows shown could keep a FIFO present and only the hidden ones (or
+> the secondary ones) skip it.
+>
+> Proposal: an optional `present_mode` on `ViewportBuilder` (or a
+> `Frame::set_viewport_surface_config(ViewportId, SurfaceConfig)`),
+> applied by egui-wgpu's painter to that viewport's surface only,
+> falling back to the global configuration.
+
+PR idea: a per-viewport override map in `egui_wgpu::winit::Painter`,
+read in `configure_surface`, and the field on `ViewportBuilder`, passed
+through `egui-winit`'s viewport creation like the other window options.
+
 **wgpu: a pass-through surface colour space, and BT.2020 linear.**
 
 > Title: `SurfaceColorSpace::PassThrough` and `Bt2020Linear` on Vulkan
