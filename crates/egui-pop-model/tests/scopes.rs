@@ -374,3 +374,187 @@ fn a_rebound_key_keeps_the_declared_clause() {
     );
     assert_eq!(k.resolve(&keys("Ctrl+Shift+G"), &open), run("files.new"));
 }
+
+/// The context of a window: its `appWindow` and its own `focusedPanel`.
+fn in_window(window: &str, panel: &str) -> WhenContext {
+    WhenContext::new()
+        .with("appWindow", window)
+        .with("focusedPanel", panel)
+}
+
+/// `Right` bound in each scope of the bubble order.
+fn bubbling() -> Keymap {
+    let mut k = Keymap::new();
+    let bind = |k: &mut Keymap, cmd: &'static str, scope: KeyScope| {
+        let options = BindOptions {
+            scope,
+            ..BindOptions::default()
+        };
+        k.bind_with(&FW, Layer::Default, "Right", Action::run(cmd), "", options)
+            .unwrap();
+    };
+    bind(&mut k, "app.right", KeyScope::Global);
+    bind(&mut k, "main.right", KeyScope::window("main"));
+    bind(&mut k, "grid.right", KeyScope::panel("app.grid"));
+    bind(&mut k, "cell.right", KeyScope::surface("cell"));
+    k
+}
+
+#[test]
+fn keys_bubble_from_the_surface_to_the_panel_the_window_then_global() {
+    let k = bubbling();
+    let mut cx = in_window("main", "app.grid");
+    cx.flag_at("cellFocus", true, 1);
+    assert_eq!(k.resolve(&keys("Right"), &cx), run("cell.right"));
+    assert_eq!(
+        k.resolve(&keys("Right"), &in_window("main", "app.grid")),
+        run("grid.right")
+    );
+    assert_eq!(
+        k.resolve(&keys("Right"), &in_window("main", "app.other")),
+        run("main.right")
+    );
+    assert_eq!(
+        k.resolve(&keys("Right"), &in_window("import", "")),
+        run("app.right")
+    );
+}
+
+#[test]
+fn a_panel_s_binding_fires_only_while_its_window_has_it_focused() {
+    let mut k = Keymap::new();
+    k.bind_with(
+        &FW,
+        Layer::Default,
+        "Delete",
+        Action::run("grid.remove"),
+        "",
+        BindOptions {
+            scope: KeyScope::panel("app.grid"),
+            ..BindOptions::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        k.resolve(&keys("Delete"), &in_window("main", "app.grid")),
+        run("grid.remove")
+    );
+    // Another window: its own focused panel is not the grid.
+    let (r, trace) = k.resolve_traced(&keys("Delete"), &in_window("import", ""));
+    assert_eq!(r, Resolution::Nothing);
+    assert_eq!(
+        trace.candidates[0].verdict,
+        Verdict::PanelNotFocused {
+            panel: "app.grid".into()
+        }
+    );
+    let (r, trace) = {
+        let mut w = Keymap::new();
+        w.bind_with(
+            &FW,
+            Layer::Default,
+            "Delete",
+            Action::run("main.remove"),
+            "",
+            BindOptions {
+                scope: KeyScope::window("main"),
+                ..BindOptions::default()
+            },
+        )
+        .unwrap();
+        w.resolve_traced(&keys("Delete"), &in_window("import", ""))
+    };
+    assert_eq!(r, Resolution::Nothing);
+    assert_eq!(
+        trace.candidates[0].verdict,
+        Verdict::OtherWindow {
+            window: "main".into()
+        }
+    );
+}
+
+#[test]
+fn a_modal_blocks_window_and_panel_bindings_as_global_ones() {
+    let k = bubbling();
+    let mut cx = in_window("main", "app.grid");
+    cx.set("modalOpen", "true");
+    assert_eq!(k.resolve(&keys("Right"), &cx), Resolution::Nothing);
+}
+
+#[test]
+fn a_binding_without_a_scope_takes_its_panel_from_its_clause() {
+    assert_eq!(
+        KeyScope::infer_from("focusedPanel == 'app.grid' && !busy"),
+        KeyScope::panel("app.grid")
+    );
+    assert_eq!(
+        KeyScope::infer_from("focusedPanel == 'app.grid'"),
+        KeyScope::panel("app.grid")
+    );
+    // An alternative of panels, or none, stays global.
+    assert_eq!(
+        KeyScope::infer_from("focusedPanel == 'a' || focusedPanel == 'b'"),
+        KeyScope::Global
+    );
+    assert_eq!(KeyScope::infer_from("canUndo"), KeyScope::Global);
+    assert_eq!(KeyScope::infer_from(""), KeyScope::Global);
+    // A keymap written before scopes: its panel binding is the panel's.
+    let doc: KeymapDoc = serde_json::from_value(serde_json::json!({
+        "bindings": [
+            { "keys": "Delete", "command": "grid.remove", "when": "focusedPanel == 'app.grid'" },
+            { "keys": "Ctrl+Z", "command": "app.undo" },
+            { "keys": "N", "command": "cell.n", "scope": "surface:cell" },
+            { "keys": "W", "command": "main.w", "scope": "window:main" },
+            { "keys": "G", "command": "any.g", "scope": "global", "when": "canUndo" }
+        ]
+    }))
+    .unwrap();
+    let mut k = Keymap::new();
+    assert!(k.load(&FW, Layer::User, &doc).is_empty());
+    let scope = |cmd: &str| {
+        k.all()
+            .find(|b| b.action.to_file().as_deref() == Some(cmd))
+            .map(|b| b.options.scope.clone())
+            .unwrap()
+    };
+    assert_eq!(scope("grid.remove"), KeyScope::panel("app.grid"));
+    assert_eq!(scope("app.undo"), KeyScope::Global);
+    assert_eq!(scope("cell.n"), KeyScope::surface("cell"));
+    assert_eq!(scope("main.w"), KeyScope::window("main"));
+    assert_eq!(scope("any.g"), KeyScope::Global);
+    // Saved back as it was read, inferred scopes left out (`global`
+    // written out is the same as none).
+    let saved = k.export(&FW, Layer::User);
+    assert_eq!(saved.bindings[0].scope, "");
+    assert_eq!(saved.bindings[3].scope, "window:main");
+    assert_eq!(saved.bindings[4].scope, "");
+    // The plain `bind` infers too.
+    let mut b = Keymap::new();
+    b.bind(
+        &FW,
+        Layer::Default,
+        "Delete",
+        Action::run("grid.remove"),
+        "focusedPanel == 'app.grid'",
+    )
+    .unwrap();
+    assert_eq!(
+        b.all().next().unwrap().options.scope,
+        KeyScope::panel("app.grid")
+    );
+}
+
+#[test]
+fn scopes_parse_and_print_as_in_files() {
+    for text in [
+        "global",
+        "system",
+        "surface:cell",
+        "window:main",
+        "panel:app.grid",
+    ] {
+        assert_eq!(KeyScope::parse(text).unwrap().to_string(), text);
+    }
+    assert!(KeyScope::parse("window:").is_err());
+    assert!(KeyScope::parse("pane:x").is_err());
+}

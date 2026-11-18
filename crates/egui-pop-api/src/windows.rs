@@ -307,6 +307,9 @@ pub(crate) struct Entry {
     shell_bars: bool,
     pub(crate) geometry: Option<Geometry>,
     pub(crate) focused: Option<bool>,
+    /// The panel focused last in this window, its own `focusedPanel`:
+    /// the main window's focus never reaches it.
+    pub(crate) focused_panel: Option<egui_pop_model::ids::PanelId>,
     dispatcher: Option<crate::app::WindowKeys>,
     pub(crate) closed: bool,
 }
@@ -544,6 +547,7 @@ impl AppHandle {
                     shell_bars: spec.shell_bars,
                     geometry: saved,
                     focused: None,
+                    focused_panel: None,
                     dispatcher: Some(crate::app::WindowKeys::default()),
                     closed: false,
                 });
@@ -1056,6 +1060,7 @@ impl AppHandle {
                 shell_bars,
                 geometry: saved,
                 focused: None,
+                focused_panel: None,
                 dispatcher: Some(crate::app::WindowKeys::default()),
                 closed: false,
             });
@@ -1267,8 +1272,9 @@ impl AppHandle {
 
     /// A deferred window's keys, dispatched in its own pass with its
     /// dispatcher; the commands run before the main window's next pass,
-    /// in this window's context.
+    /// in this window's context: its own focused panel, its `appWindow`.
     fn dispatch_window_keys(&self, ctx: &Context, id: &WindowId) {
+        self.follow_window_focus(ctx, id);
         let Some(mut keys) = self
             .windows_mut()
             .entry_mut(id)
@@ -1290,6 +1296,38 @@ impl AppHandle {
         for d in dispatched {
             self.run_in_context(d.command, serde_json::Value::Null, cx.clone());
         }
+    }
+}
+
+impl AppHandle {
+    /// Keeps an application window's own focused panel up with where its
+    /// focus went: the last panel the pointer pressed in or a widget of
+    /// which took the focus, kept while the focus goes elsewhere.
+    fn follow_window_focus(&self, ctx: &Context, id: &WindowId) {
+        let Some(moved) = egui_pop_core::focus::take_moved(ctx) else {
+            return;
+        };
+        let chain = match moved {
+            egui_pop_core::focus::Moved::Pressed(c) | egui_pop_core::focus::Moved::Focused(c) => c,
+            egui_pop_core::focus::Moved::Left => return,
+        };
+        let Some(panel) = self.workbench_mut().panel_of(&chain) else {
+            return;
+        };
+        if let Some(e) = self.windows_mut().entry_mut(id) {
+            e.focused_panel = Some(panel);
+        }
+    }
+
+    /// An application window's own focused panel (`None` for the main
+    /// window, whose focus is the workbench's).
+    pub(crate) fn window_focused_panel(
+        &self,
+        viewport: ViewportId,
+    ) -> Option<egui_pop_model::ids::PanelId> {
+        self.windows_ref()
+            .by_viewport(viewport)
+            .and_then(|e| e.focused_panel.clone())
     }
 }
 

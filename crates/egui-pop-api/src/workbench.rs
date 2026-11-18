@@ -1401,7 +1401,7 @@ impl Workbench {
 
     /// The panel drawn in these scopes (the innermost, should one be drawn
     /// inside another).
-    fn panel_of(&self, chain: &[focus::ScopeRecord]) -> Option<PanelId> {
+    pub(crate) fn panel_of(&self, chain: &[focus::ScopeRecord]) -> Option<PanelId> {
         chain.iter().rev().find_map(|r| {
             let spec = self
                 .specs

@@ -2001,6 +2001,9 @@ impl AppHandle {
     /// detached panel's window, its focus chain and its overlays, and
     /// `window` holds the panel's id (empty in the main window);
     /// `appWindow` names the application window (ADR 0025);
+    /// `focusedPanel` is the window group's own: the workbench's focused
+    /// panel in the main window and its detached panels, an application
+    /// window's last focused panel in it (empty when none);
     /// `modalOpen` says whether a modal is open in the window's group
     /// (an application window's own, or the main window's with its
     /// detached panels: a modal in one application window does not make
@@ -2029,7 +2032,14 @@ impl AppHandle {
         base.set("modalOpen", flag(overlay::modal_open_in(ctx, group)));
         base.set("canUndo", flag(self.can_undo()));
         base.set("canRedo", flag(self.can_redo()));
-        if let Some(wb) = self.try_workbench() {
+        // Each window's own: the workbench's for the main window's group
+        // (its detached panels' windows share it), an application window's
+        // own for it ("" while none of its panels was focused), so a
+        // panel's keys never fire from another window.
+        if self.window_group(view) != egui::ViewportId::ROOT {
+            let panel = self.window_focused_panel(view);
+            base.set("focusedPanel", panel.as_ref().map_or("", PanelId::as_str));
+        } else if let Some(wb) = self.try_workbench() {
             base.set(
                 "focusedPanel",
                 wb.focused.as_ref().map_or("", PanelId::as_str),
