@@ -576,7 +576,7 @@ fn compare(ui: &mut Ui, p: &mut PageState, thumbs: &Thumbs) {
         widgets::checkbox(ui, &mut p.synced, "Sync zoom and pan");
         // Fixed counts, for the snapshots and a quick look.
         for n in [1usize, 2, 4, 6] {
-            if widgets::selectable_label(ui, p.compared.len() == n, &shown_label(n)).clicked() {
+            if widgets::selectable_label(ui, p.compared.len() == n, shown_label(n)).clicked() {
                 p.compared = p.shown.iter().take(n).copied().collect();
                 p.active = p.compared.first().copied();
                 p.compare.reset();
