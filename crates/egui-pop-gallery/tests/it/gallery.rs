@@ -865,7 +865,7 @@ fn the_ramps_page_in_every_pop_theme_keeps_its_numbers() {
     h.run();
     assert_eq!(value_of(&h, "Temperature"), 6500.0);
     assert_eq!(value_of(&h, "Temperature on its track"), 4200.0);
-    assert_eq!(value_of(&h, "Temp"), 5000.0);
+    assert_eq!(value_of(&h, "Warmth"), 5000.0);
     let at = h.get_by_label("Tint").rect().center();
     drag_by(&mut h, at, egui::vec2(40.0, 0.0), egui::Modifiers::NONE);
     assert!(value_of(&h, "Tint") > 30.0, "a drag right raises it");

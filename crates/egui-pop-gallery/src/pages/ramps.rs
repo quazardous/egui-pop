@@ -31,7 +31,7 @@ impl Default for State {
         Self {
             value: [6500.0, 30.0, 1.4, 1.0, 0.85],
             track: [4200.0, -40.0, 0.5, -1.5, 0.95],
-            knobs: [5000.0, 60.0, 1.6, 2.0],
+            knobs: [5000.0, 1.6, 1.6, 2.0],
             faders: [8000.0, -60.0, 0.9, 0.97],
         }
     }
@@ -48,7 +48,7 @@ const DARK: Color32 = Color32::from_gray(40);
 const LIGHT: Color32 = Color32::from_gray(235);
 
 /// The width of the page's sliders.
-const WIDTH: f32 = 300.0;
+const WIDTH: f32 = 280.0;
 
 fn temperature<'a>(v: &'a mut f64, label: &str) -> Slider<'a> {
     Slider::new(v, label, 2000.0..=12_000.0)
@@ -111,83 +111,102 @@ fn highlights<'a>(v: &'a mut f64, label: &str) -> Slider<'a> {
 pub fn show(ui: &mut Ui, s: &mut State) {
     ui.label("Sliders and knobs with a colour for the minimum and one for the maximum: the value is drawn in the colour between them, blended in Oklab so the middle stays clear. The number and the thumb still say the value. The track mode shows the whole ramp, the thumb marking the value. A high-contrast theme keeps the theme's own fill.");
     let size = vec2(WIDTH, ui.spacing().interact_size.y);
-    section(ui, "Value colour");
-    let [t, n, sat, ev, hl] = &mut s.value;
-    temperature(t, "Temperature").size(size).show(ui);
-    tint(n, "Tint").size(size).show(ui);
-    saturation(sat, "Saturation").size(size).show(ui);
-    exposure(ev, "Exposure").size(size).show(ui);
-    highlights(hl, "Highlights clipped").size(size).show(ui);
-    section(ui, "Track gradient");
-    let [t, n, sat, ev, hl] = &mut s.track;
-    temperature(t, "Temperature on its track")
-        .ramp_track()
-        .size(size)
-        .show(ui);
-    tint(n, "Tint on its track")
-        .ramp_track()
-        .size(size)
-        .show(ui);
-    saturation(sat, "Saturation on its track")
-        .ramp_track()
-        .size(size)
-        .show(ui);
-    exposure(ev, "Exposure on its track")
-        .ramp_track()
-        .size(size)
-        .show(ui);
-    highlights(hl, "Clipping on its track")
-        .ramp_track()
-        .size(size)
-        .show(ui);
-    section(ui, "Knobs");
-    ui.horizontal(|ui| {
-        let size = vec2(56.0, 96.0);
-        let [t, sat, ev, ev2] = &mut s.knobs;
-        Knob::new(t, "Temp", 2000.0..=12_000.0)
-            .step(50.0)
-            .integer()
-            .unit("K")
-            .ramp(BLUE, AMBER)
-            .size(size)
-            .show(ui);
-        Knob::new(sat, "Sat", 0.0..=2.0)
-            .step(0.01)
-            .ramp("text.muted", "accent.default")
-            .size(size)
-            .show(ui);
-        Knob::new(ev, "EV", -3.0..=4.0)
-            .step(0.01)
-            .signed()
-            .unit("EV")
-            .ramp(DARK, LIGHT)
-            .size(size)
-            .show(ui);
-        ui.add_space(16.0);
-        Knob::new(ev2, "EV track", -3.0..=4.0)
-            .step(0.01)
-            .signed()
-            .unit("EV")
-            .ramp(DARK, LIGHT)
-            .ramp_track()
-            .size(vec2(64.0, 96.0))
-            .show(ui);
+    // The two modes side by side, the same controls in each.
+    ui.horizontal_top(|ui| {
+        ui.vertical(|ui| {
+            ui.set_width(WIDTH);
+            section(ui, "Value colour");
+            let [t, n, sat, ev, hl] = &mut s.value;
+            temperature(t, "Temperature").size(size).show(ui);
+            tint(n, "Tint").size(size).show(ui);
+            saturation(sat, "Saturation").size(size).show(ui);
+            exposure(ev, "Exposure").size(size).show(ui);
+            highlights(hl, "Highlights clipped").size(size).show(ui);
+        });
+        ui.vertical(|ui| {
+            ui.set_width(WIDTH);
+            section(ui, "Track gradient");
+            let [t, n, sat, ev, hl] = &mut s.track;
+            temperature(t, "Temperature on its track")
+                .ramp_track()
+                .size(size)
+                .show(ui);
+            tint(n, "Tint on its track")
+                .ramp_track()
+                .size(size)
+                .show(ui);
+            saturation(sat, "Saturation on its track")
+                .ramp_track()
+                .size(size)
+                .show(ui);
+            exposure(ev, "Exposure on its track")
+                .ramp_track()
+                .size(size)
+                .show(ui);
+            highlights(hl, "Clipping on its track")
+                .ramp_track()
+                .size(size)
+                .show(ui);
+        });
     });
-    section(ui, "Faders");
-    ui.horizontal(|ui| {
-        let size = vec2(52.0, 150.0);
-        let [t, n, hl, hl2] = &mut s.faders;
-        temperature(t, "Temp").vertical().size(size).show(ui);
-        tint(n, "Tint fader")
-            .ramp_track()
-            .vertical()
-            .size(size)
-            .show(ui);
-        highlights(hl, "Clip").vertical().size(size).show(ui);
-        highlights(hl2, "Clip track")
-            .ramp_track()
-            .vertical()
-            .size(size)
-            .show(ui);
+    ui.horizontal_top(|ui| {
+        ui.vertical(|ui| {
+            ui.set_width(WIDTH);
+            section(ui, "Knobs");
+            ui.horizontal(|ui| {
+                let size = vec2(56.0, 96.0);
+                let [t, sat, ev, ev2] = &mut s.knobs;
+                Knob::new(t, "Warmth", 2000.0..=12_000.0)
+                    .step(50.0)
+                    .integer()
+                    .unit("K")
+                    .ramp(BLUE, AMBER)
+                    .size(size)
+                    .show(ui);
+                Knob::new(sat, "Sat", 0.0..=2.0)
+                    .step(0.01)
+                    .display_scale(100.0)
+                    .precision(0)
+                    .unit("%")
+                    .ramp("text.muted", "accent.default")
+                    .size(size)
+                    .show(ui);
+                Knob::new(ev, "EV", -3.0..=4.0)
+                    .step(0.01)
+                    .signed()
+                    .unit("EV")
+                    .ramp(DARK, LIGHT)
+                    .size(size)
+                    .show(ui);
+                Knob::new(ev2, "EV track", -3.0..=4.0)
+                    .step(0.01)
+                    .signed()
+                    .unit("EV")
+                    .ramp(DARK, LIGHT)
+                    .ramp_track()
+                    .size(size)
+                    .show(ui);
+            });
+        });
+        ui.vertical(|ui| {
+            ui.set_width(WIDTH);
+            section(ui, "Faders");
+            ui.horizontal(|ui| {
+                let size = vec2(52.0, 120.0);
+                let [t, n, hl, hl2] = &mut s.faders;
+                temperature(t, "Temp").vertical().size(size).show(ui);
+                tint(n, "Tint fader")
+                    .ramp_track()
+                    .vertical()
+                    .size(size)
+                    .show(ui);
+                highlights(hl, "Clip").vertical().size(size).show(ui);
+                highlights(hl2, "Clip track")
+                    .ramp_track()
+                    .vertical()
+                    .size(size)
+                    .show(ui);
+            });
+        });
     });
 }
