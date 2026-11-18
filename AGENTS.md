@@ -35,6 +35,7 @@
 | `book.toml`, `docs/SUMMARY.md`, `tools/book/` | The docs site: `docs/` as an mdBook under `/docs/` on GitHub Pages, the workspace's rustdoc (every feature) under `/api/`; `tools/book/links.py` turns links out of `docs/` into GitHub links and fails on a broken one; `tools/book/summary.py` checks that `docs/SUMMARY.md` lists every page `docs/README.md` links. |
 | `tools/site/` | The site's landing page (`index.html`, static, at the root of GitHub Pages, beside the gallery under `/gallery/`), and `links.py`, which checks its links in the assembled site. |
 | `tools/wbox/` | Running the gallery offscreen in a nested compositor. |
+| `tools/cost/` | What each feature set costs (dependencies, build times, binary size, first frame): `cost.py`, run by the bench box's `egui-pop-cost` job on the `cost_probe` example, and its budget (`budget.json`); see docs/quality.md. |
 | `tools/web-smoke.mjs` | The web smoke test: loads a Trunk build of the gallery in headless Chrome, fails on a panic or without the start line (CI's wasm job, the Pages workflow). |
 
 Principles: [CREDO.md](CREDO.md). Rules for contributions:

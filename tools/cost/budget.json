@@ -1,0 +1,175 @@
+{
+ "about": "egui-pop's cost per feature set, measured by tools/cost/cost.py on the bench box (egui-pop-cost); a figure above max(value * (1 + fraction), value + floor) is reported, never a failure",
+ "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+ "tolerance": {
+  "deps": [
+   0.05,
+   2
+  ],
+  "clean_build_s": [
+   0.25,
+   20
+  ],
+  "added_build_s": [
+   0.25,
+   20
+  ],
+  "incremental_build_s": [
+   0.5,
+   3
+  ],
+  "binary_bytes": [
+   0.05,
+   65536
+  ],
+  "start_minimal_ms": [
+   0.5,
+   30
+  ],
+  "start_default_ms": [
+   0.5,
+   30
+  ]
+ },
+ "sets": {
+  "none": {
+   "deps": 115,
+   "clean_build_s": 286.2,
+   "added_build_s": 0.0,
+   "incremental_build_s": 4.1,
+   "binary_bytes": 20975888,
+   "start_minimal_ms": 67.99,
+   "start_default_ms": 68.87
+  },
+  "default": {
+   "deps": 289,
+   "clean_build_s": 370.9,
+   "added_build_s": 320.2,
+   "incremental_build_s": 7.8,
+   "binary_bytes": 37300624,
+   "start_minimal_ms": 40.14,
+   "start_default_ms": 39.52
+  },
+  "eframe": {
+   "deps": 283,
+   "added_build_s": 339.3,
+   "incremental_build_s": 7.7,
+   "binary_bytes": 35440592,
+   "start_minimal_ms": 52.35,
+   "start_default_ms": 41.34
+  },
+  "phosphor": {
+   "deps": 116,
+   "added_build_s": 100.7,
+   "incremental_build_s": 2.0,
+   "binary_bytes": 21777928,
+   "start_minimal_ms": 47.53,
+   "start_default_ms": 47.33
+  },
+  "bundled-fonts": {
+   "deps": 115,
+   "added_build_s": 106.4,
+   "incremental_build_s": 1.0,
+   "binary_bytes": 21605240,
+   "start_minimal_ms": 41.66,
+   "start_default_ms": 41.94
+  },
+  "theme-zip": {
+   "deps": 124,
+   "added_build_s": 177.0,
+   "incremental_build_s": 2.3,
+   "binary_bytes": 20989640,
+   "start_minimal_ms": 69.35,
+   "start_default_ms": 69.51
+  },
+  "image-previews": {
+   "deps": 129,
+   "added_build_s": 115.8,
+   "incremental_build_s": 2.0,
+   "binary_bytes": 21543672,
+   "start_minimal_ms": 111.97,
+   "start_default_ms": 77.37
+  },
+  "viewport": {
+   "deps": 154,
+   "added_build_s": 198.6,
+   "incremental_build_s": 2.0,
+   "binary_bytes": 20991336,
+   "start_minimal_ms": 107.38,
+   "start_default_ms": 108.25
+  },
+  "imaging": {
+   "deps": 155,
+   "added_build_s": 198.0,
+   "incremental_build_s": 1.7,
+   "binary_bytes": 20991336,
+   "start_minimal_ms": 76.06,
+   "start_default_ms": 73.36
+  },
+  "views": {
+   "deps": 119,
+   "added_build_s": 27.2,
+   "incremental_build_s": 1.7,
+   "binary_bytes": 20975888,
+   "start_minimal_ms": 78.8,
+   "start_default_ms": 89.3
+  },
+  "views-markdown": {
+   "deps": 143,
+   "added_build_s": 159.3,
+   "incremental_build_s": 1.5,
+   "binary_bytes": 20978616,
+   "start_minimal_ms": 67.89,
+   "start_default_ms": 70.07
+  },
+  "editors": {
+   "deps": 135,
+   "added_build_s": 32.8,
+   "incremental_build_s": 1.0,
+   "binary_bytes": 20975888,
+   "start_minimal_ms": 39.72,
+   "start_default_ms": 41.72
+  },
+  "i18n": {
+   "deps": 131,
+   "added_build_s": 153.2,
+   "incremental_build_s": 1.1,
+   "binary_bytes": 20988576,
+   "start_minimal_ms": 48.55,
+   "start_default_ms": 47.46
+  },
+  "platform": {
+   "deps": 208,
+   "added_build_s": 339.5,
+   "incremental_build_s": 7.6,
+   "binary_bytes": 20986432,
+   "start_minimal_ms": 40.25,
+   "start_default_ms": 40.79
+  },
+  "svg": {
+   "deps": 141,
+   "added_build_s": 196.2,
+   "incremental_build_s": 1.0,
+   "binary_bytes": 22070696,
+   "start_minimal_ms": 40.91,
+   "start_default_ms": 41.21
+  },
+  "system-fonts": {
+   "deps": 124,
+   "added_build_s": 126.1,
+   "incremental_build_s": 1.7,
+   "binary_bytes": 21258936,
+   "start_minimal_ms": 87.66,
+   "start_default_ms": 78.38
+  },
+  "graph-png": {
+   "deps": 192,
+   "added_build_s": 251.5,
+   "incremental_build_s": 2.0,
+   "binary_bytes": 20980536,
+   "start_minimal_ms": 102.07,
+   "start_default_ms": 104.16
+  }
+ },
+ "measured": "2026-11-18, egui-pop-cost on the bench box (5 threads, other jobs running)"
+}
