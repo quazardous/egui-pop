@@ -851,6 +851,27 @@ fn value_of(h: &Harness<'_, Gallery>, label: &str) -> f64 {
 }
 
 #[test]
+fn the_ramps_page_in_every_pop_theme_keeps_its_numbers() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in POP_THEMES {
+        let mut h = harness(options(theme, Density::Comfortable, "ramps"));
+        h.run();
+        egui_pop_test::assert_all_named(&h);
+        results.add(h.try_page_shot(format!("ramps-{theme}")));
+    }
+    // The colour never says the value alone: each control keeps its
+    // number, and a drag still moves it.
+    let mut h = harness(options("pop-dark", Density::Comfortable, "ramps"));
+    h.run();
+    assert_eq!(value_of(&h, "Temperature"), 6500.0);
+    assert_eq!(value_of(&h, "Temperature on its track"), 4200.0);
+    assert_eq!(value_of(&h, "Warmth"), 5000.0);
+    let at = h.get_by_label("Tint").rect().center();
+    drag_by(&mut h, at, egui::vec2(40.0, 0.0), egui::Modifiers::NONE);
+    assert!(value_of(&h, "Tint") > 30.0, "a drag right raises it");
+}
+
+#[test]
 fn faders_and_knobs_go_up_and_reset_and_narrow_sliders_keep_their_name() {
     use egui::accesskit::{Orientation, Role};
     let mut results = egui_kittest::SnapshotResults::new();

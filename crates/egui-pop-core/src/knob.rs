@@ -81,9 +81,10 @@ use egui::{
 
 use crate::kit::{Kit, State, Tone};
 use crate::slider::{
-    Cause, Change, Drag, Hook, Spec, Thumb, Verdict, access, decide, gestures, keep_auto_ids,
-    keys_wheel_access, modifier_scale, open_typed_entry, reset_clicked, spec_builders, state_of,
-    take_typed_request, typed_entry, typing_id, typing_text, value_menu,
+    Cause, Change, Drag, Hook, Ramp, RampMode, Spec, Thumb, Verdict, access, decide, gestures,
+    keep_auto_ids, keys_wheel_access, modifier_scale, open_typed_entry, ramp, ramp_builders,
+    reset_clicked, spec_builders, state_of, take_typed_request, typed_entry, typing_id,
+    typing_text, value_menu,
 };
 use crate::state::Slot;
 
@@ -181,6 +182,7 @@ impl<'a> Knob<'a> {
     }
 
     spec_builders!();
+    ramp_builders!();
 
     /// What a double click goes back to.
     pub fn default(mut self, default: f64) -> Self {
@@ -706,6 +708,9 @@ fn show_pointer(ctx: &egui::Context) {
 /// the slider's kit parts: `slider` (the dial), `slider-fill` (the
 /// value's arc), `slider-thumb` (the pointer), `slider-value` (the
 /// text).
+/// With a colour ramp, the value's arc and the pointer take its colour
+/// at the value, or the track's arc shows the whole ramp
+/// ([`RampMode::Track`]).
 /// An endless knob's face has no arcs: twelve ticks turn with the value,
 /// one turn over the soft range, the pointer the longest.
 fn paint(ui: &Ui, layout: &Layout, response: &Response, spec: &Spec, v: f64, endless: bool) {
@@ -767,9 +772,39 @@ fn paint(ui: &Ui, layout: &Layout, response: &Response, spec: &Spec, v: f64, end
             Stroke::new(width.max(2.0), pointer),
         );
     } else {
-        paint_arcs(
-            &painter, centre, r, width, track, fill.fill, dial.text, pointer, spec, v,
-        );
+        let tokens = crate::theme::Tokens::of(ui.ctx());
+        let colours = match ramp::active(spec.ramp.as_ref(), &tokens) {
+            // The ramp along the track's arc; the pointer marks the value.
+            Some(ramp) if spec.ramp_mode == RampMode::Track => Arcs {
+                track,
+                ramp: Some((ramp, &tokens)),
+                fill: Color32::TRANSPARENT,
+                pointer,
+            },
+            // The value's arc and the pointer in the ramp's colour at the
+            // value, standing against the dial.
+            Some(ramp) => {
+                let back = crate::slider::backdrop(dial.fill, &tokens);
+                let c = ramp.value_color(spec.frac(v) as f32, &tokens, back);
+                Arcs {
+                    track,
+                    ramp: None,
+                    fill: c,
+                    pointer: c,
+                }
+            }
+            None => Arcs {
+                track,
+                ramp: None,
+                fill: if fill.fill == Color32::TRANSPARENT {
+                    dial.text
+                } else {
+                    fill.fill
+                },
+                pointer,
+            },
+        };
+        paint_arcs(&painter, centre, r, width, &colours, spec, v);
     }
     if response.has_focus() {
         let ring = kit.slider.style(state.with(State::FOCUS, true));
@@ -787,18 +822,24 @@ fn paint(ui: &Ui, layout: &Layout, response: &Response, spec: &Spec, v: f64, end
     paint_text(ui, &painter, layout, spec, v, dial.text, r);
 }
 
+/// The colours of a dial's arcs.
+struct Arcs<'r> {
+    track: Color32,
+    /// The ramp drawn along the track's arc, over `track`.
+    ramp: Option<(&'r Ramp, &'r crate::theme::Tokens)>,
+    /// The value's arc; none when transparent.
+    fill: Color32,
+    pointer: Color32,
+}
+
 /// The track's arc, the value's arc (from zero when the soft range holds
 /// it, else from the start) and the pointer.
-#[allow(clippy::too_many_arguments)]
 fn paint_arcs(
     painter: &egui::Painter,
     centre: Pos2,
     r: f32,
     width: f32,
-    track: Color32,
-    fill: Color32,
-    text: Color32,
-    pointer: Color32,
+    colours: &Arcs<'_>,
     spec: &Spec,
     v: f64,
 ) {
@@ -811,25 +852,33 @@ fn paint_arcs(
             })
             .collect()
     };
-    painter.add(Shape::line(
-        arc(angle_of(0.0), angle_of(1.0), r - width / 2.0),
-        Stroke::new(width, track),
-    ));
+    if let Some((ramp, tokens)) = colours.ramp {
+        // Short pieces, each in the ramp's colour at its middle.
+        const N: usize = 48;
+        for i in 0..N {
+            let (a, b) = (i as f32 / N as f32, (i + 1) as f32 / N as f32);
+            let c = ramp.color_at((a + b) / 2.0, tokens);
+            painter.add(Shape::line(
+                arc(angle_of(a), angle_of(b), r - width / 2.0),
+                Stroke::new(width, c),
+            ));
+        }
+    } else {
+        painter.add(Shape::line(
+            arc(angle_of(0.0), angle_of(1.0), r - width / 2.0),
+            Stroke::new(width, colours.track),
+        ));
+    }
     let at = spec.frac(v) as f32;
     let zero = if spec.soft.0 < 0.0 && spec.soft.1 > 0.0 {
         spec.frac(0.0) as f32
     } else {
         0.0
     };
-    let fill_color = if fill == Color32::TRANSPARENT {
-        text
-    } else {
-        fill
-    };
-    if (at - zero).abs() > f32::EPSILON {
+    if (at - zero).abs() > f32::EPSILON && colours.fill != Color32::TRANSPARENT {
         painter.add(Shape::line(
             arc(angle_of(zero), angle_of(at), r - width / 2.0),
-            Stroke::new(width, fill_color),
+            Stroke::new(width, colours.fill),
         ));
     }
     let a = angle_of(at);
@@ -838,7 +887,7 @@ fn paint_arcs(
             centre + (r - width) * 0.25 * vec2(a.cos(), a.sin()),
             centre + (r - width) * 0.9 * vec2(a.cos(), a.sin()),
         ],
-        Stroke::new(width.max(2.0), pointer),
+        Stroke::new(width.max(2.0), colours.pointer),
     );
 }
 

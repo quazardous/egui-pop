@@ -40,7 +40,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 72] = [
+pub const PAGES: [&str; 73] = [
     "overview",
     "tokens",
     "builtins",
@@ -57,6 +57,7 @@ pub const PAGES: [&str; 72] = [
     "sliders",
     "faders",
     "compact",
+    "ramps",
     "inputs",
     "menus",
     "toolbars",
@@ -278,6 +279,16 @@ pub fn builder(options: &Options) -> AppBuilder {
             group: "Components",
             weight: 46,
             show: pages::faders::show,
+            playground: None,
+        })
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.ramps"),
+            story: StoryId::from_static("ramps"),
+            title: "Colour ramps",
+            description: "Sliders and knobs with a colour for the minimum and one for the maximum, the value drawn in the colour between them (blended in Oklab): a white balance, a saturation, an exposure and a clipping warning, the colour at the value or the whole ramp on the track.",
+            group: "Components",
+            weight: 48,
+            show: pages::ramps::show,
             playground: None,
         })
         .plugin(PagePlugin {
