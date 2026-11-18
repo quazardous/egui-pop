@@ -48,7 +48,7 @@ impl Plugin for FileBrowserPage {
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         ctx.story(
             Story::new(StoryId::from_static("file-browser"), "File browser", show)
-                .description("One file browser, many views: the entries of a folder from a source (here held in memory), shown by a mode chosen in the switcher or with Ctrl+1 to Ctrl+6 (details, thumbnails, filmstrip, Finder's columns, a carousel, an agenda by day, month or year), the order chosen in the sort menu (name, modified, taken, size or type, up or down, folders first or among the files), the thumbnails' size on a slider, quick look with Ctrl+Y or Space, drops onto a folder, the folder shown or an application's target, the mode remembered per dialog.")
+                .description("One file browser, many views: the entries of a folder from a source (here held in memory), shown by a mode chosen in the switcher or with Ctrl+1 to Ctrl+6 (details, thumbnails, filmstrip, Finder's columns, a carousel, an agenda by day, month or year), the order chosen in the sort menu (name, modified, taken, size or type, up or down, folders first or among the files), the thumbnails' size on a slider, a rubber band dragged from the room around the thumbnails, quick look with Ctrl+Y or Space, drops onto a folder, the folder shown or an application's target, the mode remembered per dialog.")
                 .group("Components", 53),
         )?;
         Ok(())

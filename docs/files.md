@@ -563,6 +563,12 @@ its own list and grid (columns to sort by, groups) for its two modes.
   `ViewModes::register` adds others. A mode draws and reports clicks; the
   browser keeps the selection (one or several, Ctrl and Shift as in the
   picker) and the focus, which a change of mode keeps.
+- **Rubber band.** In `thumbnails`, a drag from the room around the cells
+  draws a band. The selection follows it as it is drawn: its cells alone,
+  or added to the selection with Ctrl or Shift held. When it is let go, the
+  focus goes to its last cell. The band comes from
+  `ThumbnailGrid::rubber_band`, which tells the cells it touches
+  (`show_with_band`), scrolled away or not.
 - **Filmstrip.** `filmstrip` is one virtualised row of thumbnails (64 to
   128 points) under a large view of the focused entry (Lightroom's Loupe
   and Filmstrip). Left and Right move along the strip, Page Up and Page
