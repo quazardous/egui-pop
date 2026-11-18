@@ -640,6 +640,10 @@ egui-pop-area-center be338e13d993b71f
 egui-pop-area-end-side 560b37ffe9b87765
 egui-pop-area-resize 585bc5bb3236a78c
 egui-pop-area-start-side ef1e5352ef93cccc
+egui-pop-area-title-bottom c99a1281eec8ae2a
+egui-pop-area-title-center e9f2dae0ca29d90c
+egui-pop-area-title-end-side 81b464f4caa7549e
+egui-pop-area-title-start-side 3ce51123b0106703
 egui-pop-arrangement-name e8f800548ef8413c
 egui-pop-arrangement-save-title 50972489f52a7614
 egui-pop-arrangement-save-verb edfcfc3efd9be837
@@ -1454,6 +1458,7 @@ egui-pop-workbench-close-panel d48094548e62ca0f
 egui-pop-workbench-detach f12827392b3d10f9
 egui-pop-workbench-dock-back 908d7f6794dcc75d
 egui-pop-workbench-dock-in 6f9fb7702cb4a7ec
+egui-pop-workbench-dock-title 4a631eac61b5404a
 egui-pop-workbench-drop-here ddcc0be031326169
 egui-pop-workbench-float eb7e945b1415bcc5
 egui-pop-workbench-flyout-pin 4ebe2494b850fd48
@@ -1671,6 +1676,8 @@ setting-workbench-group-handle-empty-space.description a98feae240edc90d
 setting-workbench-group-handle-empty-space.label ff719cf9a51d9d9e
 setting-workbench-group-handle-grip.description 25bab25970387c99
 setting-workbench-group-handle-grip.label 78b3c1ef86c3683e
+setting-workbench-group-handle-menu.description 3c0320b70389f785
+setting-workbench-group-handle-menu.label 192e7a28332a1d59
 setting-workbench-group-handle-modifier-drag.description 54cad0ddf5387364
 setting-workbench-group-handle-modifier-drag.label 12e44ecb78add3f6
 setting-workbench-group-handle-move-window.description c55e8cea8af1ebd0

@@ -366,10 +366,9 @@ pub const SETTING_FLOAT_MOVE: egui_pop_model::ids::SettingId =
 
 /// The group handles an application allows unless it says otherwise
 /// ([`AppBuilder::group_handles`](crate::AppBuilder::group_handles)):
-/// every handle but the tab menu's "Move group", whose list names the
-/// docks by their internal names; the panel menu's own entries (Move to,
-/// Detach, Move to group) move a group instead.
-pub const DEFAULT_GROUP_HANDLES: GroupHandles = GroupHandles::ALL.with(GroupHandles::MENU, false);
+/// every handle, the tab menu's "Move group" included, whose list names
+/// the areas by their translated titles and the panels they hold.
+pub const DEFAULT_GROUP_HANDLES: GroupHandles = GroupHandles::ALL;
 
 /// Each group handle, its setting and its label and description.
 const HANDLE_SETTINGS: [(GroupHandles, egui_pop_model::ids::SettingId, &str, &str); 5] = [
@@ -3127,6 +3126,40 @@ fn area_text(ctx: &egui::Context, area: Area) -> String {
     )
 }
 
+/// The title of the space's dock `dock` (an area's own, or its bare
+/// target), as the tab menu's Move group list shows it: the area's title,
+/// and the titles of the panels it holds, translated.
+fn dock_title(app: &AppHandle, ctx: &egui::Context, dock: &str) -> Option<String> {
+    let (area, _) = dock_area(dock)?;
+    let title = strings::tr(
+        ctx,
+        match area {
+            Area::Center => &txt::AREA_TITLE_CENTER,
+            Area::StartSide => &txt::AREA_TITLE_START_SIDE,
+            Area::EndSide => &txt::AREA_TITLE_END_SIDE,
+            Area::Bottom => &txt::AREA_TITLE_BOTTOM,
+        },
+    );
+    let panels: Vec<PanelId> = {
+        let wb = app.workbench_mut();
+        wb.layout
+            .areas
+            .iter()
+            .find(|(a, _)| *a == area)
+            .map(|(_, node)| node.panels().into_iter().cloned().collect())
+            .unwrap_or_default()
+    };
+    if panels.is_empty() {
+        return Some(title);
+    }
+    let panels: Vec<String> = panels.iter().map(|p| app.panel_title(ctx, p)).collect();
+    Some(strings::tr_args(
+        ctx,
+        &txt::WORKBENCH_DOCK_TITLE,
+        &[("area", &title), ("panels", &panels.join(", "))],
+    ))
+}
+
 /// Why a panel may not go to an area, as the interface says it.
 fn refusal(ctx: &egui::Context, spec: &PanelSpec, title: &str, area: Area) -> Option<String> {
     (!spec.allows(area)).then(|| {
@@ -5715,6 +5748,10 @@ impl TabViewer for Viewer<'_> {
     fn context_menu(&mut self, ui: &mut Ui, tab: &mut PanelId, _path: egui_stack::TabPath) {
         // The panel menu, the one a floating panel's title opens too.
         panel_menu::show(ui, self.app, tab);
+    }
+
+    fn dock_title(&mut self, dock: &str) -> Option<egui::WidgetText> {
+        dock_title(self.app, &self.app.egui(), dock).map(Into::into)
     }
 
     fn allowed_in_windows(&self, _tab: &mut PanelId) -> bool {

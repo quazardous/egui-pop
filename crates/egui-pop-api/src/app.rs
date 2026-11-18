@@ -3501,7 +3501,7 @@ impl AppBuilder {
     /// window's move handle (`MOVE_WINDOW`): the user turns off any of
     /// them in the settings, never on one left out here. By default
     /// [`DEFAULT_GROUP_HANDLES`](crate::workbench::DEFAULT_GROUP_HANDLES),
-    /// every handle but the tab menu's "Move group".
+    /// every handle.
     ///
     /// <div class="warning">Experimental: may change in any release
     /// (docs/stability.md).</div>

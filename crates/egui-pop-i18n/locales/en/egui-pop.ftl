@@ -1297,6 +1297,14 @@ egui-pop-area-resize = Resize { $area }
 
 egui-pop-area-start-side = the start side bar
 
+egui-pop-area-title-bottom = Bottom panel
+
+egui-pop-area-title-center = Centre
+
+egui-pop-area-title-end-side = End side bar
+
+egui-pop-area-title-start-side = Start side bar
+
 egui-pop-arrangement-name = Name
 
 egui-pop-arrangement-save-title = Save the current arrangement
@@ -2925,6 +2933,8 @@ egui-pop-workbench-dock-back = Dock back
 
 egui-pop-workbench-dock-in = Dock in { $area }
 
+egui-pop-workbench-dock-title = { $area } ({ $panels })
+
 egui-pop-workbench-drop-here = Drop a panel here
 
 egui-pop-workbench-float = Float
@@ -3408,6 +3418,10 @@ setting-workbench-group-handle-empty-space =
 setting-workbench-group-handle-grip =
     .description = Whether each tab bar ends with a grip that moves its whole group of tabs, even when the bar is full.
     .label = Group grip
+
+setting-workbench-group-handle-menu =
+    .description = Whether a tab's menu offers to move its whole group to another area or a new window.
+    .label = Move group in the tab menu
 
 setting-workbench-group-handle-modifier-drag =
     .description = Whether a tab dragged with the group key held (Group drag key) carries its whole group.

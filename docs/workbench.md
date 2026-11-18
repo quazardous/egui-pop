@@ -602,11 +602,12 @@ the grip at the end of the bar, or a tab dragged with the group key
 held (Shift by default) drags the whole group, as an editor group is
 dragged by its tab bar in established IDEs. Each of these handles is a
 setting the user turns off (`workbench.group_handle.empty_space`,
-`.grip`, `.modifier_drag`; the key is `workbench.group_drag_modifier`:
-shift, ctrl or alt), among those the application allows
-(`AppBuilder::group_handles`; the tab menu's "Move group",
-`GroupHandles::MENU`, is left out by default, the panel menu moving a
-group instead). A floating window's move handle
+`.grip`, `.modifier_drag`, `.menu`; the key is
+`workbench.group_drag_modifier`: shift, ctrl or alt), among those the
+application allows (`AppBuilder::group_handles`, all of them by
+default). The tab menu's "Move group" (`GroupHandles::MENU`) lists a
+new window and the other areas, each by its title and the titles of
+the panels it holds ("Start side bar (Tree)"), translated. A floating window's move handle
 (`workbench.group_handle.move_window`) and what moving the window does
 (`workbench.float_move`: `move`, the default, or `dock`) are settings
 too, for egui_stack's floats. Dragged whole, all its tabs move together, in order, the shown one
