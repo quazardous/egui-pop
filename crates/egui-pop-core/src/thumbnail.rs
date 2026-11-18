@@ -26,8 +26,8 @@
 //! ```
 
 use egui::{
-    Color32, Id, Rect, Response, Role, Sense, TextStyle, TextWrapMode, TextureId, Ui, Vec2, Widget,
-    WidgetInfo, WidgetText, pos2, vec2,
+    Color32, Id, Modifiers, Rect, Response, Role, Sense, Stroke, StrokeKind, TextStyle,
+    TextWrapMode, TextureId, Ui, Vec2, Widget, WidgetInfo, WidgetText, pos2, vec2,
 };
 
 use crate::icon::Icon;
@@ -235,6 +235,69 @@ pub struct ThumbnailGrid {
     id_salt: Option<Id>,
     max_height: Option<f32>,
     reveal: Option<usize>,
+    band: bool,
+}
+
+/// What a [`ThumbnailGrid`] drawn with [`ThumbnailGrid::show_with_band`]
+/// tells.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
+pub struct GridOutput {
+    /// The number of cells in a row, what a move up or down skips.
+    pub per_row: usize,
+    /// A rubber band being drawn, or let go this frame.
+    pub band: Option<Band>,
+}
+
+/// A rubber band dragged across a grid ([`ThumbnailGrid::rubber_band`]).
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct Band {
+    /// The cells it touches, in order, scrolled away or not.
+    pub cells: Vec<usize>,
+    /// The keys held when it started: Ctrl or Shift add to a selection.
+    pub modifiers: Modifiers,
+    /// Let go this frame: the selection it makes is final.
+    pub finished: bool,
+}
+
+/// How far the pointer moves before a drag draws a rubber band: a click is
+/// not a band.
+pub const BAND_MIN: f32 = 4.0;
+
+/// The cells of a grid `per_row` wide that `rect` touches, `rect` in the
+/// grid's own coordinates (its first cell's corner at the origin), each
+/// cell `cell` large, `gap` apart in a row and `pitch` from one row's top
+/// to the next's.
+pub fn cells_in(
+    rect: Rect,
+    per_row: usize,
+    count: usize,
+    cell: Vec2,
+    gap: f32,
+    pitch: f32,
+) -> Vec<usize> {
+    let per_row = per_row.max(1);
+    if count == 0 || rect.max.x < 0.0 || rect.max.y < 0.0 {
+        return Vec::new();
+    }
+    let step = cell.x + gap;
+    let rows = count.div_ceil(per_row);
+    let first_row = (rect.min.y.max(0.0) / pitch).floor() as usize;
+    let first_col = (rect.min.x.max(0.0) / step).floor() as usize;
+    let last_row = ((rect.max.y / pitch).floor() as usize).min(rows - 1);
+    let last_col = ((rect.max.x / step).floor() as usize).min(per_row - 1);
+    let mut out = Vec::new();
+    for row in first_row..=last_row {
+        for col in first_col..=last_col {
+            let i = row * per_row + col;
+            let min = pos2(col as f32 * step, row as f32 * pitch);
+            if i < count && Rect::from_min_size(min, cell).intersects(rect) {
+                out.push(i);
+            }
+        }
+    }
+    out
 }
 
 impl ThumbnailGrid {
@@ -246,7 +309,16 @@ impl ThumbnailGrid {
             id_salt: None,
             max_height: None,
             reveal: None,
+            band: false,
         }
+    }
+
+    /// A drag from the room around the cells draws a rubber band
+    /// (Finder's, Explorer's), which [`ThumbnailGrid::show_with_band`]
+    /// tells: the cells it touches, scrolled away or not.
+    pub fn rubber_band(mut self, on: bool) -> ThumbnailGrid {
+        self.band = on;
+        self
     }
 
     /// What tells its scrolling from another grid's in the same `Ui`.
@@ -270,13 +342,19 @@ impl ThumbnailGrid {
 
     /// Draws the rows in view, `item` drawing cell `i`. Gives the number of
     /// cells in a row, what a move up or down skips.
-    pub fn show(self, ui: &mut Ui, mut item: impl FnMut(&mut Ui, usize)) -> usize {
+    pub fn show(self, ui: &mut Ui, item: impl FnMut(&mut Ui, usize)) -> usize {
+        self.show_with_band(ui, item).per_row
+    }
+
+    /// [`ThumbnailGrid::show`], telling the rubber band too.
+    pub fn show_with_band(self, ui: &mut Ui, mut item: impl FnMut(&mut Ui, usize)) -> GridOutput {
         let ThumbnailGrid {
             count,
             cell,
             id_salt,
             max_height,
             reveal,
+            band,
         } = self;
         let gap = Tokens::of(ui.ctx()).space.xs;
         let width = ui.available_width() - ui.spacing().scroll.allocated_width();
@@ -294,7 +372,17 @@ impl ThumbnailGrid {
         // Rows lie one row height and the `Ui`'s spacing apart: the pitch
         // `show_rows` works the first row in view out from.
         let pitch = cell.y + ui.spacing().item_spacing.y;
+        let band_id = ui.scope_id().with(("thumbnail_grid.band", id_salt));
+        let mut told = None;
         let out = ui.scroll_area_rows(area, cell.y, rows, |ui, range| {
+            if band {
+                // Under the cells, which take the clicks: the grid's own
+                // coordinates start at its first cell's corner.
+                let origin = ui.max_rect().min - vec2(0.0, range.start as f32 * pitch);
+                told = rubber_band(ui, band_id, origin, |r| {
+                    cells_in(r, per_row, count, cell, gap, pitch)
+                });
+            }
             if let Some(i) = reveal {
                 let top = ui.max_rect().top() + ((i / per_row) as f32 - range.start as f32) * pitch;
                 let left = ui.max_rect().left();
@@ -321,6 +409,116 @@ impl ThumbnailGrid {
             }
         });
         crate::ui::contain_wheel(ui, &out);
-        per_row
+        GridOutput {
+            per_row,
+            band: told,
+        }
+    }
+}
+
+/// A band's corners in the grid's coordinates, and the keys held when it
+/// started; kept between frames under the grid's id.
+#[derive(Clone, Copy, Debug)]
+struct BandDrag {
+    from: Vec2,
+    to: Vec2,
+    modifiers: Modifiers,
+}
+
+/// Reads and paints a rubber band over the room in view, `origin` the
+/// grid's first cell's corner on screen; `cells` says what a rectangle in
+/// the grid's coordinates touches.
+fn rubber_band(
+    ui: &mut Ui,
+    id: Id,
+    origin: egui::Pos2,
+    cells: impl Fn(Rect) -> Vec<usize>,
+) -> Option<Band> {
+    // The room in view, the grid's empty end included.
+    let bg = ui.interact(ui.clip_rect(), id, Sense::drag());
+    let mut drag: Option<BandDrag> = ui.data(|d| d.get_temp(id));
+    if bg.drag_started()
+        && let Some(p) = bg.interact_pointer_pos()
+    {
+        let at = p - origin;
+        drag = Some(BandDrag {
+            from: at,
+            to: at,
+            modifiers: ui.input(|i| i.modifiers),
+        });
+    }
+    if bg.dragged()
+        && let (Some(d), Some(p)) = (drag.as_mut(), bg.interact_pointer_pos())
+    {
+        d.to = p - origin;
+    }
+    let finished = bg.drag_stopped();
+    let shown = drag.filter(|d| (d.to - d.from).length() >= BAND_MIN);
+    let told = shown.map(|d| {
+        let r = Rect::from_two_pos(d.from.to_pos2(), d.to.to_pos2());
+        if !finished {
+            let t = Tokens::of(ui.ctx());
+            let fill = t
+                .color("thumbnail.band")
+                .unwrap_or(t.accent.default.gamma_multiply(0.18));
+            let outline = t
+                .color("thumbnail.band-outline")
+                .unwrap_or(t.accent.default);
+            let on_screen = r.translate(origin.to_vec2());
+            let painter = ui.painter().clone();
+            painter.rect_filled(on_screen, 0.0, fill);
+            painter.rect_stroke(
+                on_screen,
+                0.0,
+                Stroke::new(1.0, outline),
+                StrokeKind::Inside,
+            );
+            crate::pointer::hold_drag_cursor(ui.ctx(), crate::pointer::DragKind::Select);
+        }
+        Band {
+            cells: cells(r),
+            modifiers: d.modifiers,
+            finished,
+        }
+    });
+    if finished || !(bg.dragged() || bg.drag_started()) {
+        drag = None;
+    }
+    ui.data_mut(|d| match drag {
+        Some(b) => {
+            d.insert_temp(id, b);
+        }
+        None => d.remove::<BandDrag>(id),
+    });
+    told
+}
+
+#[cfg(test)]
+mod band_tests {
+    use super::*;
+
+    #[test]
+    fn a_band_touches_the_cells_it_crosses_and_none_beyond_the_last() {
+        let cell = vec2(10.0, 10.0);
+        // Three a row, 2 apart; rows 12 apart.
+        let at = |a: (f32, f32), b: (f32, f32)| {
+            cells_in(
+                Rect::from_two_pos(pos2(a.0, a.1), pos2(b.0, b.1)),
+                3,
+                7,
+                cell,
+                2.0,
+                12.0,
+            )
+        };
+        assert_eq!(at((1.0, 1.0), (2.0, 2.0)), [0]);
+        // Across the first two cells of the first two rows.
+        assert_eq!(at((5.0, 5.0), (15.0, 15.0)), [0, 1, 3, 4]);
+        // In a gap alone: nothing.
+        assert!(at((10.5, 0.0), (11.5, 30.0)).is_empty());
+        // Down past the end: the short last row's cell only.
+        assert_eq!(at((0.0, 30.0), (100.0, 100.0)), [6]);
+        // Above and left of the grid.
+        assert!(at((-20.0, -20.0), (-1.0, -1.0)).is_empty());
     }
 }

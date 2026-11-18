@@ -26,7 +26,7 @@ use egui::{Modifiers, Ui};
 
 use egui_pop_core::icon::Icon;
 use egui_pop_core::strings;
-use egui_pop_core::thumbnail::ThumbnailGrid;
+use egui_pop_core::thumbnail::{Band, ThumbnailGrid};
 use egui_pop_core::widgets;
 
 use super::fs::{Meta, SharedFs};
@@ -1364,10 +1364,13 @@ pub fn paint_cell(ui: &Ui, rect: egui::Rect, e: &SourceEntry, thumbnail: ThumbSt
 
 /// Lays `count` entries out in a virtualised grid of `cell`s through
 /// `draw`, reporting what was drawn: the one way every built-in mode lays
-/// its entries out. Gives the entries in a row.
+/// its entries out. Gives the entries in a row. With `band`, a drag from
+/// the room around the cells draws a rubber band, told to the browser
+/// under that key ([`band_key`]).
 #[allow(clippy::too_many_arguments)]
 fn lay_out(
     ui: &mut Ui,
+    band: Option<egui::Id>,
     container: Option<(&str, bool)>,
     drawer: &mut dyn EntryDrawer,
     salt: egui::Id,
@@ -1379,7 +1382,10 @@ fn lay_out(
     out: &mut ModeOutput,
     mut draw: impl FnMut(&mut dyn EntryDrawer, &mut Ui, usize) -> egui::Response,
 ) -> usize {
-    let mut grid = ThumbnailGrid::new(count, cell).id_salt(salt).reveal(reveal);
+    let mut grid = ThumbnailGrid::new(count, cell)
+        .id_salt(salt)
+        .reveal(reveal)
+        .rubber_band(band.is_some());
     if let Some(h) = max_height {
         grid = grid.max_height(h);
     }
@@ -1390,7 +1396,7 @@ fn lay_out(
         if count == 0 {
             drawer.empty(ui);
         }
-        columns = grid.clone().show(ui, |ui, n| {
+        let shown = grid.clone().show_with_band(ui, |ui, n| {
             let r = draw(&mut *drawer, ui, n);
             if focus == Some(n) {
                 out.focused = Some(r.id);
@@ -1399,6 +1405,10 @@ fn lay_out(
             first = first.min(n);
             end = end.max(n + 1);
         });
+        columns = shown.per_row;
+        if let (Some(key), Some(told)) = (band, shown.band) {
+            ui.ctx().data_mut(|d| d.insert_temp(key, told));
+        }
     };
     in_container(ui, container, out, &mut add);
     out.visible = if first == usize::MAX {
@@ -1407,6 +1417,12 @@ fn lay_out(
         first..end
     };
     columns.max(1)
+}
+
+/// Where a mode's rubber band is told to the browser, for the browser's
+/// `id` ([`ModeContext::id`]).
+fn band_key(id: egui::Id) -> egui::Id {
+    id.with("egui_pop.file_browser.band")
 }
 
 /// Draws the entries through `add`, inside a list box named `container`'s
@@ -1488,6 +1504,7 @@ impl ViewMode for DetailsMode {
         let reveal = cx.focus.filter(|_| cx.reveal_focus && n > 0);
         lay_out(
             ui,
+            None,
             cx.name.as_deref().map(|n| (n, cx.many)),
             drawer,
             cx.id.with("details"),
@@ -1603,6 +1620,7 @@ impl ViewMode for ThumbnailsMode {
         let reveal = cx.focus.filter(|_| cx.reveal_focus && n > 0);
         let columns = lay_out(
             ui,
+            Some(band_key(cx.id)),
             cx.name.as_deref().map(|n| (n, cx.many)),
             drawer,
             cx.id.with("thumbnails"),
@@ -1866,6 +1884,7 @@ impl ViewMode for ColumnsMode {
                         let size = drawer.row_size(ui, w - ui.spacing().scroll.allocated_width());
                         lay_out(
                             ui,
+                            None,
                             cx.name.as_deref().map(|n| (n, cx.many)),
                             &mut *drawer,
                             cx.id.with("columns.here"),
@@ -3195,6 +3214,8 @@ pub struct FileBrowser {
     /// The entries' order ([`FileBrowser::set_sort`]).
     sort: PickerSort,
     folders_first: bool,
+    /// The selection a rubber band adds to while it is drawn.
+    band_base: Option<BTreeSet<PathBuf>>,
 }
 
 /// The browser's default order: folders first, then names as people read
@@ -3451,6 +3472,7 @@ impl FileBrowser {
             marks: None,
             sort: PickerSort::default(),
             folders_first: true,
+            band_base: None,
         };
         b.reload();
         b
@@ -4008,6 +4030,40 @@ impl FileBrowser {
         before != self.selection
     }
 
+    /// Selects what a rubber band touches: alone, or added to the
+    /// selection it started from with Ctrl or Shift held. `true` when the
+    /// selection changed.
+    fn apply_band(&mut self, band: &Band) -> bool {
+        let keep = band.modifiers.command || band.modifiers.shift;
+        let base = self
+            .band_base
+            .get_or_insert_with(|| {
+                if keep {
+                    self.selection.paths.clone()
+                } else {
+                    BTreeSet::new()
+                }
+            })
+            .clone();
+        let mut paths = base;
+        paths.extend(
+            band.cells
+                .iter()
+                .filter_map(|&i| self.entries.get(i))
+                .map(|e| e.path.clone()),
+        );
+        let changed = paths != self.selection.paths;
+        self.selection.paths = paths;
+        if band.finished {
+            self.band_base = None;
+            if let Some(last) = band.cells.last().and_then(|&i| self.entries.get(i)) {
+                self.focus = Some(last.path.clone());
+                self.selection.anchor = Some(last.path.clone());
+            }
+        }
+        changed
+    }
+
     pub fn select_all(&mut self) {
         if self.select == SelectMode::Many {
             self.selection.paths = self.entries.iter().map(|e| e.path.clone()).collect();
@@ -4353,6 +4409,23 @@ impl FileBrowser {
         }
         self.thumbnails.end_frame(ui.ctx());
         let mode_out = inner.inner;
+        // A rubber band selects as it goes, the focus on its last entry once
+        // let go.
+        let band = ui.ctx().data_mut(|d| {
+            let key = band_key(self.id);
+            let band = d.get_temp::<Band>(key);
+            d.remove::<Band>(key);
+            band
+        });
+        match band {
+            Some(band) if self.select == SelectMode::Many => {
+                out.selection_changed |= self.apply_band(&band);
+                if band.finished {
+                    ui.memory_mut(|m| m.request_focus(keys_id));
+                }
+            }
+            _ => self.band_base = None,
+        }
         // The entries' container: a stop for Tab that takes the keys.
         let container = ui.interact(
             inner.response.rect,

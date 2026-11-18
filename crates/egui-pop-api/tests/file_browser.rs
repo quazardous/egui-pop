@@ -1501,3 +1501,47 @@ fn the_sort_menu_says_the_order_and_a_click_turns_it() {
     h.run();
     assert!(h.query_by_label_contains("Sort by").is_none());
 }
+
+#[test]
+fn a_rubber_band_from_the_room_around_the_thumbnails_selects_what_it_crosses() {
+    let mut b = FileBrowser::new("band", source(3), "/p");
+    b.set_mode("thumbnails");
+    let mut h = harness(b);
+    h.get_by_label("IMG_003.png").click();
+    h.run();
+    let first = h.get_by_label("IMG_001.png").rect();
+    let second = h.get_by_label("IMG_002.png").rect();
+    // From the empty room under the row, up and left onto the first cell.
+    let a = egui::pos2(second.center().x, second.bottom() + 40.0);
+    let to = first.center();
+    h.drag_at(a);
+    h.run();
+    for i in 1..=4 {
+        h.hover_at(a + (to - a) * (i as f32 / 4.0));
+        h.run();
+    }
+    // The selection follows the band while it is drawn.
+    let sel: Vec<PathBuf> = h.state().selection().paths.iter().cloned().collect();
+    assert_eq!(
+        sel,
+        [
+            PathBuf::from("/p/IMG_001.png"),
+            PathBuf::from("/p/IMG_002.png")
+        ]
+    );
+    h.drop_at(to);
+    h.run();
+    let sel: Vec<PathBuf> = h.state().selection().paths.iter().cloned().collect();
+    assert_eq!(
+        sel,
+        [
+            PathBuf::from("/p/IMG_001.png"),
+            PathBuf::from("/p/IMG_002.png")
+        ]
+    );
+    assert!(h.state().focus().is_some());
+    // A click is not a band: the cell clicked alone.
+    h.get_by_label("IMG_003.png").click();
+    h.run();
+    assert_eq!(h.state().selection().len(), 1);
+}
