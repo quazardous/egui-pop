@@ -1158,3 +1158,69 @@ fn a_sensitive_text_is_masked_on_screen_and_in_the_accessibility_tree() {
     let dump = format!("{:?}", h.root());
     assert!(!dump.contains("hunter2-secret"), "masked in the tree");
 }
+
+/// A scrub field 400 points wide over 0 to 100, moving `travel` points a
+/// soft range when given.
+fn scrub_field(travel: Option<f32>) -> Harness<'static, f64> {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(420.0, 80.0))
+        .build_ui_state(
+            move |ui, v: &mut f64| {
+                let s = Slider::new(v, "Radius", 0.0..=100.0)
+                    .step(0.1)
+                    .unit("px")
+                    .default(10.0)
+                    .scrub()
+                    .size(egui::vec2(400.0, 24.0));
+                match travel {
+                    Some(points) => s.travel(points),
+                    None => s,
+                }
+                .show(ui);
+            },
+            10.0,
+        );
+    h.run();
+    h
+}
+
+#[test]
+fn a_scrub_field_is_a_slider_with_its_value_range_and_keys() {
+    let mut h = scrub_field(None);
+    let node = h.get_by_label("Radius");
+    let a = node.accesskit_node();
+    assert_eq!(a.role(), egui::accesskit::Role::Slider);
+    assert_eq!(a.numeric_value(), Some(10.0));
+    assert_eq!(a.min_numeric_value(), Some(0.0));
+    assert_eq!(a.max_numeric_value(), Some(100.0));
+    assert_eq!(a.value().as_deref(), Some("10.0 px"));
+    h.get_by_label("Radius").click();
+    h.run();
+    h.key_press(Key::ArrowRight);
+    h.run();
+    assert!((ev(&h) - 10.1).abs() < 1e-9, "an arrow steps: {}", ev(&h));
+    h.key_press(Key::ArrowLeft);
+    h.key_press(Key::ArrowLeft);
+    h.run();
+    assert!((ev(&h) - 9.9).abs() < 1e-9, "{}", ev(&h));
+}
+
+#[test]
+fn a_scrub_field_moves_its_travel_a_soft_range_whatever_its_width() {
+    // Across its width by default: a quarter of the field, a quarter of
+    // the range.
+    let mut h = scrub_field(None);
+    let bar = h.get_by_label("Radius").rect();
+    drag(&mut h, bar.center(), 100.0, Modifiers::NONE);
+    assert!((ev(&h) - 35.0).abs() < 0.2, "a quarter: {}", ev(&h));
+    // At a set speed: 1000 points the range, so 100 points a tenth.
+    let mut h = scrub_field(Some(1000.0));
+    let bar = h.get_by_label("Radius").rect();
+    drag(&mut h, bar.center(), 100.0, Modifiers::NONE);
+    assert!((ev(&h) - 20.0).abs() < 0.2, "a tenth: {}", ev(&h));
+    // Ctrl is still ten times finer.
+    h.event(Event::ModifiersChanged(Modifiers::COMMAND));
+    drag(&mut h, bar.center(), 100.0, Modifiers::COMMAND);
+    h.event(Event::ModifiersChanged(Modifiers::NONE));
+    assert!((ev(&h) - 21.0).abs() < 0.2, "a hundredth more: {}", ev(&h));
+}

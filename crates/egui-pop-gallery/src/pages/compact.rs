@@ -24,6 +24,7 @@ pub struct State {
     exposure: f64,
     contrast: f64,
     radius: f64,
+    hue: f64,
     narrow: f64,
     name: String,
     opacity: f64,
@@ -39,6 +40,7 @@ impl Default for State {
             exposure: 0.7,
             contrast: 0.0,
             radius: 12.0,
+            hue: 0.0,
             narrow: 0.7,
             name: "Sky".into(),
             opacity: 80.0,
@@ -78,6 +80,17 @@ pub fn show(ui: &mut Ui, s: &mut State) {
         .unit("px")
         .default(12.0)
         .scrub()
+        .size(size)
+        .show(ui);
+    // At a set speed: 720 points of drag a whole turn, whatever its
+    // width (a value's sensitivity, half a degree a point).
+    Slider::new(&mut s.hue, "Hue shift", -180.0..=180.0)
+        .step(0.5)
+        .unit("°")
+        .signed()
+        .default(0.0)
+        .scrub()
+        .travel(720.0)
         .size(size)
         .show(ui);
     // Too narrow for its label: the value alone, the label in the
