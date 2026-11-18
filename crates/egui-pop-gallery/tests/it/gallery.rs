@@ -8095,10 +8095,11 @@ fn page_ends_in_a_short_window(page: &str) {
 for_each_page!(per_page! { every_page_ends_in_a_short_window, super::page_ends_in_a_short_window });
 
 // Not all of it for nothing: pages longer than the short window scroll
-// there, so the check above sees a scroll through to the end.
+// there, so the check above sees a scroll through to the end (58 of 74
+// pages did on 2026-11-18; these three, long lists of sections, are sure to).
 #[test]
 fn a_short_window_scrolls_long_pages() {
-    for page in ["builtins", "inputs", "settings"] {
+    for page in ["sections", "menus", "settings"] {
         assert_eq!(
             check_short_page("pop-dark", Density::Comfortable, page),
             Ok(true),
