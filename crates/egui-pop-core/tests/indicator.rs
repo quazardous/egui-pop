@@ -251,3 +251,39 @@ fn a_pass_drawing_no_mark_leaves_none_recorded() {
     h.run();
     assert!(indicator::find(&h.ctx, "unread").is_some());
 }
+
+#[test]
+fn a_moved_mark_is_read_by_who_moved_it_and_fits_a_narrow_gutter() {
+    use egui_pop_core::indicator::{Size, ValueMark};
+    use egui_pop_core::ui::UiPop as _;
+    // A HUD part's gutter after its slot: 12 points wide, 9 high.
+    let gutter = egui::Rect::from_min_size(egui::pos2(100.0, 40.0), egui::vec2(12.0, 9.0));
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(200.0, 100.0))
+        .build_ui(move |ui| {
+            ui.rect_ui(
+                gutter,
+                egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                |ui| {
+                    ui.add(
+                        Indicator::mark(ValueMark::Moved("Mask 1".into()))
+                            .size(Size::Small)
+                            .id("exposure.moved"),
+                    )
+                },
+            );
+        });
+    theme::install(&h.ctx, &ThemeSpec::new("pop-dark"));
+    h.run();
+    let node = h.get_by_label("Moved by Mask 1");
+    assert_eq!(node.accesskit_node().role(), Role::Image);
+    let r = indicator::find(&h.ctx, "exposure.moved").unwrap();
+    assert_eq!((r.kind, r.state.as_str()), ("mark", "moved"));
+    assert_eq!(r.tone, Tone::Accent);
+    let [x, y, w, hgt] = r.rect;
+    let drawn = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(w, hgt));
+    assert!(
+        gutter.expand(0.5).contains_rect(drawn),
+        "{drawn:?} inside the gutter {gutter:?}"
+    );
+}
