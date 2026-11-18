@@ -85,7 +85,10 @@ table only says so: the application sorts its rows as
 `DataTable::store`, the sort (`<prefix>/sort`: `name`, `-name` or empty)
 and the widths (`<prefix>/widths`) live in the host's value store, so
 they are saved with the settings, read by agents, and set from
-anywhere; `table::declare` declares them once.
+anywhere; `table::declare` declares them once. Without a store, an
+order the application decides elsewhere (a sort command) shows in the
+header with `TableState::set_sort`, and `TableState::set_widths` sets the
+columns' widths; neither runs a step.
 
 ```rust
 use egui_pop::egui;
@@ -313,6 +316,14 @@ moment is a step ([ADR 0011](adr/0011-lifecycle-steps.md)) a plugin may
 veto, redirect, replace or follow; the selection also comes back as
 `Signal::Select` in the output, and a stopped step as `Signal::Vetoed`.
 
+Enter on the cursor's row, or a double click on a row, signals
+`Signal::Activate { key }` (open it), in a list as in a table. Built with
+`drag_out(true)`, a drag starting on a row signals
+`Signal::DragOut { keys }`: the selection when the row is in it, else
+that row alone, the selection left as it is. The application sets its
+payload (`egui::DragAndDrop::set_payload`) for its drop targets; while
+the drag lasts the cursor shows a carry and the pointer how many rows go.
+
 | Step | Arguments | Default |
 |---|---|---|
 | `list.select` | `list`, `keys`, `cursor` | sets the selection |
@@ -325,4 +336,5 @@ The gallery's `table` page shows 10 000 photos sorted and resized
 through the store, cells drawn by the page (stars for the rating), a
 veto on sorting by one column, columns selected from their headers
 (shared with the application-wide selection), a header menu, and a list
-of keywords.
+of keywords; both open a row on Enter or a double click and carry rows
+out by a drag, said in its signals.

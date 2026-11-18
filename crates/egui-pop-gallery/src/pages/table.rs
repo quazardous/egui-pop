@@ -245,7 +245,7 @@ impl Plugin for TablePage {
 }
 
 fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
-    ui.label("Click a header to sort (up, down, none); drag a header's edge to resize. The sort and the widths live in the value store.");
+    ui.label("Click a header to sort (up, down, none); drag a header's edge to resize. The sort and the widths live in the value store. Enter or a double click opens a row; a drag from a row carries the rows out.");
     let mut veto = app.context().get(VETO) == "true";
     if widgets::checkbox(
         ui,
@@ -273,6 +273,7 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
         .store(&store, PREFIX)
         .height(super::fitted_height(ui, 260.0))
         .select_columns(p.select_columns)
+        .drag_out(true)
         .header_menu(|ui, column| {
             if widgets::selectable_label(ui, false, "Describe this column").clicked() {
                 menu_log = Some(format!("header menu: describe {column}"));
@@ -334,6 +335,7 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
         .mode(Mode::Multiple)
         .app(app)
         .height(140.0)
+        .drag_out(true)
         .show(ui, &mut p.list, &mut p.keywords);
     for s in out.signals {
         p.log.push(describe(&s));
@@ -351,6 +353,9 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
 fn describe<K: std::fmt::Debug>(s: &list::Signal<K>) -> String {
     match s {
         list::Signal::Select { keys, .. } => format!("select {keys:?}"),
+        list::Signal::Activate { key } => format!("activate {key:?}"),
+        list::Signal::DragOut { keys } => format!("drag out {keys:?}"),
         list::Signal::Vetoed { step, reason } => format!("{step} vetoed: {reason}"),
+        _ => format!("{s:?}"),
     }
 }

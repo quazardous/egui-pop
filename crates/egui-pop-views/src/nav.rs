@@ -148,7 +148,8 @@ pub(crate) fn reveal(row: usize, row_h: f32, offset: f32, height: f32) -> f32 {
 }
 
 /// The keys of a focused flat view (a list, a table): the selections
-/// they propose, and the row to bring into view.
+/// they propose, the row to bring into view, and the cursor's key when
+/// Enter activates it.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn flat<K: crate::select::Key>(
     ui: &Ui,
@@ -159,12 +160,13 @@ pub(crate) fn flat<K: crate::select::Key>(
     label_at: &dyn Fn(usize) -> String,
     page: usize,
     type_ahead: &mut TypeAhead,
-) -> (Vec<crate::select::Proposal<K>>, Option<usize>) {
+) -> (Vec<crate::select::Proposal<K>>, Option<usize>, Option<K>) {
     let keys = read(ui);
     let mut out = Vec::new();
     let mut reveal = None;
+    let mut activate = None;
     if keys.is_empty() || len == 0 {
-        return (out, reveal);
+        return (out, reveal, activate);
     }
     let cursor = selection
         .cursor()
@@ -188,6 +190,12 @@ pub(crate) fn flat<K: crate::select::Key>(
                 let search = type_ahead.push(t, now).to_string();
                 find(&search, cursor, len, label_at).map(|j| (j, Modifiers::NONE))
             }
+            Nav::Activate => {
+                if let Some(c) = cursor {
+                    activate = Some(key_at(c));
+                }
+                None
+            }
             _ => None,
         };
         if let Some((j, mods)) = to {
@@ -195,7 +203,7 @@ pub(crate) fn flat<K: crate::select::Key>(
             reveal = Some(j);
         }
     }
-    (out, reveal)
+    (out, reveal, activate)
 }
 
 #[cfg(test)]

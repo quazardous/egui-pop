@@ -4,8 +4,9 @@
 
 use std::ops::Range;
 
-use egui::{EventFilter, Id, Rect, Response, ScrollArea, Sense, Ui, pos2, vec2};
+use egui::{EventFilter, Id, Rect, Response, ScrollArea, Sense, TextStyle, Ui, pos2, vec2};
 use egui_pop_core::kit::{Component, Kit, KitCx, Part, State};
+use egui_pop_core::theme::Tokens;
 use egui_pop_core::ui::UiPop as _;
 
 use crate::nav;
@@ -177,3 +178,55 @@ pub(crate) fn height(ui: &Ui) -> f32 {
 /// Rows clickable and draggable, not focusable: the view takes the
 /// focus as a whole.
 pub(crate) const ROW_SENSE: Sense = Sense::CLICK.union(Sense::DRAG);
+
+/// How many items a drag out of a view carries, beside the pointer.
+pub(crate) fn carry_count(ui: &Ui, count: usize) {
+    let ctx = ui.ctx();
+    let Some(at) = ctx.pointer_latest_pos() else {
+        return;
+    };
+    let t = Tokens::of(ctx);
+    let painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Tooltip,
+        Id::unique("egui_pop_views::library::carry"),
+    ));
+    let visuals = ui.visuals().clone();
+    let galley = painter.layout_no_wrap(
+        count.to_string(),
+        TextStyle::Small.resolve(ui.style()),
+        visuals.selection.stroke.color,
+    );
+    let pad = vec2(t.space.xs * 2.0, t.space.xs);
+    let rect = Rect::from_min_size(at + vec2(14.0, 14.0), galley.size() + pad * 2.0);
+    painter.rect_filled(rect, rect.height() / 2.0, visuals.selection.bg_fill);
+    painter.galley(rect.min + pad, galley, visuals.selection.stroke.color);
+}
+
+/// Keeps a drag out of a row going while the pointer's button is held:
+/// the carry cursor and how many items go, beside the pointer; ends it
+/// once the button is let go.
+pub(crate) fn carry(ui: &Ui, carry: &mut Option<usize>) {
+    let Some(count) = *carry else {
+        return;
+    };
+    if ui.input(|i| i.pointer.any_down()) {
+        egui_pop_core::pointer::hold_drag_cursor(ui.ctx(), egui_pop_core::pointer::DragKind::Carry);
+        carry_count(ui, count);
+    } else {
+        *carry = None;
+    }
+}
+
+/// What a drag out starting on the row of `key` carries: the selection
+/// when the row is in it, else that row alone (the selection is left as
+/// it is).
+pub(crate) fn carried<K: crate::select::Key>(
+    selection: &crate::select::Selection<K>,
+    key: K,
+) -> Vec<K> {
+    if selection.contains(&key) {
+        selection.keys().to_vec()
+    } else {
+        vec![key]
+    }
+}
