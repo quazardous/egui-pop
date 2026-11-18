@@ -2935,14 +2935,20 @@ fn the_workbench_page_shows_drop_zones_and_arranges_the_bottom_area_as_a_grid() 
         [console.clone(), notes.clone(), properties.clone()]
     );
     // The Notes tab, held over the left edge of the console's group: the
-    // left half of the group is bordered and tinted.
+    // left half of the group is bordered and tinted. Halfway down the
+    // area, clear of the top band: egui_stack lays the edge bands on the
+    // body below the tab bar and a stack band under it, so the console's
+    // first line sits in the top band too, nearer its edge than the left.
     let tab = |h: &Harness<'_, Gallery>, name: &str| {
         h.get_by_role_and_label(egui::accesskit::Role::Button, name)
             .rect()
     };
     let a = tab(&h, "Notes").center();
     let body = h.get_by_label("> ready").rect();
-    let b = egui::pos2(body.left() + 6.0, body.center().y);
+    let area = app
+        .area_rect(Area::Bottom)
+        .expect("the bottom area is drawn");
+    let b = egui::pos2(body.left() + 6.0, area.center().y);
     let pointer = |h: &mut Harness<'_, Gallery>, e: egui::Event| {
         h.input_mut().events.push(e);
         h.step();
