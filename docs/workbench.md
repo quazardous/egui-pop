@@ -517,23 +517,32 @@ titled with the panel and the application's name (`AppBuilder::name`,
 as tabs: it shows them in one tab bar (no splits) and is titled after
 the tab shown. A panel joins it:
 
-- **by a drag**: while a tab is dragged, a detached window under the
-  pointer shows the drop zone the areas show (the kit's `dock-preview`,
-  egui_stack's `DropZone::at` over the window's body), disabled with its
-  reason for a panel that may not leave the main window; let go there,
-  the tab joins the window's tabs. egui keeps each window's input apart
-  and the system hands a drag to the window it began in, so the window
-  sees the pointer only through the main one: a window embedded in the
-  main one (kittest, a backend without windows) always does, an OS
-  window does when both windows know where they are on the screen
-  (X11, Windows, macOS), not on Wayland, which hides window positions;
+- **by a drag**: the window's tabs are a dock of the workbench's space,
+  one of egui_stack's native floats (`FloatsArea`, hosted by egui-pop
+  with its own viewport ids), so a tab dragged from any window is one
+  drag of the space (`DockSpace::dragging`). A detached window under the
+  pointer shows the drop zone the areas show (the kit's
+  `dock-preview`), disabled with its reason for a panel that may not
+  leave the main window (`stack.dock.drop`); let go there, the tab joins
+  the window's tabs. egui keeps each window's input apart and the
+  system hands a drag to the window it began in, so the window sees the
+  pointer only through the space's drag: a window embedded in the main
+  one (kittest, a backend without windows) always does, an OS window
+  does when both windows know where they are on the screen (X11,
+  Windows, macOS). On Wayland, which hides window positions, each
+  window that may take the tab outlines its dock once the tab leaves
+  its window (`DockPainter::window_outline`, the kit's `dock-preview`
+  border, `AppHandle::window_outlines`), and the window the pointer is
+  over once the drag lets it go takes it;
 - **from the tab's menu**, "Move to window", which lists the detached
   windows by their panels and works everywhere; an agent runs the
   `workbench.move_to_window` command (`panel`, the focused one by
   default; `window`, a panel of that window), `AppHandle::move_to_window`
   from code.
 
-Each way is one `workbench.join_window` step (`panel`, `window`). Its
+Each way is one `workbench.join_window` step (`panel`, `window`): a
+drop egui_stack lands in a detached window is put back and moved by
+that step, which a plugin may veto (the tab stays where it was). Its
 tab's menu moves a panel out again ("Move to …" docks it, Detach gives
 it a window of its own); closing the window docks every panel it holds.
 The layout document keeps the first panel under `panel` and the others
@@ -576,16 +585,17 @@ over another window of the application goes there: over the main
 window, it docks in the area under the pointer (the centre, a side or
 the bottom area drawn, or a closed one along the areas' edge), as a
 `workbench.move` step; over another detached window, it joins its tabs.
-The main window's areas are targets of the drag session
-(`workbench.area.<area>`): over one, the whole area shows the drop zone
-(the kit's `dock-preview`), disabled with its reason for a panel the
-area refuses (`only_in`), and a drop there is refused with that reason
-(`drag.refused`, `workbench.refused`), the tab staying in its window.
+Over the main window the areas show the zones of a drag begun there
+(a group's middle, its edges, a tab bar, a closed area along the
+areas' edge), disabled with its reason where the area refuses the
+panel (`only_in`); a drop there is refused with that reason
+(`drag.refused`, `workbench.refused`), the tab staying in its window,
+and a drop it takes is said as dropped on `workbench.area.<area>`.
 Let go outside every window, nothing moves. Where the system tells
 where windows are (X11, Windows), the zone shows during the drag; on
-Wayland, which hides window positions, nothing shows before the
-release, and the drop goes to the window the pointer is over once the
-drag lets it go (the drag session's fallback); the way home that
+Wayland, which hides window positions, the main window's docks are
+outlined instead, and the drop goes to the window the pointer is over
+once the drag lets it go; the way home that
 always works is the **Dock back** button at the end of the window's
 tab bar, the tab menu's Dock back, or `Ctrl+Shift+D`
 (`workbench.panel.dock_back`, on the focused panel): the shown panel

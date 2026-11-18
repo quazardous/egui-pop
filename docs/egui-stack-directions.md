@@ -367,6 +367,21 @@ first is cheap: hit-test drops in global coordinates (each viewport's
 
 ## 3. Detached windows
 
+**Since egui_stack 0.28.4 (EP2), done this way.** egui_stack grew the
+host hook this section asks for (`ViewportHost`) and native floats in
+the space (`FloatsArea`, one drag across viewports,
+`DockSpace::dragging`). egui-pop's detached windows are those floats:
+each window's tabs are a dock of the workbench's space
+(`window:<panel>`), drawn through egui-pop's host (its viewport ids,
+frame, keys, overlays and close step), painted by the kit
+(`FloatsArea::painter`, `configure`, `decorate` for the Dock back
+button). egui-pop keeps its own window lifecycle: the floats' close
+policy is `Keep` (the `workbench.close_window` step closes), the screens
+are repaired by egui-pop (the host tells egui_stack none), and a drop
+into or out of a detached window is put back and run as
+`workbench.join_window` or `workbench.move`. The text below is the
+analysis as it stood before.
+
 **What egui-pop adds on top of egui_dock's windows.** egui_stack's
 windows are `egui::Window`s inside the same viewport, bounded by the
 dock's `window_bounds` (egui_stack `src/dock_state/window_state.rs:121-140`,

@@ -27,8 +27,12 @@
 //!   window by itself (the workbench's tabs into its areas) claims it
 //!   ([`claim`]): `drag.dropped` names what took it.
 //!
-//! The workbench's tabs and tab groups go through the same session: a
-//! detached panel's window is a target of a dragged tab.
+//! The workbench's tabs and tab groups are carried by the session too, so
+//! their drags are said on the bus; their drop is the workbench's dock
+//! space's (egui_stack's one drag across its windows), which ends the
+//! session where it lands it, or refuses it, at a dock of another window:
+//! a release the space took is never delivered to a target of the
+//! session, nor said twice.
 
 use std::any::Any;
 use std::collections::BTreeMap;
@@ -372,23 +376,14 @@ pub(crate) fn waiting(ctx: &Context) -> bool {
         .is_some_and(|s| s.released.is_some())
 }
 
-/// Whether the window being drawn (`ctx`'s viewport) has a drag of a `T`
-/// to look at as a target of another window's drag: one begun in another
-/// window and in progress, or one already delivered here and not taken.
-pub(crate) fn from_elsewhere<T: Any + Send + Sync>(ctx: &Context) -> bool {
+/// Where the pointer of the drag of a `T` in progress (held, or let go and
+/// waiting for a window to take it) is in the window being drawn (`ctx`'s
+/// viewport), in its points, when it can be known.
+pub(crate) fn pointer_here<T: Any + Send + Sync>(ctx: &Context) -> Option<Pos2> {
     let st = state(ctx);
     let st = lock(&st);
-    let viewport = ctx.viewport_id();
-    let window = st.window_of(viewport);
-    let in_progress = st
-        .session
-        .as_ref()
-        .is_some_and(|s| s.source != viewport && s.payload.is::<T>());
-    in_progress
-        || st
-            .delivered
-            .iter()
-            .any(|d| d.window == window && d.payload.is::<T>())
+    let s = st.session.as_ref().filter(|s| s.payload.is::<T>())?;
+    pointer_in(s, ctx)
 }
 
 /// How the last drag of a `T` ended, and its payload, while no other drag
@@ -427,6 +422,67 @@ pub fn claim(ctx: &Context, what: &str) {
     if let Some(e) = st.ended.as_mut().filter(|e| !e.said) {
         e.claimed = Some(what.to_string());
     }
+}
+
+/// A drop the workbench's dock space took, or refused at a target of its
+/// own (a tab or a tab group let go over a dock of another window): the
+/// drag of a `T` in progress, or the one just let go over no target of
+/// the session and not said yet, ends there, delivered to no target of
+/// the session (the claim rule: a release the space took is never
+/// delivered twice). `drag.dropped` names the window and the target the
+/// space took it in; `drag.refused` the reason, when refused.
+pub(crate) fn taken<T: Any + Send + Sync>(
+    ctx: &Context,
+    window: &str,
+    target: &str,
+    refusal: Option<String>,
+) {
+    let st = state(ctx);
+    let mut st = lock(&st);
+    let end = match refusal {
+        Some(reason) => End::Refused {
+            window: window.to_string(),
+            target: target.to_string(),
+            reason,
+        },
+        None => End::Dropped {
+            window: window.to_string(),
+            target: target.to_string(),
+        },
+    };
+    if st.session.as_ref().is_some_and(|s| s.payload.is::<T>()) {
+        st.end(end);
+        return;
+    }
+    let Some(e) = st
+        .ended
+        .as_mut()
+        .filter(|e| !e.said && e.payload.is::<T>() && matches!(e.end, End::Left { .. }))
+    else {
+        return;
+    };
+    e.said = true;
+    let say = match &end {
+        End::Refused {
+            window,
+            target,
+            reason,
+        } => Say::Refused(json!({
+            "kind": e.kind,
+            "source": e.source,
+            "window": window,
+            "target": target,
+            "reason": reason,
+        })),
+        _ => Say::Drop(DragDelivery {
+            kind: e.kind.clone(),
+            source: e.source.clone(),
+            window: window.to_string(),
+            target: target.to_string(),
+        }),
+    };
+    e.end = end;
+    st.say.push(say);
 }
 
 /// The window's top-left on the screen, in pixels, and its scale, where
