@@ -592,6 +592,19 @@ its own list and grid (columns to sort by, groups) for its two modes.
   (`set_folders_first`). The selection and the focus stay on their
   entries. A mode that orders by time on its own (`ModeNeeds::time`, the
   agenda) shows no menu.
+- **Groups.** With the application's groupings
+  (`FileBrowser::with_grouping`, over `files::groups`, as the picker's),
+  files that go together are one entry: a RAW with its sidecars and its
+  JPEG shows as the RAW, its members' badges on it (`+XMP +JPEG`, or how
+  many past two), said to screen readers with its members ("Grouped with
+  a.cr3.xmp, a.jpg"), and with its first member's thumbnail when it has
+  none of its own. The members leave `FileBrowser::entries`, and
+  `FileBrowser::group_of` gives an entry's group. The groups are found as
+  the listing's pages come, a place past 2,048 files on a thread of its
+  own (`FileBrowser::groups_pending` while it works). The sort menu turns
+  grouping off and on (`set_grouped`); a member selected or focused then
+  leaves it for its group's entry. egui-pop declares no grouping: what
+  goes together is the application's rule.
 - **Agenda.** `agenda` files the entries by day, the newest first: one
   heading per day (a screen reader's heading, `2026-11-08`), its entries
   under it in a grid, the newest of the day first, and the entries without
