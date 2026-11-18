@@ -59,6 +59,14 @@ use crate::when::{When, WhenContext};
 /// own comes with the next breaking release of this enum.
 pub const DORMANT: &str = "dormant: its command's plugin is disconnected";
 
+/// The context key naming the keys the focused widget reads itself, as
+/// chord key names separated by spaces (`arrowleft arrowright home`): set by
+/// the key dispatcher while such a widget has the focus. A global binding of
+/// one of them without Ctrl or Alt is left to the widget
+/// ([`Verdict::LeftToWidget`]), unless it fires `always` or its clause tests
+/// this key itself.
+pub const CONTEXT_WIDGET_KEYS: &str = "focusedWidgetKeys";
+
 /// Where a binding comes from; later variants win.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -515,9 +523,11 @@ pub enum Typing {
     /// `unless-typing` for the other keys, which type or edit text.
     #[default]
     Auto,
-    /// Fires even while typing.
+    /// Fires even while typing, and before a focused widget that reads
+    /// the key itself ([`CONTEXT_WIDGET_KEYS`]).
     Always,
-    /// Left to the text input while one has the focus.
+    /// Left to the text input while one has the focus (and, global, to a
+    /// focused widget that reads the key).
     UnlessTyping,
 }
 
@@ -675,6 +685,9 @@ pub enum Verdict {
     },
     /// A text input has the focus and keeps the key.
     LeftToTyping,
+    /// The focused widget reads the key itself and the binding is global
+    /// ([`CONTEXT_WIDGET_KEYS`]).
+    LeftToWidget,
     /// A modal is open in the window and the binding is not a surface's.
     BlockedByModal,
 }
@@ -747,6 +760,7 @@ impl fmt::Display for Verdict {
                 write!(f, "its panel `{panel}` is not this window's focused panel")
             }
             Verdict::LeftToTyping => write!(f, "left to the text input"),
+            Verdict::LeftToWidget => write!(f, "left to the focused widget, which reads it"),
             Verdict::BlockedByModal => write!(f, "blocked by a modal"),
         }
     }
@@ -1000,6 +1014,19 @@ impl Keymap {
             && truthy("textInputFocus")
         {
             return Some(Verdict::LeftToTyping);
+        }
+        // The focused widget reads the key itself: it goes before a
+        // global binding (one scoped to its place still goes first).
+        if o.scope.is_global()
+            && o.typing.effective(&r.binding.keys) == Typing::UnlessTyping
+            && !(o.typing == Typing::Auto && r.when.keys().contains(&CONTEXT_WIDGET_KEYS))
+            && r.binding.keys.0.first().is_some_and(|c| {
+                cx.get(CONTEXT_WIDGET_KEYS)
+                    .split(' ')
+                    .any(|k| !k.is_empty() && k == c.key)
+            })
+        {
+            return Some(Verdict::LeftToWidget);
         }
         // A modal blocks every binding but a surface's (a surface under a
         // modal does not hold the focus).
