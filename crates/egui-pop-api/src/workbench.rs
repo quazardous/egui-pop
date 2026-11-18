@@ -2654,6 +2654,9 @@ pub(crate) fn windows(
     // egui_stack's own record of the floats' life: egui-pop's steps and
     // the bus already say it.
     let _ = space.take_float_events();
+    // A float egui_stack closed this pass kept its place in its own
+    // terms: egui-pop's is the one kept (`closed_windows`).
+    floats.closed.clear();
     cache_id.set(ctx, cache);
     let mut wb = app.workbench_mut();
     wb.floats = floats;
@@ -2670,12 +2673,18 @@ pub(crate) fn windows(
 /// by its panel, at its place (egui-pop's, read on egui_stack's screens).
 /// A window no longer drawn loses its dock, and egui_stack closes its
 /// float (forgetting its window's builder).
+///
+/// One owner for a closed window's place: egui-pop's (`closed_windows`,
+/// its screen named, the layout's form). The copy egui_stack keeps when it
+/// closes a float (`ZoneLayout::closed`, screen points) is dropped, so a
+/// float opened again is never moved by it.
 fn sync_floats(
     floats: &mut ZoneLayout,
     space: &mut DockSpace<PanelId>,
     drawn: &[Auxiliary],
     screens: &[egui_stack::layout::Screen],
 ) {
+    floats.closed.clear();
     let gone: Vec<String> = floats
         .floats
         .iter()
@@ -6126,5 +6135,29 @@ mod tests {
         // Justified: the bottom area across the whole width.
         let tree = shell_tree(&PanelAlignment::Justify.order(), false, None, &leaf);
         assert_eq!(tree.children()[1].name.0, "bottom");
+    }
+
+    #[test]
+    fn a_window_opened_again_takes_egui_pops_place_and_egui_stacks_copy_goes() {
+        let panel = PanelId::from_static("demo.log");
+        let kept = [700.0, 50.0, 500.0, 300.0];
+        let aux = Auxiliary::window(panel.clone(), crate::window::UNNAMED_SCREEN, kept);
+        let mut floats = ZoneLayout::new(Zone::leaf("windows", Content::Empty));
+        let mut space = to_space(&Layout::default());
+        // egui_stack closed the window's float somewhere else: it kept
+        // that place in its own terms.
+        let mut elsewhere = window_host::float_of(&aux, &[]);
+        elsewhere.place = egui_stack::layout::Place::new(Rect::from_min_size(
+            egui::pos2(10.0, 10.0),
+            egui::vec2(200.0, 100.0),
+        ));
+        floats.open_float(elsewhere);
+        floats.close_float(panel.as_str());
+        assert!(floats.closed_place(panel.as_str()).is_some());
+        // Detached again: egui-pop's place, and no second copy left.
+        sync_floats(&mut floats, &mut space, std::slice::from_ref(&aux), &[]);
+        let open = floats.float_mut(panel.as_str()).expect("open again");
+        assert_eq!(open.place, window_host::float_of(&aux, &[]).place);
+        assert!(floats.closed.is_empty());
     }
 }
