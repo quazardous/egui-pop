@@ -120,6 +120,15 @@ assert!(report.failures.is_empty());
   runs the queue in order with `run_pending()`. egui-pop's application
   calls `AppHandle::run_pending` once per pass, before the `On::Pass`
   handlers, and asks for a pass when work is queued.
+- **Listeners for a window** (`AppHandle::listen_local_in::<P>(window,
+  …)`): a local listener registered for an application window wakes
+  that window each time it runs, inline or from the queue, so what it
+  changed is drawn there within one frame without a hand-written
+  `request_repaint_of`. The main window is still woken to run the queue
+  and the asks; the window's wake comes in addition. A window drawn in
+  the main one (the main window, a detached panel's, every window where
+  they are embedded: the web, kittest) or no longer open wakes the main
+  window. `AppHandle::wake_window` asks a window's pass the same way.
 - **Requests heard after the drawing** (the contract's `Defer`
   capability, which the kernel offers): code that cannot be re-entered
   while it draws (a panel with its state borrowed) asks a request with

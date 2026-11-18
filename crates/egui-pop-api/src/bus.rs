@@ -1099,6 +1099,66 @@ fn install(kernel: &dyn bus_contract::Bus, registry: &Arc<Mutex<Registry>>) {
 }
 
 impl AppHandle {
+    /// Registers a local listener on `P` under `id` for the window
+    /// `window`: each time it runs, that window is woken, so what it
+    /// changed is drawn there within one frame. Bound to the calling
+    /// thread (the interface's), as [`bus_contract::Bus::listen_local_any`].
+    ///
+    /// An emit on this thread runs it inline and asks for a pass of the
+    /// window. An emit from another thread queues it: the bus waker asks
+    /// for the main window's pass, which runs it ([`AppHandle::run_pending`];
+    /// a request asked for after the drawing is heard at the main
+    /// window's drain), and its run then asks for the window's pass.
+    /// The main window is woken as before; the window is woken as well,
+    /// rather than redrawn by hand. A window drawn in the main one (the
+    /// main window itself, a detached panel's, every window where the
+    /// windows are embedded: the web, kittest) and a window not open
+    /// wake the main window.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn listen_local_in<P: Point>(
+        &self,
+        window: &WindowId,
+        id: impl Into<String>,
+        opts: ListenOpts,
+        run: impl Fn(&P::Input, &mut P::Value) -> Result<(), bus_contract::HookError> + 'static,
+    ) -> Result<(), bus_contract::Refused> {
+        let (app, window) = (self.downgrade(), window.clone());
+        self.bus().listen_local::<P>(id, opts, move |input, value| {
+            let out = run(input, value);
+            if let Ok(app) = app.get() {
+                app.wake_window(&window);
+            }
+            out
+        })
+    }
+
+    /// Asks for a pass of the window `window`: its own viewport's when
+    /// it is an open application window with a system window of its own;
+    /// else the main window's, where it is drawn (or nothing is).
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn wake_window(&self, window: &WindowId) {
+        let ctx = self.egui();
+        let viewport = match self.0.windows.try_borrow() {
+            Ok(w) => w.viewport_of(window),
+            // Asked while the registry is changed (a listener run from a
+            // window's opening or closing): its viewport and the main
+            // window's, whichever draws it.
+            Err(_) => {
+                ctx.request_repaint_of(ViewportId::ROOT);
+                Some(window.deferred_viewport())
+            }
+        };
+        let at = match viewport {
+            Some(v) if v != ViewportId::ROOT && !ctx.embed_viewports() => v,
+            _ => ViewportId::ROOT,
+        };
+        ctx.request_repaint_of(at);
+    }
+
     /// Runs the local listeners ([`bus_contract::Bus::listen_local_any`])
     /// that emits on other threads queued for this thread, in their
     /// order, with this application as [`asking`]; their failures
