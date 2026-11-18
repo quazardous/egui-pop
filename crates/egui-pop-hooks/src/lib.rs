@@ -4,6 +4,7 @@
 #![warn(missing_docs)]
 
 mod order;
+mod timing;
 
 use std::any::{Any, TypeId};
 use std::cell::RefCell;
@@ -24,14 +25,15 @@ use web_time::Instant;
 pub use bus_contract;
 pub use bus_contract::{
     Altered, Capability, Collected, DEFAULT_DEADLINE, Defer, FAILED_FACT, Failure, FailureKind,
-    HookError, LAST, ListenOpts, ListenerInfo, PLUGIN_DEADLINE, PendingRun, Point, PointDecl,
-    PointInfo, PointKind, PointSpec, Refusal, Refused, declare_all, missing_targets, offers,
-    order_dump,
+    HookError, LAST, ListenOpts, ListenerInfo, ListenerTimings, OVER_BUDGET_FACT, OverBudget,
+    PLUGIN_DEADLINE, PendingRun, Point, PointDecl, PointInfo, PointKind, PointSpec, PointTimings,
+    Refusal, Refused, TimingStats, Timings, declare_all, missing_targets, offers, order_dump,
 };
 use bus_contract::{
-    AnyInput, AnyListener, AnyLocalListener, AnyValue, Bus, CloneFn, FailureSink, FreshFn,
-    PendingWaker, PointKey,
+    AnyInput, AnyListener, AnyLocalListener, AnyValue, BudgetSink, Bus, CloneFn, FailureSink,
+    FreshFn, PendingWaker, PointKey,
 };
+use timing::Stats;
 
 thread_local! {
     /// The local listeners registered on this thread, by kernel and
@@ -72,6 +74,8 @@ struct Pending {
     entries: Vec<Arc<Entry>>,
     deadline: Duration,
     rules: Rules,
+    timing: Arc<PointTiming>,
+    budget: Option<Duration>,
 }
 
 /// A request asked through [`Defer`], waiting for its thread's
@@ -96,12 +100,54 @@ struct Rules {
 }
 
 /// A point's listeners in order, the point's deadline, the failures
-/// known before running, and its rules.
+/// known before running, its rules, its passes' times and its budget.
 struct Snapshot {
     entries: Vec<Arc<Entry>>,
     deadline: Duration,
     failures: Vec<Failure>,
     rules: Rules,
+    timing: Arc<PointTiming>,
+    budget: Option<Duration>,
+}
+
+/// A point's passes: their times and how many went over its budget.
+#[derive(Default)]
+struct PointTiming {
+    passes: Stats,
+    over: AtomicU64,
+}
+
+impl fmt::Debug for PointTiming {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PointTiming").finish_non_exhaustive()
+    }
+}
+
+/// One pass of a point's listeners on this thread, timed as it runs.
+struct Pass {
+    took: Duration,
+    ran: bool,
+    /// Each listener's time, kept only for a point with a budget (what an
+    /// [`OverBudget`] names).
+    listeners: Option<Vec<(String, Duration)>>,
+}
+
+impl Pass {
+    fn new(budget: Option<Duration>) -> Pass {
+        Pass {
+            took: Duration::ZERO,
+            ran: false,
+            listeners: budget.map(|_| Vec::new()),
+        }
+    }
+
+    fn add(&mut self, id: &str, took: Duration) {
+        self.took += took;
+        self.ran = true;
+        if let Some(l) = &mut self.listeners {
+            l.push((id.to_owned(), took));
+        }
+    }
 }
 
 /// What a listener answered instead of a value.
@@ -134,6 +180,8 @@ struct Entry {
     runs: AtomicU64,
     failures: AtomicU64,
     last_failure: Mutex<Option<String>>,
+    /// Its runs' times ([`Timings`]).
+    timing: Stats,
 }
 
 impl fmt::Debug for Entry {
@@ -154,6 +202,8 @@ struct Slot {
     ordered: Vec<Arc<Entry>>,
     /// `(listener, target)` constraints naming a missing listener.
     missing: Vec<(String, String)>,
+    /// Its passes' times ([`Timings`]).
+    timing: Arc<PointTiming>,
 }
 
 impl Slot {
@@ -164,6 +214,7 @@ impl Slot {
             spec: None,
             ordered: Vec::new(),
             missing: Vec::new(),
+            timing: Arc::default(),
         }
     }
 
@@ -205,6 +256,9 @@ pub struct Kernel {
     dropped: Mutex<Vec<(ThreadId, u64)>>,
     default_deadline: Duration,
     seq: AtomicU64,
+    /// Whether listener runs are timed ([`Kernel::set_timing`]).
+    timing: AtomicBool,
+    budget_sinks: RwLock<Vec<BudgetSink>>,
 }
 
 impl fmt::Debug for Kernel {
@@ -243,6 +297,8 @@ impl Kernel {
             dropped: Mutex::new(Vec::new()),
             default_deadline: deadline,
             seq: AtomicU64::new(0),
+            timing: AtomicBool::new(true),
+            budget_sinks: RwLock::new(Vec::new()),
         }
     }
 
@@ -387,6 +443,7 @@ impl Kernel {
             runs: AtomicU64::new(0),
             failures: AtomicU64::new(0),
             last_failure: Mutex::new(None),
+            timing: Stats::default(),
         }));
         slot.set(entries).map_err(|path| Refused::Cycle {
             point: key.id,
@@ -492,10 +549,10 @@ impl Kernel {
         point: &'static str,
         input: &AnyInput,
         deferred: Vec<Arc<Entry>>,
-        deadline: Duration,
-        rules: Rules,
+        snap: (Duration, Rules, &Arc<PointTiming>, Option<Duration>),
         work: impl Fn() -> Work,
     ) {
+        let (deadline, rules, timing, budget) = snap;
         let mut threads: Vec<ThreadId> = Vec::new();
         for e in &deferred {
             if let Run::Local(t) = e.run
@@ -521,6 +578,8 @@ impl Kernel {
                     entries,
                     deadline,
                     rules,
+                    timing: timing.clone(),
+                    budget,
                 });
             self.wake(thread);
         }
@@ -562,6 +621,7 @@ impl Kernel {
         let mut ran = Vec::new();
         let mut failures = Vec::new();
         let mut refused = None;
+        let mut pass = Pass::new(p.budget);
         let (mut value, fresh) = match p.work {
             Work::Alter(value, clone) => (Some((value, clone)), None),
             Work::Collect(fresh) => (None, Some(fresh)),
@@ -582,6 +642,7 @@ impl Kernel {
                 &p.input,
                 v,
                 entry.opts.deadline.unwrap_or(p.deadline),
+                &mut pass,
             ) {
                 Some(Ok(v)) => {
                     if let Some((old, _)) = &mut value {
@@ -601,11 +662,45 @@ impl Kernel {
                 }
             }
         }
+        self.end_pass(p.point, &p.timing, p.budget, pass);
         let mut run = PendingRun::new(p.point);
         run.ran = ran;
         run.failures = failures;
         run.refused = refused;
         run
+    }
+
+    /// Counts a pass that ran something in its point's times and reports
+    /// it to the budget sinks when it went over the budget.
+    fn end_pass(
+        &self,
+        point: &'static str,
+        timing: &PointTiming,
+        budget: Option<Duration>,
+        pass: Pass,
+    ) {
+        if !pass.ran || !self.timing.load(Ordering::Relaxed) {
+            return;
+        }
+        timing.passes.record(pass.took);
+        let Some(budget) = budget else { return };
+        if pass.took <= budget {
+            return;
+        }
+        timing.over.fetch_add(1, Ordering::Relaxed);
+        let sinks: Vec<BudgetSink> = self
+            .budget_sinks
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        if sinks.is_empty() {
+            return;
+        }
+        let mut over = OverBudget::new(point, pass.took, budget);
+        over.listeners = pass.listeners.unwrap_or_default();
+        for sink in sinks {
+            let _ = catch_unwind(AssertUnwindSafe(|| sink(&over)));
+        }
     }
 
     /// What a listener's refusal or failure means under `rules`; a
@@ -749,7 +844,10 @@ impl Kernel {
             deadline,
             mut failures,
             rules,
+            timing,
+            budget,
         } = self.snapshot(&key);
+        let mut pass = Pass::new(budget);
         let mut value = value;
         let mut deferred = Vec::new();
         let mut ran = Vec::new();
@@ -765,6 +863,7 @@ impl Kernel {
                 &input,
                 clone(&*value),
                 entry.opts.deadline.unwrap_or(deadline),
+                &mut pass,
             );
             if answer.is_some() {
                 ran.push(entry.id.clone());
@@ -782,13 +881,15 @@ impl Kernel {
                 None => {}
             }
         }
+        self.end_pass(key.id, &timing, budget, pass);
         if refused.is_some() {
             // A refused request queues nothing for other threads.
             deferred.clear();
         }
         let ids = deferred.iter().map(|e| e.id.clone()).collect();
         if !deferred.is_empty() {
-            self.defer(key.id, &input, deferred, deadline, rules, || {
+            let snap = (deadline, rules, &timing, budget);
+            self.defer(key.id, &input, deferred, snap, || {
                 Work::Alter(clone(&*value), clone)
             });
         }
@@ -810,7 +911,10 @@ impl Kernel {
             deadline,
             failures,
             rules,
+            timing,
+            budget,
         } = self.snapshot(&key);
+        let mut pass = Pass::new(budget);
         let mut out = Collected::new();
         out.failures = failures;
         let mut deferred = Vec::new();
@@ -825,6 +929,7 @@ impl Kernel {
                 &input,
                 fresh(),
                 entry.opts.deadline.unwrap_or(deadline),
+                &mut pass,
             ) {
                 Some(Ok(v)) => out.parts.push((entry.id.clone(), v)),
                 Some(Err(answer)) => match self.judge(key.id, entry, answer, rules) {
@@ -839,11 +944,11 @@ impl Kernel {
                 None => {}
             }
         }
+        self.end_pass(key.id, &timing, budget, pass);
         out.deferred = deferred.iter().map(|e| e.id.clone()).collect();
         if !deferred.is_empty() {
-            self.defer(key.id, &input, deferred, deadline, rules, || {
-                Work::Collect(fresh)
-            });
+            let snap = (deadline, rules, &timing, budget);
+            self.defer(key.id, &input, deferred, snap, || Work::Collect(fresh));
         }
         out
     }
@@ -859,6 +964,8 @@ impl Kernel {
             deadline: default,
             failures,
             rules: Rules::default(),
+            timing: Arc::default(),
+            budget: None,
         };
         let Some(slot) = points.get(key.id) else {
             return empty(Vec::new());
@@ -899,6 +1006,8 @@ impl Kernel {
             deadline: point_deadline,
             failures,
             rules,
+            timing: slot.timing.clone(),
+            budget: slot.spec.as_ref().and_then(|s| s.budget),
         }
     }
 
@@ -948,6 +1057,7 @@ impl Kernel {
             info.description = spec.description.clone();
             info.declared = true;
             info.fail_closed = spec.fail_closed;
+            info.budget = spec.budget;
         }
         info.deadline = deadline;
         info.listeners = slot
@@ -993,6 +1103,8 @@ impl Kernel {
     /// Runs one listener on `value`, on this thread or its own, within
     /// its deadline, panics caught; `None` for a local listener whose
     /// closure this thread does not hold (removed meanwhile).
+    ///
+    /// Its time goes to the listener's times and to `pass`.
     fn call(
         &self,
         point: &'static str,
@@ -1000,19 +1112,79 @@ impl Kernel {
         input: &AnyInput,
         value: AnyValue,
         deadline: Duration,
+        pass: &mut Pass,
     ) -> Option<Result<AnyValue, Answer>> {
-        let shared = match &entry.run {
-            Run::Shared(run) => run,
+        let (result, took) = match &entry.run {
+            Run::Shared(run) => {
+                entry.runs.fetch_add(1, Ordering::Relaxed);
+                call(point, entry, run, input, value, deadline)
+            }
             Run::Local(_) => {
                 // Taken out of the cell first: the listener may emit or
                 // listen.
                 let run = LOCAL.with(|l| l.borrow().get(&(self.id, entry.seq)).cloned())?;
                 entry.runs.fetch_add(1, Ordering::Relaxed);
-                return Some(timed(&*run, input, value, deadline));
+                timed(&*run, input, value, deadline)
             }
         };
-        entry.runs.fetch_add(1, Ordering::Relaxed);
-        Some(call(point, entry, shared, input, value, deadline))
+        if self.timing.load(Ordering::Relaxed) {
+            entry.timing.record(took);
+            pass.add(&entry.id, took);
+        }
+        Some(result)
+    }
+
+    /// Times listener runs (the default) or stops: when off, nothing is
+    /// counted and no pass is reported over budget; the deadlines still
+    /// hold. Turning it off keeps the times so far.
+    pub fn set_timing(&self, on: bool) {
+        self.timing.store(on, Ordering::Relaxed);
+    }
+
+    /// Whether listener runs are timed ([`Kernel::set_timing`]).
+    pub fn timing(&self) -> bool {
+        self.timing.load(Ordering::Relaxed)
+    }
+
+    /// Every point that ran a pass since the last reset, in id order, its
+    /// listeners in the order they run ([`Timings::points`]).
+    pub fn timings(&self) -> Vec<PointTimings> {
+        self.read()
+            .iter()
+            .filter_map(|(id, slot)| point_timings(id, slot))
+            .collect()
+    }
+
+    /// The timings of the point `point` ([`Timings::point`]).
+    pub fn point_timings(&self, point: &str) -> Option<PointTimings> {
+        let points = self.read();
+        let (id, slot) = points.get_key_value(point)?;
+        point_timings(id, slot)
+    }
+
+    /// Starts a new window of times ([`Timings::reset`]).
+    pub fn reset_timings(&self) {
+        for slot in self.read().values() {
+            slot.timing.passes.reset();
+            slot.timing.over.store(0, Ordering::Relaxed);
+            for e in &slot.ordered {
+                e.timing.reset();
+            }
+        }
+    }
+
+    /// Adds a sink called with each pass over its point's budget, on the
+    /// thread that ran it ([`Timings::add_budget_sink`]). A sink that
+    /// panics is ignored.
+    pub fn on_over_budget(&self, sink: impl Fn(&OverBudget) + Send + Sync + 'static) {
+        self.add_budget_sink(Arc::new(sink));
+    }
+
+    fn add_budget_sink(&self, sink: BudgetSink) {
+        self.budget_sinks
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(sink);
     }
 }
 
@@ -1031,21 +1203,23 @@ fn timed(
     input: &AnyInput,
     value: AnyValue,
     deadline: Duration,
-) -> Result<AnyValue, Answer> {
+) -> (Result<AnyValue, Answer>, Duration) {
     let start = Instant::now();
     let result = guarded(run, &**input, value);
     let took = start.elapsed();
-    match result {
+    let result = match result {
         Ok(_) if took > deadline => Err(Answer::Fail(FailureKind::Late {
             deadline,
             took: Some(took),
         })),
         r => r,
-    }
+    };
+    (result, took)
 }
 
 /// Runs one shared listener on `value`, inline or on its own thread,
-/// within its deadline, panics caught.
+/// within its deadline, panics caught; with the time it took (for a
+/// threaded one, the time the emit waited).
 fn call(
     point: &'static str,
     entry: &Entry,
@@ -1053,10 +1227,25 @@ fn call(
     input: &AnyInput,
     value: AnyValue,
     deadline: Duration,
-) -> Result<AnyValue, Answer> {
+) -> (Result<AnyValue, Answer>, Duration) {
     if !entry.opts.threaded {
         return timed(&**run, input, value, deadline);
     }
+    let start = Instant::now();
+    let result = threaded(point, entry, run, input, value, deadline);
+    (result, start.elapsed())
+}
+
+/// Runs one shared listener on a thread of its own, waiting for it up to
+/// its deadline.
+fn threaded(
+    point: &'static str,
+    entry: &Entry,
+    run: &AnyListener,
+    input: &AnyInput,
+    value: AnyValue,
+    deadline: Duration,
+) -> Result<AnyValue, Answer> {
     let (tx, rx) = sync_channel(1);
     let run = run.clone();
     let input = input.clone();
@@ -1178,6 +1367,51 @@ impl Bus for Kernel {
     fn defer(&self) -> Option<&dyn Defer> {
         Some(self)
     }
+
+    fn timings(&self) -> Option<&dyn Timings> {
+        Some(self)
+    }
+}
+
+impl Timings for Kernel {
+    fn points(&self) -> Vec<PointTimings> {
+        Kernel::timings(self)
+    }
+
+    fn point(&self, point: &str) -> Option<PointTimings> {
+        Kernel::point_timings(self, point)
+    }
+
+    fn reset(&self) {
+        Kernel::reset_timings(self);
+    }
+
+    fn add_budget_sink(&self, sink: BudgetSink) {
+        Kernel::add_budget_sink(self, sink);
+    }
+}
+
+/// A point's times, `None` when it ran no pass since the last reset.
+fn point_timings(id: &'static str, slot: &Slot) -> Option<PointTimings> {
+    if slot.timing.passes.count() == 0 {
+        return None;
+    }
+    let mut out = PointTimings::new(id);
+    out.budget = slot.spec.as_ref().and_then(|s| s.budget);
+    out.passes = slot.timing.passes.read();
+    out.over_budget = slot.timing.over.load(Ordering::Relaxed);
+    out.listeners = slot
+        .ordered
+        .iter()
+        .filter(|e| e.timing.count() > 0)
+        .map(|e| {
+            let mut l = ListenerTimings::new(e.id.clone());
+            l.owner = e.opts.owner.clone();
+            l.stats = e.timing.read();
+            l
+        })
+        .collect();
+    Some(out)
 }
 
 impl Defer for Kernel {

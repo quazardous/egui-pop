@@ -40,6 +40,13 @@ one failing contribution never breaks the others.
   drain waits for the next one. egui-pop's application drains once per
   pass after its panels and windows are drawn, and before it quits
   (`AppHandle::ask`, `AppHandle::drain_asks`).
+- **Listener times and budgets.** The kernel offers the contract's
+  `Timings` capability: each listener run is timed into a log histogram
+  of relaxed atomics, per listener and per pass (`timings()`,
+  `point_timings()`: count, total, max, p50, p95; `reset_timings()`;
+  `set_timing(false)` to stop counting). A pass over its point's budget
+  (`PointSpec::budget`) goes to the `on_over_budget` sinks, its results
+  kept.
 - **Introspection.** `points()` lists every point and its listeners in
   the order they run, with their owners, constraints, deadlines, missing
   targets and counters (runs, failures, the last failure), for people,
