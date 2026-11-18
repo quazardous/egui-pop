@@ -19,6 +19,9 @@ const ITEM: &str = "Import automatically";
 fn menu_open() -> Harness<'static, Gallery> {
     let mut h = harness(options("pop-dark", Density::Comfortable, "menus"));
     h.run();
+    // The row ends the page: brought into view first.
+    h.get_by_label(ROW).scroll_to_me();
+    h.run();
     h.get_by_label(ROW).click_secondary();
     h.run();
     assert!(h.query_by_label("Import now").is_some(), "the menu opened");

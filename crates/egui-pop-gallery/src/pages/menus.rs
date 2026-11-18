@@ -185,13 +185,13 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     if popup.clicked() {
         menus::popup_at(app, &CARD_MENU, popup.rect);
     }
-    section(ui, "A menu drawn by hand, with a submenu");
-    hand_drawn(ui, app);
     section(ui, "The same menu, drawn in place");
     egui::Frame::menu(ui.style()).show(ui, |ui| {
         ui.set_max_width(260.0);
         menus::show(ui, app, &CARD_MENU);
     });
+    section(ui, "A menu drawn by hand, with a submenu");
+    hand_drawn(ui, app);
 }
 
 /// The hand-drawn menu's choice, in the app's context: `"off"`, `"plug"`
