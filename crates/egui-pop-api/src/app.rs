@@ -772,6 +772,9 @@ pub(crate) struct Shared {
     /// The group handles the application allows
     /// (`AppBuilder::group_handles`).
     pub(crate) group_handles: std::cell::Cell<crate::workbench::GroupHandles>,
+    /// The layout's changes egui_stack said on the bus
+    /// (`stack.layout.changed`) and the shell has not read yet.
+    pub(crate) stack_changes: RefCell<Vec<egui_stack::bus::LayoutChange>>,
     /// The main menu drawn as a bar under the title.
     menu_bar: std::cell::Cell<bool>,
     /// The application allows the system's file chooser
@@ -940,6 +943,7 @@ impl AppHandle {
             system_wheel_lines: std::cell::Cell::new(crate::pointer::SYSTEM_WHEEL_LINES),
             toast_corner: std::cell::Cell::default(),
             group_handles: std::cell::Cell::new(crate::workbench::DEFAULT_GROUP_HANDLES),
+            stack_changes: RefCell::new(Vec::new()),
             menu_bar: std::cell::Cell::new(true),
             system_file_chooser: std::cell::Cell::new(false),
             transparent_panel_windows: std::cell::Cell::new(false),
@@ -4303,6 +4307,7 @@ impl AppBuilder {
         app.autosave_baseline();
         app.listen_settings();
         app.listen_layout();
+        crate::workbench::listen_stack(&app.handle);
         app.install_theme();
         app.emit(&Lifecycle::Started);
         app.started = true;
