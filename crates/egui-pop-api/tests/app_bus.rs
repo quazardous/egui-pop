@@ -139,8 +139,11 @@ fn an_application_bus_receives_egui_pops_points_listeners_and_requests() {
 
     // The points, from egui-pop's contract table, in its order, with
     // their kinds.
+    // Then egui_stack's points, declared when the workbench gives its
+    // dock space the application's bus.
     let declared: Vec<String> = CONTRACT
         .iter()
+        .chain(egui_stack::bus::POINTS)
         .map(|d| format!("{} {}", d.id, d.kind.as_str()))
         .collect();
     assert_eq!(recording.calls("declare "), declared);
