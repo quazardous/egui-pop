@@ -6387,6 +6387,135 @@ fn the_library_page_culls_filters_and_compares() {
     h.page_shot("library-compare-pop-dark");
 }
 
+/// The comparison's panes, in their order: the list items inside the
+/// surface.
+fn compare_panes(h: &Harness<'_, Gallery>) -> Vec<(String, egui::Rect)> {
+    use egui::accesskit::Role;
+    let surface = h.get_by_role_and_label(Role::List, "Compare").rect();
+    let mut panes: Vec<(String, egui::Rect)> = h
+        .query_all_by_role(Role::ListItem)
+        .filter(|n| surface.contains_rect(n.rect()))
+        .map(|n| (n.accesskit_node().label().unwrap_or_default(), n.rect()))
+        .collect();
+    panes.sort_by(|a, b| {
+        (a.1.top(), a.1.left())
+            .partial_cmp(&(b.1.top(), b.1.left()))
+            .unwrap()
+    });
+    panes
+}
+
+fn pane_names(h: &Harness<'_, Gallery>) -> Vec<String> {
+    compare_panes(h).into_iter().map(|p| p.0).collect()
+}
+
+#[test]
+fn the_library_page_compares_one_to_many_images_dragged_in_and_out() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "library"));
+    h.run();
+    h.get_by_label("Compare").click();
+    h.run();
+    assert_eq!(pane_names(&h), ["DSC_00000", "DSC_00001", "DSC_00002"]);
+    // One image is a loupe, filling the surface; more tile in a grid.
+    let surface = h
+        .get_by_role_and_label(egui::accesskit::Role::List, "Compare")
+        .rect();
+    for (n, cols, rows, shot) in [
+        (1, 1, 1, "library-compare-1-pop-dark"),
+        (2, 2, 1, "library-compare-2-pop-dark"),
+        (4, 2, 2, "library-compare-4-pop-dark"),
+        (6, 3, 2, "library-compare-6-pop-dark"),
+    ] {
+        let label = if n == 1 {
+            "1 image".to_string()
+        } else {
+            format!("{n} images")
+        };
+        h.get_by_label(&label).click();
+        h.run();
+        let panes = compare_panes(&h);
+        assert_eq!(panes.len(), n, "{label}");
+        let tops: std::collections::BTreeSet<i32> =
+            panes.iter().map(|p| p.1.top() as i32).collect();
+        let lefts: std::collections::BTreeSet<i32> =
+            panes.iter().map(|p| p.1.left() as i32).collect();
+        assert_eq!((lefts.len(), tops.len()), (cols, rows), "{label}");
+        if n == 1 {
+            let r = panes[0].1;
+            assert!(
+                r.width() > surface.width() * 0.95 && r.height() > surface.height() * 0.95,
+                "the loupe fills the surface: {r:?} in {surface:?}"
+            );
+        }
+        h.remove_cursor();
+        h.run();
+        h.page_shot(shot);
+    }
+    // Four again: a click makes a pane active, the arrows move it.
+    h.get_by_label("4 images").click();
+    h.run();
+    h.get_by_role_and_label(egui::accesskit::Role::ListItem, "DSC_00001")
+        .click();
+    h.run();
+    assert!(h.query_by_label("compare.active: DSC_00001").is_some());
+    h.key_press(egui::Key::ArrowRight);
+    h.run();
+    assert!(h.query_by_label("compare.active: DSC_00002").is_some());
+    // Delete takes the active pane out; the page edits its list.
+    h.key_press(egui::Key::Delete);
+    h.run();
+    assert!(h.query_by_label("compare.remove: DSC_00002").is_some());
+    assert_eq!(pane_names(&h), ["DSC_00000", "DSC_00001", "DSC_00003"]);
+    // Its close button too.
+    h.get_by_label("Remove DSC_00000 from the comparison")
+        .click_accesskit();
+    h.run();
+    assert_eq!(pane_names(&h), ["DSC_00001", "DSC_00003"]);
+    // An image of the filmstrip dragged onto the first pane's left half
+    // goes in first.
+    let strip = h
+        .query_all_by_label("DSC_00005")
+        .map(|n| n.rect())
+        .max_by(|a, b| a.top().total_cmp(&b.top()))
+        .expect("in the filmstrip");
+    let first = compare_panes(&h)[0].1;
+    let to = egui::pos2(first.left() + first.width() * 0.2, first.center().y);
+    drag_by(
+        &mut h,
+        strip.center(),
+        to - strip.center(),
+        egui::Modifiers::NONE,
+    );
+    h.run();
+    assert!(h.query_by_label("compare.add: 1 at 0").is_some());
+    assert_eq!(pane_names(&h), ["DSC_00005", "DSC_00001", "DSC_00003"]);
+    // A pane carried out by its name and let go over nothing goes out.
+    let handle = h.get_by_label("Move DSC_00001").rect();
+    let away = egui::pos2(handle.center().x, surface.top() - 40.0);
+    drag_by(
+        &mut h,
+        handle.center(),
+        away - handle.center(),
+        egui::Modifiers::NONE,
+    );
+    h.run();
+    assert!(h.query_by_label("compare.remove: DSC_00001").is_some());
+    assert_eq!(pane_names(&h), ["DSC_00005", "DSC_00003"]);
+    // Carried onto the surface, after the last pane: moved.
+    let handle = h.get_by_label("Move DSC_00005").rect();
+    let last = compare_panes(&h)[1].1;
+    let to = egui::pos2(last.right() - 10.0, last.center().y);
+    drag_by(
+        &mut h,
+        handle.center(),
+        to - handle.center(),
+        egui::Modifiers::NONE,
+    );
+    h.run();
+    assert!(h.query_by_label("compare.move: DSC_00005 to 1").is_some());
+    assert_eq!(pane_names(&h), ["DSC_00003", "DSC_00005"]);
+}
+
 #[test]
 fn a_kit_restyles_the_library() {
     // Data only: square cells with a bar under the selected one, square

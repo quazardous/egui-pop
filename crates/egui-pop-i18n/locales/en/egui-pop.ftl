@@ -2633,6 +2633,14 @@ egui-pop-views-collapse-stack = Collapse the stack of { $count }
 
 egui-pop-views-compare = Compare
 
+egui-pop-views-compare-empty = Drop images here to compare them
+
+egui-pop-views-compare-full = The comparison is full
+
+egui-pop-views-compare-not-images = Not images to compare
+
+egui-pop-views-compare-remove = Remove { $name } from the comparison
+
 egui-pop-views-empty = Empty
 
 egui-pop-views-expand-stack = Expand the stack of { $count }

@@ -2,18 +2,20 @@
 //! and a filmstrip sharing its selection, thumbnails arriving a pass
 //! after they are asked for (some never: placeholders), ratings, labels,
 //! flags, tags and stacks owned by the page, a search field with filter
-//! chips, the marks of the image under the cursor, and a comparison.
+//! chips, the marks of the image under the cursor, and a comparison:
+//! one image as a loupe, several as a survey, images dragged in and out.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::rc::Rc;
 
 use egui::{Color32, ColorImage, TextureHandle, TextureOptions, Ui};
+use egui_pop::api::bus::drag;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::widgets;
 use egui_pop::model::ids::{PluginId, StoryId};
-use egui_pop::views::library::compare::{CompareState, CompareView, Pane};
+use egui_pop::views::library::compare::{CompareState, CompareView, Intent, Pane};
 use egui_pop::views::library::filter::{Candidate, Filter, SearchField, SearchState};
 use egui_pop::views::library::marks::{ColorLabels, EmptyStars, FlagToggle, RatingStars};
 use egui_pop::views::library::tags::{TagInput, TagInputState};
@@ -216,6 +218,11 @@ pub struct PageState {
     tags: TagInputState,
     compare: CompareState,
     comparing: bool,
+    /// The images compared, in order: the page owns the list, the
+    /// comparison asks to edit it.
+    compared: Vec<u32>,
+    /// The active image of the comparison.
+    active: Option<u32>,
     synced: bool,
     auto_advance: bool,
     /// Empty stars on every cell, not only under the pointer.
@@ -247,6 +254,8 @@ impl Default for PageState {
             tags: TagInputState::default(),
             compare: CompareState::new(),
             comparing: false,
+            compared: vec![0, 1, 2],
+            active: Some(0),
             synced: true,
             auto_advance: false,
             empty_stars: false,
@@ -378,7 +387,7 @@ impl Plugin for LibraryPage {
             Story::new(StoryId::from_static("library"), "Photo library", move |ui, app| {
                 show(ui, app, &mut page.borrow_mut())
             })
-            .description("A photo library for culling: 10 000 images in a virtualised thumbnail grid and a filmstrip, ratings, colour labels, flags and stacks, culling keys with auto-advance, a search field with filter chips, tags, and a comparison of two to four images.")
+            .description("A photo library for culling: 10 000 images in a virtualised thumbnail grid and a filmstrip, ratings, colour labels, flags and stacks, culling keys with auto-advance, a search field with filter chips, tags, and a comparison of one to eight images (a loupe, a survey) that images are dragged into and out of.")
             .group("Components", 79),
         )?;
         Ok(())
@@ -543,15 +552,57 @@ fn library(ui: &mut Ui, app: &AppHandle, p: &mut PageState, thumbs: &Thumbs) {
     p.handle(signals);
 }
 
+/// Images carried by a drag on the page: out of the filmstrip, out of a
+/// comparison pane, onto the comparison.
+#[derive(Clone, Debug)]
+pub struct DraggedImages(pub Vec<u32>);
+
+/// A count of images compared, as its button says it.
+fn shown_label(n: usize) -> String {
+    if n == 1 {
+        "1 image".to_string()
+    } else {
+        format!("{n} images")
+    }
+}
+
+/// The most images the page's comparison shows.
+pub const COMPARED_MAX: usize = 8;
+
 fn compare(ui: &mut Ui, p: &mut PageState, thumbs: &Thumbs) {
     section(ui, "Compare");
-    widgets::checkbox(ui, &mut p.synced, "Sync zoom and pan");
-    let sel = p.state.selection().keys();
-    let keys: Vec<u32> = if (2..=4).contains(&sel.len()) {
-        sel.to_vec()
-    } else {
-        p.shown.iter().take(3).copied().collect()
+    ui.label("One image is a loupe, several a survey. Drag images from the filmstrip above onto the comparison to add them, drag a pane out by its name or press Delete to take it out, click a pane or use the arrows to make it active.");
+    ui.horizontal(|ui| {
+        widgets::checkbox(ui, &mut p.synced, "Sync zoom and pan");
+        // Fixed counts, for the snapshots and a quick look.
+        for n in [1usize, 2, 4, 6] {
+            if widgets::selectable_label(ui, p.compared.len() == n, &shown_label(n)).clicked() {
+                p.compared = p.shown.iter().take(n).copied().collect();
+                p.active = p.compared.first().copied();
+                p.compare.reset();
+            }
+        }
+    });
+    // A filmstrip to drag images from.
+    let items = Shown {
+        photos: &p.photos,
+        shown: &p.shown,
+        stacks: false,
+        revision: p.revision,
     };
+    let signals = ThumbGrid::filmstrip("compare-strip")
+        .label("Images to compare")
+        .drag_out(true)
+        .height(96.0)
+        .show(ui, &mut p.state, &items, thumbs)
+        .signals;
+    for s in &signals {
+        if let Signal::DragOut { keys } = s {
+            drag::start(ui.ctx(), "photos", DraggedImages(keys.clone()));
+        }
+    }
+    p.handle(signals);
+    let keys = p.compared.clone();
     let panes: Vec<Pane<u32>> = keys
         .iter()
         .map(|k| Pane::new(*k, p.photos[*k as usize].name.clone()))
@@ -564,10 +615,69 @@ fn compare(ui: &mut Ui, p: &mut PageState, thumbs: &Thumbs) {
     let out = CompareView::new("gallery.compare")
         .synced(p.synced)
         .best(p.best)
-        .height(super::fitted_height(ui, 360.0))
+        .active(p.active)
+        .removable(true)
+        .max_panes(COMPARED_MAX)
+        .carry("photos", DraggedImages, |d: &DraggedImages| {
+            Some(d.0.clone())
+        })
+        .height(super::fitted_height(ui, 300.0))
         .show(ui, &mut p.compare, &panes, thumbs);
     if let Some(k) = out.best {
         p.best = Some(k);
         p.log.push(format!("best: {}", p.photos[k as usize].name));
+    }
+    for intent in out.intents {
+        p.intent(intent);
+    }
+}
+
+impl PageState {
+    /// What the comparison asked of the list: the page edits it.
+    fn intent(&mut self, intent: Intent<u32>) {
+        let name = |p: &Self, k: u32| p.photos[k as usize].name.clone();
+        match intent {
+            Intent::Active { key } => {
+                self.active = Some(key);
+                self.log
+                    .push(format!("compare.active: {}", name(self, key)));
+            }
+            Intent::Add { keys, at } => {
+                let at = at.min(self.compared.len());
+                for (i, k) in keys.iter().enumerate() {
+                    if self.compared.len() >= COMPARED_MAX {
+                        break;
+                    }
+                    self.compared.insert(at + i, *k);
+                    self.compare.inserted(at + i);
+                }
+                self.log
+                    .push(format!("compare.add: {} at {at}", keys.len()));
+            }
+            Intent::Remove { key } => {
+                if let Some(i) = self.compared.iter().position(|k| *k == key) {
+                    self.compared.remove(i);
+                    self.compare.removed(i);
+                    if self.active == Some(key) {
+                        self.active = self
+                            .compared
+                            .get(i.min(self.compared.len().saturating_sub(1)))
+                            .copied();
+                    }
+                }
+                self.log
+                    .push(format!("compare.remove: {}", name(self, key)));
+            }
+            Intent::Move { key, to } => {
+                if let Some(from) = self.compared.iter().position(|k| *k == key) {
+                    self.compared.remove(from);
+                    self.compared.insert(to.min(self.compared.len()), key);
+                    self.compare.moved(from, to);
+                }
+                self.log
+                    .push(format!("compare.move: {} to {to}", name(self, key)));
+            }
+            _ => {}
+        }
     }
 }

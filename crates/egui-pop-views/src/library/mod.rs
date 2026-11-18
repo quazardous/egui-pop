@@ -7,8 +7,8 @@
 //!   overlays, stacks, the culling keys, a rubber band;
 //! - [`marks`]: ratings, colour labels and pick or reject flags, their
 //!   widgets, and the culling keymap (Lightroom's keys, auto-advance);
-//! - [`compare`]: two to four images side by side, zoom and pan synced,
-//!   a "best" marker;
+//! - [`compare`]: one to many images, a loupe or side by side, zoom and
+//!   pan synced, a "best" marker, images dragged in and out;
 //! - [`tags`]: tag chips and a tag input with completion;
 //! - [`filter`]: a search field with filter chips, giving a structured
 //!   filter;
