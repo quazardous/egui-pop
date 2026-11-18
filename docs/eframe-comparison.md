@@ -140,15 +140,37 @@ comment at the code site.
    it over the builder (`native/epi_integration.rs:32` to `:45`), so
    eframe's wins. eframe's copy is better on one point: it clamps the
    position to the real monitors, which egui-pop's cannot (it sees none).
+   *Resolved (2026-11-18):* `window::restore` turns `persist_window` off,
+   so a run egui-pop starts has one owner, egui-pop, and the runner's
+   screens give it the clamping eframe had. A host on eframe's own runner
+   chooses: it calls `window::restore` (egui-pop's place), or leaves the
+   root to eframe (the gallery, which keeps its documents in eframe's
+   storage, does that). A detached window's closed place has one owner
+   too: egui-pop's (`closed_windows`, naming its screen); the copy
+   egui_stack keeps when it closes a float is dropped at each pass.
 2. **Two persistence systems.** egui-pop never implements
    `eframe::App::save` and never reads `Storage`; it keeps its documents
    in its own directory. eframe's store, when the feature is on, keeps
    egui's memory and the root window beside it. Neither is wrong, but an
    application sees two directories and two sources of truth.
+   *Decided (2026-11-18): egui-pop keeps its own writer.* eframe calls
+   `App::save` only with its `persistence` feature and a storage, every
+   `auto_save_interval` (30 s) and at exit (`native/epi_integration.rs:458`
+   to `:502`). egui-pop's writer saves a second after a change, with no
+   feature, so a crash loses at most that second; driving it from
+   `App::save` would lose up to thirty and force eframe's feature on.
+   eframe's storage stays the application's choice, for egui's memory.
 3. **The present mode is chosen before start-up, for every window.**
    `windows::present_mode` rewrites `wgpu_options` globally; eframe 0.37
    lets the application change it per frame through
    `Frame::set_wgpu_surface_config` (`epi.rs:965`).
+   *Decided (2026-11-18): it stays chosen at start-up.* The per-frame
+   setter reconfigures every surface at once, so it cannot give one
+   window a mode of its own, and going back to a FIFO present when only
+   one window is open would bring the Wayland stall back for a hidden or
+   minimised main window, which the main window's wake
+   (`main_wake::paint_safe`) relies on not having. The per-window mode is
+   asked upstream instead (upstream.md, drafted requests).
 4. **Window handles taken once, from the creation context**, then kept
    in egui-pop's statics (`frame::set_native_window`,
    `files::set_parent_window`): correct for the root, and the only option
@@ -204,9 +226,9 @@ Keep eframe (A), and organise egui-pop's work around it in three parts.
 ### 1. Build on eframe's extension points
 
 - **The `App` trait**: keep egui-pop's application an `eframe::App`
-  (`logic` for hidden-window ticks, `ui`, `on_exit`), and add `save`
-  delegating to egui-pop's persistence, so eframe's auto-save interval
-  and exit save drive it instead of egui-pop's own timer.
+  (`logic` for hidden-window ticks, `ui`, `on_exit`). `save` is not
+  used: eframe calls it only with its `persistence` feature, every
+  30 s, and egui-pop's writer saves a second after a change (overlap 2).
 - **`NativeOptions` and `WebOptions`**: keep taking the application's
   options and adding to them (`window::restore`, `present_mode`), never
   building them behind the application's back; document which fields
@@ -219,30 +241,30 @@ Keep eframe (A), and organise egui-pop's work around it in three parts.
   `frame` already do; for the windows eframe does not expose, from the
   event loop egui-pop owns (the runner), behind the same per-viewport
   functions.
-- **Frame pacing**: move the present-mode choice to
-  `Frame::set_wgpu_surface_config`, so it can follow the number of open
-  windows instead of being fixed at start-up.
+- **Frame pacing**: the present mode stays chosen at start-up
+  (`windows::present_mode`); `Frame::set_wgpu_surface_config` changes
+  every surface at once and would bring back the Wayland stall (overlap
+  3).
 - **Platform services** stay separate crates (tray-icon, notifications,
   a single instance) waking egui through `request_repaint`, which is how
   eframe expects them.
 
 ### 2. Stop fighting or duplicating eframe
 
-- **The root window's place**: one owner. Either egui-pop turns
-  `persist_window` off in `run_native` and keeps its own (applications
-  started by egui-pop), or it leaves the root to eframe (with its
-  monitor clamping) and keeps `windows.json` for application windows
-  only. The first keeps one store and one format; recommended, with the
-  clamping asked upstream (part 3).
+- **The root window's place**: one owner, egui-pop: `window::restore`
+  turns `persist_window` off, and the runner's screens clamp the place
+  (done, overlap 1).
 - **Storage**: document that egui-pop's persistence is the application's
   store and eframe's `persistence` feature is not needed; when an
   application turns it on, egui-pop says so in its `about` information
   rather than silently keeping two.
 - **Clipboard**: turn `clipboard_shortcuts` off and bind the chords in
-  the keymap, as the upstream.md entry already plans; the event mapping
-  then goes.
-- **Present mode**: as above, per frame rather than a rewrite of the
-  options.
+  the keymap, as the upstream.md entry already plans, but only where a
+  system backend reads the clipboard (`egui-pop-platform`'s arboard
+  backend): with the shortcuts off, `TextEdit` no longer copies or
+  pastes on its own, and egui-pop must push the events and read the text
+  itself, which the default backend cannot do natively. The event
+  mapping stays for the web and the default backend.
 
 ### 3. Gaps only eframe (or below) can fill
 
@@ -264,6 +286,32 @@ Drafts already exist for several of them in
 filed yet" in [upstream.md](upstream.md), which stays the register: a
 workaround and its entry go when the fix ships in a release egui-pop
 moves to.
+
+## Fallback triggers
+
+egui-pop stays on eframe (option A, through `create_native`) until one of
+these holds; then it runs its own winit loop with eframe's pieces
+(`create_native` already owns the loop) or, last, option B:
+
+- **A hook only eframe's painter holds becomes a must**: the main
+  interface's surface in a wide-gamut or HDR colour space, or a present
+  mode per window, with no answer to the drafted egui-wgpu requests
+  (upstream.md) within two egui releases of filing them.
+- **An owner window egui-pop must set at creation**, on a system where
+  setting it after creation does not work, with winit's cross-platform
+  owner (rust-windowing/winit#4256) still not released two winit
+  releases after it is filed for.
+- **eframe stops painting inside `RedrawRequested`**, or winit's
+  `WindowId` stops being the native window, and the release that changes
+  it gives no per-viewport handle instead: the runner's guards
+  (`runner::ids_verified`, `egui-pop-winit`'s `window_id` test) say so
+  first.
+- **eframe drops `create_native`**, or a hook egui-pop relies on, with no
+  replacement.
+
+Each trigger is checked at an egui release bump. Until one holds, the
+cost (about 2,900 lines natively and 4,500 on the web, re-synced at each
+release) is not worth paying.
 
 ## The runner: eframe through `create_native`
 
