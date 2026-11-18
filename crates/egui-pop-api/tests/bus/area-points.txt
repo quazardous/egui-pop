@@ -1,0 +1,2 @@
+ui.areas
+  1. ui.area_registry (owner egui_pop): nothing

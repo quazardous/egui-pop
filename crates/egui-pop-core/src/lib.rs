@@ -45,6 +45,9 @@
 //! - [`strings`]: the library's own strings, by key, with English
 //!   fallbacks;
 //! - [`icon`]: icons by role, sized and coloured from tokens;
+//! - [`areas`]: the area registry: what each interactive area writes
+//!   (display, navigate, edit), an edit area's grips at rest, cursor and
+//!   hover card drawn by the framework, inert while its panel is stale;
 //! - [`hover_card`]: rich hover cards (formatted text, rows, live
 //!   values, command links) next to any widget, read by agents as data;
 //! - [`indicator`]: micro-indicators (dots and LEDs, badges, pips,
@@ -74,6 +77,7 @@
 //! - [`inspect`]: the element picker behind devtools' inspect mode.
 
 pub mod a11y;
+pub mod areas;
 pub mod band;
 pub mod binding;
 pub mod canvas;

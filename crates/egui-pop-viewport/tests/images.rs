@@ -4,6 +4,7 @@
 use egui::{Color32, Event, Key, Modifiers, PointerButton, vec2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
+use egui_pop_core::areas::{self, AreaKind};
 use egui_pop_viewport::change::{Change, Verdict};
 use egui_pop_viewport::histogram::{Channel, Clipping, Drag, Histogram};
 use egui_pop_viewport::thumbnail::{
@@ -241,4 +242,78 @@ fn a_histogram_drag_is_handed_back_and_a_veto_gives_it_back() {
     let rect = h.get_by_label("Histogram").rect();
     drag_by(&mut h, rect.center(), rect.width() / 4.0);
     assert!(h.state().abs() < 1e-6, "vetoed at the end: {}", h.state());
+}
+
+/// A draggable histogram naming its exposure beside one that only shows
+/// (a scope), optionally inside a panel whose state is not current.
+fn exposure_and_scope(inert: bool) -> Harness<'static, f64> {
+    let bins: Vec<f32> = (0..64).map(|i| (i * (63 - i)) as f32).collect();
+    let mut h = Harness::builder()
+        .with_size(vec2(420.0, 280.0))
+        .build_ui_state(
+            move |ui, ev: &mut f64| {
+                areas::scope(ui, "demo.scopes", inert, |ui| {
+                    let out = Histogram::new([Channel::new("Luminance", &bins, Color32::GRAY)])
+                        .draggable(true)
+                        .edits("Exposure", format!("{:+.2} EV", *ev))
+                        .size(vec2(400.0, 120.0))
+                        .show(ui);
+                    *ev += f64::from(out.moved()) * 4.0;
+                    Histogram::new([Channel::new("Luminance", &bins, Color32::GRAY)])
+                        .label("Scope")
+                        .size(vec2(400.0, 120.0))
+                        .show(ui);
+                });
+            },
+            0.3,
+        );
+    h.run();
+    h
+}
+
+#[test]
+fn a_draggable_histogram_is_an_edit_area_with_a_grip_a_scope_has_none() {
+    let h = exposure_and_scope(false);
+    let edit = areas::find(&h.ctx, "histogram:Histogram").expect("the histogram registered");
+    assert_eq!(edit.kind, AreaKind::Edit);
+    assert_eq!(edit.control.as_deref(), Some("Exposure"));
+    assert_eq!(edit.value.as_deref(), Some("+0.30 EV"));
+    assert_eq!(edit.panel.as_deref(), Some("demo.scopes"));
+    assert!(!edit.inert);
+    assert_eq!(edit.grips.len(), 1, "its exposure grip, at rest");
+    assert!(edit.rect.contains(edit.grips[0].at), "on the histogram");
+    assert!(
+        edit.grips[0].at.x > edit.rect.center().x,
+        "on its right edge"
+    );
+    let scope = areas::find(&h.ctx, "histogram:Scope").expect("the scope registered");
+    assert_eq!(scope.kind, AreaKind::Display);
+    assert!(scope.grips.is_empty() && scope.control.is_none());
+}
+
+#[test]
+fn the_hover_card_names_the_control_and_its_value() {
+    let h = exposure_and_scope(false);
+    let node = h.get_by_label("Histogram");
+    assert_eq!(
+        node.accesskit_node().description().as_deref(),
+        Some("Exposure +0.30 EV")
+    );
+    assert_eq!(h.get_by_label("Scope").accesskit_node().description(), None);
+}
+
+#[test]
+fn a_histogram_in_a_stale_panel_is_inert() {
+    let mut h = exposure_and_scope(true);
+    let edit = areas::find(&h.ctx, "histogram:Histogram").unwrap();
+    assert_eq!(edit.kind, AreaKind::Edit, "still listed as what it is");
+    assert!(edit.inert);
+    assert!(edit.grips.is_empty(), "no grip while inert");
+    assert_eq!(
+        h.get_by_label("Histogram").accesskit_node().description(),
+        None
+    );
+    let start = edit.rect.center();
+    drag_by(&mut h, start, 100.0);
+    assert_eq!(*h.state(), 0.3, "nothing edited");
 }
