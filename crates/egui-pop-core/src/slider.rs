@@ -690,6 +690,7 @@ pub struct Slider<'a> {
     compact: bool,
     scrub: bool,
     menu: bool,
+    travel: Option<f32>,
 }
 
 /// The least width a horizontal slider takes, whatever its room: below
@@ -721,6 +722,7 @@ impl<'a> Slider<'a> {
             compact: false,
             scrub: false,
             menu: true,
+            travel: None,
         }
     }
 
@@ -738,6 +740,7 @@ impl<'a> Slider<'a> {
             compact: false,
             scrub: false,
             menu: true,
+            travel: None,
         }
     }
 
@@ -783,7 +786,8 @@ impl<'a> Slider<'a> {
     /// where the value matters more than where it sits in its range. The
     /// slider's gestures, keys, typed entry, menu, history and
     /// accessibility stay: a drag along the field scrubs the value over
-    /// the soft range, whatever the field's width. Too narrow for its
+    /// the soft range, whatever the field's width, or at a set speed with
+    /// [`Slider::travel`]. Too narrow for its
     /// label, it shows the value alone, as [`Slider::compact`] does.
     /// Horizontal only: a vertical slider keeps its track.
     ///
@@ -791,6 +795,21 @@ impl<'a> Slider<'a> {
     /// (docs/stability.md).</div>
     pub fn scrub(mut self) -> Self {
         self.scrub = true;
+        self
+    }
+
+    /// Points of drag over the soft range, whatever the bar's length: a
+    /// scrub field that moves at a set speed (a value's sensitivity, its
+    /// soft range over so many points) rather than across its width. By
+    /// default the bar's length; the fine and coarse modifiers still
+    /// scale it. As [`Knob::travel`](crate::knob::Knob::travel).
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn travel(mut self, points: f32) -> Self {
+        if points > 0.0 && points.is_finite() {
+            self.travel = Some(points);
+        }
         self
     }
 
@@ -855,6 +874,7 @@ impl<'a> Slider<'a> {
             compact,
             scrub,
             menu,
+            travel,
         } = self;
         let row_height = ui.spacing().interact_size.y;
         let wanted = match (size, vertical) {
@@ -910,9 +930,9 @@ impl<'a> Slider<'a> {
             let g = gestures(ui.ctx());
             let scale = modifier_scale(ui, &g);
             let along = if vertical {
-                Axis::Vertical(bar.height())
+                Axis::Vertical(travel.unwrap_or(bar.height()))
             } else {
-                Axis::Horizontal(bar.width())
+                Axis::Horizontal(travel.unwrap_or(bar.width()))
             };
             match drag_along(ui, &response, &spec, *value, spec.soft, scale, along) {
                 Drag::None => {}
