@@ -379,6 +379,9 @@ pub struct PlacesOutput {
     pub chosen: Option<(String, PlaceItem)>,
 }
 
+/// What draws an item's context menu ([`PlacesPanel::menu`]).
+type PlaceMenu<'a> = Box<dyn FnMut(&mut Ui, &PlaceSection, &PlaceItem) + 'a>;
+
 /// A side panel of places: sections, each a heading over its items, as the
 /// in-app picker lists them (an import window's sources column). One stop
 /// for Tab; Up and Down go from item to item across the sections, Enter or
@@ -407,7 +410,7 @@ pub struct PlacesPanel<'a> {
     name: String,
     sections: &'a [PlaceSection],
     selected: Option<&'a str>,
-    menu: Option<Box<dyn FnMut(&mut Ui, &PlaceSection, &PlaceItem) + 'a>>,
+    menu: Option<PlaceMenu<'a>>,
 }
 
 impl fmt::Debug for PlacesPanel<'_> {
