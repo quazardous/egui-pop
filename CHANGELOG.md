@@ -8,6 +8,20 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.14.0 (2026-11-18)
+
+Published: egui-pop-fit 0.1.1, egui-pop-core 0.12.2, egui-pop-api 0.12.1, egui-pop-i18n 0.12.1, egui-pop-views 0.13.0, egui-pop 0.14.0.
+
+### Breaking changes
+
+- egui-pop, egui-pop-i18n, egui-pop-views: The library's comparison (`views::library::compare`) is one surface for one to many images: one image is a loupe filling the surface, with the same zoom, pan and wheel as the image viewport; two to four sit side by side as before (four in a square), and more tile in the grid that shows them the largest (six in three columns), up to `CompareView::max_panes` (four by default, at most `PANE_LIMIT`, 16). The application keeps owning the list: the surface says what the user asked, as `Intent`s in `CompareOutput::intents`: a pane made active (a click, the arrows, Home and End, the keyboard focus), images dropped on it to add at a place, a pane taken out (its close button and Delete or Backspace on the active pane, with `CompareView::removable`), a pane moved. With `CompareView::carry`, images come in and go out through the application's drag session, across its windows too: a drag of the application's payload let go on the surface adds its images (a bar shows where, a full comparison refuses with its reason), a pane's name drags its image out, and a pane let go over nothing goes out. `CompareView::active` outlines the active image; `CompareOutput::panes` says where each pane was drawn, and `compare::layout` gives the same places. Each pane is a list item named after its image and selected when active, inside a list named Compare that takes the keyboard. Breaking: `CompareOutput` is `#[non_exhaustive]` and has new fields; `CompareState` keeps one view per pane for any count, with `removed`, `inserted` and `moved` to follow the application's list. New strings: `egui-pop-views-compare-empty`, `-compare-remove`, `-compare-full`, `-compare-not-images` (English and French).
+
+### Features
+
+- egui-pop-api: A tab dragged out of a detached panel's window and let go over another window of the application docks there: over the main window, in the area under the pointer (the centre, a side or the bottom area, a closed one along the areas' edge), which shows the same drop zone as a drag inside the main window, with the same refusals and their reasons (`only_in`); over another detached window, among its tabs. Let go outside every window, the tab stays. Where the system tells where windows are (X11, Windows) the zone shows during the drag; where it hides them (Wayland) the drop goes to the window the pointer is over once let go, with no zone shown before. A detached window now always shows its tab bar, even with one panel, with a Dock back button at its end (the shown panel docks back where it came from, else in its own area); the `workbench.panel.dock_back` command is bound to `Ctrl+Shift+D`.
+- egui-pop, egui-pop-fit: `egui-pop-fit`, a new crate in the workspace: the slot layout engine formerly published on its own as `egui_fit` (0.1), with its history, its tests and an unchanged API (paths `egui_fit::` become `egui_pop_fit::`). It packs plain boxes into a grid in standard slot sizes (¼, ⅓, ½, ⅔, ¾ of a unit and whole multiples, counted in twelfths), with forms, orientations, pins, groups and their bands, growth and hysteresis, and has no egui dependency; its `serde` feature is kept. The facade re-exports it as `egui_pop::fit`, and its `fit-serde` feature turns on `serde` there. Experimental.
+- egui-pop, egui-pop-api, egui-pop-core: egui_stack 0.26: a dock's separators are named after the tabs on each side for screen readers ("Resize between Files and Outline", was "Resize"), a tab starts dragging 6 points from the press, and a drop over a dock leaves its tab bar out, a band under the bar stacking the tab there. Code that builds egui_stack's `OverlayFeel` itself now finishes the literal with `..Default::default()`.
+
 ## 0.13.1 (2026-11-17)
 
 Published: egui-pop-core 0.12.1, egui-pop-viewport 0.12.1, egui-pop-views 0.12.1, egui-pop 0.13.1.

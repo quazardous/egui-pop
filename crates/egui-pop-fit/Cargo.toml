@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-fit"
-version = "0.1.0"
+version = "0.1.1"
 description = "A slot layout engine with no egui dependency: dense grid packing of plain boxes in standard slot sizes, with forms, orientations, growth and hysteresis (formerly egui_fit)"
 readme = "README.md"
 keywords = ["layout", "grid", "packing", "gui"]
