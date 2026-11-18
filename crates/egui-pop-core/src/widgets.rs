@@ -1,6 +1,6 @@
 //! egui's small widgets drawn through the kit (`docs/kit.md`): a
 //! checkbox, a radio button, a selectable row, a toggle chip, and the
-//! arrow of a combo box.
+//! arrow of a combo box; and an on/off [`Switch`], which egui lacks.
 //!
 //! Each keeps egui's layout (egui's atoms, sizes and spacing), its
 //! interaction and what it tells assistive technology; the kit paints
@@ -20,6 +20,7 @@
 //! | `ComboBox::from_id_salt(id)` | [`combo_box`]`(id)` |
 //! | `ComboBox::new(id, label)` | [`combo_box_labelled`]`(id, label)` |
 //! | a selectable label used as a toggle | [`ToggleChip`] |
+//! | a checkbox drawn as a switch (egui's demo `toggle_switch`) | [`switch`]`(ui, &mut on, text)`, or [`Switch`] |
 //!
 //! [`Splitter`] has no counterpart in egui, whose panels keep their
 //! resize lines to themselves and out of the keyboard's reach.
@@ -121,7 +122,7 @@ impl Widget for Checkbox<'_> {
             indeterminate,
         } = self;
         let kit = Kit::of(ui.ctx());
-        let mut toggle = Toggle::allocate(ui, &kit.checkbox, atoms, "egui_pop::checkbox");
+        let mut toggle = Toggle::allocate(ui, &kit.checkbox, atoms, "egui_pop::checkbox", 1.0);
         if toggle.response().clicked() {
             *checked = !*checked;
             toggle.response_mut().mark_changed();
@@ -175,7 +176,7 @@ impl Widget for RadioButton<'_> {
     fn ui(self, ui: &mut Ui) -> Response {
         let RadioButton { checked, atoms } = self;
         let kit = Kit::of(ui.ctx());
-        let toggle = Toggle::allocate(ui, &kit.radio, atoms, "egui_pop::radio_button");
+        let toggle = Toggle::allocate(ui, &kit.radio, atoms, "egui_pop::radio_button", 1.0);
         let text = toggle.text.clone();
         toggle.response().widget_info(|| {
             WidgetInfo::selected(
@@ -200,16 +201,24 @@ impl Widget for RadioButton<'_> {
 
 /// A checkbox or a radio button laid out as egui lays them out: a square
 /// of the box's side (`width`, else egui's icon width) before the label,
-/// at least egui's interaction height.
+/// at least egui's interaction height. A switch's track is `ratio` sides
+/// wide.
 struct Toggle<'a> {
     prepared: egui::AllocatedWidgetAtom<'a>,
     rect_id: IdSalt,
     side: f32,
+    ratio: f32,
     text: Option<String>,
 }
 
 impl<'a> Toggle<'a> {
-    fn allocate(ui: &mut Ui, component: &Component, mut atoms: Atoms<'a>, id: &str) -> Self {
+    fn allocate(
+        ui: &mut Ui,
+        component: &Component,
+        mut atoms: Atoms<'a>,
+        id: &str,
+        ratio: f32,
+    ) -> Self {
         let side = if component.data.width > 0.0 {
             component.data.width
         } else {
@@ -218,7 +227,7 @@ impl<'a> Toggle<'a> {
         let mut min_size = Vec2::splat(ui.spacing().interact_size.y);
         min_size.y = min_size.y.at_least(side);
         // Centred on the line: the icon is as tall as the line.
-        let mut icon_size = Vec2::splat(side);
+        let mut icon_size = vec2(side * ratio, side);
         icon_size.y = icon_size.y.at_least(min_size.y);
         let rect_id = IdSalt::new(id);
         atoms.push_left(Atom::custom(rect_id, icon_size));
@@ -231,6 +240,7 @@ impl<'a> Toggle<'a> {
             prepared,
             rect_id,
             side,
+            ratio,
             text,
         }
     }
@@ -245,13 +255,31 @@ impl<'a> Toggle<'a> {
 
     /// Paints the label, the box (grown by `expansion`) and the mark.
     fn paint(
-        mut self,
+        self,
         ui: &Ui,
         kit: &Kit,
         component: &Component,
         on: bool,
         mark: Option<Glyph>,
         expansion: f32,
+    ) -> Response {
+        self.paint_with(ui, component, on, |big, state, color| {
+            paint_box(ui, component, big.expand(expansion), state);
+            if let Some(mark) = mark {
+                paint_mark(ui, kit, mark, big, color);
+            }
+        })
+    }
+
+    /// Paints the label, then hands the box's rectangle (`ratio` sides
+    /// wide, a side high, centred on the line), the state and the mark's
+    /// colour to `icon`.
+    fn paint_with(
+        mut self,
+        ui: &Ui,
+        component: &Component,
+        on: bool,
+        icon: impl FnOnce(Rect, State, Color32),
     ) -> Response {
         if !ui.is_rect_visible(self.prepared.response.rect) {
             return self.prepared.response;
@@ -262,17 +290,14 @@ impl<'a> Toggle<'a> {
         // filling a checked box keeps its label readable.
         let label = text_color(ui, component, state_of(ui, self.response(), false));
         self.prepared.fallback_text_color = label;
-        let (side, rect_id) = (self.side, self.rect_id);
+        let (side, ratio, rect_id) = (self.side, self.ratio, self.rect_id);
         let r = self.prepared.paint(ui);
         if let Some(rect) = r.rect(rect_id) {
-            let big = Rect::from_center_size(
-                pos2(rect.left() + side / 2.0, rect.center().y),
-                Vec2::splat(side),
+            let big = Rect::from_min_size(
+                pos2(rect.left(), rect.center().y - side / 2.0),
+                vec2(side * ratio, side),
             );
-            paint_box(ui, component, big.expand(expansion), state);
-            if let Some(mark) = mark {
-                paint_mark(ui, kit, mark, big, color);
-            }
+            icon(big, state, color);
         }
         r.response
     }
@@ -349,6 +374,101 @@ pub fn radio_value<'a, V: PartialEq>(
         r.mark_changed();
     }
     r
+}
+
+/// How many of its box's sides a switch's track is wide.
+const SWITCH_RATIO: f32 = 1.8;
+
+/// An on/off switch: a track (the kit's `switch` component, `selected`
+/// while on) and a round thumb, at the track's start while off and at its
+/// end while on, in the state's `text`; its label after it, in the `text`
+/// of the same state off. Laid out as a checkbox is (egui's interaction
+/// height, the box's side as the track's height), clicked, or pressed
+/// with Space or Enter when focused, to toggle. A switch to assistive
+/// technology (AccessKit's `Switch` role, toggled while on), named by its
+/// label or by [`Switch::name`]. The thumb moves at once: no animation to
+/// wait for, none to turn off for reduced motion.
+///
+/// For a setting that takes effect at once (a feature on or off); a
+/// choice confirmed later is a [`Checkbox`].
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
+///
+/// Need (input): an on/off switch (a toggle with a track and a thumb).
+#[must_use = "You should put this widget in a ui with `ui.add(widget);`"]
+pub struct Switch<'a> {
+    on: &'a mut bool,
+    atoms: Atoms<'a>,
+    name: Option<String>,
+}
+
+impl std::fmt::Debug for Switch<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Switch")
+            .field("on", &self.on)
+            .field("name", &self.name)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<'a> Switch<'a> {
+    /// A switch toggling `on`, labelled by `atoms`.
+    pub fn new(on: &'a mut bool, atoms: impl IntoAtoms<'a>) -> Self {
+        Switch {
+            on,
+            atoms: atoms.into_atoms(),
+            name: None,
+        }
+    }
+
+    /// A switch without a label: give it a [`name`](Self::name).
+    pub fn without_text(on: &'a mut bool) -> Self {
+        Self::new(on, ())
+    }
+
+    /// Its name for assistive technology, when it has no label or its
+    /// label says too little.
+    #[inline]
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+}
+
+impl Widget for Switch<'_> {
+    fn ui(self, ui: &mut Ui) -> Response {
+        let Switch { on, atoms, name } = self;
+        let kit = Kit::of(ui.ctx());
+        let mut toggle = Toggle::allocate(ui, &kit.switch, atoms, "egui_pop::switch", SWITCH_RATIO);
+        if toggle.response().clicked() {
+            *on = !*on;
+            toggle.response_mut().mark_changed();
+        }
+        let value = *on;
+        let name = name.or_else(|| toggle.text.clone()).unwrap_or_default();
+        toggle
+            .response()
+            .widget_info(|| WidgetInfo::selected(Role::Switch, ui.is_enabled(), value, &name));
+        let component = &kit.switch;
+        toggle.paint_with(ui, component, value, |track, state, color| {
+            paint_box(ui, component, track, state);
+            let half = track.height() / 2.0;
+            let x = if value {
+                track.right() - half
+            } else {
+                track.left() + half
+            };
+            // The thumb leaves a third of the track's half height around it.
+            ui.painter()
+                .circle_filled(pos2(x, track.center().y), half * 2.0 / 3.0, color);
+        })
+    }
+}
+
+/// A switch ([`Switch`]): an on/off toggle with a track and a thumb.
+pub fn switch<'a>(ui: &mut Ui, on: &'a mut bool, atoms: impl IntoAtoms<'a>) -> Response {
+    ui.add(Switch::new(on, atoms))
 }
 
 /// A row picked from a short list: its box is the kit's `selectable-row`

@@ -288,6 +288,11 @@ text-role:
     size: {$type: "dimension", $value: "{font.size.m}"}
     color: {$type: "color", $value: "{text.default}"}
     weight: {$type: "number", $value: 400}
+  strong:
+    $description: "Inline emphasis in running text: a word or a value that must stand out, at the body's size."
+    size: {$type: "dimension", $value: "{font.size.m}"}
+    color: {$type: "color", $value: "{text.strong}"}
+    weight: {$type: "number", $value: 600}
   muted:
     $description: "Secondary text: hints, descriptions, an empty list's message."
     size: {$type: "dimension", $value: "{font.size.m}"}

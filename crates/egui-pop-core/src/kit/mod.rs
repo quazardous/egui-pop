@@ -942,6 +942,9 @@ components! {
     /// combo box's choices, the assist card's rows; `selected` for the
     /// chosen one, never `hover` then.
     selectable_row: "selectable-row" => "box",
+    /// An on/off switch's track (`widgets::Switch`), its thumb in `text`:
+    /// `selected` while on.
+    switch: "switch" => "pill",
     /// A tab of the workbench's tab bars.
     tab: "tab" => "box",
     /// The bar behind a row of tabs.

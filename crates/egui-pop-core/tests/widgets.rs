@@ -4,7 +4,7 @@
 use egui::accesskit::{Role, Toggled};
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
-use egui_pop_core::widgets::{self, Checkbox, ToggleChip};
+use egui_pop_core::widgets::{self, Checkbox, Switch, ToggleChip};
 
 #[derive(Default)]
 struct Values {
@@ -12,6 +12,8 @@ struct Values {
     choice: usize,
     picked: usize,
     case: bool,
+    wifi: bool,
+    bare: bool,
 }
 
 fn app() -> Harness<'static, Values> {
@@ -25,6 +27,8 @@ fn app() -> Harness<'static, Values> {
                 widgets::selectable_value(ui, &mut v.picked, i, *name);
             }
             ui.add(ToggleChip::new(&mut v.case, "Aa").name("Match case"));
+            widgets::switch(ui, &mut v.wifi, "Wi-Fi");
+            ui.add(Switch::without_text(&mut v.bare).name("Airplane mode"));
             widgets::combo_box_labelled("combo", "Mode")
                 .selected_text(["First", "Second"][v.picked])
                 .show_ui(ui, |ui| {
@@ -127,4 +131,61 @@ fn a_combo_box_with_the_kit_s_arrow_opens_and_picks() {
     h.query_all_by_label("Second").last().unwrap().click();
     h.run();
     assert_eq!(h.state().picked, 1);
+}
+
+#[test]
+fn a_switch_is_a_named_switch_toggled_by_a_click_and_by_space() {
+    let mut h = app();
+    h.run();
+    let node = h.get_by_label("Wi-Fi");
+    assert_eq!(node.accesskit_node().role(), Role::Switch);
+    assert_eq!(node.accesskit_node().toggled(), Some(Toggled::False));
+    node.click();
+    h.run();
+    assert!(h.state().wifi);
+    assert_eq!(
+        h.get_by_label("Wi-Fi").accesskit_node().toggled(),
+        Some(Toggled::True)
+    );
+    h.get_by_label("Wi-Fi").focus();
+    h.run();
+    h.key_press(egui::Key::Space);
+    h.run();
+    assert!(!h.state().wifi, "Space toggles it back");
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert!(h.state().wifi, "and so does Enter");
+}
+
+#[test]
+fn a_switch_without_a_label_is_named_by_its_name() {
+    let mut h = app();
+    h.run();
+    let node = h.get_by_label("Airplane mode");
+    assert_eq!(node.accesskit_node().role(), Role::Switch);
+    node.click();
+    h.run();
+    assert!(h.state().bare);
+}
+
+#[test]
+fn a_switch_s_track_is_wider_than_a_checkbox_s_box_and_as_tall() {
+    let mut h = Harness::new_ui(|ui| {
+        let mut a = true;
+        ui.add(Checkbox::without_text(&mut a))
+            .widget_info(|| egui::WidgetInfo::labeled(Role::CheckBox, true, "Box"));
+        let mut b = true;
+        ui.add(Switch::without_text(&mut b).name("Track"));
+    });
+    h.run();
+    let rects: Vec<egui::Rect> = h
+        .query_all_by_role(Role::CheckBox)
+        .chain(h.query_all_by_role(Role::Switch))
+        .map(|n| n.rect())
+        .collect();
+    let [checkbox, switch] = rects[..] else {
+        panic!("{rects:?}")
+    };
+    assert_eq!(switch.height(), checkbox.height());
+    assert!(switch.width() > checkbox.width(), "{switch:?} {checkbox:?}");
 }

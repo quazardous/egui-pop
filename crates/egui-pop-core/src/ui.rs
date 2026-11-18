@@ -30,8 +30,8 @@ use std::ops::Range;
 
 use egui::scroll_area::ScrollAreaOutput;
 use egui::{
-    ComboBox, InnerResponse, Rect, Response, RichText, ScrollArea, Shadow, Ui, UiBuilder,
-    WidgetText,
+    ComboBox, InnerResponse, Layout, Rect, Response, RichText, ScrollArea, Sense, Shadow, Ui,
+    UiBuilder, Vec2, Widget, WidgetText,
 };
 
 use crate::fonts::{self, Role, Weight};
@@ -89,7 +89,22 @@ impl Space {
 /// installed it (`fonts::family`), at the regular weight before.
 pub fn role_text(ui: &Ui, role: TextRole, text: impl Into<String>) -> RichText {
     let t = Tokens::of(ui.ctx());
-    let style = t.text_role.get(role);
+    styled_text(ui, t.text_role.get(role), text)
+}
+
+/// `text` as inline emphasis (`text-role.strong`): the body's size, a
+/// heavier weight and the strong text colour, for a word or a value that
+/// must stand out in running text. Not a heading: a title over a group
+/// is [`UiPop::section_title`].
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
+pub fn strong_text(ui: &Ui, text: impl Into<String>) -> RichText {
+    let t = Tokens::of(ui.ctx());
+    styled_text(ui, &t.text_role.strong, text)
+}
+
+fn styled_text(ui: &Ui, style: &crate::theme::TextRoleStyle, text: impl Into<String>) -> RichText {
     let rich = RichText::new(text)
         .size(style.size.max(4.0))
         .color(style.color);
@@ -237,6 +252,16 @@ pub trait UiPop: sealed::Sealed {
     /// Need (text): small print about an item, a date or a size.
     fn meta(&mut self, text: impl Into<String>) -> Response;
 
+    /// Inline emphasis: a word or a value that must stand out in running
+    /// text, at the body's size in a heavier weight (`text-role.strong`,
+    /// [`strong_text`]). egui's own `strong` only brightens the colour.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    ///
+    /// Need (text): strong or bold text inline, a word that must stand out.
+    fn strong(&mut self, text: impl Into<String>) -> Response;
+
     /// Monospace text: a log's or a console's line, a path, a piece of
     /// code. egui's monospace text style (`font.text-style.monospace`,
     /// in `font.family.mono`) in the body role's colour
@@ -276,6 +301,49 @@ pub trait UiPop: sealed::Sealed {
     ///
     /// Need (layout): a divider, a rule between two sections (separator).
     fn divider(&mut self) -> Response;
+
+    /// `widget` in a box of `size` at the layout's cursor, filling it
+    /// (centred and justified along the layout's direction): a row the
+    /// width of its room, a field of a set width. egui's `add_sized`.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    ///
+    /// Need (layout): a widget of a fixed size, filling its box (add_sized).
+    fn sized(&mut self, size: Vec2, widget: impl Widget) -> Response;
+
+    /// `add` in a box of exactly `size` at the layout's cursor, laid out
+    /// by `layout` (`Layout::centered_and_justified` to fill it): a cell
+    /// of a set width in a row. The box takes `size` whatever `add`
+    /// draws. egui's `allocate_ui_with_layout`, whose box shrinks to its
+    /// content.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    ///
+    /// Need (layout): content in a box of a fixed size (allocate_ui_with_layout).
+    fn sized_ui<R>(
+        &mut self,
+        size: Vec2,
+        layout: Layout,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> InnerResponse<R>;
+
+    /// `add` in `rect`, laid out by `layout` and clipped to it, for what
+    /// places its parts by rectangles (a card laid out by a layout
+    /// engine, a slot): nothing it draws goes past `rect`. egui's `put`,
+    /// for any content.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    ///
+    /// Need (layout): content placed in a given rectangle, clipped to it (put).
+    fn rect_ui<R>(
+        &mut self,
+        rect: Rect,
+        layout: Layout,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> InnerResponse<R>;
 
     /// Space by intent along the layout's direction ([`Space`]); egui's
     /// own `add_space` takes points.
@@ -428,6 +496,11 @@ impl UiPop for Ui {
         self.text_role(TextRole::Meta, text)
     }
 
+    fn strong(&mut self, text: impl Into<String>) -> Response {
+        let rich = strong_text(self, text);
+        self.label(rich)
+    }
+
     fn code_text(&mut self, text: impl Into<String>) -> Response {
         let color = Tokens::of(self.ctx()).text_role.body.color;
         self.label(RichText::new(text).monospace().color(color))
@@ -466,6 +539,40 @@ impl UiPop for Ui {
             }
         }
         response
+    }
+
+    fn sized(&mut self, size: Vec2, widget: impl Widget) -> Response {
+        let layout = if self.layout().main_dir().is_horizontal() {
+            Layout::centered_and_justified(egui::Direction::LeftToRight)
+        } else {
+            Layout::centered_and_justified(egui::Direction::TopDown)
+        };
+        self.sized_ui(size, layout, |ui| ui.add(widget)).inner
+    }
+
+    fn sized_ui<R>(
+        &mut self,
+        size: Vec2,
+        layout: Layout,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> InnerResponse<R> {
+        let (rect, response) = self.allocate_exact_size(size, Sense::hover());
+        let mut child = self.new_child(UiBuilder::new().max_rect(rect).layout(layout));
+        let inner = add(&mut child);
+        InnerResponse::new(inner, response)
+    }
+
+    fn rect_ui<R>(
+        &mut self,
+        rect: Rect,
+        layout: Layout,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> InnerResponse<R> {
+        let clip = rect.intersect(self.clip_rect());
+        self.scope_builder(UiBuilder::new().max_rect(rect).layout(layout), |ui| {
+            ui.set_clip_rect(clip);
+            add(ui)
+        })
     }
 
     fn space_role(&mut self, space: Space) {

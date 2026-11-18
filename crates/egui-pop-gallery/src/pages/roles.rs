@@ -1,10 +1,11 @@
 //! The layout by role page: the `UiPop` helpers (text roles, spacing by
 //! intent, code, text in a tone and dividers, cards and buttons by tone,
-//! rows and grids), each with the
+//! rows and grids, fixed sizes), each with the
 //! tokens it reads.
 
 use egui::Ui;
 use egui_pop::core::ui::{Align, Grid, Length, Row, Space, TextRole, Tone, Track, UiPop};
+use egui_pop::core::widgets::SelectableRow;
 use egui_pop::theme::Tokens;
 
 /// The tones shown, each by its name.
@@ -24,6 +25,8 @@ const TONES: [Tone; 8] = [
 pub struct State {
     last: Option<Tone>,
     name: String,
+    /// The fixed-size rows' choice.
+    shown: usize,
 }
 
 impl Default for State {
@@ -31,6 +34,7 @@ impl Default for State {
         Self {
             last: None,
             name: "IMG_0001.raw".to_owned(),
+            shown: 0,
         }
     }
 }
@@ -39,6 +43,7 @@ pub fn show(ui: &mut Ui, state: &mut State) {
     let t = Tokens::of(ui.ctx());
     ui.muted("Layout code says what a piece of text is and why there is space; the helpers draw from the theme's text roles, spacing by intent and kit.");
     rows_and_grids(ui, state);
+    fixed_sizes(ui, state);
     ui.space_role(Space::Section);
     ui.section_title("Text roles");
     ui.space_role(Space::Inline);
@@ -51,6 +56,15 @@ pub fn show(ui: &mut Ui, state: &mut State) {
                 ui.text_role(role, sample(role));
                 ui.end_row();
             }
+            // Inline emphasis: not a `TextRole`, its own helper.
+            ui.monospace("text-role.strong");
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.label("Writes ");
+                ui.strong("one copy");
+                ui.label(" of each image.");
+            });
+            ui.end_row();
         });
 
     ui.space_role(Space::Section);
@@ -183,6 +197,46 @@ fn rows_and_grids(ui: &mut Ui, state: &mut State) {
         r.cell(|ui| ui.button("Apply"));
         r.cell(|ui| ui.button_tone(Tone::Accent, "Export all"));
     });
+}
+
+/// `ui.sized`, `ui.sized_ui` and `ui.rect_ui`: a widget, content, and
+/// content in a rectangle, each in a box of a set size.
+fn fixed_sizes(ui: &mut Ui, state: &mut State) {
+    let t = Tokens::of(ui.ctx());
+    ui.space_role(Space::Section);
+    ui.section_title("Fixed sizes");
+    ui.muted("A widget filling a box of a set size (sized), content in one (sized_ui), content clipped to a rectangle (rect_ui).");
+    ui.space_role(Space::Group);
+    let row = egui::vec2(16.0 * t.space.group, t.size.row_height);
+    for (i, name) in ["Show Exposure", "Show Contrast"].into_iter().enumerate() {
+        if ui
+            .sized(row, SelectableRow::new(state.shown == i, name))
+            .clicked()
+        {
+            state.shown = i;
+        }
+    }
+    ui.space_role(Space::Group);
+    ui.horizontal(|ui| {
+        let cell = egui::vec2(3.0 * t.space.group, t.size.row_height);
+        for n in 1..=3 {
+            ui.sized_ui(
+                cell,
+                egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                |ui| ui.muted(n.to_string()),
+            );
+        }
+    });
+    ui.space_role(Space::Group);
+    let (rect, _) = ui.allocate_exact_size(
+        egui::vec2(10.0 * t.space.group, t.size.row_height),
+        egui::Sense::hover(),
+    );
+    ui.rect_ui(
+        rect,
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| ui.label("A long line clipped to its rectangle, never past it"),
+    );
 }
 
 fn sample(role: TextRole) -> &'static str {

@@ -199,6 +199,10 @@ pub struct TextRoles {
     pub title: TextRoleStyle,
     pub section: TextRoleStyle,
     pub body: TextRoleStyle,
+    /// Inline emphasis at the body's size (`text-role.strong`): not a
+    /// [`TextRole`] variant, so drawn with [`crate::ui::strong_text`] and
+    /// `UiPop::strong`.
+    pub strong: TextRoleStyle,
     pub muted: TextRoleStyle,
     pub meta: TextRoleStyle,
 }
@@ -499,6 +503,15 @@ impl Tokens {
                     title: role("title"),
                     section: role("section"),
                     body: role("body"),
+                    // A theme from before the role: the body, semibold.
+                    strong: if r.dimension("text-role.strong.size").is_some() {
+                        role("strong")
+                    } else {
+                        TextRoleStyle {
+                            weight: crate::fonts::Weight::SEMIBOLD,
+                            ..role("body")
+                        }
+                    },
                     muted: role("muted"),
                     meta: role("meta"),
                 }

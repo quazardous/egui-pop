@@ -383,6 +383,21 @@ const CORE: &[Required] = &[
         "ordinary text: its weight",
     ),
     sys(
+        "text-role.strong.size",
+        "dimension",
+        "inline emphasis: its size",
+    ),
+    sys(
+        "text-role.strong.color",
+        "color",
+        "inline emphasis: its colour",
+    ),
+    sys(
+        "text-role.strong.weight",
+        "number",
+        "inline emphasis: its weight",
+    ),
+    sys(
         "text-role.muted.size",
         "dimension",
         "secondary text: its size",
