@@ -125,7 +125,7 @@ image = { version = "0.25", default-features = false }
 # handles and their drag modifiers, floats moved by a handle, and the
 # `bus` feature (`stack.*` points on the application's bus); 0.28.6
 # `TabViewer::dock_title`, the areas' titles in the Move group menu.
-egui_stack = { version = "0.28.7", default-features = false }
+egui_stack = { version = "0.28.8", default-features = false }
 egui-pop = { version = "0.14.0", path = "crates/egui-pop" }
 
 [workspace.lints.rust]
