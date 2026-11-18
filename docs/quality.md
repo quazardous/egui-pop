@@ -99,6 +99,69 @@ After a merge, the Pages workflow builds the docs site, the API
 documentation with every feature, and the web gallery with its smoke
 test again, then publishes them.
 
+## What a build costs
+
+What egui-pop costs an application is measured on a bench box, not in
+CI (CI is for compatibility): the `egui-pop-cost` job runs
+[`tools/cost/cost.py`](../tools/cost/cost.py) on the `cost_probe`
+example (one plugin with one panel, which builds with any set of
+features) for each feature set of the `egui-pop` crate: without the
+default features, with them, and each default or heavy optional
+feature alone. It counts the dependencies (`cargo tree -e normal`),
+times release builds with the compile cache off (clean for the first
+two sets, then what each set adds on top of the bare build, then an
+incremental build after the application's code changed), weighs the
+stripped binary, and times the headless start to the first frame drawn
+and tessellated, over `MinimalPlugins` and over `DefaultPlugins`. The
+figures are judged against
+[`tools/cost/budget.json`](../tools/cost/budget.json): one over its
+budget (each figure's tolerance is in the file) is reported, never a
+failure. To move the budget, commit the `budget.json` a run returns.
+
+The first run (2026-11-18, Rust 1.95, five threads of a box running
+other jobs at the same time):
+
+| Set | Dependencies | Build | Binary |
+|---|---:|---:|---:|
+| `--no-default-features` | 115 | 286 s clean | 20.0 MiB |
+| default features | 289 | 371 s clean | 35.6 MiB |
+| `eframe` alone | 283 | +339 s | 33.8 MiB |
+| `phosphor` alone | 116 | +101 s | 20.8 MiB |
+| `bundled-fonts` alone | 115 | +106 s | 20.6 MiB |
+| `theme-zip` alone | 124 | +177 s | 20.0 MiB |
+| `image-previews` alone | 129 | +116 s | 20.5 MiB |
+
+What it says:
+
+- **eframe is the cost of the defaults**: 168 of the 174 dependencies
+  the defaults add (winit, wgpu, glow and the windowing stack), most of
+  their build time and 13.8 MiB of the 15.6 MiB they add to the binary.
+  `create-native`, also a default, only changes how eframe starts. A
+  host running its own event loop leaves `eframe` out.
+- **The other default features are cheap**: the Phosphor icon font and
+  the bundled fonts add their font files (0.8 and 0.6 MiB) and one or
+  no dependency; `theme-zip` adds the zip crate (9 dependencies) and no
+  size; `image-previews` adds `image`'s PNG and JPEG decoders, which
+  eframe brings anyway. The `+` times include about 100 s of egui-pop's
+  own crates rebuilt with another feature set: a feature's own share is
+  what is left.
+- **A feature an application does not call costs build time, not
+  binary size**: the linker drops what the probe never reaches, so the
+  heavy optional features (`viewport`, `views-markdown`, `platform`,
+  `graph-png`...) leave the binary at 20 MiB. They cost dependencies
+  (`platform` 93 more, `graph-png` 77) and build time (`platform`
+  +340 s); `tools/cost/budget.json` lists each.
+- **`DefaultPlugins` costs nothing to build** (its plugins are in
+  `egui-pop-api` whatever the features) and nothing measurable at
+  start: with the default features the first frame comes 40 ms after
+  the process starts over either plugin group. Almost all of it is the
+  application's build (`App::build`); drawing and tessellating the
+  frame takes 2 to 3 ms. Start-up times moved between 40 and 110 ms
+  from one set to the next with the box's load, so differences under
+  about 30 ms are noise.
+- An incremental build, after the application's code changed, takes
+  4 s without eframe and 8 s with it, mostly the link.
+
 ## What is not covered
 
 - **Linux only.** CI runs on Ubuntu. Windows and macOS are neither

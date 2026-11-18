@@ -82,8 +82,8 @@ TOLERANCE = {
     "added_build_s": [0.25, 20],
     "incremental_build_s": [0.5, 3],
     "binary_bytes": [0.05, 65536],
-    "start_minimal_ms": [0.3, 10],
-    "start_default_ms": [0.3, 10],
+    "start_minimal_ms": [0.5, 30],
+    "start_default_ms": [0.5, 30],
 }
 
 COLUMNS = [
