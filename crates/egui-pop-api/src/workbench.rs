@@ -145,7 +145,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::{Arc, Mutex};
 
-use egui::{Color32, Id, Pos2, Rect, Role, Ui, ViewportBuilder, ViewportId, WidgetInfo};
+use egui::{Color32, Id, Pos2, Rect, Role, Ui, ViewportId, WidgetInfo};
 use egui_pop_core::focus;
 use egui_pop_core::kit::{Kit, KitCx, Part, Side, State};
 use egui_pop_core::state::Slot;
@@ -170,6 +170,7 @@ use crate::window::WindowState;
 
 mod drag_session;
 pub mod panel_menu;
+mod window_host;
 use crate::bus::drag::{self, End, Seen as DragSeen};
 use drag_session::Dragged;
 
@@ -1507,6 +1508,12 @@ impl Workbench {
         (ask.opened, Some((repaired(was), repaired(now))))
     }
 
+    /// The place a detached window opened with, its builder's for its
+    /// life (#5241); `None` before it opens.
+    pub(crate) fn window_opened(&self, panel: &PanelId) -> Option<WindowState> {
+        self.window_asks.get(panel).map(|ask| ask.opened)
+    }
+
     /// A detached window's place as the system told it, followed into the
     /// layout: never asked back.
     fn window_told(&mut self, panel: &PanelId, place: WindowPlace) {
@@ -2392,16 +2399,20 @@ pub(crate) fn windows(
     app.workbench_mut()
         .window_asks
         .retain(|p, _| auxiliary.iter().any(|a| a.panel == *p));
+    use egui_stack::ViewportHost as _;
+    let mut host = window_host::PanelWindows::new(app, ctx, app_name, keys);
+    let stack_screens = host.screens();
     for aux in auxiliary {
-        // Titled after the panel it shows.
-        let Some(spec) = app.workbench_mut().spec(aux.shown()).cloned() else {
+        // Titled after the panel it shows: not drawn while that panel is
+        // not declared.
+        if app.workbench_mut().spec(aux.shown()).is_none() {
             continue;
-        };
+        }
         // A place off every screen comes back onto one. The builder keeps
         // the place the window opened with: one that changed would be
         // asked of the system again by the backend, a size the system
         // just set asked back one pass late (#5241).
-        let (state, changed) = app.workbench_mut().window_place(
+        let (_, changed) = app.workbench_mut().window_place(
             &aux.panel,
             (aux.rect, aux.maximized, aux.fullscreen),
             &screens,
@@ -2409,162 +2420,49 @@ pub(crate) fn windows(
         if let Some((from, to)) = changed {
             crate::bus::panels::ask_place(ctx, window_id(&aux.panel), &aux.panel, from, to);
         }
-        let own = crate::frame::own_frame(app);
-        let panel_title = strings::panel_title(ctx, spec.id.as_str(), &spec.title);
-        let title = if app_name.is_empty() {
-            panel_title
-        } else {
-            strings::tr_args(
-                ctx,
-                &txt::WORKBENCH_WINDOW_TITLE,
-                &[("panel", &panel_title), ("application", app_name)],
-            )
-        };
-        let mut builder = ViewportBuilder::default()
-            .with_title(title.clone())
-            .with_inner_size(state.size)
-            .with_decorations(!own);
-        if let Some(p) = state.position {
-            builder = builder.with_position(p);
+        let float = window_host::float_of(&aux, &stack_screens);
+        let viewport = host.viewport_id(&float.key);
+        let builder = host.builder(&float);
+        host.show(ctx, viewport, builder, &mut |ui| window_body(app, ui, &aux));
+    }
+}
+
+/// A detached window's content: its tabs, and the drop target it is for
+/// a tab or a group dragged from another window.
+fn window_body(app: &AppHandle, ui: &mut Ui, aux: &Auxiliary) {
+    let vctx = ui.ctx().clone();
+    let panel = aux.panel.clone();
+    let body = egui::CentralPanel::default()
+        .show(ui, |ui| window_tabs(app, ui, aux))
+        .response
+        .rect;
+    // A tab or a group dragged from the main window: this window is one
+    // of its drop targets, by its id on the bus (the drag session finds
+    // it, in this window or from the screen's coordinates, and delivers
+    // the drop once).
+    let holds = |d: &Dragged| d.panels().iter().any(|p| aux.holds(p));
+    let window = crate::bus::panels::window_of_panel(&panel);
+    let refusal = |d: &Dragged| {
+        window_refusal(app, d).map(|spec| {
+            let title = strings::panel_title(&vctx, spec.id.as_str(), &spec.title);
+            strings::tr_args(&vctx, &txt::WORKBENCH_STAYS_DOCKED, &[("panel", &title)])
+        })
+    };
+    let seen = if drag::payload::<Dragged>(&vctx).is_some_and(|d| holds(&d)) {
+        DragSeen::Nothing
+    } else {
+        drag::target::<Dragged>(&vctx, &window, body, refusal)
+    };
+    match seen {
+        DragSeen::Over { payload, at } => {
+            window_drop(app, &vctx, aux, &payload, body, at);
         }
-        if state.maximized {
-            builder = builder.with_maximized(true);
+        DragSeen::Unknown(payload) => window_outline(app, &vctx, aux, &payload, body),
+        // Refused, the step says why, as a tab menu's move would.
+        DragSeen::Dropped(payload) | DragSeen::Refused { payload, .. } => {
+            join_dropped(app, &payload, &panel);
         }
-        if state.fullscreen {
-            builder = builder.with_fullscreen(true);
-        }
-        let panel = aux.panel.clone();
-        // Transparent where a surface below it (the image surface) can
-        // show through, when the application asks; the window says how
-        // it was built and why.
-        let transparency = if app.transparent_panel_windows() {
-            crate::window::surface_below_transparency(crate::window::windowing())
-        } else {
-            egui_pop_core::window_surface::Transparency::Opaque(
-                "the application builds its panels' windows opaque \
-                 (AppBuilder::transparent_panel_windows)"
-                    .into(),
-            )
-        };
-        // Transparent too for its rounded corners, when it has them.
-        if transparency.is_transparent() || (own && egui_pop_core::frame::rounding(ctx)) {
-            builder = builder.with_transparent(true);
-        }
-        egui_pop_core::window_surface::set_transparency(ctx, window_id(&panel), Some(transparency));
-        crate::bus::panels::show_window(ctx, window_id(&panel), builder, |ui, class| {
-            let vctx = ui.ctx().clone();
-            // Embedded in the main window (a backend without windows of
-            // its own, kittest): the main window's pass does all this.
-            let own_window = class != egui::ViewportClass::EmbeddedWindow;
-            if own_window {
-                app.note_window(&vctx);
-                let window = crate::bus::panels::window_of_panel(&panel);
-                crate::bus::files::begin_pass(&vctx, &window);
-                drag::begin_pass(&vctx, &window);
-                app.block_window(&vctx, &|v| !crate::windows::is_app_window(app, v));
-                egui_pop_core::overlay::begin_pass(&vctx);
-                keys(&vctx);
-            }
-            if let Some((from, to)) = egui_pop_core::scale::changed(&vctx) {
-                app.publish(
-                    "egui_pop",
-                    None,
-                    "scale.changed",
-                    json!({ "viewport": panel, "from": from, "to": to }),
-                );
-            }
-            // In full screen, the title bar as the main window's: kept
-            // unless the setting says otherwise.
-            let full_screen = egui_pop_core::frame::full_screen(&vctx);
-            if own && (!full_screen || crate::frame::bar_in_fullscreen(app)) {
-                egui_pop_core::frame::resize_edges(&vctx);
-                // Its edge: a line that tells it from the window under it
-                // (embedded in the main window, that window's is drawn).
-                if own_window {
-                    egui_pop_core::frame::paint_window_edge(
-                        &vctx,
-                        egui_pop_core::frame::window_edge(&vctx, &crate::window::screens()),
-                    );
-                }
-                let out = egui::Panel::top(Id::unique(("egui_pop.aux.title", panel.as_str())))
-                    .frame(egui::Frame::NONE)
-                    .show(ui, |ui| {
-                        egui_pop_core::frame::TitleBar::new(&title)
-                            .button(egui_pop_core::frame::Button::Minimize, false)
-                            .show(ui, |_| {}, |_| {})
-                    })
-                    .inner;
-                match out.request {
-                    Some(egui_pop_core::frame::FrameRequest::Close) => {
-                        app.change_workbench(Change::CloseWindow(panel.clone()));
-                    }
-                    Some(r) => crate::frame::request(app, &vctx, r),
-                    None => {}
-                }
-            }
-            let body = egui::CentralPanel::default()
-                .show(ui, |ui| window_tabs(app, ui, &aux))
-                .response
-                .rect;
-            // A tab or a group dragged from the main window: this window
-            // is one of its drop targets, by its id on the bus (the drag
-            // session finds it, in this window or from the screen's
-            // coordinates, and delivers the drop once).
-            let holds = |d: &Dragged| d.panels().iter().any(|p| aux.holds(p));
-            let window = crate::bus::panels::window_of_panel(&panel);
-            let refusal = |d: &Dragged| {
-                window_refusal(app, d).map(|spec| {
-                    let title = strings::panel_title(&vctx, spec.id.as_str(), &spec.title);
-                    strings::tr_args(&vctx, &txt::WORKBENCH_STAYS_DOCKED, &[("panel", &title)])
-                })
-            };
-            let seen = if drag::payload::<Dragged>(&vctx).is_some_and(|d| holds(&d)) {
-                DragSeen::Nothing
-            } else {
-                drag::target::<Dragged>(&vctx, &window, body, refusal)
-            };
-            match seen {
-                DragSeen::Over { payload, at } => {
-                    window_drop(app, &vctx, &aux, &payload, body, at);
-                }
-                DragSeen::Unknown(payload) => window_outline(app, &vctx, &aux, &payload, body),
-                // Refused, the step says why, as a tab menu's move would.
-                DragSeen::Dropped(payload) | DragSeen::Refused { payload, .. } => {
-                    join_dropped(app, &payload, &panel);
-                }
-                _ => {}
-            }
-            if own_window {
-                app.show_zone(ui, &crate::zones::WINDOW_OVERLAYS);
-                // Files dropped on this window: its `files.drop`.
-                crate::bus::files::end_pass(app, ui);
-                drag::end_pass(app, &vctx);
-                crate::menus::draw_popup(&vctx, app);
-            }
-            if vctx.input(|i| i.viewport().close_requested()) {
-                // The step decides, then the window's `window.close`: the
-                // default docks its panels back. Refused, it stays.
-                app.change_workbench(Change::CloseWindow(panel.clone()));
-                let kept = (app.workbench_mut().layout.auxiliary.iter()).any(|a| a.panel == panel);
-                if kept {
-                    crate::bus::panels::keep_open(&vctx);
-                }
-            }
-            // Its place, kept in the layout.
-            if own_window {
-                keep_window_place(app, &vctx, &panel);
-                // A tab moved among its tabs, or another gesture its dock
-                // made: read back and said if it changed (`layout.changed`).
-                if vctx.input(|i| {
-                    i.pointer.any_released()
-                        || i.events
-                            .iter()
-                            .any(|e| matches!(e, egui::Event::Key { pressed: true, .. }))
-                }) {
-                    app.note_layout("input");
-                }
-            }
-        });
+        _ => {}
     }
 }
 
