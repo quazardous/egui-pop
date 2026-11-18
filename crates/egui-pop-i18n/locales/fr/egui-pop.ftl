@@ -853,6 +853,14 @@ egui-pop-area-resize = Redimensionner { $area }
 
 egui-pop-area-start-side = la barre latérale de début
 
+egui-pop-area-title-bottom = Panneau du bas
+
+egui-pop-area-title-center = Centre
+
+egui-pop-area-title-end-side = Barre latérale de fin
+
+egui-pop-area-title-start-side = Barre latérale de début
+
 egui-pop-busy = Occupé
 
 egui-pop-cancel = Annuler
@@ -2234,6 +2242,8 @@ egui-pop-workbench-dock-back = Réancrer
 
 egui-pop-workbench-dock-in = Ancrer dans { $area }
 
+egui-pop-workbench-dock-title = { $area } ({ $panels })
+
 egui-pop-workbench-drop-here = Déposez un panneau ici
 
 egui-pop-workbench-flyout-pin = Épingler { $panel }
@@ -2625,6 +2635,10 @@ setting-workbench-group-handle-empty-space =
 setting-workbench-group-handle-grip =
     .description = Si chaque barre d’onglets se termine par une poignée qui déplace tout son groupe d’onglets, même quand la barre est pleine.
     .label = Poignée de groupe
+
+setting-workbench-group-handle-menu =
+    .description = Si le menu d’un onglet propose de déplacer tout son groupe vers une autre zone ou une nouvelle fenêtre.
+    .label = Déplacer le groupe dans le menu de l’onglet
 
 setting-workbench-group-handle-modifier-drag =
     .description = Si un onglet glissé avec la touche de groupe maintenue (Touche de déplacement du groupe) emporte tout son groupe.

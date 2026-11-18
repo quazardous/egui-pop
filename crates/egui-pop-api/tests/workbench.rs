@@ -814,6 +814,60 @@ fn the_shell_takes_no_room_below_the_window() {
     assert!(used.bottom() <= max.bottom(), "{used:?} past {max:?}");
 }
 
+/// Clicks the grip ending the bottom area's tab bar, which opens its
+/// group's Move group menu.
+fn open_bottom_group_menu(h: &mut Harness<'_, App>) {
+    let grip = h
+        .query_all_by_label("Move group")
+        .max_by(|a, b| a.rect().center().y.total_cmp(&b.rect().center().y))
+        .expect("a grip in the bottom area");
+    grip.click();
+    h.run();
+}
+
+/// The labels of the buttons shown.
+fn button_labels(h: &Harness<'_, App>) -> Vec<String> {
+    h.query_all_by_role(egui::accesskit::Role::Button)
+        .filter_map(|node| egui_kittest::kittest::NodeT::accesskit_node(&node).label())
+        .collect()
+}
+
+#[test]
+fn the_move_group_menu_names_the_areas_by_their_titles() {
+    let mut h = harness(builder(false));
+    open_bottom_group_menu(&mut h);
+    let labels = button_labels(&h);
+    assert!(
+        labels.iter().any(|l| l == "Start side bar (Tree)"),
+        "{labels:?}"
+    );
+    assert!(
+        !labels.iter().any(|l| l.contains("start_side")),
+        "{labels:?}"
+    );
+    // Translated: the area's title and its panels'.
+    h.run();
+    egui_pop_core::strings::install(
+        &h.ctx,
+        std::sync::Arc::new(
+            egui_pop_core::strings::MapStrings::new("fr")
+                .with("egui-pop-area-title-start-side", "Barre latérale de début")
+                .with("egui-pop-workbench-dock-title", "{ $area } ({ $panels })")
+                .with("panel-demo-tree.title", "Arbre"),
+        ),
+    );
+    h.key_press(egui::Key::Escape);
+    h.run();
+    open_bottom_group_menu(&mut h);
+    let labels = button_labels(&h);
+    assert!(
+        labels
+            .iter()
+            .any(|l| l == "Barre latérale de début (Arbre)"),
+        "{labels:?}"
+    );
+}
+
 /// Sets the setting `id` to `value`, as the user would.
 fn set_setting(h: &mut Harness<'_, App>, id: &str, value: egui_pop_model::values::Value) {
     egui_pop_core::lock(&h.state().handle().store())
@@ -837,13 +891,19 @@ fn the_group_handles_are_those_the_app_allows_that_the_user_left_on() {
     let declared = |h: &Harness<'_, App>, id: &egui_pop_model::ids::SettingId| {
         h.state().handle().settings().iter().any(|s| s.id == *id)
     };
-    // By default every handle but the tab menu's, whose setting is not
-    // offered.
+    // By default every handle, the tab menu's included, each with its
+    // setting.
     let mut h = harness(builder(false));
     assert_eq!(group_handles(h.state().handle()), DEFAULT_GROUP_HANDLES);
-    assert!(!DEFAULT_GROUP_HANDLES.contains(GroupHandles::MENU));
+    assert_eq!(DEFAULT_GROUP_HANDLES, GroupHandles::ALL);
     assert!(declared(&h, &SETTING_GROUP_GRIP));
-    assert!(!declared(&h, &SETTING_GROUP_MENU));
+    assert!(declared(&h, &SETTING_GROUP_MENU));
+    // The user turns the tab menu's off.
+    set_setting(&mut h, SETTING_GROUP_MENU.as_str(), Value::Bool(false));
+    let handles = group_handles(h.state().handle());
+    assert!(!handles.contains(GroupHandles::MENU));
+    assert!(handles.contains(GroupHandles::GRIP));
+    set_setting(&mut h, SETTING_GROUP_MENU.as_str(), Value::Bool(true));
     // The grips are drawn, translated names and all.
     assert!(h.query_all_by_label("Move group").count() > 0);
     // The user turns the grip off: it is gone from every tab bar.

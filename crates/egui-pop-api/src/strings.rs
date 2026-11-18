@@ -740,6 +740,16 @@ pub const AREA_START_SIDE: StrKey = StrKey::new("egui-pop-area-start-side", "the
 pub const AREA_END_SIDE: StrKey = StrKey::new("egui-pop-area-end-side", "the end side bar");
 pub const AREA_BOTTOM: StrKey = StrKey::new("egui-pop-area-bottom", "the bottom panel");
 pub const AREA_RESIZE: StrKey = StrKey::new("egui-pop-area-resize", "Resize { $area }");
+/// An area as a title of its own: the tab menu's Move group list.
+pub const AREA_TITLE_CENTER: StrKey = StrKey::new("egui-pop-area-title-center", "Centre");
+pub const AREA_TITLE_START_SIDE: StrKey =
+    StrKey::new("egui-pop-area-title-start-side", "Start side bar");
+pub const AREA_TITLE_END_SIDE: StrKey = StrKey::new("egui-pop-area-title-end-side", "End side bar");
+pub const AREA_TITLE_BOTTOM: StrKey = StrKey::new("egui-pop-area-title-bottom", "Bottom panel");
+/// An area holding panels, in the tab menu's Move group list: its title
+/// and its panels' titles.
+pub const WORKBENCH_DOCK_TITLE: StrKey =
+    StrKey::new("egui-pop-workbench-dock-title", "{ $area } ({ $panels })");
 /// The activity bar's pane, for screen readers and tests.
 pub const AREA_ACTIVITY_BAR: StrKey = StrKey::new("egui-pop-area-activity-bar", "the activity bar");
 pub const WORKBENCH_MOVE_TO: StrKey =
@@ -1884,6 +1894,11 @@ pub const ALL: &[StrKey] = &[
     AREA_END_SIDE,
     AREA_BOTTOM,
     AREA_RESIZE,
+    AREA_TITLE_CENTER,
+    AREA_TITLE_START_SIDE,
+    AREA_TITLE_END_SIDE,
+    AREA_TITLE_BOTTOM,
+    WORKBENCH_DOCK_TITLE,
     AREA_ACTIVITY_BAR,
     WORKBENCH_MOVE_TO,
     WORKBENCH_DOCK_IN,

@@ -123,8 +123,9 @@ image = { version = "0.25", default-features = false }
 # the tab drag threshold, the drop zones that leave the tab bar out and
 # the `OverlayFeel` built with `..Default::default()`; 0.28.2 the group
 # handles and their drag modifiers, floats moved by a handle, and the
-# `bus` feature (`stack.*` points on the application's bus).
-egui_stack = { version = "0.28.4", default-features = false }
+# `bus` feature (`stack.*` points on the application's bus); 0.28.6
+# `TabViewer::dock_title`, the areas' titles in the Move group menu.
+egui_stack = { version = "0.28.6", default-features = false }
 egui-pop = { version = "0.14.0", path = "crates/egui-pop" }
 
 [workspace.lints.rust]
