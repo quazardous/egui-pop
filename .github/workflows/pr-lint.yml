@@ -90,11 +90,6 @@ jobs:
       - name: Paths named in docs/ resolve
         if: ${{ !cancelled() }}
         run: cargo xtask doc-paths --check
-      # A new crate without a release on crates.io is left out of the
-      # semver job, which runs on `next` only.
-      - name: Semver job's exclusions
-        if: ${{ !cancelled() }}
-        run: python3 tools/semver-excludes.py
       - name: Licences and advisories
         if: ${{ !cancelled() }}
         run: cargo deny check

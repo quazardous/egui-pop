@@ -86,9 +86,7 @@ Pull requests target `next`, a buffer branch between them and `main`:
   tested on the bench box, and on GitHub run one check, `pr-lint`
   (`.github/workflows/pr-lint.yml`), on every push, in a few minutes and
   without building a test: the title, `cargo fmt --check`, the changeset
-  check, `cargo xtask ui-index --check`, the semver job's exclusions
-  (`tools/semver-excludes.py`: a crate without a release on crates.io is
-  excluded from `cargo semver-checks`), `cargo deny check` and `cargo doc
+  check, `cargo xtask ui-index --check`, `cargo deny check` and `cargo doc
   --workspace --no-deps --locked` without a warning. **Such a pull
   request merges when its box jobs are green and its `pr-lint` check is
   green** (since 2026-11-15). Look at the check once, when the box jobs
