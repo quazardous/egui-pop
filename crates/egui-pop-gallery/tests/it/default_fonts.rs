@@ -8,7 +8,7 @@
 use egui_kittest::Harness;
 use egui_pop::core::fonts;
 use egui_pop::theme::Density;
-use egui_pop_gallery::{Gallery, Options, PAGES};
+use egui_pop_gallery::{Gallery, Options};
 use egui_pop_test::SharedGpu as _;
 use serde_json::json;
 
@@ -44,17 +44,22 @@ fn harness(page: &str) -> Harness<'static, Gallery> {
         })
 }
 
-#[test]
-fn every_page_draws_with_eguis_own_fonts() {
-    for page in PAGES.iter().filter(|p| !SKIPPED.contains(p)) {
-        let mut h = harness(page);
+fn page_draws_with_eguis_own_fonts(page: &str) {
+    if SKIPPED.contains(&page) {
+        return;
+    }
+    let mut h = harness(page);
+    let _ = h.run_ok();
+    let (ui, mono) = fonts::installed_families(&h.ctx).expect("fonts installed");
+    assert_eq!((ui, mono), (vec!["Ubuntu".into()], vec!["Hack".into()]));
+    // A page whose content keeps asking for frames (tiles, a
+    // preview) gets a few more.
+    for _ in 0..4 {
         let _ = h.run_ok();
-        let (ui, mono) = fonts::installed_families(&h.ctx).expect("fonts installed");
-        assert_eq!((ui, mono), (vec!["Ubuntu".into()], vec!["Hack".into()]));
-        // A page whose content keeps asking for frames (tiles, a
-        // preview) gets a few more.
-        for _ in 0..4 {
-            let _ = h.run_ok();
-        }
     }
 }
+
+// A test per page (`per_page!`).
+for_each_page!(
+    per_page! { every_page_draws_with_eguis_own_fonts, super::page_draws_with_eguis_own_fonts }
+);

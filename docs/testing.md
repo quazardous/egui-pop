@@ -92,8 +92,14 @@ Pull requests target `next`, a buffer branch between them and `main`:
   green** (since 2026-11-15). Look at the check once, when the box jobs
   are done: `gh pr checks <n> --watch --fail-fast` (it returns when the
   checks end), or a single `gh pr checks <n>`; nothing else of CI is
-  watched. The box's `egui-pop-gate` job runs fmt and the documentation
-  build too, with clippy and the tests;
+  watched. **The box jobs of a branch** are narrow: the `egui-pop-test`
+  runs of the crates and test targets the change touches, plus
+  `egui-pop-snapshots` when something visible or listed changes (a page
+  drawn differently, a page or a story added, a snapshot's subject
+  moved); `next`'s CI runs the rest. The box's `egui-pop-gate` job (fmt,
+  clippy, every test, the doctests and the documentation build) is for
+  releases or a by-hand check, not for each branch; it runs every test
+  and every step even after a failure, so one run shows all that fails;
 - every push to `next` runs everything; a run is never cancelled: a
   newer push waits behind the running one (GitHub keeps only the newest
   waiting), so a batch of merges is checked once and `main` is promoted
@@ -286,11 +292,21 @@ wall time of the whole workflow, with a warm cache:
 
 A full run was not faster: one test, rendering every gallery page under
 every theme and density, ran for nearly 4 minutes on lavapipe and set the
-pace (and reached the CI timeout as pages were added). It is split in
-`egui-pop-gallery::gallery` into a test per theme and density
-(`every_page_renders_in_<theme>_<density>`), run side by side; a further
-test checks every theme and density has its own. The JUnit reports of
-each run (the `junit` artifact) list every test's time.
+pace (and reached the CI timeout as pages were added). Every test that
+walks the gallery's pages is now a test per page (since 2026-11-18): in
+`egui-pop-gallery`'s `it`, `gallery::every_page_renders::<page>` (every
+theme and density), `gallery::every_interactive_node_has_a_name::<page>`,
+`gallery::every_input_brick_has_a_name::<page>`,
+`gallery::every_page_ends_in_a_short_window::<page>`,
+`gallery::every_playground_ends_in_a_short_window::<page>` and
+`default_fonts::every_page_draws_with_eguis_own_fonts::<page>`. They run
+side by side, none grows with the gallery, and a slow page shows by name.
+The gallery's build script writes the page list as a macro
+(`for_each_page!`, from `PAGES` in `src/lib.rs`) and the tests' `per_page!`
+makes a module of tests from it: a page added to `PAGES` gets its tests,
+and `gallery::every_page_has_its_generated_tests` fails if the list read
+differs from `PAGES`. The JUnit reports of each run (the `junit`
+artifact) list every test's time.
 
 ## Layers
 

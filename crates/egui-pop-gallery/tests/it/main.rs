@@ -7,6 +7,26 @@
 //! keyboard_walk::`. Under plain `cargo test` every module's tests share one
 //! process (docs/testing.md, "One test executable").
 
+// `for_each_page!`: the pages of `PAGES`, written by build.rs.
+include!(concat!(env!("OUT_DIR"), "/pages.rs"));
+
+/// A module of tests, one per page of `PAGES`, each calling `$check(page)`:
+/// `for_each_page!(per_page! { module, check })`. Each page's test runs
+/// in a process of its own under nextest, so a slow page shows by name and
+/// no test grows with the gallery; a page added to `PAGES` gets its test.
+macro_rules! per_page {
+    ({ $module:ident, $check:path } $($id:ident $page:literal;)*) => {
+        mod $module {
+            $(
+                #[test]
+                fn $id() {
+                    $check($page);
+                }
+            )*
+        }
+    };
+}
+
 mod agent_actions;
 mod default_fonts;
 mod drag_cursors;
