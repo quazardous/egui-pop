@@ -42,7 +42,10 @@
 //!   click for itself (`egui_pop_core::pointer::claim`);
 //! - [`popup_at`] opens a declared menu as a popup under a rectangle or
 //!   at a point (a logo, `Alt+Space`); egui-pop draws it until an item is
-//!   chosen, a click lands outside or Escape is pressed.
+//!   chosen, a click lands outside or Escape is pressed;
+//! - [`submenu`] adds a submenu item to a menu drawn by hand (a context
+//!   menu built in a closure), in the declared menus' look, opened by the
+//!   pointer resting on it or by the keyboard, closed one level by Escape.
 //!
 //! Opening a menu by [`popup_at`] or a context menu runs the
 //! [`STEP_OPEN`] step (ADR 0011): a plugin may veto it or change its
@@ -399,7 +402,7 @@ pub fn bar_within(ui: &mut Ui, app: &AppHandle, menu: &MenuId, reserve: f32) {
                         MenuState::mark_shown(ui.ctx(), sub);
                         MenuState::from_ui(ui, |state, _| state.open_item = Some(sub));
                     }
-                    submenu(ui, app, &m.menu, &m.label, &cx, &Json::Null, 0, &TITLES);
+                    declared_submenu(ui, app, &m.menu, &m.label, &cx, &Json::Null, 0, &TITLES);
                     access_key(ui.ctx(), id, m.key);
                 });
             }
@@ -1103,7 +1106,7 @@ pub(crate) fn rows(
                     let label = strings::menu_label(ui.ctx(), sub.as_str(), &label);
                     let label_x = ui
                         .add_enabled_ui(enabled, |ui| {
-                            submenu(ui, app, &sub, &label, cx, args, depth, &columns)
+                            declared_submenu(ui, app, &sub, &label, cx, args, depth, &columns)
                         })
                         .inner;
                     record_row(
@@ -1695,7 +1698,7 @@ fn title_of(ctx: &Context, spec: &Option<CommandSpec>, id: &CommandId) -> String
 /// opening on hover as egui's `SubMenuButton` does; where its label
 /// starts in the row.
 #[allow(clippy::too_many_arguments)]
-fn submenu(
+fn declared_submenu(
     ui: &mut Ui,
     app: &AppHandle,
     menu: &MenuId,
@@ -1743,6 +1746,155 @@ fn submenu(
         });
     r.rect(egui::IdSalt::new(text_id))
         .map_or(0.0, |l| l.left() - r.response.rect.left())
+}
+
+/// What a hand-drawn submenu item remembers between passes (per item).
+#[derive(Clone, Copy, Debug, Default)]
+struct Hover {
+    /// When the pointer came to rest on the item.
+    since: Option<f64>,
+    /// Escape closed the submenu: the pointer resting there does not open
+    /// it again until it moves.
+    held: bool,
+}
+
+const SUBMENU_HOVER: Slot<Hover> = Slot::new("api.menus.submenu_hover");
+
+/// A submenu item in a menu drawn by hand (a context menu built in a
+/// closure, `egui_pop_core::pointer::claim::context_menu`), drawn as the
+/// declared menus' submenu items: the kit's `menu-item` with the submenu
+/// arrow, `selected` while its submenu is open. `add` draws the submenu's
+/// rows; it runs only while the submenu is open, and its value comes back
+/// in the response's `inner`.
+///
+/// - The pointer resting on the item `motion.submenu.delay` (200 ms)
+///   opens it; a click opens it at once.
+/// - On the keyboard, Right, Enter or Space on the item opens it with the
+///   focus on its first row; Left in the submenu closes it, back on the
+///   item; Escape closes one level (this submenu, not the menu holding
+///   it).
+/// - Assistive technology reads a menu item named by `label`, with a
+///   menu popup, expanded while open.
+///
+/// Choosing a row in the submenu closes every level: the row calls
+/// `ui.close()`, as in any egui menu.
+///
+/// Need (dialog): a submenu in a context menu drawn by hand.
+///
+/// ```
+/// use egui_pop_api::menus;
+///
+/// fn row_menu(ui: &mut egui::Ui, auto: &mut bool) {
+///     if ui.button("Rename").clicked() {
+///         ui.close();
+///     }
+///     menus::submenu(ui, "Import automatically", |ui| {
+///         if ui.radio_value(auto, false, "Off").clicked()
+///             | ui.radio_value(auto, true, "On plug-in").clicked()
+///         {
+///             ui.close();
+///         }
+///     });
+/// }
+/// ```
+pub fn submenu<R>(
+    ui: &mut Ui,
+    label: &str,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> egui::InnerResponse<Option<R>> {
+    let ctx = ui.ctx().clone();
+    let t = Tokens::of(&ctx);
+    let side = t.size.icon_inline;
+    let my_id = ui.next_auto_id();
+    let sub_id = SubMenu::id_from_widget_id(my_id);
+    let is_open = |ui: &Ui| MenuState::from_ui(ui, |state, _| state.open_item == Some(sub_id));
+    let mut open = is_open(ui);
+    // Escape closes the deepest open level alone: taken here, before the
+    // submenu's popup and the menu holding it see it (egui closes them
+    // all).
+    let escaped = open
+        && MenuState::is_deepest_open_sub_menu(&ctx, sub_id)
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+    let slot = SUBMENU_HOVER.keyed(my_id);
+    if escaped {
+        MenuState::from_ui(ui, |state, _| state.open_item = None);
+        ui.memory_mut(|m| m.request_focus(my_id));
+        slot.set(
+            &ctx,
+            Hover {
+                since: None,
+                held: true,
+            },
+        );
+        open = false;
+    }
+
+    let arrow = my_id.with("arrow");
+    let text_id = my_id.with("label");
+    let kit = Kit::of(&ctx);
+    let item = &kit.menu_item;
+    let paint_slot = ui.painter().add(Shape::Noop);
+    let state = item_state(ui, my_id).with(State::SELECTED, open);
+    let atoms: Vec<Atom<'_>> = vec![
+        item_text(ui, item, state, label).atom_id(egui::IdSalt::new(text_id)),
+        Atom::grow(),
+        Atom::custom(egui::IdSalt::new(arrow), vec2(side, side)),
+    ];
+    let button = Button::new(egui::Atoms::from(atoms))
+        .fill(Color32::TRANSPARENT)
+        .stroke(Stroke::NONE);
+    let r = button.atom_ui(ui);
+    let response = r.response.clone();
+    paint_item(ui, item, paint_slot, response.rect, state);
+    if let Some(rect) = r.rect(egui::IdSalt::new(arrow)) {
+        kit.glyph(Glyph::Submenu).paint(
+            ui.painter(),
+            rect.shrink(rect.width() * 0.15),
+            t.text.muted,
+        );
+    }
+
+    // The pointer opens it after resting on the item.
+    let now = ctx.input(|i| i.time);
+    let moved = ctx.input(|i| i.pointer.delta() != egui::Vec2::ZERO);
+    let hovered = response.contains_pointer();
+    let delay = f64::from(t.motion.submenu_delay);
+    let hover = slot.update(&ctx, |h| {
+        if h.held && (moved || !hovered) {
+            h.held = false;
+        }
+        if !hovered || h.held {
+            h.since = None;
+        } else if h.since.is_none() {
+            h.since = Some(now);
+        }
+        *h
+    });
+    let rested = hover.since.is_some_and(|s| now - s >= delay);
+    if let Some(s) = hover.since.filter(|_| !rested) {
+        ctx.request_repaint_after_secs((s + delay - now).max(0.0) as f32);
+    }
+    let focused = response.has_focus();
+    let keyboard = focused
+        && !escaped
+        && (ui.input(|i| i.key_pressed(egui::Key::ArrowRight))
+            || (response.clicked() && !response.clicked_by(egui::PointerButton::Primary)));
+    let clicked = response.clicked_by(egui::PointerButton::Primary);
+    let inner = if !escaped && (open || keyboard || clicked || rested) {
+        SubMenu::default()
+            .config(MenuConfig::find(ui))
+            .show(ui, &response, add)
+            .map(|shown| shown.inner)
+    } else {
+        None
+    };
+    let expanded = is_open(ui);
+    ctx.accesskit_node_builder(response.id, |node| {
+        node.set_role(egui::accesskit::Role::MenuItem);
+        node.set_has_popup(egui::accesskit::HasPopup::Menu);
+        node.set_expanded(expanded);
+    });
+    egui::InnerResponse::new(inner, response)
 }
 
 impl AppHandle {

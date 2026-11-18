@@ -446,6 +446,11 @@ const CORE: &[Required] = &[
     ),
     sys("motion.spinner.turn", "duration", "one turn of a spinner"),
     sys(
+        "motion.submenu.delay",
+        "duration",
+        "how long the pointer rests on a submenu item before its submenu opens",
+    ),
+    sys(
         "motion.progress.travel",
         "duration",
         "an indeterminate bar's segment crossing its track",

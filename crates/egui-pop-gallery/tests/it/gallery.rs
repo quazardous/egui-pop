@@ -6,6 +6,8 @@
 //! region, the bars around it in a suite of their own
 //! (`the_bars_have_their_own_snapshots`, `chrome-*`).
 
+// A submenu item in a menu drawn by hand: pointer, keyboard, Escape.
+mod hand_submenu;
 // Inputs keeping to a narrow panel, a picture at two widths.
 mod input_widths;
 // Every overlay opened and closed in the registry (ADR 0029).

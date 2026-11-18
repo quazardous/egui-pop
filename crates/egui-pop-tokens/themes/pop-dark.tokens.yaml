@@ -499,6 +499,11 @@ motion:
     turn:
       $value: {value: 900, unit: "ms"}
       $description: "One turn of a spinner (still under reduced motion)."
+  submenu:
+    delay:
+      $type: "duration"
+      $value: {value: 200, unit: "ms"}
+      $description: "The pointer rests this long on a submenu item before its submenu opens, so crossing the item on the way elsewhere opens nothing."
   progress:
     travel:
       $type: "duration"
