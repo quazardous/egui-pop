@@ -746,6 +746,7 @@ egui-pop-files-camera 2084bc593dd90bf4
 egui-pop-files-column-modified 4a4dc6e0a5c27f60
 egui-pop-files-column-name e8f800548ef8413c
 egui-pop-files-column-size 460e2b4dbac0e0ba
+egui-pop-files-column-taken a6a6c5403125d6ce
 egui-pop-files-column-type f97f51ee1be110cd
 egui-pop-files-create bd8bd1041b1d098d
 egui-pop-files-crumb-collapsed e2172f6631841467
@@ -827,6 +828,7 @@ egui-pop-files-selected b94bd277035f8891
 egui-pop-files-selected-none 06639adc9d49a67f
 egui-pop-files-selected-not-shown b92d4087c913b866
 egui-pop-files-size 460e2b4dbac0e0ba
+egui-pop-files-sort-by fdd935e0be790484
 egui-pop-files-sort-ranked e152e2abf66757d0
 egui-pop-files-sorted-down 26c3550025343606
 egui-pop-files-sorted-up 3e593b33e0ce2cba

@@ -1390,3 +1390,114 @@ fn an_application_sets_the_selection_among_the_entries_listed() {
     h.state_mut().set_selection(Vec::new());
     assert!(h.state().selection().is_empty());
 }
+
+/// A source giving a fixed listing: a folder, and photos with sizes, change
+/// times and capture times of their own.
+#[derive(Debug)]
+struct Shoot;
+
+fn at(secs: u64) -> std::time::SystemTime {
+    std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs)
+}
+
+impl FileSource for Shoot {
+    fn id(&self) -> &str {
+        "test.shoot"
+    }
+
+    fn list(&self, _place: &Path, _options: &browser::ListOptions) -> browser::Listing {
+        let photo =
+            |name: &str, size: u64, modified: u64, taken: Option<u64>| browser::SourceEntry {
+                taken: taken.map(at),
+                modified: Some(at(modified)),
+                size: Some(size),
+                ..entry(&format!("/s/{name}"))
+            };
+        let folder = browser::SourceEntry {
+            kind: browser::EntryKind::Folder,
+            size: None,
+            ..entry("/s/zeta")
+        };
+        let (tx, listing) = browser::Listing::channel();
+        tx.send(browser::Page::Entries(vec![
+            photo("b.jpg", 10, 200, None),
+            folder,
+            photo("a.jpg", 30, 100, Some(300)),
+            photo("c.jpg", 20, 50, Some(10)),
+        ]));
+        tx.send(browser::Page::Done);
+        listing
+    }
+}
+
+fn names(b: &FileBrowser) -> Vec<&str> {
+    b.entries().iter().map(|e| e.name.as_str()).collect()
+}
+
+#[test]
+fn the_browser_sorts_by_name_change_capture_time_or_size_and_keeps_the_focus() {
+    use egui_pop_api::files::sort::{PickerSort, SortColumn};
+    let mut h = harness(FileBrowser::new("sort", Arc::new(Shoot), "/s"));
+    assert_eq!(names(h.state()), ["zeta", "a.jpg", "b.jpg", "c.jpg"]);
+    h.get_by_label("b.jpg").click();
+    h.run();
+    let sort = |column, descending| PickerSort { column, descending };
+    // b.jpg has no capture time: its change time stands in for it.
+    h.state_mut().set_sort(sort(SortColumn::Taken, false));
+    assert_eq!(names(h.state()), ["zeta", "c.jpg", "b.jpg", "a.jpg"]);
+    h.state_mut().set_sort(sort(SortColumn::Modified, true));
+    assert_eq!(names(h.state()), ["zeta", "b.jpg", "a.jpg", "c.jpg"]);
+    h.state_mut().set_sort(sort(SortColumn::Size, true));
+    assert_eq!(names(h.state()), ["zeta", "a.jpg", "c.jpg", "b.jpg"]);
+    // Among the files, a folder has no size: it goes last.
+    h.state_mut().set_folders_first(false);
+    assert_eq!(names(h.state()), ["a.jpg", "c.jpg", "b.jpg", "zeta"]);
+    h.state_mut().set_sort(sort(SortColumn::Name, true));
+    assert_eq!(names(h.state()), ["zeta", "c.jpg", "b.jpg", "a.jpg"]);
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/s/b.jpg")));
+    assert_eq!(h.state().selection().len(), 1);
+    assert!(h.state().selection().contains(Path::new("/s/b.jpg")));
+}
+
+#[test]
+fn a_sort_set_from_the_start_orders_the_first_listing() {
+    use egui_pop_api::files::sort::{PickerSort, SortColumn};
+    let b = FileBrowser::new("sort-start", Arc::new(Shoot), "/s")
+        .with_sort(PickerSort {
+            column: SortColumn::Taken,
+            descending: true,
+        })
+        .with_folders_first(false);
+    assert_eq!(names(&b), ["a.jpg", "b.jpg", "c.jpg", "zeta"]);
+}
+
+#[test]
+fn the_sort_menu_says_the_order_and_a_click_turns_it() {
+    use egui_pop_api::files::sort::SortColumn;
+    let mut h = harness(
+        FileBrowser::new("sort-menu", Arc::new(Shoot), "/s").with_modes(ViewModes::built_in()),
+    );
+    h.get_by_label("Sort by: Name, sorted ascending").click();
+    h.run();
+    // A new order starts the way people look for it: the latest first.
+    h.get_by_label("Taken").click();
+    h.run();
+    assert_eq!(h.state().sort().column, SortColumn::Taken);
+    assert!(h.state().sort().descending);
+    assert_eq!(names(h.state()), ["zeta", "a.jpg", "b.jpg", "c.jpg"]);
+    // The direction's own button turns it.
+    h.get_by_label("Taken, sorted descending").click();
+    h.run();
+    assert!(!h.state().sort().descending);
+    assert_eq!(names(h.state()), ["zeta", "c.jpg", "b.jpg", "a.jpg"]);
+    h.get_by_label("Sort by: Taken, sorted ascending").click();
+    h.run();
+    h.get_by_label("Folders first").click();
+    h.run();
+    assert!(!h.state().folders_first());
+    // An agenda orders by time on its own: no menu there.
+    h.state_mut().set_mode("agenda");
+    h.run();
+    assert!(h.query_by_label_contains("Sort by").is_none());
+}

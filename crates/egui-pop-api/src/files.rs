@@ -2682,13 +2682,14 @@ struct ListColumn {
 }
 
 impl SortColumn {
-    /// Its title.
+    /// Its title, as a column's header and a sort menu say it.
     fn title(self) -> &'static strings::StrKey {
         match self {
             SortColumn::Name => &txt::FILES_COLUMN_NAME,
             SortColumn::Size => &txt::FILES_COLUMN_SIZE,
             SortColumn::Modified => &txt::FILES_COLUMN_MODIFIED,
             SortColumn::Type => &txt::FILES_COLUMN_TYPE,
+            SortColumn::Taken => &txt::FILES_COLUMN_TAKEN,
         }
     }
 }
@@ -5671,7 +5672,9 @@ impl FilePicker {
             SortColumn::Size => self
                 .meta_of(&e.path)
                 .map_or_else(String::new, |m| preview::size_text(m.len)),
-            SortColumn::Modified => self
+            // A file system knows no capture time: the picker's is the
+            // time the file last changed.
+            SortColumn::Modified | SortColumn::Taken => self
                 .meta_of(&e.path)
                 .and_then(|m| m.modified)
                 .map_or_else(String::new, preview::time_text),

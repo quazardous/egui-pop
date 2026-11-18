@@ -17,8 +17,9 @@ use std::time::SystemTime;
 use super::fs::Meta;
 use super::{Entry, extension_dot};
 
-/// What the picker's entries are sorted by.
+/// What the picker's and the file browser's entries are sorted by.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum SortColumn {
     /// The name, read naturally ([`natural_cmp`]).
     #[default]
@@ -29,6 +30,10 @@ pub enum SortColumn {
     Modified,
     /// A file's extension.
     Type,
+    /// When a photo was taken, as an application's source says
+    /// ([`SourceEntry::taken`](super::browser::SourceEntry::taken)); the
+    /// time it last changed when the source does not say.
+    Taken,
 }
 
 impl SortColumn {
@@ -39,6 +44,7 @@ impl SortColumn {
             SortColumn::Size => "size",
             SortColumn::Modified => "modified",
             SortColumn::Type => "type",
+            SortColumn::Taken => "taken",
         }
     }
 
@@ -49,15 +55,28 @@ impl SortColumn {
             "size" => Some(SortColumn::Size),
             "modified" => Some(SortColumn::Modified),
             "type" => Some(SortColumn::Type),
+            "taken" => Some(SortColumn::Taken),
             _ => None,
         }
     }
 
+    /// Every column, in the order a sort menu lists them.
+    pub const ALL: [SortColumn; 5] = [
+        SortColumn::Name,
+        SortColumn::Modified,
+        SortColumn::Taken,
+        SortColumn::Size,
+        SortColumn::Type,
+    ];
+
     /// Which way a first click sorts: the newest and the largest first, as
     /// Finder and Nautilus do; those are what people look for in these
     /// columns.
-    fn starts_descending(self) -> bool {
-        matches!(self, SortColumn::Size | SortColumn::Modified)
+    pub fn starts_descending(self) -> bool {
+        matches!(
+            self,
+            SortColumn::Size | SortColumn::Modified | SortColumn::Taken
+        )
     }
 }
 
@@ -154,6 +173,15 @@ fn extension(name: &str) -> String {
     extension_dot(name).map_or_else(String::new, |dot| name[dot + 1..].to_lowercase())
 }
 
+/// What [`sort_by`] asks of each item it sorts.
+pub(super) struct SortFacts<'a> {
+    pub name: &'a str,
+    pub is_dir: bool,
+    pub size: Option<u64>,
+    pub modified: Option<SystemTime>,
+    pub taken: Option<SystemTime>,
+}
+
 /// Puts entries in `sort`'s order. Folders stay first when `folders_first`,
 /// in the same direction among themselves. What has no value in the column (a
 /// folder's size and type, a time the file system does not say) goes last either
@@ -165,15 +193,47 @@ pub(super) fn sort_entries(
     folders_first: bool,
     facts: impl Fn(&Entry) -> Option<Meta>,
 ) -> Vec<Entry> {
-    let value = |e: &Entry| match sort.column {
+    let needs_facts = matches!(
+        sort.column,
+        SortColumn::Size | SortColumn::Modified | SortColumn::Taken
+    );
+    let mut keyed: Vec<(Option<Meta>, Entry)> = entries
+        .into_iter()
+        .map(|e| (needs_facts.then(|| facts(&e)).flatten(), e))
+        .collect();
+    sort_by(&mut keyed, sort, folders_first, |(m, e)| SortFacts {
+        name: &e.name,
+        is_dir: e.is_dir,
+        size: m.as_ref().filter(|m| !m.is_dir).map(|m| m.len),
+        modified: m.as_ref().and_then(|m| m.modified),
+        // A file system knows no capture time.
+        taken: None,
+    });
+    keyed.into_iter().map(|(_, e)| e).collect()
+}
+
+/// Sorts `items` in `sort`'s order, as [`sort_entries`] says, reading each
+/// one's facts once.
+pub(super) fn sort_by<T>(
+    items: &mut [T],
+    sort: PickerSort,
+    folders_first: bool,
+    facts: impl Fn(&T) -> SortFacts<'_>,
+) {
+    let value = |f: &SortFacts<'_>| match sort.column {
         SortColumn::Name => None,
-        SortColumn::Size => facts(e).filter(|m| !m.is_dir).map(|m| Value::Size(m.len)),
-        SortColumn::Modified => facts(e).and_then(|m| m.modified).map(Value::Time),
-        SortColumn::Type => (!e.is_dir).then(|| Value::Extension(extension(&e.name))),
+        SortColumn::Size => f.size.filter(|_| !f.is_dir).map(Value::Size),
+        SortColumn::Modified => f.modified.map(Value::Time),
+        SortColumn::Taken => f.taken.or(f.modified).map(Value::Time),
+        SortColumn::Type => (!f.is_dir).then(|| Value::Extension(extension(f.name))),
     };
-    let mut keyed: Vec<(Option<Value>, Entry)> =
-        entries.into_iter().map(|e| (value(&e), e)).collect();
-    keyed.sort_by(|(v, a), (w, b)| {
+    let mut order: Vec<(Option<Value>, usize)> = items
+        .iter()
+        .enumerate()
+        .map(|(i, t)| (value(&facts(t)), i))
+        .collect();
+    order.sort_by(|(v, i), (w, j)| {
+        let (a, b) = (facts(&items[*i]), facts(&items[*j]));
         let group = if folders_first {
             b.is_dir.cmp(&a.is_dir)
         } else {
@@ -187,7 +247,7 @@ pub(super) fn sort_entries(
             (None, None) => Ordering::Equal,
         };
         let names = || {
-            let order = natural_cmp(&a.name, &b.name);
+            let order = natural_cmp(a.name, b.name);
             if sort.descending && sort.column == SortColumn::Name {
                 order.reverse()
             } else {
@@ -196,7 +256,23 @@ pub(super) fn sort_entries(
         };
         group.then_with(values).then_with(names)
     });
-    keyed.into_iter().map(|(_, e)| e).collect()
+    apply_order(items, order.into_iter().map(|(_, i)| i).collect());
+}
+
+/// Moves `items` into `order` (each an index of where the item is now), in
+/// place.
+fn apply_order<T>(items: &mut [T], mut order: Vec<usize>) {
+    // Follow each cycle of the permutation once.
+    for start in 0..order.len() {
+        let mut at = start;
+        while order[at] != start {
+            let from = order[at];
+            items.swap(at, from);
+            order[at] = at;
+            at = from;
+        }
+        order[at] = at;
+    }
 }
 
 #[cfg(test)]
@@ -473,6 +549,51 @@ mod tests {
                 |_| panic!("no facts for {text}"),
             );
             assert_eq!(out.len(), 2);
+        }
+    }
+
+    #[test]
+    fn the_picker_sorts_by_capture_time_as_by_change_time() {
+        assert_eq!(sorted("taken", true), sorted("modified", true));
+        assert_eq!(sorted("-taken", false), sorted("-modified", false));
+    }
+
+    #[test]
+    fn a_capture_time_comes_before_the_change_time_and_stands_in_for_none() {
+        // (name, modified, taken)
+        let mut items = vec![
+            ("a", Some(1), Some(30)),
+            ("b", Some(20), None),
+            ("c", None, Some(10)),
+            ("d", None, None),
+        ];
+        let at = |s: Option<u64>| s.map(|s| SystemTime::UNIX_EPOCH + Duration::from_secs(s));
+        let sort = PickerSort::parse("taken").unwrap();
+        sort_by(&mut items, sort, true, |&(name, modified, taken)| {
+            SortFacts {
+                name,
+                is_dir: false,
+                size: None,
+                modified: at(modified),
+                taken: at(taken),
+            }
+        });
+        let names: Vec<&str> = items.iter().map(|i| i.0).collect();
+        assert_eq!(names, ["c", "b", "a", "d"]);
+    }
+
+    #[test]
+    fn an_order_is_applied_in_place_whatever_its_cycles() {
+        for order in [
+            vec![0, 1, 2, 3, 4],
+            vec![4, 3, 2, 1, 0],
+            vec![1, 2, 3, 4, 0],
+            vec![2, 0, 1, 4, 3],
+        ] {
+            let mut items = vec!['a', 'b', 'c', 'd', 'e'];
+            let want: Vec<char> = order.iter().map(|&i| items[i]).collect();
+            apply_order(&mut items, order);
+            assert_eq!(items, want);
         }
     }
 }
