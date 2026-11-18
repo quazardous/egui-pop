@@ -4376,3 +4376,54 @@ fn choosing_a_folder_in_the_columns_the_selected_folder_is_the_answer() {
         Ok(Chosen::Paths(vec![PathBuf::from("/r/b")]))
     );
 }
+
+/// An application's sections of places: a card and a service.
+#[derive(Debug)]
+struct ImportSources(PathBuf);
+
+impl files::places::PlaceProvider for ImportSources {
+    fn id(&self) -> &str {
+        "test.import"
+    }
+
+    fn sections(&self) -> Vec<files::places::PlaceSection> {
+        use files::places::{PlaceItem, PlaceSection};
+        vec![
+            PlaceSection::new("cards", "Cards")
+                .item(PlaceItem::folder("EOS_DIGITAL", &self.0).badge("2 new")),
+            PlaceSection::new("services", "Services")
+                .item(PlaceItem::new("photos", "Photo service").icon("phosphor:cloud")),
+            PlaceSection::new("empty", "Nothing"),
+        ]
+    }
+}
+
+#[test]
+fn the_side_bar_lists_an_application_s_sections_and_their_folders() {
+    let root = tree("app-places");
+    let mut h = harness_with(App::builder(), None::<Box<dyn Plugin>>);
+    let f = h.state().handle().service(&FILES).unwrap();
+    f.place_providers()
+        .register(Arc::new(ImportSources(root.join("notes"))));
+    assert_eq!(f.place_providers().ids(), ["test.import"]);
+    let _p = choose(
+        &mut h,
+        FileRequest::open("Open").directory(root.join("photos")),
+    );
+    let title = h.get_by_label("Cards");
+    assert_eq!(title.accesskit_node().role(), Role::Heading);
+    // Its badge said with its name; a service is no folder: not in the picker.
+    h.get_by_label("EOS_DIGITAL, 2 new").click();
+    settle(&mut h);
+    assert_eq!(f.picker(f.open_ids()[0]).unwrap().dir, root.join("notes"));
+    assert!(h.query_by_label("Services").is_none());
+    assert!(h.query_by_label("Nothing").is_none());
+    // Every place as sections, for a panel of its own.
+    let places = f.places(h.state().handle());
+    let ids: Vec<String> = places.sections(&h.ctx).into_iter().map(|s| s.id).collect();
+    // Home first, where the machine has one; an empty section left out.
+    assert_eq!(ids[ids.len() - 2..], ["cards", "services"]);
+    assert!(ids.len() == 2 || ids[0] == "files.places", "{ids:?}");
+    assert!(f.place_providers().unregister("test.import"));
+    let _ = std::fs::remove_dir_all(root);
+}

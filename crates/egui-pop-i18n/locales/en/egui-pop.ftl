@@ -1637,6 +1637,8 @@ egui-pop-files-pages = Pages
 
 egui-pop-files-pictures = Pictures
 
+egui-pop-files-places = Places
+
 egui-pop-files-preview = Preview
 
 egui-pop-files-preview-failed = The preview failed
