@@ -264,10 +264,12 @@ pub struct Kernel {
     /// Whether listener runs are timed ([`Kernel::set_timing`]).
     timing: AtomicBool,
     budget_sinks: RwLock<Vec<BudgetSink>>,
-    /// The host's journal ([`Kernel::with_journal`]).
-    journal: Option<Arc<dyn Journal>>,
-    /// The host's relay ([`Kernel::with_relay`]).
-    relay: Option<Arc<dyn Relay>>,
+    /// The host's journal ([`Kernel::with_journal`]). Held as unwind
+    /// safe, as the kernel's other shared state is: a listener's panic is
+    /// caught and reported, never left half-done in the host's journal.
+    journal: Option<AssertUnwindSafe<Arc<dyn Journal>>>,
+    /// The host's relay ([`Kernel::with_relay`]), held as the journal is.
+    relay: Option<AssertUnwindSafe<Arc<dyn Relay>>>,
 }
 
 impl fmt::Debug for Kernel {
@@ -339,7 +341,7 @@ impl Kernel {
     /// });
     /// ```
     pub fn with_journal(mut self, journal: Arc<dyn Journal>) -> Kernel {
-        self.journal = Some(journal);
+        self.journal = Some(AssertUnwindSafe(journal));
         self
     }
 
@@ -351,7 +353,7 @@ impl Kernel {
     /// in [`Kernel::declaration`] and records what it takes in through
     /// its journal.
     pub fn with_relay(mut self, relay: Arc<dyn Relay>) -> Kernel {
-        self.relay = Some(relay);
+        self.relay = Some(AssertUnwindSafe(relay));
         self
     }
 
