@@ -171,7 +171,7 @@ use crate::window::WindowState;
 mod drag_session;
 pub mod panel_menu;
 mod window_host;
-use crate::bus::drag::{self, End, Seen as DragSeen};
+use crate::bus::drag::{self, End};
 use drag_session::Dragged;
 
 /// The shell's zones as panels.
@@ -591,32 +591,51 @@ pub(crate) fn listen_stack(app: &AppHandle) {
 
 /// The panels' rules for a drop egui_stack asks about (`stack.dock.drop`):
 /// the reason a tab may not go there (empty when there is none to say),
-/// `None` when it may. Moving inside its own area is always allowed;
-/// over a detached window, the window takes the drop; a detached window's
-/// own tabs (not the space's) move freely. For a group, the first of its
-/// tabs refused.
+/// `None` when it may. Moving inside its own area, or among a detached
+/// window's tabs, is always allowed; a detached window takes the panels
+/// that may live in a window of their own. For a group, the first of its
+/// tabs refused. A drop into or out of a detached window allowed here
+/// still runs its step, which may veto it (`settle_drop`).
 fn drop_refusal(app: &AppHandle, ask: &egui_stack::bus::DropAsk) -> Option<String> {
     if ask.from.is_none() && ask.to.is_none() {
         return None;
     }
+    let ctx = app.egui();
+    let panels = || {
+        let wb = app.workbench_mut();
+        let specs: Vec<PanelSpec> = (ask.tabs.iter())
+            .filter_map(|key| PanelId::new(key.as_str()).ok())
+            .filter_map(|p| wb.spec(&p).cloned())
+            .collect();
+        specs
+    };
+    if ask.to.as_deref().is_some_and(|d| d.starts_with("window:")) {
+        if ask.from.as_deref() == ask.to.as_deref() {
+            return None;
+        }
+        return panels().iter().find_map(|spec| {
+            spec.refuses(&crate::mounts::panel_host(Place::Window))
+                .map(|_| stays_docked(&ctx, spec))
+        });
+    }
     let Some((area, _)) = ask.to.as_deref().and_then(dock_area) else {
         return Some(String::new());
     };
-    if app.workbench_mut().window_drop.is_some() {
-        return Some(String::new());
-    }
     let from = ask.from.as_deref().and_then(dock_area).map(|(a, _)| a);
     if from == Some(area) {
         return None;
     }
-    let ctx = app.egui();
-    ask.tabs.iter().find_map(|key| {
-        let panel = PanelId::new(key.as_str()).ok()?;
-        let spec = app.workbench_mut().spec(&panel).cloned()?;
+    panels().iter().find_map(|spec| {
         let title = strings::panel_title(&ctx, spec.id.as_str(), &spec.title);
-        refusal(&ctx, &spec, &title, area)
+        refusal(&ctx, spec, &title, area)
             .or_else(|| spec.refuses(&crate::mounts::panel_host(Place::Area(area))))
     })
+}
+
+/// Why a panel stays out of the detached windows, as the drop zone says it.
+fn stays_docked(ctx: &egui::Context, spec: &PanelSpec) -> String {
+    let title = strings::panel_title(ctx, spec.id.as_str(), &spec.title);
+    strings::tr_args(ctx, &txt::WORKBENCH_STAYS_DOCKED, &[("panel", &title)])
 }
 
 /// Where a panel detached without a known place opens, and its size.
@@ -740,6 +759,13 @@ fn dock_area(name: &str) -> Option<(Area, bool)> {
 /// kept when empty, a target for a tab dragged to a closed area.
 fn area_rules() -> DockRules {
     DockRules::default().windows(false).keep_when_empty(true)
+}
+
+/// A detached window's dock's rules: tabs only (no split), no float of
+/// egui_stack's own (a panel leaves through `workbench.detach`), kept when
+/// a drag empties it (its step decides: `settle_drop`).
+fn window_rules() -> DockRules {
+    area_rules().splits(egui_stack::AllowedSplits::None)
 }
 
 /// A bare target's rules: the tab joins the area's tabs, so no split.
@@ -1291,19 +1317,40 @@ impl Landing {
 type WindowPlace = ([f32; 4], bool, bool);
 
 /// Who owns a detached window's place (#5241). The system sizes a window
-/// once it is open: the window opens with a place (its builder, kept the
-/// same while the window lives, so the backend asks nothing more of it),
-/// and a place the system tells is followed into the layout, never asked
-/// back. Only a place the application changes on purpose (a layout
-/// applied) is asked, once, by explicit commands.
+/// once it is open: the window opens with a place (its builder, which
+/// egui_stack makes once and gives again unchanged while the window
+/// lives, so the backend asks nothing more of it), and a place the system
+/// tells is followed into the layout, never asked back. Only a place the
+/// application changes on purpose (a layout applied) is asked, once, by
+/// explicit commands.
 #[derive(Clone, Copy, Debug)]
 struct WindowAsk {
-    /// What the window opened with: its builder's place, for its life.
-    opened: WindowState,
     /// The place last asked of the system (or opened with).
     asked: WindowPlace,
     /// The place the system last told, followed into the layout.
     told: Option<WindowPlace>,
+}
+
+/// Where a panel is in the space: an area's dock (or its bare target),
+/// or a detached window's dock.
+#[derive(Clone, Debug, PartialEq)]
+enum Home {
+    Area(Area),
+    Window(PanelId),
+}
+
+/// The space's drag in progress, as the workbench follows it.
+#[derive(Clone, Debug)]
+struct Cross {
+    /// What is dragged.
+    dragged: Dragged,
+    /// The viewport it began in.
+    source: ViewportId,
+    /// The areas and the detached windows before the drag.
+    areas: Vec<(Area, Node)>,
+    windows: Vec<Auxiliary>,
+    /// Where each dragged panel was.
+    homes: Vec<Home>,
 }
 
 /// The workbench's state, held by the application.
@@ -1336,13 +1383,29 @@ pub(crate) struct Workbench {
     landing_rect: Option<Rect>,
     /// The drop hint drawn last frame.
     pub hint: Option<DropHint>,
-    /// The detached window under a dragged tab last frame, where a drop
-    /// moves it.
+    /// The detached window under a dragged tab this pass, where a drop
+    /// moves it (the space's drop zone painted over one of its docks).
     pub window_drop: Option<WindowDrop>,
     /// The detached windows outlined this pass, where a tab dragged out of
-    /// the main window may go but no window can tell the pointer is over
-    /// it (`window_outline`).
+    /// another window may go but no window can tell the pointer is over
+    /// it (the space's `DockPainter::window_outline`).
     window_outlines: Vec<PanelId>,
+    /// The detached windows as egui_stack's native floats, each showing
+    /// its dock of the space (`window:<panel>`): their places, kept beside
+    /// the shell's layout, which is built again each pass. The layout
+    /// document (`layout.auxiliary`) stays the saved form.
+    floats: ZoneLayout,
+    /// The space replaced while it was taken out (the layout changed):
+    /// the floats' state (their windows' builders, the drag in progress)
+    /// goes on in the space projected next (`DockSpace::carry_floats_from`).
+    retired: Option<DockSpace<PanelId>>,
+    /// The space's drag in progress, as the last pass saw it, and the
+    /// layout before it: a drop into or out of a detached window is the
+    /// workbench's step, never egui_stack's move (`settle_drop`).
+    cross: Option<Cross>,
+    /// The last drop zone the space painted during a drag: its dock, its
+    /// refusal, the pass.
+    cross_landing: Option<(String, Option<String>, u64)>,
     /// The place of each panel's detached window when it closed: the
     /// panel detached again opens its window there, as it was.
     closed_windows: BTreeMap<PanelId, Auxiliary>,
@@ -1428,6 +1491,10 @@ impl Default for Workbench {
             landing_rect: None,
             window_drop: None,
             window_outlines: Vec::new(),
+            floats: ZoneLayout::new(Zone::leaf("windows", Content::Empty)),
+            retired: None,
+            cross: None,
+            cross_landing: None,
             closed_windows: BTreeMap::new(),
             window_asks: BTreeMap::new(),
             floated_from: BTreeMap::new(),
@@ -1457,61 +1524,59 @@ impl Default for Workbench {
     }
 }
 
+/// A detached window's place as a window state, brought back onto the
+/// screens (`screens`) when it is off them all.
+pub(crate) fn repaired_place(
+    (r, maximized, fullscreen): WindowPlace,
+    screens: &[Rect],
+) -> WindowState {
+    let [x, y, w, h] = r;
+    WindowState {
+        position: Some(egui::pos2(x, y)),
+        size: egui::vec2(w, h),
+        maximized,
+        fullscreen,
+    }
+    .repair(screens)
+}
+
 impl Workbench {
-    /// A detached window's place for this pass (#5241): the place its
-    /// window opened with, for its builder (the same while it lives), and
-    /// the place the application changed on purpose (from, to), to ask of
-    /// the system once. A place the system told is never asked back.
+    /// A detached window's place for this pass (#5241): the place the
+    /// application changed on purpose (from, to), to ask of the system
+    /// once. A place the system told is never asked back. Its first place
+    /// is the one its builder opens it with (`window_host`).
     fn window_place(
         &mut self,
         panel: &PanelId,
         now: WindowPlace,
         screens: &[Rect],
-    ) -> (WindowState, Option<(WindowState, WindowState)>) {
-        let repaired = |(r, maximized, fullscreen): WindowPlace| {
-            let [x, y, w, h] = r;
-            WindowState {
-                position: Some(egui::pos2(x, y)),
-                size: egui::vec2(w, h),
-                maximized,
-                fullscreen,
-            }
-            .repair(screens)
-        };
+    ) -> Option<(WindowState, WindowState)> {
         let Some(ask) = self.window_asks.get_mut(panel) else {
-            let opened = repaired(now);
             log::debug!(
                 target: "egui_pop::window_size",
                 "`{panel}` opens its window at {:?} (maximized {}, full screen {}): its builder's place",
-                opened.size,
-                opened.maximized,
-                opened.fullscreen,
+                now.0,
+                now.1,
+                now.2,
             );
             self.window_asks.insert(
                 panel.clone(),
                 WindowAsk {
-                    opened,
                     asked: now,
                     told: None,
                 },
             );
-            return (opened, None);
+            return None;
         };
         if ask.asked == now || ask.told == Some(now) {
-            return (ask.opened, None);
+            return None;
         }
         // The application changed the place: asked, from where the
         // window is (as told), once.
         let was = ask.told.unwrap_or(ask.asked);
         ask.asked = now;
         ask.told = None;
-        (ask.opened, Some((repaired(was), repaired(now))))
-    }
-
-    /// The place a detached window opened with, its builder's for its
-    /// life (#5241); `None` before it opens.
-    pub(crate) fn window_opened(&self, panel: &PanelId) -> Option<WindowState> {
-        self.window_asks.get(panel).map(|ask| ask.opened)
+        Some((repaired_place(was, screens), repaired_place(now, screens)))
     }
 
     /// A detached window's place as the system told it, followed into the
@@ -1595,17 +1660,34 @@ impl Workbench {
         self.layout.clone()
     }
 
-    /// Reads the docks' tabs and splits back into the layout.
+    /// Reads the docks' tabs and splits back into the layout: the areas'
+    /// trees, and the order of each detached window's tabs and the one it
+    /// shows. Not while a tab moved into or out of a detached window waits
+    /// for its step (`settle_drop`).
     fn read_back(&mut self) {
         if self.stale || self.taken > 0 {
             return;
         }
-        if let Some(space) = &self.space {
-            self.layout.areas = from_space(space);
+        let Some(space) = &self.space else {
+            return;
+        };
+        if unsettled(space, &self.layout.auxiliary) {
+            return;
+        }
+        self.layout.areas = from_space(space);
+        for a in &mut self.layout.auxiliary {
+            if let Some((panels, active)) = window_tabs_in(space, &a.panel) {
+                a.reorder(&panels);
+                if let Some(p) = panels.get(active) {
+                    a.show(p);
+                }
+            }
         }
     }
 
-    /// Makes the space show the layout, when it changed outside it.
+    /// Makes the space show the layout, when it changed outside it. The
+    /// floats' state of the space it replaces goes on in the new one (their
+    /// windows, the drag in progress): the space keeps its id.
     pub fn project(&mut self) {
         if !self.stale {
             return;
@@ -1614,6 +1696,10 @@ impl Workbench {
         if let Some(bus) = &self.bus {
             space.set_bus(bus.clone(), stack_key);
         }
+        if let Some(mut old) = self.space.take().or_else(|| self.retired.take()) {
+            space.carry_floats_from(&mut old);
+        }
+        self.retired = None;
         self.space = Some(space);
         self.stale = false;
     }
@@ -2197,6 +2283,9 @@ impl Workbench {
         self.taken = self.taken.saturating_sub(1);
         if !self.stale {
             self.space = Some(space);
+        } else {
+            // Its floats go on in the space projected next.
+            self.retired = Some(space);
         }
     }
 
@@ -2300,11 +2389,10 @@ impl Workbench {
     }
 
     /// Keeps where a dock painted the dragged tab's drop zone, if it did.
-    fn note_landing(&mut self, seen: Mutex<Option<Painted>>) {
+    fn note_landing(&mut self, seen: Mutex<Option<Painted>>, pass: u64) {
         let Some(painted) = seen.into_inner().ok().flatten() else {
             return;
         };
-        self.landing_rect = Some(painted.rect);
         // The dock it would go into (another than the one drawn, which may
         // have resolved the drag for every dock), as an area.
         let surface = match &painted.destination {
@@ -2312,12 +2400,35 @@ impl Workbench {
             egui_stack::TabDestination::EmptySurface(surface) => *surface,
             egui_stack::TabDestination::Window(_) => return,
         };
-        let Some((area, bare)) = self
+        let Some(name) = self
             .space
             .as_ref()
             .and_then(|space| space.dock_name(surface))
-            .and_then(dock_area)
+            .map(str::to_owned)
         else {
+            return;
+        };
+        self.cross_landing = Some((name.clone(), painted.refusal.clone(), pass));
+        // Over a detached window's dock drawn with the main window's (a
+        // backend that draws the windows in it): the window takes it.
+        if let Some(window) = name
+            .strip_prefix("window:")
+            .and_then(|p| PanelId::new(p).ok())
+        {
+            let lead = (self.dragging.as_ref().map(|(d, ..)| d.lead().clone()))
+                .or_else(|| self.cross.as_ref().map(|c| c.dragged.lead().clone()));
+            if let Some(panel) = lead {
+                self.window_drop = Some(WindowDrop {
+                    panel,
+                    window,
+                    zone: zone_of(&painted.destination),
+                    refusal: painted.refusal,
+                });
+            }
+            return;
+        }
+        self.landing_rect = Some(painted.rect);
+        let Some((area, bare)) = dock_area(&name) else {
             return;
         };
         let Some(landing) = Landing::of(&painted.destination, bare) else {
@@ -2361,10 +2472,14 @@ impl Workbench {
 }
 
 /// Draws the detached panels, each in a window of its own (with its own
-/// scale, and the application's frame when it draws one). Closing such a
-/// window is the `workbench.close_window` step, whose default asks the
-/// window's `window.close` on the bus: the workbench's listener docks its
-/// panels back (`crate::bus::panels`, which shows the windows too).
+/// scale, and the application's frame when it draws one): egui_stack's
+/// native floats (`FloatsArea`), each showing the window's dock of the
+/// workbench's space, through egui-pop's host (`window_host`), which keeps
+/// egui-pop's viewport ids. Closing such a window is the
+/// `workbench.close_window` step (egui_stack's close policy says `Keep`),
+/// whose default asks the window's `window.close` on the bus: the
+/// workbench's listener docks its panels back (`crate::bus::panels`, which
+/// shows the windows too).
 ///
 /// Each window is a window of the application in full: `keys` dispatches
 /// its keys in its own context (its focus chain, `window` naming its
@@ -2372,6 +2487,13 @@ impl Workbench {
 /// over it (dialogs, the command palette, popup menus; the toasts while
 /// it is the active window), and a modal open in another window blocks
 /// it (`overlay::block_window`).
+///
+/// A window's docks are the space's: a tab or a group dragged from one
+/// window to another is one drag of the space (`DockSpace::dragging`),
+/// which shows its drop zone in the window under the pointer, outlines
+/// the windows where the system hides where they are, and lands it once.
+/// A drop into or out of a detached window then runs the workbench's step
+/// (`settle_drop`).
 pub(crate) fn windows(
     app: &AppHandle,
     ctx: &egui::Context,
@@ -2387,32 +2509,24 @@ pub(crate) fn windows(
         detach_dropped(app, &group);
         drag::claim(ctx, "workbench.detach");
     }
-    let auxiliary = {
-        let mut wb = app.workbench_mut();
-        // Found again by this pass's windows.
-        wb.window_drop = None;
-        wb.window_outlines.clear();
-        wb.layout.auxiliary.clone()
-    };
+    let auxiliary = app.workbench_mut().layout.auxiliary.clone();
     let screens = crate::window::screens();
     // A window gone: its next one opens with its own place.
     app.workbench_mut()
         .window_asks
         .retain(|p, _| auxiliary.iter().any(|a| a.panel == *p));
-    use egui_stack::ViewportHost as _;
-    let mut host = window_host::PanelWindows::new(app, ctx, app_name, keys);
-    let stack_screens = host.screens();
-    for aux in auxiliary {
-        // Titled after the panel it shows: not drawn while that panel is
-        // not declared.
-        if app.workbench_mut().spec(aux.shown()).is_none() {
-            continue;
-        }
+    // Titled after the panel it shows: not drawn while that panel is not
+    // declared.
+    let drawn: Vec<Auxiliary> = auxiliary
+        .into_iter()
+        .filter(|a| app.workbench_mut().spec(a.shown()).is_some())
+        .collect();
+    for aux in &drawn {
         // A place off every screen comes back onto one. The builder keeps
         // the place the window opened with: one that changed would be
         // asked of the system again by the backend, a size the system
         // just set asked back one pass late (#5241).
-        let (_, changed) = app.workbench_mut().window_place(
+        let changed = app.workbench_mut().window_place(
             &aux.panel,
             (aux.rect, aux.maximized, aux.fullscreen),
             &screens,
@@ -2420,49 +2534,443 @@ pub(crate) fn windows(
         if let Some((from, to)) = changed {
             crate::bus::panels::ask_place(ctx, window_id(&aux.panel), &aux.panel, from, to);
         }
-        let float = window_host::float_of(&aux, &stack_screens);
-        let viewport = host.viewport_id(&float.key);
-        let builder = host.builder(&float);
-        host.show(ctx, viewport, builder, &mut |ui| window_body(app, ui, &aux));
+    }
+    let Some(mut space) = app.workbench_mut().take_space() else {
+        return;
+    };
+    let mut floats = std::mem::replace(
+        &mut app.workbench_mut().floats,
+        ZoneLayout::new(Zone::leaf("windows", Content::Empty)),
+    );
+    // egui_stack's places, in its terms (named screens, physical pixels);
+    // its own repair is left off (the host tells it no screen): egui-pop
+    // brings windows back onto the screens (`window_place`, `screen.*`).
+    let stack_screens = window_host::stack_screens(&crate::window::screen_list());
+    sync_floats(&mut floats, &mut space, &drawn, &stack_screens);
+    let kit = Kit::of(ctx);
+    let panels: Vec<PanelId> = drawn.iter().flat_map(|a| a.panels().cloned()).collect();
+    let cache_id = TAB_CACHE.keyed("windows");
+    let mut cache = cache_id.update(ctx, std::mem::take);
+    cache.prepare(app, ctx, &kit, &panels);
+    let style = cache.dock_style(&ctx.global_style(), &kit);
+    // What each window's dock holds, to name a drag begun there.
+    let docks: HashMap<egui_stack::SurfaceIndex, (PanelId, Vec<PanelId>, usize)> = drawn
+        .iter()
+        .filter_map(|a| {
+            let surface = space.dock_surface(&window_host::window_dock(&a.panel))?;
+            let (tabs, active) = window_tabs_in(&space, &a.panel)?;
+            Some((surface, (a.panel.clone(), tabs, active)))
+        })
+        .collect();
+    let dragged = app
+        .workbench_mut()
+        .cross
+        .as_ref()
+        .map(|c| c.dragged.clone());
+    let seen = Mutex::new(None);
+    let outlined = Mutex::new(false);
+    let painter = AreaPainter::new(&kit, false, &seen).outlines(&outlined);
+    let mut viewer = Viewer {
+        app,
+        prepared: &cache.tabs,
+    };
+    space.state_mut().translations = dock_translations(ctx);
+    // A backend without windows of its own (kittest, the web) draws them
+    // in the main window: their docks share the main window's drag.
+    let embedded = ctx.embed_viewports();
+    let labels = group_labels(ctx);
+    let mut window_drop = None;
+    let mut window_outlines = Vec::new();
+    let mut host = window_host::PanelWindows::new(app, ctx, app_name, keys);
+    egui_stack::FloatsArea::new(&mut floats, &mut space)
+        .host(&mut host)
+        .style(style)
+        .painter(&painter)
+        .group_handles(group_handles(app))
+        .group_drag_modifiers(group_drag_modifier(app).modifiers())
+        .float_move(float_move(app))
+        .configure(|_, area| {
+            let area = area
+                .labels(labels.clone())
+                .allowed_splits(egui_stack::AllowedSplits::None)
+                .show_close_buttons(false)
+                .show_add_buttons(false)
+                .show_leaf_close_all_buttons(false)
+                .show_leaf_collapse_buttons(false);
+            if embedded { area.id(space_id()) } else { area }
+        })
+        .decorate(|ui, shown| {
+            let Some(window) = PanelId::new(shown.key.as_str()).ok() else {
+                return;
+            };
+            // The drop zone the space painted over this window's dock, or
+            // its outline: where a tab dragged from another window goes.
+            if let Some(painted) = seen.lock().ok().and_then(|mut s| s.take())
+                && let Some(dragged) = &dragged
+            {
+                window_drop = Some(WindowDrop {
+                    panel: dragged.lead().clone(),
+                    window: window.clone(),
+                    zone: zone_of(&painted.destination),
+                    refusal: painted.refusal.clone(),
+                });
+                app.workbench_mut().cross_landing = Some((
+                    window_host::window_dock(&window),
+                    painted.refusal,
+                    ctx.cumulative_pass_nr(),
+                ));
+            }
+            if outlined.lock().is_ok_and(|mut o| std::mem::take(&mut *o)) {
+                window_outlines.push(window.clone());
+            }
+            let area_id = if embedded {
+                space_id()
+            } else {
+                space_id().with(("egui_stack.float", shown.key.as_str()))
+            };
+            let bars = if shown.tab_bars.is_empty() {
+                // Drawn with the main window's docks: their bars together.
+                let surface = docks
+                    .iter()
+                    .find(|(_, (w, ..))| *w == window)
+                    .map(|(s, _)| *s);
+                DockArea::tab_bars(ui.ctx(), area_id)
+                    .into_iter()
+                    .filter(|(path, _)| Some(path.surface) == surface)
+                    .collect()
+            } else {
+                shown.tab_bars.clone()
+            };
+            if let Some((_, bar)) = bars.first() {
+                let shown_panel = docks
+                    .values()
+                    .find(|(w, ..)| *w == window)
+                    .and_then(|(_, tabs, active)| tabs.get(*active).cloned())
+                    .unwrap_or_else(|| window.clone());
+                dock_back_button(app, ui, &kit, *bar, &shown_panel);
+            }
+            window_drag(ui.ctx(), area_id, &window, &docks);
+        })
+        .show(ctx, &mut viewer);
+    // egui_stack's own record of the floats' life: egui-pop's steps and
+    // the bus already say it.
+    let _ = space.take_float_events();
+    cache_id.set(ctx, cache);
+    let mut wb = app.workbench_mut();
+    wb.floats = floats;
+    if window_drop.is_some() {
+        wb.window_drop = window_drop;
+    }
+    wb.window_outlines = window_outlines;
+    wb.put_space(space);
+    drop(wb);
+    settle_drop(app, ctx);
+}
+
+/// The floats showing the detached windows drawn: one per window, keyed
+/// by its panel, at its place (egui-pop's, read on egui_stack's screens).
+/// A window no longer drawn loses its dock, and egui_stack closes its
+/// float (forgetting its window's builder).
+fn sync_floats(
+    floats: &mut ZoneLayout,
+    space: &mut DockSpace<PanelId>,
+    drawn: &[Auxiliary],
+    screens: &[egui_stack::layout::Screen],
+) {
+    let gone: Vec<String> = floats
+        .floats
+        .iter()
+        .map(|f| f.key.clone())
+        .filter(|key| !drawn.iter().any(|a| a.panel.as_str() == key))
+        .collect();
+    for key in gone {
+        if let Ok(panel) = PanelId::new(key.as_str()) {
+            let _ = space.remove_dock(&window_host::window_dock(&panel));
+        }
+    }
+    for aux in drawn {
+        let float = window_host::float_of(aux, screens);
+        match floats.float_mut(&float.key) {
+            Some(open) => open.place = float.place,
+            None => {
+                let place = float.place.clone();
+                floats.open_float(float).place = place;
+            }
+        }
     }
 }
 
-/// A detached window's content: its tabs, and the drop target it is for
-/// a tab or a group dragged from another window.
-fn window_body(app: &AppHandle, ui: &mut Ui, aux: &Auxiliary) {
-    let vctx = ui.ctx().clone();
-    let panel = aux.panel.clone();
-    let body = egui::CentralPanel::default()
-        .show(ui, |ui| window_tabs(app, ui, aux))
-        .response
-        .rect;
-    // A tab or a group dragged from the main window: this window is one
-    // of its drop targets, by its id on the bus (the drag session finds
-    // it, in this window or from the screen's coordinates, and delivers
-    // the drop once).
-    let holds = |d: &Dragged| d.panels().iter().any(|p| aux.holds(p));
-    let window = crate::bus::panels::window_of_panel(&panel);
-    let refusal = |d: &Dragged| {
-        window_refusal(app, d).map(|spec| {
-            let title = strings::panel_title(&vctx, spec.id.as_str(), &spec.title);
-            strings::tr_args(&vctx, &txt::WORKBENCH_STAYS_DOCKED, &[("panel", &title)])
+/// How a drop lands in a detached window's dock: among its tabs (they
+/// hold no splits).
+fn zone_of(destination: &egui_stack::TabDestination) -> DropZone {
+    match Landing::of(destination, false) {
+        Some(Landing::Split(zone)) => zone,
+        _ => DropZone::Center,
+    }
+}
+
+/// A tab or a group dragged out of a detached window (its dock's area
+/// `area_id`, drawn in `ctx`'s window): carried by a drag session
+/// (`bus::drag`) too, so the drag is said on the bus (`drag.started`,
+/// `drag.dropped` or `drag.refused`) whichever window it began in. Let go
+/// in its own window over no target, its dock took it.
+fn window_drag(
+    ctx: &egui::Context,
+    area_id: Id,
+    window: &PanelId,
+    docks: &HashMap<egui_stack::SurfaceIndex, (PanelId, Vec<PanelId>, usize)>,
+) {
+    let mine = |surface| docks.get(&surface).filter(|(w, ..)| w == window);
+    let dragged = DockArea::dragged_tab(ctx, area_id)
+        .and_then(|d| {
+            let (_, tabs, _) = mine(d.path.surface)?;
+            Some(Dragged::Tab(tabs.get(d.path.tab.0)?.clone()))
+        })
+        .or_else(|| {
+            let d = DockArea::dragged_node(ctx, area_id)?;
+            let (_, tabs, active) = mine(d.path.surface)?;
+            Some(Dragged::Group {
+                panels: tabs.clone(),
+                shown: tabs.get(*active).or(tabs.first())?.clone(),
+            })
+        });
+    let started_id = Id::unique(("egui_pop.window_dock", window.as_str())).with("drag_session");
+    let started = ctx
+        .data(|d| d.get_temp::<bool>(started_id))
+        .unwrap_or(false);
+    // A flag left by a window a drop emptied and closed does not hold
+    // back the next drag: a session carrying the tab is what counts.
+    let carried = |d: &Dragged| {
+        drag::payload::<Dragged>(ctx).is_some_and(|p| d.panels().iter().all(|q| p.holds(q)))
+    };
+    match dragged {
+        Some(d) if !carried(&d) => {
+            let kind = if d.is_group() { "tab-group" } else { "tab" };
+            drag::start(ctx, kind, d);
+            ctx.data_mut(|data| data.insert_temp(started_id, true));
+        }
+        Some(_) => {}
+        None if started => {
+            ctx.data_mut(|d| d.remove_temp::<bool>(started_id));
+            if let Some((_, End::Left { inside: true })) = drag::ended::<Dragged>(ctx) {
+                drag::claim(ctx, "workbench.window");
+            }
+        }
+        None => {}
+    }
+}
+
+/// The space's drag, followed each pass: when it begins, the layout is
+/// kept as it was; when it ends, a tab or a group the space moved into a
+/// detached window, or out of one, is put back and moved by the
+/// workbench's step instead, as a drop on the window always was (a plugin
+/// may veto or redirect it, the panels' registry follows its windows):
+///
+/// - into a detached window: `workbench.join_window` (`group` for a
+///   group), said on the bus as dropped on that window;
+/// - out of one into an area of the main window: `workbench.move` for
+///   each of its panels, said as dropped on the area
+///   (`workbench.area.<area>`).
+///
+/// A drag the space refused over another window (the drop zone painted
+/// refused) is said refused with its reason. A drag inside the main
+/// window is the areas' (`track_drag`). Either way the drag session
+/// (`bus::drag`) ends there: a release the space took is never delivered
+/// to a target of the session (`drag::taken`).
+fn settle_drop(app: &AppHandle, ctx: &egui::Context) {
+    let mut wb = app.workbench_mut();
+    let pass = ctx.cumulative_pass_nr();
+    let Some(space) = wb.space.as_ref().or(wb.retired.as_ref()) else {
+        return;
+    };
+    let now = homes(space);
+    // A move egui_stack made: the windows' docks no longer hold what the
+    // layout says (a step that moved it since, a detach, made them agree).
+    let moved = unsettled(space, &wb.layout.auxiliary);
+    if let Some(drag) = space.dragging() {
+        let dragged = match drag.payload {
+            egui_stack::DragPayload::Tab(path) => space
+                .state()
+                .leaf(path.node_path())
+                .ok()
+                .and_then(|leaf| leaf.tabs.get(path.tab.0).cloned())
+                .map(Dragged::Tab),
+            egui_stack::DragPayload::Group(path) => {
+                space.state().leaf(path).ok().and_then(|leaf| {
+                    let shown = leaf.tabs.get(leaf.active.0).or(leaf.tabs.first())?.clone();
+                    Some(Dragged::Group {
+                        panels: leaf.tabs.clone(),
+                        shown,
+                    })
+                })
+            }
+            _ => None,
+        };
+        let Some(dragged) = dragged else {
+            return;
+        };
+        let source = drag.source;
+        if wb.cross.as_ref().is_some_and(|c| c.dragged == dragged) {
+            return;
+        }
+        let homes: Vec<Home> = (dragged.panels().iter())
+            .filter_map(|p| now.get(p).cloned())
+            .collect();
+        wb.read_back();
+        let cross = Cross {
+            dragged,
+            source,
+            areas: wb.layout.areas.clone(),
+            windows: wb.layout.auxiliary.clone(),
+            homes,
+        };
+        wb.cross = Some(cross);
+        return;
+    }
+    let Some(cross) = wb.cross.take() else {
+        return;
+    };
+    let landing = wb.cross_landing.take().filter(|(_, _, at)| *at + 2 >= pass);
+    let lead = cross.dragged.lead().clone();
+    let was = cross.homes.first().cloned();
+    let to = now.get(&lead).cloned();
+    let crossed = moved
+        && match (&was, &to) {
+            (Some(Home::Window(a)), Some(Home::Window(b))) => a != b,
+            (Some(Home::Window(_)), Some(Home::Area(_))) | (_, Some(Home::Window(_))) => was != to,
+            _ => false,
+        };
+    if !crossed {
+        // Nothing moved across a window: a refusal over another window
+        // is said, with its reason.
+        let from_window = matches!(was, Some(Home::Window(_)));
+        // Let go over the main window out of its docks (an area's margin):
+        // the area there takes it, as the whole area always did.
+        let area_at = (drag::pointer_here::<Dragged>(ctx))
+            .filter(|_| from_window && cross.source != ctx.viewport_id())
+            .filter(|_| !landing.as_ref().is_some_and(|(_, why, _)| why.is_some()))
+            .and_then(|at| area_under(&wb, at));
+        drop(wb);
+        if let Some(area) = area_at {
+            drop_into_area(app, ctx, &cross.dragged, area);
+            return;
+        }
+        let Some((dock, Some(reason), _)) = landing else {
+            return;
+        };
+        let into_window = dock.starts_with("window:");
+        if !into_window && !from_window {
+            return;
+        }
+        let (window, target) = drop_target_names(&dock);
+        drag::taken::<Dragged>(ctx, &window, &target, Some(reason.clone()));
+        match dock
+            .strip_prefix("window:")
+            .and_then(|p| PanelId::new(p).ok())
+        {
+            // As a drop on the window always did: its step says why.
+            Some(w) => join_dropped(app, &cross.dragged, &w),
+            None => app.workbench_refused(&format!("move {lead}"), &reason),
+        }
+        return;
+    }
+    // Put back as it was: the step moves it.
+    wb.layout.areas = cross.areas.clone();
+    for a in &mut wb.layout.auxiliary {
+        if let Some(before) = cross.windows.iter().find(|b| b.panel == a.panel) {
+            a.tabs.clone_from(&before.tabs);
+            a.shown = before.shown;
+        }
+    }
+    let gone: Vec<Auxiliary> = (cross.windows.iter())
+        .filter(|b| !wb.layout.auxiliary.iter().any(|a| a.panel == b.panel))
+        .cloned()
+        .collect();
+    wb.layout.auxiliary.extend(gone);
+    wb.stale = true;
+    drop(wb);
+    match to {
+        Some(Home::Window(window)) => {
+            let target = crate::bus::panels::window_of_panel(&window);
+            drag::taken::<Dragged>(ctx, &target, &target, None);
+            join_dropped(app, &cross.dragged, &window);
+        }
+        Some(Home::Area(area)) => drop_into_area(app, ctx, &cross.dragged, area),
+        None => {}
+    }
+    ctx.request_repaint();
+}
+
+/// A tab or a group from a detached window let go over an area of the main
+/// window: each of its panels' `workbench.move` (the first refused or
+/// vetoed stops it), said as dropped on `workbench.area.<area>`; refused
+/// with the area's reason where the area keeps it out.
+fn drop_into_area(app: &AppHandle, ctx: &egui::Context, dragged: &Dragged, area: Area) {
+    let target = format!("workbench.area.{}", area_name(area));
+    let why = {
+        let wb = app.workbench_mut();
+        let specs: Vec<PanelSpec> = (dragged.panels().iter())
+            .filter_map(|p| wb.spec(p).cloned())
+            .collect();
+        specs.iter().find_map(|spec| {
+            let title = strings::panel_title(ctx, spec.id.as_str(), &spec.title);
+            refusal(ctx, spec, &title, area)
+                .or_else(|| spec.refuses(&crate::mounts::panel_host(Place::Area(area))))
         })
     };
-    let seen = if drag::payload::<Dragged>(&vctx).is_some_and(|d| holds(&d)) {
-        DragSeen::Nothing
-    } else {
-        drag::target::<Dragged>(&vctx, &window, body, refusal)
-    };
-    match seen {
-        DragSeen::Over { payload, at } => {
-            window_drop(app, &vctx, aux, &payload, body, at);
+    drag::taken::<Dragged>(ctx, crate::windows::WindowId::MAIN, &target, why.clone());
+    if let Some(why) = why {
+        app.workbench_refused(&format!("move {}", dragged.lead()), &why);
+        return;
+    }
+    for panel in dragged.panels() {
+        let out = app.change_workbench(Change::Move(panel.clone(), area));
+        if let Some(Outcome::Done(Err(e))) = &out {
+            app.workbench_refused(&format!("move {panel}"), e);
+            break;
         }
-        DragSeen::Unknown(payload) => window_outline(app, &vctx, aux, &payload, body),
-        // Refused, the step says why, as a tab menu's move would.
-        DragSeen::Dropped(payload) | DragSeen::Refused { payload, .. } => {
-            join_dropped(app, &payload, &panel);
+        if matches!(out, Some(Outcome::Vetoed { .. })) {
+            break;
         }
-        _ => {}
+    }
+}
+
+/// The area of the main window at `at` (its points): one drawn there, else
+/// a closed one whose band along the areas' edge holds it, else the centre
+/// when it lies in the areas.
+fn area_under(wb: &Workbench, at: Pos2) -> Option<Area> {
+    let closed = [Area::StartSide, Area::EndSide, Area::Bottom]
+        .into_iter()
+        .filter(|a| wb.panels_in(*a).is_empty() && !wb.zen)
+        .find(|a| wb.edge_rect(*a).contains(at));
+    let drawn = (wb.rects.iter())
+        .filter(|(a, _)| **a == Area::Center || !wb.zen)
+        .find(|(_, r)| r.contains(at))
+        .map(|(a, _)| *a);
+    closed
+        .or(drawn)
+        .or_else(|| wb.content.contains(at).then_some(Area::Center))
+}
+
+/// The window and the target a drop on a dock of the space is said on
+/// the bus with: a detached window by its window (`panel:<panel>`), an
+/// area of the main window as `workbench.area.<area>`.
+fn drop_target_names(dock: &str) -> (String, String) {
+    match dock
+        .strip_prefix("window:")
+        .and_then(|p| PanelId::new(p).ok())
+    {
+        Some(w) => {
+            let window = crate::bus::panels::window_of_panel(&w);
+            (window.clone(), window)
+        }
+        None => {
+            let area = dock_area(dock).map_or(Area::Center, |(a, _)| a);
+            (
+                crate::windows::WindowId::MAIN.to_string(),
+                format!("workbench.area.{}", area_name(area)),
+            )
+        }
     }
 }
 
@@ -2526,92 +3034,22 @@ fn keep_window_place(app: &AppHandle, vctx: &egui::Context, panel: &PanelId) {
     }
 }
 
-/// A detached window holding tabs: one tab bar (egui_stack's, painted
-/// by the kit as the areas' are), no splits. The order the user gives
-/// the tabs and the one shown go back to the layout.
-fn window_tabs(app: &AppHandle, ui: &mut Ui, aux: &Auxiliary) {
-    let ctx = ui.ctx().clone();
-    let kit = Kit::of(&ctx);
-    let panels: Vec<PanelId> = aux.panels().cloned().collect();
-    let mut dock = DockState::new(panels.clone());
-    if let Some(path) = dock.find_tab(aux.shown()) {
-        let _ = dock.set_active_tab(path);
-    }
-    let id = window_dock_id(&aux.panel);
-    let cache_id = TAB_CACHE.keyed(id);
-    let mut cache = cache_id.update(&ctx, std::mem::take);
-    cache.prepare(app, &ctx, &kit, &panels);
-    let style = cache.dock_style(ui.style(), &kit);
-    let mut viewer = Viewer {
-        app,
-        prepared: &cache.tabs,
-    };
-    dock.translations = dock_translations(&ctx);
-    let area = DockArea::new(&mut dock).id(id).style(style).painter(&*kit);
-    group_gestures(area, app, &ctx)
-        .allowed_splits(egui_stack::AllowedSplits::None)
-        .show_close_buttons(false)
-        .show_add_buttons(false)
-        .show_leaf_close_all_buttons(false)
-        .show_leaf_collapse_buttons(false)
-        .show_inside(ui, &mut viewer);
-    let bar = first_bar(dock.main_surface(), &kit, &cache.tabs);
-    cache_id.set(&ctx, cache);
-    if let Some(bar) = bar {
-        dock_back_button(app, ui, &kit, bar, aux.shown());
-    }
-    // A tab dragged out of the window: carried by a drag session, which
-    // the other windows' targets take (the main window's areas, another
-    // detached window); let go in this window, its dock took it.
-    let dragged = DockArea::dragged_tab(&ctx, id).and_then(|d| {
-        let leaf = dock.leaf(d.path.node_path()).ok()?;
-        leaf.tabs.get(d.path.tab.0).cloned()
-    });
-    let started_id = id.with("drag_session");
-    let started = ctx
-        .data(|d| d.get_temp::<bool>(started_id))
-        .unwrap_or(false);
-    // A flag left by a window a drop emptied and closed does not hold
-    // back the next drag: a session carrying the tab is what counts.
-    let carried = |p: &PanelId| drag::payload::<Dragged>(&ctx).is_some_and(|d| d.holds(p));
-    match dragged {
-        Some(panel) if !carried(&panel) => {
-            drag::start(&ctx, "tab", Dragged::Tab(panel));
-            ctx.data_mut(|d| d.insert_temp(started_id, true));
-        }
-        None if started => {
-            ctx.data_mut(|d| d.remove_temp::<bool>(started_id));
-            if let Some((_, End::Left { inside: true })) = drag::ended::<Dragged>(&ctx) {
-                drag::claim(&ctx, "workbench.window");
-            }
-        }
-        _ => {}
-    }
-    if let Some(Node::Tabs { panels, active }) = from_dock(&dock) {
-        let mut wb = app.workbench_mut();
-        if let Some(a) = wb
-            .layout
-            .auxiliary
-            .iter_mut()
-            .find(|a| a.panel == aux.panel)
-        {
-            a.reorder(&panels);
-            if let Some(p) = panels.get(active) {
-                a.show(p);
-            }
-        }
-    }
-}
-
-/// The Dock back button at the end of a detached window's tab bar: its
+/// The Dock back button at the end of a detached window's tab bar (`bar`,
+/// the whole bar), left of egui_stack's group grip and move handle: its
 /// shown panel docks back where it came from, else in its own area
 /// (`workbench.dock_back`, as the tab menu's Dock back and the
 /// `workbench.panel.dock_back` command, `Ctrl+Shift+D`). Named for
 /// assistive technology, its name its tooltip.
-fn dock_back_button(app: &AppHandle, ui: &mut Ui, kit: &Kit, bar: TabBar, shown: &PanelId) {
-    let side = bar.rect.height().min(kit.tab.data.height.max(16.0));
+fn dock_back_button(app: &AppHandle, ui: &mut Ui, kit: &Kit, bar: Rect, shown: &PanelId) {
+    let side = bar.height().min(kit.tab.data.height.max(16.0));
+    let handles = group_handles(app);
+    let ends = [GroupHandles::GRIP, GroupHandles::MOVE_WINDOW]
+        .into_iter()
+        .filter(|h| handles.contains(*h))
+        .count() as f32;
+    let right = bar.right() - ends * GROUP_HANDLE_SIZE;
     let rect = Rect::from_center_size(
-        egui::pos2(bar.rect.right() - side / 2.0 - 2.0, bar.rect.center().y),
+        egui::pos2(right - side / 2.0 - 2.0, bar.center().y),
         egui::vec2(side, side),
     );
     let name = strings::tr(ui.ctx(), &txt::WORKBENCH_DOCK_BACK);
@@ -2636,107 +3074,15 @@ fn dock_back_button(app: &AppHandle, ui: &mut Ui, kit: &Kit, bar: TabBar, shown:
     }
 }
 
-/// A detached window's tab dock id.
-fn window_dock_id(panel: &PanelId) -> Id {
-    Id::unique(("egui_pop.window_dock", panel.as_str()))
-}
-
-/// A tab dragged over a detached window: the zone a drop takes there,
-/// drawn as the areas' (the kit's `dock-preview`, disabled with its
-/// reason where the panel may not go), kept for the drop.
-///
-/// A detached window holds tabs, not splits: the zone is the window's
-/// whole body (`DropZone::at` with no split allowed), and a drop there
-/// joins its tabs.
-pub(crate) fn window_drop(
-    app: &AppHandle,
-    vctx: &egui::Context,
-    aux: &Auxiliary,
-    dragged: &Dragged,
-    body: Rect,
-    pointer: Pos2,
-) {
-    let zone = egui_stack::DropZone::at(
-        body,
-        pointer,
-        WINDOW_EDGE_COVERAGE,
-        egui_stack::AllowedSplits::None,
-    );
-    // A group goes whole or not at all: the first of its panels that may
-    // not go says why.
-    let refusal = window_refusal(app, dragged).map(|spec| {
-        let title = strings::panel_title(vctx, spec.id.as_str(), &spec.title);
-        strings::tr_args(vctx, &txt::WORKBENCH_STAYS_DOCKED, &[("panel", &title)])
-    });
-    paint_drop_zone(
-        vctx,
-        Id::unique(("egui_pop.window_drop", aux.panel.as_str())),
-        body,
-        refusal.clone(),
-    );
-    app.workbench_mut().window_drop = Some(WindowDrop {
-        panel: dragged.lead().clone(),
-        window: aux.panel.clone(),
-        zone,
-        refusal,
-    });
-}
-
-/// A tab dragged out of the main window where the system hides window
-/// positions (Wayland): no window can tell whether the pointer is over it
-/// until the drag lets it go, so each detached window that may take the
-/// tab outlines its body (the kit's `dock-preview` border, disabled where
-/// the panel may not go), the best hint there is. A drop over it still
-/// joins it (the drag session delivers it there).
-fn window_outline(
-    app: &AppHandle,
-    vctx: &egui::Context,
-    aux: &Auxiliary,
-    dragged: &Dragged,
-    body: Rect,
-) {
-    let refused = window_refusal(app, dragged).is_some();
-    let kit = Kit::of(vctx);
-    let style = kit
-        .dock_preview
-        .style(State::REST.with(State::DISABLED, refused));
-    let width = style.border_width.max(WINDOW_OUTLINE_WIDTH);
-    let painter = vctx.layer_painter(egui::LayerId::new(
-        egui::Order::Foreground,
-        Id::unique(("egui_pop.window_outline", aux.panel.as_str())),
-    ));
-    painter.rect_stroke(
-        body,
-        egui::CornerRadius::same(style.radius.round().clamp(0.0, 255.0) as u8),
-        egui::Stroke::new(width, style.border_color),
-        egui::StrokeKind::Inside,
-    );
-    app.workbench_mut().window_outlines.push(aux.panel.clone());
-}
-
-/// The first panel of a drag that may not go into a detached window, if
-/// one may not.
-fn window_refusal(app: &AppHandle, dragged: &Dragged) -> Option<PanelSpec> {
-    let wb = app.workbench_mut();
-    dragged
-        .panels()
-        .iter()
-        .filter_map(|p| wb.spec(p))
-        .find(|spec| {
-            spec.refuses(&crate::mounts::panel_host(Place::Window))
-                .is_some()
-        })
-        .cloned()
-}
+/// The breadth of each of egui_stack's handles at the end of a tab bar
+/// (the group grip, a float's move handle), in points.
+const GROUP_HANDLE_SIZE: f32 = 16.0;
 
 /// The least width of a detached window's outline while a tab is dragged
-/// out of the main window (`window_outline`), in points: seen at a glance
-/// around the whole window.
+/// out of another window where window positions are hidden
+/// (`DockPainter::window_outline`), in points: seen at a glance around the
+/// whole window.
 const WINDOW_OUTLINE_WIDTH: f32 = 3.0;
-
-/// The share of a detached window's body along each edge a split would
-/// take, as egui_stack's (unused while windows hold tabs only).
-const WINDOW_EDGE_COVERAGE: f32 = 0.25;
 
 /// Forgets the overlays of the windows closed since the last pass: what
 /// they showed is gone with them (a dialog shown there comes to the main
@@ -2812,7 +3158,76 @@ pub(crate) fn to_space(layout: &Layout) -> DockSpace<PanelId> {
     for area in Area::ALL {
         space.add_dock(bare_target(area), bare_rules(), Vec::new());
     }
+    // Each detached window: a dock of its own, a native float's
+    // (`windows`), holding its tabs, its shown one active.
+    for a in &layout.auxiliary {
+        let name = window_host::window_dock(&a.panel);
+        if space.has_dock(&name) {
+            continue;
+        }
+        space.add_dock(&name, window_rules(), a.panels().cloned().collect());
+        if let Some(tree) = space.dock_mut(&name)
+            && let Some(leaf) = tree.iter_mut().find_map(|n| n.get_leaf_mut())
+            && let Some(i) = leaf.tabs.iter().position(|p| p == a.shown())
+        {
+            leaf.active = egui_stack::TabIndex(i);
+        }
+    }
     space
+}
+
+/// A detached window's dock's tabs, in order, and the one it shows; `None`
+/// when the space has no dock for it.
+fn window_tabs_in(space: &DockSpace<PanelId>, window: &PanelId) -> Option<(Vec<PanelId>, usize)> {
+    let tree = space.dock(&window_host::window_dock(window))?;
+    let mut panels = Vec::new();
+    let mut active = 0;
+    for node in tree.iter() {
+        if let Some(leaf) = node.get_leaf() {
+            if panels.is_empty() {
+                active = leaf.active.0;
+            }
+            panels.extend(leaf.tabs.iter().cloned());
+        }
+    }
+    let last = panels.len().saturating_sub(1);
+    Some((panels, active.min(last)))
+}
+
+/// Whether a detached window's dock holds other panels than its window
+/// (a tab moved into or out of it, its step not run yet).
+fn unsettled(space: &DockSpace<PanelId>, windows: &[Auxiliary]) -> bool {
+    windows.iter().any(|a| {
+        window_tabs_in(space, &a.panel).is_some_and(|(panels, _)| {
+            let mut now: Vec<&PanelId> = panels.iter().collect();
+            let mut was: Vec<&PanelId> = a.panels().collect();
+            now.sort();
+            was.sort();
+            now != was
+        })
+    })
+}
+
+/// Where each panel is in the space: its area, or its detached window.
+fn homes(space: &DockSpace<PanelId>) -> HashMap<PanelId, Home> {
+    let mut out = HashMap::new();
+    for (path, panel) in space.state().iter_all_tabs() {
+        let Some(name) = space.dock_name(path.surface) else {
+            continue;
+        };
+        let home = match dock_area(name) {
+            Some((area, _)) => Home::Area(area),
+            None => match name
+                .strip_prefix("window:")
+                .and_then(|p| PanelId::new(p).ok())
+            {
+                Some(window) => Home::Window(window),
+                None => continue,
+            },
+        };
+        out.insert(panel.clone(), home);
+    }
+    out
 }
 
 /// The areas' trees, read back from the space; a tab dropped on an area's
@@ -3151,6 +3566,9 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         wb.bare.clear();
         wb.landing = None;
         wb.landing_rect = None;
+        // Found again by this pass's docks.
+        wb.window_drop = None;
+        wb.window_outlines.clear();
         // A tab dragged: the layout before a drop, to put it back if the
         // move is vetoed.
         let before = wb.dragged(&ctx).map(|(dragged, from, _)| {
@@ -3547,7 +3965,12 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
         wb.flyout_rect = drawn;
         wb.flyout_held = drawn.and(wb.flyout.clone());
     }
-    if before.is_some() {
+    // A tab dragged here, or from a detached window over this one: the
+    // closed and bare areas take it too.
+    let remote = (app.workbench_mut().space.as_ref())
+        .and_then(|s| s.dragging())
+        .is_some_and(|d| d.source != ctx.viewport_id());
+    if before.is_some() || remote {
         drop_targets(app, ui, zen);
     }
     app.set_drawing_areas(false);
@@ -3559,139 +3982,6 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     }
     track_drag(app, &ctx, before);
     publish_hint(app, &ctx);
-    area_targets(app, &ctx, zen);
-}
-
-/// A tab dragged from a detached panel's window (a drag session begun in
-/// another window): the main window's areas are its drop targets, by
-/// their ids (`workbench.area.<area>`): the centre, each side and the
-/// bottom area drawn, and a closed one along the areas' edge (in zen
-/// mode, the centre only). Over one, the drop zone shows the whole area
-/// as a drag inside the main window shows a closed one (the kit's
-/// `dock-preview`, disabled with the reason where the panel stays out of
-/// it); let go there, the tab docks in the area (`workbench.move`), or
-/// the refusal is said and the tab stays in its window.
-///
-/// The pointer is placed from the screen's coordinates where the system
-/// tells where windows are (X11, Windows); where it hides them (Wayland),
-/// no zone shows during the drag, and the first window that sees the
-/// pointer once the drag lets it go takes it (`bus::drag`).
-fn area_targets(app: &AppHandle, ctx: &egui::Context, zen: bool) {
-    if !drag::from_elsewhere::<Dragged>(ctx) {
-        return;
-    }
-    let targets: Vec<(Area, Rect)> = {
-        let wb = app.workbench_mut();
-        let centre = wb.hint_rect(Area::Center);
-        let mut drawn = Vec::new();
-        let mut closed = Vec::new();
-        for area in [Area::StartSide, Area::EndSide, Area::Bottom] {
-            if zen {
-                break;
-            }
-            match wb.rects.get(&area) {
-                Some(r) if !wb.panels_in(area).is_empty() => drawn.push((area, *r)),
-                _ => closed.push((area, wb.edge_rect(area))),
-            }
-        }
-        // Drawn last, the closed areas' bands win at the edges.
-        std::iter::once((Area::Center, centre))
-            .chain(drawn)
-            .chain(closed)
-            .filter(|(_, r)| r.is_positive())
-            .collect()
-    };
-    for (area, rect) in targets {
-        let id = format!("workbench.area.{}", area_name(area));
-        let refusal = |d: &Dragged| area_refusal(app, ctx, d, area);
-        match drag::target::<Dragged>(ctx, &id, rect, refusal) {
-            DragSeen::Over { payload, .. } => {
-                let why = area_refusal(app, ctx, &payload, area);
-                paint_drop_zone(
-                    ctx,
-                    Id::unique("egui_pop.workbench.drop_back"),
-                    rect,
-                    why.clone(),
-                );
-                let index = app.workbench_mut().panels_in(area).len();
-                app.workbench_mut().hint = Some(DropHint {
-                    panel: payload.lead().clone(),
-                    area: area_name(area),
-                    rect,
-                    refusal: why,
-                    zone: DropZone::Center,
-                    index: Some(index),
-                    preview: None,
-                    armed: true,
-                });
-            }
-            DragSeen::Dropped(payload) => {
-                for panel in payload.panels() {
-                    let out = app.change_workbench(Change::Move(panel.clone(), area));
-                    if let Some(Outcome::Done(Err(e))) = &out {
-                        app.workbench_refused(&format!("move {panel}"), e);
-                        break;
-                    }
-                    if matches!(out, Some(Outcome::Vetoed { .. })) {
-                        break;
-                    }
-                }
-                ctx.request_repaint();
-            }
-            DragSeen::Refused { payload, reason } => {
-                app.workbench_refused(&format!("move {}", payload.lead()), &reason);
-            }
-            _ => {}
-        }
-    }
-}
-
-/// Why a dragged tab, or the first of a group's panels, may not go into
-/// an area of the main window, as the drop zone says it.
-fn area_refusal(
-    app: &AppHandle,
-    ctx: &egui::Context,
-    dragged: &Dragged,
-    area: Area,
-) -> Option<String> {
-    let specs: Vec<PanelSpec> = {
-        let wb = app.workbench_mut();
-        dragged
-            .panels()
-            .iter()
-            .filter_map(|p| wb.spec(p).cloned())
-            .collect()
-    };
-    specs.iter().find_map(|spec| {
-        let title = strings::panel_title(ctx, spec.id.as_str(), &spec.title);
-        refusal(ctx, spec, &title, area)
-            .or_else(|| spec.refuses(&crate::mounts::panel_host(Place::Area(area))))
-    })
-}
-
-/// The kit's `dock-preview` over `rect`, on the foreground layer `layer`:
-/// at rest where a drop goes, disabled with its label saying why where it
-/// may not.
-fn paint_drop_zone(ctx: &egui::Context, layer: Id, rect: Rect, refusal: Option<String>) {
-    let kit = Kit::of(ctx);
-    let t = egui_pop_core::theme::Tokens::of(ctx);
-    let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, layer));
-    let label = refusal.map(|why| {
-        let font = egui::FontId::proportional(t.font.body);
-        ctx.fonts_mut(|f| f.layout_no_wrap(why, font, Color32::PLACEHOLDER))
-    });
-    kit.dock_preview.paint_part(
-        &KitCx {
-            painter: &painter,
-            ppp: ctx.pixels_per_point(),
-        },
-        &Part {
-            rect,
-            room: rect,
-            state: State::REST.with(State::DISABLED, label.is_some()),
-            label: label.as_ref(),
-        },
-    );
 }
 
 /// While a tab drags, the areas a dock does not draw as targets: a closed
@@ -3723,7 +4013,10 @@ fn drop_targets(app: &AppHandle, ui: &mut Ui, zen: bool) {
     targets.sort_by_key(|(dock, _)| !dock.ends_with(".bare"));
     let ctx = ui.ctx().clone();
     let kit = Kit::of(&ctx);
-    let style = dock_style(ui.style(), &kit);
+    let mut style = dock_style(ui.style(), &kit);
+    if let Some(space) = app.workbench_mut().space.as_ref() {
+        from_elsewhere(&mut style, space, &ctx);
+    }
     let prepared = HashMap::new();
     for (dock, rect) in targets {
         let Some(mut space) = app.workbench_mut().take_space() else {
@@ -3735,7 +4028,7 @@ fn drop_targets(app: &AppHandle, ui: &mut Ui, zen: bool) {
                 .max_rect(rect),
         );
         let seen = Mutex::new(None);
-        let painter = AreaPainter::new(app, &kit, false, &seen);
+        let painter = AreaPainter::new(&kit, false, &seen);
         let mut viewer = Viewer {
             app,
             prepared: &prepared,
@@ -3747,7 +4040,7 @@ fn drop_targets(app: &AppHandle, ui: &mut Ui, zen: bool) {
         group_gestures(area, app, &ctx).show_inside(&mut target, &mut viewer);
         let mut wb = app.workbench_mut();
         wb.put_space(space);
-        wb.note_landing(seen);
+        wb.note_landing(seen, ctx.cumulative_pass_nr());
     }
 }
 
@@ -4980,6 +5273,7 @@ fn draw_dock(app: &AppHandle, ui: &mut Ui, area: Area) {
     let mut cache = cache_id.update(&ctx, std::mem::take);
     cache.prepare(app, &ctx, &kit, &tabs);
     let mut style = cache.dock_style(ui.style(), &kit);
+    from_elsewhere(&mut style, &space, &ctx);
     let frameless = app.frameless(area);
     if frameless {
         // The panels' bodies run to the area's edges, with no border
@@ -4994,7 +5288,7 @@ fn draw_dock(app: &AppHandle, ui: &mut Ui, area: Area) {
         prepared: &cache.tabs,
     };
     let seen = Mutex::new(None);
-    let painter = AreaPainter::new(app, &kit, frameless, &seen);
+    let painter = AreaPainter::new(&kit, frameless, &seen);
     // egui_stack lays the tabs out and takes their input, and follows a
     // drag across the areas (the first dock drawn in a pass resolves it
     // for all of them); the kit measures and paints the tabs, bars,
@@ -5018,7 +5312,7 @@ fn draw_dock(app: &AppHandle, ui: &mut Ui, area: Area) {
         wb.bars.insert(area, bar);
     }
     wb.put_space(space);
-    wb.note_landing(seen);
+    wb.note_landing(seen, ctx.cumulative_pass_nr());
 }
 
 /// The tab bar of an area's first tabs (where `Layout::place` adds a
@@ -5065,12 +5359,17 @@ fn group_gestures<'a>(
     app: &AppHandle,
     ctx: &egui::Context,
 ) -> DockArea<'a, PanelId> {
+    area.group_handles(group_handles(app))
+        .group_drag_modifiers(group_drag_modifier(app).modifiers())
+        .labels(group_labels(ctx))
+}
+
+/// The names of a dock's group grip and a float's move handle, translated.
+fn group_labels(ctx: &egui::Context) -> egui_stack::Labels {
     let mut labels = egui_stack::Labels::default();
     labels.move_group = strings::tr(ctx, &txt::WORKBENCH_MOVE_GROUP).into();
     labels.move_window = strings::tr(ctx, &txt::WORKBENCH_MOVE_WINDOW).into();
-    area.group_handles(group_handles(app))
-        .group_drag_modifiers(group_drag_modifier(app).modifiers())
-        .labels(labels)
+    labels
 }
 
 /// A dock's menu texts, translated: its tab menu's "Move group" and that
@@ -5095,30 +5394,30 @@ struct Painted {
 /// The kit as an area's dock painter: everything as the kit paints it,
 /// except the panels' bodies in a frameless area, which have no border
 /// there (`AppBuilder::frameless`). It notes where the drop zone of a
-/// dragged tab is painted, for the drop hint; over a detached window,
-/// which takes the drop, it paints none.
+/// dragged tab is painted, for the drop hint, and, painting the detached
+/// windows' docks, whether it outlined one (a tab dragged out of another
+/// window where window positions are hidden).
 struct AreaPainter<'a> {
     kit: &'a Kit,
     frameless: bool,
-    /// The dragged tab is over a detached window.
-    quiet: bool,
     seen: &'a Mutex<Option<Painted>>,
+    outlined: Option<&'a Mutex<bool>>,
 }
 
 impl<'a> AreaPainter<'a> {
-    fn new(
-        app: &AppHandle,
-        kit: &'a Kit,
-        frameless: bool,
-        seen: &'a Mutex<Option<Painted>>,
-    ) -> Self {
-        let quiet = app.workbench_mut().window_drop.is_some();
+    fn new(kit: &'a Kit, frameless: bool, seen: &'a Mutex<Option<Painted>>) -> Self {
         Self {
             kit,
             frameless,
-            quiet,
             seen,
+            outlined: None,
         }
+    }
+
+    /// Notes each outline it paints in `outlined`.
+    fn outlines(mut self, outlined: &'a Mutex<bool>) -> Self {
+        self.outlined = Some(outlined);
+        self
     }
 }
 
@@ -5150,21 +5449,40 @@ impl egui_stack::DockPainter for AreaPainter<'_> {
     }
 
     fn drop_target(&self, painter: &egui::Painter, target: &egui_stack::DropTargetPaint<'_>) {
-        if !self.quiet {
-            self.kit.drop_target(painter, target);
-        }
+        self.kit.drop_target(painter, target);
     }
 
     fn drop_button(&self, painter: &egui::Painter, button: &egui_stack::DropButtonPaint<'_>) {
-        if !self.quiet {
-            self.kit.drop_button(painter, button);
+        self.kit.drop_button(painter, button);
+    }
+
+    /// A detached window's dock outlined (the kit's `dock-preview` border,
+    /// disabled where the panel may not go), at least
+    /// [`WINDOW_OUTLINE_WIDTH`] wide.
+    fn window_outline(
+        &self,
+        painter: &egui::Painter,
+        outline: &egui_stack::WindowOutlinePaint<'_>,
+    ) {
+        let style = self
+            .kit
+            .dock_preview
+            .style(State::REST.with(State::DISABLED, outline.refused));
+        let width = style.border_width.max(WINDOW_OUTLINE_WIDTH);
+        painter.rect_stroke(
+            outline.rect,
+            egui::CornerRadius::same(style.radius.round().clamp(0.0, 255.0) as u8),
+            egui::Stroke::new(width, style.border_color),
+            egui::StrokeKind::Inside,
+        );
+        if let Some(outlined) = self.outlined
+            && let Ok(mut o) = outlined.lock()
+        {
+            *o = true;
         }
     }
 
     fn drop_preview(&self, painter: &egui::Painter, drop: &egui_stack::DropPaint<'_>) {
-        if self.quiet {
-            return;
-        }
         if let Ok(mut seen) = self.seen.lock() {
             let refusal = drop.refusal.map(|r| {
                 r.reason
@@ -5212,6 +5530,19 @@ impl egui_stack::DockPainter for AreaPainter<'_> {
 struct Viewer<'a> {
     app: &'a AppHandle,
     prepared: &'a HashMap<PanelId, PreparedTab>,
+}
+
+/// A tab or a group dragged from another window over this one: the drop
+/// zone follows the pointer at once (no preference held for a moment, as
+/// for a drag begun here), the pointer coming from the other window's
+/// passes.
+fn from_elsewhere(style: &mut egui_stack::Style, space: &DockSpace<PanelId>, ctx: &egui::Context) {
+    if space
+        .dragging()
+        .is_some_and(|d| d.source != ctx.viewport_id())
+    {
+        style.overlay.feel.max_preference_time = 0.0;
+    }
 }
 
 /// egui_stack's style for an area: its tab bars as high as the kit's
@@ -5391,6 +5722,30 @@ impl TabViewer for Viewer<'_> {
         // egui_stack's floating windows.
         false
     }
+
+    fn close_policy(&mut self, close: &egui_stack::FloatClose) -> egui_stack::ClosePolicy {
+        use egui_stack::ClosePolicy;
+        // Drawn in the main window, its host follows the close (`window_host`).
+        if self.app.egui().embed_viewports() {
+            return ClosePolicy::Keep;
+        }
+        let Ok(panel) = PanelId::new(close.key.as_str()) else {
+            return ClosePolicy::Keep;
+        };
+        // A detached window's close is the workbench's step
+        // (`workbench.close_window`), whose default asks the window's
+        // `window.close`: its panels dock back through the layout, so
+        // egui_stack only drops the window's tabs from its dock. Vetoed,
+        // the window stays.
+        self.app
+            .change_workbench(Change::CloseWindow(panel.clone()));
+        let kept = (self.app.workbench_mut().layout.auxiliary.iter()).any(|a| a.panel == panel);
+        if kept {
+            ClosePolicy::Keep
+        } else {
+            ClosePolicy::CloseTabs
+        }
+    }
 }
 
 /// A tab or a group dropped on a detached window: it joins the window's
@@ -5454,6 +5809,19 @@ fn track_drag(app: &AppHandle, ctx: &egui::Context, before: Option<Before>) {
     // are), or cancelled: the session has it (`windows`). Let go in the
     // main window, over no window: the areas take it.
     if drag::waiting(ctx) {
+        return;
+    }
+    // Moved into a detached window's dock: the window's step takes it
+    // (`settle_drop`), and says it.
+    let into_window = before.as_ref().is_some_and(|(dragged, ..)| {
+        let wb = app.workbench_mut();
+        let at = wb.space.as_ref().map(homes).unwrap_or_default();
+        dragged
+            .panels()
+            .iter()
+            .any(|p| matches!(at.get(p), Some(Home::Window(_))))
+    });
+    if into_window {
         return;
     }
     match drag::ended::<Dragged>(ctx) {

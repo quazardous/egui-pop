@@ -17,7 +17,9 @@
 //!   files, drags and overlays, the application's title bar, its place
 //!   kept in the layout, its close asked through `workbench.close_window`.
 //! - **Its screens are egui-pop's** ([`crate::window::set_screens`]), in
-//!   egui_stack's terms: physical pixels, named.
+//!   egui_stack's terms ([`stack_screens`]: physical pixels, named), which
+//!   places the floats; egui-pop brings its windows back onto them itself,
+//!   so the host tells egui_stack none and its repair stays off.
 //!
 //! [`float_of`] gives a detached window as egui_stack's model sees a
 //! float: the layout document stays the saved form, and the float is read
@@ -189,31 +191,52 @@ impl<'a> PanelWindows<'a> {
     }
 }
 
+impl PanelWindows<'_> {
+    /// What a window's builder says of it beside its place, as it stands
+    /// this pass: its title (its shown panel's), its decorations (the
+    /// system's unless the application draws its own frame), and whether
+    /// it is transparent (a surface below may show through, or rounded
+    /// corners). The backend follows a change of them; its place stays the
+    /// one it opened with.
+    fn dressed(&self, builder: ViewportBuilder, aux: &Auxiliary) -> ViewportBuilder {
+        let ctx = self.ctx;
+        let title = self
+            .title(ctx, aux)
+            .unwrap_or_else(|| aux.shown().as_str().to_owned());
+        let own = crate::frame::own_frame(self.app);
+        let builder = builder.with_title(title).with_decorations(!own);
+        let rounded = own && egui_pop_core::frame::rounding(ctx);
+        if transparency(self.app).is_transparent() || rounded {
+            builder.with_transparent(true)
+        } else {
+            builder
+        }
+    }
+}
+
 impl ViewportHost for PanelWindows<'_> {
     fn viewport_id(&self, key: &str) -> ViewportId {
         super::panel_viewport(key)
     }
 
-    /// Built at the place the window opened with (#5241: the same builder
-    /// for the window's life, so the backend asks the system nothing
-    /// more), titled, decorated by the system unless the application draws
-    /// its own frame, transparent where a surface below may show through
-    /// or for rounded corners.
+    /// Built at the place the window opened with (#5241: egui_stack makes
+    /// it once and gives it again unchanged for the window's life, so the
+    /// backend asks the system nothing more), titled, decorated by the
+    /// system unless the application draws its own frame, transparent
+    /// where a surface below may show through or for rounded corners
+    /// ([`Self::dressed`], again each pass).
     fn builder(&mut self, float: &Float) -> ViewportBuilder {
         let Some(aux) =
             panel_of_key(&float.key).and_then(|p| self.window(super::panel_viewport(p.as_str())))
         else {
             return ViewportBuilder::default().with_title(float.key.clone());
         };
-        let opened = self.app.workbench_mut().window_opened(&aux.panel);
-        let ctx = self.ctx;
-        let title = self
-            .title(ctx, &aux)
-            .unwrap_or_else(|| aux.shown().as_str().to_owned());
-        let own = crate::frame::own_frame(self.app);
-        let mut builder = ViewportBuilder::default()
-            .with_title(title)
-            .with_decorations(!own);
+        // egui_stack makes it once and gives it again unchanged (#5241).
+        let opened = Some(super::repaired_place(
+            (aux.rect, aux.maximized, aux.fullscreen),
+            &crate::window::screens(),
+        ));
+        let mut builder = self.dressed(ViewportBuilder::default(), &aux);
         if let Some(state) = opened {
             builder = builder.with_inner_size(state.size);
             if let Some(p) = state.position {
@@ -225,10 +248,6 @@ impl ViewportHost for PanelWindows<'_> {
             if state.fullscreen {
                 builder = builder.with_fullscreen(true);
             }
-        }
-        let rounded = own && egui_pop_core::frame::rounding(ctx);
-        if transparency(self.app).is_transparent() || rounded {
-            builder = builder.with_transparent(true);
         }
         builder
     }
@@ -249,6 +268,9 @@ impl ViewportHost for PanelWindows<'_> {
             ctx.show_viewport_immediate(id, builder, |ui, _| body(ui));
             return;
         };
+        // Its title follows the panel it shows; its place is the one it
+        // opened with.
+        let builder = self.dressed(builder, &aux);
         let app = self.app;
         let panel = aux.panel.clone();
         let title = self
@@ -318,7 +340,9 @@ impl ViewportHost for PanelWindows<'_> {
                 crate::bus::drag::end_pass(app, &vctx);
                 crate::menus::draw_popup(&vctx, app);
             }
-            if vctx.input(|i| i.viewport().close_requested()) {
+            // In a window of its own, egui_stack asks the close of the
+            // workbench's viewer (`close_policy`), which runs the step.
+            if !own_window && vctx.input(|i| i.viewport().close_requested()) {
                 // The step decides, then the window's `window.close`: the
                 // default docks its panels back. Refused, it stays.
                 app.change_workbench(Change::CloseWindow(panel.clone()));
@@ -344,8 +368,12 @@ impl ViewportHost for PanelWindows<'_> {
         });
     }
 
+    /// None: egui-pop brings its windows back onto the screens itself
+    /// (`window_place`, `screen.removed` docking a window back), so
+    /// egui_stack's own repair is left off. The floats' places are read on
+    /// [`stack_screens`].
     fn screens(&self) -> Vec<Screen> {
-        stack_screens(&crate::window::screen_list())
+        Vec::new()
     }
 }
 
