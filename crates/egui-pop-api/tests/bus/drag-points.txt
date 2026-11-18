@@ -1,3 +1,3 @@
-drag.start
-drag.drop
-  1. drag.target (owner egui_pop): priority 1000
+pop.drag.start
+pop.drag.drop
+  1. pop.drag.target (owner egui_pop): priority 1000

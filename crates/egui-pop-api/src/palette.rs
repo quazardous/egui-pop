@@ -70,9 +70,9 @@ pub const PALETTE: ServiceToken<Palette> = ServiceToken::new("app.palette");
 pub const OWNER: &str = "egui_pop.palette";
 /// The start of the palette's popup id.
 pub const POPUP_PREFIX: &str = "palette@";
-/// The palette's listener on `popup.close`: closed by anyone (its window
+/// The palette's listener on `pop.popup.close`: closed by anyone (its window
 /// closing under it), it closes in its window's group.
-pub const POPUP_LISTENER: &str = "palette.popup";
+pub const POPUP_LISTENER: &str = "pop.palette.popup";
 
 /// How many recent commands come first.
 pub const RECENT: usize = 8;

@@ -54,7 +54,7 @@
 //! |---|---|---|
 //! | `frame.minimize` | `{}` | minimizes the window |
 //! | `frame.maximize` | `{ "maximized": bool }` (the state asked for) | maximizes or restores |
-//! | `frame.close` | `{ "viewport": "root" }` | closes the window: the main one's `window.close`; an application window's close request, its content may refuse, then its `window.close` |
+//! | `frame.close` | `{ "viewport": "root" }` | closes the window: the main one's `pop.window.close`; an application window's close request, its content may refuse, then its `pop.window.close` |
 //! | `frame.system_menu` | `{ "x", "y" }` (points) | opens the system menu there |
 //! | `frame.exit_fullscreen` | `{ "viewport": "root" }` | leaves full screen |
 //! | `frame.hit_test` | `{ "viewport": "root", "install": bool }` | on Windows, takes over the window's hit testing (or gives it back) |
@@ -486,7 +486,7 @@ fn follow_setting(ui: &Ui, app: &AppHandle) -> bool {
     native::follow(ctx, app, own);
     native::corners(ctx, own);
     // Given once here; a change of the setting is followed by
-    // `frame.decorations`.
+    // `pop.frame.decorations`.
     if DECORATED.keyed(ctx.viewport_id()).get(ctx).is_none() {
         decorate(ctx, ctx.viewport_id(), own);
     }
@@ -507,8 +507,8 @@ fn decorate(ctx: &Context, viewport: egui::ViewportId, own: bool) {
     }
 }
 
-/// Registers `frame.decorations`, egui-pop's local listener of
-/// `settings.changed`: the main window takes the decorations
+/// Registers `pop.frame.decorations`, egui-pop's local listener of
+/// `pop.settings.changed`: the main window takes the decorations
 /// [`SETTING_FRAME`] asks for in the call that changed it.
 pub(crate) fn listen(app: &AppHandle) {
     use crate::bus::{FRAME_DECORATIONS, OWNER, SettingsChanged, asking};

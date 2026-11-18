@@ -1,6 +1,6 @@
 //! The interactive areas (`egui_pop_core::areas`) in a workbench: a
 //! panel's areas name it, its edit areas are inert while its state is not
-//! current (`panel.state`), and `ui.areas` on the bus lists them.
+//! current (`pop.panel.state`), and `pop.ui.areas` on the bus lists them.
 
 use std::path::Path;
 
@@ -145,5 +145,5 @@ fn the_ui_areas_point_is_declared_with_its_listener() {
         );
         assert!(bus::POINTS.contains(&p), "{p} in the points");
     }
-    assert_eq!(<UiAreas as bus::bus_contract::Point>::ID, "ui.areas");
+    assert_eq!(<UiAreas as bus::bus_contract::Point>::ID, "pop.ui.areas");
 }

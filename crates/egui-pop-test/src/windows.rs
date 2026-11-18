@@ -485,7 +485,7 @@ impl MultiWindow {
 
     /// The screens the system says, named as winit names them, for this
     /// thread's application (`egui_pop_api::window::set_screens`): told
-    /// again with one missing, it is unplugged (`screen.removed`) at the
+    /// again with one missing, it is unplugged (`pop.screen.removed`) at the
     /// main window's next pass. Forgotten when the harness is dropped.
     pub fn set_screen_list(&mut self, screens: Vec<egui_pop_api::window::Screen>) {
         egui_pop_api::window::set_screens(screens);

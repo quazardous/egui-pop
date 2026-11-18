@@ -881,10 +881,10 @@ pub fn popup_at_with(app: &AppHandle, menu: &MenuId, at: impl Into<At>, args: Js
 pub const POPUP_OWNER: &str = "egui_pop.menus";
 /// The start of the popup menu's popup id: `menu@<window>`.
 pub const POPUP_PREFIX: &str = "menu@";
-/// The popup menu's listener on `popup.close`: closed by anyone (Escape,
+/// The popup menu's listener on `pop.popup.close`: closed by anyone (Escape,
 /// an item chosen, its window closing under it), it is no longer open,
 /// in that call.
-pub const POPUP_LISTENER: &str = "menus.popup";
+pub const POPUP_LISTENER: &str = "pop.menus.popup";
 
 /// The popup menu's request, in the window it shows in.
 fn popup_request(app: &AppHandle, popup: &Popup, reason: Reason) -> WindowRequest {
@@ -898,7 +898,7 @@ fn popup_request(app: &AppHandle, popup: &Popup, reason: Reason) -> WindowReques
     .parent(parent)
 }
 
-/// Closes the popup menu open, by its `popup.close`.
+/// Closes the popup menu open, by its `pop.popup.close`.
 fn end_popup(app: &AppHandle, reason: Reason, how: &str) {
     let Some(p) = app.popup() else { return };
     if !app.request_popup_close(popup_request(app, &p, reason).how(how)) {
@@ -939,7 +939,7 @@ pub fn popup_window(app: &AppHandle) -> Option<egui::ViewportId> {
     app.popup().map(|p| app.still_open(p.window))
 }
 
-/// Closes the popup menu, if one is open (its `popup.close`).
+/// Closes the popup menu, if one is open (its `pop.popup.close`).
 pub fn close_popup(app: &AppHandle) {
     end_popup(app, Reason::Command, "owner");
 }

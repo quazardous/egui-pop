@@ -4,7 +4,7 @@
 //! every change of a `settings/` path, made here (the Settings app, a
 //! bound widget, `value.set`, the application's code) or by another
 //! client of the host's store (applied by the Settings app's sync), is
-//! said **once** as `settings.changed` ([`SettingsChanged`], a
+//! said **once** as `pop.settings.changed` ([`SettingsChanged`], a
 //! [`SettingChange`]: path, scope, by). Whoever follows a setting is one
 //! of its listeners and does its own part there; nobody compares a
 //! setting every pass.
@@ -68,13 +68,13 @@ impl SettingChange {
     }
 }
 
-/// A setting changed (`settings.changed`), said once per change of its
+/// A setting changed (`pop.settings.changed`), said once per change of its
 /// value by the value store, its one writer.
 #[derive(Debug)]
 pub struct SettingsChanged;
 impl Point for SettingsChanged {
     const KIND: PointKind = PointKind::Event;
-    const ID: &'static str = "settings.changed";
+    const ID: &'static str = "pop.settings.changed";
     type Input = SettingChange;
     type Value = ();
 }
@@ -83,12 +83,12 @@ impl Point for SettingsChanged {
 pub const SETTINGS_POINTS: [&str; 1] = [SettingsChanged::ID];
 
 /// egui-pop's listener installing the theme a setting changes.
-pub const THEME_INSTALL: &str = "theme.install";
+pub const THEME_INSTALL: &str = "pop.theme.install";
 /// egui-pop's listener loading the pointer profile the setting names.
-pub const POINTER_PROFILE: &str = "pointer.profile";
+pub const POINTER_PROFILE: &str = "pop.pointer.profile";
 /// egui-pop's listener giving the main window the decorations
 /// `window.frame` asks for.
-pub const FRAME_DECORATIONS: &str = "frame.decorations";
+pub const FRAME_DECORATIONS: &str = "pop.frame.decorations";
 
 /// Where settings live in the value store.
 const PREFIX: &str = "settings/";
@@ -142,7 +142,7 @@ pub(crate) fn hear(store: &mut Store, heard: &Heard) {
 
 impl AppHandle {
     /// Says each setting changed since the last time as
-    /// `settings.changed`, once, in the order the value store wrote them:
+    /// `pop.settings.changed`, once, in the order the value store wrote them:
     /// its listeners run now, on this thread. A listener writing a
     /// setting is followed in the same call. Asked from inside a
     /// delivery, it returns at once: the delivery running takes it.

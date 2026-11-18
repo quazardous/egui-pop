@@ -9,7 +9,7 @@
 //! palette or a detached window moved or resized. Each of them notes the
 //! change ([`AppHandle::note_layout`]); none says it.
 //!
-//! The main window's pass says it, **once**, as `layout.changed`
+//! The main window's pass says it, **once**, as `pop.layout.changed`
 //! ([`LayoutChanged`], a [`LayoutChange`] naming its causes), in
 //! [`AppHandle::settle_layout`], the one place that does:
 //!
@@ -40,7 +40,7 @@ use crate::app::AppHandle;
 /// What changed the layout: the workbench step's id (`workbench.move`,
 /// `workbench.detach`, ...), `layout.set` (a layout put in),
 /// `layout.repair` (repaired against the panels declared),
-/// `window.place` (a detached window moved or resized),
+/// `pop.window.place` (a detached window moved or resized),
 /// `palette.place` (a palette following the window's edges), `input`
 /// (a button let go or a key pressed: what a dock changed).
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
@@ -50,13 +50,13 @@ pub struct LayoutChange {
     pub causes: Vec<String>,
 }
 
-/// The layout changed (`layout.changed`), said once per real change,
+/// The layout changed (`pop.layout.changed`), said once per real change,
 /// once the gesture that made it ended.
 #[derive(Debug)]
 pub struct LayoutChanged;
 impl Point for LayoutChanged {
     const KIND: PointKind = PointKind::Event;
-    const ID: &'static str = "layout.changed";
+    const ID: &'static str = "pop.layout.changed";
     type Input = LayoutChange;
     type Value = ();
 }
@@ -67,7 +67,7 @@ pub const LAYOUT_POINTS: [&str; 1] = [LayoutChanged::ID];
 /// egui-pop's listener saving the layout to the host's document (the
 /// `layout.save` step). An application's copy of the layout runs after
 /// it.
-pub const LAYOUT_SAVE: &str = "layout.save";
+pub const LAYOUT_SAVE: &str = "pop.layout.save";
 
 /// How long a place followed from the system (a window, a palette) stays
 /// still before its change is said, in seconds.
@@ -115,7 +115,7 @@ impl AppHandle {
         wb.unsaid = None;
     }
 
-    /// Says `layout.changed` once for the changes noted, when no gesture
+    /// Says `pop.layout.changed` once for the changes noted, when no gesture
     /// holds and the layout differs from the one said last: its listeners
     /// run now, on this thread. Then notes a button let go or a key
     /// pressed in the main window, said at the next pass, once the pass

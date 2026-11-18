@@ -1,8 +1,8 @@
 //! The main window brought to the front, as the platform services do
 //! when a second launch, a tray click or a notification asks for the
-//! application. In an application it is the bus's `window.activate` of
+//! application. In an application it is the bus's `pop.window.activate` of
 //! the main window ([`raise_app`]): the registry holds it as the active
-//! window and its `window.raise` listener brings it forward.
+//! window and its `pop.window.raise` listener brings it forward.
 //!
 //! <div class="warning">Experimental: may change in any release
 //! (docs/stability.md).</div>
@@ -16,7 +16,7 @@ use egui_pop_api::windows::WindowId;
 pub const OWNER: &str = "egui_pop.platform";
 
 /// Asks the application's main window to the front: its
-/// `window.activate` with the reason `command`, owned by [`OWNER`]. The
+/// `pop.window.activate` with the reason `command`, owned by [`OWNER`]. The
 /// window is shown, restored when minimized and asked for the focus. On
 /// Wayland a window cannot take the focus by itself (the compositor needs
 /// an activation token, which egui does not pass on): the window asks

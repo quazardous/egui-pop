@@ -3215,7 +3215,7 @@ fn the_strips_page_shows_live_states_a_popover_and_a_hover_card() {
     assert!(h.query_by_label("Sync: up to date").is_some());
 }
 
-/// A panel whose content is not current (`panel.state`), drawn by the
+/// A panel whose content is not current (`pop.panel.state`), drawn by the
 /// workbench's chrome: dimmed, a busy mark on its corner and on its tab
 /// once the delay passed; a failure shows at once, its reason read in
 /// its mark's name.

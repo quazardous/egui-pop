@@ -4,7 +4,7 @@
 //! A panel whose content follows something it does not hold (the photo
 //! selected, a document, a source) may show content that no longer
 //! matches it: stale until its work starts, updating while it runs,
-//! failed when it could not. Whoever knows asks `panel.state`
+//! failed when it could not. Whoever knows asks `pop.panel.state`
 //! ([`PanelStateSet`], a [`PanelStateAsk`] naming the panel), from any
 //! thread; the workbench's listener ([`PANEL_CHROME`]) keeps it, and the
 //! panel's chrome shows it: never the panel itself.
@@ -103,13 +103,13 @@ impl PanelStateAsk {
     }
 }
 
-/// A panel's state is asked (`panel.state`); its listeners say what they
+/// A panel's state is asked (`pop.panel.state`); its listeners say what they
 /// did, one line each, in the value.
 #[derive(Debug)]
 pub struct PanelStateSet;
 impl Point for PanelStateSet {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "panel.state";
+    const ID: &'static str = "pop.panel.state";
     type Input = PanelStateAsk;
     type Value = Vec<String>;
 }
@@ -117,9 +117,9 @@ impl Point for PanelStateSet {
 /// The panel state points, in the order [`super::order_dump`] prints them.
 pub const PANEL_STATE_POINTS: [&str; 1] = [PanelStateSet::ID];
 
-/// The workbench's listener of `panel.state`: keeps each panel's state
+/// The workbench's listener of `pop.panel.state`: keeps each panel's state
 /// for its chrome.
-pub const PANEL_CHROME: &str = "workbench.panel_state";
+pub const PANEL_CHROME: &str = "pop.workbench.panel_state";
 
 /// The mark a panel's tab holds, one at a time: the highest rank wins
 /// ([`TabMark::rank`]).
@@ -174,7 +174,7 @@ pub(crate) struct Kept {
 /// Every panel's state asked, by panel id.
 pub(crate) type States = Arc<Mutex<BTreeMap<String, Kept>>>;
 
-/// Registers the workbench's listener of `panel.state`; `wake` repaints
+/// Registers the workbench's listener of `pop.panel.state`; `wake` repaints
 /// the interface (the state may be asked from another thread).
 pub(super) fn install(kernel: &dyn Bus, states: &States, wake: Arc<Mutex<Option<egui::Context>>>) {
     let states = states.clone();

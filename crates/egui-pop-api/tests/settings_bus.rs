@@ -1,5 +1,5 @@
 //! A setting changed, by this window or by another client of the host's
-//! store, is said once on the bus (`settings.changed`), and its
+//! store, is said once on the bus (`pop.settings.changed`), and its
 //! followers (the theme, the pointer profile, the window's frame) do
 //! their part in the pass it is heard, with no pass of their own after.
 

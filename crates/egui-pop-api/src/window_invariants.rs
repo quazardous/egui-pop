@@ -7,7 +7,7 @@
 //!
 //! The registry ([`AppHandle::windows_list`]) is the one list of windows
 //! and popups. Six rules say it agrees with what egui and the system
-//! show; they are checked by `window.invariants`, the last listener of
+//! show; they are checked by `pop.window.invariants`, the last listener of
 //! every window and popup point, and again at the end of every pass of
 //! the main window:
 //!
@@ -26,7 +26,7 @@
 //!    passes a move needs ([`crate::bus::ScreenRemoved`] moves those on a
 //!    screen gone). Not checked while no screen is told.
 //!
-//! [`CLOSED_LEFT`] is `window.close`'s own: a window it closed is still in
+//! [`CLOSED_LEFT`] is `pop.window.close`'s own: a window it closed is still in
 //! the registry once its listeners ran.
 //!
 //! A broken rule is a visible state, never a silent fix: one error line
@@ -61,7 +61,7 @@ pub const POPUP_PARENT: &str = "popup-has-parent";
 pub const CHILD_ALIVE: &str = "no-child-of-closed-parent";
 /// Rule 6: a positioned window meets a screen.
 pub const ON_SCREEN: &str = "positioned-meets-a-screen";
-/// `window.close`'s check: the window it closed left the registry.
+/// `pop.window.close`'s check: the window it closed left the registry.
 pub const CLOSED_LEFT: &str = "closed-left-registry";
 
 /// The six rules, in the ADR's order.
@@ -75,7 +75,7 @@ const STRUCTURE: [&str; 3] = [OWNER, POPUP_PARENT, CHILD_ALIVE];
 const BACKEND_GRACE: u32 = 1;
 
 /// The main window's passes a positioned window may stay off every
-/// screen: the system moving a window `window.place` moved, or one being
+/// screen: the system moving a window `pop.window.place` moved, or one being
 /// dragged across screens.
 const ON_SCREEN_GRACE: u32 = 3;
 
@@ -150,7 +150,7 @@ pub(crate) fn viewport_of(kind: WindowKind, id: &str) -> Option<ViewportId> {
 /// A detached panel's window id in the registry: `panel:<panel id>`.
 pub(crate) const PANEL_PREFIX: &str = "panel:";
 
-/// `window.close`'s check broken: the window it closed is still held.
+/// `pop.window.close`'s check broken: the window it closed is still held.
 pub(crate) fn closed_left(req: &crate::bus::WindowRequest) -> Broken {
     Broken::new(
         CLOSED_LEFT,
@@ -296,7 +296,7 @@ impl AppHandle {
             .insert((viewport, registered));
     }
 
-    /// `window.invariants` after a request: the rules the registry alone
+    /// `pop.window.invariants` after a request: the rules the registry alone
     /// answers. Whether they all hold.
     pub(crate) fn check_invariants_after_request(&self) -> bool {
         let records = self.windows_list();

@@ -538,10 +538,10 @@ pub fn float_move(app: &AppHandle) -> FloatMove {
 
 /// The workbench's listener of `stack.dock.drop`: the panels' rules
 /// refuse a tab dragged into an area it stays out of, with the reason.
-pub const STACK_DROP: &str = "workbench.dock_drop";
+pub const STACK_DROP: &str = "pop.workbench.dock_drop";
 /// The workbench's listener of `stack.layout.changed`: the shell follows
 /// the zones the user resized, folded and unfolded, and the flyouts.
-pub const STACK_LAYOUT: &str = "workbench.stack_layout";
+pub const STACK_LAYOUT: &str = "pop.workbench.stack_layout";
 
 /// A panel as egui_stack's points name it: its id.
 fn stack_key(panel: &PanelId) -> String {
@@ -1462,7 +1462,7 @@ pub(crate) struct Workbench {
     /// The sizes the user gave the side and bottom areas, by zone name
     /// (`shell_sizes`); `None` until loaded.
     shell_sizes: Option<BTreeMap<String, f32>>,
-    /// Layout changes noted and not said yet (`layout.changed`).
+    /// Layout changes noted and not said yet (`pop.layout.changed`).
     pub(crate) unsaid: Option<crate::bus::layout::Unsaid>,
     /// The layout as said, loaded or saved last; `None` before the
     /// first pass.
@@ -2476,7 +2476,7 @@ impl Workbench {
 /// workbench's space, through egui-pop's host (`window_host`), which keeps
 /// egui-pop's viewport ids. Closing such a window is the
 /// `workbench.close_window` step (egui_stack's close policy says `Keep`),
-/// whose default asks the window's `window.close` on the bus: the
+/// whose default asks the window's `pop.window.close` on the bus: the
 /// workbench's listener docks its panels back (`crate::bus::panels`, which
 /// shows the windows too).
 ///
@@ -3019,7 +3019,7 @@ fn keep_window_place(app: &AppHandle, vctx: &egui::Context, panel: &PanelId) {
         return;
     }
     // The screen it is on, by the name the system gives it: unplugged,
-    // the window docks back (`screen.removed`).
+    // the window docks back (`pop.screen.removed`).
     if let Some(name) = info
         .outer_rect
         .and_then(|r| crate::window::screen_name_at(egui::Rect::from_min_size(r.min, size)))
@@ -5730,7 +5730,7 @@ impl TabViewer for Viewer<'_> {
                 egui_pop_core::a11y::name(response, egui::Role::Button, &title);
             }
         }
-        // Its state's mark (`panel.state`) or its kind's, the tab's one
+        // Its state's mark (`pop.panel.state`) or its kind's, the tab's one
         // mark slot.
         let kind = self.app.panel_kind(tab);
         crate::bus::panel_state::paint_tab(
@@ -5771,7 +5771,7 @@ impl TabViewer for Viewer<'_> {
         };
         // A detached window's close is the workbench's step
         // (`workbench.close_window`), whose default asks the window's
-        // `window.close`: its panels dock back through the layout, so
+        // `pop.window.close`: its panels dock back through the layout, so
         // egui_stack only drops the window's tabs from its dock. Vetoed,
         // the window stays.
         self.app

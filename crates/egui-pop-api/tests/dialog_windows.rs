@@ -1,8 +1,8 @@
 //! Dialogs and file choices on the bus (ADR 0029, slice 5): a dialog
-//! coming up is its `popup.open`, a file choice started its `popup.open`
-//! (or a native window's `window.open` for the system's chooser), each
+//! coming up is its `pop.popup.open`, a file choice started its `pop.popup.open`
+//! (or a native window's `pop.window.open` for the system's chooser), each
 //! ending by its close. A window closed with a dialog and a file choice
-//! open closes both first, each by its own `popup.close` (reason
+//! open closes both first, each by its own `pop.popup.close` (reason
 //! `parent-closed`), their owners cancelling them in that call: no child
 //! is left in `windows.list`.
 
@@ -127,7 +127,7 @@ fn choice_popup(app: &AppHandle) -> String {
 }
 
 /// The import window closed: its dialog and its choice each closed first
-/// by their `popup.close` (`parent-closed`), cancelled, gone from the
+/// by their `pop.popup.close` (`parent-closed`), cancelled, gone from the
 /// registry, before `window.closed`; no invariant broken.
 fn assert_children_closed_first(
     app: &AppHandle,
@@ -235,7 +235,7 @@ fn a_window_closed_by_the_system_closes_its_dialog_and_file_choice_first() {
     assert!(m.app().broken_invariants().is_empty());
 }
 
-/// The same, asked as `window.close` by anyone.
+/// The same, asked as `pop.window.close` by anyone.
 #[test]
 fn a_window_close_asked_on_the_bus_closes_its_dialog_and_file_choice_first() {
     let mut m = multi();
@@ -313,7 +313,7 @@ fn a_file_choice_answered_closes_its_popup() {
 }
 
 /// A dialog waiting behind another in the closing window never came up:
-/// it has no popup, and `dialogs.cancel-on-close` cancels it in the close.
+/// it has no popup, and `pop.dialogs.cancel-on-close` cancels it in the close.
 #[test]
 fn a_waiting_dialog_is_cancelled_with_its_window() {
     let mut m = multi();
@@ -337,7 +337,7 @@ fn a_waiting_dialog_is_cancelled_with_its_window() {
             "{id}: {cancelled:?}"
         );
     }
-    // What `window.close`'s listeners did, as its step's event says.
+    // What `pop.window.close`'s listeners did, as its step's event says.
     let step = events(m.app(), "window.close");
     let did = step.last().unwrap().data["result"]["did"].to_string();
     assert!(did.contains(dialogs::CANCEL_ON_CLOSE), "{did}");
@@ -345,7 +345,7 @@ fn a_waiting_dialog_is_cancelled_with_its_window() {
 }
 
 /// A native window (the system's chooser, a web view's own window) is a
-/// child of its window: closed with it by its own `window.close`.
+/// child of its window: closed with it by its own `pop.window.close`.
 #[test]
 fn a_native_child_closes_with_its_window() {
     let mut m = multi();
@@ -393,7 +393,7 @@ fn a_popup_without_its_parent_is_refused() {
 }
 
 /// The main window closed while the import window holds a dialog: the
-/// import window moves into it (`window.reparent`), its dialog with it,
+/// import window moves into it (`pop.window.reparent`), its dialog with it,
 /// now a popup of the main window, its parent never gone.
 #[test]
 fn a_window_moved_into_the_main_window_takes_its_popups() {
@@ -436,11 +436,11 @@ fn dialogs_and_choices_have_no_private_close_path() {
     let files = read("files.rs");
     assert!(
         !files.contains("still_open"),
-        "files.rs follows its window's close from a pass: listen to `popup.close`"
+        "files.rs follows its window's close from a pass: listen to `pop.popup.close`"
     );
     let bus = read("bus.rs");
     assert!(
         !bus.contains("dialogs::window_closed"),
-        "`window.children` names a neighbour: it asks each child's close"
+        "`pop.window.children` names a neighbour: it asks each child's close"
     );
 }

@@ -1,4 +1,4 @@
-//! A panel described on the bus (ADR 0029): `panel.describe` answers
+//! A panel described on the bus (ADR 0029): `pop.panel.describe` answers
 //! what a declared panel is, its kind first ([`PanelKind`]: whether it
 //! edits), for agents, tests and the application's own parts, without a
 //! screenshot.
@@ -31,13 +31,13 @@ pub struct PanelDescription {
     pub palette: bool,
 }
 
-/// A panel is described (`panel.describe`): the input is its id, the
+/// A panel is described (`pop.panel.describe`): the input is its id, the
 /// value its description, `None` while nobody knows it.
 #[derive(Debug)]
 pub struct PanelDescribe;
 impl Point for PanelDescribe {
     const KIND: PointKind = PointKind::Alter;
-    const ID: &'static str = "panel.describe";
+    const ID: &'static str = "pop.panel.describe";
     type Input = String;
     type Value = Option<PanelDescription>;
 }
@@ -46,11 +46,11 @@ impl Point for PanelDescribe {
 /// prints them.
 pub const PANEL_DESCRIBE_POINTS: [&str; 1] = [PanelDescribe::ID];
 
-/// The workbench's listener of `panel.describe`: describes a declared
+/// The workbench's listener of `pop.panel.describe`: describes a declared
 /// panel from its declaration.
-pub const PANEL_DESCRIBE: &str = "workbench.panel_describe";
+pub const PANEL_DESCRIBE: &str = "pop.workbench.panel_describe";
 
-/// Registers the workbench's listener of `panel.describe`.
+/// Registers the workbench's listener of `pop.panel.describe`.
 pub(super) fn install(kernel: &dyn Bus) {
     let listened = kernel.listen::<PanelDescribe>(
         PANEL_DESCRIBE,

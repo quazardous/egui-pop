@@ -15,8 +15,8 @@
 //! it alone; the window closed, the choice is cancelled.
 //!
 //! A choice under way is on the bus (ADR 0029): started, it asks its
-//! `popup.open` (`file:<id>`, owned by this plugin, its parent the window
-//! it was asked from), or, for the system's chooser, the `window.open` of
+//! `pop.popup.open` (`file:<id>`, owned by this plugin, its parent the window
+//! it was asked from), or, for the system's chooser, the `pop.window.open` of
 //! a native window; ended, their close. Its window closing closes it
 //! (`parent-closed`), and this plugin's listener ([`CHOICE_LISTENER`])
 //! cancels the choice in that call.
@@ -1518,10 +1518,10 @@ fn start_folder(app: &AppHandle, request: &FileRequest, fs: &SharedFs) -> Option
 /// The plugin's id.
 pub const PLUGIN: PluginId = PluginId::from_static("egui_pop.files");
 
-/// The files plugin's listener on `popup.close` and `window.close`: the
+/// The files plugin's listener on `pop.popup.close` and `pop.window.close`: the
 /// choice of that popup or native window is cancelled, whoever asked (its
 /// window closing, among others).
-pub const CHOICE_LISTENER: &str = "files.choice";
+pub const CHOICE_LISTENER: &str = "pop.files.choice";
 /// A choice's id in the registry: `file:<id>`.
 pub const POPUP_PREFIX: &str = "file:";
 
@@ -1930,8 +1930,8 @@ fn cancel_on_close(req: &WindowRequest, did: &mut Vec<String>) -> Result<(), Hoo
 }
 
 /// Registers the files plugin's listener on the bus, replacing that of an
-/// earlier connection: [`CHOICE_LISTENER`] on `popup.close` (the in-app
-/// picker's popup) and `window.close` (the system chooser's window).
+/// earlier connection: [`CHOICE_LISTENER`] on `pop.popup.close` (the in-app
+/// picker's popup) and `pop.window.close` (the system chooser's window).
 fn listen(app: &AppHandle) {
     let bus = app.bus();
     bus.unlisten(PopupClose::ID, CHOICE_LISTENER);

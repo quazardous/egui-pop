@@ -1,6 +1,6 @@
 //! Files dropped from another program, on the bus: every window's pass
 //! (the main window, an application window, a detached panel's window)
-//! reads the files dropped on it once, into a `files.drop` request naming
+//! reads the files dropped on it once, into a `pop.files.drop` request naming
 //! that window. A listener taking them makes it `files.dropped`; with
 //! nobody taking them it is `files.refused` (ADR 0003), never lost.
 //! Nothing but the bus's files module reads egui's dropped files: the
@@ -120,7 +120,7 @@ fn files_dropped_on_any_window_nobody_takes_are_refused_naming_that_window() {
 /// the paths, each drop once.
 type Taken = Arc<Mutex<Vec<(String, Vec<String>)>>>;
 
-/// The application's import, a listener of `files.drop` after the file
+/// The application's import, a listener of `pop.files.drop` after the file
 /// browser's: it takes what no browser took.
 fn listen_import(app: &AppHandle) -> Taken {
     let taken = Taken::default();
@@ -236,7 +236,7 @@ fn a_file_browser_takes_files_dropped_on_its_target_said_by_its_listener() {
     assert_eq!(dropped[0].data["window"], "browse");
     assert_eq!(
         dropped[0].data["did"],
-        serde_json::json!(["files.browser: a file browser took them for `catalogue`"])
+        serde_json::json!(["pop.files.browser: a file browser took them for `catalogue`"])
     );
     // Taken by the browser: the application's import, after it, left it.
     assert!(taken.lock().unwrap().is_empty());

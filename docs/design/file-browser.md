@@ -428,8 +428,8 @@ pub enum ThumbState {
   to the dropped folder or selects the dropped file (JetBrains' chooser),
   an import adds the files. Files from the system come through the bus
   (2026-11-16): the window's pass reads them once (`bus::files`), and a
-  system drop the browser takes is said on that window's `files.drop` by
-  its listener `files.browser`, first, so an application's listener
+  system drop the browser takes is said on that window's `pop.files.drop` by
+  its listener `pop.files.browser`, first, so an application's listener
   declared after it leaves the drop alone. Not built: the browser's own entries as drag
   sources (they sense clicks only; a rubber band and dragging out need one
   gesture model).

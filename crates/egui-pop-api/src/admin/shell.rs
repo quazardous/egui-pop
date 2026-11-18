@@ -38,7 +38,7 @@ use crate::settings_window;
 use crate::strings as txt;
 use crate::windows::{WindowSpec, WindowUi};
 
-/// Draws the app while it is open, in the mode the `admin.window`
+/// Draws the app while it is open, in the mode the `pop.admin.window`
 /// setting says: an overlay of the main window, or an application window
 /// of its own ([`super::APP_WINDOW`]). Where the backend has no windows of
 /// its own (the web, kittest), the overlay.
@@ -135,8 +135,8 @@ pub(super) fn window_spec(ctx: &egui::Context) -> WindowSpec {
 
 /// The app's application window: the page, drawn in the window's own
 /// pass. Its close button, the page's Close and Escape close the window
-/// (`window.close`); the app closes with it, in the same call
-/// (`admin.window`, on the bus).
+/// (`pop.window.close`); the app closes with it, in the same call
+/// (`pop.admin.window`, on the bus).
 pub(super) fn window_content(ui: &mut Ui, window: &mut WindowUi<'_>) {
     let app = window.app().clone();
     let Some(admin) = app.service(&ADMIN) else {

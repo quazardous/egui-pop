@@ -494,8 +494,8 @@ fn a_web_view_failing_gives_the_same_page() {
 }
 
 // The web view on the bus (ADR 0029): a native window owned by the viewer,
-// a child of the window its page is drawn in, opened by its `window.open`
-// and closed, wherever it is dropped, by its `window.close`.
+// a child of the window its page is drawn in, opened by its `pop.window.open`
+// and closed, wherever it is dropped, by its `pop.window.close`.
 
 /// The viewer's native windows listed: (id, parent).
 fn web_views(app: &AppHandle) -> Vec<(String, Option<String>)> {
@@ -533,7 +533,7 @@ fn the_web_view_is_a_native_window_of_the_viewer_while_shown() {
     assert_eq!(opened.len(), 1);
     assert_eq!(opened[0].data["window"], listed[0].0.as_str());
     assert_eq!(opened[0].data["kind"], "native");
-    // Leaving the page: its `window.close`, the view dropped in that call.
+    // Leaving the page: its `pop.window.close`, the view dropped in that call.
     links::open(&app, Request::new("docs:other"));
     h.run_steps(2);
     assert_eq!(pretend.log().open, 0);
@@ -560,7 +560,7 @@ fn hiding_its_panel_closes_the_web_view_on_the_bus() {
     assert_eq!(pretend.log().open, 0);
     assert!(web_views(&app).is_empty());
     assert_eq!(closed_reasons(&app), ["command"]);
-    // Shown again: a new `window.open`.
+    // Shown again: a new `pop.window.open`.
     app.set_panel_visible(&PANEL, true);
     h.run_steps(3);
     assert_eq!(web_views(&app).len(), 1);
@@ -639,7 +639,7 @@ fn closing_its_window_closes_the_web_view_first() {
     assert_eq!(listed.len(), 1, "{:?}", app.windows_list());
     assert_eq!(listed[0].1.as_deref(), Some(panel.as_str()));
     assert_eq!(pretend.log().open, 1);
-    // Its window closed by the system: the web view's own `window.close`
+    // Its window closed by the system: the web view's own `pop.window.close`
     // first (`parent-closed`), the view dropped in that call.
     let v = egui_pop_api::workbench::window_id(&PANEL);
     m.request_close(v);
@@ -669,8 +669,8 @@ fn closing_its_window_closes_the_web_view_first() {
 }
 
 /// The embed module opens and closes its native view only through the bus:
-/// the backend is asked after the view's `window.open`, and the view is
-/// dropped only by the viewer's listener on `window.close`.
+/// the backend is asked after the view's `pop.window.open`, and the view is
+/// dropped only by the viewer's listener on `pop.window.close`.
 #[test]
 fn the_web_view_opens_and_closes_only_through_the_bus() {
     let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/viewer/embed.rs"))
@@ -691,11 +691,15 @@ fn the_web_view_opens_and_closes_only_through_the_bus() {
     assert_eq!(opens.len(), 1, "one place opens a web view");
     assert!(
         asks.len() == 1 && asks[0] < opens[0],
-        "its `window.open` is asked first: {asks:?} {opens:?}"
+        "its `pop.window.open` is asked first: {asks:?} {opens:?}"
     );
     // Where the listener is: from its fn to the next fn.
     let start = find("fn drop_on_close(");
-    assert_eq!(start.len(), 1, "the viewer's listener on `window.close`");
+    assert_eq!(
+        start.len(),
+        1,
+        "the viewer's listener on `pop.window.close`"
+    );
     let end = code
         .iter()
         .enumerate()

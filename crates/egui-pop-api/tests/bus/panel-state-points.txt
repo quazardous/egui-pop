@@ -1,2 +1,2 @@
-panel.state
-  1. workbench.panel_state (owner egui_pop): nothing
+pop.panel.state
+  1. pop.workbench.panel_state (owner egui_pop): nothing

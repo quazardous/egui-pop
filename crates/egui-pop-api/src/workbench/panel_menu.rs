@@ -20,7 +20,7 @@
 //! - Close.
 //!
 //! A floating panel's menu opens through [`crate::menus::context_menu`],
-//! so it is a `popup.open` on the bus like every context menu.
+//! so it is a `pop.popup.open` on the bus like every context menu.
 
 use egui::Response;
 use egui_pop_core::strings;

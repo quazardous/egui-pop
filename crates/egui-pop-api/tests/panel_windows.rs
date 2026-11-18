@@ -1,8 +1,8 @@
 //! The detached panels' windows on the bus (ADR 0029, slice 4): the
-//! workbench owns them. Detaching a panel is its window's `window.open`,
+//! workbench owns them. Detaching a panel is its window's `pop.window.open`,
 //! docking it back (by command, or moved to an area as a dragged tab is)
-//! its `window.reparent` into the main window, closing its window (the
-//! system's close, or anyone asking) its `window.close`, which docks its
+//! its `pop.window.reparent` into the main window, closing its window (the
+//! system's close, or anyone asking) its `pop.window.close`, which docks its
 //! panels back; a vetoed close leaves the registry as it was. Each window
 //! is a real viewport of the test kit's backend, so the registry is
 //! checked against it after every pass.
@@ -132,12 +132,12 @@ fn detaching_a_panel_is_its_window_open_owned_by_the_workbench() {
     assert_eq!(
         did[..2],
         [
-            "workbench.window: `demo.log` detached".to_string(),
-            "window.registry: holds it".to_string(),
+            "pop.workbench.window: `demo.log` detached".to_string(),
+            "pop.window.registry: holds it".to_string(),
         ],
         "{did:?}"
     );
-    assert!(did[2].starts_with("window.invariants: "), "{did:?}");
+    assert!(did[2].starts_with("pop.window.invariants: "), "{did:?}");
     // A real viewport, painted in a pass of its own.
     assert!(m.painted(v));
     assert!(m.names(v).iter().any(|n| n == "log body"));
@@ -181,7 +181,7 @@ fn closing_its_window_is_its_window_close_and_docks_it_back() {
     assert_eq!(closed[0].data["window"], LOG_WINDOW);
     assert_eq!(closed[0].data["owner"], WORKBENCH_OWNER);
     assert_docked(&mut m, v);
-    // Anyone asking `window.close` of it: the workbench docks it back.
+    // Anyone asking `pop.window.close` of it: the workbench docks it back.
     let v = detach_log(&mut m);
     assert!(m.app().request_window_close(WindowRequest::new(
         LOG_WINDOW,
@@ -254,7 +254,7 @@ fn the_workbench_has_no_direct_window_path() {
     ] {
         assert!(
             !text.contains(raw),
-            "workbench.rs uses `{raw}`: ask the bus (`window.open`, `window.reparent`, `window.close`)"
+            "workbench.rs uses `{raw}`: ask the bus (`pop.window.open`, `pop.window.reparent`, `pop.window.close`)"
         );
     }
 }
@@ -262,7 +262,7 @@ fn the_workbench_has_no_direct_window_path() {
 /// A layout put in again (what an application does when it re-applies a
 /// workspace) is not a close: a detached window it still holds stays
 /// open, the same viewport, with no request asked; a layout without it
-/// docks the panel back, as its window's `window.reparent`.
+/// docks the panel back, as its window's `pop.window.reparent`.
 #[test]
 fn a_layout_put_in_again_keeps_the_detached_window() {
     let mut m = multi();

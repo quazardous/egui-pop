@@ -1,2 +1,2 @@
-panel.describe
-  1. workbench.panel_describe (owner egui_pop): nothing
+pop.panel.describe
+  1. pop.workbench.panel_describe (owner egui_pop): nothing

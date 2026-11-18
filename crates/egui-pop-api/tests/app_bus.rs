@@ -161,8 +161,8 @@ fn an_application_bus_receives_egui_pops_points_listeners_and_requests() {
     .unwrap();
     assert_eq!(app.bus_order(), reviewed);
     assert_eq!(bus::order_dump(&*recording, &WINDOW_POINTS), reviewed);
-    // Every listener of `window.close` it runs was registered through it.
-    let mut registered = recording.calls("listen window.close ");
+    // Every listener of `pop.window.close` it runs was registered through it.
+    let mut registered = recording.calls("listen pop.window.close ");
     let mut running: Vec<String> = recording
         .listeners(WindowClose::ID)
         .unwrap()
@@ -180,15 +180,40 @@ fn an_application_bus_receives_egui_pops_points_listeners_and_requests() {
     assert!(
         recording
             .calls("alter ")
-            .contains(&"window.open".to_string())
+            .contains(&"pop.window.open".to_string())
     );
     app.close_window(&WindowId::new("import"));
     assert!(
         recording
             .calls("alter ")
-            .contains(&"window.close".to_string())
+            .contains(&"pop.window.close".to_string())
     );
     assert_eq!(app.windows_list().len(), 1);
+}
+
+/// The bus-contract naming rule: several libraries share one bus, so
+/// every point egui-pop declares and every listener it registers is under
+/// its `pop.` prefix (egui_stack's own are under `stack.`).
+#[test]
+fn every_point_and_listener_of_egui_pop_has_its_prefix() {
+    for d in CONTRACT {
+        assert!(d.id.starts_with("pop."), "point `{}` lacks `pop.`", d.id);
+    }
+    for p in bus::POINTS {
+        assert!(p.starts_with("pop."), "point `{p}` lacks `pop.`");
+    }
+    let recording = Arc::new(Recording::default());
+    let _m = multi(recording.clone());
+    let listens = recording.calls("listen ");
+    assert!(listens.len() > 20, "{listens:#?}");
+    for call in &listens {
+        let call = call.strip_prefix("local ").unwrap_or(call);
+        let (point, id) = call.split_once(' ').unwrap();
+        assert!(
+            id.starts_with("pop.") || id.starts_with("stack."),
+            "listener `{id}` on `{point}` lacks `pop.`"
+        );
+    }
 }
 
 #[test]
@@ -202,7 +227,7 @@ fn a_second_application_on_one_bus_is_refused() {
     assert!(matches!(
         second,
         Err(egui_pop_api::BuildError::Bus(Refused::AlreadyDeclared {
-            point: "window.open"
+            point: "pop.window.open"
         }))
     ));
     // The first keeps its listeners.

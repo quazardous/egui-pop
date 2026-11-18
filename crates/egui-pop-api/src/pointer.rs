@@ -107,7 +107,7 @@ pub fn profile(app: &AppHandle) -> &'static Profile {
 
 /// Asks for a palette drag mode (the `input.dock_drag` setting:
 /// `profile` or one of [`DockDrag::CHOICES`]), said once as
-/// `settings.changed` and in force from the next pass.
+/// `pop.settings.changed` and in force from the next pass.
 pub fn set_dock_drag(app: &AppHandle, value: &str) -> Result<(), String> {
     if value != FROM_PROFILE && DockDrag::parse(value).is_none() {
         return Err(format!("`{value}` is not a palette drag mode"));

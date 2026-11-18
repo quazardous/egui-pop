@@ -1,5 +1,5 @@
 //! The screens on the bus: a screen unplugged is said as
-//! `screen.removed`, by its name, and every window on it moves onto a
+//! `pop.screen.removed`, by its name, and every window on it moves onto a
 //! screen left (an application window, the main window) or docks back (a
 //! detached panel's window); invariant 6 ("a positioned window meets a
 //! screen") holds. Where positions are hidden (Wayland), nothing moves.
@@ -45,7 +45,7 @@ fn monitor() -> Screen {
     Screen::from_physical(Some("DP-1".into()), (1280, 0), (1920, 1080), 1.0)
 }
 
-/// What `screen.added` and `screen.removed` said, in order.
+/// What `pop.screen.added` and `pop.screen.removed` said, in order.
 type Heard = Rc<RefCell<Vec<(String, ScreenChange)>>>;
 
 /// An application with both screens told, its main window on the panel;
@@ -150,8 +150,8 @@ fn the_screens_first_told_are_not_said_a_screen_plugged_in_is() {
     assert_eq!(
         names(&heard),
         vec![
-            ("screen.removed".into(), Some("DP-1".into())),
-            ("screen.added".into(), Some("DP-1".into())),
+            ("pop.screen.removed".into(), Some("DP-1".into())),
+            ("pop.screen.added".into(), Some("DP-1".into())),
         ]
     );
     let said = heard.borrow()[0].1.clone();
@@ -175,7 +175,7 @@ fn a_detached_window_on_a_screen_unplugged_docks_back() {
     unplug(&mut m);
     assert_eq!(
         names(&heard),
-        vec![("screen.removed".into(), Some("DP-1".into()))]
+        vec![("pop.screen.removed".into(), Some("DP-1".into()))]
     );
     m.root_pass();
     m.root_pass();
@@ -235,7 +235,7 @@ fn an_app_window_on_a_screen_unplugged_moves_onto_one_left() {
     unplug(&mut m);
     assert_eq!(
         names(&heard),
-        vec![("screen.removed".into(), Some("DP-1".into()))]
+        vec![("pop.screen.removed".into(), Some("DP-1".into()))]
     );
     let at = moved_to(&m, va).expect("the window is moved");
     assert!(panel().rect.contains(at), "{at:?} is on the panel");
@@ -283,7 +283,7 @@ fn where_positions_are_hidden_nothing_moves() {
     // Said all the same: the system told the screens.
     assert_eq!(
         names(&heard),
-        vec![("screen.removed".into(), Some("DP-1".into()))]
+        vec![("pop.screen.removed".into(), Some("DP-1".into()))]
     );
     assert_eq!(moved_to(&m, va), None);
     assert_eq!(moved_to(&m, v), None);

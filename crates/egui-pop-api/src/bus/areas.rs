@@ -1,4 +1,4 @@
-//! The interactive areas on the bus (ADR 0029): `ui.areas` lists every
+//! The interactive areas on the bus (ADR 0029): `pop.ui.areas` lists every
 //! area the last pass of each window registered
 //! (`egui_pop_core::areas`): its kind (display, navigate, edit), for an
 //! edit area the control it writes, its value and path, its panel,
@@ -16,13 +16,13 @@ use egui_pop_core::lock;
 
 use super::OWNER;
 
-/// The interactive areas are listed (`ui.areas`): the value is the list,
+/// The interactive areas are listed (`pop.ui.areas`): the value is the list,
 /// each window's last pass, the main window's first.
 #[derive(Debug)]
 pub struct UiAreas;
 impl Point for UiAreas {
     const KIND: PointKind = PointKind::Alter;
-    const ID: &'static str = "ui.areas";
+    const ID: &'static str = "pop.ui.areas";
     type Input = ();
     type Value = Vec<AreaRecord>;
 }
@@ -30,10 +30,10 @@ impl Point for UiAreas {
 /// The area points, in the order [`super::order_dump`] prints them.
 pub const AREA_POINTS: [&str; 1] = [UiAreas::ID];
 
-/// The registry's listener of `ui.areas`: lists the areas registered.
-pub const AREA_REGISTRY: &str = "ui.area_registry";
+/// The registry's listener of `pop.ui.areas`: lists the areas registered.
+pub const AREA_REGISTRY: &str = "pop.ui.area_registry";
 
-/// Registers the registry's listener of `ui.areas`; it reads the context
+/// Registers the registry's listener of `pop.ui.areas`; it reads the context
 /// the interface draws with.
 pub(super) fn install(kernel: &dyn Bus, ctx: Arc<Mutex<Option<egui::Context>>>) {
     let listened = kernel.listen::<UiAreas>(

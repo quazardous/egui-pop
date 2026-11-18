@@ -1,37 +1,37 @@
-window.open
-  1. workbench.window (owner egui_pop.workbench): before window.registry
-  2. admin.window (owner egui_pop.admin): before window.registry
-  3. window.registry (owner egui_pop): nothing
-  4. window.invariants (owner egui_pop): last
-window.close
-  1. window.children (owner egui_pop): before window.focus; priority 1000
-  2. workbench.window (owner egui_pop.workbench): after window.children; before window.focus
-  3. admin.window (owner egui_pop.admin): after window.children; before window.focus
-  4. dialogs.cancel-on-close (owner egui_pop.dialogs): after window.children; before window.focus
-  5. files.choice (owner egui_pop.files): after window.children; before window.focus
-  6. window.focus (owner egui_pop): before window.registry
-  7. window.registry (owner egui_pop): after window.focus
-  8. window.place (owner egui_pop): after window.registry
-  9. window.invariants (owner egui_pop): last
-window.reparent
-  1. workbench.window (owner egui_pop.workbench): before window.registry
-  2. window.registry (owner egui_pop): before window.place
-  3. window.place (owner egui_pop): after window.registry
-  4. window.focus (owner egui_pop): after window.place
-  5. window.invariants (owner egui_pop): last
-window.activate
-  1. window.registry (owner egui_pop): before window.raise
-  2. window.raise (owner egui_pop): after window.registry
-  3. window.keys (owner egui_pop): local; after window.registry
-  4. window.invariants (owner egui_pop): last
-popup.open
-  1. window.registry (owner egui_pop): nothing
-  2. window.invariants (owner egui_pop): last
-popup.close
-  1. palette.popup (owner egui_pop.palette): before overlay.stack
-  2. overlay.stack (owner egui_pop): before window.registry
-  3. menus.popup (owner egui_pop.menus): before window.registry
-  4. dialogs.popup (owner egui_pop.dialogs): before window.registry
-  5. files.choice (owner egui_pop.files): before window.registry
-  6. window.registry (owner egui_pop): nothing
-  7. window.invariants (owner egui_pop): last
+pop.window.open
+  1. pop.workbench.window (owner egui_pop.workbench): before pop.window.registry
+  2. pop.admin.window (owner egui_pop.admin): before pop.window.registry
+  3. pop.window.registry (owner egui_pop): nothing
+  4. pop.window.invariants (owner egui_pop): last
+pop.window.close
+  1. pop.window.children (owner egui_pop): before pop.window.focus; priority 1000
+  2. pop.workbench.window (owner egui_pop.workbench): after pop.window.children; before pop.window.focus
+  3. pop.admin.window (owner egui_pop.admin): after pop.window.children; before pop.window.focus
+  4. pop.dialogs.cancel-on-close (owner egui_pop.dialogs): after pop.window.children; before pop.window.focus
+  5. pop.files.choice (owner egui_pop.files): after pop.window.children; before pop.window.focus
+  6. pop.window.focus (owner egui_pop): before pop.window.registry
+  7. pop.window.registry (owner egui_pop): after pop.window.focus
+  8. pop.window.place (owner egui_pop): after pop.window.registry
+  9. pop.window.invariants (owner egui_pop): last
+pop.window.reparent
+  1. pop.workbench.window (owner egui_pop.workbench): before pop.window.registry
+  2. pop.window.registry (owner egui_pop): before pop.window.place
+  3. pop.window.place (owner egui_pop): after pop.window.registry
+  4. pop.window.focus (owner egui_pop): after pop.window.place
+  5. pop.window.invariants (owner egui_pop): last
+pop.window.activate
+  1. pop.window.registry (owner egui_pop): before pop.window.raise
+  2. pop.window.raise (owner egui_pop): after pop.window.registry
+  3. pop.window.keys (owner egui_pop): local; after pop.window.registry
+  4. pop.window.invariants (owner egui_pop): last
+pop.popup.open
+  1. pop.window.registry (owner egui_pop): nothing
+  2. pop.window.invariants (owner egui_pop): last
+pop.popup.close
+  1. pop.palette.popup (owner egui_pop.palette): before pop.overlay.stack
+  2. pop.overlay.stack (owner egui_pop): before pop.window.registry
+  3. pop.menus.popup (owner egui_pop.menus): before pop.window.registry
+  4. pop.dialogs.popup (owner egui_pop.dialogs): before pop.window.registry
+  5. pop.files.choice (owner egui_pop.files): before pop.window.registry
+  6. pop.window.registry (owner egui_pop): nothing
+  7. pop.window.invariants (owner egui_pop): last

@@ -787,9 +787,9 @@ pub const WORKBENCH_DOCK_IN: StrKey =
 pub const WORKBENCH_DROP_HERE: StrKey =
     StrKey::new("egui-pop-workbench-drop-here", "Drop a panel here");
 /// A panel's mark while its content is stale or being updated
-/// (`panel.state`).
+/// (`pop.panel.state`).
 pub const PANEL_STATE_UPDATING: StrKey = StrKey::new("egui-pop-panel-state-updating", "Updating…");
-/// A panel's mark when its update failed (`panel.state`), with the
+/// A panel's mark when its update failed (`pop.panel.state`), with the
 /// reason.
 pub const PANEL_STATE_FAILED: StrKey =
     StrKey::new("egui-pop-panel-state-failed", "Update failed: { $reason }");

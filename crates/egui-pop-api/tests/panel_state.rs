@@ -1,4 +1,4 @@
-//! A panel's state on the bus (`panel.state`): a panel whose content is
+//! A panel's state on the bus (`pop.panel.state`): a panel whose content is
 //! stale or updating is dimmed with a busy mark on its corner and its tab
 //! once the state has lasted the delay, a fast update shows nothing, a
 //! failure shows at once with its reason, and ready clears it. The state

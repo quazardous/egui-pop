@@ -224,12 +224,12 @@ the tab is dropped in another area, the move goes through the
 back where it was, a redirect sends it to the area the step names.
 The refusal itself is asked on the application's bus: the space has it
 (egui_stack's `bus` feature), and the workbench's listener of
-egui_stack's `stack.dock.drop` (`workbench.dock_drop`) says the panels'
+egui_stack's `stack.dock.drop` (`pop.workbench.dock_drop`) says the panels'
 rules; any listener of the point may refuse a drop, its reason shown on
 the zone, asked when the drop's destination changes and again at
 release. The workbench follows the zones the user resized, folded or
 unfolded, and the flyouts, from `stack.layout.changed`
-(`workbench.stack_layout`), on the same bus. A palette dragged over an area it docks in, with the dock keys held (see
+(`pop.workbench.stack_layout`), on the same bus. A palette dragged over an area it docks in, with the dock keys held (see
 Palettes, Dragging), shows the hint with a ghost of its tab (the kit's
 `tab-preview`) after the area's first tabs.
 
@@ -443,7 +443,7 @@ drawing its own surface lying over the centre makes it a sublayer of
 
 A panel whose content follows something it does not hold (the photo
 selected, a document) may show content that no longer matches it. Whoever
-knows says so on the bus, never the panel: `panel.state`
+knows says so on the bus, never the panel: `pop.panel.state`
 (`bus::PanelStateSet`) with the panel's id and its `bus::PanelState`:
 
 | State | What the chrome shows |
@@ -493,11 +493,11 @@ The mark is drawn by the chrome, never by the panel: on a docked tab's
 top end corner, and after the title of a floating palette's band (or on
 its tab in a group of tabs). It takes the tab's one mark slot
 (`bus::TabMark::Edits`), of the lowest rank: while the panel is busy or
-failed (`panel.state`), that mark shows instead, and the edits mark comes
+failed (`pop.panel.state`), that mark shows instead, and the edits mark comes
 back once it is ready. It is the same indicator id as the state's
 (`bus::mark_id(panel, true)`), its state `edit`.
 
-`panel.describe` (`bus::PanelDescribe`, `AppHandle::describe_panel`)
+`pop.panel.describe` (`bus::PanelDescribe`, `AppHandle::describe_panel`)
 describes a declared panel on the bus: its title, whether it is a
 palette, and its kind (`bus::PanelDescription`), for agents and tests
 without a screenshot.
@@ -541,10 +541,10 @@ fn exposure(ui: &mut egui::Ui, ev: &mut f32) {
 ```
 
 An edit area is **inert** while its panel's state is not current
-(`panel.state` stale, updating or failed): the workbench draws the
+(`pop.panel.state` stale, updating or failed): the workbench draws the
 panel's content in an `areas::scope` that says so, and the area senses
 no edit and shows no grip, no card, no edit cursor (the histogram of the
-previous photo is not dragged). `ui.areas` (`bus::UiAreas`,
+previous photo is not dragged). `pop.ui.areas` (`bus::UiAreas`,
 `AppHandle::ui_areas`) lists the areas of each window's last pass: id,
 kind, control, value, path, rectangle, panel, grips, and whether it is
 inert, for agents and tests without a screenshot.
@@ -624,7 +624,7 @@ detached window and a new one, for keyboard users and where a drag
 cannot reach a window (Wayland), on a group of two tabs or more. Across
 windows, these are the `workbench.join_window` and `workbench.detach`
 steps with `group: true` (`Change::JoinWindowGroup`,
-`Change::DetachGroup`): the window it opens is its `window.open`, a
+`Change::DetachGroup`): the window it opens is its `pop.window.open`, a
 window it empties closes as a panel's joining another does.
 
 **Back out of a detached window.** A detached window always shows its
@@ -872,7 +872,7 @@ assert!(app.handle().layout().floating_of(&TOOLS).is_some());
   profile, rebindable in the shortcuts editor). The keys are read every
   pass of the drag: pressed or let go mid-drag, the targets show or go.
   Snapping and anchoring stay on a plain drag. The mode is the
-  `input.dock_drag` setting (said once as `settings.changed`):
+  `input.dock_drag` setting (said once as `pop.settings.changed`):
   `modifier-docks` (the default), `modifier-floats` (a plain drag
   docks, the keys keep it floating: Photoshop's and Visual Studio's
   way, the Photoshop pointer profile's), `dwell` (docking arms once the

@@ -10,7 +10,7 @@
 //! A **drag session** carries any typed payload from the window it began
 //! in to the window it is let go over:
 //!
-//! - the source starts it ([`start`]), naming its kind; `drag.start` is
+//! - the source starts it ([`start`]), naming its kind; `pop.drag.start` is
 //!   asked ([`DragStart`]), then `drag.started` said;
 //! - each pass, the **drop targets** say where they are, by window and by
 //!   id ([`target`]): over one, the target shows where the payload would
@@ -20,7 +20,7 @@
 //!   the screen's coordinates where the system tells where windows are;
 //!   where it hides them (Wayland), the first window that sees the pointer
 //!   over one of its targets once the drag lets it go takes it, within a
-//!   few passes. A delivery is `drag.drop` ([`DragDrop`]), then
+//!   few passes. A delivery is `pop.drag.drop` ([`DragDrop`]), then
 //!   `drag.dropped`; a target that refuses it says why, in `drag.refused`
 //!   with its reason, as does a drag let go over no target and taken by
 //!   nobody, or cancelled (`Escape`). A source handling a drop in its own
@@ -77,24 +77,24 @@ pub struct DragDelivery {
     pub target: String,
 }
 
-/// A drag begins (`drag.start`): its listeners are told, each saying what
+/// A drag begins (`pop.drag.start`): its listeners are told, each saying what
 /// it did in the value.
 #[derive(Debug)]
 pub struct DragStart;
 impl Point for DragStart {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "drag.start";
+    const ID: &'static str = "pop.drag.start";
     type Input = DragBegin;
     type Value = Vec<String>;
 }
 
-/// A drag is delivered to a target (`drag.drop`): egui-pop's listener
+/// A drag is delivered to a target (`pop.drag.drop`): egui-pop's listener
 /// [`TARGET`] says which, first.
 #[derive(Debug)]
 pub struct DragDrop;
 impl Point for DragDrop {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "drag.drop";
+    const ID: &'static str = "pop.drag.drop";
     type Input = DragDelivery;
     type Value = Vec<String>;
 }
@@ -102,8 +102,8 @@ impl Point for DragDrop {
 /// The drag points, in the order [`super::order_dump`] prints them.
 pub const DRAG_POINTS: [&str; 2] = [DragStart::ID, DragDrop::ID];
 
-/// egui-pop's listener of `drag.drop`, first: the target that took it.
-pub const TARGET: &str = "drag.target";
+/// egui-pop's listener of `pop.drag.drop`, first: the target that took it.
+pub const TARGET: &str = "pop.drag.target";
 
 /// What a drop target sees of a drag of its payload type in a pass.
 #[derive(Debug)]
@@ -777,7 +777,7 @@ pub(crate) fn end_pass(app: &AppHandle, ctx: &Context) {
     }
 }
 
-/// Registers egui-pop's listener of `drag.drop`.
+/// Registers egui-pop's listener of `pop.drag.drop`.
 pub(super) fn install(kernel: &dyn Bus) {
     let listened = kernel.listen::<DragDrop>(
         TARGET,

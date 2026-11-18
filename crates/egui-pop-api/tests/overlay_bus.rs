@@ -1,5 +1,5 @@
 //! Popups, menus and the palette on the bus (ADR 0029, slice 6): the
-//! overlay stack's opens and closes are `popup.open` / `popup.close`, with
+//! overlay stack's opens and closes are `pop.popup.open` / `pop.popup.close`, with
 //! their owner, their window and how they closed; a window closing under
 //! an open menu closes the menu first (`parent-closed`), no invariant
 //! broken.
@@ -136,7 +136,7 @@ fn a_popup_menu_opened_and_closed_is_a_popup_of_its_window() {
 }
 
 /// A window closed under an open menu and a popover: both closed first,
-/// by their `popup.close` (`parent-closed`), before `window.closed`; the
+/// by their `pop.popup.close` (`parent-closed`), before `window.closed`; the
 /// menu's owner closed it in that call; no invariant broken.
 #[test]
 fn a_window_closing_under_an_open_menu_closes_it_first() {
@@ -188,7 +188,7 @@ fn a_window_closing_under_an_open_menu_closes_it_first() {
 fn overlays_close_on_the_bus_only() {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     // The dialogs' and file choices' popups are their own: their
-    // `popup.close` listeners close their overlay.
+    // `pop.popup.close` listeners close their overlay.
     let own = ["dialogs.rs", "files.rs", "bus"];
     let mut found = Vec::new();
     for entry in walk(&src) {
@@ -209,7 +209,7 @@ fn overlays_close_on_the_bus_only() {
     }
     assert!(
         found.is_empty(),
-        "close an overlay by its popup (`AppHandle::close_overlay`, a `popup.close`): {found:#?}"
+        "close an overlay by its popup (`AppHandle::close_overlay`, a `pop.popup.close`): {found:#?}"
     );
 }
 

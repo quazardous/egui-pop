@@ -1,31 +1,31 @@
 //! The shell's windows on the bus (ADR 0029, slice 4): the main window's
 //! close, quitting, and a window's content moving into the main window and
-//! back (`window.reparent`).
+//! back (`pop.window.reparent`).
 //!
 //! - The main window's close, whatever asked it (the system's close
 //!   request, its title bar's Close, [`AppHandle::close_window`],
-//!   [`AppHandle::quit`]), is one `window.close` of the main window. Its
+//!   [`AppHandle::quit`]), is one `pop.window.close` of the main window. Its
 //!   step may be vetoed by a before-hook (unsaved work): the close is then
 //!   cancelled and nothing changed. With another window open and the
 //!   application not quitting, the window worked in last moves into the
-//!   main window instead (ADR 0025): a `window.reparent`, and the close is
+//!   main window instead (ADR 0025): a `pop.window.reparent`, and the close is
 //!   cancelled.
 //! - Closing the main window closes every other window first, each by its
-//!   own `window.close` (`window.children`; reason `quit` or
+//!   own `pop.window.close` (`pop.window.children`; reason `quit` or
 //!   `parent-closed`), so each owner's state closes with its window.
-//! - `window.reparent` runs `window.registry` (the content moves; the
-//!   registry holds the window or lets it go), `window.place` (each id
-//!   keeps its own place), `window.focus` (the main window is the one
+//! - `pop.window.reparent` runs `pop.window.registry` (the content moves; the
+//!   registry holds the window or lets it go), `pop.window.place` (each id
+//!   keeps its own place), `pop.window.focus` (the main window is the one
 //!   worked in), then the invariants.
 //!
-//! A detached panel's window docked back is a `window.reparent` too (the
+//! A detached panel's window docked back is a `pop.window.reparent` too (the
 //! workbench's listener moves its panels first, [`super::panels`]); while
 //! a window's content holds the main window, the detached panels' windows
 //! leave the registry with the shell, and come back with it.
 //!
 //! The system window's own close request stays the way a window's title
 //! bar asks it where its content may refuse ([`crate::windows::WindowUi::keep_open`]):
-//! the window's pass then asks `window.close`. The raw viewport commands
+//! the window's pass then asks `pop.window.close`. The raw viewport commands
 //! of these paths are here, and nowhere else in the shell.
 
 use std::sync::{Arc, Mutex};
@@ -62,7 +62,7 @@ pub(super) fn declare(ctx: &mut crate::Ctx<'_>) -> Result<(), crate::ctx::CtxErr
     Ok(())
 }
 
-/// Registers the listeners of `window.reparent`: the registry, the place,
+/// Registers the listeners of `pop.window.reparent`: the registry, the place,
 /// the focus (the invariants, last, are the bus's).
 pub(super) fn install(kernel: &dyn Bus, registry: &Arc<Mutex<Registry>>) {
     let mine = || ListenOpts::new().owner(OWNER);
@@ -157,8 +157,8 @@ pub(super) fn install(kernel: &dyn Bus, registry: &Arc<Mutex<Registry>>) {
     }
 }
 
-/// `window.children`'s part on the main window's close: every other
-/// window is closed by its own `window.close` first, its owner's state
+/// `pop.window.children`'s part on the main window's close: every other
+/// window is closed by its own `pop.window.close` first, its owner's state
 /// with it (`quit` when the application quits, else `parent-closed`).
 pub(super) fn close_children_of_main(app: &AppHandle, req: &WindowRequest, did: &mut Vec<String>) {
     let reason = if req.reason == Reason::Quit {
@@ -188,7 +188,7 @@ pub(super) fn close_children_of_main(app: &AppHandle, req: &WindowRequest, did: 
 }
 
 /// The step of the main window's close, when another window moves into
-/// it instead (not quitting, one open): the `window.reparent` asked, and
+/// it instead (not quitting, one open): the `pop.window.reparent` asked, and
 /// what the step returns.
 pub(super) fn move_in_instead(app: &AppHandle, req: &WindowRequest) -> Option<serde_json::Value> {
     if req.kind != WindowKind::Main || req.reason == Reason::Quit {
@@ -209,7 +209,7 @@ pub(super) fn move_in_instead(app: &AppHandle, req: &WindowRequest) -> Option<se
 
 impl AppHandle {
     /// Asks for a window's content to move to another window
-    /// (`window.reparent`): `parent` `main` moves an application window's
+    /// (`pop.window.reparent`): `parent` `main` moves an application window's
     /// content into the main window (its own window goes); no `parent`
     /// moves the content the main window holds back to a window of its
     /// own. Its listeners all run now, in their declared order; a
@@ -247,7 +247,7 @@ impl AppHandle {
         }
     }
 
-    /// Asks the main window's close (`window.close` of the main window):
+    /// Asks the main window's close (`pop.window.close` of the main window):
     /// whether it closed (not vetoed, no window moved into it instead).
     pub(crate) fn ask_main_close(&self, reason: Reason) -> bool {
         self.request_window_close(WindowRequest::new(
@@ -259,7 +259,7 @@ impl AppHandle {
     }
 
     /// The main window's pass saw the system ask its close: unless a
-    /// `window.close` of the main window already ran (it asked the
+    /// `pop.window.close` of the main window already ran (it asked the
     /// system), one is asked now; vetoed, or answered by a window moving
     /// into it, the system's close is cancelled.
     pub(crate) fn main_close_seen(&self, ctx: &Context) {
@@ -276,7 +276,7 @@ impl AppHandle {
         }
     }
 
-    /// `window.registry`'s part on the main window's close: the system is
+    /// `pop.window.registry`'s part on the main window's close: the system is
     /// asked to close it, unless it asked already.
     pub(super) fn registry_close_main(&self) {
         let ctx = self.egui();
@@ -288,7 +288,7 @@ impl AppHandle {
 
     /// The main window asked to its front while a window's content holds
     /// it: that content goes back to a window of its own, a
-    /// `window.reparent` with no parent.
+    /// `pop.window.reparent` with no parent.
     pub(crate) fn ask_home(&self) {
         let Some(id) = self.take_going_home() else {
             return;
@@ -301,9 +301,9 @@ impl AppHandle {
         ));
     }
 
-    /// The `frame.close` step's default: the main window's `window.close`;
+    /// The `frame.close` step's default: the main window's `pop.window.close`;
     /// another window's close request to the system, which its content may
-    /// refuse before its pass asks `window.close`. Whether a close was
+    /// refuse before its pass asks `pop.window.close`. Whether a close was
     /// asked.
     pub(crate) fn frame_close(&self, ctx: &Context) -> bool {
         if ctx.viewport_id() == ViewportId::ROOT {

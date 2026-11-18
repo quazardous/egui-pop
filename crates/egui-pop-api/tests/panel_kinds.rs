@@ -1,7 +1,7 @@
 //! A panel's kind (`PanelKind`): a control or mixed panel carries the
 //! "edits" mark in its tab's one mark slot and in its floating palette's
 //! band, a view panel none; a busy or failed state wins the slot while it
-//! shows; `panel.describe` on the bus carries the kind. The chrome draws
+//! shows; `pop.panel.describe` on the bus carries the kind. The chrome draws
 //! the mark, never the panel.
 
 use std::path::Path;
@@ -212,6 +212,6 @@ fn the_panel_describe_point_is_declared_with_its_listener() {
     }
     assert_eq!(
         <PanelDescribe as bus::bus_contract::Point>::ID,
-        "panel.describe"
+        "pop.panel.describe"
     );
 }

@@ -1,6 +1,6 @@
-screen.added
+pop.screen.added
   1. test.added (owner test): local; last
-screen.removed
-  1. workbench.screens (owner egui_pop): local; before window.place
-  2. window.place (owner egui_pop): local; after workbench.screens
+pop.screen.removed
+  1. pop.workbench.screens (owner egui_pop): local; before pop.window.place
+  2. pop.window.place (owner egui_pop): local; after pop.workbench.screens
   3. test.removed (owner test): local; last

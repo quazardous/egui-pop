@@ -706,7 +706,7 @@ pub fn block_window_among(ctx: &Context, same: &dyn Fn(ViewportId) -> bool) -> O
 
 /// As [`block_window_among`], a click on the backdrop asking `raise` to
 /// bring the window of the modal to the front (an application asks its
-/// bus's `window.activate`).
+/// bus's `pop.window.activate`).
 pub fn block_window_raising(
     ctx: &Context,
     same: &dyn Fn(ViewportId) -> bool,

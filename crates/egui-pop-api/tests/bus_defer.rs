@@ -6,7 +6,7 @@
 //! bus's `Defer` capability), and the application drains the asks once
 //! per pass after the panels and windows are drawn, and before it quits.
 //!
-//! Every command run is asked on `command.run` first, a fail-closed
+//! Every command run is asked on `pop.command.run` first, a fail-closed
 //! request: a listener refusing it, or failing, stops it before its
 //! handler, and the journal says `command.refused` with who and why.
 
