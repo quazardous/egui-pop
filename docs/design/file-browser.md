@@ -451,6 +451,18 @@ pub enum ThumbState {
    saving and choices do not move. Every test of today's picker keeps
    passing; the snapshots change only where the switcher replaces the two
    buttons.
+   Done since in two steps. The picker's modes and its switcher came
+   first, the picker drawing its own rows and cells through an
+   `EntryDrawer`. Then its rows and cells became the browser's own
+   (`PlainDrawer`: a selectable row whose columns fit its width, the name,
+   when it last changed, its size and type, said to screen readers; a
+   thumbnail cell; marks as indicators, `files.badge:<path>:<text>`). The
+   picker keeps a thin drawer of its own: its headers that sort, and its
+   rules on a click, on Tab and on the keys (the selection by kind, the
+   highlight its field drives). It takes the browser's thumbnails
+   (`PreviewThumbnails`, a group's member standing in), its group chips and
+   its rubber band. The listing, the filter and the selection stay the
+   picker's: `FileBrowser` has no filter, ranking or per-kind selection yet.
 3. **The folder chooser** is the same picker with `ChooseKind::Folder`; it
    gets `details` and `columns` (thumbnails are of little use for folders).
 4. **Helios's import** draws a `FileBrowser` with its `FileSource` (the
