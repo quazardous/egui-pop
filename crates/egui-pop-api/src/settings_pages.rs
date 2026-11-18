@@ -482,8 +482,9 @@ pub(crate) fn page_entries<'a>(
         .collect()
 }
 
-/// Whether a page matches the search: every word in its title, parent,
-/// description, keywords or one of its settings as shown.
+/// Whether a page matches the search: every word in its title, its
+/// settings' labels (fuzzy), its parent or keywords (fuzzy, as
+/// keywords), or its and its settings' descriptions (by words).
 pub(crate) fn matches(
     ctx: &egui::Context,
     page: &SettingsPage,
@@ -491,23 +492,16 @@ pub(crate) fn matches(
     entries: &[SettingEntry],
     filter: &str,
 ) -> bool {
-    let mut text = format!(
-        "{} {} {} {}",
-        page.title,
-        parent_title,
-        page.description,
-        page.keywords.join(" ")
-    );
+    let mut fields = fuzzy::Fields::new()
+        .label(page.title.as_str())
+        .keyword(parent_title)
+        .keywords(page.keywords.iter().cloned())
+        .description(page.description.as_str());
     for e in page_entries(page, entries) {
         let d = crate::settings_window::shown(ctx, e);
-        text.push(' ');
-        text.push_str(&d.label);
-        text.push(' ');
-        text.push_str(&d.description);
+        fields = fields.label(d.label).description(d.description);
     }
-    filter
-        .split_whitespace()
-        .all(|w| fuzzy::score(w, &text).is_some())
+    fields.find(filter).is_some()
 }
 
 /// The page's reset, greyed at its defaults, and its description.

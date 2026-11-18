@@ -87,8 +87,7 @@ fn search_narrows_the_form_and_a_reset_takes_a_setting_back() {
     assert_eq!(search_text(&h), "focus");
     assert!(h.query_by_label("Keyboard focus").is_some());
     // A setting of the same section that does not match goes (an empty
-    // search shows it with the first section). The search is fuzzy:
-    // "Light or dark" stays, its description holding f…o…c…u…s.
+    // search shows it with the first section).
     assert!(h.query_all_by_label("Interface zoom").next().is_none());
     // The shortcuts matching the search are listed too, nothing else.
     assert!(h.query_by_label("Edit: Undo").is_none());

@@ -394,24 +394,35 @@ pub(crate) fn shown(ctx: &egui::Context, e: &SettingEntry) -> egui_pop_model::va
     d
 }
 
-/// Whether a setting matches the search (label, description, section,
-/// as shown).
+/// A setting's fields as the search reads them: its label (fuzzy), its
+/// section's title (as a keyword) and its description (by words), as
+/// shown.
+pub(crate) fn fields(ctx: &egui::Context, app: &AppHandle, e: &SettingEntry) -> fuzzy::Fields {
+    let d = shown(ctx, e);
+    fuzzy::Fields::new()
+        .label(d.label)
+        .keyword(app.section_title(ctx, &e.owner, &e.section))
+        .description(d.description)
+}
+
+/// How a setting matches the search, if it does.
+pub(crate) fn found(
+    ctx: &egui::Context,
+    app: &AppHandle,
+    e: &SettingEntry,
+    filter: &str,
+) -> Option<fuzzy::Found> {
+    fields(ctx, app, e).find(filter)
+}
+
+/// Whether a setting matches the search.
 pub(crate) fn matches(
     ctx: &egui::Context,
     app: &AppHandle,
     e: &SettingEntry,
     filter: &str,
 ) -> bool {
-    let d = shown(ctx, e);
-    let text = format!(
-        "{} {} {}",
-        app.section_title(ctx, &e.owner, &e.section),
-        d.label,
-        d.description
-    );
-    filter
-        .split_whitespace()
-        .all(|w| fuzzy::score(w, &text).is_some())
+    found(ctx, app, e, filter).is_some()
 }
 
 /// Whether a custom page matches the search.
@@ -614,12 +625,18 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                                         }
                                         continue;
                                     }
-                                    let list: Vec<&SettingEntry> = entries
+                                    // Best first: a label match before a
+                                    // description's (ties keep their order).
+                                    let mut list: Vec<(fuzzy::Found, &SettingEntry)> = entries
                                         .iter()
-                                        .filter(|e| {
-                                            &e.section == sec && matches(&ctx, app, e, &filter)
+                                        .filter(|e| &e.section == sec)
+                                        .filter_map(|e| {
+                                            found(&ctx, app, e, &filter).map(|f| (f, e))
                                         })
                                         .collect();
+                                    list.sort_by_key(|(f, _)| *f);
+                                    let list: Vec<&SettingEntry> =
+                                        list.into_iter().map(|(_, e)| e).collect();
                                     if list.is_empty() {
                                         continue;
                                     }
