@@ -785,13 +785,15 @@ mod carry {
     }
 
     type Target<K> = Box<dyn Fn(&Context, &str, Rect, bool) -> Over<K>>;
+    type Start<K> = Box<dyn Fn(&Context, Vec<K>)>;
+    type Ended = Box<dyn Fn(&Context) -> Option<End>>;
 
     /// The application's payload, behind closures.
     pub(super) struct Carry<K> {
         pub(super) kind: &'static str,
-        pub(super) start: Box<dyn Fn(&Context, Vec<K>)>,
+        pub(super) start: Start<K>,
         target: Target<K>,
-        ended: Box<dyn Fn(&Context) -> Option<End>>,
+        ended: Ended,
     }
 
     impl<K: Key> Carry<K> {
