@@ -10,7 +10,8 @@ a photo library, the kind of view used to import, cull and sort images:
   flags**, drawn over the thumbnails and edited with the mouse, the keys
   of a culling keymap (Lightroom's), or their own widgets;
 - **stacks**, collapsed to their top image with a count, or expanded;
-- a **comparison** of two to four images, zoom and pan synced;
+- a **comparison** of one to many images (a loupe, a survey), zoom and
+  pan synced, images dragged in and out;
 - **tag chips** and a **tag input** completing from the application's
   tags;
 - a **search field with filter chips**, giving the application a
@@ -236,12 +237,30 @@ own fields.
 
 ## The comparison
 
-`CompareView::new("compare").synced(true).best(best).show(ui, &mut
-state, &panes, &thumbs)` shows two to four `Pane`s (four in a square):
-Ctrl and the wheel zoom around the pointer, a drag pans, a double click
-goes back to fit; synced, every pane follows. Each pane has a "best"
-toggle; the output's `best` is the image the user marked, and the
-application says which one is (`best`).
+`CompareView::new("compare").synced(true).best(best).active(active).show(ui,
+&mut state, &panes, &thumbs)` shows the `Pane`s the application lists:
+one is a loupe filling the surface, two to four sit side by side (four
+in a square), more tile in the grid that shows them the largest (six in
+three columns), up to `max_panes` (four by default, `PANE_LIMIT` at
+most). Ctrl and the wheel zoom around the pointer, a drag pans, a double
+click goes back to fit; synced, every pane follows. Each pane has a
+"best" toggle; the output's `best` is the image the user marked, and the
+application says which one is (`best`) and which one is active
+(`active`, outlined).
+
+The application owns the list; the surface says what the user asked, in
+the output's `intents`: `Intent::Active` (a click, the arrows, Home and
+End), `Intent::Remove` (with `removable(true)`: each pane's close
+button, Delete or Backspace on the active one), `Intent::Add` and
+`Intent::Move`. With `carry(kind, pack, unpack)`, the surface is a
+target of the application's drag session (`egui_pop_api::bus::drag`),
+in any of its windows: a payload `unpack` reads images from, let go on
+it, gives `Intent::Add` with the place shown by a bar while over it; a
+pane's name drags its image out as `pack` makes it, let go over nothing
+it gives `Intent::Remove`, let go on the surface `Intent::Move`. Keep
+the state's per-pane views with the list through `CompareState::removed`,
+`inserted` and `moved`. The output's `panes` says where each pane was
+drawn (`compare::layout` gives the same places).
 
 ## Steps
 

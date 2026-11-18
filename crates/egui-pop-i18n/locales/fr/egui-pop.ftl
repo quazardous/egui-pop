@@ -2085,6 +2085,14 @@ egui-pop-views-collapse-stack = Replier la pile de { $count }
 
 egui-pop-views-compare = Comparaison
 
+egui-pop-views-compare-empty = Déposez des images ici pour les comparer
+
+egui-pop-views-compare-full = La comparaison est pleine
+
+egui-pop-views-compare-not-images = Ce ne sont pas des images à comparer
+
+egui-pop-views-compare-remove = Retirer { $name } de la comparaison
+
 egui-pop-views-empty = Vide
 
 egui-pop-views-expand-stack = Déplier la pile de { $count }

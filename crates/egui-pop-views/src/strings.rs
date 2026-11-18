@@ -142,6 +142,22 @@ pub const FILTER_FROM: StrKey = StrKey::new("egui-pop-views-filter-from", "From 
 pub const FILTER_TO: StrKey = StrKey::new("egui-pop-views-filter-to", "Until { $to }");
 /// The comparison's "best" toggle.
 pub const MARK_BEST: StrKey = StrKey::new("egui-pop-views-mark-best", "Best of the comparison");
+/// The comparison with no image: where to drop some.
+pub const COMPARE_EMPTY: StrKey = StrKey::new(
+    "egui-pop-views-compare-empty",
+    "Drop images here to compare them",
+);
+/// A comparison pane's close button: its accessible name.
+pub const COMPARE_REMOVE: StrKey = StrKey::new(
+    "egui-pop-views-compare-remove",
+    "Remove { $name } from the comparison",
+);
+/// Why a drop on the comparison is refused: the payload holds no image.
+pub const COMPARE_NOT_IMAGES: StrKey =
+    StrKey::new("egui-pop-views-compare-not-images", "Not images to compare");
+/// Why a drop on the comparison is refused: it shows all it can.
+pub const COMPARE_FULL: StrKey =
+    StrKey::new("egui-pop-views-compare-full", "The comparison is full");
 
 /// The viewer's toolbar: the previous page.
 pub const VIEWER_BACK: StrKey = StrKey::new("egui-pop-views-viewer-back", "Back");
@@ -447,6 +463,10 @@ pub const ALL: &[StrKey] = &[
     FILTER_FROM,
     FILTER_TO,
     MARK_BEST,
+    COMPARE_EMPTY,
+    COMPARE_REMOVE,
+    COMPARE_NOT_IMAGES,
+    COMPARE_FULL,
     VIEWER_BACK,
     VIEWER_CODE_BLOCK,
     VIEWER_FORWARD,
