@@ -13,8 +13,12 @@
 //!
 //! **Transport.** A Unix socket (Linux, macOS) in the user's runtime
 //! directory (`$XDG_RUNTIME_DIR`, `$TMPDIR` on macOS), mode 0600, in a
-//! directory no one else may write to; a named pipe on Windows. One
-//! JSON-RPC request per line, one response per line. Methods:
+//! directory no one else may write to, a client whose process runs as
+//! another user refused at once; a named pipe on Windows, open to its
+//! owner and the system only, remote clients rejected. At most
+//! [`MAX_CONNECTIONS`] clients at once, requests of at most
+//! [`MAX_REQUEST_BYTES`]. One JSON-RPC request per line, one response
+//! per line. Methods:
 //!
 //! | Method | Params | Result |
 //! |---|---|---|
@@ -65,6 +69,7 @@ use egui_pop_model::ids::{PluginId, SettingId};
 use egui_pop_model::values::Descriptor;
 use serde_json::{Value as Json, json};
 
+mod limits;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 mod rpc;
@@ -74,6 +79,7 @@ mod unix;
 #[cfg(windows)]
 mod windows;
 
+pub use limits::{MAX_CONNECTIONS, MAX_REQUEST_BYTES};
 pub use rpc::RpcError;
 
 /// The environment variable that turns the socket on

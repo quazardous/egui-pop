@@ -1,13 +1,14 @@
 //! JSON-RPC 2.0, one message per line: reading a request, handing it to
 //! the UI thread, writing its response.
 
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Read as _, Write};
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
 
 use egui_pop_core::debug::Feedback;
 use serde_json::{Value as Json, json};
 
+use crate::limits::MAX_REQUEST_BYTES;
 use crate::{DEFAULT_DEADLINE, Job, MAX_DEADLINE, Waker};
 
 /// How long a request other than `wait` waits for the UI thread: it is
@@ -38,6 +39,10 @@ impl RpcError {
     pub const NO_ANSWER: i64 = -32002;
     /// A `ui` action found no node, or more than one, to act on.
     pub const UI: i64 = -32003;
+    /// A transport limit was reached: too many clients connected, or a
+    /// request longer than [`crate::MAX_REQUEST_BYTES`]; the connection
+    /// is closed after it.
+    pub const LIMIT: i64 = -32004;
 
     pub(crate) fn new(code: i64, message: impl Into<String>) -> Self {
         Self {
@@ -65,6 +70,26 @@ impl RpcError {
         Self::new(Self::REFUSED, "the agent socket is off")
     }
 
+    /// The client is not a process of the user the application runs as.
+    #[cfg(unix)]
+    pub(crate) fn not_the_user() -> Self {
+        Self::new(
+            Self::REFUSED,
+            "only the user the application runs as may connect",
+        )
+    }
+
+    /// Too many clients are connected.
+    pub(crate) fn too_many_connections() -> Self {
+        Self::new(
+            Self::LIMIT,
+            format!(
+                "too many clients connected (at most {}): try again once one closes",
+                crate::MAX_CONNECTIONS
+            ),
+        )
+    }
+
     pub(crate) fn refused(f: &Feedback) -> Self {
         Self {
             code: Self::REFUSED,
@@ -82,19 +107,61 @@ impl RpcError {
     }
 }
 
-/// Serves one connection until it closes.
-pub(crate) fn serve(reader: impl BufRead, mut writer: impl Write, tx: &Sender<Job>, wake: &Waker) {
-    for line in reader.lines() {
-        let Ok(line) = line else { return };
-        if line.trim().is_empty() {
-            continue;
+/// Serves one connection until it closes, or until it sends a request
+/// longer than [`MAX_REQUEST_BYTES`].
+pub(crate) fn serve(
+    mut reader: impl BufRead,
+    mut writer: impl Write,
+    tx: &Sender<Job>,
+    wake: &Waker,
+) {
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        // One byte more than the cap and its `\n`: a line that fills it
+        // is too long.
+        let limit = MAX_REQUEST_BYTES as u64 + 2;
+        match (&mut reader).take(limit).read_until(b'\n', &mut buf) {
+            Ok(0) | Err(_) => return,
+            Ok(_) => {}
         }
-        if let Some(response) = handle(&line, tx, wake)
+        if buf.last() == Some(&b'\n') {
+            buf.pop();
+            if buf.last() == Some(&b'\r') {
+                buf.pop();
+            }
+        }
+        if buf.len() > MAX_REQUEST_BYTES {
+            let e = RpcError::new(
+                RpcError::LIMIT,
+                format!("a request longer than {MAX_REQUEST_BYTES} bytes: the connection closes"),
+            );
+            log::warn!(target: "egui_pop_agent", "agent client closed: {}", e.message);
+            refuse(&mut writer, e);
+            return;
+        }
+        let response = match std::str::from_utf8(&buf) {
+            Ok(line) if line.trim().is_empty() => continue,
+            Ok(line) => handle(line, tx, wake),
+            Err(e) => Some(error(
+                Json::Null,
+                RpcError::new(RpcError::PARSE, format!("not UTF-8: {e}")),
+            )),
+        };
+        if let Some(response) = response
             && (writeln!(writer, "{response}").is_err() || writer.flush().is_err())
         {
             return;
         }
     }
+}
+
+/// Answers a connection that is closed before any request is read (a
+/// transport limit, a client that is not the user's) with `e`, `id`
+/// null.
+pub(crate) fn refuse(mut writer: impl Write, e: RpcError) {
+    let _ = writeln!(writer, "{}", error(Json::Null, e));
+    let _ = writer.flush();
 }
 
 /// The response to one line; `None` for a notification (no `id`).
