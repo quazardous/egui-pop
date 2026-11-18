@@ -136,6 +136,41 @@ Within the case, `e` moves up beside `c`; across it, `c` stays below the
 legend `b` instead of moving up beside `a`, and `f` stays below the case.
 The gutter draws each group's band.
 
+### Regions
+
+`layout_regions` places cards in named regions around and over a
+surface, such as the read-outs and tool chips over an image: the
+corners, the edges, the centre and an overlay, each with an anchor, a gap
+and a priority. Regions take their room in priority order, each avoiding
+the blocks of the ones before it; each packs its cards with the engine,
+from its anchor outwards, and folds its lowest-priority cards when room
+runs out. A region around the surface uses the margin between it and the
+bounds. Start and end follow the direction (right to left mirrors them).
+
+```rust
+use egui_pop_fit::{layout_regions, Anchor, Card, PointRect, Region, Size, Size2, Surface};
+
+let image = PointRect { x: 0.0, y: 0.0, w: 240.0, h: 144.0 };
+let surface = Surface::new(image, 24.0);
+let regions = [
+    Region::new(1, Anchor::TopStart).with_gap(8.0),
+    Region::new(2, Anchor::BottomEnd).with_gap(8.0),
+];
+let chip = Size2::new(Size::ONE, Size::ONE);
+let cards = [
+    Card::fixed(10, 1, chip),
+    Card::fixed(11, 1, chip).with_priority(-1),
+    Card::sized(20, 2, 40.0, 20.0),
+];
+let result = layout_regions(&surface, &regions, &cards, None);
+// The first card in the corner, a gap from the edges and from the next.
+let first = result.card(10).unwrap().rect.unwrap();
+assert_eq!((first.x, first.y, first.w, first.h), (8.0, 8.0, 16.0, 16.0));
+assert_eq!(result.rects(1).len(), 2);
+assert!(result.folded().is_empty());
+print!("{}", result.dump());
+```
+
 `cargo run -p egui-pop-fit --example dump` lays out a small panel at several widths.
 
 ## Demo

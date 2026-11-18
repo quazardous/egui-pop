@@ -2033,6 +2033,42 @@ fn the_labels_page_draws_labels_over_a_bright_and_a_dark_image() {
 }
 
 #[test]
+fn the_regions_page_places_cards_around_and_over_an_image() {
+    use egui_pop_gallery::pages::regions::{NARROW, WIDE, folded, solve};
+    // Wide, every card has room; narrow, the lower priorities fold.
+    let wide = solve(WIDE.0, WIDE.1);
+    assert!(folded(&wide).is_empty(), "{}", wide.dump());
+    let narrow = solve(NARROW.0, NARROW.1);
+    assert_eq!(
+        folded(&narrow),
+        ["1/250 s", "Before / after"],
+        "{}",
+        narrow.dump()
+    );
+    // No two placed cards overlap, and each lies within the bounds.
+    for (layout, bounds) in [(&wide, WIDE.0), (&narrow, NARROW.0)] {
+        let rects: Vec<_> = layout.cards.iter().filter_map(|c| c.rect).collect();
+        for (i, a) in rects.iter().enumerate() {
+            assert!(a.x >= 0.0 && a.y >= 0.0, "{a:?}");
+            assert!(a.x + a.w <= bounds[0] && a.y + a.h <= bounds[1], "{a:?}");
+            for b in &rects[i + 1..] {
+                let apart =
+                    a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+                assert!(apart, "{a:?} {b:?}\n{}", layout.dump());
+            }
+        }
+    }
+    let mut h = harness(options("pop-dark", Density::Comfortable, "regions"));
+    h.run();
+    egui_pop_test::assert_all_named(&h);
+    h.get_by_label("Regions, wide");
+    h.get_by_label("Regions, narrow");
+    h.get_by_label("Regions, narrow, folded: 1/250 s, Before / after");
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_page_shot("regions-pop-dark"));
+}
+
+#[test]
 fn the_cursors_page_shows_a_brush_outline_and_the_loupe() {
     let mut results = egui_kittest::SnapshotResults::new();
     for theme in ["pop-dark", "pop-light"] {

@@ -83,7 +83,7 @@ over the size kept. `--no-persistence` or `--quit-after` run the gallery with
 nothing read and nothing kept, as `tools/wbox/app.sh` does.
 
 Pages: `overview` (the theme overview), `tokens`, `builtins` (egui's
-built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (layout by role: text roles, spacing by intent, cards and buttons by tone, rows and grids on one baseline), `scoped` (egui's own buttons, toggles, combo box and text fields restyled by the kit in a scope), `theme-editor` (the theme editor), `fonts` (candidate font pairs side by side), `icons`, `indicators` (dots, badges, pips, flags, swatches), `sections` (collapsible sections stacked in a panel), `folds` (groups folding inside a panel, a hand-built tree's rows with their toggles), `motion` (the motion clock), `values`, `history` (the application's history: its panel's list, a click jumping to a step), `sliders`, `faders` (vertical sliders as a strip of faders, knobs in their three layouts, sliders in narrow slots, a standalone section band), `compact` (controls for a slot of a given size: scrub fields, compact cells, a value's marks, value bars, menu rows), `inputs` (decorated inputs, field states and Tab order),
+built-ins, and egui-pop's kit-drawn checkbox, radio, rows and chips), `roles` (layout by role: text roles, spacing by intent, cards and buttons by tone, rows and grids on one baseline), `regions` (slot regions: cards around and over an image, folding by priority), `scoped` (egui's own buttons, toggles, combo box and text fields restyled by the kit in a scope), `theme-editor` (the theme editor), `fonts` (candidate font pairs side by side), `icons`, `indicators` (dots, badges, pips, flags, swatches), `sections` (collapsible sections stacked in a panel), `folds` (groups folding inside a panel, a hand-built tree's rows with their toggles), `motion` (the motion clock), `values`, `history` (the application's history: its panel's list, a click jumping to a step), `sliders`, `faders` (vertical sliders as a strip of faders, knobs in their three layouts, sliders in narrow slots, a standalone section band), `compact` (controls for a slot of a given size: scrub fields, compact cells, a value's marks, value bars, menu rows), `inputs` (decorated inputs, field states and Tab order),
 `menus`, `toolbars` (toolbars of commands, More tools, a tool palette), `dialogs`, `files` (the file chooser), `toasts`, `tips` (tips of the day and
 hints), `about` (Help > About: what the gallery says about itself, its
 version info to copy), `progress`,
@@ -489,7 +489,7 @@ labels over a bright and a dark image.
 
 ### Layout
 
-Zones and blocks, the workbench, the layout controls, palettes, arrangements, the context stack, the clipboard, links, the viewer, strips and the window frame.
+Zones and blocks, the workbench, the layout controls, slot regions, palettes, arrangements, the context stack, the clipboard, links, the viewer, strips and the window frame.
 
 <table>
   <tr>
@@ -545,6 +545,9 @@ Zones and blocks, the workbench, the layout controls, palettes, arrangements, th
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-edge-maximized-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-edge-maximized-pop-dark.png" width="200" alt="frame-edge-maximized-pop-dark"></a><br>frame-edge-maximized-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/frame-edge-rounded-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/frame-edge-rounded-pop-dark.png" width="200" alt="frame-edge-rounded-pop-dark"></a><br>frame-edge-rounded-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/workbench-empty-centre-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/workbench-empty-centre-pop-dark.png" width="200" alt="workbench-empty-centre-pop-dark"></a><br>workbench-empty-centre-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/regions-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/regions-pop-dark.png" width="200" alt="regions-pop-dark"></a><br>regions-pop-dark</td>
   </tr>
 </table>
 
