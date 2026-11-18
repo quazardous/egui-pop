@@ -1045,6 +1045,7 @@ egui-pop-shortcuts-from-user 7c1015e324534020
 egui-pop-shortcuts-from-workspace 03c22c9a1e72a85c
 egui-pop-shortcuts-goes-to c8356e3ae2ee2b67
 egui-pop-shortcuts-key-from fd5ae90de64af563
+egui-pop-shortcuts-key-in 42f7c5cd50d7c172
 egui-pop-shortcuts-no-key 63b265a9e486b5c5
 egui-pop-shortcuts-no-key-name 01b0fb6f60b3da3f
 egui-pop-shortcuts-pointer-add d60cf48375534422
@@ -1059,6 +1060,9 @@ egui-pop-shortcuts-pointer-remove-name 6c5bb12ed59b899c
 egui-pop-shortcuts-pointer-use 14546c2ce2bfc3a8
 egui-pop-shortcuts-press-new-keys 1afe5776010207e8
 egui-pop-shortcuts-press-to-search 1514669ebb8c71f0
+egui-pop-shortcuts-scope-main-window e563a04406632f3b
+egui-pop-shortcuts-scope-panel 7330d64c92ff7b72
+egui-pop-shortcuts-scope-window b6175faf16e3fa18
 egui-pop-shortcuts-search-by-key 10d5d8999e25bb21
 egui-pop-shortcuts-show-all 9a901f899be07fb0
 egui-pop-shortcuts-system-failed 01682a7786399072

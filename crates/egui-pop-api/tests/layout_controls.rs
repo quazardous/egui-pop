@@ -375,3 +375,59 @@ fn each_layout_option_changes_the_layout_and_is_undone_in_one_step() {
         SideBarPosition::Left
     );
 }
+
+/// The area toggles belong to the main window, whose workbench they fold:
+/// pressed in another application window they do nothing, and the
+/// shortcuts editor says where they listen.
+#[test]
+fn the_area_toggles_listen_in_the_main_window_only() {
+    use egui_pop_api::windows::WindowSpec;
+    use egui_pop_model::keymap::KeyScope;
+    use egui_pop_test::windows::MultiWindow;
+    let mut m = MultiWindow::new(|ctx| {
+        App::builder()
+            .name("Demo")
+            .plugins(DefaultPlugins)
+            .plugin(Demo)
+            .build(ctx)
+            .unwrap()
+    });
+    m.root_pass();
+    for command in [
+        CMD_TOGGLE_PRIMARY_SIDE_BAR,
+        CMD_TOGGLE_PANEL,
+        CMD_TOGGLE_SECONDARY_SIDE_BAR,
+    ] {
+        let scopes: Vec<KeyScope> = m
+            .app()
+            .key_sources(&command)
+            .into_iter()
+            .map(|b| b.options.scope)
+            .collect();
+        assert_eq!(scopes, [KeyScope::window("main")], "{command}");
+    }
+    m.app()
+        .open_window(WindowSpec::new("import", "Import"), |ui, _| {
+            ui.label("import body");
+        });
+    m.root_pass();
+    let import = m.app().window_viewport(&"import".into()).unwrap();
+    m.window_pass(import);
+    let press = |m: &mut MultiWindow, v: egui::ViewportId| {
+        m.focus(v);
+        m.press(v, egui::Key::B, egui::Modifiers::COMMAND);
+        if v != egui::ViewportId::ROOT {
+            m.window_pass(v);
+        }
+        m.root_pass();
+        m.root_pass();
+    };
+    press(&mut m, import);
+    assert_eq!(
+        shown(m.app()),
+        [true; 3],
+        "Ctrl+B in another window folded the main window's side bar"
+    );
+    press(&mut m, egui::ViewportId::ROOT);
+    assert_eq!(shown(m.app()), [false, true, true]);
+}

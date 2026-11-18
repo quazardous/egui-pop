@@ -52,8 +52,8 @@ use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::fuzzy;
-use egui_pop_model::ids::{BlockId, CommandId, OwnerId, PluginId};
-use egui_pop_model::keymap::{Action, Keys, Layer, Pointer};
+use egui_pop_model::ids::{BlockId, CommandId, OwnerId, PanelId, PluginId};
+use egui_pop_model::keymap::{Action, KeyScope, Keys, Layer, Pointer};
 use egui_pop_model::values::{self, Change, Set};
 use serde_json::json;
 
@@ -1009,6 +1009,37 @@ fn title_of(ctx: &egui::Context, app: &AppHandle, id: &CommandId) -> String {
         .map_or_else(|| id.to_string(), |s| command_title(ctx, &s))
 }
 
+/// Where a binding listens, as the shortcuts editor says it after its
+/// keys: none for a binding of every window (global or system, whose note
+/// says the rest).
+fn scope_name(ctx: &egui::Context, app: &AppHandle, scope: &KeyScope) -> Option<String> {
+    match scope {
+        KeyScope::Global | KeyScope::System => None,
+        KeyScope::Window(id) => {
+            let open = app.windows().into_iter().find(|w| w.id.as_str() == id);
+            let main = open
+                .as_ref()
+                .map_or(id == crate::windows::WindowId::MAIN, |w| w.main);
+            Some(if main {
+                strings::tr(ctx, &txt::SHORTCUTS_SCOPE_MAIN_WINDOW)
+            } else {
+                let title = open.map_or_else(|| id.clone(), |w| w.title);
+                strings::tr_args(ctx, &txt::SHORTCUTS_SCOPE_WINDOW, &[("window", &title)])
+            })
+        }
+        KeyScope::Panel(id) => {
+            let title =
+                PanelId::new(id.clone()).map_or_else(|_| id.clone(), |p| app.panel_title(ctx, &p));
+            Some(strings::tr_args(
+                ctx,
+                &txt::SHORTCUTS_SCOPE_PANEL,
+                &[("panel", &title)],
+            ))
+        }
+        KeyScope::Surface(name) => Some(name.clone()),
+    }
+}
+
 /// What the command's system-scope keys do outside the window, and
 /// whether that is as declared (`false`: they only work inside).
 fn system_note(ctx: &egui::Context, app: &AppHandle, id: &CommandId) -> Option<(String, bool)> {
@@ -1280,13 +1311,23 @@ fn shortcuts_of(ui: &mut Ui, app: &AppHandle, st: &mut State, filter: &str, poin
                     } else {
                         sources
                             .iter()
-                            .map(|b| match app.key_source_name(&ctx, b) {
-                                Some(source) => strings::tr_args(
-                                    &ctx,
-                                    &txt::SHORTCUTS_KEY_FROM,
-                                    &[("keys", &b.keys.to_string()), ("source", &source)],
-                                ),
-                                None => b.keys.to_string(),
+                            .map(|b| {
+                                let keys = match app.key_source_name(&ctx, b) {
+                                    Some(source) => strings::tr_args(
+                                        &ctx,
+                                        &txt::SHORTCUTS_KEY_FROM,
+                                        &[("keys", &b.keys.to_string()), ("source", &source)],
+                                    ),
+                                    None => b.keys.to_string(),
+                                };
+                                match scope_name(&ctx, app, &b.options.scope) {
+                                    Some(scope) => strings::tr_args(
+                                        &ctx,
+                                        &txt::SHORTCUTS_KEY_IN,
+                                        &[("keys", &keys), ("scope", &scope)],
+                                    ),
+                                    None => keys,
+                                }
                             })
                             .collect::<Vec<_>>()
                             .join(", ")

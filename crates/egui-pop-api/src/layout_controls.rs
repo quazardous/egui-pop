@@ -455,6 +455,13 @@ fn arrangement_items(app: &AppHandle) -> Vec<ListItem> {
         .collect()
 }
 
+/// Where the area toggles listen: the main window (and its detached
+/// panels' windows), whose workbench they show and hide; pressed in
+/// another application window they do nothing.
+fn main_window() -> egui_pop_model::keymap::BindOptions {
+    egui_pop_model::keymap::BindOptions::window(crate::windows::WindowId::MAIN)
+}
+
 /// Declares the commands, the setting and the layout menu (the
 /// framework's own plugin does). Each command's icon is its area's
 /// layout icon, outlined while the area is hidden and filled while it
@@ -468,17 +475,17 @@ pub(crate) fn declare(ctx: &mut crate::Ctx<'_>) -> Result<(), crate::CtxError> {
             .icon("layout-left-off")
             .icon_on("layout-left")
             .description("Shows or hides the primary side bar: hidden, it folds to its strip and keeps its panels.")
-            .key("Ctrl+B"),
+            .key_with("Ctrl+B", main_window()),
         CommandSpec::new(CMD_TOGGLE_PANEL, "Toggle panel", "View")
             .icon("layout-bottom-off")
             .icon_on("layout-bottom")
             .description("Shows or hides the bottom panel: hidden, it keeps its panels.")
-            .key("Ctrl+J"),
+            .key_with("Ctrl+J", main_window()),
         CommandSpec::new(CMD_TOGGLE_SECONDARY_SIDE_BAR, "Toggle secondary side bar", "View")
             .icon("layout-right-off")
             .icon_on("layout-right")
             .description("Shows or hides the secondary side bar: hidden, it folds to its strip and keeps its panels.")
-            .key("Ctrl+Alt+B"),
+            .key_with("Ctrl+Alt+B", main_window()),
     ];
     for (order, (spec, (area, _, key))) in specs.into_iter().zip(TOGGLES).enumerate() {
         ctx.command(

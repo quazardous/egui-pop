@@ -1601,6 +1601,14 @@ egui-pop-shortcuts-from-workspace = espace de travail
 
 egui-pop-shortcuts-key-from = { $keys } ({ $source })
 
+egui-pop-shortcuts-key-in = { $keys } dans { $scope }
+
+egui-pop-shortcuts-scope-main-window = la fenêtre principale
+
+egui-pop-shortcuts-scope-window = la fenêtre { $window }
+
+egui-pop-shortcuts-scope-panel = le panneau { $panel }
+
 egui-pop-shortcuts-goes-to = { $keys } va à { $command }
 
 egui-pop-shortcuts-system-failed = { $keys } ne fonctionne pas hors de la fenêtre : { $reason }

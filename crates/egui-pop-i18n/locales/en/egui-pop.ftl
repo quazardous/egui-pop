@@ -2107,6 +2107,8 @@ egui-pop-shortcuts-goes-to = { $keys } goes to { $command }
 
 egui-pop-shortcuts-key-from = { $keys } ({ $source })
 
+egui-pop-shortcuts-key-in = { $keys } in { $scope }
+
 egui-pop-shortcuts-no-key = No key
 
 egui-pop-shortcuts-no-key-name = Remove every key of { $command }
@@ -2134,6 +2136,12 @@ egui-pop-shortcuts-pointer-use = Use { $keys }
 egui-pop-shortcuts-press-new-keys = Press the new keys for { $command }. Escape: cancel; Backspace: no key.
 
 egui-pop-shortcuts-press-to-search = Press the keys to search for. Escape: cancel.
+
+egui-pop-shortcuts-scope-main-window = the main window
+
+egui-pop-shortcuts-scope-panel = the { $panel } panel
+
+egui-pop-shortcuts-scope-window = the { $window } window
 
 egui-pop-shortcuts-search-by-key = Search by key
 
