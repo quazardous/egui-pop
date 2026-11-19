@@ -1503,7 +1503,7 @@ pub(crate) fn stable_id(ui: &Ui, kind: &'static str, label: &str) -> Id {
     let pass = ctx.cumulative_pass_nr_for(viewport);
     let n = ctx.data_mut(|d| {
         let seen =
-            d.get_temp_mut_or_default::<StableIds>(Id::new(("egui_pop.stable_ids", viewport)));
+            d.get_temp_mut_or_default::<StableIds>(Id::unique(("egui_pop.stable_ids", viewport)));
         if seen.pass != pass {
             seen.pass = pass;
             seen.taken.clear();
