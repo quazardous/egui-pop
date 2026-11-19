@@ -883,7 +883,8 @@ impl<'a> Slider<'a> {
             (None, false) => vec2(room(ui).max(MIN_WIDTH), row_height),
             (None, true) => vec2(row_height * 1.5, VERTICAL_LENGTH),
         };
-        let (id, row) = ui.allocate_space(wanted);
+        let (_, row) = ui.allocate_space(wanted);
+        let id = stable_id(ui, "egui_pop.slider", &spec.label);
         let quad = if vertical { None } else { quad };
         let (bar, quad_rect) = split_quad(row, quad.is_some(), ui);
         let mut response = ui.interact(bar, id, Sense::click_and_drag());
@@ -1484,6 +1485,41 @@ pub(crate) fn open_typed_entry(ui: &Ui, typing_id: Id, text: String) {
     TYPING.keyed(typing_id).set(ui.ctx(), text);
     TYPING_FOCUS.keyed(typing_id).set(ui.ctx(), true);
     ui.ctx().request_repaint();
+}
+
+/// The id a value widget (a slider, a range slider, a knob, a scrub
+/// field) senses under: keyed by `kind` and its label in `ui`'s id, not
+/// egui's automatic id. The automatic id follows how many widgets came
+/// before in every enclosing `Ui`: a widget appearing before it while it
+/// is dragged (a "modified" mark, a reset button shown once the value
+/// moves) would give it another id, and egui would end its drag. The
+/// space it allocates still takes its automatic id, so the widgets after
+/// it keep theirs. A second widget of the same kind and label in the same
+/// `Ui` in a pass takes the next number, so two never share an id.
+pub(crate) fn stable_id(ui: &Ui, kind: &'static str, label: &str) -> Id {
+    let base = ui.make_persistent_id((kind, label));
+    let ctx = ui.ctx();
+    let viewport = ctx.viewport_id();
+    let pass = ctx.cumulative_pass_nr_for(viewport);
+    let n = ctx.data_mut(|d| {
+        let seen =
+            d.get_temp_mut_or_default::<StableIds>(Id::unique(("egui_pop.stable_ids", viewport)));
+        if seen.pass != pass {
+            seen.pass = pass;
+            seen.taken.clear();
+        }
+        let n = seen.taken.entry(base).or_insert(0);
+        *n += 1;
+        *n - 1
+    });
+    if n == 0 { base } else { base.with(n) }
+}
+
+/// The ids [`stable_id`] gave in a pass, and how many times each.
+#[derive(Clone, Default)]
+struct StableIds {
+    pass: u64,
+    taken: std::collections::HashMap<Id, u32>,
 }
 
 /// Takes the auto id an open typed entry takes, so the widgets after a
