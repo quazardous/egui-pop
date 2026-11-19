@@ -2,7 +2,7 @@
 //! process.
 //!
 //! When the application's bus offers the contract's
-//! [`Journal`](bus_contract::Journal) capability, egui-pop's journal
+//! [`Journal`](bus_contract_journal::Journal) capability, egui-pop's journal
 //! (`AppHandle::publish`, `AppHandle::events_since`,
 //! `AppHandle::last_event`, so agents' `wait` and the debug bridge's
 //! journal readers) is that journal, unless the host keeps a journal of

@@ -1,4 +1,4 @@
-//! Passes over a point's budget ([`bus_contract::Timings`]): heard from
+//! Passes over a point's budget ([`bus_contract_timings::Timings`]): heard from
 //! the bus's budget sink on whatever thread ran them, said on the
 //! interface thread as the `bus.overBudget` fact and one warning in the
 //! log, at most once a minute per point (the passes not said are
@@ -34,7 +34,7 @@ pub(crate) struct Heard {
 }
 
 /// Listens to the bus's passes over budget, when the bus offers
-/// [`bus_contract::Timings`].
+/// [`bus_contract_timings::Timings`].
 pub(crate) fn install(kernel: &dyn bus_contract::Bus) -> Heard {
     let heard = Heard::default();
     if let Some(timings) = kernel.timings() {

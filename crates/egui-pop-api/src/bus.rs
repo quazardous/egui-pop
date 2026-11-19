@@ -1242,7 +1242,7 @@ impl AppHandle {
     /// it quits. For code that cannot be re-entered while it draws (a
     /// panel with its state borrowed). The ask's number; `None` when the
     /// application's bus does not offer the `Defer` capability
-    /// ([`bus_contract::Bus::defer`]), the caller then asking it at once
+    /// ([`bus_contract_defer::BusDefer::defer`]), the caller then asking it at once
     /// or keeping it.
     ///
     /// Asked in a detached panel's window, drawn inside the main window's
