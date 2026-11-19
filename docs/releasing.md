@@ -136,8 +136,10 @@ Publishing is the owner's call, and stays a manual step.
    "Features" and "Fixes", each entry naming its crates.
 
 2. **Review**: push the branch, open a pull request titled like the
-   commit, read the changelog and the versions. CI's semver job checks
-   the new versions against crates.io. Merge it.
+   commit, read the changelog and the versions. Merge it: on `next`,
+   CI's semver job checks the new versions against crates.io (the
+   release raises the crates' manifests and deletes the changesets,
+   both of which select it).
 
 3. **Publish**, from the merged commit on `main`, by hand:
 
@@ -147,7 +149,12 @@ Publishing is the owner's call, and stays a manual step.
    ```
 
    It publishes the crates whose version is not on crates.io yet, in
-   the order of their dependencies.
+   the order of their dependencies. First it runs
+   `cargo semver-checks check-release` on those that have an earlier
+   release (it needs `cargo install cargo-semver-checks --locked`, and
+   GStreamer's and WebKitGTK's development packages for the video and
+   web view features); a failure publishes nothing. `--skip-semver`
+   leaves the checks out, for a run resumed after they passed.
 
 4. **Tag** a minor of the facade, `vX.Y.0`, on the commit it was
    published from; patches and sub-crates are not tagged:
@@ -159,11 +166,15 @@ Publishing is the owner's call, and stays a manual step.
 
 knope is a development tool, not a dependency:
 `cargo install knope --locked` (CI pins its version, see
-`.github/workflows/ci.yml`).
+`.github/workflows/semver.yml`).
 
 ### Semver checks
 
-CI's **Semver checks** job blocks a merge. It first runs
+CI's **Semver checks** job blocks `main`'s promotion. It runs when a
+published crate's build input or a changeset changed since `main`, every
+night on `next`, and by hand (`.github/workflows/semver.yml`;
+[CI jobs](testing.md#ci-jobs)); `cargo xtask publish` runs the checks
+again before uploading. It first runs
 `knope pending-versions`, which writes in its checkout the versions the
 pending changesets lead to, then
 `cargo semver-checks check-release --workspace`, which compares every

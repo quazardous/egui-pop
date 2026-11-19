@@ -1,0 +1,88 @@
+name: Semver checks
+
+# Every published crate against its latest release on crates.io, with the
+# versions the pending changesets lead to: a break passes when its
+# changeset says major (a new minor before 1.0), fails otherwise
+# (docs/releasing.md, "Semver checks").
+#
+# It runs (docs/testing.md, "CI jobs"):
+# - from CI (ci.yml), when a published crate's build input or a changeset
+#   changed since main;
+# - nightly on next, whatever changed: a failure turns this workflow's run
+#   red, as a CI failure would;
+# - by hand (workflow_dispatch), on the branch it is started from.
+# `cargo xtask publish` runs the checks again before uploading.
+on:
+  workflow_call:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+  # knope, which raises the versions from the changesets (knope.toml).
+  KNOPE_VERSION: "0.23.2"
+
+jobs:
+  semver:
+    name: Semver checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # A scheduled run starts from the default branch (main); it checks next.
+          ref: ${{ github.event_name == 'schedule' && 'next' || '' }}
+      # It documents the features other than unstable ones: `views-video`, whose
+      # bindings ask for GStreamer's development packages, and `views-webview`,
+      # WebKitGTK's.
+      - name: Install GStreamer's and WebKitGTK's development packages
+        if: vars.UBUNTU_ARCHIVE_DOWN != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libwebkit2gtk-4.1-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-semver-checks
+      - uses: knope-dev/action@19617851f9f13ab2f27a05989c55efb18aca3675 # v2.1.2
+        with:
+          version: ${{ env.KNOPE_VERSION }}
+      # Raises the versions in this checkout only; nothing is committed.
+      - name: The versions the pending changesets lead to
+        run: |
+          git config user.name ci
+          git config user.email ci@invalid
+          knope pending-versions
+          git status --short
+      # A crate not yet on crates.io has no baseline to compare with: every
+      # crate to publish that crates.io's index does not know is left out
+      # until its first release (tools/semver-excludes.py).
+      - name: The crates with no release yet
+        run: |
+          excludes="$(python3 tools/semver-excludes.py)"
+          echo "SEMVER_EXCLUDES=$excludes" >> "$GITHUB_ENV"
+      - if: vars.UBUNTU_ARCHIVE_DOWN != 'true'
+        run: cargo semver-checks check-release --workspace $SEMVER_EXCLUDES
+      # Ubuntu's archive down, so no GStreamer or WebKitGTK: every crate
+      # whose features need neither as usual, then egui-pop and
+      # egui-pop-views with the features cargo-semver-checks would pick
+      # (all but unstable ones), less video and webview.
+      - name: Semver checks without the video and webview features
+        if: vars.UBUNTU_ARCHIVE_DOWN == 'true'
+        run: |
+          echo "::warning::UBUNTU_ARCHIVE_DOWN is set: semver checks leave out the video and webview features"
+          echo "- Semver checks left out the video and webview features (UBUNTU_ARCHIVE_DOWN)" >> "$GITHUB_STEP_SUMMARY"
+          cargo semver-checks check-release --workspace $SEMVER_EXCLUDES \
+            --exclude egui-pop --exclude egui-pop-views
+          for crate in egui-pop egui-pop-views; do
+            features="$(cargo metadata --no-deps --format-version 1 | jq -r --arg p "$crate" '
+              .packages[] | select(.name == $p) | .features | keys[]
+              | select(test("^(default|video|webview|views-video|views-webview|unstable|nightly|bench|no_std)$|^(_|unstable_|unstable-)") | not)
+            ' | paste -sd, -)"
+            echo "$crate: $features"
+            cargo semver-checks check-release --package "$crate" --default-features --features "$features"
+          done
+

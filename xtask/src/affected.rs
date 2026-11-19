@@ -58,7 +58,9 @@ const EVERYTHING: &[&str] = &[
 const BOOK: &[&str] = &["book.toml", "tools/book/"];
 
 /// The changesets: the next release's notes and bumps, read by knope and
-/// `cargo xtask changeset-check` (its own CI job), built by nothing.
+/// `cargo xtask changeset-check` (its own CI job), built by nothing. The
+/// semver job reads them (the versions they lead to decide whether a
+/// break passes), and a release deletes them, so they select it.
 const CHANGESETS: &str = ".changeset/";
 
 /// Test targets that read the documentation, besides `consumer-smoke`
@@ -607,8 +609,9 @@ fn select_in(
         }
         if path.starts_with(CHANGESETS) {
             notes = true;
+            jobs.semver = true;
             sel.reasons
-                .push(format!("{path}: a changeset, nothing to build"));
+                .push(format!("{path}: a changeset, nothing to build but semver"));
             continue;
         }
         if BOOK.iter().any(|p| path.starts_with(*p)) {
@@ -1150,22 +1153,14 @@ mod tests {
     }
 
     #[test]
-    fn a_changeset_builds_nothing() {
+    fn a_changeset_builds_nothing_and_checks_semver() {
         let ws = workspace();
         let sel = select(&ws, &changed(&[".changeset/fix.md"]), &critical(), false);
         assert!(!sel.full && sel.docs_only);
         assert!(sel.packages.is_empty() && sel.binaries.is_empty());
         let j = sel.jobs;
-        assert!(
-            !j.fmt
-                && !j.clippy
-                && !j.doc
-                && !j.book
-                && !j.wasm
-                && !j.package
-                && !j.semver
-                && !j.deny
-        );
+        assert!(!j.fmt && !j.clippy && !j.doc && !j.book && !j.wasm && !j.package && !j.deny);
+        assert!(j.semver);
     }
 
     #[test]

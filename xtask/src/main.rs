@@ -91,11 +91,13 @@ Tasks:
                          no stable or supported item names an experimental
                          type in its signature; exceptions in
                          xtask/experimental.allow
-  publish [--dry-run] [--interval SECS]
+  publish [--dry-run] [--interval SECS] [--skip-semver]
                          publish the workspace's crates to crates.io in the
                          order of their dependencies, skipping the versions
                          already there; on crates.io's rate limit, try again
-                         after SECS (default 600); --dry-run prints the plan
+                         after SECS (default 600); --dry-run prints the plan;
+                         cargo semver-checks runs first on the crates to
+                         publish (--skip-semver leaves it out)
   affected [--base REF] [--files PATH...] [--full] [--run] [--github]
                          the tests and CI jobs a change needs, from the
                          files it touches and the dependency graph; --run
