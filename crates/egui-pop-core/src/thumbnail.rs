@@ -202,6 +202,27 @@ impl Widget for Thumbnail {
     }
 }
 
+/// How a thumbnail grid's zoom answers a resize: what the zoom (its
+/// slider, `Ctrl` and `+` or `-`, `Ctrl` and the wheel) means, and so
+/// what a wider grid shows.
+///
+/// The application picks it for each grid: the file browser
+/// (`FileBrowser::with_resize`), the in-app picker
+/// (`FilesPlugin::grid_resize`) and the library grid
+/// (`ThumbGrid::resize`). Either way the zoom the person sets is kept.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum GridResize {
+    /// The zoom is a count per row: a wider grid shows the same count of
+    /// larger thumbnails (the default, egui-pop's behaviour since 0.16).
+    #[default]
+    PerRow,
+    /// The zoom is a size: a wider grid keeps the thumbnails' size and
+    /// shows more columns, as catalogue applications do. The cells share
+    /// what is left of a row, so a cell is drawn at most one column's
+    /// share larger than the size asked.
+    FixedSize,
+}
+
 /// A virtualised grid: only the rows in view are built, so ten thousand
 /// thumbnails cost what a screenful does. `item` draws cell `i`.
 pub fn thumbnail_grid(ui: &mut Ui, count: usize, cell: Vec2, item: impl FnMut(&mut Ui, usize)) {

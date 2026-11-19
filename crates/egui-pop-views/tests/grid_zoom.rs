@@ -6,7 +6,7 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_core::theme::Tokens;
 use egui_pop_views::library::grid::{
-    LibraryItems, LibraryState, MIN_SIZE, Signal, Thumb, ThumbGrid, ThumbSource, Zoom,
+    GridResize, LibraryItems, LibraryState, MIN_SIZE, Signal, Thumb, ThumbGrid, ThumbSource, Zoom,
 };
 
 struct Shoot(u32);
@@ -41,9 +41,16 @@ struct Panel {
     inner: f32,
     gap: f32,
     zooms: Vec<u32>,
+    /// What the grid signalled of a zoom kept as a size.
+    sizes: Vec<f32>,
+    resize: GridResize,
 }
 
 fn panel(width: f32, zoom: Zoom) -> Harness<'static, Panel> {
+    panel_under(width, zoom, GridResize::PerRow)
+}
+
+fn panel_under(width: f32, zoom: Zoom, resize: GridResize) -> Harness<'static, Panel> {
     let mut state = LibraryState::new("shoot");
     state.set_zoom(zoom);
     let mut h = Harness::builder()
@@ -55,7 +62,7 @@ fn panel(width: f32, zoom: Zoom) -> Harness<'static, Panel> {
                     ui.set_width(width);
                     p.inner = ui.available_width() - ui.spacing().scroll.allocated_width();
                     p.gap = Tokens::of(ui.ctx()).space.s;
-                    let out = ThumbGrid::new("grid").height(500.0).show(
+                    let out = ThumbGrid::new("grid").height(500.0).resize(p.resize).show(
                         ui,
                         &mut p.state,
                         &Shoot(200),
@@ -63,8 +70,10 @@ fn panel(width: f32, zoom: Zoom) -> Harness<'static, Panel> {
                     );
                     p.columns = out.columns;
                     for s in out.signals {
-                        if let Signal::Zoom { per_row } = s {
-                            p.zooms.push(per_row);
+                        match s {
+                            Signal::Zoom { per_row } => p.zooms.push(per_row),
+                            Signal::ZoomSize { points } => p.sizes.push(points),
+                            _ => {}
                         }
                     }
                 });
@@ -76,6 +85,8 @@ fn panel(width: f32, zoom: Zoom) -> Harness<'static, Panel> {
                 inner: 0.0,
                 gap: 0.0,
                 zooms: Vec::new(),
+                sizes: Vec::new(),
+                resize,
             },
         );
     h.run();
@@ -220,4 +231,63 @@ fn the_steps_go_by_counts() {
     assert_eq!(Zoom::PerRow(6).zoomed_out(), Zoom::PerRow(8));
     assert_eq!(Zoom::PerRow(32).zoomed_out(), Zoom::PerRow(40));
     assert_eq!(Zoom::default(), Zoom::PerRow(5));
+}
+
+#[test]
+fn a_fixed_size_grid_gains_columns_when_widened() {
+    let mut h = panel_under(800.0, Zoom::Points(150.0), GridResize::FixedSize);
+    let narrow = h.state().columns;
+    let size = h.state().state.size();
+    assert!(size >= 150.0, "a cell is at least the size asked: {size}");
+    resize(&mut h, 1300.0);
+    assert!(
+        h.state().columns > narrow,
+        "a wider panel shows more columns: {} then {}",
+        narrow,
+        h.state().columns
+    );
+    let wide = h.state().state.size();
+    assert!(
+        (150.0..150.0 * 2.0).contains(&wide),
+        "the thumbnails keep about their size: {size} then {wide}"
+    );
+    resize(&mut h, 500.0);
+    assert!(h.state().columns < narrow, "and a narrower one fewer");
+    assert_eq!(
+        h.state().state.zoom(),
+        Zoom::Points(150.0),
+        "the size is kept"
+    );
+    assert!(h.state().sizes.is_empty(), "a resize is no zoom");
+}
+
+#[test]
+fn a_per_row_grid_keeps_its_count_when_widened() {
+    let mut h = panel_under(800.0, Zoom::PerRow(4), GridResize::PerRow);
+    assert_eq!(h.state().columns, 4);
+    resize(&mut h, 1300.0);
+    assert_eq!(h.state().columns, 4, "the count holds, the cells grow");
+}
+
+#[test]
+fn a_fixed_size_grid_turns_a_count_into_its_size_and_steps_by_columns() {
+    let mut h = panel_under(800.0, Zoom::PerRow(4), GridResize::FixedSize);
+    assert_eq!(h.state().columns, 4, "the count shows as it did");
+    let Zoom::Points(p) = h.state().state.zoom() else {
+        panic!("the zoom is now a size: {:?}", h.state().state.zoom());
+    };
+    assert_eq!(
+        h.state().sizes,
+        vec![p],
+        "the size is signalled once, to keep"
+    );
+    focus(&mut h);
+    press(&mut h, Key::Minus);
+    assert!(h.state().columns > 4, "a step out shows more columns");
+    assert!(
+        matches!(h.state().state.zoom(), Zoom::Points(q) if q < p),
+        "and keeps a smaller size"
+    );
+    assert_eq!(h.state().sizes.len(), 2);
+    assert!(h.state().zooms.is_empty(), "no count is signalled");
 }

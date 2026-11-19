@@ -30,6 +30,7 @@ use egui_pop_core::kit::Kit;
 use egui_pop_core::placeholder::SkeletonTokens;
 use egui_pop_core::strings;
 use egui_pop_core::theme::Tokens;
+pub use egui_pop_core::thumbnail::GridResize;
 use egui_pop_core::thumbnail::{self, Thumbnail};
 use egui_pop_core::thumbnail::{Band, ThumbnailGrid};
 use egui_pop_core::widgets;
@@ -604,9 +605,10 @@ impl Default for ModeSettings {
 pub enum ThumbZoom {
     /// This many thumbnails per row (at least one).
     PerRow(u32),
-    /// A size in points, as an older setting kept it: turned into the
-    /// count per row it gives at the grid's width on the next draw
-    /// ([`ThumbZoom::from_points`]).
+    /// A size in points: under [`GridResize::FixedSize`], the zoom
+    /// itself; under [`GridResize::PerRow`], as an older setting kept it,
+    /// turned into the count per row it gives at the grid's width on the
+    /// next draw ([`ThumbZoom::from_points`]).
     Points(f32),
 }
 
@@ -675,6 +677,31 @@ impl ThumbZoom {
     pub fn side(self, width: f32, gap: f32) -> f32 {
         let n = self.shown_per_row(width, gap) as f32;
         ((width + gap) / n - gap).floor().max(1.0)
+    }
+
+    /// The zoom in `resize`'s form at `width`: under
+    /// [`GridResize::PerRow`] a count ([`ThumbZoom::resolved`]), under
+    /// [`GridResize::FixedSize`] a size in points (a count becomes the
+    /// side it gives there, in whole points). A grid too narrow to lay
+    /// out (before its first draw) leaves it as it is.
+    #[must_use]
+    pub fn under(self, resize: GridResize, width: f32, gap: f32) -> ThumbZoom {
+        if !(width.is_finite() && width >= ThumbnailsMode::MIN_SIZE) {
+            return self;
+        }
+        match (resize, self) {
+            (GridResize::PerRow, _) => self.resolved(width, gap),
+            (GridResize::FixedSize, ThumbZoom::Points(p)) => {
+                let p = if p.is_finite() { p } else { 0.0 };
+                ThumbZoom::Points(p.clamp(
+                    ThumbnailsMode::MIN_SIZE,
+                    width.max(ThumbnailsMode::MIN_SIZE),
+                ))
+            }
+            (GridResize::FixedSize, ThumbZoom::PerRow(_)) => {
+                ThumbZoom::Points(self.side(width, gap).max(ThumbnailsMode::MIN_SIZE))
+            }
+        }
     }
 
     /// One step closer: fewer, larger thumbnails per row (down to one).
@@ -3853,6 +3880,8 @@ pub struct FileBrowser {
     /// How many thumbnails fill a row; turned into the settings' size at
     /// each draw.
     zoom: ThumbZoom,
+    /// What the zoom means on a resize ([`FileBrowser::with_resize`]).
+    resize: GridResize,
     /// The grid's room at the last draw (width, gap): what the toolbar's
     /// zoom reads.
     grid_room: (f32, f32),
@@ -4360,6 +4389,7 @@ impl FileBrowser {
             mode,
             settings: ModeSettings::default(),
             zoom: ThumbZoom::default(),
+            resize: GridResize::default(),
             grid_room: (800.0, 4.0),
             thumbnails: Arc::new(NoThumbnails),
             type_ahead: TypeAhead::default(),
@@ -5254,9 +5284,30 @@ impl FileBrowser {
         self.zoom = ThumbZoom::Points(side.max(ThumbnailsMode::MIN_SIZE));
     }
 
-    /// The thumbnails' zoom: how many fill a row.
+    /// The thumbnails' zoom: how many fill a row, or under
+    /// [`GridResize::FixedSize`] their size in points once drawn. What
+    /// an application keeps to show the grid as the person left it.
     pub fn zoom(&self) -> ThumbZoom {
         self.zoom
+    }
+
+    /// What the zoom means when the grid is resized
+    /// ([`GridResize::PerRow`] by default): a count per row, or a size
+    /// that keeps the thumbnails' size and adds columns.
+    #[must_use]
+    pub fn with_resize(mut self, resize: GridResize) -> Self {
+        self.resize = resize;
+        self
+    }
+
+    /// [`FileBrowser::with_resize`] on a browser already made.
+    pub fn set_resize(&mut self, resize: GridResize) {
+        self.resize = resize;
+    }
+
+    /// What the zoom means when the grid is resized.
+    pub fn resize(&self) -> GridResize {
+        self.resize
     }
 
     /// Sets the thumbnails' zoom; it survives a resize.
@@ -5592,18 +5643,39 @@ impl FileBrowser {
                 .iter()
                 .any(|m| m.id == self.mode_id && m.needs.thumbnails)
             {
-                // Thumbnails per row, fewer to the right: larger ones.
                 let name = strings::tr(ui.ctx(), &crate::strings::FILES_THUMBNAIL_SIZE);
                 let (width, gap) = self.grid_room;
-                let most = ThumbZoom::most_per_row(width, gap);
-                let mut per_row = self.zoom.shown_per_row(width, gap);
-                let r = ui.add(
-                    egui::Slider::new(&mut per_row, most..=1)
-                        .show_value(false)
-                        .text(name),
-                );
-                if r.changed() {
-                    self.set_thumbnails_per_row(per_row);
+                match self.resize {
+                    GridResize::PerRow => {
+                        // Thumbnails per row, fewer to the right: larger ones.
+                        let most = ThumbZoom::most_per_row(width, gap);
+                        let mut per_row = self.zoom.shown_per_row(width, gap);
+                        let r = ui.add(
+                            egui::Slider::new(&mut per_row, most..=1)
+                                .show_value(false)
+                                .text(name),
+                        );
+                        if r.changed() {
+                            self.set_thumbnails_per_row(per_row);
+                        }
+                    }
+                    GridResize::FixedSize => {
+                        // The thumbnails' size, larger to the right.
+                        let least = ThumbnailsMode::MIN_SIZE;
+                        let most = width.max(least);
+                        let mut side = match self.zoom.under(self.resize, width, gap) {
+                            ThumbZoom::Points(p) => p,
+                            ThumbZoom::PerRow(_) => self.zoom.side(width, gap),
+                        };
+                        let r = ui.add(
+                            egui::Slider::new(&mut side, least..=most)
+                                .show_value(false)
+                                .text(name),
+                        );
+                        if r.changed() {
+                            self.set_zoom(ThumbZoom::Points(side.round()));
+                        }
+                    }
                 }
             }
             // The order, unless the mode orders by time on its own.
@@ -5759,10 +5831,11 @@ impl FileBrowser {
             };
         thumbnails.begin_frame(ui.ctx());
         let inner = ui.scope(|ui| {
-            // The zoom, a count per row, as the side the modes draw at.
+            // The zoom, a count per row or a size (its resize policy), as
+            // the side the modes draw at.
             let (width, gap) = ThumbnailGrid::room(ui);
             self.grid_room = (width, gap);
-            self.zoom = self.zoom.resolved(width, gap);
+            self.zoom = self.zoom.under(self.resize, width, gap);
             self.settings.thumbnail_size = self.zoom.side(width, gap);
             self.mode.show(
                 ui,

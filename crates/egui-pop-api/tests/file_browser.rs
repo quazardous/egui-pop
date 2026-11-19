@@ -733,6 +733,49 @@ fn the_thumbnail_zoom_is_a_count_per_row_that_survives_a_resize() {
 }
 
 #[test]
+fn under_fixed_size_the_zoom_is_a_size_and_a_wider_browser_gains_columns() {
+    let mut h = harness(thumbnails("zoom-fixed", 30));
+    h.state_mut().set_resize(browser::GridResize::FixedSize);
+    h.state_mut().set_thumbnails_per_row(4);
+    h.run();
+    h.run();
+    let narrow = first_row(&h, 30);
+    assert_eq!(narrow.len(), 4, "a count shows as it did");
+    let browser::ThumbZoom::Points(p) = h.state().zoom() else {
+        panic!("the zoom became a size: {:?}", h.state().zoom());
+    };
+    // Wider: more columns of about the same size.
+    h.set_size(egui::vec2(1000.0, 400.0));
+    h.run();
+    h.run();
+    let wide = first_row(&h, 30);
+    assert!(wide.len() > 4, "{wide:?}");
+    assert!(
+        wide[0].width() < narrow[0].width() + 40.0,
+        "{wide:?} {narrow:?}"
+    );
+    assert_eq!(
+        h.state().zoom(),
+        browser::ThumbZoom::Points(p),
+        "the size is kept"
+    );
+    // The rule: a count becomes the side it gives; a size stays.
+    use browser::{GridResize, ThumbZoom};
+    assert_eq!(
+        ThumbZoom::PerRow(4).under(GridResize::FixedSize, 630.0, 4.0),
+        ThumbZoom::Points(154.0)
+    );
+    assert_eq!(
+        ThumbZoom::Points(154.0).under(GridResize::FixedSize, 1000.0, 4.0),
+        ThumbZoom::Points(154.0)
+    );
+    assert_eq!(
+        ThumbZoom::Points(154.0).under(GridResize::PerRow, 630.0, 4.0),
+        ThumbZoom::PerRow(4)
+    );
+}
+
+#[test]
 fn an_old_thumbnail_size_in_points_converts_to_a_count_at_the_width() {
     let mut h = harness(thumbnails("zoom-points", 30));
     h.state_mut().set_thumbnail_size(150.0);

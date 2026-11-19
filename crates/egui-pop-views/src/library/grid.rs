@@ -14,7 +14,8 @@
 //!
 //! The grid does the layout (the zoom, [`Zoom`], is a count of
 //! thumbnails per row that share the panel's width, so it survives a
-//! resize: Ctrl and the wheel, or + and -), the keyboard (arrows, Page Up and Page Down, Home
+//! resize, or with [`ThumbGrid::resize`] a size that keeps on a resize
+//! and gains columns: Ctrl and the wheel, or + and -), the keyboard (arrows, Page Up and Page Down, Home
 //! and End, Space, Ctrl+A, Enter), the selection (a click, Shift for a
 //! range, Ctrl to toggle, a rubber band dragged across the cells), the
 //! culling keys ([`CullKeymap`]: ratings, flags, labels, auto-advance),
@@ -73,6 +74,7 @@ use egui_pop_core::placeholder::SkeletonTokens;
 use egui_pop_core::rating::RatingStars;
 use egui_pop_core::strings::{tr, tr_with};
 use egui_pop_core::theme::Tokens;
+pub use egui_pop_core::thumbnail::GridResize;
 use egui_pop_core::ui::UiPop as _;
 use egui_pop_model::ids::StepId;
 use serde_json::{Value as Json, json};
@@ -106,14 +108,23 @@ pub(super) const OVERLAY_MIN: f32 = 64.0;
 /// thumbnails. `PerRow(1)` fills the panel. A panel too narrow for `n`
 /// cells of [`MIN_SIZE`] shows as many as fit, and keeps `n` for when it
 /// grows again.
+///
+/// That is the [`GridResize::PerRow`] policy, the default. A grid built
+/// with [`ThumbGrid::resize`] and [`GridResize::FixedSize`] keeps the
+/// zoom as a size ([`Zoom::Points`]) instead: a panel made wider shows
+/// more columns of thumbnails that keep their size.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Zoom {
-    /// This many thumbnails per row (at least one).
+    /// This many thumbnails per row (at least one). Under
+    /// [`GridResize::FixedSize`], the grid's next pass turns it into the
+    /// size it gives at the panel's width and signals
+    /// [`Signal::ZoomSize`].
     PerRow(u32),
-    /// A size in points, as an older setting kept it: the grid's next
-    /// pass turns it into the count per row it gave at the panel's width
-    /// ([`Zoom::from_points`]) and signals [`Signal::Zoom`], for the
-    /// application to store the count instead.
+    /// A size in points: under [`GridResize::FixedSize`], the zoom
+    /// itself. Under [`GridResize::PerRow`], as an older setting kept it:
+    /// the grid's next pass turns it into the count per row it gave at
+    /// the panel's width ([`Zoom::from_points`]) and signals
+    /// [`Signal::Zoom`], for the application to store the count instead.
     Points(f32),
 }
 
@@ -323,6 +334,10 @@ struct ViewMem {
     cols: usize,
     /// How many cells of [`MIN_SIZE`] fit in a row, as of the last pass.
     fit: usize,
+    /// The panel's inner width and the gap between cells, as of the last
+    /// pass.
+    width: f32,
+    gap: f32,
     /// Ctrl and the wheel, or a pinch, gathered (the log of the zoom
     /// factor) until it makes a step.
     pinch: f32,
@@ -380,7 +395,8 @@ impl<K: Key> LibraryState<K> {
         self.published = false;
     }
 
-    /// The grid's zoom: how many thumbnails per row.
+    /// The grid's zoom: how many thumbnails per row, or their size under
+    /// [`GridResize::FixedSize`].
     pub fn zoom(&self) -> Zoom {
         self.zoom
     }
@@ -508,6 +524,13 @@ pub enum Signal<K> {
     Zoom {
         per_row: u32,
     },
+    /// The zoom of a grid keeping the size on a resize
+    /// ([`GridResize::FixedSize`]) changed: thumbnails this many points
+    /// wide, for the application to keep (a stored count converted
+    /// included).
+    ZoomSize {
+        points: f32,
+    },
     /// A step was vetoed.
     Vetoed {
         step: StepId,
@@ -563,6 +586,7 @@ pub struct ThumbGrid<'a> {
     overlays: bool,
     empty_stars: EmptyStars,
     drag_out: bool,
+    resize: GridResize,
 }
 
 impl<'a> ThumbGrid<'a> {
@@ -580,6 +604,7 @@ impl<'a> ThumbGrid<'a> {
             overlays: true,
             empty_stars: EmptyStars::OnHover,
             drag_out: false,
+            resize: GridResize::PerRow,
         }
     }
 
@@ -658,6 +683,18 @@ impl<'a> ThumbGrid<'a> {
         self
     }
 
+    /// What the zoom means when the panel is resized
+    /// ([`GridResize::PerRow`] by default): a count per row, so a wider
+    /// panel shows larger thumbnails; or a size
+    /// ([`GridResize::FixedSize`]), so a wider panel shows more columns,
+    /// the cells sharing what is left of a row. The zoom is the
+    /// [`LibraryState`]'s, kept in the policy's form; the application
+    /// keeps what [`Signal::Zoom`] or [`Signal::ZoomSize`] says.
+    pub fn resize(mut self, resize: GridResize) -> Self {
+        self.resize = resize;
+        self
+    }
+
     pub fn show<K: Key>(
         self,
         ui: &mut Ui,
@@ -687,18 +724,34 @@ impl<'a> ThumbGrid<'a> {
         };
         let strip_h = self.height.unwrap_or(120.0);
         let mut mem = state.views.remove(&self.view).unwrap_or_default();
-        // A zoom still in points becomes the count it gave at this width.
+        // A zoom not in the policy's form becomes, at this width, the
+        // count a size gave (per row) or the size a count gives (fixed).
         let mut converted = None;
         let size = if grid {
             let width = ui.available_width() - ui.spacing().scroll.allocated_width();
             let fit = Zoom::most_per_row(width, gap);
-            if let Zoom::Points(p) = state.zoom
-                && width >= MIN_SIZE + 2.0 * gap
-            {
-                state.zoom = Zoom::from_points(p, width, gap);
-                converted = state.zoom.per_row();
+            let room = width >= MIN_SIZE + 2.0 * gap;
+            match (self.resize, state.zoom) {
+                (GridResize::PerRow, Zoom::Points(p)) if room => {
+                    state.zoom = Zoom::from_points(p, width, gap);
+                    converted = state.zoom.per_row().map(|per_row| Signal::Zoom { per_row });
+                }
+                (GridResize::FixedSize, Zoom::PerRow(n)) if room => {
+                    let points = Zoom::cell_width(n.min(fit), width, gap)
+                        .floor()
+                        .max(MIN_SIZE);
+                    state.zoom = Zoom::Points(points);
+                    converted = Some(Signal::ZoomSize { points });
+                }
+                _ => {}
             }
-            let per_row = state.zoom.per_row().unwrap_or(1).min(fit);
+            mem.width = width;
+            mem.gap = gap;
+            let per_row = match state.zoom {
+                Zoom::PerRow(n) => n.max(1),
+                Zoom::Points(p) => per_row_fitting(p, width, gap),
+            }
+            .min(fit);
             mem.cols = per_row as usize;
             mem.fit = fit as usize;
             let size = Zoom::cell_width(per_row, width, gap);
@@ -1275,10 +1328,12 @@ impl<'a> ThumbGrid<'a> {
         }
 
         let mut signals = self.run_ops(ops, state, items, &mut mem);
-        if let Some(per_row) = converted
-            && !signals.iter().any(|s| matches!(s, Signal::Zoom { .. }))
+        if let Some(signal) = converted
+            && !signals
+                .iter()
+                .any(|s| matches!(s, Signal::Zoom { .. } | Signal::ZoomSize { .. }))
         {
-            signals.insert(0, Signal::Zoom { per_row });
+            signals.insert(0, signal);
         }
         if focused && let Some(reg) = &registry {
             reg.set_focused(&state.id);
@@ -1372,8 +1427,20 @@ impl<'a> ThumbGrid<'a> {
                     };
                     let to = to.per_row().unwrap_or(1).min(mem.fit.max(1) as u32);
                     if Some(to) != shown.per_row() {
-                        state.zoom = Zoom::PerRow(to);
-                        out.push(Signal::Zoom { per_row: to });
+                        match self.resize {
+                            GridResize::PerRow => {
+                                state.zoom = Zoom::PerRow(to);
+                                out.push(Signal::Zoom { per_row: to });
+                            }
+                            // The size that shows `to` per row here.
+                            GridResize::FixedSize => {
+                                let points = Zoom::cell_width(to, mem.width, mem.gap)
+                                    .floor()
+                                    .max(MIN_SIZE);
+                                state.zoom = Zoom::Points(points);
+                                out.push(Signal::ZoomSize { points });
+                            }
+                        }
                     }
                     continue;
                 }
