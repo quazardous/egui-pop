@@ -215,10 +215,12 @@ jobs:
     if: needs.changes.outputs.test == 'true'
     # Ubuntu's archive down: 26.04, whose LLVM the fallback Mesa build links.
     runs-on: ${{ vars.UBUNTU_ARCHIVE_DOWN == 'true' && 'ubuntu-26.04' || 'ubuntu-24.04' }}
-    # The tests split in three by nextest (`--partition hash:N/3`), run side
-    # by side: about 16 minutes of tests become about 6 per shard. Each
-    # shard builds the tests (about 3 minutes, from the shared cache) and
-    # runs the doctests.
+    # The tests split in three by their measured duration (`cargo xtask
+    # shards`, ci/test-durations.json; docs/testing.md, "Shards by
+    # duration"), run side by side: about 14 minutes of tests become about
+    # 5 per shard. Each shard builds the tests (about 4 minutes, from the
+    # shared cache); shard 1 also runs the doctests, the icon set's SVG
+    # tests and the shard check, and gets fewer tests for them.
     strategy:
       fail-fast: false
       matrix:
@@ -270,9 +272,9 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           if [ "$FULL" = true ]; then
-            cargo xtask affected --full --run -- --profile ci --partition hash:${{ matrix.shard }}/3
+            cargo xtask affected --full --run --shard ${{ matrix.shard }}/3 -- --profile ci
           else
-            cargo xtask affected --base "$BASE" --run -- --profile ci --partition hash:${{ matrix.shard }}/3
+            cargo xtask affected --base "$BASE" --run --shard ${{ matrix.shard }}/3 -- --profile ci
           fi
       # The icon set rasterises SVG only under egui-pop-core's `svg`
       # feature, which no workspace crate turns on: the runs above compile
@@ -280,6 +282,11 @@ jobs:
       - name: Icon set tests with SVG
         if: matrix.shard == 1
         run: cargo nextest run -p egui-pop-core --locked --profile ci --features svg -E 'test(icon_set) | binary(icon_set)'
+      # Every test in exactly one shard: nextest lists each shard's filter
+      # against the whole workspace (built already when everything runs).
+      - name: Shards cover every test once
+        if: matrix.shard == 1 && needs.changes.outputs.full == 'true'
+        run: cargo xtask shards check --shards 3
       - name: Upload the test report
         if: always()
         uses: actions/upload-artifact@v4

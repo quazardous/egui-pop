@@ -20,7 +20,8 @@ use std::process::Command;
 
 pub const USAGE: &str = "\
 cargo xtask affected [--base REF] [--files PATH...] [--full]
-                     [--plan | --run] [--github] [-- NEXTEST_ARGS...]
+                     [--plan | --run] [--github] [--shard I/N]
+                     [-- NEXTEST_ARGS...]
 
   --base REF     compare with the merge base of REF and HEAD, the working
                  tree included (default: origin/main)
@@ -32,6 +33,9 @@ cargo xtask affected [--base REF] [--files PATH...] [--full]
                  cargo test --doc for the doctests
   --github       write the jobs to $GITHUB_OUTPUT and the report to
                  $GITHUB_STEP_SUMMARY
+  --shard I/N    run shard I of N only: the tests split by measured
+                 duration (`cargo xtask shards`, ci/test-durations.json);
+                 the doctests run on shard 1
   -- ARGS        passed to every cargo nextest run (e.g. --profile ci)";
 
 /// The nextest filter of every critical test, and of those that render.
@@ -183,6 +187,7 @@ pub fn affected(args: &[String]) -> Result<(), String> {
     let mut run = false;
     let mut show_plan = false;
     let mut github = false;
+    let mut shard = None;
     let mut nextest_args = Vec::new();
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -193,6 +198,11 @@ pub fn affected(args: &[String]) -> Result<(), String> {
             "--run" => run = true,
             "--plan" => show_plan = true,
             "--github" => github = true,
+            "--shard" => {
+                shard = Some(super::shards::parse_shard(
+                    it.next().ok_or("--shard needs I/N")?,
+                )?);
+            }
             "--" => {
                 nextest_args.extend(it.by_ref().cloned());
             }
@@ -222,13 +232,18 @@ pub fn affected(args: &[String]) -> Result<(), String> {
     if github {
         write_github(&sel, &report)?;
     }
+    let mut steps = plan(&sel, &packages, &nextest_args);
+    if let Some((i, n)) = shard {
+        let split = super::shards::load(n)?;
+        steps = sharded(steps, i, &split.filter(i));
+    }
     if show_plan {
-        for Step(args) in plan(&sel, &packages, &nextest_args) {
-            println!("cargo {}", shell_words(&args));
+        for Step(args) in &steps {
+            println!("cargo {}", shell_words(args));
         }
     }
     if run {
-        run_tests(&sel, &packages, &nextest_args)?;
+        run_tests(steps)?;
     }
     Ok(())
 }
@@ -934,6 +949,30 @@ pub fn plan(sel: &Selection, packages: &[Package], extra: &[String]) -> Vec<Step
     steps
 }
 
+/// The steps of shard `i` alone: every nextest run narrowed by the
+/// shard's filter (`-E`, joined with the run's own filter), the doctests
+/// on shard 1 only.
+pub fn sharded(steps: Vec<Step>, i: usize, filter: &str) -> Vec<Step> {
+    steps
+        .into_iter()
+        .filter_map(|Step(mut args)| {
+            if args.first().map(String::as_str) != Some("nextest") {
+                return (i == 1).then_some(Step(args));
+            }
+            match args.iter().position(|a| a == "-E") {
+                Some(e) if e + 1 < args.len() => {
+                    args[e + 1] = format!("({}) & ({filter})", args[e + 1]);
+                }
+                _ => {
+                    args.push("-E".into());
+                    args.push(filter.into());
+                }
+            }
+            Some(Step(args))
+        })
+        .collect()
+}
+
 /// Arguments as a shell would need them typed.
 fn shell_words(args: &[String]) -> String {
     args.iter()
@@ -948,7 +987,7 @@ fn shell_words(args: &[String]) -> String {
         .join(" ")
 }
 
-fn run_tests(sel: &Selection, packages: &[Package], extra: &[String]) -> Result<(), String> {
+fn run_tests(steps: Vec<Step>) -> Result<(), String> {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
     let mut failed = Vec::new();
     // Each nextest run writes its JUnit report (profile `ci`) to the
@@ -957,7 +996,7 @@ fn run_tests(sel: &Selection, packages: &[Package], extra: &[String]) -> Result<
         .map(PathBuf::from)
         .unwrap_or_else(|| super::root().join("target"))
         .join("nextest");
-    for (i, Step(args)) in plan(sel, packages, extra).into_iter().enumerate() {
+    for (i, Step(args)) in steps.into_iter().enumerate() {
         let shown = shell_words(&args);
         eprintln!("\n$ cargo {shown}");
         let status = Command::new(&cargo)
@@ -1339,6 +1378,36 @@ mod tests {
         );
         let full = select(&ws, &changed(&["Cargo.lock"]), &critical(), false);
         assert_eq!(plan(&full, &ws, &[]).len(), 2);
+    }
+
+    #[test]
+    fn a_shard_narrows_every_nextest_run_and_keeps_the_doctests_on_the_first() {
+        let ws = workspace();
+        let full = select(&ws, &[], &[], true);
+        let shown = |i| -> Vec<String> {
+            sharded(plan(&full, &ws, &[]), i, "binary_id(=x)")
+                .into_iter()
+                .map(|Step(a)| a.join(" "))
+                .collect()
+        };
+        assert_eq!(
+            shown(1),
+            [
+                "nextest run --locked --no-tests=warn --workspace -E binary_id(=x)",
+                "test --locked --workspace --doc",
+            ]
+        );
+        assert_eq!(
+            shown(2),
+            ["nextest run --locked --no-tests=warn --workspace -E binary_id(=x)"]
+        );
+        let narrow = vec![Step(
+            ["nextest", "run", "-E", "test(a)", "--profile", "ci"]
+                .map(String::from)
+                .to_vec(),
+        )];
+        let Step(a) = &sharded(narrow, 3, "f")[0];
+        assert_eq!(a.join(" "), "nextest run -E (test(a)) & (f) --profile ci");
     }
 
     #[test]
