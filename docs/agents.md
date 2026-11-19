@@ -452,6 +452,14 @@ The bridge has one caller identity: every command it runs is
   the command and its arguments, and a decline or a deadline refuses it
   (`command.refused`, `by: "pop.agent.confirm"`). The user's own runs
   are never asked ([The agent socket](agent-socket.md#destructive-calls-the-user-confirms)).
+- **Grants per agent.** Over the agent socket, each agent is held to a
+  grant the application sets (commands, read-only, values, `ui`
+  actions; presets read-only, editor, full): a client that does not say
+  `hello` reads only unless the application allows unpaired writes, and
+  the `pop.agent.grants` listener refuses on `pop.command.run` what a
+  grant does not allow (`command.refused`, `by: "pop.agent.grants"`),
+  before the application's own listeners
+  ([The agent socket](agent-socket.md#grants-what-each-agent-may-do)).
 - **Links.** A link an agent asks to open (`links.open`, `files.reveal`,
   `viewer.open_outside`) is always confirmed by the user, and the links
   plugin vetoes any answer to that confirmation but the user's: an agent
@@ -605,10 +613,11 @@ assert_eq!(app.run(&count, Json::Null, Origin::User).now(), Some(Ok(json!(3))));
 
 What is not protected today. None of these is fixed by documenting it.
 
-- **No authentication beyond the socket's owner.** egui-pop has no
-  notion of who the agent is: every call through the bridge is
-  `debug-bridge`, every call through the [agent socket](agent-socket.md)
-  `agent-socket`. The socket is a Unix socket of mode 0600 in a directory
+- **No authentication beyond the socket's owner.** Every call through
+  the bridge in the process is `debug-bridge`; through the
+  [agent socket](agent-socket.md), `agent-socket` until the client says
+  `hello`, its paired id after, and a pairing token attributes, it does
+  not isolate. The socket is a Unix socket of mode 0600 in a directory
   only the user may write to (a named pipe on Windows, with the system's
   default access), so any process of the same user that reaches it is an
   agent, with what the bridge's mode allows (read-only unless the

@@ -342,6 +342,7 @@ fn dispatch(
         }
         "ui" => Job::Ui {
             params,
+            origin,
             // The UI thread answers first, so the reason reaches the client.
             deadline: Instant::now() + ANSWER_WITHIN - Duration::from_secs(5),
             reply,

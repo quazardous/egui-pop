@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use egui_kittest::Harness;
-use egui_pop_agent::{AgentSocket, AgentSocketExt as _};
+use egui_pop_agent::{AgentGrants, AgentGrantsExt as _, AgentSocket, AgentSocketExt as _};
 use egui_pop_api::core::debug::BridgeMode;
 use egui_pop_api::zones::{self, Block};
 use egui_pop_api::{App, Ctx, DefaultPlugins, Plugin, PluginError};
@@ -70,6 +70,7 @@ fn app(socket: &Path, seen: Arc<Mutex<Seen>>) -> Harness<'static, App> {
         .plugins(DefaultPlugins)
         .plugin(Pointer { seen })
         .debug_bridge(BridgeMode::On)
+        .agent_grants(AgentGrants::new().allow_unpaired_writes())
         .app_id("org.example.UiPointer")
         .agent_socket(AgentSocket::at(socket));
     let mut h = egui_pop_test::app(builder, egui::vec2(800.0, 600.0));

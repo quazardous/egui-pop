@@ -74,6 +74,10 @@ application chose no mode, the setting on or off.
   that do not mutate and read-only commands. An application that offers
   more says so with `AppBuilder::debug_bridge(BridgeMode::On)`, before
   or after; the mode applies to every agent, not only the socket's.
+- **Unpaired clients read only.** Whatever the mode, a client that does
+  not say `hello` is held to the read-only grant
+  ([Grants](#grants-what-each-agent-may-do)); a paired agent to the
+  editor grant unless the application says otherwise.
 
 ## The protocol
 
@@ -193,8 +197,8 @@ never says `hello` keeps working as before, as
 
 A token says which agent calls; it does not isolate agents from one
 another: every process of the user may read what another one keeps.
-Whatever an agent may do still comes from the bridge's mode and the
-`agent` flags, the same for every agent; grants per agent come later.
+What each agent may do is its [grant](#grants-what-each-agent-may-do),
+within the bridge's mode and the `agent` flags.
 
 ```console
 $ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"hello","params":{"name":"my script"}}' \
@@ -238,6 +242,80 @@ $ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"call","params":{"collector":"
     | socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/egui-pop-agent-org.example.App.sock
 {"error":{"code":-32001,"message":"the user declined `files.trash`: it is destructive and needs the user's confirmation"},"id":1,"jsonrpc":"2.0"}
 ```
+
+## Grants: what each agent may do
+
+The application says what each of the socket's agents may do, with an
+`egui_pop_agent::Grant` per agent:
+
+| Field | Says |
+|---|---|
+| `commands` | the commands it may run: `*`, a prefix (`files.*`) or an id |
+| `read_only` | only read-only commands and calls that change nothing |
+| `values` | the value paths `value.set` and `value.reset` may write: `*`, a prefix (`settings/*`) or a path |
+| `ui` | `ui` may act for it (click, type, keys, scroll); reading the tree is always allowed |
+
+Three presets: `Grant::read_only()` (every command that reads, nothing
+written), `Grant::editor()` (every command offered to agents, no value
+written directly, no `ui` action) and `Grant::full()` (everything the
+bridge's mode allows). `.commands([..])`, `.values([..])` and `.ui(..)`
+narrow or widen one.
+
+```rust
+use egui_pop_agent::{AgentGrants, AgentGrantsExt as _, Grant};
+
+let app = App::builder()
+    .debug_bridge(BridgeMode::On)
+    .agent_socket_from_env_or_setting()
+    .agent_grants(
+        AgentGrants::new()
+            // A paired agent without a grant of its own (editor by default).
+            .paired(Grant::editor().commands(["library.*", "about.read"]))
+            // The paired agent `claude-code`.
+            .agent("claude-code", Grant::full().ui(false)),
+    );
+```
+
+- **Who gets which.** A client that said no `hello`
+  (`Origin::Agent("agent-socket")`) gets `AgentGrants::unpaired`,
+  read-only by default; a paired agent its own grant, or
+  `AgentGrants::paired`, the editor by default. Other origins (the user,
+  an in-process caller, a script) are not the socket's: grants say
+  nothing about them.
+- **Within the mode.** The bridge's mode stays the ceiling: under
+  `ReadOnly` no grant writes, and destructive calls are still confirmed
+  by the user ([Destructive calls](#destructive-calls-the-user-confirms)).
+- **Enforced** fail-closed, twice. The socket checks each `call` and each
+  `ui` action first, so the agent is answered `-32001` at once, before
+  anything runs or is asked (a call the bridge refuses anyway, its mode
+  or an `agent` flag, is answered by the bridge as before). And a listener named `pop.agent.grants`
+  (`egui_pop_agent::GRANTS`) on `pop.command.run` refuses any run its
+  grant does not allow, whatever path it took. It has priority
+  `grants::PRIORITY` (10 000): it runs before the application's own
+  listeners (`helios.policy`, for one), which see only what the grants
+  let through; one that must run first says
+  `ListenOpts::new().before(GRANTS)`.
+- **On the journal**, a refusal is `command.refused` (a command) or
+  `debug.call.refused` (another action, `ui` actions as collector `ui`),
+  with `by: "pop.agent.grants"` and the reason, from the agent's origin.
+- **Changed live** with `egui_pop_agent::grants::set_grants(app, ..)`;
+  `grants::grants(app)` reads them, `grants::grant_of(app, origin)` the
+  one an origin is held to.
+
+**The escape hatch.** Before grants, an unpaired client wrote whatever
+the mode allowed. A client that does not say `hello` yet (the MCP
+binary, `egui_pop_test::scenario::live`, a script) and must write, for a
+scenario run on a throwaway profile, needs the application to say so:
+
+```rust
+App::builder()
+    .debug_bridge(BridgeMode::On)
+    .agent_socket(AgentSocket::new())
+    .agent_grants(AgentGrants::new().allow_unpaired_writes());
+```
+
+`allow_unpaired_writes` gives unpaired clients `Grant::full()`, today's
+behaviour. Put it behind the same switch that turns the bridge `On`.
 
 ## MCP
 
@@ -301,13 +379,13 @@ application's own (`settled` stays reachable).
   `inspection` feature ([inspection.md](inspection.md)), a second
   connection.
 - **Windows** is compile-checked only.
-- **Same rights for every agent.** Agents are told apart (`hello`), not
-  yet granted differently, and a client that does not say `hello` is
-  not held to less; a pairing cannot be revoked yet but by removing
-  it from `agent-pairings.json`. The MCP binary does not say `hello`
-  yet.
+- **Grants are the application's.** The user cannot change them yet
+  (an Agents page comes later); a pairing cannot be revoked yet but by
+  removing it from `agent-pairings.json`. The MCP binary does not say
+  `hello` yet, so it reads only unless the application allows unpaired
+  writes.
 - **Confirmation through `ui`.** An agent allowed to act through `ui`
-  (the bridge on) can click the confirmation's button, which answers as
+  (the bridge on, its grant's `ui`) can click the confirmation's button, which answers as
   the user; the input lock while a confirmation is open comes later.
 - **A confirmation left open.** Past its deadline the dialog stays
   open; accepting it then runs nothing. Calls made in the application's
