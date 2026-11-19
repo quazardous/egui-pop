@@ -6,10 +6,12 @@ use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
 
 use egui_pop_core::debug::Feedback;
+use egui_pop_model::commands::Origin;
 use serde_json::{Value as Json, json};
 
 use crate::limits::MAX_REQUEST_BYTES;
-use crate::{DEFAULT_DEADLINE, Job, MAX_DEADLINE, Waker};
+use crate::pairing::{HELLO_DEADLINE, MAX_NAME_CHARS};
+use crate::{AGENT, DEFAULT_DEADLINE, Job, MAX_DEADLINE, Waker};
 
 /// How long a request other than `wait` waits for the UI thread: it is
 /// answered at the next pass, unless the application stopped drawing.
@@ -107,13 +109,39 @@ impl RpcError {
     }
 }
 
+/// Who a connection is: the paired agent it said `hello` as, if any.
+#[derive(Debug, Default)]
+pub(crate) struct Session {
+    agent: Option<String>,
+}
+
+impl Session {
+    /// Its calls' origin: `Origin::Agent("<id>")` once paired,
+    /// `Origin::Agent("agent-socket")` before.
+    pub(crate) fn origin(&self) -> Origin {
+        Origin::Agent(self.agent.as_deref().unwrap_or(AGENT).into())
+    }
+}
+
 /// Serves one connection until it closes, or until it sends a request
-/// longer than [`MAX_REQUEST_BYTES`].
-pub(crate) fn serve(
+/// longer than [`MAX_REQUEST_BYTES`]; a paired agent's closing is told
+/// to the UI thread (`agent.disconnected`).
+pub(crate) fn serve(reader: impl BufRead, writer: impl Write, tx: &Sender<Job>, wake: &Waker) {
+    let mut session = Session::default();
+    serve_session(reader, writer, tx, wake, &mut session);
+    if let Some(agent) = session.agent
+        && tx.send(Job::Gone { agent }).is_ok()
+    {
+        wake.wake();
+    }
+}
+
+fn serve_session(
     mut reader: impl BufRead,
     mut writer: impl Write,
     tx: &Sender<Job>,
     wake: &Waker,
+    session: &mut Session,
 ) {
     let mut buf = Vec::new();
     loop {
@@ -142,7 +170,7 @@ pub(crate) fn serve(
         }
         let response = match std::str::from_utf8(&buf) {
             Ok(line) if line.trim().is_empty() => continue,
-            Ok(line) => handle(line, tx, wake),
+            Ok(line) => handle(line, tx, wake, session),
             Err(e) => Some(error(
                 Json::Null,
                 RpcError::new(RpcError::PARSE, format!("not UTF-8: {e}")),
@@ -165,7 +193,12 @@ pub(crate) fn refuse(mut writer: impl Write, e: RpcError) {
 }
 
 /// The response to one line; `None` for a notification (no `id`).
-pub(crate) fn handle(line: &str, tx: &Sender<Job>, wake: &Waker) -> Option<Json> {
+pub(crate) fn handle(
+    line: &str,
+    tx: &Sender<Job>,
+    wake: &Waker,
+    session: &mut Session,
+) -> Option<Json> {
     let request: Json = match serde_json::from_str(line) {
         Ok(r) => r,
         Err(e) => {
@@ -199,14 +232,20 @@ pub(crate) fn handle(line: &str, tx: &Sender<Job>, wake: &Waker) -> Option<Json>
         ));
     };
     let params = request.get("params").cloned().unwrap_or(json!({}));
-    respond(dispatch(method, params, tx, wake))
+    respond(dispatch(method, params, tx, wake, session))
 }
 
 fn error(id: Json, e: RpcError) -> Json {
     json!({ "jsonrpc": "2.0", "id": id, "error": e.to_json() })
 }
 
-fn dispatch(method: &str, params: Json, tx: &Sender<Job>, wake: &Waker) -> Result<Json, RpcError> {
+fn dispatch(
+    method: &str,
+    params: Json,
+    tx: &Sender<Job>,
+    wake: &Waker,
+    session: &mut Session,
+) -> Result<Json, RpcError> {
     let (reply, rx) = mpsc::sync_channel(1);
     let str_param = |name: &str| -> Result<String, RpcError> {
         params
@@ -221,9 +260,41 @@ fn dispatch(method: &str, params: Json, tx: &Sender<Job>, wake: &Waker) -> Resul
         None | Some(Json::Null) => None,
         Some(_) => Some(str_param("window")?),
     };
+    let origin = session.origin();
     let mut within = ANSWER_WITHIN;
+    let mut hello = false;
     let job = match method {
-        "describe" => Job::Describe { reply },
+        "hello" => {
+            if let Some(agent) = &session.agent {
+                return Err(RpcError::params(format!(
+                    "this connection said `hello` already, as `{agent}`"
+                )));
+            }
+            let name = str_param("name")?;
+            if name.trim().is_empty() || name.chars().count() > MAX_NAME_CHARS {
+                return Err(RpcError::params(format!(
+                    "`name` is 1 to {MAX_NAME_CHARS} characters"
+                )));
+            }
+            let token = match params.get("token") {
+                None | Some(Json::Null) => None,
+                Some(_) => Some(str_param("token")?),
+            };
+            let held = params
+                .get("deadline_ms")
+                .and_then(Json::as_u64)
+                .map_or(HELLO_DEADLINE, Duration::from_millis)
+                .min(HELLO_DEADLINE);
+            within = held + Duration::from_secs(2);
+            hello = true;
+            Job::Hello {
+                name,
+                token,
+                deadline: Instant::now() + held,
+                reply,
+            }
+        }
+        "describe" => Job::Describe { origin, reply },
         "snapshot" => Job::Snapshot {
             collector: match params.get("collector") {
                 None | Some(Json::Null) => None,
@@ -237,6 +308,7 @@ fn dispatch(method: &str, params: Json, tx: &Sender<Job>, wake: &Waker) -> Resul
             action: str_param("action")?,
             args: params.get("args").cloned().unwrap_or(Json::Null),
             window,
+            origin,
             reply,
         },
         "wait" => {
@@ -252,6 +324,7 @@ fn dispatch(method: &str, params: Json, tx: &Sender<Job>, wake: &Waker) -> Resul
             Job::Wait {
                 args: params,
                 deadline: Instant::now() + held,
+                origin,
                 reply,
             }
         }
@@ -264,7 +337,7 @@ fn dispatch(method: &str, params: Json, tx: &Sender<Job>, wake: &Waker) -> Resul
         other => {
             return Err(RpcError::new(
                 RpcError::NO_METHOD,
-                format!("no method `{other}`: describe, snapshot, call, wait, ui"),
+                format!("no method `{other}`: hello, describe, snapshot, call, wait, ui"),
             ));
         }
     };
@@ -276,7 +349,12 @@ fn dispatch(method: &str, params: Json, tx: &Sender<Job>, wake: &Waker) -> Resul
     }
     wake.wake();
     match rx.recv_timeout(within) {
-        Ok(r) => r,
+        Ok(r) => {
+            if hello && let Ok(result) = &r {
+                session.agent = result["agent"].as_str().map(String::from);
+            }
+            r
+        }
         Err(RecvTimeoutError::Timeout) => Err(RpcError::new(
             RpcError::NO_ANSWER,
             "the application did not answer: no frame ran",

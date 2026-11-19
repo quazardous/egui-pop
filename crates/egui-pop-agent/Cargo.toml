@@ -22,6 +22,10 @@ egui-pop-core.workspace = true
 egui-pop-api.workspace = true
 log.workspace = true
 serde_json.workspace = true
+# MIT OR Apache-2.0: the system's randomness, for pairing tokens.
+getrandom = { version = "0.4", default-features = false }
+# MIT OR Apache-2.0: pairing tokens are kept as their SHA-256.
+sha2 = { version = "0.10", default-features = false }
 
 # Apache-2.0: the official MCP SDK, for the `mcp` feature.
 rmcp = { version = "3.9", optional = true, default-features = false, features = ["server", "transport-io"] }

@@ -1431,11 +1431,13 @@ dependencies = [
  "egui-pop-model",
  "egui-pop-test",
  "egui_kittest",
+ "getrandom 0.4.3",
  "interprocess",
  "log",
  "nix 0.31.3",
  "rmcp",
  "serde_json",
+ "sha2 0.10.9",
  "tokio",
  "widestring",
 ]
