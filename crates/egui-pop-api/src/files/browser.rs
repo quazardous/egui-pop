@@ -701,7 +701,10 @@ impl ThumbZoom {
             .copied()
             .find(|&s| s > n)
             .unwrap_or_else(|| (n as f32 * 1.25).ceil() as u32);
-        ThumbZoom::PerRow(next.min(Self::most_per_row(width, gap)).clamp(1, Self::MOST))
+        ThumbZoom::PerRow(
+            next.min(Self::most_per_row(width, gap))
+                .clamp(1, Self::MOST),
+        )
     }
 }
 

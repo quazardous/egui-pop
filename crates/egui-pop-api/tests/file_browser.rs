@@ -764,9 +764,15 @@ fn the_zoom_steps_through_counts_and_one_across_is_the_largest() {
     let (w, gap) = (630.0, 4.0);
     assert_eq!(ThumbZoom::default().zoomed_in(w, gap), ThumbZoom::PerRow(4));
     assert_eq!(ThumbZoom::PerRow(1).zoomed_in(w, gap), ThumbZoom::PerRow(1));
-    assert_eq!(ThumbZoom::default().zoomed_out(w, gap), ThumbZoom::PerRow(6));
+    assert_eq!(
+        ThumbZoom::default().zoomed_out(w, gap),
+        ThumbZoom::PerRow(6)
+    );
     // No more than fit: 64-point cells in 630 points.
-    assert_eq!(ThumbZoom::PerRow(9).zoomed_out(w, gap), ThumbZoom::PerRow(9));
+    assert_eq!(
+        ThumbZoom::PerRow(9).zoomed_out(w, gap),
+        ThumbZoom::PerRow(9)
+    );
     // The side fills the row.
     let side = ThumbZoom::PerRow(3).side(w, gap);
     assert!(3.0 * side + 2.0 * gap <= w && 3.0 * (side + 1.0) + 2.0 * gap > w);
