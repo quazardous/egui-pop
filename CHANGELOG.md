@@ -8,6 +8,14 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 2026-11-19
+
+Published: egui-pop-core 0.13.2.
+
+### Fixes
+
+- egui-pop-core: A focused slider, range slider or knob keeps its arrow keys: they step its value and no longer move the keyboard to a neighbouring widget after the first press (egui's arrow navigation, which a tab bar's grip beside a panel made reachable). It also says it reads its arrows, Page Up, Page Down, Home and End (`focus::reads_keys`), so they reach it before a global binding of theirs. And a thumbnail grid's rubber band senses only the grid's own width, no longer taking the clicks of widgets beside the grid in the same `Ui` (the scroll area clips its rows only up and down).
+
 ## 0.16.0 (2026-11-19)
 
 Published: egui-pop-model 0.11.1, egui-pop-core 0.13.1, egui-pop-api 0.14.0, egui-pop-test 0.15.0, egui-pop-viewport 0.13.1, egui-pop-i18n 0.14.0, egui-pop-agent 0.9.0, egui-pop-editors 0.14.0, egui-pop-platform 0.14.0, egui-pop-views 0.15.0, egui-pop-imaging 0.14.0, egui-pop 0.16.0.
