@@ -136,7 +136,9 @@ CI also runs `cargo deny check`, builds the gallery for
 `wasm32-unknown-unknown`, checks the changesets and the pull request's
 title, and runs `cargo semver-checks` on every published crate against
 crates.io, with the versions the pending changesets lead to: a break
-without a `major` changeset fails.
+without a `major` changeset fails. The semver checks run when a
+published crate or a changeset changed, nightly on `next`, and again
+before publishing.
 Pull requests target `next`, not `main`. A contributor's pull request
 from a fork runs the quick checks and merges once they pass. The
 maintainers' own pull requests (branches of this repository) run one

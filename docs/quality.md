@@ -59,7 +59,7 @@ Conventional Commits; it runs again when the title is edited.
 | Gallery for the web | the gallery built for `wasm32-unknown-unknown` with Trunk, then started in headless Chrome: it fails on a panic or without the start line | yes |
 | Packaging | `cargo publish --workspace --dry-run`: every published crate packages with its metadata | yes |
 | Changesets | `cargo xtask changeset-check`: a pull request changing a published crate adds a changeset (or is labelled `internal`); changesets name published crates and known bumps; a break travels up to the dependents | yes |
-| Semver checks | `cargo semver-checks` on every published crate against its latest release on crates.io, with the versions the pending changesets lead to: a break needs a `major` changeset ([Changesets and releases](releasing.md#semver-checks)) | yes |
+| Semver checks | `cargo semver-checks` on every published crate against its latest release on crates.io, with the versions the pending changesets lead to: a break needs a `major` changeset ([Changesets and releases](releasing.md#semver-checks)); only when a published crate or a changeset changed, and nightly on `next` ([`semver.yml`](../.github/workflows/semver.yml)) | yes |
 
 The tests job runs, among others:
 

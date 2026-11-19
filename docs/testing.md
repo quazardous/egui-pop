@@ -214,12 +214,23 @@ selected and skipped, the critical tests added) in the run's summary.
 | `deny` | a `Cargo.toml`, `Cargo.lock` or `deny.toml` changed |
 | `wasm` | a crate the gallery builds from changed (its tests and examples aside) |
 | `package` | a manifest changed, or a file was added to or removed from a crate |
-| `semver` | a crate `egui-pop` builds from changed (its tests and examples aside) |
+| `semver` | a crate `egui-pop` builds from changed (its tests and examples aside), or a changeset |
 
 A change under `.github/`, `.config/`, `.cargo/`, `xtask/`, to the
 workspace files, the test kit or the token files, or to any path no rule
 names runs every job. So do every push to `main` and a pull request
 labelled `ci:full`.
+
+A push to `next` runs every job too, but `semver`: it runs when what
+changed since `main` (the last commit that passed every job) selects it
+by the rule above. Comparing with `main` rather than with the previous
+push keeps the commits of a run that never finished (a newer push
+waiting replaces an older one). The job is its own workflow,
+`.github/workflows/semver.yml`, that `ci.yml` calls; it also runs every
+night on `next` (03:17 UTC), whatever changed, and by hand
+(`workflow_dispatch`). A failed nightly run is red on the Actions page,
+like CI. `cargo xtask publish` runs the checks again before uploading
+anything ([Changesets and releases](releasing.md#semver-checks)).
 
 A skipped job reports nothing, and a required check that never reports
 blocks a pull request: the last job, `CI`, needs every other one and

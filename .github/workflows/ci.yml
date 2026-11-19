@@ -27,8 +27,6 @@ env:
   RUSTDOCFLAGS: -D warnings
   # The minimum supported Rust version; also the toolchain CI checks with.
   RUST_TOOLCHAIN: "1.95"
-  # knope, which raises the versions from the changesets (knope.toml).
-  KNOPE_VERSION: "0.23.2"
 
 jobs:
   # The repository variable UBUNTU_ARCHIVE_DOWN set to `true` says Ubuntu's
@@ -86,6 +84,8 @@ jobs:
           FULL: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
           BASE: ${{ github.event.pull_request.base.sha }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
         run: |
           if [ "$FULL" = true ]; then
             cargo xtask affected --full --github
@@ -101,6 +101,19 @@ jobs:
               echo "$job=false" >> "$GITHUB_OUTPUT"
             done
             echo "Into next: quick checks only; tests, docs site, wasm, packaging and semver run on next."
+          fi
+          # A push to next runs every job but the semver checks: they run
+          # when what changed since main (the last commit that passed
+          # everything) touches a published crate's build input or a
+          # changeset; nightly and before publishing, they run anyway
+          # (docs/testing.md, "CI jobs").
+          if [ "$EVENT" = push ] && [ "$REF" = refs/heads/next ] \
+            && git rev-parse --verify -q origin/main >/dev/null; then
+            since_main="$(mktemp)"
+            GITHUB_OUTPUT="$since_main" GITHUB_STEP_SUMMARY=/dev/null \
+              cargo xtask affected --base origin/main --github
+            grep '^semver=' "$since_main" >> "$GITHUB_OUTPUT"
+            echo "Semver checks since main: $(grep '^semver=' "$since_main")"
           fi
 
   fmt:
@@ -446,67 +459,15 @@ jobs:
             cargo xtask changeset-check --base "$BASE"
           fi
 
-  # Every published crate against its latest release on crates.io, with
-  # the versions the pending changesets lead to: a break passes when its
-  # changeset says major (a new minor before 1.0), fails otherwise.
+  # Every published crate against its latest release on crates.io
+  # (semver.yml): only when a published crate's build input or a changeset
+  # changed since main, the last commit next passed everything with.
+  # semver.yml also runs nightly on next and by hand.
   semver:
     name: Semver checks
     needs: changes
     if: needs.changes.outputs.semver == 'true'
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v5
-      # It documents the features other than unstable ones: `views-video`, whose
-      # bindings ask for GStreamer's development packages, and `views-webview`,
-      # WebKitGTK's.
-      - name: Install GStreamer's and WebKitGTK's development packages
-        if: vars.UBUNTU_ARCHIVE_DOWN != 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-            libwebkit2gtk-4.1-dev
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-semver-checks
-      - uses: knope-dev/action@19617851f9f13ab2f27a05989c55efb18aca3675 # v2.1.2
-        with:
-          version: ${{ env.KNOPE_VERSION }}
-      # Raises the versions in this checkout only; nothing is committed.
-      - name: The versions the pending changesets lead to
-        run: |
-          git config user.name ci
-          git config user.email ci@invalid
-          knope pending-versions
-          git status --short
-      # A crate not yet on crates.io has no baseline to compare with: every
-      # crate to publish that crates.io's index does not know is left out
-      # until its first release (tools/semver-excludes.py).
-      - name: The crates with no release yet
-        run: |
-          excludes="$(python3 tools/semver-excludes.py)"
-          echo "SEMVER_EXCLUDES=$excludes" >> "$GITHUB_ENV"
-      - if: vars.UBUNTU_ARCHIVE_DOWN != 'true'
-        run: cargo semver-checks check-release --workspace $SEMVER_EXCLUDES
-      # Ubuntu's archive down, so no GStreamer or WebKitGTK: every crate
-      # whose features need neither as usual, then egui-pop and
-      # egui-pop-views with the features cargo-semver-checks would pick
-      # (all but unstable ones), less video and webview.
-      - name: Semver checks without the video and webview features
-        if: vars.UBUNTU_ARCHIVE_DOWN == 'true'
-        run: |
-          echo "::warning::UBUNTU_ARCHIVE_DOWN is set: semver checks leave out the video and webview features"
-          echo "- Semver checks left out the video and webview features (UBUNTU_ARCHIVE_DOWN)" >> "$GITHUB_STEP_SUMMARY"
-          cargo semver-checks check-release --workspace $SEMVER_EXCLUDES \
-            --exclude egui-pop --exclude egui-pop-views
-          for crate in egui-pop egui-pop-views; do
-            features="$(cargo metadata --no-deps --format-version 1 | jq -r --arg p "$crate" '
-              .packages[] | select(.name == $p) | .features | keys[]
-              | select(test("^(default|video|webview|views-video|views-webview|unstable|nightly|bench|no_std)$|^(_|unstable_|unstable-)") | not)
-            ' | paste -sd, -)"
-            echo "$crate: $features"
-            cargo semver-checks check-release --package "$crate" --default-features --features "$features"
-          done
+    uses: ./.github/workflows/semver.yml
 
   # The one required check: every job above passed or was skipped. A
   # skipped job reports nothing, so branch protection names this one.

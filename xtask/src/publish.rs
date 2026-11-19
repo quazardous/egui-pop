@@ -15,6 +15,13 @@
 //! time (HTTP 429). A refused crate is tried again after `--interval`
 //! seconds; any other failure stops the run. Running it again resumes
 //! where it stopped: what was published is skipped.
+//!
+//! Before uploading anything, every crate to publish that has an earlier
+//! release goes through `cargo semver-checks check-release` against
+//! crates.io: CI checks semver only when a published crate changes and
+//! nightly (`docs/testing.md`), so the release checks again itself.
+//! `--skip-semver` leaves that out, for a run resumed after the check
+//! passed.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{BufRead as _, BufReader};
@@ -39,10 +46,12 @@ pub(crate) struct Package {
 pub fn publish(args: &[String]) -> Result<(), String> {
     let mut dry_run = false;
     let mut interval = 600u64;
+    let mut semver = true;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--dry-run" => dry_run = true,
+            "--skip-semver" => semver = false,
             "--interval" => {
                 interval = it
                     .next()
@@ -58,6 +67,9 @@ pub fn publish(args: &[String]) -> Result<(), String> {
         "{} crates, in the order of their dependencies:",
         order.len()
     );
+    if semver && !dry_run {
+        semver_checks(&order)?;
+    }
     let mut stale = Vec::new();
     for p in &order {
         let state = if published(&p.name, &p.version)? {
@@ -80,6 +92,38 @@ pub fn publish(args: &[String]) -> Result<(), String> {
         );
     }
     Ok(())
+}
+
+/// `cargo semver-checks check-release` on the crates about to be
+/// published that crates.io already has a release of (a first release
+/// has no baseline). A break that its version does not declare stops
+/// the run before anything is uploaded.
+fn semver_checks(order: &[&Package]) -> Result<(), String> {
+    let mut checked = Vec::new();
+    for p in order {
+        if !published(&p.name, &p.version)? && released(&p.name)? {
+            checked.push(p.name.as_str());
+        }
+    }
+    if checked.is_empty() {
+        println!("semver checks: no crate to publish has an earlier release");
+        return Ok(());
+    }
+    println!("semver checks: {}", checked.join(", "));
+    let mut cmd = Command::new(cargo());
+    cmd.args(["semver-checks", "check-release"]);
+    for name in &checked {
+        cmd.args(["--package", name]);
+    }
+    let status = cmd
+        .current_dir(super::root())
+        .status()
+        .map_err(|e| format!("cargo semver-checks: {e} (cargo install cargo-semver-checks)"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("semver checks failed: nothing was published (--skip-semver to leave them out)".into())
+    }
 }
 
 /// Why the crate's folder may differ from what crates.io has for its
@@ -247,6 +291,22 @@ pub(crate) fn published(name: &str, version: &str) -> Result<bool, String> {
         "200" => Ok(true),
         "404" => Ok(false),
         code => Err(format!("crates.io answered {code} for {name} {version}")),
+    }
+}
+
+/// Whether crates.io has any release of the crate.
+fn released(name: &str) -> Result<bool, String> {
+    let url = format!("https://crates.io/api/v1/crates/{name}");
+    let out = Command::new("curl")
+        .args(["-s", "-o", "/dev/null", "-w", "%{http_code}"])
+        .args(["-A", "egui-pop xtask publish"])
+        .arg(&url)
+        .output()
+        .map_err(|e| format!("curl: {e}"))?;
+    match String::from_utf8_lossy(&out.stdout).trim() {
+        "200" => Ok(true),
+        "404" => Ok(false),
+        code => Err(format!("crates.io answered {code} for {name}")),
     }
 }
 
