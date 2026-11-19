@@ -183,6 +183,16 @@ what users have). A breaking change passes when its changeset makes
 the crate's version a new minor (before 1.0) and fails otherwise,
 naming what broke.
 
+The baseline is built from crates.io in a fresh resolution, which takes
+the newest version of each dependency unless told otherwise; one that
+needs a newer Rust than the pinned toolchain fails the build (kstring
+2.0.5, through gstreamer, needs Rust 1.96 for egui-pop 0.18.0's
+publish). `.cargo/config.toml` sets
+`resolver.incompatible-rust-versions = "fallback"`, so the checks, run
+from the checkout, pick versions the toolchain builds. A run from
+elsewhere sets `CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback`;
+never skip the checks for it.
+
 ## The switch to changesets
 
 Changesets started after 0.2.0. The changes merged before them are in
