@@ -8,6 +8,14 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 2026-11-19
+
+Published: egui-pop-api 0.13.1.
+
+### Fixes
+
+- egui-pop-api: Focusing a panel (`workbench.focus`, `<panel>.focus`, `AppHandle::focus_panel`) focuses the panel, no longer its first focusable widget: the panel's own stop holds the keyboard and Tab enters its widgets, as in classic applications. A slider first in a panel was focused that way, so the wheel over it stepped its value instead of scrolling the panel. A panel that wants a widget to take the keyboard names it with `focus::prefer` (a canvas under a toolbar, a search field a "go to the search" key lands in), as before. F6's regions still land on a region's first focusable widget.
+
 ## 0.15.0 (2026-11-18)
 
 Published: egui-pop-tokens 0.2.10, egui-pop-fit 0.1.2, egui-pop-hooks 0.2.1, egui-pop-model 0.11.0, egui-pop-core 0.13.0, egui-pop-api 0.13.0, egui-pop-test 0.14.0, egui-pop-viewport 0.13.0, egui-pop-i18n 0.13.0, egui-pop-agent 0.8.0, egui-pop-editors 0.13.0, egui-pop-platform 0.13.0, egui-pop-views 0.14.0, egui-pop-imaging 0.13.0, egui-pop 0.15.0.
