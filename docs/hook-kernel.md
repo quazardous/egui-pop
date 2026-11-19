@@ -45,12 +45,12 @@ given a longer deadline).
 ## The API
 
 ```rust
-use egui_pop_hooks::{Kernel, ListenOpts, Point, PointSpec};
+use egui_pop_hooks::{Kernel, ListenOpts, Point, PointId, PointSpec};
 
 /// The findings of a health report: each check adds its own.
 struct HealthReport;
 impl Point for HealthReport {
-    const ID: &'static str = "health.report";
+    const ID: PointId = PointId::new("health.report");
     type Input = ();
     type Value = Vec<String>;
 }
@@ -71,6 +71,11 @@ assert!(report.failures.is_empty());
   every listener reads, the `Value` a listener edits. Declaring it
   (`Kernel::declare`, with a `PointSpec`) is optional and adds a
   description and a deadline for introspection.
+- **Ids are checked** (bus-contract 0.5): a point id is a `PointId`,
+  checked when made, so a bad one in a `const` does not compile; a
+  listener id breaking the same rule (`<prefix>.<segment>…`, the first
+  segment `[a-z][a-z0-9_-]*`) is refused with `Refused::BadId` and
+  nothing is registered.
 - **Listeners** (`Kernel::listen`) have ids, unique per point. They run
   ordered by `after`/`before`, then by priority (higher first), then by
   registration order: the same listeners always run in the same order.
@@ -168,13 +173,16 @@ assert!(report.failures.is_empty());
   runs a fact bus (entries numbered, read again from a number, relayed
   between processes) hands it to the kernel with
   `Kernel::with_journal` and `Kernel::with_relay`; `bus.journal()` and
-  `bus.relay()` then answer, and points may be declared journaled
-  (`PointDecl::journaled`) or relayable (`PointDecl::relayable(codec)`).
+  `bus.relay()` (the `BusJournal` and `BusCrossing` extension traits of
+  `bus-contract-journal` and `bus-contract-crossing`) then answer, and
+  points may be declared journaled (`.facets(&[JOURNALED])`) or
+  relayable (`.facets(&[relayable_event::<P>()])`).
   Without them such points are refused (`Refused::Unsupported`), by
   `declare_all` and by `Kernel::declare_point` alike, and a relay with
   no journal is not offered. The kernel checks each publish itself: a
   point it does not hold declared journaled, or under another type, is
-  refused (`Refused::NotJournaled`, `Refused::TypeMismatch`) before the
+  refused (the journal contract's `Refused::Contract`,
+  `Refused::TypeMismatch`) before the
   host sees it. The host keeps the entries and runs the pump: each entry
   of a journaled point is delivered by a collect emit on the kernel
   (`Bus::collect_any`) from the pump's thread, never the publisher's, in

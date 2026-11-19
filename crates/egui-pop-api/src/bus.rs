@@ -88,7 +88,7 @@
 //! a [`JobAsk`], asked by [`AppHandle::request_job`]); whoever runs the
 //! job does the work and answers with its `job.*` events. Those events,
 //! and the job commands' `command.*` events, are delivered to the
-//! listeners of [`JobEvents`] (`pop.job.*`) in journal order, once each
+//! listeners of [`JobEvents`] (`pop.job.event`) in journal order, once each
 //! ([`AppHandle::deliver_events`]): the jobs plugin's model is one of them
 //! (`pop.jobs.model`), so no job state changes but on the bus. A plugin
 //! connecting or disconnecting is asked on [`PluginConnect`] and
@@ -144,7 +144,8 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use bus_contract::{ListenOpts, Point, PointDecl, PointKind};
+use bus_contract::{ListenOpts, Point, PointDecl, PointId, PointKind};
+use bus_contract_defer::BusDefer;
 use egui::{ViewportCommand, ViewportId};
 use egui_pop_core::lock;
 use serde::{Deserialize, Serialize};
@@ -156,6 +157,12 @@ use crate::windows::WindowId;
 
 pub use bus_contract;
 pub use bus_contract::{missing_targets, order_dump};
+/// The capability contracts egui-pop reaches on the bus (bus-contract
+/// 0.5 moved them out of the core).
+pub use bus_contract_crossing;
+pub use bus_contract_defer;
+pub use bus_contract_journal;
+pub use bus_contract_timings;
 pub use egui_pop_hooks;
 
 mod activate;
@@ -320,7 +327,7 @@ impl WindowRequest {
 pub struct WindowOpen;
 impl Point for WindowOpen {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.window.open";
+    const ID: PointId = PointId::new("pop.window.open");
     type Input = WindowRequest;
     type Value = Vec<String>;
 }
@@ -330,7 +337,7 @@ impl Point for WindowOpen {
 pub struct WindowClose;
 impl Point for WindowClose {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.window.close";
+    const ID: PointId = PointId::new("pop.window.close");
     type Input = WindowRequest;
     type Value = Vec<String>;
 }
@@ -340,7 +347,7 @@ impl Point for WindowClose {
 pub struct WindowReparent;
 impl Point for WindowReparent {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.window.reparent";
+    const ID: PointId = PointId::new("pop.window.reparent");
     type Input = WindowRequest;
     type Value = Vec<String>;
 }
@@ -350,7 +357,7 @@ impl Point for WindowReparent {
 pub struct PopupOpen;
 impl Point for PopupOpen {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.popup.open";
+    const ID: PointId = PointId::new("pop.popup.open");
     type Input = WindowRequest;
     type Value = Vec<String>;
 }
@@ -360,7 +367,7 @@ impl Point for PopupOpen {
 pub struct PopupClose;
 impl Point for PopupClose {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.popup.close";
+    const ID: PointId = PointId::new("pop.popup.close");
     type Input = WindowRequest;
     type Value = Vec<String>;
 }
@@ -373,19 +380,19 @@ impl Point for PopupClose {
 pub struct WindowActivate;
 impl Point for WindowActivate {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.window.activate";
+    const ID: PointId = PointId::new("pop.window.activate");
     type Input = WindowRequest;
     type Value = Vec<String>;
 }
 
 /// The window and popup points, in the order [`order_dump`] prints them.
 pub const WINDOW_POINTS: [&str; 6] = [
-    WindowOpen::ID,
-    WindowClose::ID,
-    WindowReparent::ID,
-    WindowActivate::ID,
-    PopupOpen::ID,
-    PopupClose::ID,
+    WindowOpen::ID.as_str(),
+    WindowClose::ID.as_str(),
+    WindowReparent::ID.as_str(),
+    WindowActivate::ID.as_str(),
+    PopupOpen::ID.as_str(),
+    PopupClose::ID.as_str(),
 ];
 
 /// A request about a job, asked of whoever runs it (the host, or the
@@ -447,7 +454,7 @@ impl JobAsk {
 pub struct JobCancel;
 impl Point for JobCancel {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.job.cancel";
+    const ID: PointId = PointId::new("pop.job.cancel");
     type Input = JobAsk;
     type Value = Vec<String>;
 }
@@ -457,7 +464,7 @@ impl Point for JobCancel {
 pub struct JobPause;
 impl Point for JobPause {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.job.pause";
+    const ID: PointId = PointId::new("pop.job.pause");
     type Input = JobAsk;
     type Value = Vec<String>;
 }
@@ -467,7 +474,7 @@ impl Point for JobPause {
 pub struct JobResume;
 impl Point for JobResume {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.job.resume";
+    const ID: PointId = PointId::new("pop.job.resume");
     type Input = JobAsk;
     type Value = Vec<String>;
 }
@@ -477,19 +484,19 @@ impl Point for JobResume {
 pub struct JobRetry;
 impl Point for JobRetry {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.job.retry";
+    const ID: PointId = PointId::new("pop.job.retry");
     type Input = JobAsk;
     type Value = Vec<String>;
 }
 
-/// A job event was said (`pop.job.*`): each `job.*` event of the journal, and
+/// A job event was said (`pop.job.event`): each `job.*` event of the journal, and
 /// each `command.*` event of a job command, delivered once, in journal
 /// order ([`AppHandle::deliver_events`]).
 #[derive(Debug)]
 pub struct JobEvents;
 impl Point for JobEvents {
     const KIND: PointKind = PointKind::Event;
-    const ID: &'static str = "pop.job.*";
+    const ID: PointId = PointId::new("pop.job.event");
     type Input = Event;
     type Value = ();
 }
@@ -533,7 +540,7 @@ impl PluginChange {
 pub struct PluginConnect;
 impl Point for PluginConnect {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.plugin.connect";
+    const ID: PointId = PointId::new("pop.plugin.connect");
     type Input = PluginChange;
     type Value = Vec<String>;
 }
@@ -546,51 +553,51 @@ impl Point for PluginConnect {
 pub struct PluginDisconnect;
 impl Point for PluginDisconnect {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.plugin.disconnect";
+    const ID: PointId = PointId::new("pop.plugin.disconnect");
     type Input = PluginChange;
     type Value = serde_json::Map<String, serde_json::Value>;
 }
 
 /// The job points, in the order [`order_dump`] prints them.
 pub const JOB_POINTS: [&str; 5] = [
-    JobCancel::ID,
-    JobPause::ID,
-    JobResume::ID,
-    JobRetry::ID,
-    JobEvents::ID,
+    JobCancel::ID.as_str(),
+    JobPause::ID.as_str(),
+    JobResume::ID.as_str(),
+    JobRetry::ID.as_str(),
+    JobEvents::ID.as_str(),
 ];
 
 /// The plugin points, in the order [`order_dump`] prints them.
-pub const PLUGIN_POINTS: [&str; 2] = [PluginConnect::ID, PluginDisconnect::ID];
+pub const PLUGIN_POINTS: [&str; 2] = [PluginConnect::ID.as_str(), PluginDisconnect::ID.as_str()];
 
 /// Every point egui-pop declares: the window, job, plugin, files,
 /// settings, drag, screen, panel state, layout, panel description and
 /// command and area points.
 pub const POINTS: [&str; 24] = [
-    WindowOpen::ID,
-    WindowClose::ID,
-    WindowReparent::ID,
-    WindowActivate::ID,
-    PopupOpen::ID,
-    PopupClose::ID,
-    JobCancel::ID,
-    JobPause::ID,
-    JobResume::ID,
-    JobRetry::ID,
-    JobEvents::ID,
-    PluginConnect::ID,
-    PluginDisconnect::ID,
-    FilesDrop::ID,
-    SettingsChanged::ID,
-    DragStart::ID,
-    DragDrop::ID,
-    ScreenAdded::ID,
-    ScreenRemoved::ID,
-    PanelStateSet::ID,
-    LayoutChanged::ID,
-    PanelDescribe::ID,
-    CommandRun::ID,
-    UiAreas::ID,
+    WindowOpen::ID.as_str(),
+    WindowClose::ID.as_str(),
+    WindowReparent::ID.as_str(),
+    WindowActivate::ID.as_str(),
+    PopupOpen::ID.as_str(),
+    PopupClose::ID.as_str(),
+    JobCancel::ID.as_str(),
+    JobPause::ID.as_str(),
+    JobResume::ID.as_str(),
+    JobRetry::ID.as_str(),
+    JobEvents::ID.as_str(),
+    PluginConnect::ID.as_str(),
+    PluginDisconnect::ID.as_str(),
+    FilesDrop::ID.as_str(),
+    SettingsChanged::ID.as_str(),
+    DragStart::ID.as_str(),
+    DragDrop::ID.as_str(),
+    ScreenAdded::ID.as_str(),
+    ScreenRemoved::ID.as_str(),
+    PanelStateSet::ID.as_str(),
+    LayoutChanged::ID.as_str(),
+    PanelDescribe::ID.as_str(),
+    CommandRun::ID.as_str(),
+    UiAreas::ID.as_str(),
 ];
 
 /// egui-pop's contract table (ADR 0030): every point it declares on the
@@ -1235,7 +1242,7 @@ impl AppHandle {
     /// it quits. For code that cannot be re-entered while it draws (a
     /// panel with its state borrowed). The ask's number; `None` when the
     /// application's bus does not offer the `Defer` capability
-    /// ([`bus_contract::Bus::defer`]), the caller then asking it at once
+    /// ([`bus_contract_defer::BusDefer::defer`]), the caller then asking it at once
     /// or keeping it.
     ///
     /// Asked in a detached panel's window, drawn inside the main window's
@@ -1256,7 +1263,7 @@ impl AppHandle {
     }
 
     /// Runs the requests asked on this thread for after the drawing
-    /// ([`AppHandle::ask`], or [`bus_contract::Defer`] on the
+    /// ([`AppHandle::ask`], or [`bus_contract_defer::Defer`] on the
     /// application's bus), in ask order, with this application as
     /// [`asking`]; what each did, failures logged and refusals noted.
     /// An ask made by a listener while it runs waits for the next drain.
@@ -1379,7 +1386,7 @@ impl AppHandle {
                 "egui_pop",
                 None,
                 "window.refused",
-                json!({ "request": WindowClose::ID, "window": request.window, "owner": request.owner, "reason": "no open window of this id" }),
+                json!({ "request": WindowClose::ID.as_str(), "window": request.window, "owner": request.owner, "reason": "no open window of this id" }),
             );
             return false;
         }
@@ -1402,7 +1409,7 @@ impl AppHandle {
                     "egui_pop",
                     None,
                     "window.refused",
-                    json!({ "request": WindowClose::ID, "window": request.window, "owner": request.owner, "vetoed_by": by, "reason": reason }),
+                    json!({ "request": WindowClose::ID.as_str(), "window": request.window, "owner": request.owner, "vetoed_by": by, "reason": reason }),
                 );
                 false
             }

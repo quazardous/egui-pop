@@ -10,7 +10,7 @@ pop.job.resume
 pop.job.retry
   1. pop.jobs.model (owner egui_pop.jobs): before pop.jobs.host
   2. pop.jobs.host (owner egui_pop.jobs): after pop.jobs.model
-pop.job.*
+pop.job.event
   1. pop.jobs.model (owner egui_pop.jobs): nothing
 pop.plugin.connect
   1. pop.jobs.adopt-on-connect (owner egui_pop.jobs): nothing

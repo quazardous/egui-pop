@@ -2,7 +2,7 @@
 //! process.
 //!
 //! When the application's bus offers the contract's
-//! [`Journal`](bus_contract::Journal) capability, egui-pop's journal
+//! [`Journal`](bus_contract_journal::Journal) capability, egui-pop's journal
 //! (`AppHandle::publish`, `AppHandle::events_since`,
 //! `AppHandle::last_event`, so agents' `wait` and the debug bridge's
 //! journal readers) is that journal, unless the host keeps a journal of
@@ -14,7 +14,8 @@
 
 use std::sync::Arc;
 
-use bus_contract::{AnyValue, Journal, JournalEntry, Point, PointDecl, PointKey, PointKind};
+use bus_contract::{AnyValue, Point, PointDecl, PointId, PointKey, PointKind};
+use bus_contract_journal::{JOURNALED, Journal, JournalEntry};
 use serde_json::Value as Json;
 
 use crate::host::{Event, Seq};
@@ -48,7 +49,7 @@ impl HostEvent {
 pub struct HostEvents;
 impl Point for HostEvents {
     const KIND: PointKind = PointKind::Event;
-    const ID: &'static str = "pop.journal";
+    const ID: PointId = PointId::new("pop.journal");
     type Input = HostEvent;
     type Value = ();
 }
@@ -59,7 +60,7 @@ impl Point for HostEvents {
 pub const HOST_JOURNAL: PointDecl = PointDecl::of::<HostEvents>(
     "egui-pop's journal on the bus's: each event egui-pop publishes (a command dispatched, done or failed, a job's progress, a link, an agent's session), recorded with a number shared with the application's journaled facts.",
 )
-.journaled();
+.facets(&[JOURNALED]);
 
 /// Records an event on the bus's journal; its number, or why not.
 pub(crate) fn publish(
@@ -99,7 +100,10 @@ pub(crate) fn event_of(entry: &JournalEntry) -> Event {
     }
     Event {
         seq: entry.seq,
-        source: entry.source.clone().unwrap_or_else(|| "bus".into()),
+        source: entry
+            .origin
+            .as_ref()
+            .map_or_else(|| "bus".into(), |o| o.process.clone()),
         cause: entry.cause,
         name: entry.kind.clone(),
         data: entry.text.as_deref().map_or(Json::Null, |t| {

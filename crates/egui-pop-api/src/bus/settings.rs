@@ -26,7 +26,7 @@
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
-use bus_contract::{Point, PointKind};
+use bus_contract::{Point, PointId, PointKind};
 use egui_pop_core::lock;
 use egui_pop_model::values::Store;
 use serde::Serialize;
@@ -74,13 +74,13 @@ impl SettingChange {
 pub struct SettingsChanged;
 impl Point for SettingsChanged {
     const KIND: PointKind = PointKind::Event;
-    const ID: &'static str = "pop.settings.changed";
+    const ID: PointId = PointId::new("pop.settings.changed");
     type Input = SettingChange;
     type Value = ();
 }
 
 /// The settings points, in the order [`super::order_dump`] prints them.
-pub const SETTINGS_POINTS: [&str; 1] = [SettingsChanged::ID];
+pub const SETTINGS_POINTS: [&str; 1] = [SettingsChanged::ID.as_str()];
 
 /// egui-pop's listener installing the theme a setting changes.
 pub const THEME_INSTALL: &str = "pop.theme.install";

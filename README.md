@@ -221,7 +221,7 @@ egui-pop makes its own), shared with its other libraries
 ```rust
 use std::sync::Arc;
 use egui_pop::api::bus::bus_contract::{
-    Bus, HookError, ListenOpts, Point, PointDecl, PointKind, declare_all,
+    Bus, HookError, ListenOpts, Point, PointDecl, PointId, PointKind, declare_all,
 };
 use egui_pop::api::bus::egui_pop_hooks::Kernel;
 use egui_pop::egui;
@@ -230,7 +230,7 @@ use egui_pop::prelude::*;
 /// The application's request, under its own prefix: a note is deleted.
 struct NoteDelete;
 impl Point for NoteDelete {
-    const ID: &'static str = "notes.note.delete";
+    const ID: PointId = PointId::new("notes.note.delete");
     const KIND: PointKind = PointKind::Request;
     type Input = String;
     type Value = ();

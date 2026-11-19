@@ -17,7 +17,9 @@ use std::sync::{Arc, Mutex};
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
-use egui_pop_api::bus::bus_contract::{self, HookError, ListenOpts, Point, PointDecl, PointKind};
+use egui_pop_api::bus::bus_contract::{
+    self, HookError, ListenOpts, Point, PointDecl, PointId, PointKind,
+};
 use egui_pop_api::bus::{self, COMMAND_POINTS, CONTRACT, CommandAsk, CommandRun};
 use egui_pop_api::{App, AppBuilder, Ctx, Plugin, PluginError};
 use egui_pop_model::commands::{CommandSpec, Origin};
@@ -30,7 +32,7 @@ use serde_json::Value as Json;
 struct Note;
 impl Point for Note {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "test.note";
+    const ID: PointId = PointId::new("test.note");
     type Input = String;
     type Value = Vec<String>;
 }

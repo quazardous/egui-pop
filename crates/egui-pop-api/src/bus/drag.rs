@@ -38,7 +38,7 @@ use std::any::Any;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use bus_contract::{Bus, ListenOpts, Point, PointKind};
+use bus_contract::{Bus, ListenOpts, Point, PointId, PointKind};
 use egui::{Context, Id, Pos2, Rect, Vec2, ViewportId};
 use egui_pop_core::lock;
 use serde::Serialize;
@@ -83,7 +83,7 @@ pub struct DragDelivery {
 pub struct DragStart;
 impl Point for DragStart {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.drag.start";
+    const ID: PointId = PointId::new("pop.drag.start");
     type Input = DragBegin;
     type Value = Vec<String>;
 }
@@ -94,13 +94,13 @@ impl Point for DragStart {
 pub struct DragDrop;
 impl Point for DragDrop {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.drag.drop";
+    const ID: PointId = PointId::new("pop.drag.drop");
     type Input = DragDelivery;
     type Value = Vec<String>;
 }
 
 /// The drag points, in the order [`super::order_dump`] prints them.
-pub const DRAG_POINTS: [&str; 2] = [DragStart::ID, DragDrop::ID];
+pub const DRAG_POINTS: [&str; 2] = [DragStart::ID.as_str(), DragDrop::ID.as_str()];
 
 /// egui-pop's listener of `pop.drag.drop`, first: the target that took it.
 pub const TARGET: &str = "pop.drag.target";

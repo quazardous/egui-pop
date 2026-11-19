@@ -52,6 +52,10 @@ theme-zip = ["egui-pop-core/theme-zip"]
 
 [dependencies]
 bus-contract.workspace = true
+bus-contract-defer.workspace = true
+bus-contract-timings.workspace = true
+bus-contract-journal.workspace = true
+bus-contract-crossing.workspace = true
 egui-pop-hooks.workspace = true
 profiling.workspace = true
 egui.workspace = true

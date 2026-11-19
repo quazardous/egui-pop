@@ -15,7 +15,7 @@ use std::rc::Rc;
 
 use egui::ViewportId;
 use egui_pop_api::App;
-use egui_pop_api::bus::bus_contract::{self, ListenOpts, Point, PointDecl, PointKind};
+use egui_pop_api::bus::bus_contract::{self, ListenOpts, Point, PointDecl, PointId, PointKind};
 use egui_pop_api::windows::{WindowId, WindowSpec};
 use egui_pop_test::windows::MultiWindow;
 
@@ -24,7 +24,7 @@ use egui_pop_test::windows::MultiWindow;
 struct Changed;
 impl Point for Changed {
     const KIND: PointKind = PointKind::Alter;
-    const ID: &'static str = "test.changed";
+    const ID: PointId = PointId::new("test.changed");
     type Input = String;
     type Value = ();
 }
@@ -34,7 +34,7 @@ impl Point for Changed {
 struct Note;
 impl Point for Note {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "test.note";
+    const ID: PointId = PointId::new("test.note");
     type Input = String;
     type Value = Vec<String>;
 }

@@ -30,7 +30,7 @@
 //! document its host names, through the `layout.save` step. An
 //! application keeping a copy of the layout elsewhere listens after it.
 
-use bus_contract::{Point, PointKind};
+use bus_contract::{Point, PointId, PointKind};
 use egui::Context;
 use serde::Serialize;
 
@@ -56,13 +56,13 @@ pub struct LayoutChange {
 pub struct LayoutChanged;
 impl Point for LayoutChanged {
     const KIND: PointKind = PointKind::Event;
-    const ID: &'static str = "pop.layout.changed";
+    const ID: PointId = PointId::new("pop.layout.changed");
     type Input = LayoutChange;
     type Value = ();
 }
 
 /// The layout points, in the order [`super::order_dump`] prints them.
-pub const LAYOUT_POINTS: [&str; 1] = [LayoutChanged::ID];
+pub const LAYOUT_POINTS: [&str; 1] = [LayoutChanged::ID.as_str()];
 
 /// egui-pop's listener saving the layout to the host's document (the
 /// `layout.save` step). An application's copy of the layout runs after

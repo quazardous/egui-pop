@@ -142,7 +142,7 @@ impl AppHandle {
                 "egui_pop",
                 request.cause,
                 "window.refused",
-                json!({ "request": WindowActivate::ID, "window": request.window, "owner": request.owner, "reason": "no open window of this id" }),
+                json!({ "request": WindowActivate::ID.as_str(), "window": request.window, "owner": request.owner, "reason": "no open window of this id" }),
             );
             return false;
         };

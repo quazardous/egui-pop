@@ -941,7 +941,8 @@ fn the_grants_listener_runs_before_the_applications_and_holds_any_path() {
             },
         )
         .unwrap();
-    let order = egui_pop_api::bus::order_dump(&*h.state().handle().bus(), &[CommandRun::ID]);
+    let order =
+        egui_pop_api::bus::order_dump(&*h.state().handle().bus(), &[CommandRun::ID.as_str()]);
     let (g, p) = (
         order.find("pop.agent.grants").expect("listed"),
         order.find("test.policy").expect("listed"),

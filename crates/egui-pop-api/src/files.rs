@@ -1967,8 +1967,8 @@ fn cancel_on_close(req: &WindowRequest, did: &mut Vec<String>) -> Result<(), Hoo
 /// picker's popup) and `pop.window.close` (the system chooser's window).
 fn listen(app: &AppHandle) {
     let bus = app.bus();
-    bus.unlisten(PopupClose::ID, CHOICE_LISTENER);
-    bus.unlisten(WindowClose::ID, CHOICE_LISTENER);
+    bus.unlisten(&PopupClose::ID, CHOICE_LISTENER);
+    bus.unlisten(&WindowClose::ID, CHOICE_LISTENER);
     let mine = || ListenOpts::new().owner(PLUGIN.as_str());
     let listened = [
         bus.listen::<PopupClose>(CHOICE_LISTENER, mine().before(REGISTRY), cancel_on_close),

@@ -662,17 +662,58 @@ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
 name = "bus-contract"
-version = "0.3.3"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca7f10309d0163ba09e7b0649d2d2ea100f64823dcdb5a5ea97cde92a69ad36c"
+checksum = "ba445cf665b95f93e2c9d33e10556d9efad68b8719e286fe2b96e5f829ad7566"
+
+[[package]]
+name = "bus-contract-crossing"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e2fd12a6e93df12de5360efcd21187a664f6e6f3448098e652c69f0db8ebca4"
+dependencies = [
+ "bus-contract",
+ "bus-contract-journal",
+]
+
+[[package]]
+name = "bus-contract-defer"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c26252cd230e17ffcfa7d51bed9c2a58759d8daafd29156c832a50bc57975dd"
+dependencies = [
+ "bus-contract",
+]
+
+[[package]]
+name = "bus-contract-journal"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f622fa481c98f00b77a24a8f2b20d4f9054e6a85789d0e1ef85eedef77d10e87"
+dependencies = [
+ "bus-contract",
+]
+
+[[package]]
+name = "bus-contract-timings"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66a3f6b43a67c181bc725a0629db2d049fa7cff23e240e1c7b627efd6e33ab7d"
+dependencies = [
+ "bus-contract",
+]
 
 [[package]]
 name = "bus-kernel"
-version = "0.1.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9af623399b719ee0e6b59c86ee85103b36eaa39170dd8be464a24f7d37df9552"
+checksum = "b09d385ceb0bb9c55a5321f419d80e4db45feedd2b893ca19f16789169a75bea"
 dependencies = [
  "bus-contract",
+ "bus-contract-crossing",
+ "bus-contract-defer",
+ "bus-contract-journal",
+ "bus-contract-timings",
  "web-time",
 ]
 
@@ -1457,6 +1498,10 @@ name = "egui-pop-api"
 version = "0.15.0"
 dependencies = [
  "bus-contract",
+ "bus-contract-crossing",
+ "bus-contract-defer",
+ "bus-contract-journal",
+ "bus-contract-timings",
  "bus-kernel",
  "eframe",
  "egui",
@@ -1924,9 +1969,9 @@ dependencies = [
 
 [[package]]
 name = "egui_stack"
-version = "0.29.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ccc7ef5d8abe3a7a1814b7f2ab16b1f19c102e5cb6382a6a8bb3ac16b5fd525"
+checksum = "af4b1cbe1096d6c435849c1c0121c89f953db1462ee060367a377828c1d52688"
 dependencies = [
  "bus-contract",
  "duplicate",
