@@ -28,6 +28,10 @@ Published: egui-pop-hooks 0.3.0, egui-pop-model 0.11.2, egui-pop-core 0.14.0, eg
 - egui-pop, egui-pop-api: The in-app picker lists through a `FileBrowser`: its folder is read off the interface thread on the system's file system, its entries coming in over the next frames (`FilePicker::loading` says while they do), and the browser filters, orders, groups and ranks them by the field's text. Its own listing, sorting and grouping code is gone; `FilePicker::entries` and `visible` read the browser. `FileBrowser::set_show_hidden` lists hidden entries too. Under a filter that refuses a group's main file, the browser shows the group's members as entries of their own, as the picker did.
 - egui-pop, egui-pop-api: The in-app picker keeps its highlight and selection in its `FileBrowser`, under a `SelectionPolicy` by the kind of choice: several files, one file, or one folder (saving: the folder Enter goes into). A click, the arrows, Ctrl+Space, select all and the rubber band go through the browser; `FilePicker::highlight` and `selected` stay public and read the browser after each step, and a value the application sets is taken at the next one, kept to the policy. The browser gains `SelectionPolicy::keeps_filtered` (the selection keeps the entries the filter or the query sets aside, as the picker's field always did) and `FileBrowser::set_focus`; a move without Shift takes the anchor along, a Shift range with no anchor starts from the entry the focus leaves, and a rubber band selects nothing when one entry is chosen at a time.
 
+### Fixes
+
+- egui-pop-api: A listener registered for a window (`AppHandle::listen_local_in`) whose window is closed or drawn in the main one no longer asks for a second main pass when the main window's pass runs it from the queue another thread filled: that pass draws what it changed. Run between passes, it still wakes the main window.
+
 ## 2026-11-19
 
 Published: egui-pop-core 0.13.3, egui-pop-api 0.14.1.
