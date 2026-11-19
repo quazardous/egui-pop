@@ -142,7 +142,10 @@ fn a_panel_focus_command_gives_it_the_keyboard() {
     );
     let _ = h.run_ok();
     assert_eq!(h.state().app.handle().focused_panel(), Some(NOTES));
-    assert_eq!(name(walk::focused(&h)), "Clear the notes…");
+    // The panel itself, not its first widget; Tab enters it.
+    assert_eq!(name(walk::focused(&h)), "Notes");
+    assert_eq!(name(walk::press(&mut h, TAB)), "Clear the notes…");
+    assert_eq!(h.state().app.handle().focused_panel(), Some(NOTES));
 }
 
 #[test]
@@ -241,8 +244,11 @@ impl Plugin for Panels {
         .panel(
             PanelSpec::new(SEARCH, "Search", Area::Bottom),
             move |ui, _| {
-                ui.text_edit_singleline(&mut *search.lock().unwrap())
+                let field = ui
+                    .text_edit_singleline(&mut *search.lock().unwrap())
                     .accessible_name("Search");
+                // A search panel names its field: "go to the search" types.
+                focus::prefer(ui.ctx(), field.id);
             },
         )?;
         ctx.command(
@@ -404,7 +410,8 @@ fn a_row_scrolled_out_of_its_panel_is_still_that_panels() {
 fn a_panel_focus_command_leaves_a_focus_already_inside_where_it_is() {
     let (mut h, _) = panels();
     run(&mut h, "demo.list.focus");
-    assert_eq!(name(walk::focused(&h)), "Row 0");
+    assert_eq!(name(walk::focused(&h)), "List");
+    assert_eq!(name(walk::press(&mut h, TAB)), "Row 0");
     assert_eq!(name(walk::press(&mut h, TAB)), "Row 1");
     run(&mut h, "demo.list.focus");
     assert_eq!(name(walk::focused(&h)), "Row 1");
@@ -522,7 +529,7 @@ fn a_detached_panel_takes_the_focus_and_the_keys() {
     run(&mut h, "demo.image.focus");
     assert_eq!(name(walk::focused(&h)), "Canvas");
     run(&mut h, "demo.list.focus");
-    assert_eq!(name(walk::focused(&h)), "Row 0");
+    assert_eq!(name(walk::focused(&h)), "List");
     assert_eq!(panel(&h), Some(LIST));
 }
 
@@ -915,6 +922,7 @@ fn f6_is_the_way_in_where_tab_hides_the_palettes() {
 fn f6_does_not_change_what_tab_goes_through() {
     let (mut h, _) = panels();
     run(&mut h, "demo.list.focus");
+    assert_eq!(name(walk::press(&mut h, TAB)), "Row 0");
     assert_eq!(name(walk::press(&mut h, TAB)), "Row 1");
     assert_eq!(name(walk::press(&mut h, SHIFT_TAB)), "Row 0");
 }
