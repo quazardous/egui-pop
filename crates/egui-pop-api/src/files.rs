@@ -70,11 +70,12 @@
 //!   ([`sort`]), in the list and the grid alike; it is kept in the host store
 //!   ([`SORT`]), and [`SETTING_FOLDERS_FIRST`] keeps folders first.
 //! - **The in-app picker's view**, with previews: a list, or a grid of
-//!   thumbnails from the same providers ([`PickerView`]), whose size is a
-//!   slider, `Ctrl` and the wheel, or `Ctrl` and `+` or `-`; only the cells
+//!   thumbnails from the same providers ([`PickerView`]), whose zoom (how
+//!   many thumbnails fill a row, one across at most, kept through a
+//!   resize) is a slider, `Ctrl` and the wheel, or `Ctrl` and `+` or `-`; only the cells
 //!   in view ask for a thumbnail ([`Previews::want`]), a placeholder stands
 //!   in until it is made, and the arrows move in two dimensions. Both are
-//!   kept in the host store ([`VIEW`], [`THUMBNAIL_SIZE`]).
+//!   kept in the host store ([`VIEW`], [`THUMBNAILS_PER_ROW`]).
 //! - **The in-app picker's folder** reads as breadcrumbs: each segment opens its
 //!   folder, the chevron after it lists its subfolders, and with too little room
 //!   the start collapses behind a menu, the deepest segments staying.
@@ -272,8 +273,15 @@ pub const VIEW: &str = "settings/files.view";
 pub const VIEWS: &str = "settings/files.views";
 /// How many dialogs' modes are kept.
 pub const VIEWS_KEPT: usize = 32;
-/// Where the size of the in-app picker's thumbnails is kept, in points.
+/// Where an older version kept the size of the in-app picker's thumbnails,
+/// in points. No longer declared: a value saved there is read until
+/// [`THUMBNAILS_PER_ROW`] is set, converted at the grid's width
+/// ([`thumbnail_zoom`]).
 pub const THUMBNAIL_SIZE: &str = "settings/files.thumbnail_size";
+/// How many thumbnails fill a row of the in-app picker's grid; 0 (the
+/// default) until the person zooms: an older size in points
+/// ([`THUMBNAIL_SIZE`]), else [`browser::ThumbZoom::DEFAULT_PER_ROW`].
+pub const THUMBNAILS_PER_ROW: &str = "settings/files.thumbnails_per_row";
 /// Where the in-app picker's order is kept: `name`, `-name` (descending), and
 /// `size`, `modified` or `type` the same way ([`sort::PickerSort`]).
 pub const SORT: &str = "settings/files.sort";
@@ -1700,13 +1708,14 @@ impl Plugin for FilesPlugin {
                     ),
                 ),
                 (
-                    THUMBNAIL_SIZE,
-                    Descriptor::float(
-                        "File picker thumbnail size",
-                        f64::from(THUMBNAIL_MIN_SIZE),
-                        f64::from(THUMBNAIL_MAX_SIZE),
-                        f64::from(THUMBNAIL_DEFAULT_SIZE),
-                    ),
+                    THUMBNAILS_PER_ROW,
+                    Descriptor::int(
+                        "File picker thumbnails per row",
+                        0,
+                        i64::from(browser::ThumbZoom::MOST),
+                        0,
+                    )
+                    .description("0: as first shown, or as an older version kept it."),
                 ),
                 (
                     SORT,
@@ -2244,14 +2253,16 @@ pub const PANE_MIN_WIDTH: f32 = 120.0;
 /// go, the type first and the modification time last.
 pub const NAME_MIN_WIDTH: f32 = 140.0;
 
-/// The smallest thumbnails of the picker's grid, in points.
-pub const THUMBNAIL_MIN_SIZE: f32 = 64.0;
-/// The largest thumbnails of the picker's grid, in points: the side
-/// previews are made at by default ([`preview::MAX_SIDE`]).
+/// The smallest thumbnails of the picker's grid, in points: its zoom shows
+/// no more per row than fit.
+pub const THUMBNAIL_MIN_SIZE: f32 = browser::ThumbnailsMode::MIN_SIZE;
+/// The side previews are made at by default ([`preview::MAX_SIDE`]); the
+/// grid's thumbnails follow its zoom, one across at most.
 pub const THUMBNAIL_MAX_SIZE: f32 = 256.0;
-/// The size of the picker's thumbnails at first, in points.
+/// The size of the picker's thumbnails an older version started at, in
+/// points.
 pub const THUMBNAIL_DEFAULT_SIZE: f32 = 128.0;
-/// `Ctrl` and `+` or `-` multiply or divide the thumbnails' size by this.
+/// `Ctrl` and the wheel step the zoom once they have scaled it this much.
 const THUMBNAIL_STEP: f32 = 1.25;
 /// The width of the slider of the thumbnails' size.
 const THUMBNAIL_SLIDER_WIDTH: f32 = 170.0;
@@ -2393,7 +2404,7 @@ fn load_view(app: &AppHandle, picker: &mut FilePicker) {
         PickerView::List
     };
     if !picker.thumbnail_dragging {
-        picker.thumbnail_size = thumbnail_size(app);
+        picker.zoom = thumbnail_zoom(app);
     }
     picker.set_sort(sort_order(app));
     picker.set_folders_first(folders_first(app));
@@ -2412,8 +2423,11 @@ fn keep_view(app: &AppHandle, picker: &FilePicker) {
     if view_for(app, &picker.dialog).and_then(|m| PickerView::parse(&m)) != Some(picker.view) {
         want_view_for(app, &picker.dialog, picker.view.as_str());
     }
-    if !picker.thumbnail_dragging && picker.thumbnail_size != thumbnail_size(app) {
-        want_thumbnail_size(app, picker.thumbnail_size);
+    if !picker.thumbnail_dragging
+        && let Some(n) = picker.zoom.per_row()
+        && thumbnail_zoom(app) != browser::ThumbZoom::PerRow(n)
+    {
+        want_thumbnails_per_row(app, n);
     }
     if picker.sort != sort_order(app) {
         want_sort_order(app, picker.sort);
@@ -2567,18 +2581,30 @@ pub fn dialog_of(request: &FileRequest) -> String {
     })
 }
 
-/// The size of the in-app picker's thumbnails, as kept.
-pub fn thumbnail_size(app: &AppHandle) -> f32 {
-    lock(&app.store())
-        .get(THUMBNAIL_SIZE)
-        .and_then(|e| e.value.as_f64())
-        .map_or(THUMBNAIL_DEFAULT_SIZE, |s| s as f32)
+/// The zoom of the in-app picker's grid, as kept: the count per row once
+/// set ([`THUMBNAILS_PER_ROW`]); before, the size in points an older
+/// version kept ([`THUMBNAIL_SIZE`]), which the grid converts at its
+/// width when next drawn; else [`browser::ThumbZoom::DEFAULT_PER_ROW`].
+pub fn thumbnail_zoom(app: &AppHandle) -> browser::ThumbZoom {
+    let store = app.store();
+    let store = lock(&store);
+    match store.get(THUMBNAILS_PER_ROW).and_then(|e| e.value.as_i64()) {
+        Some(n) if n >= 1 => browser::ThumbZoom::PerRow(n as u32),
+        _ => store
+            .get(THUMBNAIL_SIZE)
+            .map(|e| e.value.to_json())
+            .or_else(|| store.pending().get(THUMBNAIL_SIZE).cloned())
+            .and_then(|j| j.as_f64())
+            .map_or_else(browser::ThumbZoom::default, |p| {
+                browser::ThumbZoom::Points(p as f32)
+            }),
+    }
 }
 
-/// Keeps the size of the in-app picker's thumbnails.
-pub fn want_thumbnail_size(app: &AppHandle, size: f32) {
-    let size = size.clamp(THUMBNAIL_MIN_SIZE, THUMBNAIL_MAX_SIZE);
-    keep_value(app, THUMBNAIL_SIZE, Value::Float(f64::from(size)));
+/// Keeps the zoom of the in-app picker's grid: this many per row.
+pub fn want_thumbnails_per_row(app: &AppHandle, per_row: u32) {
+    let n = per_row.clamp(1, browser::ThumbZoom::MOST);
+    keep_value(app, THUMBNAILS_PER_ROW, Value::Int(i64::from(n)));
 }
 
 /// The in-app picker's order, as kept.
@@ -2962,7 +2988,9 @@ pub struct FilePicker {
     pub view: PickerView,
     /// The dialog its view is kept under ([`dialog_of`]).
     pub dialog: String,
-    /// The thumbnails' size in the grid, in points.
+    /// The thumbnails' side in the grid, in points, as last drawn from the
+    /// zoom ([`FilePicker::zoom`]). Set to another size, it becomes the
+    /// zoom at the next draw (the count per row it gives there).
     pub thumbnail_size: f32,
     /// The order of the entries, in the list and in the grid.
     pub sort: PickerSort,
@@ -3050,6 +3078,15 @@ pub struct FilePicker {
     focus_cell: bool,
     /// The slider of the thumbnails' size is being dragged.
     thumbnail_dragging: bool,
+    /// How many thumbnails fill a row of the grid.
+    zoom: browser::ThumbZoom,
+    /// The side last drawn: [`FilePicker::thumbnail_size`] changed from
+    /// it is a size asked in points.
+    drawn_side: f32,
+    /// `Ctrl` and the wheel's zoom since the last step.
+    wheel_zoom: f32,
+    /// The grid's room at the last draw (width, gap).
+    grid_room: (f32, f32),
     /// The grid asked for thumbnails at the last frame.
     asked_thumbnails: bool,
     /// The grid's thumbnails, from the previews (shared: the picker is
@@ -3151,6 +3188,10 @@ impl FilePicker {
             reveal_cell: false,
             focus_cell: false,
             thumbnail_dragging: false,
+            zoom: browser::ThumbZoom::default(),
+            drawn_side: THUMBNAIL_DEFAULT_SIZE,
+            wheel_zoom: 1.0,
+            grid_room: (800.0, 4.0),
             asked_thumbnails: false,
             thumbnails: None,
             band_base: None,
@@ -4084,6 +4125,7 @@ impl FilePicker {
             "pane_width": self.pane_width,
             "view": self.view.as_str(),
             "thumbnail_size": self.thumbnail_size,
+            "thumbnails_per_row": self.zoom.per_row(),
             "columns": self.columns,
             "sort": self.sort.as_text(),
             "folders_first": self.folders_first,
@@ -4287,11 +4329,12 @@ impl FilePicker {
                     i.consume_key(Modifiers::COMMAND, Key::Minus),
                 )
             });
+            let (width, gap) = self.grid_room;
             if bigger {
-                self.resize_thumbnails(self.thumbnail_size * THUMBNAIL_STEP);
+                self.set_zoom(self.zoom.zoomed_in(width, gap));
             }
             if smaller {
-                self.resize_thumbnails(self.thumbnail_size / THUMBNAIL_STEP);
+                self.set_zoom(self.zoom.zoomed_out(width, gap));
             }
         }
         let (toggle, select_all) = if waiting || self.declared_keys {
@@ -4710,10 +4753,29 @@ impl FilePicker {
         self.view == PickerView::Columns && self.kind == ChooseKind::Folder
     }
 
-    /// A new size for the thumbnails; the highlighted cell stays in view.
-    fn resize_thumbnails(&mut self, size: f32) {
-        self.thumbnail_size = size.clamp(THUMBNAIL_MIN_SIZE, THUMBNAIL_MAX_SIZE);
+    /// How many thumbnails fill a row of the grid.
+    pub fn zoom(&self) -> browser::ThumbZoom {
+        self.zoom
+    }
+
+    /// A new zoom for the grid; the highlighted cell stays in view.
+    pub fn set_zoom(&mut self, zoom: browser::ThumbZoom) {
+        self.zoom = zoom;
         self.reveal_cell = true;
+    }
+
+    /// The zoom as the side its thumbnails are drawn at in `ui`'s room;
+    /// a size asked in points since the last draw becomes the zoom.
+    fn thumbnail_side(&mut self, ui: &Ui) -> f32 {
+        let (width, gap) = egui_pop_core::thumbnail::ThumbnailGrid::room(ui);
+        self.grid_room = (width, gap);
+        if self.thumbnail_size != self.drawn_side {
+            self.zoom = browser::ThumbZoom::Points(self.thumbnail_size);
+        }
+        self.zoom = self.zoom.resolved(width, gap);
+        self.thumbnail_size = self.zoom.side(width, gap);
+        self.drawn_side = self.thumbnail_size;
+        self.thumbnail_size
     }
 
     /// The application's choices, on a line of their own above the buttons:
@@ -4965,14 +5027,19 @@ impl FilePicker {
         let name = strings::tr(ui.ctx(), &txt::FILES_THUMBNAIL_SIZE);
         let height = ui.spacing().interact_size.y;
         ui.allocate_ui(vec2(THUMBNAIL_SLIDER_WIDTH, height), |ui| {
-            let mut size = f64::from(self.thumbnail_size);
-            let range = f64::from(THUMBNAIL_MIN_SIZE)..=f64::from(THUMBNAIL_MAX_SIZE);
-            let out = Slider::new(&mut size, &name, range)
+            // Thumbnails per row, fewer (larger) to the right: the value
+            // is the count negated, shown as the count.
+            let (width, gap) = self.grid_room;
+            let most = f64::from(browser::ThumbZoom::most_per_row(width, gap));
+            let mut value = -f64::from(self.zoom.shown_per_row(width, gap));
+            let out = Slider::new(&mut value, &name, -most..=-1.0)
+                .integer()
                 .step(1.0)
-                .default(f64::from(THUMBNAIL_DEFAULT_SIZE))
+                .display_scale(-1.0)
+                .default(-f64::from(browser::ThumbZoom::DEFAULT_PER_ROW).max(-most))
                 .show(ui);
             if out.response.changed() {
-                self.resize_thumbnails(size as f32);
+                self.set_zoom(browser::ThumbZoom::PerRow((-value).round().max(1.0) as u32));
             }
             self.thumbnail_dragging = out.response.dragged();
         });
@@ -5390,7 +5457,17 @@ impl FilePicker {
             if ui.rect_contains_pointer(area) {
                 let zoom = ui.input(|i| i.zoom_delta());
                 if (zoom - 1.0).abs() > f32::EPSILON {
-                    self.resize_thumbnails(self.thumbnail_size * zoom);
+                    // Gathered until it makes a step: a pinch's small
+                    // deltas zoom too.
+                    self.wheel_zoom *= zoom;
+                    let (width, gap) = self.grid_room;
+                    if self.wheel_zoom >= THUMBNAIL_STEP - 1e-3 {
+                        self.set_zoom(self.zoom.zoomed_in(width, gap));
+                        self.wheel_zoom = 1.0;
+                    } else if self.wheel_zoom <= 1.0 / THUMBNAIL_STEP + 1e-3 {
+                        self.set_zoom(self.zoom.zoomed_out(width, gap));
+                        self.wheel_zoom = 1.0;
+                    }
                 }
             }
         }
@@ -5418,7 +5495,11 @@ impl FilePicker {
             anchor: self.anchor.clone(),
         };
         let mut settings = browser::ModeSettings {
-            thumbnail_size: self.thumbnail_size,
+            thumbnail_size: if grid {
+                self.thumbnail_side(ui)
+            } else {
+                self.thumbnail_size
+            },
             ..browser::ModeSettings::default()
         };
         let name = strings::tr_args(

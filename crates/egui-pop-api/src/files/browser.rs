@@ -572,7 +572,8 @@ pub struct ModeInfo {
 /// A mode's own settings, kept per browser.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModeSettings {
-    /// The thumbnails' side, in points.
+    /// The thumbnails' side, in points: the browser sets it from its zoom
+    /// ([`ThumbZoom::side`]) before each draw.
     pub thumbnail_size: f32,
     /// The agenda's level and its collapsed groups.
     pub agenda: AgendaSettings,
@@ -584,6 +585,137 @@ impl Default for ModeSettings {
             thumbnail_size: 128.0,
             agenda: AgendaSettings::default(),
         }
+    }
+}
+
+/// A thumbnail grid's zoom: how many thumbnails fill a row, the API's
+/// side of the library grid's `Zoom` (`egui_pop_views::library::grid`,
+/// which converts from and into it).
+///
+/// The cells share the grid's width, gaps aside, so the zoom survives a
+/// resize: a grid made wider shows the same count of larger thumbnails.
+/// `PerRow(1)` shows one thumbnail across. A grid too narrow for `n`
+/// cells of [`ThumbnailsMode::MIN_SIZE`] shows as many as fit, and keeps
+/// `n` for when it grows again. A host turns the zoom into
+/// [`ModeSettings::thumbnail_size`] before a mode draws
+/// ([`ThumbZoom::side`]), with the room the grid will have
+/// ([`ThumbnailGrid::room`](egui_pop_core::thumbnail::ThumbnailGrid::room)).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ThumbZoom {
+    /// This many thumbnails per row (at least one).
+    PerRow(u32),
+    /// A size in points, as an older setting kept it: turned into the
+    /// count per row it gives at the grid's width on the next draw
+    /// ([`ThumbZoom::from_points`]).
+    Points(f32),
+}
+
+impl Default for ThumbZoom {
+    fn default() -> Self {
+        ThumbZoom::PerRow(ThumbZoom::DEFAULT_PER_ROW)
+    }
+}
+
+impl ThumbZoom {
+    /// The zoom at first: this many thumbnails per row.
+    pub const DEFAULT_PER_ROW: u32 = 5;
+    /// The counts per row the zoom steps through (`Ctrl` and `+` or
+    /// `-`); past the last, each step out adds a quarter.
+    pub const STEPS: [u32; 13] = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32];
+    /// The most thumbnails per row a zoom asks for.
+    pub const MOST: u32 = 64;
+
+    /// The count per row a size in `points` gives in a grid `width`
+    /// points wide with `gap` points between cells: how a size kept in
+    /// points converts, once.
+    pub fn from_points(points: f32, width: f32, gap: f32) -> ThumbZoom {
+        let points = if points.is_finite() {
+            points.max(ThumbnailsMode::MIN_SIZE)
+        } else {
+            ThumbnailsMode::MIN_SIZE
+        };
+        ThumbZoom::PerRow(fitting(points, width, gap))
+    }
+
+    /// How many thumbnails of at least [`ThumbnailsMode::MIN_SIZE`] fit
+    /// in a row `width` points wide with `gap` points between cells (at
+    /// least one).
+    pub fn most_per_row(width: f32, gap: f32) -> u32 {
+        fitting(ThumbnailsMode::MIN_SIZE, width, gap)
+    }
+
+    /// The count per row, unless it is still a size in points.
+    pub fn per_row(self) -> Option<u32> {
+        match self {
+            ThumbZoom::PerRow(n) => Some(n.clamp(1, Self::MOST)),
+            ThumbZoom::Points(_) => None,
+        }
+    }
+
+    /// The zoom as a count per row, a size in points converted at
+    /// `width`; the count itself, even past what fits.
+    #[must_use]
+    pub fn resolved(self, width: f32, gap: f32) -> ThumbZoom {
+        match self {
+            ThumbZoom::PerRow(n) => ThumbZoom::PerRow(n.clamp(1, Self::MOST)),
+            ThumbZoom::Points(p) => ThumbZoom::from_points(p, width, gap),
+        }
+    }
+
+    /// The count a grid `width` points wide shows: the zoom's, or as many
+    /// as fit.
+    pub fn shown_per_row(self, width: f32, gap: f32) -> u32 {
+        let n = self.resolved(width, gap).per_row().unwrap_or(1);
+        n.min(Self::most_per_row(width, gap))
+    }
+
+    /// The thumbnails' side, in whole points, for the zoom in a grid
+    /// `width` points wide with `gap` points between cells: what a host
+    /// sets [`ModeSettings::thumbnail_size`] to.
+    pub fn side(self, width: f32, gap: f32) -> f32 {
+        let n = self.shown_per_row(width, gap) as f32;
+        ((width + gap) / n - gap).floor().max(1.0)
+    }
+
+    /// One step closer: fewer, larger thumbnails per row (down to one).
+    /// A size in points steps from the count it gives at `width`.
+    #[must_use]
+    pub fn zoomed_in(self, width: f32, gap: f32) -> ThumbZoom {
+        let n = self.shown_per_row(width, gap);
+        ThumbZoom::PerRow(
+            Self::STEPS
+                .iter()
+                .rev()
+                .copied()
+                .find(|&s| s < n)
+                .unwrap_or(1),
+        )
+    }
+
+    /// One step out: more, smaller thumbnails per row, while they fit.
+    #[must_use]
+    pub fn zoomed_out(self, width: f32, gap: f32) -> ThumbZoom {
+        let n = self.shown_per_row(width, gap);
+        let next = Self::STEPS
+            .iter()
+            .copied()
+            .find(|&s| s > n)
+            .unwrap_or_else(|| (n as f32 * 1.25).ceil() as u32);
+        ThumbZoom::PerRow(
+            next.min(Self::most_per_row(width, gap))
+                .clamp(1, Self::MOST),
+        )
+    }
+}
+
+/// How many cells `size` points wide fit in `width` with `gap` between
+/// them (at least one): the grid's own rule.
+fn fitting(size: f32, width: f32, gap: f32) -> u32 {
+    let n = ((width + gap) / (size + gap)).floor();
+    if n.is_finite() && n >= 1.0 {
+        (n as u32).min(ThumbZoom::MOST)
+    } else {
+        1
     }
 }
 
@@ -1917,7 +2049,10 @@ pub struct ThumbnailsMode {
 }
 
 impl ThumbnailsMode {
+    /// The smallest thumbnails: a zoom shows no more per row than fit.
     pub const MIN_SIZE: f32 = 64.0;
+    /// The largest thumbnails of the modes drawn at a size (the agenda);
+    /// the grid's follow its zoom ([`ThumbZoom`]), up to one across.
     pub const MAX_SIZE: f32 = 256.0;
 }
 
@@ -1944,10 +2079,8 @@ impl ViewMode for ThumbnailsMode {
 
     fn show(&mut self, ui: &mut Ui, cx: ModeContext<'_>) -> ModeOutput {
         let mut out = ModeOutput::default();
-        let side = cx
-            .settings
-            .thumbnail_size
-            .clamp(Self::MIN_SIZE, Self::MAX_SIZE);
+        // As large as the zoom makes it: one thumbnail across at most.
+        let side = cx.settings.thumbnail_size.max(Self::MIN_SIZE);
         let mut plain = PlainDrawer {
             entries: cx.entries,
             selection: cx.selection,
@@ -3548,6 +3681,12 @@ pub struct FileBrowser {
     mode_id: String,
     mode: Box<dyn ViewMode>,
     settings: ModeSettings,
+    /// How many thumbnails fill a row; turned into the settings' size at
+    /// each draw.
+    zoom: ThumbZoom,
+    /// The grid's room at the last draw (width, gap): what the toolbar's
+    /// zoom reads.
+    grid_room: (f32, f32),
     thumbnails: Arc<dyn ThumbnailProvider>,
     type_ahead: TypeAhead,
     reveal: bool,
@@ -4040,6 +4179,8 @@ impl FileBrowser {
             mode_id,
             mode,
             settings: ModeSettings::default(),
+            zoom: ThumbZoom::default(),
+            grid_room: (800.0, 4.0),
             thumbnails: Arc::new(NoThumbnails),
             type_ahead: TypeAhead::default(),
             reveal: false,
@@ -4698,10 +4839,26 @@ impl FileBrowser {
         true
     }
 
-    /// The thumbnails' side, in points.
+    /// A size of thumbnails in points (an older setting's): the next draw
+    /// turns it into the count per row it gives there ([`ThumbZoom`]).
     pub fn set_thumbnail_size(&mut self, side: f32) {
-        self.settings.thumbnail_size =
-            side.clamp(ThumbnailsMode::MIN_SIZE, ThumbnailsMode::MAX_SIZE);
+        self.zoom = ThumbZoom::Points(side.max(ThumbnailsMode::MIN_SIZE));
+    }
+
+    /// The thumbnails' zoom: how many fill a row.
+    pub fn zoom(&self) -> ThumbZoom {
+        self.zoom
+    }
+
+    /// Sets the thumbnails' zoom; it survives a resize.
+    pub fn set_zoom(&mut self, zoom: ThumbZoom) {
+        self.zoom = zoom;
+        self.reveal = true;
+    }
+
+    /// This many thumbnails per row (one: a thumbnail across).
+    pub fn set_thumbnails_per_row(&mut self, per_row: u32) {
+        self.set_zoom(ThumbZoom::PerRow(per_row.clamp(1, ThumbZoom::MOST)));
     }
 
     /// Focuses an entry, by path; with `extend`, selects the range from the
@@ -4993,15 +5150,19 @@ impl FileBrowser {
                 .iter()
                 .any(|m| m.id == self.mode_id && m.needs.thumbnails)
             {
+                // Thumbnails per row, fewer to the right: larger ones.
                 let name = strings::tr(ui.ctx(), &crate::strings::FILES_THUMBNAIL_SIZE);
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.settings.thumbnail_size,
-                        ThumbnailsMode::MIN_SIZE..=ThumbnailsMode::MAX_SIZE,
-                    )
-                    .show_value(false)
-                    .text(name),
+                let (width, gap) = self.grid_room;
+                let most = ThumbZoom::most_per_row(width, gap);
+                let mut per_row = self.zoom.shown_per_row(width, gap);
+                let r = ui.add(
+                    egui::Slider::new(&mut per_row, most..=1)
+                        .show_value(false)
+                        .text(name),
                 );
+                if r.changed() {
+                    self.set_thumbnails_per_row(per_row);
+                }
             }
             // The order, unless the mode orders by time on its own.
             if !infos.iter().any(|m| m.id == self.mode_id && m.needs.time) {
@@ -5148,6 +5309,11 @@ impl FileBrowser {
             };
         thumbnails.begin_frame(ui.ctx());
         let inner = ui.scope(|ui| {
+            // The zoom, a count per row, as the side the modes draw at.
+            let (width, gap) = ThumbnailGrid::room(ui);
+            self.grid_room = (width, gap);
+            self.zoom = self.zoom.resolved(width, gap);
+            self.settings.thumbnail_size = self.zoom.side(width, gap);
             self.mode.show(
                 ui,
                 ModeContext {

@@ -645,16 +645,16 @@ fn the_carousel_asks_for_the_middle_first_then_outwards() {
 }
 
 #[test]
-fn the_carousel_middle_follows_the_thumbnail_size_within_the_room() {
+fn the_carousel_middle_follows_the_zoom_within_the_room() {
     let mut small = harness(carousel("car-size-small", 30));
-    small.state_mut().set_thumbnail_size(96.0);
+    small.state_mut().set_thumbnails_per_row(6);
     small
         .state_mut()
         .focus_on(Path::new("/p/IMG_010.png"), false);
     small.run();
     small.run();
     let mut large = harness(carousel("car-size-large", 30));
-    large.state_mut().set_thumbnail_size(160.0);
+    large.state_mut().set_thumbnails_per_row(4);
     large
         .state_mut()
         .focus_on(Path::new("/p/IMG_010.png"), false);
@@ -662,11 +662,12 @@ fn the_carousel_middle_follows_the_thumbnail_size_within_the_room() {
     large.run();
     let s = small.get_by_label("IMG_010.png").rect();
     let l = large.get_by_label("IMG_010.png").rect();
-    // The plain drawer's cell is as wide as its thumbnail.
-    assert!((s.width() - 96.0).abs() < 1.0, "{s:?}");
-    assert!((l.width() - 160.0).abs() < 1.0, "{l:?}");
-    // The largest size, clamped: the middle still fits a third of the room.
-    large.state_mut().set_thumbnail_size(256.0);
+    // The plain drawer's cell is as wide as its thumbnail: a sixth, then
+    // a quarter of the room, gaps aside.
+    assert!((90.0..110.0).contains(&s.width()), "{s:?}");
+    assert!((140.0..160.0).contains(&l.width()), "{l:?}");
+    // One across, clamped: the middle still fits a third of the room.
+    large.state_mut().set_thumbnails_per_row(1);
     large.run();
     large.run();
     let c = large.get_by_label("IMG_010.png").rect();
@@ -675,6 +676,107 @@ fn the_carousel_middle_follows_the_thumbnail_size_within_the_room() {
         "{c:?}"
     );
     assert!(c.width() > l.width(), "{c:?}");
+}
+
+fn thumbnails(id: &str, n: usize) -> FileBrowser {
+    let mut b = FileBrowser::new(id.to_owned(), source(n), "/p").with_modes(ViewModes::built_in());
+    assert!(b.set_mode("thumbnails"));
+    b
+}
+
+/// The cells of the grid's first row, by their thumbnails' names.
+fn first_row(h: &Harness<'static, FileBrowser>, n: usize) -> Vec<egui::Rect> {
+    let rects: Vec<egui::Rect> = (1..=n)
+        .filter_map(|i| {
+            h.query_by_label(&format!("IMG_{i:03}.png"))
+                .map(|node| node.rect())
+        })
+        .collect();
+    let top = rects[0].top();
+    rects
+        .into_iter()
+        .filter(|r| (r.top() - top).abs() < 1.0)
+        .collect()
+}
+
+#[test]
+fn the_thumbnail_zoom_is_a_count_per_row_that_survives_a_resize() {
+    let mut h = harness(thumbnails("zoom-resize", 30));
+    h.state_mut().set_thumbnails_per_row(4);
+    h.run();
+    h.run();
+    let narrow = first_row(&h, 30);
+    assert_eq!(narrow.len(), 4);
+    // Wider: the same count, larger.
+    h.set_size(egui::vec2(1000.0, 400.0));
+    h.run();
+    h.run();
+    let wide = first_row(&h, 30);
+    assert_eq!(wide.len(), 4);
+    assert!(wide[0].width() > narrow[0].width() + 50.0, "{wide:?}");
+    assert_eq!(h.state().zoom(), browser::ThumbZoom::PerRow(4));
+    // The largest zoom: one thumbnail across.
+    h.state_mut().set_thumbnails_per_row(1);
+    h.run();
+    h.run();
+    let one = first_row(&h, 30);
+    assert_eq!(one.len(), 1);
+    assert!(one[0].width() > 900.0, "{one:?}");
+    // Too narrow for the count: as many as fit, the count kept.
+    h.state_mut().set_thumbnails_per_row(32);
+    h.set_size(egui::vec2(640.0, 400.0));
+    h.run();
+    h.run();
+    let fit = first_row(&h, 30).len() as u32;
+    assert!((8..32).contains(&fit), "{fit}");
+    assert_eq!(h.state().zoom(), browser::ThumbZoom::PerRow(32));
+}
+
+#[test]
+fn an_old_thumbnail_size_in_points_converts_to_a_count_at_the_width() {
+    let mut h = harness(thumbnails("zoom-points", 30));
+    h.state_mut().set_thumbnail_size(150.0);
+    assert_eq!(h.state().zoom(), browser::ThumbZoom::Points(150.0));
+    h.run();
+    h.run();
+    let row = first_row(&h, 30).len() as u32;
+    // 150 points in about 630: four.
+    assert_eq!(h.state().zoom(), browser::ThumbZoom::PerRow(4));
+    assert_eq!(row, 4);
+    // The rule itself, and a size below the least.
+    assert_eq!(
+        browser::ThumbZoom::from_points(150.0, 630.0, 4.0),
+        browser::ThumbZoom::PerRow(4)
+    );
+    assert_eq!(
+        browser::ThumbZoom::from_points(10.0, 630.0, 4.0),
+        browser::ThumbZoom::PerRow(9)
+    );
+    assert_eq!(
+        browser::ThumbZoom::from_points(f32::NAN, 630.0, 4.0),
+        browser::ThumbZoom::PerRow(9)
+    );
+}
+
+#[test]
+fn the_zoom_steps_through_counts_and_one_across_is_the_largest() {
+    use browser::ThumbZoom;
+    let (w, gap) = (630.0, 4.0);
+    assert_eq!(ThumbZoom::default().zoomed_in(w, gap), ThumbZoom::PerRow(4));
+    assert_eq!(ThumbZoom::PerRow(1).zoomed_in(w, gap), ThumbZoom::PerRow(1));
+    assert_eq!(
+        ThumbZoom::default().zoomed_out(w, gap),
+        ThumbZoom::PerRow(6)
+    );
+    // No more than fit: 64-point cells in 630 points.
+    assert_eq!(
+        ThumbZoom::PerRow(9).zoomed_out(w, gap),
+        ThumbZoom::PerRow(9)
+    );
+    // The side fills the row.
+    let side = ThumbZoom::PerRow(3).side(w, gap);
+    assert!(3.0 * side + 2.0 * gap <= w && 3.0 * (side + 1.0) + 2.0 * gap > w);
+    assert!((ThumbZoom::PerRow(1).side(w, gap) - w).abs() <= 1.0);
 }
 
 /// Draws each cell as an empty box of the size it says, and keeps the

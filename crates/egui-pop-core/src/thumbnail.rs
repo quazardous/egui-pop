@@ -340,6 +340,15 @@ impl ThumbnailGrid {
         self
     }
 
+    /// The room a grid drawn in `ui` lays its cells out in: its width
+    /// (the scroll bar aside) and the gap between cells. `n` cells of
+    /// `(width + gap) / n - gap` points fill a row.
+    pub fn room(ui: &Ui) -> (f32, f32) {
+        let gap = Tokens::of(ui.ctx()).space.xs;
+        let width = ui.available_width() - ui.spacing().scroll.allocated_width();
+        (width, gap)
+    }
+
     /// Draws the rows in view, `item` drawing cell `i`. Gives the number of
     /// cells in a row, what a move up or down skips.
     pub fn show(self, ui: &mut Ui, item: impl FnMut(&mut Ui, usize)) -> usize {
@@ -356,8 +365,7 @@ impl ThumbnailGrid {
             reveal,
             band,
         } = self;
-        let gap = Tokens::of(ui.ctx()).space.xs;
-        let width = ui.available_width() - ui.spacing().scroll.allocated_width();
+        let (width, gap) = ThumbnailGrid::room(ui);
         let per_row = (((width + gap) / (cell.x + gap)).floor() as usize).max(1);
         let rows = count.div_ceil(per_row);
         let mut area = egui::ScrollArea::vertical()
