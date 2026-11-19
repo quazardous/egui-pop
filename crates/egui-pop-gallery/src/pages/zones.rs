@@ -5,6 +5,7 @@
 use egui::{RichText, Stroke, Ui};
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::ui::UiPop;
 use egui_pop::core::widgets;
 use egui_pop::model::commands::CommandSpec;
 use egui_pop::model::ids::{BlockId, CommandId, PluginId, StoryId, ZoneId};
@@ -46,7 +47,7 @@ impl Plugin for ZonesPage {
             .block(
                 CARD,
                 Block::add(TITLE, 0, |ui, _| {
-                    ui.strong("Card title");
+                    ui.strong_text("Card title");
                 }),
             )
             .block(
@@ -161,7 +162,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             app.show_zone(ui, &CARD);
         });
     ui.add_space(t.space.l);
-    ui.strong("Resolved blocks");
+    ui.strong_text("Resolved blocks");
     let zone = app.zones().into_iter().find(|z| z.id == CARD);
     egui::Grid::new("card.blocks")
         .num_columns(4)
@@ -169,7 +170,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         .spacing([t.space.m, t.space.xs])
         .show(ui, |ui| {
             for h in ["Block", "Owner", "Weight", "Applied"] {
-                ui.strong(h);
+                ui.strong_text(h);
             }
             ui.end_row();
             for b in zone.map(|z| z.blocks).unwrap_or_default() {

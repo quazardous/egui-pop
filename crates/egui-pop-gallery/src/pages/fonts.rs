@@ -16,6 +16,7 @@ use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::fonts::{self, Face, Weight, bundled};
 use egui_pop::core::state::Slot;
+use egui_pop::core::ui::UiPop;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::theme::Tokens;
 
@@ -238,7 +239,7 @@ fn show(ui: &mut Ui, _app: &AppHandle) {
 fn column(ui: &mut Ui, c: &Candidate) {
     let ctx = ui.ctx().clone();
     let t = Tokens::of(&ctx);
-    ui.strong(c.title);
+    ui.strong_text(c.title);
     let size = match c.bytes() {
         0 => "in egui already".to_string(),
         b => format!("{} KB", (b as f32 / 1000.0).round()),

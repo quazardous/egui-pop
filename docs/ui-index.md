@@ -26,7 +26,7 @@ To add an entry, give the item a doc line
 | monospace text, a log or console line, a path or code | `ui.code_text(..)`<br>`egui_pop::core::ui::UiPop::code_text` | Monospace text: a log's or a console's line, a path, a piece of code. |
 | secondary text, a hint or a description | `ui.muted(..)`<br>`egui_pop::core::ui::UiPop::muted` | Secondary text: a hint, a description (`text-role.muted`). |
 | small print about an item, a date or a size | `ui.meta(..)`<br>`egui_pop::core::ui::UiPop::meta` | Small print about an item: a date, a size (`text-role.meta`). |
-| strong or bold text inline, a word that must stand out | `ui.strong(..)`<br>`egui_pop::core::ui::UiPop::strong` | Inline emphasis: a word or a value that must stand out in running text, at the body's size in a heavier weight (`text-role.strong`, `strong_text`). |
+| strong or bold text inline, a word that must stand out | `ui.strong_text(..)`<br>`egui_pop::core::ui::UiPop::strong_text` | Inline emphasis: a word or a value that must stand out in running text, at the body's size in a heavier weight (`text-role.strong`, `strong_text`). |
 | text in a tone, a failed state or an error in the danger colour | `ui.text_tone(..)`<br>`egui_pop::core::ui::UiPop::text_tone` | Text in a tone: a failed state, an error, a warning, a success. |
 
 ## Spacing, cards and scrolling

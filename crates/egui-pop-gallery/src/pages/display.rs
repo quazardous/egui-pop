@@ -3,6 +3,7 @@
 //! (with `--wide-gamut`, on Wayland), and the transfers' curves.
 
 use egui::{Color32, Sense, Stroke, Ui, pos2, vec2};
+use egui_pop::core::ui::UiPop;
 use egui_pop::core::widgets;
 use egui_pop::theme::Tokens;
 use egui_pop::viewport::display::{
@@ -137,9 +138,9 @@ pub fn show(ui: &mut Ui, s: &mut DisplayState) {
         .striped(true)
         .spacing([t.space.l, t.space.xs])
         .show(ui, |ui| {
-            ui.strong("Surface");
-            ui.strong("P3 red");
-            ui.strong("Lost");
+            ui.strong_text("Surface");
+            ui.strong_text("P3 red");
+            ui.strong_text("Lost");
             ui.end_row();
             for (name, surface) in surfaces() {
                 let r = display::resolve(&wanted, &surface, true);

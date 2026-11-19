@@ -4,6 +4,7 @@
 //! with their previews, and a text field keeping egui's own copy and
 //! paste.
 
+use egui_pop::core::ui::UiPop;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -248,7 +249,7 @@ fn show(ui: &mut Ui, app: &AppHandle, a: &Palette, b: &Palette, greys: &Palette)
         Ok(ways) => {
             for w in ways {
                 ui.horizontal_wrapped(|ui| {
-                    ui.strong(&w.label);
+                    ui.strong_text(&w.label);
                     if let Some(p) = &w.preview {
                         ui.weak(p);
                     }

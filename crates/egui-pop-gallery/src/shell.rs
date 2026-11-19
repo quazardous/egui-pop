@@ -293,7 +293,7 @@ fn switchers(ui: &mut Ui, app: &AppHandle) {
     let shown = service.shown(ui.ctx());
     let counterpart = service.counterpart();
     let mut picked = shown.clone();
-    ui.strong(TITLE);
+    ui.strong_text(TITLE);
     ui.separator();
     let label = ui.label("Theme");
     // The other theme of the pair, the one not shown.

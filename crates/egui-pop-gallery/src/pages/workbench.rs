@@ -16,6 +16,7 @@ use egui_pop::api::stories::Story;
 use egui_pop::api::strips::{Indicator, Tone};
 use egui_pop::api::workbench::{self, STEP_MOVE};
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
+use egui_pop::core::ui::UiPop;
 use egui_pop::core::widgets;
 use egui_pop::model::commands::CommandSpec;
 use egui_pop::model::ids::{CommandId, PanelId, PluginId, StoryId};
@@ -240,10 +241,10 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         .num_columns(4)
         .striped(true)
         .show(ui, |ui| {
-            ui.strong("Panel");
-            ui.strong("Default area");
-            ui.strong("May go to");
-            ui.strong("Sizes");
+            ui.strong_text("Panel");
+            ui.strong_text("Default area");
+            ui.strong_text("May go to");
+            ui.strong_text("Sizes");
             ui.end_row();
             for spec in app.panels() {
                 if spec.bare {
@@ -275,19 +276,19 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let layout = app.layout();
     for (area, node) in &layout.areas {
         ui.horizontal(|ui| {
-            ui.strong(workbench::area_name(*area));
+            ui.strong_text(workbench::area_name(*area));
             ui.monospace(shape(node));
         });
     }
     for aux in &layout.auxiliary {
         ui.horizontal(|ui| {
-            ui.strong("window");
+            ui.strong_text("window");
             ui.monospace(format!("{} on {} at {:?}", aux.panel, aux.screen, aux.rect));
         });
     }
     if !layout.hidden.is_empty() {
         ui.horizontal(|ui| {
-            ui.strong("closed");
+            ui.strong_text("closed");
             ui.monospace(
                 layout
                     .hidden

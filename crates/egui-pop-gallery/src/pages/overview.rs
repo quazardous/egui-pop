@@ -220,10 +220,10 @@ fn contrast_table(ui: &mut Ui, t: &Tokens) {
         .num_columns(4)
         .striped(true)
         .show(ui, |ui| {
-            ui.strong("Foreground on background");
-            ui.strong("Ratio");
-            ui.strong("Needs");
-            ui.strong("");
+            ui.strong_text("Foreground on background");
+            ui.strong_text("Ratio");
+            ui.strong_text("Needs");
+            ui.strong_text("");
             ui.end_row();
             for pair in contrast::PAIRS {
                 let ratio = contrast::pair_ratio(r, pair);

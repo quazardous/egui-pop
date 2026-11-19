@@ -66,7 +66,7 @@ pub fn show(ui: &mut Ui, state: &mut State) {
                 .striped(true)
                 .show(ui, |ui| {
                     for head in ["", "Token", "Tier", "Value", "Alias of"] {
-                        ui.strong(head);
+                        ui.strong_text(head);
                     }
                     ui.end_row();
                     for tok in rows {

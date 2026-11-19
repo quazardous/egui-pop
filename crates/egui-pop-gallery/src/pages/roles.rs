@@ -61,7 +61,7 @@ pub fn show(ui: &mut Ui, state: &mut State) {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 ui.label("Writes ");
-                ui.strong("one copy");
+                ui.strong_text("one copy");
                 ui.label(" of each image.");
             });
             ui.end_row();

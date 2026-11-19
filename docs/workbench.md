@@ -1134,7 +1134,7 @@ ctx.block(
     zones::CAPTION_START,
     Block::replace(frame::BLOCK_MENU, BlockId::from_static("app.logo"), |ui, app| {
         frame::menu_button(ui, app);
-        ui.strong("My app");
+        ui.strong_text("My app");
     }),
 );
 # }

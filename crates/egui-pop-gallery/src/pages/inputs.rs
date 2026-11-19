@@ -347,7 +347,7 @@ fn tab_order(ui: &mut Ui, s: &mut State) {
     ui.horizontal_top(|ui| {
         tab::scope(ui, "inputs-address", ScopeKind::Panel, |ui| {
             ui.vertical(|ui| {
-                ui.strong("Address");
+                ui.strong_text("Address");
                 // Drawn column by column; read row by row.
                 ui.horizontal_top(|ui| {
                     ui.vertical(|ui| {
@@ -376,7 +376,7 @@ fn tab_order(ui: &mut Ui, s: &mut State) {
         ui.add_space(24.0);
         tab::scope(ui, "inputs-options", ScopeKind::Panel, |ui| {
             ui.vertical(|ui| {
-                ui.strong("Options");
+                ui.strong_text("Options");
                 Input::text(&mut s.tags, "Tags")
                     .placeholder("Tags")
                     .tab(TabStop::new().group("export"))

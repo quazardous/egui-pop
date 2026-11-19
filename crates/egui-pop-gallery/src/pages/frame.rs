@@ -12,6 +12,7 @@ use egui_pop::core::frame::{FrameLayout, HitRegions, TitleBar};
 use egui_pop::core::kit::Kit;
 use egui_pop::core::param::{self, Mode};
 use egui_pop::core::state::Slot;
+use egui_pop::core::ui::UiPop;
 use egui_pop::core::widgets;
 use egui_pop::model::ids::{BlockId, PluginId, StoryId};
 use egui_pop::theme::Tokens;
@@ -62,7 +63,7 @@ impl Plugin for FramePage {
                 |ui, app| {
                     frame::menu_button(ui, app);
                     logo(ui);
-                    ui.strong("egui-pop gallery");
+                    ui.strong_text("egui-pop gallery");
                 },
             ),
         );
@@ -157,7 +158,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                         .label("Preview menu")
                         .sense_click(),
                 );
-                ui.strong("App");
+                ui.strong_text("App");
             },
             |ui| {
                 let _ = ui.small_button("Layout");
