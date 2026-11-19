@@ -37,6 +37,7 @@
 | `tools/wbox/` | Running the gallery offscreen in a nested compositor. |
 | `tools/cost/` | What each feature set costs (dependencies, build times, binary size, first frame): `cost.py`, run by the bench box's `egui-pop-cost` job on the `cost_probe` example, and its budget (`budget.json`); see docs/quality.md. |
 | `tools/web-smoke.mjs` | The web smoke test: loads a Trunk build of the gallery in headless Chrome, fails on a panic or without the start line (CI's wasm job, the Pages workflow). |
+| `ci/test-durations.json` | Every test's time on CI, from nextest's JUnit reports: the input of the `test` job's shards, split by duration (`cargo xtask shards`, `docs/testing.md`, "Shards by duration"); refreshed by hand with `cargo xtask shards refresh`. |
 
 Principles: [CREDO.md](CREDO.md). Rules for contributions:
 [CONTRIBUTING.md](CONTRIBUTING.md).

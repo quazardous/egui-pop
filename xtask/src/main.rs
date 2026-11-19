@@ -26,6 +26,10 @@
 //! files it touches and the workspace's dependency graph, and runs those
 //! tests (`affected.rs`).
 //!
+//! `shards` splits the tests into CI's shards by their measured
+//! duration, kept in `ci/test-durations.json`, and refreshes that file
+//! from nextest's JUnit reports (`shards.rs`).
+//!
 //! `changeset-check`, `release-notes` and `tag` check the changesets,
 //! write a release into the changelog after knope raised the versions,
 //! and tag a minor of the facade (`release.rs`, `docs/releasing.md`).
@@ -55,6 +59,7 @@ mod families;
 mod gallery;
 mod publish;
 mod release;
+mod shards;
 mod ui_index;
 
 use ab_glyph::{Font as _, FontRef, PxScale, ScaleFont as _};
@@ -102,6 +107,10 @@ Tasks:
                          the tests and CI jobs a change needs, from the
                          files it touches and the dependency graph; --run
                          runs those tests (`cargo xtask affected --help`)
+  shards [refresh | check] [--shards N]
+                         CI's test shards split by measured duration, from
+                         ci/test-durations.json; refresh rewrites it from
+                         JUnit reports (`cargo xtask shards --help`)
   changeset-check [--base REV] [--internal]
                          check the pending changesets (known crates and
                          bumps, a break travelling up to the dependents);
@@ -366,6 +375,7 @@ fn main() -> ExitCode {
         Some("experimental") => experimental::experimental(&args[1..]),
         Some("publish") => publish::publish(&args[1..]),
         Some("affected") => affected::affected(&args[1..]),
+        Some("shards") => shards::shards(&args[1..]),
         Some("changeset-check") => release::check(&args[1..]),
         Some("release-notes") => release::notes(&args[1..]),
         Some("tag") => release::tag(&args[1..]),

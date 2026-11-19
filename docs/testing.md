@@ -66,7 +66,8 @@ What the configuration sets:
   The `ci` profile stops a test after 4 minutes and writes a JUnit report
   (`target/nextest/ci/junit.xml`, renamed `junit-<n>.xml` after each run
   by `cargo xtask affected --run`), which CI keeps: the slowest tests are
-  visible there.
+  visible there, and `cargo xtask shards refresh` reads them to split the
+  shards ([Shards by duration](#shards-by-duration)).
 - **The `critical` profile** runs the critical tests alone (below).
 
 One process per test means one wgpu device per test on lavapipe. The
@@ -210,7 +211,7 @@ selected and skipped, the critical tests added) in the run's summary.
 | `alone` (`tools/check-alone.sh`: every published crate's `cargo check -p`, with and without its default features, outside the workspace's feature unification) | as `clippy` |
 | `doc` (the guides' `cargo doc`) | documentation changed and `clippy` does not run |
 | `book` (the docs site: `mdbook build`, `tools/book/summary.py`, `tools/book/links.py`) | a file under `docs/`, `book.toml` or `tools/book/` changed |
-| `test` | always: the selection above, critical tests at least |
+| `test` | always: the selection above, critical tests at least, in three shards ([by duration](#shards-by-duration)) |
 | `deny` | a `Cargo.toml`, `Cargo.lock` or `deny.toml` changed |
 | `wasm` | a crate the gallery builds from changed (its tests and examples aside) |
 | `package` | a manifest changed, or a file was added to or removed from a crate |
@@ -235,6 +236,53 @@ anything ([Changesets and releases](releasing.md#semver-checks)).
 A skipped job reports nothing, and a required check that never reports
 blocks a pull request: the last job, `CI`, needs every other one and
 fails when one of them failed. It is the only check to require.
+
+### Shards by duration
+
+The `test` job runs in three shards side by side (Tests (lavapipe 1/3 to
+3/3)), split by each test's measured time rather than by count or name,
+so the slowest shard stays close to the average:
+
+- `ci/test-durations.json` holds every test's time on CI, per nextest
+  binary id, taken from the `junit-*` artifacts of full runs on `next`.
+- `cargo xtask shards` computes the split from that file alone, so the
+  three jobs compute the same one: the tests are grouped into units (a
+  whole binary; a heavy binary cut into its modules, and a heavy module
+  into its tests, until a unit weighs less than a twelfth of a shard),
+  and the units go, longest first, to the lightest shard. Shard 1 starts
+  with `first_shard_seconds` of its own (the doctests, the icon set's SVG
+  tests and the shard check, which run there alone), counted over
+  `threads` (the runner's four cores).
+- The lightest shard at the end runs every test the two others do not
+  (`not (...)`): a test the file does not know yet runs there, and no
+  test can be dropped. On a full run, shard 1 checks it anyway: `cargo
+  xtask shards check` lists each shard's tests with nextest and fails
+  unless every test of the workspace is in exactly one shard.
+- `cargo xtask affected --run --shard I/N` runs shard I: each nextest run
+  is narrowed by the shard's filter (joined with its own `-E`), the
+  doctests run on shard 1 only.
+
+```sh
+cargo xtask shards                        # the split: each shard's expected time and filter
+cargo xtask shards --filter 2             # shard 2's nextest filter alone
+cargo xtask shards refresh --run RUN_ID   # rewrite the durations from a CI run's JUnit reports
+cargo xtask shards refresh DIR...         # or from reports on disk (target/nextest/ci/)
+```
+
+Refresh the file by hand when a shard drifts from the others (each run's
+summary shows the shards' times), from one or more green full runs of
+`next` (`gh run list --branch next --workflow ci.yml`): a test in several
+runs gets its mean time. Nothing refreshes it on a schedule yet. A test
+added since only lands on the rest shard, so the split degrades slowly,
+never by losing a test. Three shards, because each one pays about seven
+minutes before its first test (the runner's setup and the build), against
+about five of tests: a fourth shard would save about a minute of wall time
+for seven more runner minutes.
+
+Measured on 2026-11-19 (two full runs of `next`): with nextest's hash
+partition the shards' test steps took 4 min 10 s to 6 min (plus the
+doctests on every shard, 40 s each); the durations split expects about
+5 min 10 s for each, the doctests and the check counted on shard 1.
 
 To run locally what the `test` job runs on a pull request:
 
