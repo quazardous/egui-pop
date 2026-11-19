@@ -146,8 +146,9 @@ fn a_form_edits_typed_fields_and_picks_a_path_in_the_app() {
     // bar's scroll area takes its height: a few frames.
     h.run_steps(8);
     h.run();
-    // Folders first, then the files the field accepts.
-    assert!(h.query_by_label("sub/").is_some());
+    // Folders first (a folder row is named by its name alone), then the
+    // files the field accepts.
+    assert!(h.query_by_label("sub").is_some());
     assert!(h.query_by_label("photo.png").is_none());
     // The file chooser's in-app picker: a click highlights, Open chooses.
     h.get_by_label("notes.txt").click();
