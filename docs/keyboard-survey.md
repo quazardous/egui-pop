@@ -709,8 +709,9 @@ one pull request. Numbers stay as they are, since the walk's tests name them;
 2. **Done: a rebound key keeps its `when`,** in `Keymap::rebind` and
    `rebind_all`, before the walk ran.
 3. **Done: one focused panel.** `workbench.focus` hands over the widget focus
-   (what the panel names with `focus::prefer`, else its first focusable, else
-   the panel's own stop); `focused` follows the widget focus however it arrived,
+   (what the panel names with `focus::prefer`, else the panel's own stop, from
+   which Tab enters it; no longer its first focusable, which put the wheel on a
+   slider); `focused` follows the widget focus however it arrived,
    and stays on the last panel when it goes to the menu, the status bar or
    nothing. Palettes and flyouts only borrow it; detached windows count. The
    widget last focused in the panel is not restored: that is item 5.

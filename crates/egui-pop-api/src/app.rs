@@ -2730,7 +2730,7 @@ impl AppHandle {
         ui.push_id(("egui_pop_panel", id.as_str()), |ui| {
             focus::scope(ui, &scope, &[], |ui| {
                 let taking = self.takes_the_focus(ui.ctx(), id, &scope);
-                let stop = self.panel_stop(ui, id, title, taking);
+                self.panel_stop(ui, id, title, taking);
                 let failed = |fault: &fault::Fault| {
                     log::error!(
                         target: "egui_pop",
@@ -2762,7 +2762,7 @@ impl AppHandle {
                 // What the inspect mode names the panel by.
                 egui_pop_core::inspect::region(ui, "panel", id.as_str(), None, owner.as_str());
                 if taking {
-                    settle_panel_focus(ui, stop);
+                    settle_panel_focus(ui);
                 }
             });
         });
@@ -2790,22 +2790,18 @@ impl AppHandle {
         !inside
     }
 
-    /// The panel's own stop: there to start from when it takes the focus,
-    /// and to hold it if nothing in the panel can. It shows nothing and is
-    /// not a Tab stop otherwise.
-    fn panel_stop(&self, ui: &mut Ui, id: &PanelId, title: &str, taking: bool) -> Id {
+    /// The panel's own stop: it holds the focus a panel takes (unless the
+    /// panel prefers a widget), and Tab goes on from it into the panel's
+    /// widgets. It shows nothing and is not a Tab stop otherwise.
+    fn panel_stop(&self, ui: &mut Ui, id: &PanelId, title: &str, taking: bool) {
         let stop = Id::unique(("egui_pop.panel_stop", id.as_str()));
         if taking {
-            ui.memory_mut(|m| {
-                m.request_focus(stop);
-                m.move_focus(egui::FocusDirection::Next);
-            });
+            ui.memory_mut(|m| m.request_focus(stop));
         }
         if taking || ui.memory(|m| m.has_focus(stop)) {
             let r = ui.interact(ui.max_rect(), stop, egui::Sense::focusable_noninteractive());
             a11y::name(&r, egui::Role::Pane, title);
         }
-        stop
     }
 
     /// Keeps `focused` up with where the focus went, and starts a pass for a
@@ -3298,8 +3294,10 @@ impl AppHandle {
     }
 
     /// Shows a panel and gives it the keyboard (`workbench.focus`): it is the
-    /// focused panel at once, and its first focusable widget has the focus in
-    /// the next pass (`crate::workbench`'s "The focused panel").
+    /// focused panel at once, and in the next pass the panel itself holds the
+    /// focus (its own stop, from which Tab enters its widgets), or the widget
+    /// it named with `focus::prefer` (`crate::workbench`'s "The focused
+    /// panel").
     pub fn focus_panel(&self, panel: &PanelId) -> Option<Outcome> {
         self.change_workbench(crate::workbench::Change::Focus(panel.clone()))
     }
@@ -3337,19 +3335,12 @@ fn zen_result(outcome: Option<Outcome>, on: bool) -> Result<Json, String> {
 }
 
 /// After a panel asked for the focus and drew its content: the widget it
-/// prefers takes it. Else the first focusable widget took it already, and if
-/// none did, the panel's own stop keeps it. The last marker ends egui's search
-/// for "the next widget": it would go on past the panel.
-fn settle_panel_focus(ui: &mut Ui, stop: Id) {
-    let end = stop.with("end");
-    let rect = egui::Rect::from_min_size(ui.max_rect().min, egui::Vec2::ZERO);
-    ui.interact(rect, end, egui::Sense::focusable_noninteractive());
-    let settled = match focus::preferred(ui.ctx()) {
-        Some(preferred) => Some(preferred),
-        None => ui.memory(|m| m.has_focus(end)).then_some(stop),
-    };
-    if let Some(id) = settled {
-        ui.memory_mut(|m| m.request_focus(id));
+/// prefers (`focus::prefer`) takes it, else the panel's own stop keeps it.
+/// Never its first focusable widget: a slider focused that way would take
+/// the wheel meant to scroll the panel; Tab goes on from the stop.
+fn settle_panel_focus(ui: &mut Ui) {
+    if let Some(preferred) = focus::preferred(ui.ctx()) {
+        ui.memory_mut(|m| m.request_focus(preferred));
     }
 }
 

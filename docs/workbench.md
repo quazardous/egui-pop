@@ -267,7 +267,10 @@ scopes](adr/0007-key-resolution.md#addendum-2026-11-18-scopes-per-window)).
 
 **Handing a panel the keyboard.** It shows the panel, then gives the focus to
 the widget the panel named with `egui_pop::core::focus::prefer`; without one, to
-its first focusable widget; without any, to the panel itself. If the focus is
+the panel itself, from which Tab enters its widgets. Never to its first
+focusable widget unasked: a slider focused that way would take the wheel meant
+to scroll the panel (classic applications focus the panel, not its first
+control). If the focus is
 in the panel already it stays where it is. Behind a modal, or when a command
 from an agent, a script or a device finds someone typing in a field, only
 `focusedPanel` moves. The focus lands a pass later, so the key that ran the command is not
@@ -277,10 +280,11 @@ typed into the field it lands on.
   focusable, and a panel whose toolbar comes first says `focus::prefer(ui.ctx(),
   response.id)` so the canvas gets the keyboard. The image viewport does, as do
   the library's grid (over its filters) and a text editor (over its find bar).
-  A panel with a search field first and a list below should do the same.
-- **A panel with nothing focusable** holds the focus itself: a stop named after
-  the panel, drawn only while it holds the focus, so it is no extra Tab stop.
-  Tab goes on from there. It shows nothing yet ([item 4 of the keyboard
+  A panel with a search field first and a list below should do the same, and
+  a search panel names its field, so a "go to the search" key lands in it.
+- **Any other panel** holds the focus itself: a stop named after the panel,
+  drawn only while it holds the focus, so it is no extra Tab stop. Tab goes on
+  from there into its widgets. It shows nothing yet ([item 4 of the keyboard
   survey](keyboard-survey.md)).
 
 **The last panel stays** when the focus goes to something no panel holds. In

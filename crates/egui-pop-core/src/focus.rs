@@ -545,9 +545,9 @@ fn widgets_in(ui: &Ui) -> usize {
 
 /// Names the widget the scopes open around it hand the focus to when asked
 /// (call it each pass, in the scope, where it is drawn): the canvas under a
-/// panel's toolbar, the list under its search field. Without one, a panel
-/// given the keyboard goes to its first focusable widget. The first widget
-/// to ask in a scope wins.
+/// panel's toolbar, the search field a "go to the search" command lands in.
+/// Without one, a panel given the keyboard holds it itself, and Tab enters
+/// its widgets. The first widget to ask in a scope wins.
 pub fn prefer(ctx: &Context, id: Id) {
     let st = state(ctx);
     let mut s = lock(&st);
