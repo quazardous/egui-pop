@@ -4475,10 +4475,45 @@ impl FileBrowser {
         }
     }
 
+    /// A group's members go with their main file while the filter passes
+    /// it; when it refuses the main file, each member is an entry of its
+    /// own, for the filter to judge (sidecars shown under an `xmp` filter).
+    fn follow_mains(&mut self) {
+        if self.groups.is_empty() {
+            return;
+        }
+        let filter = &self.filter;
+        let passes = |main: &Path| {
+            filter.kind.is_none_or(|k| k == EntryKind::File)
+                && has_extension(&filter.extensions, main)
+        };
+        let main_of: HashMap<&PathBuf, &PathBuf> = (self.groups.values())
+            .flat_map(|g| g.members.iter().map(move |m| (m, &g.main)))
+            .collect();
+        let back: Vec<PathBuf> = (self.absorbed.keys())
+            .filter(|m| main_of.get(m).is_some_and(|main| !passes(main)))
+            .cloned()
+            .collect();
+        let absorbed = &mut self.absorbed;
+        self.entries.retain(|e| match main_of.get(&e.path) {
+            Some(main) if passes(main) => {
+                absorbed.insert(e.path.clone(), e.clone());
+                false
+            }
+            _ => true,
+        });
+        for m in back {
+            if let Some(e) = self.absorbed.remove(&m) {
+                self.entries.push(e);
+            }
+        }
+    }
+
     /// Puts the entries listed in the order asked, those the filter and the
     /// query leave out set aside; the selection and the focus leave those.
     fn arrange(&mut self) {
         self.entries.append(&mut self.filtered_out);
+        self.follow_mains();
         let query = self.query.trim().to_owned();
         if !self.filter.is_all() {
             let filter = &self.filter;
@@ -4627,6 +4662,16 @@ impl FileBrowser {
     /// The group an entry heads, as last found.
     pub fn group_of(&self, path: &Path) -> Option<&FileGroup> {
         self.groups.get(path)
+    }
+
+    /// The groups as last found, by main file, shared.
+    pub(crate) fn groups(&self) -> Arc<HashMap<PathBuf, FileGroup>> {
+        Arc::clone(&self.groups)
+    }
+
+    /// The members out of the entries while their group shows.
+    pub(crate) fn absorbed(&self) -> &HashMap<PathBuf, SourceEntry> {
+        &self.absorbed
     }
 
     /// Whether the groups of what was listed are still being looked for.
@@ -5013,6 +5058,20 @@ impl FileBrowser {
         self.selection = Selection::default();
         self.focus = None;
         self.reload();
+    }
+
+    /// Lists hidden entries too (a name starting with `.`), or leaves them
+    /// out (the default); the place is listed again when it changes.
+    pub fn set_show_hidden(&mut self, on: bool) {
+        if on != self.options.hidden {
+            self.options.hidden = on;
+            self.reload();
+        }
+    }
+
+    /// Whether hidden entries are listed.
+    pub fn show_hidden(&self) -> bool {
+        self.options.hidden
     }
 
     /// Lists the place again, keeping the selection and the focus by path.
