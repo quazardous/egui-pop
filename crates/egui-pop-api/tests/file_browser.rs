@@ -728,7 +728,7 @@ fn the_thumbnail_zoom_is_a_count_per_row_that_survives_a_resize() {
     h.run();
     h.run();
     let fit = first_row(&h, 30).len() as u32;
-    assert!(fit < 32 && fit >= 8, "{fit}");
+    assert!((8..32).contains(&fit), "{fit}");
     assert_eq!(h.state().zoom(), browser::ThumbZoom::PerRow(32));
 }
 
