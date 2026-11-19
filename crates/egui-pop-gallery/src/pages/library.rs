@@ -17,6 +17,7 @@ use egui_pop::core::widgets;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::views::library::compare::{CompareState, CompareView, Intent, Pane};
 use egui_pop::views::library::filter::{Candidate, Filter, SearchField, SearchState};
+use egui_pop::views::library::grid::{GridResize, Zoom};
 use egui_pop::views::library::marks::{ColorLabels, EmptyStars, FlagToggle, RatingStars};
 use egui_pop::views::library::tags::{TagInput, TagInputState};
 use egui_pop::views::library::{
@@ -230,6 +231,8 @@ pub struct PageState {
     /// The grid's panel, a share of the page's width: the zoom (a count
     /// per row) survives its resize.
     panel: f32,
+    /// What the grid's zoom means on a resize.
+    resize: GridResize,
     best: Option<u32>,
     thumbs: Option<Thumbs>,
     log: Vec<String>,
@@ -263,6 +266,7 @@ impl Default for PageState {
             auto_advance: false,
             empty_stars: false,
             panel: 1.0,
+            resize: GridResize::PerRow,
             best: None,
             thumbs: None,
             log: Vec::new(),
@@ -338,6 +342,7 @@ impl PageState {
             Signal::Activate { key } => format!("activate {key}"),
             Signal::DragOut { keys } => format!("drag out: {}", keys.len()),
             Signal::Zoom { per_row } => format!("zoom {per_row} per row"),
+            Signal::ZoomSize { points } => format!("zoom {points} points"),
             Signal::Vetoed { step, reason } => format!("{step} vetoed: {reason}"),
         };
         self.log.push(line);
@@ -458,7 +463,8 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
 
 fn library(ui: &mut Ui, app: &AppHandle, p: &mut PageState, thumbs: &Thumbs) {
     section(ui, &format!("Images ({} of {IMAGES})", p.shown.len()));
-    // The zoom is a count per row: resize the panel, it stays.
+    // The zoom is a count per row (resize the panel, it stays), or a
+    // size (resize it, the columns follow).
     ui.horizontal(|ui| {
         ui.label("Panel width");
         for (name, share) in [("Narrow", 0.35), ("Half", 0.6), ("Full", 1.0)] {
@@ -472,8 +478,21 @@ fn library(ui: &mut Ui, app: &AppHandle, p: &mut PageState, thumbs: &Thumbs) {
         if ui.button("Zoom out").clicked() {
             p.state.set_zoom(p.state.zoom().zoomed_out());
         }
-        if let Some(n) = p.state.zoom().per_row() {
-            ui.label(format!("{n} per row"));
+        match p.state.zoom() {
+            Zoom::PerRow(n) => ui.label(format!("{n} per row")),
+            Zoom::Points(s) => ui.label(format!("{s} points")),
+        };
+    });
+    // What the zoom means on a resize, on a line of its own.
+    ui.horizontal(|ui| {
+        ui.label("On resize");
+        for (name, resize) in [
+            ("Per row", GridResize::PerRow),
+            ("Fixed size", GridResize::FixedSize),
+        ] {
+            if widgets::selectable_label(ui, p.resize == resize, name).clicked() {
+                p.resize = resize;
+            }
         }
     });
     let keymap = CullKeymap::lightroom().auto_advance(p.auto_advance);
@@ -499,6 +518,7 @@ fn library(ui: &mut Ui, app: &AppHandle, p: &mut PageState, thumbs: &Thumbs) {
                         EmptyStars::OnHover
                     })
                     .height(height)
+                    .resize(p.resize)
                     .show(ui, &mut p.state, &items, thumbs)
                     .signals
             })

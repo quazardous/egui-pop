@@ -36,8 +36,8 @@ pub mod thumbs;
 #[cfg(feature = "api")]
 pub use grid::change;
 pub use grid::{
-    Badge, Change, LibraryItems, LibraryOutput, LibraryState, Signal, Stack, Thumb, ThumbGrid,
-    ThumbSource, Tone, Zoom,
+    Badge, Change, GridResize, LibraryItems, LibraryOutput, LibraryState, Signal, Stack, Thumb,
+    ThumbGrid, ThumbSource, Tone, Zoom,
 };
 pub use marks::{ColorLabel, CullAction, CullKeymap, Flag, Labels, Marks};
 #[cfg(feature = "api")]

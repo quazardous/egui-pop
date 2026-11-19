@@ -6665,6 +6665,60 @@ fn a_kit_restyles_the_library() {
     h.page_shot("library-kit");
 }
 
+/// How many cells the library grid's first row holds: the cells level
+/// with the first image's (the filmstrip lies below).
+fn library_first_row(h: &Harness<'static, Gallery>) -> usize {
+    let top = h
+        .query_all_by_label("DSC_00000")
+        .next()
+        .unwrap()
+        .rect()
+        .top();
+    (0..64)
+        .filter(|i| {
+            h.query_all_by_label(&format!("DSC_{i:05}"))
+                .next()
+                .is_some_and(|n| (n.rect().top() - top).abs() < 1.0)
+        })
+        .count()
+}
+
+#[test]
+fn the_library_grid_keeps_its_count_per_row_or_its_size_on_a_resize() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "library"));
+    h.run();
+    // Per row (the default): the count holds, the thumbnails grow.
+    // (Half: a narrow panel holds fewer than five of the smallest.)
+    h.get_by_label("Half").click();
+    h.run();
+    let half = library_first_row(&h);
+    h.remove_cursor();
+    h.run();
+    h.page_shot("library-per-row-half-pop-dark");
+    h.get_by_label("Full").click();
+    h.run();
+    assert_eq!(library_first_row(&h), half, "per row: the count is kept");
+    // Fixed size: the size holds, a wider panel gains columns.
+    h.get_by_label("Fixed size").click();
+    h.run();
+    h.get_by_label("Narrow").click();
+    h.run();
+    let narrow = library_first_row(&h);
+    h.remove_cursor();
+    h.run();
+    h.page_shot("library-fixed-size-narrow-pop-dark");
+    h.get_by_label("Full").click();
+    h.run();
+    let full = library_first_row(&h);
+    assert!(
+        full > narrow,
+        "fixed size: a wider panel shows more columns ({narrow} then {full})"
+    );
+    h.remove_cursor();
+    h.run();
+    h.page_shot("library-fixed-size-full-pop-dark");
+}
+
 #[test]
 fn a_cell_s_stars_preview_a_lower_rating_over_the_current_one() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "library"));
