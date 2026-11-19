@@ -233,7 +233,7 @@ impl AppHandle {
                     "egui_pop",
                     request.cause,
                     "window.refused",
-                    json!({ "request": WindowReparent::ID, "window": request.window, "owner": request.owner, "vetoed_by": by, "reason": reason }),
+                    json!({ "request": WindowReparent::ID.as_str(), "window": request.window, "owner": request.owner, "vetoed_by": by, "reason": reason }),
                 );
                 false
             }

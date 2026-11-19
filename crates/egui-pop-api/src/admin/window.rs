@@ -58,8 +58,8 @@ pub(super) fn close(app: &AppHandle) -> bool {
 pub(super) fn listen(app: &AppHandle, admin: Arc<Admin>) {
     let bus = app.bus();
     // Connected again: its listeners are replaced.
-    bus.unlisten(WindowOpen::ID, WINDOW_LISTENER);
-    bus.unlisten(WindowClose::ID, WINDOW_LISTENER);
+    bus.unlisten(&WindowOpen::ID, WINDOW_LISTENER);
+    bus.unlisten(&WindowClose::ID, WINDOW_LISTENER);
     let opened = {
         let admin = admin.clone();
         bus.listen::<WindowOpen>(

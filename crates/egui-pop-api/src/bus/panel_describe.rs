@@ -10,7 +10,7 @@
 //!
 //! [`AppHandle::describe_panel`]: crate::AppHandle::describe_panel
 
-use bus_contract::{Bus, ListenOpts, Point, PointKind};
+use bus_contract::{Bus, ListenOpts, Point, PointId, PointKind};
 use egui_pop_model::ids::PanelId;
 use egui_pop_model::panels::PanelKind;
 use serde::{Deserialize, Serialize};
@@ -37,14 +37,14 @@ pub struct PanelDescription {
 pub struct PanelDescribe;
 impl Point for PanelDescribe {
     const KIND: PointKind = PointKind::Alter;
-    const ID: &'static str = "pop.panel.describe";
+    const ID: PointId = PointId::new("pop.panel.describe");
     type Input = String;
     type Value = Option<PanelDescription>;
 }
 
 /// The panel description points, in the order [`super::order_dump`]
 /// prints them.
-pub const PANEL_DESCRIBE_POINTS: [&str; 1] = [PanelDescribe::ID];
+pub const PANEL_DESCRIBE_POINTS: [&str; 1] = [PanelDescribe::ID.as_str()];
 
 /// The workbench's listener of `pop.panel.describe`: describes a declared
 /// panel from its declaration.

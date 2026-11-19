@@ -28,7 +28,7 @@
 //! Invariant 6 ([`crate::window_invariants::ON_SCREEN`]) checks that every
 //! positioned window meets a screen.
 
-use bus_contract::{Bus, ListenOpts, Point, PointKind};
+use bus_contract::{Bus, ListenOpts, Point, PointId, PointKind};
 use egui::{Context, Pos2, Rect, ViewportCommand, ViewportId};
 use serde::Serialize;
 
@@ -62,7 +62,7 @@ impl From<&Screen> for ScreenChange {
 pub struct ScreenAdded;
 impl Point for ScreenAdded {
     const KIND: PointKind = PointKind::Event;
-    const ID: &'static str = "pop.screen.added";
+    const ID: PointId = PointId::new("pop.screen.added");
     type Input = ScreenChange;
     type Value = ();
 }
@@ -73,13 +73,13 @@ impl Point for ScreenAdded {
 pub struct ScreenRemoved;
 impl Point for ScreenRemoved {
     const KIND: PointKind = PointKind::Event;
-    const ID: &'static str = "pop.screen.removed";
+    const ID: PointId = PointId::new("pop.screen.removed");
     type Input = ScreenChange;
     type Value = ();
 }
 
 /// The screen points, in the order [`super::order_dump`] prints them.
-pub const SCREEN_POINTS: [&str; 2] = [ScreenAdded::ID, ScreenRemoved::ID];
+pub const SCREEN_POINTS: [&str; 2] = [ScreenAdded::ID.as_str(), ScreenRemoved::ID.as_str()];
 
 /// The workbench's listener of `pop.screen.removed`: a detached panel's
 /// window kept on the screen gone docks back.

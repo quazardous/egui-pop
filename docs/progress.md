@@ -12,7 +12,7 @@ in [Advanced widgets](widgets.md), section 3.
 `JobsPlugin` (opt-in, `egui_pop::api::jobs`) keeps it behind the `JOBS`
 service, as a listener on the bus
 ([ADR 0029](adr/0029-not-on-the-bus.md)): the bus delivers each
-`job.*` event of the journal once, in order, to the listeners of `pop.job.*`
+`job.*` event of the journal once, in order, to the listeners of `pop.job.event`
 (each pass, and before a wait or a plugin's disconnection reads the
 jobs: `AppHandle::deliver_events`), and `pop.jobs.model` is one of them.
 Nothing polls: without new events, nothing is read.

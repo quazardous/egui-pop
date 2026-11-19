@@ -1751,8 +1751,8 @@ fn answer_step(
 /// [`CANCEL_ON_CLOSE`] on `pop.window.close`.
 fn listen(app: &AppHandle) {
     let bus = app.bus();
-    bus.unlisten(PopupClose::ID, POPUP_LISTENER);
-    bus.unlisten(WindowClose::ID, CANCEL_ON_CLOSE);
+    bus.unlisten(&PopupClose::ID, POPUP_LISTENER);
+    bus.unlisten(&WindowClose::ID, CANCEL_ON_CLOSE);
     let mine = || ListenOpts::new().owner(PLUGIN.as_str());
     let listened = [
         bus.listen::<PopupClose>(POPUP_LISTENER, mine().before(REGISTRY), |req, did| {

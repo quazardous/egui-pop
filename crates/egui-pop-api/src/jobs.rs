@@ -1,7 +1,7 @@
 //! Jobs, as a plugin ([`JobsPlugin`], opt-in): the host's background
 //! work, followed on the bus ([ADR 0029](crate::bus)). The host publishes
 //! `job.*` events (see [`egui_pop_model::jobs`] for their data); the bus
-//! delivers each once, in journal order, to the listeners of `pop.job.*`
+//! delivers each once, in journal order, to the listeners of `pop.job.event`
 //! (each pass, and before a read that must see them all), and the
 //! [`Jobs`] model behind the [`JOBS`] service is one of them
 //! ([`MODEL`], `pop.jobs.model`): no job state changes but on a bus event or
@@ -116,7 +116,7 @@ pub const CMD_RETRY: CommandId = CommandId::from_static("job.retry");
 /// it to the model.
 pub const STEP_ESTIMATE: StepId = StepId::from_static("jobs.estimate");
 
-/// The jobs model's listener: of `pop.job.*` (it folds each event), and of
+/// The jobs model's listener: of `pop.job.event` (it folds each event), and of
 /// the job requests (the job shows as asked).
 pub const MODEL: &str = "pop.jobs.model";
 /// Runs a job request's command, after [`MODEL`]: the host (or the
@@ -293,7 +293,7 @@ impl JobsService {
         s.jobs.take_changed()
     }
 
-    /// Folds one event the bus delivered ([`MODEL`] on `pop.job.*`).
+    /// Folds one event the bus delivered ([`MODEL`] on `pop.job.event`).
     fn follow(&self, app: &AppHandle, e: &Event) {
         let time = egui_pop_core::motion::now(&app.egui());
         lock(&self.state).now = time;

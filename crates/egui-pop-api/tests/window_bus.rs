@@ -58,7 +58,7 @@ fn the_window_points_run_in_their_reviewed_order() {
     let close: Vec<String> = m
         .app()
         .bus()
-        .listeners(WindowClose::ID)
+        .listeners(&WindowClose::ID)
         .unwrap()
         .into_iter()
         .map(|l| l.id)

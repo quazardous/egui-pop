@@ -383,7 +383,7 @@ pub(crate) fn refuse_call(
 /// The listener on `pop.command.run`.
 pub(crate) fn listen(app: &AppHandle) {
     let bus = app.bus();
-    bus.unlisten(CommandRun::ID, GRANTS);
+    bus.unlisten(&CommandRun::ID, GRANTS);
     let r = bus.listen::<CommandRun>(
         GRANTS,
         ListenOpts::new().owner(GRANTS).priority(PRIORITY),

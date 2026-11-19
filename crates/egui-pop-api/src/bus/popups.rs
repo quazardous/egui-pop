@@ -124,7 +124,7 @@ impl AppHandle {
     /// (docs/stability.md).</div>
     pub fn request_popup_open(&self, request: WindowRequest) -> bool {
         if let Some(why) = self.open_refusal(&request, WindowKind::Popup) {
-            self.refuse("popup", PopupOpen::ID, &request, why);
+            self.refuse("popup", PopupOpen::ID.as_str(), &request, why);
             return false;
         }
         let did = emit::<PopupOpen>(self, request.clone());
@@ -148,7 +148,7 @@ impl AppHandle {
         if !self.holds(&request.window) {
             self.refuse(
                 "popup",
-                PopupClose::ID,
+                PopupClose::ID.as_str(),
                 &request,
                 "no open popup of this id",
             );
@@ -176,7 +176,7 @@ impl AppHandle {
     /// (docs/stability.md).</div>
     pub fn request_native_open(&self, request: WindowRequest) -> bool {
         if let Some(why) = self.open_refusal(&request, WindowKind::Native) {
-            self.refuse("window", WindowOpen::ID, &request, why);
+            self.refuse("window", WindowOpen::ID.as_str(), &request, why);
             return false;
         }
         let did = self.ask_window_open(request.clone());

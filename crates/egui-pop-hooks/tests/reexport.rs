@@ -5,11 +5,11 @@ use std::any::TypeId;
 use std::sync::Arc;
 
 use egui_pop_hooks::bus_contract::Bus;
-use egui_pop_hooks::{Kernel, ListenOpts, Point, PointSpec};
+use egui_pop_hooks::{Kernel, ListenOpts, Point, PointId, PointSpec};
 
 struct Trail;
 impl Point for Trail {
-    const ID: &'static str = "test.trail";
+    const ID: PointId = PointId::new("test.trail");
     type Input = ();
     type Value = Vec<String>;
 }
@@ -23,7 +23,7 @@ fn the_old_paths_are_bus_kernel_items() {
     );
     let bus: Arc<dyn Bus> = Arc::new(egui_pop_hooks::bus_kernel::Kernel::new());
     bus.declare::<Trail>(PointSpec::new("A trail.")).unwrap();
-    bus.listen::<Trail>("a", ListenOpts::new(), |_, v| {
+    bus.listen::<Trail>("test.a", ListenOpts::new(), |_, v| {
         v.push("a".into());
         Ok(())
     })

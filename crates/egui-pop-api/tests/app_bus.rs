@@ -10,8 +10,12 @@ use std::sync::{Arc, Mutex};
 use egui_pop_api::admin::AdminPlugin;
 use egui_pop_api::bus::bus_contract::{
     self, Altered, AnyInput, AnyListener, AnyLocalListener, AnyValue, Bus, CloneFn, Collected,
-    FailureSink, FreshFn, Journal, JournalEntry, ListenOpts, ListenerInfo, PendingRun,
-    PendingWaker, Point, PointDecl, PointInfo, PointKey, PointKind, PointSpec, Refused, Since,
+    FailureSink, FreshFn, ListenOpts, ListenerInfo, PendingRun, PendingWaker, Point, PointDecl,
+    PointId, PointInfo, PointKey, PointKind, PointSpec, Refused,
+};
+use egui_pop_api::bus::bus_contract_crossing::BusCrossing;
+use egui_pop_api::bus::bus_contract_journal::{
+    BusJournal, JOURNALED, Journal, JournalEntry, Since,
 };
 use egui_pop_api::bus::egui_pop_hooks::Kernel;
 use egui_pop_api::bus::{
@@ -164,7 +168,7 @@ fn an_application_bus_receives_egui_pops_points_listeners_and_requests() {
     // Every listener of `pop.window.close` it runs was registered through it.
     let mut registered = recording.calls("listen pop.window.close ");
     let mut running: Vec<String> = recording
-        .listeners(WindowClose::ID)
+        .listeners(&WindowClose::ID)
         .unwrap()
         .into_iter()
         .map(|l| l.id)
@@ -244,7 +248,7 @@ fn a_second_application_on_one_bus_is_refused() {
 struct HealthReport;
 
 impl Point for HealthReport {
-    const ID: &'static str = "health.report";
+    const ID: PointId = PointId::new("health.report");
     type Input = ();
     type Value = Vec<String>;
     const KIND: PointKind = PointKind::Collect;
@@ -286,7 +290,10 @@ fn the_debug_bus_collector_lists_every_point_on_the_bus() {
     let on_bus: Vec<&str> = shared.points().iter().map(|p| p.id).collect();
     assert_eq!(ids, on_bus);
     for decl in CONTRACT {
-        let p = points.iter().find(|p| p["point"] == decl.id).unwrap();
+        let p = points
+            .iter()
+            .find(|p| p["point"] == decl.id.as_str())
+            .unwrap();
         assert_eq!(p["by"], "egui_pop", "{}", decl.id);
         assert_eq!(p["kind"], decl.kind.as_str());
     }
@@ -306,7 +313,7 @@ fn the_debug_bus_collector_lists_every_point_on_the_bus() {
         .map(|l| l["id"].as_str().unwrap())
         .collect();
     let running: Vec<String> = shared
-        .listeners(HealthReport::ID)
+        .listeners(&HealthReport::ID)
         .unwrap()
         .into_iter()
         .map(|l| l.id)
@@ -361,7 +368,7 @@ fn a_local_listener_on_a_window_point_runs_in_order_on_the_interface_thread() {
         )
         .unwrap();
     let order: Vec<(String, bool)> = shared
-        .listeners(WindowClose::ID)
+        .listeners(&WindowClose::ID)
         .unwrap()
         .into_iter()
         .map(|l| (l.id, l.local))
@@ -477,7 +484,7 @@ fn timings_show_in_the_collector_and_a_pass_over_budget_is_said() {
 /// The application's fact: a photo was imported, journaled by its host.
 struct PhotoImported;
 impl Point for PhotoImported {
-    const ID: &'static str = "photo.imported";
+    const ID: PointId = PointId::new("photo.imported");
     const KIND: PointKind = PointKind::Event;
     type Input = String;
     type Value = ();
@@ -529,7 +536,7 @@ fn a_host_journal_given_to_the_kernel_is_reachable_from_the_apps_bus() {
     assert!(
         bus_contract::declare_all(
             &*shared,
-            &[PointDecl::of::<PhotoImported>("A photo was imported.").journaled()],
+            &[PointDecl::of::<PhotoImported>("A photo was imported.").facets(&[JOURNALED])],
         )
         .is_empty()
     );
@@ -576,7 +583,7 @@ fn a_host_journal_given_to_the_kernel_is_reachable_from_the_apps_bus() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|p| p["point"] == WindowClose::ID)
+        .find(|p| p["point"] == WindowClose::ID.as_str())
         .unwrap()
         .clone();
     assert_eq!(close["journaled"], false);

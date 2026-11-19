@@ -18,7 +18,7 @@
 
 use std::path::PathBuf;
 
-use bus_contract::{Bus, ListenOpts, Point, PointKind};
+use bus_contract::{Bus, ListenOpts, Point, PointId, PointKind};
 use egui::{Context, Id, Ui};
 use serde::Serialize;
 use serde_json::json;
@@ -69,13 +69,13 @@ impl FileDrop {
 pub struct FilesDrop;
 impl Point for FilesDrop {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.files.drop";
+    const ID: PointId = PointId::new("pop.files.drop");
     type Input = FileDrop;
     type Value = Vec<String>;
 }
 
 /// The files points, in the order [`super::order_dump`] prints them.
-pub const FILES_POINTS: [&str; 1] = [FilesDrop::ID];
+pub const FILES_POINTS: [&str; 1] = [FilesDrop::ID.as_str()];
 
 /// egui-pop's listener of `pop.files.drop`, first: what the widgets of the
 /// window's pass took (the file browser over one of its targets).
@@ -249,7 +249,7 @@ fn paint_hover(app: &AppHandle, ui: &Ui) {
 /// The listeners of `pop.files.drop` but egui-pop's own.
 fn takers(app: &AppHandle) -> usize {
     app.bus()
-        .listeners(FilesDrop::ID)
+        .listeners(&FilesDrop::ID)
         .unwrap_or_default()
         .iter()
         .filter(|l| l.id != BROWSER)
@@ -316,7 +316,7 @@ impl AppHandle {
                 "egui_pop",
                 None,
                 "files.refused",
-                data(json!({ "request": FilesDrop::ID, "reason": reason })),
+                data(json!({ "request": FilesDrop::ID.as_str(), "reason": reason })),
             );
         } else {
             self.publish(

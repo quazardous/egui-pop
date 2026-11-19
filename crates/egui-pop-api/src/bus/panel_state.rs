@@ -26,7 +26,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use bus_contract::{Bus, ListenOpts, Point, PointKind};
+use bus_contract::{Bus, ListenOpts, Point, PointId, PointKind};
 use egui::{Context, Id, Rect, Response, Ui, UiBuilder};
 use egui_pop_core::icon::Icon;
 use egui_pop_core::indicator::{Anchor, Indicator, Pip, Size};
@@ -109,13 +109,13 @@ impl PanelStateAsk {
 pub struct PanelStateSet;
 impl Point for PanelStateSet {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.panel.state";
+    const ID: PointId = PointId::new("pop.panel.state");
     type Input = PanelStateAsk;
     type Value = Vec<String>;
 }
 
 /// The panel state points, in the order [`super::order_dump`] prints them.
-pub const PANEL_STATE_POINTS: [&str; 1] = [PanelStateSet::ID];
+pub const PANEL_STATE_POINTS: [&str; 1] = [PanelStateSet::ID.as_str()];
 
 /// The workbench's listener of `pop.panel.state`: keeps each panel's state
 /// for its chrome.

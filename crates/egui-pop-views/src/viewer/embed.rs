@@ -648,7 +648,7 @@ fn too_small(ui: &mut Ui, place: &Placement, native: f32) -> bool {
 /// on.
 pub(super) fn listen(app: &AppHandle, viewer: &Arc<Viewer>) {
     let bus = app.bus();
-    bus.unlisten(WindowClose::ID, WEB_VIEW_LISTENER);
+    bus.unlisten(&WindowClose::ID, WEB_VIEW_LISTENER);
     let weak = Arc::downgrade(viewer);
     let listened = bus.listen_local::<WindowClose>(
         WEB_VIEW_LISTENER,
@@ -672,5 +672,5 @@ pub(super) fn listen(app: &AppHandle, viewer: &Arc<Viewer>) {
 
 /// Takes the viewer's listener off the bus.
 pub(super) fn unlisten(app: &AppHandle) {
-    app.bus().unlisten(WindowClose::ID, WEB_VIEW_LISTENER);
+    app.bus().unlisten(&WindowClose::ID, WEB_VIEW_LISTENER);
 }

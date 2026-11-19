@@ -29,6 +29,8 @@ const THEME_INSTALLED: state::Slot<bool> = state::Slot::new("api.app.theme_insta
 const TOP_BAR_RESERVE: state::Slot<f32> = state::Slot::new("api.app.top_bar_reserve");
 /// The width the top bar's end zone took last pass.
 const TOP_BAR_END_WIDTH: state::Slot<f32> = state::Slot::new("api.app.top_bar_end_width");
+use bus_contract_journal::BusJournal;
+use bus_contract_timings::BusTimings;
 use egui_pop_model::commands::{CommandSpec, Commands, Origin, Run};
 use egui_pop_model::diagnostics::{Diagnostic, Diagnostics};
 use egui_pop_model::ids::{
@@ -1559,7 +1561,7 @@ impl AppHandle {
     }
 
     /// The bus's journal, when it is egui-pop's (`crate::bus::HOST_JOURNAL`).
-    fn bus_journal(&self) -> Option<&dyn crate::bus::bus_contract::Journal> {
+    fn bus_journal(&self) -> Option<&dyn crate::bus::bus_contract_journal::Journal> {
         if self.0.journal_on_bus.get() {
             self.0.bus.kernel.journal()
         } else {
@@ -4202,7 +4204,9 @@ impl AppBuilder {
                 .find(|d| declared.iter().any(|p| p.id == d.id && p.declared))
             {
                 return Err(BuildError::Bus(
-                    crate::bus::bus_contract::Refused::AlreadyDeclared { point: taken.id },
+                    crate::bus::bus_contract::Refused::AlreadyDeclared {
+                        point: taken.id.as_str(),
+                    },
                 ));
             }
         }
@@ -5600,7 +5604,7 @@ impl App {
                 let kernel = app.bus();
                 let infos = kernel.points();
                 let ids: Vec<&str> = infos.iter().map(|p| p.id).collect();
-                let timings: Vec<crate::bus::bus_contract::PointTimings> =
+                let timings: Vec<crate::bus::bus_contract_timings::PointTimings> =
                     kernel.timings().map(|t| t.points()).unwrap_or_default();
                 let points: Vec<Json> = infos
                     .iter()
@@ -5648,21 +5652,20 @@ impl App {
                             "description": p.description,
                             "deadline_ms": p.deadline.as_millis(),
                             "budget_us": p.budget.map(crate::bus::budget::us),
-                            "journaled": p.journaled,
-                            "relayable": p.relayable,
+                            "journaled": crate::bus::bus_contract_journal::is_journaled(&p.facets),
+                            "relayable": crate::bus::bus_contract_crossing::codec(&p.facets).is_some(),
                             "timing": timing,
                             "listeners": listeners,
                         })
                     })
                     .collect();
                 let offers = |c| crate::bus::bus_contract::offers(&*kernel, c);
-                use crate::bus::bus_contract::Capability;
                 json!({
                     "capabilities": {
-                        "defer": offers(Capability::Defer),
-                        "timings": offers(Capability::Timings),
-                        "journal": offers(Capability::Journal),
-                        "relay": offers(Capability::Relay),
+                        "defer": offers(&crate::bus::bus_contract_defer::CONTRACT),
+                        "timings": offers(&crate::bus::bus_contract_timings::CONTRACT),
+                        "journal": offers(&crate::bus::bus_contract_journal::CONTRACT),
+                        "relay": offers(&crate::bus::bus_contract_crossing::CONTRACT),
                     },
                     "journal_seq": kernel.journal().map(|j| j.last_seq()),
                     "points": points,

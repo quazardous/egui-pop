@@ -10,7 +10,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use bus_contract::{Bus, ListenOpts, Point, PointKind};
+use bus_contract::{Bus, ListenOpts, Point, PointId, PointKind};
 use egui_pop_core::areas::{self, AreaRecord};
 use egui_pop_core::lock;
 
@@ -22,13 +22,13 @@ use super::OWNER;
 pub struct UiAreas;
 impl Point for UiAreas {
     const KIND: PointKind = PointKind::Alter;
-    const ID: &'static str = "pop.ui.areas";
+    const ID: PointId = PointId::new("pop.ui.areas");
     type Input = ();
     type Value = Vec<AreaRecord>;
 }
 
 /// The area points, in the order [`super::order_dump`] prints them.
-pub const AREA_POINTS: [&str; 1] = [UiAreas::ID];
+pub const AREA_POINTS: [&str; 1] = [UiAreas::ID.as_str()];
 
 /// The registry's listener of `pop.ui.areas`: lists the areas registered.
 pub const AREA_REGISTRY: &str = "pop.ui.area_registry";

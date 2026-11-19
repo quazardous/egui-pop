@@ -470,7 +470,7 @@ fn a_listener_of_stack_dock_drop_refuses_a_drop_with_its_reason() {
     assert_eq!(moves.load(Ordering::SeqCst), 0, "no step for a refusal");
     // The workbench's own listener still says the panels' rules.
     assert!(
-        app.bus().listeners(DockDrop::ID).is_some_and(|l| l
+        app.bus().listeners(&DockDrop::ID).is_some_and(|l| l
             .iter()
             .any(|l| l.id == egui_pop_api::workbench::STACK_DROP)),
         "egui-pop's veto listens on the bus"

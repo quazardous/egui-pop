@@ -16,7 +16,7 @@
 //! match its command's JSON Schema (`by: "pop.command.args"`,
 //! [`ARGS_VALIDATOR`]).
 
-use bus_contract::{Point, PointKind, Refusal};
+use bus_contract::{Point, PointId, PointKind, Refusal};
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::CommandId;
 use serde_json::Value as Json;
@@ -65,7 +65,7 @@ impl CommandAsk {
 pub struct CommandRun;
 impl Point for CommandRun {
     const KIND: PointKind = PointKind::Request;
-    const ID: &'static str = "pop.command.run";
+    const ID: PointId = PointId::new("pop.command.run");
     type Input = CommandAsk;
     type Value = Vec<String>;
 }
@@ -98,7 +98,7 @@ pub(crate) fn args_refusal(
 }
 
 /// The command points, in the order [`super::order_dump`] prints them.
-pub const COMMAND_POINTS: [&str; 1] = [CommandRun::ID];
+pub const COMMAND_POINTS: [&str; 1] = [CommandRun::ID.as_str()];
 
 /// Asks `pop.command.run` for `app`, inline: the refusal that stopped the
 /// run, if one did; the listeners' failures logged.

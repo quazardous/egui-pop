@@ -9,7 +9,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use bus_contract::{ListenerTimings, OVER_BUDGET_FACT, OverBudget, PointTimings, TimingStats};
+use bus_contract_timings::{
+    BusTimings, ListenerTimings, OVER_BUDGET_FACT, OverBudget, PointTimings, TimingStats,
+};
 use serde_json::{Value as Json, json};
 use web_time::Instant;
 

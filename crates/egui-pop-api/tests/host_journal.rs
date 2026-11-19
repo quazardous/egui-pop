@@ -12,7 +12,8 @@ use std::time::Duration;
 
 use bus_kernel::conformance;
 use egui_pop_api::about::{AboutPlugin, AppInfo};
-use egui_pop_api::bus::bus_contract::{Bus, Point, PointDecl, PointKind, declare_all};
+use egui_pop_api::bus::bus_contract::{Bus, Point, PointDecl, PointId, PointKind, declare_all};
+use egui_pop_api::bus::bus_contract_journal::{BusJournal, JOURNALED};
 use egui_pop_api::bus::egui_pop_hooks::Kernel;
 use egui_pop_api::host::{Dispatch, Host, Journal as HostJournal, Reply, Waker};
 use egui_pop_api::wait::{WaitFor, Waited};
@@ -22,7 +23,7 @@ use serde_json::{Value as Json, json};
 /// The application's own fact, journaled on its bus.
 struct Imported;
 impl Point for Imported {
-    const ID: &'static str = "library.imported";
+    const ID: PointId = PointId::new("library.imported");
     const KIND: PointKind = PointKind::Event;
     type Input = String;
     type Value = ();
@@ -34,7 +35,7 @@ fn journaled_bus() -> Arc<dyn Bus> {
     assert!(
         declare_all(
             &*bus,
-            &[PointDecl::of::<Imported>("A photo was imported.").journaled()]
+            &[PointDecl::of::<Imported>("A photo was imported.").facets(&[JOURNALED])]
         )
         .is_empty()
     );
