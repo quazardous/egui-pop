@@ -2670,7 +2670,8 @@ pub(crate) fn windows(
 }
 
 /// The floats showing the detached windows drawn: one per window, keyed
-/// by its panel, at its place (egui-pop's, read on egui_stack's screens).
+/// by its panel, opened at its place (egui-pop's, read on egui_stack's
+/// screens).
 /// A window no longer drawn loses its dock, and egui_stack closes its
 /// float (forgetting its window's builder).
 ///
@@ -2698,12 +2699,13 @@ fn sync_floats(
     }
     for aux in drawn {
         let float = window_host::float_of(aux, screens);
-        match floats.float_mut(&float.key) {
-            Some(open) => open.place = float.place,
-            None => {
-                let place = float.place.clone();
-                floats.open_float(float).place = place;
-            }
+        // An open float keeps the place egui_stack follows from the system:
+        // egui_stack moves a window whose place changed from code (0.28.9),
+        // and egui-pop asks its own moves itself (`window_asks`), so its
+        // place, told by the system, is never written back (#5241).
+        if floats.float_mut(&float.key).is_none() {
+            let place = float.place.clone();
+            floats.open_float(float).place = place;
         }
     }
 }
