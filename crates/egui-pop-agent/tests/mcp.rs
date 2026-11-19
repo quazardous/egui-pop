@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use egui_kittest::Harness;
+use egui_pop_agent::grants::{AgentGrants, AgentGrantsExt as _, Grant};
 use egui_pop_agent::mcp::{McpBridge, SocketClient, Target, tool_name, tools};
 use egui_pop_agent::{AgentSocket, AgentSocketExt as _};
 use egui_pop_api::about::{AboutPlugin, AppInfo};
@@ -209,9 +210,25 @@ impl Plugin for Writes {
                 .schema(zoom_schema()),
             |c| Ok(c.args["factor"].clone()),
         )?;
+        // Private: a file path, read or failed.
+        ctx.command(
+            CommandSpec::new(HOME, "Home folder", "Test")
+                .description("The library's folder (a test's).")
+                .read_only()
+                .private(),
+            |c| match c.args.get("fail") {
+                Some(_) => Err(format!("no such folder: {SECRET}")),
+                None => Ok(json!(SECRET)),
+            },
+        )?;
         Ok(())
     }
 }
+
+/// A private command: its result is a file path.
+const HOME: CommandId = CommandId::from_static("test.home");
+/// The private data `test.home` answers.
+const SECRET: &str = "/home/someone/Pictures";
 
 fn zoom_schema() -> Json {
     json!({
@@ -230,7 +247,12 @@ fn private_dir(name: &str) -> PathBuf {
 }
 
 fn app(socket: &Path) -> Harness<'static, App> {
+    app_with(socket, AgentGrants::new())
+}
+
+fn app_with(socket: &Path, grants: AgentGrants) -> Harness<'static, App> {
     let builder = App::builder()
+        .agent_grants(grants)
         .plugins(DefaultPlugins)
         .plugin(AboutPlugin::new(AppInfo::new("MCP test", "1.0.0")))
         .plugin(Writes)
@@ -390,4 +412,164 @@ fn mcp_lists_and_calls_through_the_socket() {
         std::thread::sleep(Duration::from_millis(2));
     }
     thread.join().expect("the client passes");
+}
+
+/// Runs `client` against the MCP bridge on the socket at `path`, on its
+/// own thread, while stepping the harness's frames.
+fn with_mcp<F>(
+    h: &mut Harness<'static, App>,
+    path: &Path,
+    client: impl FnOnce(Client) -> F + Send + 'static,
+) where
+    F: std::future::Future<Output = ()> + 'static,
+{
+    let p = path.to_path_buf();
+    let thread = std::thread::spawn(move || {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(async move {
+            let (client_end, server) = tokio::io::duplex(1 << 20);
+            let serving = tokio::spawn(async move {
+                let running = McpBridge::new(SocketClient::new(p))
+                    .serve(server)
+                    .await
+                    .expect("the handshake");
+                let _ = running.waiting().await;
+            });
+            let (read, write) = tokio::io::split(client_end);
+            let mut c = Client {
+                read: BufReader::new(read),
+                write,
+                next: 1,
+            };
+            c.request(
+                "initialize",
+                json!({
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": { "name": "test", "version": "0" },
+                }),
+            )
+            .await;
+            c.send(json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }))
+                .await;
+            client(c).await;
+            serving.abort();
+        });
+    });
+    let start = Instant::now();
+    while !thread.is_finished() {
+        assert!(
+            start.elapsed() < Duration::from_secs(60),
+            "the client did not finish"
+        );
+        h.step();
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    thread.join().expect("the client passes");
+}
+
+/// The user runs `test.home` twice, once failing: its result and its
+/// error are on the journal and in the run history.
+fn user_runs_home(h: &mut Harness<'static, App>) {
+    use egui_pop_api::model::commands::Origin;
+    let ok = h
+        .state_mut()
+        .run(&HOME, Json::Null, Origin::User)
+        .now()
+        .unwrap();
+    assert_eq!(ok, Ok(json!(SECRET)));
+    let failed = h
+        .state_mut()
+        .run(&HOME, json!({ "fail": SECRET }), Origin::User)
+        .now()
+        .unwrap();
+    assert!(failed.is_err());
+    h.step();
+}
+
+#[test]
+fn a_granted_agent_reads_a_private_commands_result_over_mcp() {
+    let dir = private_dir("private-granted");
+    let path = dir.join("app.sock");
+    // The default grants show private data.
+    let mut h = app(&path);
+    user_runs_home(&mut h);
+    with_mcp(&mut h, &path, |mut c| async move {
+        // Queued, then read back from the journal's `command.done`.
+        let home = c
+            .request(
+                "tools/call",
+                json!({ "name": "test_home", "arguments": {} }),
+            )
+            .await;
+        assert_ne!(home["isError"], true, "{home}");
+        assert_eq!(
+            home["content"][0]["text"],
+            json!(SECRET).to_string(),
+            "{home}"
+        );
+        // The journal and the run history, in clear.
+        let journal = c
+            .request(
+                "tools/call",
+                json!({ "name": "snapshot", "arguments": { "collector": "journal" } }),
+            )
+            .await;
+        assert!(journal.to_string().contains(SECRET), "{journal}");
+        let commands = c
+            .request(
+                "tools/call",
+                json!({ "name": "snapshot", "arguments": { "collector": "commands" } }),
+            )
+            .await;
+        assert!(commands.to_string().contains(SECRET), "{commands}");
+    });
+}
+
+#[test]
+fn an_agent_without_private_data_is_refused_a_private_command_and_reads_it_redacted() {
+    let dir = private_dir("private-withheld");
+    let path = dir.join("app.sock");
+    let mut h = app_with(
+        &path,
+        AgentGrants::new().unpaired(Grant::read_only().private(false)),
+    );
+    user_runs_home(&mut h);
+    with_mcp(&mut h, &path, |mut c| async move {
+        // Refused before it runs: no result to read back.
+        let home = c
+            .request(
+                "tools/call",
+                json!({ "name": "test_home", "arguments": {} }),
+            )
+            .await;
+        assert_eq!(home["isError"], true, "{home}");
+        assert!(home.to_string().contains("private data"), "{home}");
+        assert!(!home.to_string().contains(SECRET), "{home}");
+        // What the user ran is on the journal, redacted for this agent.
+        for collector in ["journal", "commands"] {
+            let snap = c
+                .request(
+                    "tools/call",
+                    json!({ "name": "snapshot", "arguments": { "collector": collector } }),
+                )
+                .await;
+            let text = snap.to_string();
+            assert!(!text.contains(SECRET), "{collector}: {snap}");
+            assert!(text.contains("<private>"), "{collector}: {snap}");
+        }
+        let failed = c
+            .request(
+                "tools/call",
+                json!({ "name": "wait", "arguments": { "event": "command.failed", "since": 0, "deadline_ms": 10_000 } }),
+            )
+            .await;
+        let event = &failed["structuredContent"]["event"];
+        assert_eq!(event["data"]["command"], "test.home", "{failed}");
+        assert_eq!(event["data"]["error"], "<private>", "{failed}");
+        assert_eq!(event["data"]["private"], true, "{failed}");
+    });
 }

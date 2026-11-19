@@ -38,6 +38,12 @@ const PLACES: CommandId = CommandId::from_static("test.places");
 /// for an agent whose grant withholds them.
 const PHOTOS: CommandId = CommandId::from_static("test.photos");
 
+/// A private command taking a path: it answers the path, or fails
+/// naming it when `fail` is set.
+const LOCATE: CommandId = CommandId::from_static("test.locate");
+/// The private data `test.locate` is given.
+const SECRET: &str = "/home/someone/Pictures";
+
 /// The schema `test.zoom` and `test.wipe` declare.
 fn factor_schema() -> Json {
     json!({
@@ -84,6 +90,19 @@ impl Plugin for Writes {
                 .read_only()
                 .private(),
             |_| Ok(json!({ "places": ["48.85,2.35"] })),
+        )?;
+        ctx.command(
+            CommandSpec::new(LOCATE, "Locate", "Test")
+                .description("Finds a folder by its path (a test's).")
+                .read_only()
+                .private(),
+            |c| {
+                let path = c.args["path"].clone();
+                match c.args.get("fail") {
+                    Some(_) => Err(format!("no such folder: {}", path.as_str().unwrap_or(""))),
+                    None => Ok(json!({ "found": path })),
+                }
+            },
         )?;
         ctx.command(
             CommandSpec::new(PHOTOS, "Photos", "Test")
@@ -1661,4 +1680,130 @@ fn private_data_is_refused_or_left_out_for_an_agent_whose_grant_withholds_it() {
         Grant::read_only()
     );
     assert!(run(&mut h, &PLACES, Json::Null, unpaired).is_ok());
+}
+
+/// What an agent reads of `test.locate` and `test.photos` through the
+/// socket: the journal (snapshot, `journal.since`), the `commands`
+/// collector's run history, and a `wait` on the failure.
+fn read_private_runs(path: &Path, h: &mut Harness<'static, App>) -> (Json, Json, Json, Json) {
+    let p = path.to_path_buf();
+    with_client(h, move || {
+        let mut c = Client::connect(&p);
+        let journal = c.result("snapshot", json!({ "collector": "journal" }));
+        let since = c.result(
+            "call",
+            json!({ "collector": "journal", "action": "since", "args": { "seq": 0 } }),
+        );
+        let commands = c.result("snapshot", json!({ "collector": "commands" }));
+        let failed = c.result(
+            "wait",
+            json!({ "event": "command.failed", "since": 0, "deadline_ms": 10_000 }),
+        );
+        (journal, since, commands, failed)
+    })
+}
+
+#[test]
+fn a_private_commands_args_result_and_error_are_redacted_for_an_agent_without_private_data() {
+    use egui_pop_api::model::commands::Origin;
+    let dir = private_dir("redacted");
+    let path = dir.join("app.sock");
+    let mut h = app(
+        App::builder().debug_bridge(egui_pop_api::core::debug::BridgeMode::On),
+        &path,
+    );
+    // The user runs the private command twice (once failing) and a
+    // public one.
+    let args = json!({ "path": SECRET });
+    let ok = h
+        .state_mut()
+        .run(&LOCATE, args.clone(), Origin::User)
+        .now()
+        .unwrap();
+    assert_eq!(ok, Ok(json!({ "found": SECRET })));
+    let failing = json!({ "path": SECRET, "fail": true });
+    assert!(
+        h.state_mut()
+            .run(&LOCATE, failing, Origin::User)
+            .now()
+            .unwrap()
+            .is_err()
+    );
+    h.state_mut()
+        .run(&PHOTOS, Json::Null, Origin::User)
+        .now()
+        .unwrap()
+        .unwrap();
+    h.step();
+
+    // The journal keeps them whole, marked private; in process (the
+    // application) they are in clear.
+    let done = done_runs(&h, "test.locate");
+    assert_eq!(done[0].data["result"]["found"], SECRET);
+    assert_eq!(done[0].data["private"], true);
+    assert_eq!(done_runs(&h, "test.photos")[0].data.get("private"), None);
+
+    // An agent shown private data (every preset by default) reads them in
+    // clear.
+    let (journal, since, commands, failed) = read_private_runs(&path, &mut h);
+    for read in [&journal, &since, &commands, &failed] {
+        assert!(read.to_string().contains(SECRET), "{read}");
+    }
+    assert_eq!(
+        failed["event"]["data"]["error"],
+        format!("no such folder: {SECRET}")
+    );
+
+    // Withheld: every read says `<private>` instead, and nothing else.
+    let app_handle = h.state().handle().clone();
+    egui_pop_agent::grants::set_grants(
+        &app_handle,
+        egui_pop_agent::grants::AgentGrants::new().unpaired(Grant::read_only().private(false)),
+    );
+    let (journal, since, commands, failed) = read_private_runs(&path, &mut h);
+    for read in [&journal, &since, &commands, &failed] {
+        assert!(!read.to_string().contains(SECRET), "{read}");
+    }
+    let event = |events: &Json, name: &str, command: &str| {
+        events
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["name"] == name && e["data"]["command"] == command)
+            .cloned()
+            .unwrap_or_else(|| panic!("{name} of {command} in {events}"))
+    };
+    for events in [&journal["events"], &since["data"]] {
+        let dispatched = event(events, "command.dispatched", "test.locate");
+        assert_eq!(dispatched["data"]["args"], "<private>", "{dispatched}");
+        assert_eq!(dispatched["data"]["private"], true, "{dispatched}");
+        let done = event(events, "command.done", "test.locate");
+        assert_eq!(done["data"]["result"], "<private>", "{done}");
+        let failed = event(events, "command.failed", "test.locate");
+        assert_eq!(failed["data"]["error"], "<private>", "{failed}");
+        // A public command's are unchanged.
+        let photos = event(events, "command.done", "test.photos");
+        assert_eq!(
+            photos["data"]["result"],
+            json!([{ "id": 1, "gps": "48.85,2.35" }])
+        );
+    }
+    assert_eq!(failed["event"]["data"]["error"], "<private>", "{failed}");
+    let runs = commands["history"].as_array().unwrap();
+    let locate: Vec<&Json> = runs.iter().filter(|r| r["id"] == "test.locate").collect();
+    assert_eq!(locate.len(), 2, "{commands}");
+    assert_eq!(locate[0]["args"], "<private>");
+    assert_eq!(locate[0]["result"], json!({ "Ok": "<private>" }));
+    assert_eq!(locate[1]["result"], json!({ "Err": "<private>" }));
+    let photos = runs.iter().find(|r| r["id"] == "test.photos").unwrap();
+    assert_eq!(photos["args"], Json::Null);
+    assert_eq!(photos.get("private"), None, "{photos}");
+    // A declaration is not data: its `private` flag stays as it is.
+    let spec = commands["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["id"] == "test.locate")
+        .unwrap();
+    assert_eq!(spec["private"], true);
 }

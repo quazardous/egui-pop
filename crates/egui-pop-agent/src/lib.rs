@@ -532,6 +532,9 @@ pub(crate) enum Job {
         collector: Option<String>,
         /// The application window seen from (the active one without).
         window: Option<String>,
+        /// Who asks: what it reads private is redacted when its grant
+        /// withholds private data.
+        origin: Origin,
         reply: Reply,
     },
     Call {
@@ -584,6 +587,8 @@ struct Held {
     until: WaitFor,
     since: u64,
     deadline: Instant,
+    /// Who waits: the event it gets is redacted for it when met.
+    origin: Origin,
     reply: Reply,
 }
 
@@ -633,7 +638,9 @@ impl UiSide {
         let now = Instant::now();
         self.waits.retain(|w| {
             if let Some(answer) = check(app, &w.until, w.since) {
-                let _ = w.reply.send(Ok(answer));
+                let _ = w
+                    .reply
+                    .send(Ok(grants::redacted_for(app, &w.origin, answer)));
                 return false;
             }
             if now >= w.deadline {
@@ -683,6 +690,7 @@ impl UiSide {
             Job::Snapshot {
                 collector,
                 window,
+                origin,
                 reply,
             } => {
                 // Snapshots are the bridge's too: refused when it is off,
@@ -698,13 +706,14 @@ impl UiSide {
                         return;
                     }
                 };
-                let _ = reply.send(match collector {
+                let answer = match collector {
                     None => Ok(all),
                     Some(c) => all
                         .get(&c)
                         .cloned()
                         .ok_or_else(|| RpcError::params(format!("no collector `{c}`"))),
-                });
+                };
+                let _ = reply.send(answer.map(|a| grants::redacted_for(app, &origin, a)));
             }
             Job::Call {
                 collector,
@@ -747,8 +756,15 @@ impl UiSide {
                     window,
                     origin,
                 } = call;
-                let f = app.debug_call_in(window.as_deref(), &collector, &action, &args, origin);
-                let _ = reply.send(Ok(serde_json::to_value(&f).unwrap_or(Json::Null)));
+                let f = app.debug_call_in(
+                    window.as_deref(),
+                    &collector,
+                    &action,
+                    &args,
+                    origin.clone(),
+                );
+                let f = serde_json::to_value(&f).unwrap_or(Json::Null);
+                let _ = reply.send(Ok(grants::redacted_for(app, &origin, f)));
             }
             Job::Wait {
                 args,
@@ -764,13 +780,13 @@ impl UiSide {
                     }
                 };
                 // Through the bridge, so the mode and the step apply.
-                let f = app.debug_call_as("bridge", "wait", &args, origin);
+                let f = app.debug_call_as("bridge", "wait", &args, origin.clone());
                 if !f.ok {
                     let _ = reply.send(Err(RpcError::refused(&f)));
                     return;
                 }
                 if f.data["met"] == true {
-                    let _ = reply.send(Ok(f.data));
+                    let _ = reply.send(Ok(grants::redacted_for(app, &origin, f.data)));
                     return;
                 }
                 let since = args
@@ -782,6 +798,7 @@ impl UiSide {
                     until,
                     since,
                     deadline,
+                    origin,
                     reply,
                 });
             }

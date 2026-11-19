@@ -338,6 +338,22 @@ included, unless the user or the application withholds it:
   `egui_pop_agent::grants::reads_private(app, origin)` and leaves the
   private fields out when it is `false`. It is `true` for every origin
   that is not one of the socket's agents, the user's included.
+- **What others ran stays private too.** The user may run a private
+  command, or a granted agent: its arguments, result and error reach
+  the journal (`command.dispatched`, `command.done`,
+  `command.failed`, each marked `"private": true` in its data) and the
+  `commands` collector's run `history` (marked `"private": true`). The
+  socket redacts them at read time, per reader: an agent whose grant
+  withholds private data reads `"<private>"` in their place in every
+  `snapshot`, `call` and `wait` answer
+  (`egui_pop_agent::grants::redacted_for`, which calls
+  `egui_pop_api::host::redact_private`); an agent shown private data
+  reads them whole, so `egui-pop-agent-mcp` still reads a queued
+  private command's result back from its `command.done`. In process,
+  the application reads its journal and `AppHandle::history` whole.
+  The journal is not redacted when written: a host that writes it
+  elsewhere (a trace log, a report) redacts the events marked private
+  itself.
 - **On by default.** Every preset reads private data;
   `Grant::read_only().private(false)` withholds it, and the Agents page
   has a switch for it per agent and for the defaults.

@@ -325,6 +325,7 @@ fn dispatch(
                 Some(_) => Some(str_param("collector")?),
             },
             window,
+            origin,
             reply,
         },
         "call" => {
