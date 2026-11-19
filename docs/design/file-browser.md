@@ -314,6 +314,12 @@ pub struct ModeOutput {
   "thumbnails"])`, all by default).
 - **Persistence.** The current mode per dialog id, the mode's own settings
   (thumbnail size, the columns shown) under `settings/files.mode.<persist>`.
+- **Zoom.** The thumbnails' zoom is a count per row (`ThumbZoom`, the
+  library grid's `Zoom` on the API's side), not a size: the browser turns it
+  into `ModeSettings::thumbnail_size` before each draw, from the room the grid
+  has (`ThumbnailGrid::room`), so it survives a resize and its largest step
+  shows one thumbnail across. A size in points (`set_thumbnail_size`, an
+  older setting) converts to the count it gives at the width.
 - **Accessibility.** `role` sets the container's role (list box, grid,
   tree); every entry is an option with its name, selected state and the
   active descendant, as today.

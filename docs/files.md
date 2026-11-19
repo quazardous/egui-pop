@@ -266,10 +266,17 @@ which swaps the first two (`SetFolder`).
   folder left selected, and a click in another column goes to that folder
   with the folder clicked selected. The button chooses the folder selected,
   else the folder shown, as in the list. Columns last used by a folder
-  chooser are not a file dialog's: it opens in `details`. The thumbnails' size goes from `THUMBNAIL_MIN_SIZE` to
-  `THUMBNAIL_MAX_SIZE` (64 to 256 points, 128 at first): the slider beside the
-  switch, `Ctrl` and the wheel over the grid, or `Ctrl` and `+` or `-`; it is
-  kept in `settings/files.thumbnail_size` (`files::thumbnail_size`). Only the
+  chooser are not a file dialog's: it opens in `details`. The grid's zoom is a count of
+  thumbnails per row (`browser::ThumbZoom`, the library grid's `Zoom`): five
+  at first, one across at most, and no more than cells of
+  `THUMBNAIL_MIN_SIZE` (64 points) fit. The cells share the grid's width, so
+  the zoom survives a resize: a wider dialog shows the same count, larger.
+  The slider beside the switch (fewer, larger to the right), `Ctrl` and the
+  wheel over the grid, or `Ctrl` and `+` or `-` step it; it is kept in
+  `settings/files.thumbnails_per_row` (`files::thumbnail_zoom`,
+  `files::want_thumbnails_per_row`). A size in points an older version kept
+  in `settings/files.thumbnail_size` is read until then, and converted to the
+  count it gives at the grid's width when the grid is next drawn. Only the
   cells in view ask for a thumbnail, so a folder of thousands of raws costs what
   a dialog's worth does: what leaves the view leaves the worker's queue (see
   Previews); the row after the last in view is asked next, as the file

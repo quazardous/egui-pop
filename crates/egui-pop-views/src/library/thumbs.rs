@@ -22,13 +22,36 @@
 //!
 //! Its badges meet the browser's the same way: a [`Badge`] is a
 //! [`MarkChip`] (`MarkChip::from(badge)`), both drawn as indicators.
+//! So does its zoom: a grid's [`Zoom`] and the browser's and picker's
+//! [`ThumbZoom`] are the same count per row, converted with `From`.
 
 use egui::Context;
 use egui_pop_api::files::browser::{
-    MarkChip, Priority, SourceEntry, ThumbRequest, ThumbState, ThumbnailProvider,
+    MarkChip, Priority, SourceEntry, ThumbRequest, ThumbState, ThumbZoom, ThumbnailProvider,
 };
 
-use super::grid::{Badge, Thumb, ThumbSource};
+use super::grid::{Badge, Thumb, ThumbSource, Zoom};
+
+/// The browser's zoom as a grid's: the same count per row, or the same
+/// size in points still to convert.
+impl From<ThumbZoom> for Zoom {
+    fn from(zoom: ThumbZoom) -> Zoom {
+        match zoom {
+            ThumbZoom::PerRow(n) => Zoom::PerRow(n),
+            ThumbZoom::Points(p) => Zoom::Points(p),
+        }
+    }
+}
+
+/// A grid's zoom as the browser's.
+impl From<Zoom> for ThumbZoom {
+    fn from(zoom: Zoom) -> ThumbZoom {
+        match zoom {
+            Zoom::PerRow(n) => ThumbZoom::PerRow(n),
+            Zoom::Points(p) => ThumbZoom::Points(p),
+        }
+    }
+}
 
 /// A thumbnail as a provider has it, as the library draws it. A file
 /// with no image of its own ([`ThumbState::None`], a folder) and one
@@ -136,6 +159,7 @@ impl<K> Drop for ProviderThumbs<'_, K> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::library::grid;
     use egui_pop_api::files::browser::EntryKind;
     use egui_pop_core::kit::Tone;
     use std::path::{Path, PathBuf};
@@ -200,5 +224,16 @@ mod tests {
     fn a_badge_is_a_bottom_right_chip_of_its_tone() {
         let chip = MarkChip::from(Badge::new("RAW").tone(Tone::Info));
         assert_eq!(chip, MarkChip::text("RAW", "RAW").tone(Tone::Info));
+    }
+
+    #[test]
+    fn the_browser_zoom_and_the_grid_zoom_are_one_count_per_row() {
+        assert_eq!(Zoom::from(ThumbZoom::PerRow(1)), Zoom::PerRow(1));
+        assert_eq!(ThumbZoom::from(Zoom::PerRow(8)), ThumbZoom::PerRow(8));
+        assert_eq!(Zoom::from(ThumbZoom::Points(128.0)), Zoom::Points(128.0));
+        assert_eq!(
+            ThumbZoom::from(Zoom::default()),
+            ThumbZoom::PerRow(grid::DEFAULT_PER_ROW)
+        );
     }
 }

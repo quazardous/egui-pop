@@ -2250,7 +2250,8 @@ fn a_click_selects_a_double_click_opens_in_the_grid() {
 }
 
 #[test]
-fn the_view_and_the_size_are_kept_for_the_next_picker() {
+fn the_view_and_the_zoom_are_kept_for_the_next_picker() {
+    use egui_pop_api::files::browser::ThumbZoom;
     let (mut h, _) = grid_harness(40, PickerView::List);
     let app = h.state().handle().clone();
     let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
@@ -2258,46 +2259,51 @@ fn the_view_and_the_size_are_kept_for_the_next_picker() {
     settle_thumbnails(&mut h);
     assert_eq!(state(&h, "view"), "thumbnails");
     assert_eq!(files::view(&app), PickerView::Grid);
-    assert_eq!(files::thumbnail_size(&app), files::THUMBNAIL_DEFAULT_SIZE);
-    let before = state(&h, "columns").as_u64().unwrap();
+    // A count per row: five at first.
+    assert_eq!(files::thumbnail_zoom(&app), ThumbZoom::default());
+    assert_eq!(state(&h, "thumbnails_per_row"), 5);
+    assert_eq!(state(&h, "columns"), 5);
     // Ctrl and + or -, and Ctrl and the wheel (which egui reads as a zoom).
     press(&mut h, Key::Plus, Modifiers::COMMAND);
     settle_thumbnails(&mut h);
-    let bigger = files::thumbnail_size(&app);
-    assert!(bigger > files::THUMBNAIL_DEFAULT_SIZE);
-    assert!(state(&h, "columns").as_u64().unwrap() < before);
+    assert_eq!(files::thumbnail_zoom(&app), ThumbZoom::PerRow(4));
+    assert_eq!(state(&h, "columns"), 4);
     press(&mut h, Key::Minus, Modifiers::COMMAND);
     settle_thumbnails(&mut h);
-    assert!((files::thumbnail_size(&app) - files::THUMBNAIL_DEFAULT_SIZE).abs() < 0.01);
+    assert_eq!(files::thumbnail_zoom(&app), ThumbZoom::PerRow(5));
     let over = h.get_by_label("IMG_00000.cr3").rect().center();
     h.hover_at(over);
     h.input_mut().events.push(egui::Event::Zoom(0.8));
     settle_thumbnails(&mut h);
-    assert!(files::thumbnail_size(&app) < files::THUMBNAIL_DEFAULT_SIZE);
-    // A slider says it too, and the size stays within its limits.
+    assert_eq!(files::thumbnail_zoom(&app), ThumbZoom::PerRow(6));
+    // A slider says it too, and the zoom stays within its limits: as many
+    // as fit, one across.
     let slider = h.get_by_role_and_label(Role::Slider, "Thumbnail size");
     assert!(slider.rect().width() > 0.0);
     for _ in 0..40 {
         press(&mut h, Key::Minus, Modifiers::COMMAND);
     }
     settle_thumbnails(&mut h);
-    assert_eq!(files::thumbnail_size(&app), files::THUMBNAIL_MIN_SIZE);
+    let most = state(&h, "columns").as_u64().unwrap();
+    assert!(most > 6);
+    assert_eq!(files::thumbnail_zoom(&app), ThumbZoom::PerRow(most as u32));
+    assert!(state(&h, "thumbnail_size").as_f64().unwrap() >= f64::from(files::THUMBNAIL_MIN_SIZE));
     for _ in 0..40 {
         press(&mut h, Key::Plus, Modifiers::COMMAND);
     }
     settle_thumbnails(&mut h);
-    assert_eq!(files::thumbnail_size(&app), files::THUMBNAIL_MAX_SIZE);
+    assert_eq!(files::thumbnail_zoom(&app), ThumbZoom::PerRow(1));
+    assert_eq!(state(&h, "columns"), 1);
     // A second picker opens as the first was left.
     key(&mut h, Key::Escape, Modifiers::NONE);
     key(&mut h, Key::Escape, Modifiers::NONE);
     settle(&mut h);
     assert!(app.service(&FILES).unwrap().open_ids().is_empty());
     let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    settle_thumbnails(&mut h);
     assert_eq!(state(&h, "view"), "thumbnails");
-    assert_eq!(
-        state(&h, "thumbnail_size").as_f64(),
-        Some(f64::from(files::THUMBNAIL_MAX_SIZE))
-    );
+    assert_eq!(state(&h, "thumbnails_per_row"), 1);
+    assert_eq!(state(&h, "columns"), 1);
     // Back to the list: the grid's queue is dropped.
     h.get_by_label("Details").click();
     settle_thumbnails(&mut h);
@@ -2307,6 +2313,27 @@ fn the_view_and_the_size_are_kept_for_the_next_picker() {
         h.state().handle().debug_snapshot()["files"]["previews"]["queued"],
         0
     );
+}
+
+#[test]
+fn an_old_thumbnail_size_in_points_is_read_as_a_count_per_row() {
+    use egui_pop_api::files::browser::ThumbZoom;
+    let (mut h, _) = grid_harness(40, PickerView::Grid);
+    let app = h.state().handle().clone();
+    // A settings file an older version saved: a size in points.
+    let doc = egui_pop_model::values::SettingsDoc {
+        values: [(files::THUMBNAIL_SIZE.to_string(), json!(256.0))].into(),
+    };
+    egui_pop_core::lock(&app.store()).import(&doc, &Origin::Remote("file".into()));
+    assert_eq!(files::thumbnail_zoom(&app), ThumbZoom::Points(256.0));
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    settle_thumbnails(&mut h);
+    // Converted at the grid's width, then kept as a count.
+    let columns = state(&h, "columns").as_u64().unwrap() as u32;
+    assert!((2..=4).contains(&columns), "{columns}");
+    assert_eq!(files::thumbnail_zoom(&app), ThumbZoom::PerRow(columns));
+    let side = state(&h, "thumbnail_size").as_f64().unwrap();
+    assert!(side >= 200.0, "{side}");
 }
 
 // The columns and the order.
