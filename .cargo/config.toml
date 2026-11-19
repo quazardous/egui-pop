@@ -3,3 +3,10 @@
 xtask = "run --quiet --package xtask --"
 # `cargo gallery`: the gallery with the media features the system can build.
 gallery = "xtask gallery"
+
+# A dependency resolved afresh (the baseline cargo-semver-checks builds
+# from crates.io, a new lockfile) picks versions the workspace's
+# `rust-version` can build, not the newest: kstring 2.0.5, through
+# gstreamer, needs a newer rustc than the pinned toolchain.
+[resolver]
+incompatible-rust-versions = "fallback"
