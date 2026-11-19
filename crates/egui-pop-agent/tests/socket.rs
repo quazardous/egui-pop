@@ -549,7 +549,7 @@ fn a_pairing_the_user_declines_is_refused_and_an_agent_may_not_accept_it() {
         "run",
         &json!({ "id": "pop.agent.confirm", "args": { "id": 1 } }),
     );
-    assert_eq!(f.ok, false, "{f:?}");
+    assert!(!f.ok, "{f:?}");
     // The user declines.
     answer_pairing(&mut h, false, egui_pop_api::model::commands::Origin::User).unwrap();
     let r = finish(&mut h, client);
