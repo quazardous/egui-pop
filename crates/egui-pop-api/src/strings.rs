@@ -610,6 +610,8 @@ pub const FILES_MODE_COLUMNS: StrKey = StrKey::new("egui-pop-files-mode-columns"
 pub const FILES_MODE_FILMSTRIP: StrKey = StrKey::new("egui-pop-files-mode-filmstrip", "Filmstrip");
 pub const FILES_MODE_CAROUSEL: StrKey = StrKey::new("egui-pop-files-mode-carousel", "Carousel");
 pub const FILES_MODE_AGENDA: StrKey = StrKey::new("egui-pop-files-mode-agenda", "Agenda");
+/// The library grid mode's name (`egui_pop_views::library::LibraryGridMode`).
+pub const FILES_MODE_LIBRARY: StrKey = StrKey::new("egui-pop-files-mode-library", "Library grid");
 /// The agenda's heading over the entries without a time.
 pub const FILES_AGENDA_UNDATED: StrKey = StrKey::new("egui-pop-files-agenda-undated", "No date");
 /// The file browser's large views: the filmstrip's, and quick look.
@@ -1811,6 +1813,7 @@ pub const ALL: &[StrKey] = &[
     FILES_MODE_FILMSTRIP,
     FILES_MODE_CAROUSEL,
     FILES_MODE_AGENDA,
+    FILES_MODE_LIBRARY,
     FILES_AGENDA_UNDATED,
     FILES_PREVIEW_OF,
     FILES_QUICK_LOOK,

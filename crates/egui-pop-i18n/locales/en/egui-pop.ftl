@@ -1715,6 +1715,8 @@ egui-pop-files-mode-details = Details
 
 egui-pop-files-mode-filmstrip = Filmstrip
 
+egui-pop-files-mode-library = Library grid
+
 egui-pop-files-mode-thumbnails = Thumbnails
 
 egui-pop-files-modes = View mode
@@ -2796,6 +2798,8 @@ egui-pop-views-label = Label
 egui-pop-views-label-toggle = { $label } label
 
 egui-pop-views-library = Library
+
+egui-pop-views-library-rated = Rated { $stars } of 5
 
 egui-pop-views-list = List
 

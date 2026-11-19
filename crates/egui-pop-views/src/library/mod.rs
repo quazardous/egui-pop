@@ -9,6 +9,8 @@
 //!   widgets, and the culling keymap (Lightroom's keys, auto-advance);
 //! - [`compare`]: one to many images, a loupe or side by side, zoom and
 //!   pan synced, a "best" marker, images dragged in and out;
+//! - `mode` (with the `api` feature): the library grid as a file
+//!   browser's view mode, [`LibraryGridMode`];
 //! - `thumbs` (with the `api` feature): the file browser's thumbnail
 //!   provider as a [`ThumbSource`], and a [`Badge`] as its chip;
 //! - [`tags`]: tag chips and a tag input with completion;
@@ -23,6 +25,8 @@ pub mod compare;
 pub mod filter;
 pub mod grid;
 pub mod marks;
+#[cfg(feature = "api")]
+pub mod mode;
 mod paint;
 pub mod plugin;
 pub mod tags;
@@ -36,6 +40,8 @@ pub use grid::{
     ThumbSource, Tone, Zoom,
 };
 pub use marks::{ColorLabel, CullAction, CullKeymap, Flag, Labels, Marks};
+#[cfg(feature = "api")]
+pub use mode::{LibraryGridMode, LibrarySignals};
 pub use paint::{LabelStyle, LibraryTokens};
 #[cfg(feature = "api")]
 pub use plugin::LibraryPlugin;

@@ -1206,6 +1206,8 @@ egui-pop-files-mode-carousel = Carrousel
 
 egui-pop-files-mode-agenda = Agenda
 
+egui-pop-files-mode-library = Grille de photothèque
+
 egui-pop-files-agenda-undated = Sans date
 
 egui-pop-files-preview-of = Aperçu de { $name }
@@ -2265,6 +2267,8 @@ egui-pop-views-purple = Violet
 egui-pop-views-rate-stars = Noter { $stars } sur 5
 
 egui-pop-views-rating = Note
+
+egui-pop-views-library-rated = Noté { $stars } sur 5
 
 egui-pop-views-red = Rouge
 
