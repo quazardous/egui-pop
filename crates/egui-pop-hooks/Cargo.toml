@@ -1,7 +1,7 @@
 [package]
 name = "egui-pop-hooks"
 version = "0.2.1"
-description = "A small hook kernel: typed hook points, listeners with ids ordered by after/before and priority, alter and collect emits, a per-listener error boundary with panics caught and deadlines, introspection (no GUI toolkit); an implementation of the bus-contract crate"
+description = "egui-pop's name for bus-kernel, the hook kernel implementing the bus-contract crate (no GUI toolkit); it re-exports bus-kernel"
 readme = "README.md"
 keywords = ["hooks", "plugins", "extension-points", "listeners", "events"]
 categories = ["rust-patterns", "concurrency"]
@@ -16,7 +16,5 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-bus-contract.workspace = true
-# MIT OR Apache-2.0: the listener deadlines' clock on the web too, where
-# `std::time::Instant::now` panics.
-web-time = "1"
+# MIT OR Apache-2.0: the kernel itself, moved there from this crate.
+bus-kernel.workspace = true

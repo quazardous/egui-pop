@@ -104,7 +104,7 @@ The pieces of a central bus already exist, apart:
   Registration order is never relied on: a listener whose place matters
   and declares nothing is a review finding.
 - **The order run is printable.** For each point, the listeners in run
-  order with their owner and constraints (`egui_pop_hooks::Kernel::listeners`
+  order with their owner and constraints (`bus_kernel::Kernel::listeners`
   gives it): a `bus` collector on the debug bridge, a text dump in debug
   builds, and a test that keeps the dump of the window points as a
   reviewed file. "Who runs when" is read, not remembered.
