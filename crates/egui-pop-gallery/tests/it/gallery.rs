@@ -2926,9 +2926,9 @@ fn the_workbench_page_shows_where_a_tab_dragged_to_another_area_would_land() {
     h.run();
     let app = h.state().app.handle().clone();
     let notes = egui_pop::model::ids::PanelId::from_static("gallery.notes");
-    // The tabs (buttons), not the placement table's rows.
+    // The tabs, not the placement table's rows.
     let tab = |h: &Harness<'_, Gallery>, name: &str| {
-        h.get_by_role_and_label(egui::accesskit::Role::Button, name)
+        h.get_by_role_and_label(egui::accesskit::Role::Tab, name)
             .rect()
     };
     let notes_tab = tab(&h, "Notes");
@@ -3022,7 +3022,7 @@ fn the_workbench_page_shows_drop_zones_and_arranges_the_bottom_area_as_a_grid() 
     // body below the tab bar and a stack band under it, so the console's
     // first line sits in the top band too, nearer its edge than the left.
     let tab = |h: &Harness<'_, Gallery>, name: &str| {
-        h.get_by_role_and_label(egui::accesskit::Role::Button, name)
+        h.get_by_role_and_label(egui::accesskit::Role::Tab, name)
             .rect()
     };
     let a = tab(&h, "Notes").center();
@@ -3374,7 +3374,7 @@ fn the_workbench_page_detaches_a_panel_into_its_own_window() {
     let properties = egui_pop::model::ids::PanelId::from_static("gallery.properties");
     // Its tab's name says its edits mark too (it edits the selection).
     let a = h
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Properties, Edits your work")
+        .get_by_role_and_label(egui::accesskit::Role::Tab, "Properties, Edits your work")
         .rect()
         .center();
     let b = h.get_by_label("Free notes.").rect().center();
