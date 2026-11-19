@@ -257,8 +257,12 @@ impl<'a> ColorWheel<'a> {
         let mut changes = Vec::new();
         let inner = ui.vertical(|ui| {
             ui.set_width(size);
-            let (rect, mut response) =
-                ui.allocate_exact_size(vec2(size, size), Sense::click_and_drag());
+            let (rect, mut response) = change::allocate(
+                ui,
+                vec2(size, size),
+                Sense::click_and_drag(),
+                ("wheel", &label),
+            );
             let radius = size / 2.0 - 4.0;
             let center = rect.center();
             let before = *value;

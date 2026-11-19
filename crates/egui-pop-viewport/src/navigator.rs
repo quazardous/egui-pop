@@ -336,7 +336,8 @@ impl<'a> Navigator<'a> {
             let w = ui.available_width().clamp(120.0, 320.0);
             vec2(w, (w * 2.0 / 3.0).round())
         });
-        let (rect, mut response) = ui.allocate_exact_size(size, Sense::click_and_drag());
+        let (rect, mut response) =
+            change::allocate(ui, size, Sense::click_and_drag(), ("navigator", &label));
         let m = state.mapping();
         let image = image_size
             .map(|s| [f64::from(s[0]), f64::from(s[1])])

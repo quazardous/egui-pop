@@ -475,7 +475,8 @@ impl<'a> CurveEditor<'a> {
             let w = ui.available_width().clamp(120.0, 320.0);
             vec2(w, w)
         });
-        let (rect, mut response) = ui.allocate_exact_size(size, Sense::click_and_drag());
+        let (rect, mut response) =
+            change::allocate(ui, size, Sense::click_and_drag(), ("curve", &label));
         // The right click deletes a point: no context menu around opens
         // over the editor.
         claim::claim_secondary(
