@@ -228,9 +228,17 @@ by the rule above. Comparing with `main` rather than with the previous
 push keeps the commits of a run that never finished (a newer push
 waiting replaces an older one). The job is its own workflow,
 `.github/workflows/semver.yml`, that `ci.yml` calls; it also runs every
-night on `next` (03:17 UTC), whatever changed, and by hand
-(`workflow_dispatch`). A failed nightly run is red on the Actions page,
-like CI. `cargo xtask publish` runs the checks again before uploading
+night on `next` (03:17 UTC) when `next` moved since the last nightly
+run, and by hand (`workflow_dispatch`). A failed nightly run is red on
+the Actions page, like CI. The nightly run starts with a `gate` job that
+takes seconds (no checkout, no toolchain): it reads `next`'s head and
+looks for the cache entry `semver-tested-<sha>`, which a nightly run
+saves once it has checked that commit, pass or fail. Found, the checks
+are skipped, the run stays green and its summary says `skipped: next
+unchanged since <sha>`. A cache entry records which `next` was checked
+(a scheduled run's own head is `main`'s). Any API or cache error, or an
+evicted entry, runs the checks (the gate fails open). A run from
+`ci.yml` or by hand always checks. `cargo xtask publish` runs the checks again before uploading
 anything ([Changesets and releases](releasing.md#semver-checks)).
 
 A skipped job reports nothing, and a required check that never reports
