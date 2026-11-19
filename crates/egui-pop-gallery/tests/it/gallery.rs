@@ -7775,7 +7775,15 @@ fn sized_window(
             egui_pop::core::motion::freeze(&cc.egui_ctx, 0.0);
             veiled(Gallery::from_creation_context(cc, options).expect("the gallery builds"))
         });
-    h.run();
+    // The viewport page's tiles come from worker threads, each asking a
+    // frame as it lands: how many frames they span depends on the
+    // machine's load, so `run`'s step limit is no measure of them. The
+    // page settles on its source's own signal instead.
+    if page == "viewport" {
+        settle_viewport(&mut h);
+    } else {
+        h.run();
+    }
     h
 }
 
@@ -8118,6 +8126,19 @@ fn page_ends_in_a_short_window(page: &str) {
 }
 
 for_each_page!(per_page! { every_page_ends_in_a_short_window, super::page_ends_in_a_short_window });
+
+// The viewport page's tiles come from worker threads, at their own pace:
+// its check above passes every time, not only when they come quickly.
+#[test]
+fn the_viewport_page_ends_in_a_short_window_twenty_times_in_a_row() {
+    for run in 1..=20 {
+        assert_eq!(
+            check_short_page("pop-dark", Density::Comfortable, "viewport").err(),
+            None,
+            "run {run}"
+        );
+    }
+}
 
 // Not all of it for nothing: pages longer than the short window scroll
 // there, so the check above sees a scroll through to the end (58 of 74
