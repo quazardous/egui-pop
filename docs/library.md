@@ -59,6 +59,20 @@ impl ThumbSource<u64> for Thumbs {
 }
 ```
 
+An application that already feeds the file browser's thumbnails
+(`files::browser::ThumbnailProvider`) needs no second source: wrap it
+for the frame with `library::thumbs::ProviderThumbs`, saying which file
+each key is. It begins the provider's frame when made and ends it when
+dropped, so draw the views between the two:
+
+```rust,ignore
+use egui_pop::views::library::thumbs::ProviderThumbs;
+
+let thumbs = ProviderThumbs::begin(ui.ctx(), provider, |key: &u64| shoot.entry(*key));
+grid.show(ui, state, &shoot, &thumbs);
+drop(thumbs);
+```
+
 Only the cells in view are built: `LibraryItems` is asked about those
 alone, and `ThumbSource::thumb` too. A thumbnail not there yet is drawn
 as a placeholder: the image's average colour when the source knows it
@@ -149,7 +163,9 @@ cross, the image dimmed when rejected) in the top left corner, the
 labels in the top right one, the stars in the bottom left one (empty
 stars as outlines under the pointer, or on every cell with
 `ThumbGrid::empty_stars(EmptyStars::Always)`), the badges (`Badge::new("RAW")`, toned with
-`Tone`) in the bottom right one. Colour labels are same-shape
+`Tone`) in the bottom right one, drawn as indicators the way the file
+browser draws its marks (`MarkChip::from(badge)` gives the browser's
+chip; agents read them as `library.badge:<image>:<text>`). Colour labels are same-shape
 swatches, as in Lightroom and darktable; `LabelStyle::Shape` gives them
 a shape each (circle, triangle, square, diamond, hexagon), so they
 never read by colour alone, for colour-blind users. The application's
