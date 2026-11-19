@@ -46,6 +46,30 @@ debug = "line-tables-only"
 [profile.dev.package."*"]
 debug = false
 
+# Snapshot tests decode and compare a PNG per snapshot: at opt-level 0 a
+# decode takes about 80 ms and a dify comparison about 70 ms, at
+# opt-level 3 about 7 ms each (about 35 s of CPU per gallery run).
+[profile.dev.package.image]
+opt-level = 3
+
+[profile.dev.package.png]
+opt-level = 3
+
+[profile.dev.package.fdeflate]
+opt-level = 3
+
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+
+[profile.dev.package.crc32fast]
+opt-level = 3
+
+[profile.dev.package.simd-adler32]
+opt-level = 3
+
+[profile.dev.package.dify]
+opt-level = 3
+
 [workspace.dependencies]
 egui-pop-tokens = { version = "0.2.10", path = "crates/egui-pop-tokens" }
 ortho-router = { version = "0.1.1", path = "crates/ortho-router" }
