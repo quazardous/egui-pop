@@ -61,10 +61,12 @@
 //!   in, is the focused panel.
 //! - **`workbench.focus` and `<panel>.focus`:** the panel is focused at once
 //!   and takes the widget focus in the next pass: the widget named by
-//!   `focus::prefer` in it (a canvas under a toolbar), else its first
-//!   focusable widget, else the panel itself, a stop of its own, named after
-//!   it and there only while it holds the focus, from which Tab goes on. It
-//!   stays where it is if the focus already is in the panel. Behind a modal,
+//!   `focus::prefer` in it (a canvas under a toolbar, a search field), else
+//!   the panel itself, a stop of its own, named after it and there only while
+//!   it holds the focus, from which Tab enters its widgets. Never its first
+//!   focusable widget unasked: a slider focused that way would take the wheel
+//!   meant to scroll the panel. It stays where it is if the focus already is
+//!   in the panel. Behind a modal,
 //!   or when an agent's command finds someone typing, only the logical focus
 //!   moves.
 //! - **A press** in a panel, whether or not a widget takes the focus.
