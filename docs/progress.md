@@ -1,7 +1,8 @@
 # Jobs and progress
 
 egui-pop never runs an application's background work. The host (ADR
-0010) runs it and publishes `job.*` events on its journal; egui-pop folds
+0010) runs it and publishes job events on egui-pop's `pop.job.event`
+point, each typed by a `JobEventKind`; egui-pop folds
 them into a model, draws them, and sends the user's requests back to the
 host as commands. The design notes and the survey behind this page are
 in [Advanced widgets](widgets.md), section 3.
@@ -11,11 +12,19 @@ in [Advanced widgets](widgets.md), section 3.
 `egui_pop::model::jobs::Jobs` (no egui) folds the events into jobs;
 `JobsPlugin` (opt-in, `egui_pop::api::jobs`) keeps it behind the `JOBS`
 service, as a listener on the bus
-([ADR 0029](adr/0029-not-on-the-bus.md)): the bus delivers each
-`job.*` event of the journal once, in order, to the listeners of `pop.job.event`
+([ADR 0029](adr/0029-not-on-the-bus.md)): the bus delivers each job
+event once, in journal order, to the listeners of `pop.job.event`
 (each pass, and before a wait or a plugin's disconnection reads the
 jobs: `AppHandle::deliver_events`), and `pop.jobs.model` is one of them.
 Nothing polls: without new events, nothing is read.
+
+The host publishes with a `JobPublisher` (`Send + Sync`, any thread):
+the application hands one to its host (`Host::set_job_publisher`), and
+`AppHandle::job_publisher` or `AppHandle::publish_job` give the same.
+Each event is recorded in the journal under its kind's label (the
+table's names, `job.started`…) for the journal's readers, but the model
+follows the point only: a journal entry merely named `job.started` is
+not a job event, so a host never has to carry egui-pop's names.
 
 Asking about a job is a request on the bus: `pop.job.cancel`, `pop.job.pause`,
 `pop.job.resume`, `pop.job.retry` (`AppHandle::request_job` with a
@@ -27,7 +36,7 @@ plugin, nobody listens and the request is refused (`job.refused`). The
 order is printed by `AppHandle::bus_order_of(&bus::JOB_POINTS)` and kept
 as a reviewed file (`crates/egui-pop-api/tests/bus/jobs-points.txt`).
 
-| Event | Data |
+| Kind (journal label) | Data |
 |---|---|
 | `job.started` | `id`, `title`, `kind`, `parent`, `weight`, `total` (none: indeterminate), `steps` (`[{id, title, weight}]`), `cancellable` (true), `pausable` (false), `retryable` (true), `owner` (the plugin it runs for), `command` (the command that started it) |
 | `job.progress` | `id`, `done`, `total`, `failed`, `skipped`, `item`, `item_progress` (0 to 1), `phase`, `step`, `step_done`, `step_total`, `estimate` (the host's own fraction) |
@@ -68,6 +77,7 @@ default (below), a `ManualClock` of the test's own if it wants
 
 ```rust
 use egui_pop::api::App;
+use egui_pop::api::bus::JobEventKind;
 use egui_pop::api::jobs::{JOBS, JobsPlugin};
 use serde_json::json;
 
@@ -76,8 +86,8 @@ let mut app = App::builder()
     .build(&egui_pop::egui::Context::default())
     .unwrap();
 let h = app.handle().clone();
-// What a host publishes, from its own bus.
-h.publish("host", None, "job.started", json!({
+// What a host publishes, from its own job facts.
+h.publish_job("host", JobEventKind::Started, json!({
     "id": "render", "title": "Render",
     "steps": [
         { "id": "decode", "weight": 1 },
@@ -85,7 +95,7 @@ h.publish("host", None, "job.started", json!({
         { "id": "write", "weight": 1 },
     ],
 }));
-h.publish("host", None, "job.progress", json!({
+h.publish_job("host", JobEventKind::Progress, json!({
     "id": "render", "step": "process", "step_done": 1, "step_total": 2,
 }));
 app.logic(&egui_pop::egui::Context::default());

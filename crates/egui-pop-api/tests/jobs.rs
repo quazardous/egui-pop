@@ -2,6 +2,7 @@
 //! commands run in-process or refused by a host without them, the
 //! `jobs.estimate` step refining a job's fraction, the collector.
 
+use egui_pop_model::jobs::JobEventKind;
 use std::cell::Cell;
 use std::rc::Rc;
 
@@ -26,16 +27,14 @@ fn jobs_follow_the_journal_without_polling() {
     let h = app.handle().clone();
     let jobs = h.service(&JOBS).unwrap();
     assert!(jobs.idle());
-    h.publish(
+    h.publish_job(
         "host",
-        None,
-        "job.started",
+        JobEventKind::Started,
         json!({ "id": "e", "title": "Export", "total": 4, "pausable": true }),
     );
-    h.publish(
+    h.publish_job(
         "host",
-        None,
-        "job.progress",
+        JobEventKind::Progress,
         json!({ "id": "e", "done": 3, "item": "c.raw" }),
     );
     // Nothing is read until a pass.
@@ -46,7 +45,7 @@ fn jobs_follow_the_journal_without_polling() {
     assert_eq!(e.item.as_deref(), Some("c.raw"));
     assert!(e.pausable);
     assert!(!jobs.idle());
-    h.publish("host", None, "job.finished", json!({ "id": "e" }));
+    h.publish_job("host", JobEventKind::Finished, json!({ "id": "e" }));
     pass(&mut app);
     assert_eq!(jobs.job("e").unwrap().state, JobState::Done);
     assert!(jobs.idle());
@@ -62,7 +61,7 @@ fn a_host_without_the_commands_refuses_and_the_job_says_why() {
         .build(&egui::Context::default())
         .unwrap();
     let h = app.handle().clone();
-    h.publish("host", None, "job.started", json!({ "id": "e" }));
+    h.publish_job("host", JobEventKind::Started, json!({ "id": "e" }));
     pass(&mut app);
     jobs::ask(&h, "e", Request::Cancel);
     let jobs = h.service(&JOBS).unwrap();
@@ -85,18 +84,18 @@ fn an_in_process_runner_answers_the_commands() {
     let mut app = App::builder()
         .plugin(JobsPlugin::default().run_locally(|app, request, id| {
             let event = match request {
-                Request::Cancel => "job.cancelled",
-                Request::Pause => "job.paused",
-                Request::Resume => "job.resumed",
-                Request::Retry => "job.started",
+                Request::Cancel => JobEventKind::Cancelled,
+                Request::Pause => JobEventKind::Paused,
+                Request::Resume => JobEventKind::Resumed,
+                Request::Retry => JobEventKind::Started,
             };
-            app.publish("runner", None, event, json!({ "id": id }));
+            app.publish_job("runner", event, json!({ "id": id }));
             Ok(json!({ "id": id }))
         }))
         .build(&egui::Context::default())
         .unwrap();
     let h = app.handle().clone();
-    h.publish("host", None, "job.started", json!({ "id": "e" }));
+    h.publish_job("host", JobEventKind::Started, json!({ "id": "e" }));
     pass(&mut app);
     let out = app.run(&CMD_CANCEL, json!({ "id": "e" }), Origin::User);
     assert_eq!(out.now(), Some(Ok(json!({ "id": "e" }))));
@@ -143,11 +142,10 @@ fn a_hook_on_jobs_estimate_refines_an_indeterminate_job() {
         .build(&egui::Context::default())
         .unwrap();
     let h = app.handle().clone();
-    h.publish("host", None, "job.started", json!({ "id": "scan" }));
-    h.publish(
+    h.publish_job("host", JobEventKind::Started, json!({ "id": "scan" }));
+    h.publish_job(
         "host",
-        None,
-        "job.progress",
+        JobEventKind::Progress,
         json!({ "id": "scan", "done": 200 }),
     );
     pass(&mut app);
@@ -160,10 +158,9 @@ fn a_hook_on_jobs_estimate_refines_an_indeterminate_job() {
     pass(&mut app);
     assert_eq!(runs.get(), 1);
     clock.advance(4.0);
-    h.publish(
+    h.publish_job(
         "host",
-        None,
-        "job.progress",
+        JobEventKind::Progress,
         json!({ "id": "scan", "done": 500 }),
     );
     pass(&mut app);
@@ -176,13 +173,13 @@ fn a_hook_on_jobs_estimate_refines_an_indeterminate_job() {
 fn the_collector_asks_the_host_and_forgets_finished_jobs() {
     let mut app = App::builder()
         .plugin(JobsPlugin::default().run_locally(|app, _, id| {
-            app.publish("runner", None, "job.cancelled", json!({ "id": id }));
+            app.publish_job("runner", JobEventKind::Cancelled, json!({ "id": id }));
             Ok(json!(null))
         }))
         .build(&egui::Context::default())
         .unwrap();
     let h = app.handle().clone();
-    h.publish("host", None, "job.started", json!({ "id": "e" }));
+    h.publish_job("host", JobEventKind::Started, json!({ "id": "e" }));
     pass(&mut app);
     // The user, as the jobs centre's buttons or devtools; an agent is
     // refused (it runs the host's job commands instead).

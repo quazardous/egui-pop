@@ -3,6 +3,7 @@
 //! failure shows on the button; the status bar's jobs item sums the
 //! jobs up.
 
+use egui_pop_model::jobs::JobEventKind;
 use std::sync::{Arc, Mutex};
 
 use egui_kittest::Harness;
@@ -145,31 +146,28 @@ fn the_status_bar_sums_the_jobs_up() {
         "nothing to say"
     );
     let app = h.state().handle().clone();
-    app.publish(
+    app.publish_job(
         "host",
-        None,
-        "job.started",
+        JobEventKind::Started,
         json!({ "id": "a", "total": 4 }),
     );
-    app.publish(
+    app.publish_job(
         "host",
-        None,
-        "job.progress",
+        JobEventKind::Progress,
         json!({ "id": "a", "done": 1 }),
     );
     h.run();
     assert!(h.query_by_label("Jobs: 1 (25%)").is_some());
-    app.publish("host", None, "job.started", json!({ "id": "b" }));
+    app.publish_job("host", JobEventKind::Started, json!({ "id": "b" }));
     h.run();
     // One cannot estimate: no percentage.
     assert!(h.query_by_label("Jobs: 2").is_some());
-    app.publish(
+    app.publish_job(
         "host",
-        None,
-        "job.failed",
+        JobEventKind::Failed,
         json!({ "id": "b", "error": "no" }),
     );
-    app.publish("host", None, "job.finished", json!({ "id": "a" }));
+    app.publish_job("host", JobEventKind::Finished, json!({ "id": "a" }));
     h.run();
     assert!(h.query_by_label("Failed: 1").is_some());
     assert!(h.query_by_label_contains("Jobs:").is_none());

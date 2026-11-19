@@ -1010,6 +1010,10 @@ impl AppHandle {
                 }
             }
         }
+        // The host says its jobs on `pop.job.event`.
+        if let Some(h) = handle.0.host.borrow_mut().as_mut() {
+            h.set_job_publisher(handle.0.bus.jobs.clone());
+        }
         // Every setting changed is said once on the bus.
         crate::bus::settings::hear(&mut lock(&handle.0.store), &handle.0.bus.settings_heard);
         handle
@@ -1948,7 +1952,18 @@ impl AppHandle {
         self.0.running_since.borrow().get(id).copied()
     }
 
-    fn publish_now(&self, source: &str, cause: Option<Seq>, name: &str, data: Json) -> Seq {
+    /// Whether the host is in its cell (not lent to a dispatch).
+    pub(crate) fn host_free(&self) -> bool {
+        self.0.host.try_borrow().is_ok_and(|h| h.is_some())
+    }
+
+    pub(crate) fn publish_now(
+        &self,
+        source: &str,
+        cause: Option<Seq>,
+        name: &str,
+        data: Json,
+    ) -> Seq {
         let mut host = self.0.host.borrow_mut();
         let h = host.as_mut().expect("the host is free outside a dispatch");
         for (s, c, n, d) in self.0.held.borrow_mut().drain(..) {
@@ -7206,6 +7221,10 @@ impl App {
             "command.dispatched",
             json!({ "command": command, "args": args }),
         );
+        if crate::jobs::is_job_command(command) {
+            self.handle
+                .tag_job_event(seq, egui_pop_model::jobs::JobEventKind::CommandDispatched);
+        }
         let owner = self.reg.commands.owner(command).cloned();
         // A command whose run calls the host itself (undo, `history.*`,
         // the context stack's and the clipboard's commands) still goes
@@ -7305,12 +7324,23 @@ impl App {
         seq: Seq,
         result: Result<Json, String>,
     ) {
-        let (name, data) = match &result {
-            Ok(v) => ("command.done", json!({ "command": command, "result": v })),
-            Err(e) => ("command.failed", json!({ "command": command, "error": e })),
+        use egui_pop_model::jobs::JobEventKind;
+        let (kind, data) = match &result {
+            Ok(v) => (
+                JobEventKind::CommandDone,
+                json!({ "command": command, "result": v }),
+            ),
+            Err(e) => (
+                JobEventKind::CommandFailed,
+                json!({ "command": command, "error": e }),
+            ),
         };
-        self.handle
-            .publish_now(&source_of(origin), Some(seq), name, data);
+        let done = self
+            .handle
+            .publish_now(&source_of(origin), Some(seq), kind.name(), data);
+        if crate::jobs::is_job_command(command) {
+            self.handle.tag_job_event(done, kind);
+        }
         self.record(command, args, origin, result);
     }
 

@@ -426,6 +426,16 @@ pub trait Host {
     /// a result or an event arrives.
     fn set_waker(&mut self, waker: Waker);
 
+    /// Where the host says its jobs: the application hands it the
+    /// publisher of `pop.job.event` when it is built. A host whose kernel
+    /// runs jobs keeps it and publishes each job fact on it, typed
+    /// ([`JobEventKind`](egui_pop_model::jobs::JobEventKind)), from any
+    /// thread; the jobs centre follows those events only, never journal
+    /// entries by their name. Ignored by default.
+    fn set_job_publisher(&mut self, publisher: crate::bus::JobPublisher) {
+        let _ = publisher;
+    }
+
     /// The document the workbench's layout is kept in, under the
     /// application's persistence directory (`AppBuilder::persist`):
     /// [`LAYOUT_DOCUMENT`] by default, a workspace's own

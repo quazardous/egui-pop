@@ -7,6 +7,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use egui::Ui;
+use egui_pop::api::bus::JobEventKind;
 use egui_pop::api::jobs::{JOBS, STEP_ESTIMATE};
 use egui_pop::api::jobs_centre::PANEL_JOBS;
 use egui_pop::api::stories::Story;
@@ -92,8 +93,9 @@ fn started(id: &str) -> Json {
     }
 }
 
-fn publish(app: &AppHandle, name: &str, data: Json) {
-    app.publish("gallery", None, name, data);
+/// Says a job event on `pop.job.event`, as a host would.
+fn publish(app: &AppHandle, kind: JobEventKind, data: Json) {
+    app.publish_job("gallery", kind, data);
 }
 
 impl Sim {
@@ -102,7 +104,7 @@ impl Sim {
         let mut s = self.0.borrow_mut();
         s.jobs.clear();
         for id in [EXPORT, RENDER, SCAN, IMPORT, UPLOAD, IMPORTS[0]] {
-            publish(app, "job.started", started(id));
+            publish(app, JobEventKind::Started, started(id));
             s.jobs.push(SimJob {
                 id,
                 tick: 0,
@@ -124,25 +126,25 @@ impl Sim {
                     let file = format!("IMG_{n:04}.raw");
                     publish(
                         app,
-                        "job.log",
+                        JobEventKind::Log,
                         json!({ "id": id, "text": format!("\x1b[32mexported\x1b[0m {file} \x1b[2m-> out/IMG_{n:04}.jpg\x1b[0m") }),
                     );
                     if n == 6 {
                         publish(
                             app,
-                            "job.item_failed",
+                            JobEventKind::ItemFailed,
                             json!({ "id": id, "item": file, "error": "unreadable" }),
                         );
                         publish(
                             app,
-                            "job.log",
+                            JobEventKind::Log,
                             json!({ "id": id, "text": format!("\x1b[31merror\x1b[0m {file}: unreadable") }),
                         );
                     }
                     if n >= 12 {
                         publish(
                             app,
-                            "job.finished",
+                            JobEventKind::Finished,
                             json!({ "id": id, "actions": [
                             { "title": "Show", "command": CMD_DONE.as_str(), "args": { "what": "show the export" } },
                         ] }),
@@ -151,7 +153,7 @@ impl Sim {
                     } else {
                         publish(
                             app,
-                            "job.progress",
+                            JobEventKind::Progress,
                             json!({ "id": id, "done": n, "item": format!("IMG_{:04}.raw", n + 1) }),
                         );
                     }
@@ -164,43 +166,47 @@ impl Sim {
                         }
                         6 => json!({ "id": id, "step": "write", "phase": "write" }),
                         _ => {
-                            publish(app, "job.finished", json!({ "id": id }));
+                            publish(app, JobEventKind::Finished, json!({ "id": id }));
                             j.run = Run::Ended;
                             continue;
                         }
                     };
-                    publish(app, "job.progress", data);
+                    publish(app, JobEventKind::Progress, data);
                 }
                 SCAN => {
                     if n <= 3 {
                         publish(
                             app,
-                            "job.progress",
+                            JobEventKind::Progress,
                             json!({ "id": id, "done": 30 * n, "item": format!("folder {n}") }),
                         );
                     } else if n < 8 {
                         publish(
                             app,
-                            "job.progress",
+                            JobEventKind::Progress,
                             json!({ "id": id, "done": 80 * (n - 3), "total": 400 }),
                         );
                     } else {
-                        publish(app, "job.finished", json!({ "id": id }));
+                        publish(app, JobEventKind::Finished, json!({ "id": id }));
                         j.run = Run::Ended;
                     }
                 }
                 UPLOAD => {
                     if n < 3 {
-                        publish(app, "job.progress", json!({ "id": id, "done": n * 2 }));
+                        publish(
+                            app,
+                            JobEventKind::Progress,
+                            json!({ "id": id, "done": n * 2 }),
+                        );
                     } else {
                         publish(
                             app,
-                            "job.log",
+                            JobEventKind::Log,
                             json!({ "id": id, "text": "\x1b[31mconnection reset by peer\x1b[0m" }),
                         );
                         publish(
                             app,
-                            "job.failed",
+                            JobEventKind::Failed,
                             json!({ "id": id, "error": "connection reset by peer" }),
                         );
                         j.run = Run::Ended;
@@ -209,9 +215,13 @@ impl Sim {
                 IMPORT => {}
                 child => {
                     if n < 4 {
-                        publish(app, "job.progress", json!({ "id": child, "done": n }));
+                        publish(
+                            app,
+                            JobEventKind::Progress,
+                            json!({ "id": child, "done": n }),
+                        );
                     } else {
-                        publish(app, "job.finished", json!({ "id": child }));
+                        publish(app, JobEventKind::Finished, json!({ "id": child }));
                         j.run = Run::Ended;
                         next_import =
                             Some(IMPORTS.iter().position(|c| *c == child).unwrap_or(2) + 1);
@@ -222,7 +232,7 @@ impl Sim {
         if let Some(i) = next_import {
             match IMPORTS.get(i) {
                 Some(child) => {
-                    publish(app, "job.started", started(child));
+                    publish(app, JobEventKind::Started, started(child));
                     s.jobs.push(SimJob {
                         id: child,
                         tick: 0,
@@ -230,7 +240,7 @@ impl Sim {
                     });
                 }
                 None => {
-                    publish(app, "job.finished", json!({ "id": IMPORT }));
+                    publish(app, JobEventKind::Finished, json!({ "id": IMPORT }));
                     if let Some(j) = s.jobs.iter_mut().find(|j| j.id == IMPORT) {
                         j.run = Run::Ended;
                     }
@@ -258,8 +268,8 @@ impl Sim {
                 j.run = Run::Running;
                 j.tick = 0;
             }
-            publish(app, "job.started", started(IMPORT));
-            publish(app, "job.started", started(IMPORTS[0]));
+            publish(app, JobEventKind::Started, started(IMPORT));
+            publish(app, JobEventKind::Started, started(IMPORTS[0]));
             s.jobs.push(SimJob {
                 id: IMPORTS[0],
                 tick: 0,
@@ -271,20 +281,20 @@ impl Sim {
             match request {
                 Request::Cancel if j.run != Run::Ended => {
                     j.run = Run::Ended;
-                    publish(app, "job.cancelled", json!({ "id": j.id }));
+                    publish(app, JobEventKind::Cancelled, json!({ "id": j.id }));
                 }
                 Request::Pause if j.run == Run::Running => {
                     j.run = Run::Paused;
-                    publish(app, "job.paused", json!({ "id": j.id }));
+                    publish(app, JobEventKind::Paused, json!({ "id": j.id }));
                 }
                 Request::Resume if j.run == Run::Paused => {
                     j.run = Run::Running;
-                    publish(app, "job.resumed", json!({ "id": j.id }));
+                    publish(app, JobEventKind::Resumed, json!({ "id": j.id }));
                 }
                 Request::Retry if j.run == Run::Ended => {
                     j.run = Run::Running;
                     j.tick = 0;
-                    publish(app, "job.started", started(j.id));
+                    publish(app, JobEventKind::Started, started(j.id));
                 }
                 _ => {}
             }

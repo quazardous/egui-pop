@@ -1,7 +1,11 @@
 //! Jobs, as a plugin ([`JobsPlugin`], opt-in): the host's background
 //! work, followed on the bus ([ADR 0029](crate::bus)). The host publishes
-//! `job.*` events (see [`egui_pop_model::jobs`] for their data); the bus
-//! delivers each once, in journal order, to the listeners of `pop.job.event`
+//! its job events on `pop.job.event`, each typed by a
+//! [`JobEventKind`] (see [`egui_pop_model::jobs`] for their data), with
+//! the [`JobPublisher`](crate::bus::JobPublisher) the application hands
+//! it ([`Host::set_job_publisher`](crate::host::Host::set_job_publisher));
+//! no journal entry is read by its name. The bus delivers each once, in
+//! journal order, to the listeners of `pop.job.event`
 //! (each pass, and before a read that must see them all), and the
 //! [`Jobs`] model behind the [`JOBS`] service is one of them
 //! ([`MODEL`], `pop.jobs.model`): no job state changes but on a bus event or
@@ -24,7 +28,7 @@
 //!   job as waiting for the answer, then [`HOST`] runs its command (each
 //!   `{ "id" }`), declared for the host to run, or run in-process by a
 //!   runner the application gives ([`JobsPlugin::run_locally`]). The
-//!   answer is the runner's `job.*` events.
+//!   answer is the runner's job events.
 //! - A job belongs to a plugin when its `job.started` names it (`owner`,
 //!   or `command`, a command of the plugin), or when the plugin
 //!   published it itself. When that plugin is disconnected (ADR 0028),
@@ -51,7 +55,7 @@
 //! ```
 //! use egui_pop_api::App;
 //! use egui_pop_api::jobs::{JOBS, JobsPlugin};
-//! use egui_pop_model::commands::Origin;
+//! use egui_pop_model::jobs::JobEventKind;
 //! use serde_json::json;
 //!
 //! let mut app = App::builder()
@@ -59,8 +63,8 @@
 //!     .build(&egui::Context::default())
 //!     .unwrap();
 //! let h = app.handle().clone();
-//! h.publish("host", None, "job.started", json!({ "id": "export", "title": "Export", "total": 8 }));
-//! h.publish("host", None, "job.progress", json!({ "id": "export", "done": 2 }));
+//! h.publish_job("host", JobEventKind::Started, json!({ "id": "export", "title": "Export", "total": 8 }));
+//! h.publish_job("host", JobEventKind::Progress, json!({ "id": "export", "done": 2 }));
 //! app.logic(&egui::Context::default());
 //! let jobs = h.service(&JOBS).unwrap();
 //! assert_eq!(jobs.job("export").unwrap().fraction, Some(0.25));
@@ -83,17 +87,16 @@ use egui_pop_model::clock::SharedClock;
 use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::{BlockId, CommandId, PluginId, StepId};
-use egui_pop_model::jobs::{Incoming, Job, Jobs, Left, Request, Summary};
+use egui_pop_model::jobs::{Incoming, Job, JobEventKind, Jobs, Left, Request, Summary};
 use egui_pop_model::panels::{Area, PanelSpec};
 use serde_json::{Value as Json, json};
 
 use crate::app::AppHandle;
 use crate::bus::{
-    self, JobAsk, JobCancel, JobEvents, JobPause, JobResume, JobRetry, PluginConnect,
+    self, JobAsk, JobCancel, JobEvent, JobEvents, JobPause, JobResume, JobRetry, PluginConnect,
     PluginDisconnect,
 };
 use crate::hooks::On;
-use crate::host::Event;
 use crate::services::ServiceToken;
 use crate::steps::StepSpec;
 use crate::strings as txt;
@@ -128,6 +131,12 @@ pub const CANCEL_ON_DISCONNECT: &str = "pop.jobs.cancel-on-disconnect";
 /// Of `pop.plugin.connect`: the jobs a plugin had left are its own again
 /// (`job.adopted`).
 pub const ADOPT_ON_CONNECT: &str = "pop.jobs.adopt-on-connect";
+
+/// Whether `command` is a job command (`job.cancel`…): its dispatch and
+/// answer are job events.
+pub(crate) fn is_job_command(command: &CommandId) -> bool {
+    Request::ALL.into_iter().any(|r| command_of(r) == *command)
+}
 
 /// The command asking `request`.
 pub fn command_of(request: Request) -> CommandId {
@@ -294,17 +303,13 @@ impl JobsService {
     }
 
     /// Folds one event the bus delivered ([`MODEL`] on `pop.job.event`).
-    fn follow(&self, app: &AppHandle, e: &Event) {
+    fn follow(&self, app: &AppHandle, e: &JobEvent) {
         let time = egui_pop_core::motion::now(&app.egui());
         lock(&self.state).now = time;
         let now = self.now();
-        let incoming = Incoming {
-            seq: e.seq,
-            source: &e.source,
-            cause: e.cause,
-            name: &e.name,
-            data: &e.data,
-        };
+        let incoming = Incoming::new(e.seq, e.kind, &e.data)
+            .source(&e.source)
+            .cause(e.cause);
         lock(&self.state).jobs.apply(&incoming, now);
     }
 }
@@ -332,10 +337,9 @@ fn owner_gone(app: &AppHandle, plugin: &str, left: &Left) {
     }
     for id in &left.orphan {
         log::info!(target: "egui_pop", "job `{id}` is orphaned: {reason}");
-        app.publish(
+        app.publish_job(
             FRAMEWORK,
-            None,
-            egui_pop_model::jobs::ORPHANED,
+            JobEventKind::Orphaned,
             json!({ "id": id, "plugin": plugin, "reason": reason }),
         );
     }
@@ -443,10 +447,9 @@ fn listen(app: &AppHandle, owner: &str) {
             };
             let back = jobs.with(|j| j.orphaned_by(&change.plugin));
             if !back.is_empty() {
-                app.publish(
+                app.publish_job(
                     FRAMEWORK,
-                    None,
-                    egui_pop_model::jobs::ADOPTED,
+                    JobEventKind::Adopted,
                     json!({ "plugin": change.plugin, "jobs": back }),
                 );
                 app.deliver_events();
@@ -717,12 +720,10 @@ impl Plugin for JobsPlugin {
         let app = ctx.app();
         let upto = app.delivered_event();
         if upto > 0 {
-            for e in app
-                .events_since(0)
-                .iter()
-                .filter(|e| e.seq <= upto && bus::is_job_event(e))
-            {
-                service.follow(&app, e);
+            for e in app.events_since(0).iter().filter(|e| e.seq <= upto) {
+                if let Some(job) = app.job_event_of(e) {
+                    service.follow(&app, &job);
+                }
             }
         }
         ctx.service(&JOBS, service)?;
@@ -763,7 +764,7 @@ impl Plugin for JobsPlugin {
         let w = weak.clone();
         let mut collector = FnCollector::new(
             "jobs",
-            "The host's jobs folded from its `job.*` events: state, estimated fraction, counts, time left, the end of each log; `idle` says whether any goes on. Actions ask the host (`cancel`, `pause`, `resume`, `retry`, with `id`) or forget finished ones (`dismiss`, `clear`).",
+            "The host's jobs folded from its `pop.job.event` events: state, estimated fraction, counts, time left, the end of each log; `idle` says whether any goes on. Actions ask the host (`cancel`, `pause`, `resume`, `retry`, with `id`) or forget finished ones (`dismiss`, `clear`).",
         )
         .snapshot(move |_| {
             w.get()

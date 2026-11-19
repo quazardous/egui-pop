@@ -57,7 +57,7 @@ bus-contract-defer = "0.2.0"
 bus-contract-timings = "0.2.0"
 bus-contract-journal = "0.2.0"
 bus-contract-crossing = "0.2.0"
-bus-kernel = "0.3.0"
+bus-kernel = "0.3.1"
 egui-pop-hooks = { version = "0.3.0", path = "crates/egui-pop-hooks" }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
