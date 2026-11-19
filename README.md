@@ -194,6 +194,65 @@ impl Plugin for Guard {
 }
 ```
 
+Steps are the requests of [the bus](#the-bus).
+
+## The bus
+
+What is not on the bus does not exist
+([ADR 0029](https://github.com/quazardous/egui-pop/blob/main/docs/adr/0029-not-on-the-bus.md)):
+a part of the application knows the bus, not its neighbours. egui-pop's
+kernel implements the public [`bus-contract`](https://github.com/quazardous/bus-contract)
+crate, and the application supplies the bus (`AppBuilder::bus`, or
+egui-pop makes its own), shared with its other libraries
+([ADR 0030](https://github.com/quazardous/egui-pop/blob/main/docs/adr/0030-the-bus-is-a-contract.md)).
+
+- **Points** are requests, which a listener may veto, or events, each
+  declared in a library's contract table (`egui_pop::api::bus::CONTRACT`).
+- **Listeners** are named and owned, and run in the order they declare
+  (`after`, `before`, `last`, then priority), never registration order.
+- **Names** start with the declaring crate's prefix: `pop.*` for
+  egui-pop (`pop.window.close`, `pop.command.run`), `stack.*` for
+  egui_stack's optional `bus` feature, the application's own for its own.
+- **The journal and the relay**: events numbered, read again from a
+  number, relayed to another process, when the host gives the bus one.
+- **Timings and budgets**: every listener run is timed; a pass over its
+  point's budget is said as `bus.overBudget`.
+
+```rust
+use std::sync::Arc;
+use egui_pop::api::bus::bus_contract::{
+    Bus, HookError, ListenOpts, Point, PointDecl, PointKind, declare_all,
+};
+use egui_pop::api::bus::egui_pop_hooks::Kernel;
+use egui_pop::egui;
+use egui_pop::prelude::*;
+
+/// The application's request, under its own prefix: a note is deleted.
+struct NoteDelete;
+impl Point for NoteDelete {
+    const ID: &'static str = "notes.note.delete";
+    const KIND: PointKind = PointKind::Request;
+    type Input = String;
+    type Value = ();
+}
+
+/// The application's contract table.
+const POINTS: &[PointDecl] = &[PointDecl::of::<NoteDelete>("A note is deleted.")];
+
+let bus: Arc<dyn Bus> = Arc::new(Kernel::new()); // or the application's own
+let _app = App::builder().bus(bus.clone()).build(&egui::Context::default()).unwrap();
+assert!(declare_all(&*bus, POINTS).is_empty());
+let opts = ListenOpts::new().owner("notes");
+bus.listen::<NoteDelete>("notes.keep-pinned", opts, |note, _| {
+    if note == "pinned" { Err(HookError::refuse("pinned notes stay")) } else { Ok(()) }
+})
+.unwrap();
+assert!(bus.alter::<NoteDelete>("pinned".into(), ()).refused.is_some());
+```
+
+More in [The hook kernel](https://github.com/quazardous/egui-pop/blob/main/docs/hook-kernel.md)
+and the `egui_pop::api::bus` module.
+
 ## An image viewport
 
 The `viewport` feature shows an image your application computes, in
@@ -265,8 +324,9 @@ in the diff before committing. The steps it automates are in
 ## Documentation
 
 The [docs index](https://github.com/quazardous/egui-pop/blob/main/docs/README.md) lists every page: getting started,
-themes and tokens, plugins and steps, the image viewport, debugging, the
-gallery, testing, API stability and the design decisions.
+themes and tokens, plugins and steps, the bus and its hook kernel, the
+image viewport, debugging, the gallery, testing, API stability and the
+design decisions.
 They are also online, with search, at
 <https://quazardous.github.io/egui-pop/docs/>, and the API documentation
 of every crate, with every feature on (docs.rs shows the default
