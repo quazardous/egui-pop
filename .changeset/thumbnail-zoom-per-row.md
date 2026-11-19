@@ -1,7 +1,13 @@
 ---
 egui-pop-core: minor
 egui-pop-api: major
-egui-pop-views: minor
+egui-pop-views: major
+egui-pop-agent: major
+egui-pop-editors: major
+egui-pop-i18n: major
+egui-pop-imaging: major
+egui-pop-platform: major
+egui-pop-test: major
 egui-pop: major
 ---
 
