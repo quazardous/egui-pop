@@ -3858,6 +3858,10 @@ pub struct FileBrowser {
     grid_room: (f32, f32),
     thumbnails: Arc<dyn ThumbnailProvider>,
     type_ahead: TypeAhead,
+    /// The text of keys the mode took (a culling key's digit) and when:
+    /// the text event that follows, in this frame or a later one, is not
+    /// typed ahead.
+    mode_took: Vec<(String, f64)>,
     reveal: bool,
     restored: bool,
     root: Option<PathBuf>,
@@ -4359,6 +4363,7 @@ impl FileBrowser {
             grid_room: (800.0, 4.0),
             thumbnails: Arc::new(NoThumbnails),
             type_ahead: TypeAhead::default(),
+            mode_took: Vec::new(),
             reveal: false,
             restored: false,
             root: None,
@@ -5390,6 +5395,18 @@ impl FileBrowser {
         }
     }
 
+    /// Whether `text` is that of a key the mode took: then it is used up.
+    fn took_text(&mut self, text: &str) -> bool {
+        let text = text.to_lowercase();
+        match self.mode_took.iter().position(|(t, _)| *t == text) {
+            Some(i) => {
+                self.mode_took.remove(i);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Type-ahead: `text` typed at `now` (seconds). The focus goes to the
     /// first entry whose name starts with the prefix; one letter typed
     /// again goes round the entries that start with it.
@@ -5632,8 +5649,10 @@ impl FileBrowser {
                 && ui.input(|i| i.time) - self.type_ahead.at <= Self::TYPE_AHEAD_RESET;
             let mut spaced = false;
             // The text of a key the mode took (a culling key's digit) is
-            // not typed ahead.
-            let mut taken: Vec<String> = Vec::new();
+            // not typed ahead, even when it comes a frame later.
+            let now = ui.input(|i| i.time);
+            self.mode_took
+                .retain(|(_, at)| now - *at <= Self::TYPE_AHEAD_RESET);
             for ev in events {
                 match ev {
                     egui::Event::Key {
@@ -5646,7 +5665,8 @@ impl FileBrowser {
                         .own_key(key, mods, self.focus_index(), &mut self.settings) =>
                     {
                         self.reveal = true;
-                        taken.push(key.symbol_or_name().to_lowercase());
+                        self.mode_took
+                            .push((key.symbol_or_name().to_lowercase(), now));
                     }
                     egui::Event::Key {
                         key, pressed: true, ..
@@ -5682,11 +5702,8 @@ impl FileBrowser {
                             spaced |= key == egui::Key::Space;
                         }
                     }
-                    egui::Event::Text(t)
-                        if !(modifiers.command
-                            || spaced && t == " "
-                            || taken.contains(&t.to_lowercase())) =>
-                    {
+                    egui::Event::Text(t) if self.took_text(&t) => {}
+                    egui::Event::Text(t) if !(modifiers.command || spaced && t == " ") => {
                         let now = ui.input(|i| i.time);
                         self.type_ahead(&t, now);
                     }
