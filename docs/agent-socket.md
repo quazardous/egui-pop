@@ -287,7 +287,8 @@ let app = App::builder()
   by the user ([Destructive calls](#destructive-calls-the-user-confirms)).
 - **Enforced** fail-closed, twice. The socket checks each `call` and each
   `ui` action first, so the agent is answered `-32001` at once, before
-  anything runs or is asked. And a listener named `pop.agent.grants`
+  anything runs or is asked (a call the bridge refuses anyway, its mode
+  or an `agent` flag, is answered by the bridge as before). And a listener named `pop.agent.grants`
   (`egui_pop_agent::GRANTS`) on `pop.command.run` refuses any run its
   grant does not allow, whatever path it took. It has priority
   `grants::PRIORITY` (10 000): it runs before the application's own
