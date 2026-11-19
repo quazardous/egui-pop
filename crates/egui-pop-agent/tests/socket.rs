@@ -377,15 +377,20 @@ fn one_client_over_the_cap_is_refused_and_a_freed_place_is_given_again() {
         let start = Instant::now();
         loop {
             let mut c = Client::connect(&p);
-            writeln!(c.write, r#"{{"jsonrpc":"2.0","id":1,"method":"describe"}}"#).unwrap();
+            // Refused while the closed one still held its place: the
+            // refusal, or a write or read on the connection it closed
+            // already (a broken pipe, a reset).
             let mut line = String::new();
-            c.read.read_line(&mut line).unwrap();
-            let r: Json = serde_json::from_str(&line).unwrap();
-            if r.get("error").is_none() {
-                break;
+            let answered = writeln!(c.write, r#"{{"jsonrpc":"2.0","id":1,"method":"describe"}}"#)
+                .and_then(|()| c.read.read_line(&mut line))
+                .is_ok_and(|n| n > 0);
+            if answered {
+                let r: Json = serde_json::from_str(&line).unwrap();
+                if r.get("error").is_none() {
+                    break;
+                }
+                assert_eq!(r["error"]["code"], egui_pop_agent::RpcError::LIMIT, "{r}");
             }
-            // Refused while the closed one still held its place.
-            assert_eq!(r["error"]["code"], egui_pop_agent::RpcError::LIMIT, "{r}");
             assert!(
                 start.elapsed() < Duration::from_secs(10),
                 "the place was never freed"
