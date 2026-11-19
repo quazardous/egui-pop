@@ -62,13 +62,16 @@ impl From<Badge> for MarkChip {
     }
 }
 
+/// Which file a key is ([`ProviderThumbs::begin`]).
+type EntryOf<'a, K> = dyn Fn(&K) -> Option<SourceEntry> + 'a;
+
 /// A [`ThumbSource`] over a [`ThumbnailProvider`] for one frame: made
 /// with [`ProviderThumbs::begin`], which begins the provider's frame,
 /// and dropped once the views are drawn, which ends it.
 pub struct ProviderThumbs<'a, K> {
     ctx: Context,
     provider: &'a dyn ThumbnailProvider,
-    entry: Box<dyn Fn(&K) -> Option<SourceEntry> + 'a>,
+    entry: Box<EntryOf<'a, K>>,
 }
 
 impl<K> std::fmt::Debug for ProviderThumbs<'_, K> {
