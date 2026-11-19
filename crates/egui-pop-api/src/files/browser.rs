@@ -22,10 +22,15 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::SystemTime;
 
-use egui::{Modifiers, Ui};
+use egui::{AtomExt as _, Modifiers, Ui};
 
 use egui_pop_core::icon::Icon;
+use egui_pop_core::indicator::{Anchor, Indicator};
+use egui_pop_core::kit::Kit;
+use egui_pop_core::placeholder::SkeletonTokens;
 use egui_pop_core::strings;
+use egui_pop_core::theme::Tokens;
+use egui_pop_core::thumbnail::{self, Thumbnail};
 use egui_pop_core::thumbnail::{Band, ThumbnailGrid};
 use egui_pop_core::widgets;
 
@@ -602,7 +607,13 @@ impl EntryMarks {
     /// reader says it.
     pub fn label(&self, name: &str) -> String {
         let mut label = name.to_owned();
+        let mut said: Vec<&str> = Vec::new();
         for b in self.badges.iter().chain(self.chips.iter().map(|c| &c.name)) {
+            // Chips of one kind (a group's, one per member) share a name.
+            if said.contains(&b.as_str()) {
+                continue;
+            }
+            said.push(b);
             label.push_str(" · ");
             label.push_str(b);
         }
@@ -1065,8 +1076,7 @@ pub struct PlainDrawer<'a> {
 }
 
 impl PlainDrawer<'_> {
-    /// Below this width, a row shows its name alone, without the size and
-    /// the date.
+    /// Below this width, a row shows its name alone, without its facts.
     pub const FACTS_WIDTH: f32 = 320.0;
 
     /// The application's marks of entry `n`.
@@ -1074,112 +1084,232 @@ impl PlainDrawer<'_> {
         self.marks.map(|m| m(&self.entries[n])).unwrap_or_default()
     }
 
-    fn back(&self, ui: &Ui, resp: &egui::Response, n: usize, radius: f32, marks: &EntryMarks) {
-        let e = &self.entries[n];
-        let selected = self.selection.contains(&e.path);
-        let label = marks.label(&e.name);
-        resp.widget_info(|| {
-            egui::WidgetInfo::selected(egui::Role::ListBoxOption, true, selected, &label)
-        });
-        let visuals = ui.visuals();
-        let rect = resp.rect;
-        if selected {
-            ui.painter()
-                .rect_filled(rect, radius, visuals.selection.bg_fill);
-        } else if resp.hovered() {
-            ui.painter()
-                .rect_filled(rect, radius, visuals.widgets.hovered.weak_bg_fill);
+    /// Whether every entry is a folder: the columns then leave out the size
+    /// and the type, which say nothing of folders.
+    fn folders_only(&self) -> bool {
+        self.entries.iter().all(SourceEntry::is_dir)
+    }
+
+    /// The ring the focus has, apart from the selection's fill.
+    fn ring(&self, ui: &Ui, r: &egui::Response, n: usize) {
+        if self.focus != Some(n) {
+            return;
         }
-        if self.focus == Some(n) {
-            ui.painter().rect_stroke(
-                rect.shrink(0.5),
-                radius,
-                visuals.selection.stroke,
-                egui::StrokeKind::Inside,
-            );
-        }
+        egui_pop_core::focus::own_ring(ui.ctx(), r.id);
+        let t = Tokens::of(ui.ctx());
+        ui.painter().rect_stroke(
+            r.rect,
+            t.radius.widget,
+            egui::Stroke::new(1.0, t.focus_ring),
+            egui::StrokeKind::Inside,
+        );
     }
 }
 
+/// An entry as its row and its cell show it: a folder's name ends with a
+/// separator.
+fn shown_name(e: &SourceEntry) -> String {
+    if e.is_dir() {
+        format!("{}/", e.name)
+    } else {
+        e.name.clone()
+    }
+}
+
+/// What a screen reader is told of an entry beyond its name and its marks
+/// ([`EntryMarks::label`]): its facts.
+fn entry_said(facts: &[String]) -> String {
+    facts.join(", ")
+}
+
+/// Marks an entry's widget as an option of its list, selected or not.
+fn as_option(ui: &Ui, r: &egui::Response, said: &str) {
+    let said = said.to_owned();
+    ui.ctx().accesskit_node_builder(r.id, |node| {
+        node.set_role(egui::accesskit::Role::ListBoxOption);
+        if !said.is_empty() {
+            node.set_description(said);
+        }
+    });
+}
+
+/// A mark of an entry as an indicator: a chip's icon or text, a badge's
+/// text, toned as asked, its tip its name, under an id agents read
+/// (`files.badge:<path>:<text>`).
+fn mark_indicator(path: &Path, chip: &MarkChip) -> Indicator {
+    let base = match &chip.icon {
+        Some(icon) => Indicator::icon(icon.as_str()),
+        None => Indicator::text(chip.text.as_str()),
+    };
+    let said = if chip.icon.is_some() {
+        chip.name.as_str()
+    } else {
+        chip.text.as_str()
+    };
+    base.tone(chip.tone)
+        .overhang(false)
+        .id(format!("files.badge:{}:{said}", path.display()))
+        .tooltip(chip.name.clone())
+}
+
+/// An entry's marks as chips, in the order they are drawn: its badges (as
+/// neutral text chips), then its chips.
+fn mark_chips(marks: &EntryMarks) -> Vec<MarkChip> {
+    marks
+        .badges
+        .iter()
+        .map(|b| MarkChip::text(b.clone(), b.clone()))
+        .chain(marks.chips.iter().cloned())
+        .collect()
+}
+
+/// Paints chips from the end of `host`, the last at the end, as many as fit
+/// in `room`. They take no click: the entry under them does.
+fn paint_mark_row(ui: &mut Ui, path: &Path, host: egui::Rect, anchor: Anchor, chips: &[MarkChip]) {
+    let gap = Tokens::of(ui.ctx()).space.xs;
+    let mut host = host;
+    for chip in chips.iter().rev() {
+        let mark = mark_indicator(path, chip);
+        let width = mark.measure(ui).x;
+        if width > host.width() {
+            break;
+        }
+        mark.paint_at(ui, host, anchor);
+        host.set_right(host.right() - width - gap);
+    }
+}
+
+/// How wide these chips are, side by side.
+fn marks_width(ui: &Ui, path: &Path, chips: &[MarkChip]) -> f32 {
+    let gap = Tokens::of(ui.ctx()).space.xs;
+    chips
+        .iter()
+        .map(|c| mark_indicator(path, c).measure(ui).x + gap)
+        .sum()
+}
+
 impl EntryDrawer for PlainDrawer<'_> {
-    fn row_size(&self, _ui: &Ui, width: f32) -> egui::Vec2 {
-        egui::vec2(width, DetailsMode::ROW_HEIGHT)
+    fn row_size(&self, ui: &Ui, width: f32) -> egui::Vec2 {
+        egui::vec2(width, row_height(ui))
     }
 
     fn row(&mut self, ui: &mut Ui, n: usize, size: egui::Vec2) -> egui::Response {
-        let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
-        let marks = self.marks_of(n);
-        self.back(ui, &resp, n, 2.0, &marks);
         let e = &self.entries[n];
-        let visuals = ui.visuals();
-        let text = if self.selection.contains(&e.path) {
-            visuals.selection.stroke.color
-        } else if marks.dimmed {
-            visuals.weak_text_color()
-        } else {
-            visuals.text_color()
-        };
-        let badged;
-        let e = if marks.is_plain() {
-            e
-        } else {
-            badged = SourceEntry {
-                name: marks.label(&e.name),
-                ..e.clone()
-            };
-            &badged
-        };
-        let font = egui::TextStyle::Body.resolve(ui.style());
-        let w = rect.width();
-        let name = if e.is_dir() {
-            format!("{}/", e.name)
-        } else {
-            e.name.clone()
-        };
-        let y = rect.center().y;
+        let marks = self.marks_of(n);
+        let selected = self.selection.contains(&e.path);
         // A narrow row (a column of Finder's view) shows the name alone.
-        if w < Self::FACTS_WIDTH {
+        if size.x < Self::FACTS_WIDTH {
+            let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+            let visuals = ui.visuals();
+            if selected {
+                ui.painter()
+                    .rect_filled(rect, 2.0, visuals.selection.bg_fill);
+            } else if resp.hovered() {
+                ui.painter()
+                    .rect_filled(rect, 2.0, visuals.widgets.hovered.weak_bg_fill);
+            }
+            let text = if selected {
+                visuals.selection.stroke.color
+            } else if marks.dimmed {
+                visuals.weak_text_color()
+            } else {
+                visuals.text_color()
+            };
             paint_row_name(ui, rect, e, text);
+            let name = marks.label(&e.name);
+            resp.widget_info(|| {
+                egui::WidgetInfo::selected(egui::Role::ListBoxOption, true, selected, &name)
+            });
+            as_option(ui, &resp, "");
+            self.ring(ui, &resp, n);
             return resp;
         }
-        ui.painter()
-            .with_clip_rect(rect.with_max_x(rect.left() + w * 0.6))
-            .text(
-                egui::pos2(rect.left() + 4.0, y),
-                egui::Align2::LEFT_CENTER,
-                name,
-                font.clone(),
-                text,
-            );
-        if let Some(s) = e.size {
-            ui.painter().text(
-                egui::pos2(rect.left() + w * 0.6 + 4.0, y),
-                egui::Align2::LEFT_CENTER,
-                human_size(s),
-                font.clone(),
-                text,
+        let t = Tokens::of(ui.ctx());
+        let label = shown_name(e);
+        let columns = list_columns(ui, size.x, self.folders_only());
+        let height = row_height(ui) - 2.0 * ui.spacing().button_padding.y;
+        let name_column = columns.first().map_or(0.0, |c| c.width);
+        // The marks keep to the end of the name's column, and at most half
+        // of it.
+        let chips = mark_chips(&marks);
+        let marks_room = marks_width(ui, &e.path, &chips).min(name_column / 2.0);
+        let reserved = if chips.is_empty() {
+            0.0
+        } else {
+            marks_room + t.space.m
+        };
+        let mut atoms = egui::Atoms::default();
+        let mut facts = Vec::new();
+        let weak = marks.dimmed && !selected;
+        for c in &columns {
+            let (text, align) = match c.column {
+                SortColumn::Name => {
+                    let width = (c.width - reserved).max(0.0);
+                    let text = if weak {
+                        egui::RichText::new(label.clone()).weak()
+                    } else {
+                        egui::RichText::new(label.clone())
+                    };
+                    atoms.push_right(
+                        text.atom_max_width(width)
+                            .atom_size(egui::vec2(width, height))
+                            .atom_align(egui::Align2::LEFT_CENTER),
+                    );
+                    if !chips.is_empty() {
+                        // In the place of the marks, painted over it: the
+                        // columns after it stay under their headers.
+                        atoms.push_right(String::new().atom_size(egui::vec2(marks_room, height)));
+                    }
+                    continue;
+                }
+                column => {
+                    let fact = fact_text(ui.ctx(), e, column);
+                    if !fact.is_empty() {
+                        facts.push(fact.clone());
+                    }
+                    let align = if column == SortColumn::Size {
+                        egui::Align2::RIGHT_CENTER
+                    } else {
+                        egui::Align2::LEFT_CENTER
+                    };
+                    (fact, align)
+                }
+            };
+            atoms.push_right(
+                text.atom_max_width(c.width)
+                    .atom_size(egui::vec2(c.width, height))
+                    .atom_align(align),
             );
         }
-        if let Some(t) = e
-            .modified
-            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-        {
-            let days = t.as_secs() / 86_400;
-            let (y_, m, d) = civil(days as i64);
-            ui.painter().text(
-                egui::pos2(rect.left() + w * 0.78 + 4.0, y),
-                egui::Align2::LEFT_CENTER,
-                format!("{y_:04}-{m:02}-{d:02}"),
-                font,
-                text,
-            );
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let cut = ui
+            .painter()
+            .layout_no_wrap(label.clone(), font, egui::Color32::PLACEHOLDER)
+            .size()
+            .x
+            > name_column - reserved;
+        // By its path: the focus stays on it as the rows scroll.
+        let r = ui
+            .push_id(&e.path, |ui| {
+                ui.spacing_mut().icon_spacing = t.space.m;
+                ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
+                    ui.add(widgets::SelectableRow::new(selected, atoms).name(marks.label(&e.name)))
+                })
+                .inner
+            })
+            .inner;
+        as_option(ui, &r, &entry_said(&facts));
+        if let Some(c) = columns.first().filter(|_| !chips.is_empty()) {
+            let left = r.rect.left() + c.left;
+            let host = egui::Rect::from_x_y_ranges(left..=left + c.width, r.rect.y_range());
+            paint_mark_row(ui, &e.path, host, Anchor::End, &chips);
         }
-        resp
+        self.ring(ui, &r, n);
+        if cut { r.on_hover_text(label) } else { r }
     }
 
     fn cell_size(&self, ui: &Ui, side: f32) -> egui::Vec2 {
-        let caption = ui.text_style_height(&egui::TextStyle::Small) + 4.0;
-        egui::vec2(side + 8.0, side + caption + 8.0)
+        egui::vec2(side, side + thumbnail::caption_height(ui))
     }
 
     fn cell(
@@ -1189,20 +1319,236 @@ impl EntryDrawer for PlainDrawer<'_> {
         size: egui::Vec2,
         thumbnail: ThumbState,
     ) -> egui::Response {
-        let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+        let e = &self.entries[n];
         let marks = self.marks_of(n);
-        self.back(ui, &resp, n, 4.0, &marks);
-        paint_cell(ui, rect, &self.entries[n], thumbnail);
-        let chips = paint_marks(ui, rect, &marks);
-        // A chip's name is its tooltip.
-        let over = resp
-            .hover_pos()
-            .and_then(|p| chips.iter().position(|r| r.contains(p)));
-        match over {
-            Some(k) => resp.on_hover_text_at_pointer(&marks.chips[k].name),
-            None => resp,
+        let selected = self.selection.contains(&e.path);
+        let mut cell = Thumbnail::new(marks.label(&e.name))
+            .caption(e.name.as_str())
+            .size(size)
+            .selected(selected);
+        let mut failed = None;
+        cell = match thumbnail {
+            _ if e.is_dir() => cell.icon(Icon::Folder),
+            ThumbState::Ready(t) => {
+                let [w, h] = t.size();
+                cell.image(t.id(), [w as u32, h as u32])
+            }
+            ThumbState::Loading => cell.placeholder(SkeletonTokens::of(ui.ctx()).fill),
+            ThumbState::None => cell.icon(Icon::File),
+            ThumbState::Failed(why) => {
+                failed = Some(why);
+                cell.icon(Icon::Warning)
+            }
+        };
+        // By its path: the focus stays on it as the rows scroll.
+        let r = ui.push_id(&e.path, |ui| ui.add(cell)).inner;
+        as_option(ui, &r, "");
+        if marks.dimmed {
+            let t = Tokens::of(ui.ctx());
+            ui.painter().rect_filled(
+                r.rect,
+                t.radius.widget,
+                ui.visuals().extreme_bg_color.gamma_multiply(0.6),
+            );
+        }
+        let host = r.rect.shrink(Tokens::of(ui.ctx()).space.xs);
+        let chips = mark_chips(&marks);
+        if !chips.is_empty() {
+            paint_mark_row(ui, &e.path, host, Anchor::TopEnd, &chips);
+        }
+        self.ring(ui, &r, n);
+        match failed {
+            Some(why) => r.on_hover_text(why),
+            None => r,
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Rows with columns
+// ---------------------------------------------------------------------------
+
+/// A column of the rows, as it fits the width it has.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ListColumn {
+    pub(crate) column: SortColumn,
+    /// Where its text starts, from the row's left.
+    pub(crate) left: f32,
+    pub(crate) width: f32,
+}
+
+/// A row's height, and its headers': a selectable row's.
+pub(crate) fn row_height(ui: &Ui) -> f32 {
+    let text = ui.text_style_height(&egui::TextStyle::Body);
+    ui.spacing()
+        .interact_size
+        .y
+        .max(text + 2.0 * ui.spacing().button_padding.y)
+}
+
+/// Lays columns out in a row `room` wide: `wanted` holds the width of each but
+/// the name, in the order they are given up, the last first, while the name has
+/// less than [`super::NAME_MIN_WIDTH`]. Their order on screen is the name, then
+/// `wanted`'s.
+pub(crate) fn fit_columns(
+    room: f32,
+    gap: f32,
+    padding: f32,
+    wanted: &[(SortColumn, f32)],
+) -> Vec<ListColumn> {
+    let mut kept = wanted.len();
+    let name_width = loop {
+        let others: f32 = wanted[..kept].iter().map(|(_, w)| w + gap).sum();
+        let name = room - 2.0 * padding - others;
+        if name >= super::NAME_MIN_WIDTH || kept == 0 {
+            break name.max(0.0);
+        }
+        kept -= 1;
+    };
+    let mut out = vec![ListColumn {
+        column: SortColumn::Name,
+        left: padding,
+        width: name_width,
+    }];
+    let mut left = padding + name_width + gap;
+    for &(column, width) in &wanted[..kept] {
+        out.push(ListColumn {
+            column,
+            left,
+            width,
+        });
+        left += width + gap;
+    }
+    out
+}
+
+/// The columns of rows `width` wide: wide enough for their title with its
+/// arrow, and for what they say. Folders alone have no size and all one type.
+pub(crate) fn list_columns(ui: &Ui, width: f32, folders_only: bool) -> Vec<ListColumn> {
+    let ctx = ui.ctx();
+    let font = egui::TextStyle::Body.resolve(ui.style());
+    let measure = |text: String| {
+        ui.painter()
+            .layout_no_wrap(text, font.clone(), egui::Color32::PLACEHOLDER)
+            .size()
+    };
+    let inset = header_inset(ui, &Kit::of(ctx), &font);
+    let wanted = |column: SortColumn, sample: &str| {
+        let title = measure(strings::tr(ctx, column.title()));
+        // The arrow goes after the title, a little apart, as high as the text.
+        let header = title.x + title.y * 1.25 + inset;
+        (column, measure(sample.to_string()).x.max(header).ceil())
+    };
+    let folder = strings::tr(ctx, &crate::strings::FILES_KIND_FOLDER);
+    let mut columns = vec![wanted(SortColumn::Modified, "0000-00-00 00:00 UTC")];
+    if !folders_only {
+        columns.push(wanted(SortColumn::Size, "999 MB"));
+        columns.push(wanted(SortColumn::Type, &folder));
+    }
+    let gap = Tokens::of(ctx).space.m;
+    fit_columns(width, gap, ui.spacing().button_padding.x, &columns)
+}
+
+/// How far a header's title starts from the left of its cell.
+fn header_inset(ui: &Ui, kit: &Kit, font: &egui::FontId) -> f32 {
+    let galley =
+        ui.painter()
+            .layout_no_wrap("A".to_string(), font.clone(), egui::Color32::PLACEHOLDER);
+    let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(100.0, 40.0));
+    let part = egui_pop_core::kit::Part {
+        rect,
+        room: rect,
+        state: egui_pop_core::kit::State::REST,
+        label: Some(&galley),
+    };
+    kit.table_header_cell
+        .label_rect(&part, galley.size())
+        .left()
+}
+
+/// What a column says of an entry: empty for a folder's size, or a fact
+/// the source does not give.
+fn fact_text(ctx: &egui::Context, e: &SourceEntry, column: SortColumn) -> String {
+    match column {
+        SortColumn::Name => e.name.clone(),
+        SortColumn::Size if e.is_dir() => String::new(),
+        SortColumn::Size => e.size.map_or_else(String::new, super::preview::size_text),
+        SortColumn::Modified => e
+            .modified
+            .map_or_else(String::new, super::preview::time_text),
+        SortColumn::Taken => e
+            .taken
+            .or(e.modified)
+            .map_or_else(String::new, super::preview::time_text),
+        SortColumn::Type if e.is_dir() => strings::tr(ctx, &crate::strings::FILES_KIND_FOLDER),
+        SortColumn::Type => match e.name.rfind('.').filter(|&dot| dot > 0) {
+            Some(dot) => e.name[dot + 1..].to_uppercase(),
+            None => strings::tr(ctx, &crate::strings::FILES_KIND_FILE),
+        },
+    }
+}
+
+/// The headers of rows with `columns`, `width` wide: each a button that sorts
+/// by its column, the one sorted by with its arrow (a click turns it). With
+/// `ranked` the order is a filter's ranking: they are disabled, and say why.
+/// Gives the order clicked.
+pub(crate) fn sort_headers(
+    ui: &mut Ui,
+    columns: &[ListColumn],
+    width: f32,
+    sort: PickerSort,
+    ranked: bool,
+) -> Option<PickerSort> {
+    let ctx = ui.ctx().clone();
+    let height = row_height(ui);
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+    let kit = Kit::of(&ctx);
+    let font = egui::TextStyle::Body.resolve(ui.style());
+    let inset = header_inset(ui, &kit, &font);
+    let mut clicked = None;
+    ui.add_enabled_ui(!ranked, |ui| {
+        for (n, c) in columns.iter().enumerate() {
+            let left = (rect.left() + c.left - inset).max(rect.left());
+            let right = columns
+                .get(n + 1)
+                .map_or(rect.right(), |next| rect.left() + next.left - inset);
+            let at = egui::Rect::from_min_max(
+                egui::pos2(left, rect.top()),
+                egui::pos2(right, rect.bottom()),
+            );
+            let title = strings::tr(&ctx, c.column.title());
+            let descending = (!ranked && sort.column == c.column).then_some(sort.descending);
+            let name = match descending {
+                Some(true) => strings::tr_args(
+                    &ctx,
+                    &crate::strings::FILES_SORTED_DOWN,
+                    &[("column", &title)],
+                ),
+                Some(false) => strings::tr_args(
+                    &ctx,
+                    &crate::strings::FILES_SORTED_UP,
+                    &[("column", &title)],
+                ),
+                None => title.clone(),
+            };
+            let id = ui
+                .scope_id()
+                .with("egui_pop.files.header")
+                .with(c.column.as_str());
+            let r = widgets::SortHeader {
+                title: &title,
+                name: &name,
+                descending,
+                sortable: true,
+            }
+            .show(ui, &kit, at, id)
+            .on_disabled_hover_text(strings::tr(&ctx, &crate::strings::FILES_SORT_RANKED));
+            if r.clicked() {
+                clicked = Some(sort.click(c.column));
+            }
+        }
+    });
+    clicked
 }
 
 /// A cell's marks over its thumbnail: dimmed, its badges stacked from the
@@ -1418,6 +1764,18 @@ fn lay_out(
         first..end
     };
     columns.max(1)
+}
+
+/// Takes the rubber band a mode drew this frame under `id` (its
+/// [`ModeContext::id`]): for a host that draws the modes itself (the in-app
+/// picker).
+pub(crate) fn take_band(ctx: &egui::Context, id: egui::Id) -> Option<Band> {
+    ctx.data_mut(|d| {
+        let key = band_key(id);
+        let band = d.get_temp::<Band>(key);
+        d.remove::<Band>(key);
+        band
+    })
 }
 
 /// Where a mode's rubber band is told to the browser, for the browser's
@@ -3566,10 +3924,10 @@ impl Grouper {
 /// A frame's thumbnails with groups: a group's entry without an image of
 /// its own (a RAW the provider cannot read) shows its first member's that
 /// has one (its JPEG).
-struct GroupThumbnails<'a> {
-    inner: &'a dyn ThumbnailProvider,
-    groups: &'a HashMap<PathBuf, FileGroup>,
-    absorbed: &'a HashMap<PathBuf, SourceEntry>,
+pub(crate) struct GroupThumbnails<'a> {
+    pub(crate) inner: &'a dyn ThumbnailProvider,
+    pub(crate) groups: &'a HashMap<PathBuf, FileGroup>,
+    pub(crate) absorbed: &'a HashMap<PathBuf, SourceEntry>,
 }
 
 impl ThumbnailProvider for GroupThumbnails<'_> {
@@ -3609,27 +3967,24 @@ impl ThumbnailProvider for GroupThumbnails<'_> {
     }
 }
 
-/// The chip a group's entry carries: its members' badges (`+XMP +JPEG`),
-/// or how many they are past two, named by its members for screen readers
-/// and in its tip.
-fn group_chip(ctx: &egui::Context, group: &FileGroup) -> MarkChip {
-    let text = if !group.badges.is_empty() && group.badges.len() <= 2 {
-        group
-            .badges
-            .iter()
-            .map(|b| format!("+{b}"))
-            .collect::<Vec<_>>()
-            .join(" ")
-    } else {
-        format!("+{}", group.members.len())
-    };
+/// The chips a group's entry carries: one per kind of member (`+XMP`,
+/// `+JPEG`), else how many they are, each named by its members for screen
+/// readers and in its tip.
+pub(crate) fn group_chips(ctx: &egui::Context, group: &FileGroup) -> Vec<MarkChip> {
     let members = group.member_names().join(", ");
     let name = strings::tr_args(
         ctx,
         &crate::strings::FILES_GROUP_WITH,
         &[("members", &members)],
     );
-    MarkChip::text(text, name)
+    if group.badges.is_empty() {
+        return vec![MarkChip::text(format!("+{}", group.members.len()), name)];
+    }
+    group
+        .badges
+        .iter()
+        .map(|b| MarkChip::text(format!("+{b}"), name.clone()))
+        .collect()
 }
 
 impl fmt::Debug for FileBrowser {
@@ -4776,7 +5131,7 @@ impl FileBrowser {
         let with_groups = move |e: &SourceEntry| {
             let mut marks = app_marks.as_ref().map(|m| m(e)).unwrap_or_default();
             if let Some(g) = groups.get(&e.path) {
-                marks.chips.push(group_chip(&ctx, g));
+                marks.chips.extend(group_chips(&ctx, g));
             }
             marks
         };

@@ -210,6 +210,9 @@ which swaps the first two (`SetFolder`).
     commands: rebindable, and only bound while a picker offers them
     (`filePickerSelectAll`, `filePickerSelects`), so `Ctrl+A` selects the
     field's text in any other request.
+  - In the grid, a rubber band drawn from the room around the cells selects
+    the files it crosses as it goes (folders left out), the highlight on its
+    last file once it is let go: the file browser's band.
 - **One file.** Modifiers add nothing: any click or arrow moves the single
   highlight, which is the selection.
 - **Choosing a folder.** Nothing is selected at first and the line under the
@@ -269,7 +272,8 @@ which swaps the first two (`SetFolder`).
   kept in `settings/files.thumbnail_size` (`files::thumbnail_size`). Only the
   cells in view ask for a thumbnail, so a folder of thousands of raws costs what
   a dialog's worth does: what leaves the view leaves the worker's queue (see
-  Previews). A placeholder stands in until a thumbnail is made; a folder shows
+  Previews); the row after the last in view is asked next, as the file
+  browser does. A placeholder stands in until a thumbnail is made; a folder shows
   its sign and asks for nothing, a file without an image the file's sign, a
   failure a warning with its reason in a tip.
 - In the grid, the four arrows move the highlight in two dimensions, `Home` and

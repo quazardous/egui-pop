@@ -195,10 +195,10 @@ fn the_keyboard_filters_enters_and_chooses() {
             .filter("Images", &["png", "jpg"]),
     );
     assert!(h.query_by_label("Open an image").is_some());
-    assert!(h.query_by_label("photos/").is_some());
+    assert!(h.query_by_label("photos").is_some());
     // The fuzzy filter, then Enter into the folder.
     type_in(&mut h, "pho");
-    assert!(h.query_by_label("notes/").is_none());
+    assert!(h.query_by_label("notes").is_none());
     key(&mut h, Key::Enter, Modifiers::NONE);
     assert!(h.query_by_label("a.png").is_some());
     assert!(h.query_by_label("c.txt").is_none(), "the filter hides it");
@@ -266,7 +266,10 @@ fn bookmarks_are_kept_and_listed() {
     assert!(h.query_by_label("Remove the bookmark").is_some());
     // The place takes back to the folder from elsewhere.
     key(&mut h, Key::ArrowUp, Modifiers::ALT);
-    h.get_by_label("photos").click();
+    h.query_all_by_label("photos")
+        .find(|n| n.accesskit_node().role() != Role::ListBoxOption)
+        .expect("the bookmark's place")
+        .click();
     settle(&mut h);
     let f = h.state().handle().service(&FILES).unwrap();
     assert_eq!(f.picker(f.open_ids()[0]).unwrap().dir, root.join("photos"));
@@ -412,7 +415,7 @@ fn the_preview_pane_keeps_the_dialog_s_size() {
             settle(h);
         }
         let dialog = h.ctx.memory(|m| m.area_rect(modal)).unwrap().width();
-        let row = h.get_by_label("photos/").rect().width();
+        let row = h.get_by_label("photos").rect().width();
         (dialog, row)
     };
     let (dialog_on, row_on) = measure(&mut h, true);
@@ -607,7 +610,7 @@ fn the_splitter_moves_within_its_limits_and_is_kept() {
     let widest = pane_value(&h);
     assert!(widest > f64::from(files::preview::PANE_WIDTH));
     assert_eq!(f64::from(files::pane_width(&app)), widest);
-    let row = h.get_by_label("photos/").rect().width();
+    let row = h.get_by_label("photos").rect().width();
     assert!(
         (row - files::LIST_MIN_WIDTH).abs() < 1.0,
         "the list keeps its least width: {row}"
@@ -776,7 +779,7 @@ fn the_list_takes_the_dialog_s_height() {
 /// A double click in one frame (the test kit's helper, which this crate
 /// cannot depend on; see docs/upstream.md).
 fn double_click(h: &mut Harness<'static, App>, label: &str) {
-    let pos = h.get_by_label(label).rect().center();
+    let pos = row(h, label).rect().center();
     let events = &mut h.input_mut().events;
     events.push(egui::Event::PointerMoved(pos));
     for _ in 0..2 {
@@ -1330,6 +1333,13 @@ fn shown(h: &Harness<'static, App>, label: &str) -> bool {
     h.query_all_by_label(label).next().is_some()
 }
 
+/// Whether an entry of that name is listed (a place of that name aside).
+fn listed(h: &Harness<'static, App>, label: &str) -> bool {
+    h.query_all_by_role_and_label(Role::ListBoxOption, label)
+        .next()
+        .is_some()
+}
+
 /// Home as the picker falls back on it.
 fn home_or_root() -> PathBuf {
     files::home().unwrap_or_else(|| PathBuf::from("/"))
@@ -1346,7 +1356,7 @@ fn a_second_opening_starts_in_the_purposes_last_folder() {
     };
     // The first time, the request's folder.
     let p = choose(&mut h, request());
-    assert!(shown(&h, "photos/"));
+    assert!(listed(&h, "photos"));
     assert!(!shown(&h, "a.png"));
     // Chosen with the keyboard, in a folder below.
     type_in(&mut h, "pho");
@@ -1364,14 +1374,14 @@ fn a_second_opening_starts_in_the_purposes_last_folder() {
     // The same request starts there now, its `directory` a first-time default.
     let p = choose(&mut h, request());
     assert!(shown(&h, "a.png"));
-    assert!(!shown(&h, "photos/"));
+    assert!(!listed(&h, "photos"));
     // A cancel keeps nothing: wandering off does not move the last folder.
     key(&mut h, Key::ArrowUp, Modifiers::ALT);
-    assert!(shown(&h, "notes/"));
+    assert!(listed(&h, "notes"));
     cancel(&mut h, &p);
     let p = choose(&mut h, request());
     assert!(shown(&h, "a.png"));
-    assert!(!shown(&h, "notes/"));
+    assert!(!listed(&h, "notes"));
     cancel(&mut h, &p);
     let _ = std::fs::remove_dir_all(root);
 }
@@ -1467,7 +1477,7 @@ fn without_a_purpose_the_request_and_the_recent_places_decide() {
     answer(&mut h, &p, root.join("photos/a.png"));
     // The request's folder wins, on every opening.
     let p = choose(&mut h, FileRequest::open("Open").directory(&root));
-    assert!(shown(&h, "photos/"));
+    assert!(listed(&h, "photos"));
     assert!(!shown(&h, "a.png"));
     cancel(&mut h, &p);
     // Without one, the last recent place, as ever.
@@ -1528,14 +1538,14 @@ fn a_click_selects_a_folder_and_enter_or_a_double_click_goes_in() {
     let mut h = harness(None);
     let _p = choose(&mut h, FileRequest::open("Open").directory(&root));
     let dir = |h: &Harness<'static, App>| PathBuf::from(picker_state(h, "dir").as_str().unwrap());
-    click(&mut h, "photos/", Modifiers::NONE);
+    click(&mut h, "photos", Modifiers::NONE);
     assert_eq!(dir(&h), root, "a click does not go in");
     assert_eq!(highlighted(&h), "photos/");
     press(&mut h, Key::Enter, Modifiers::NONE);
     assert_eq!(dir(&h), root.join("photos"));
     press(&mut h, Key::ArrowUp, Modifiers::ALT);
     assert_eq!(dir(&h), root);
-    double_click(&mut h, "notes/");
+    double_click(&mut h, "notes");
     settle(&mut h);
     assert_eq!(dir(&h), root.join("notes"));
     let _ = std::fs::remove_dir_all(root);
@@ -1600,13 +1610,13 @@ fn ctrl_and_shift_clicks_select_several_and_the_count_says_it() {
     click(&mut h, "c.txt", Modifiers::SHIFT);
     assert_eq!(selected(&h), ["a.png", "b.jpg", "c.txt"]);
     assert!(said(&h, "Selected: 3"));
-    click(&mut h, "2026/", Modifiers::SHIFT);
+    click(&mut h, "2026", Modifiers::SHIFT);
     assert_eq!(selected(&h), ["a.png"], "the range is from the same anchor");
     // A plain click starts again; a folder cannot join, and says so.
     click(&mut h, "b.jpg", Modifiers::NONE);
     assert_eq!(selected(&h), ["b.jpg"]);
     click(&mut h, "c.txt", Modifiers::COMMAND);
-    click(&mut h, "2026/", Modifiers::COMMAND);
+    click(&mut h, "2026", Modifiers::COMMAND);
     assert_eq!(selected(&h), ["b.jpg", "c.txt"]);
     assert!(h.query_by_label_contains("2026 is a folder").is_some());
     // The highlight is on the folder: Enter would go in, Ctrl+Enter chooses.
@@ -1757,7 +1767,7 @@ fn choosing_a_folder_says_what_selecting_means() {
     assert!(line(&h, &shown));
     const PHOTOS: &str = "Selected: photos. The button chooses it, Enter goes into it";
     // A click selects, and the line says so; Ctrl+Space takes it back.
-    click(&mut h, "photos/", Modifiers::NONE);
+    click(&mut h, "photos", Modifiers::NONE);
     assert_eq!(selected(&h), ["photos"]);
     assert!(line(&h, PHOTOS));
     assert!(said(&h, PHOTOS), "what it says is announced");
@@ -1790,7 +1800,7 @@ fn saving_a_selected_folder_goes_in_and_the_name_stays() {
         FileRequest::save("Save", "new.png").directory(&root),
     );
     // Selected, the button says what it does; a file's name fills the field.
-    click(&mut h, "photos/", Modifiers::NONE);
+    click(&mut h, "photos", Modifiers::NONE);
     assert!(h.query_by_role_and_label(Role::Button, "Save").is_none());
     assert_eq!(field(&h), "new.png");
     h.get_by_role_and_label(Role::Button, "Open").click();
@@ -1799,7 +1809,7 @@ fn saving_a_selected_folder_goes_in_and_the_name_stays() {
     assert_eq!(field(&h), "new.png");
     assert!(h.query_by_role_and_label(Role::Button, "Save").is_some());
     // The stem is selected again: typing replaces it.
-    click(&mut h, "2026/", Modifiers::NONE);
+    click(&mut h, "2026", Modifiers::NONE);
     press(&mut h, Key::Enter, Modifiers::NONE);
     assert_path(picker_state(&h, "dir").clone(), root.join("photos/2026"));
     h.get_by_label("File name, or a path").type_text("dawn");
@@ -1845,7 +1855,7 @@ fn tab_through_the_rows_moves_the_highlight_and_the_keys_answer_there() {
     assert_eq!(selected(&h), ["a.png", "b.jpg"]);
     assert!(h.get_by_label("Filter, or type a path").is_focused());
     // Back on a folder's row, Enter goes in.
-    let stop = walk::reach(&mut h, walk::SHIFT_TAB, "2026/", 40);
+    let stop = walk::reach(&mut h, walk::SHIFT_TAB, "2026", 40);
     assert!(stop.is_some(), "Shift+Tab reaches the folder");
     settle(&mut h);
     assert_eq!(highlighted(&h), "2026/");
@@ -1965,6 +1975,76 @@ fn the_list_stays_the_view_at_first_and_has_no_grid_without_previews() {
     assert!(h.query_by_label("IMG_00000.cr3").is_some());
 }
 
+/// The picker's selection, by name.
+fn selected_names(h: &Harness<'static, App>) -> Vec<String> {
+    let mut names: Vec<String> = state(h, "selected")
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| {
+            let p = PathBuf::from(p.as_str().unwrap());
+            p.file_name().unwrap().to_string_lossy().into_owned()
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+/// Drags a rubber band from `from` to `to`, a few steps on the way; lets it
+/// go when `drop`.
+fn band(h: &mut Harness<'static, App>, from: egui::Pos2, to: egui::Pos2, drop: bool) {
+    h.drag_at(from);
+    h.run();
+    for i in 1..=4 {
+        h.hover_at(from + (to - from) * (i as f32 / 4.0));
+        h.run();
+    }
+    if drop {
+        h.drop_at(to);
+        h.run();
+    }
+}
+
+#[test]
+fn a_rubber_band_in_the_grid_selects_the_files_it_crosses() {
+    let (mut h, _raws) = grid_harness(3, PickerView::Grid);
+    let p = choose(&mut h, FileRequest::open_many("Open").directory("/raws"));
+    settle_thumbnails(&mut h);
+    let folder = row(&h, "Selects").rect();
+    let second = row(&h, "IMG_00001.cr3").rect();
+    // From the room under the cells, over the folder and two files: the
+    // folder is not a file to choose.
+    let from = egui::pos2(second.center().x, second.bottom() + 40.0);
+    band(&mut h, from, folder.center(), false);
+    assert_eq!(selected_names(&h), ["IMG_00000.cr3", "IMG_00001.cr3"]);
+    h.drop_at(folder.center());
+    h.run();
+    assert_eq!(selected_names(&h), ["IMG_00000.cr3", "IMG_00001.cr3"]);
+    key(&mut h, Key::Enter, Modifiers::COMMAND);
+    let r = loop {
+        settle(&mut h);
+        if let Some(r) = p.take() {
+            break r;
+        }
+    };
+    let Ok(Chosen::Paths(paths)) = files::chosen(&r) else {
+        panic!("{r:?}");
+    };
+    assert_eq!(paths.len(), 2);
+}
+
+#[test]
+fn a_rubber_band_selects_nothing_when_one_file_is_chosen() {
+    let (mut h, _raws) = grid_harness(3, PickerView::Grid);
+    let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));
+    settle_thumbnails(&mut h);
+    let first = row(&h, "IMG_00000.cr3").rect();
+    let second = row(&h, "IMG_00001.cr3").rect();
+    let from = egui::pos2(second.center().x, second.bottom() + 40.0);
+    band(&mut h, from, first.center(), true);
+    assert!(selected_names(&h).is_empty());
+}
+
 #[test]
 fn only_the_cells_in_view_ask_for_a_thumbnail_among_thousands() {
     let (mut h, raws) = grid_harness(5000, PickerView::Grid);
@@ -1977,11 +2057,16 @@ fn only_the_cells_in_view_ask_for_a_thumbnail_among_thousands() {
     assert!(!first.is_empty());
     // A dialog's worth, however many there are.
     assert!(first.len() <= 8 * columns, "{} asked", first.len());
-    // What was asked is what is drawn; a cell far away is not.
-    for path in &first {
-        let name = path.file_name().unwrap().to_str().unwrap();
-        assert!(h.query_by_label(name).is_some(), "{name} is not drawn");
-    }
+    // What was asked is what is drawn, and the row after it; a cell far
+    // away is not.
+    let undrawn = first
+        .iter()
+        .filter(|path| {
+            let name = path.file_name().unwrap().to_str().unwrap();
+            h.query_by_label(name).is_none()
+        })
+        .count();
+    assert!(undrawn <= columns, "{undrawn} asked and not drawn");
     assert!(h.query_by_label("IMG_04999.cr3").is_none());
     // Nothing more is asked while nothing moves.
     for _ in 0..5 {
@@ -2126,7 +2211,7 @@ fn tab_reaches_a_cell_and_the_focus_follows_the_arrows_through_a_long_grid() {
     press(&mut h, Key::Home, Modifiers::NONE);
     settle_thumbnails(&mut h);
     assert_eq!(highlighted(&h), "Selects/");
-    assert_eq!(walk::focused(&h).unwrap().name, "Selects/");
+    assert_eq!(walk::focused(&h).unwrap().name, "Selects");
     press(&mut h, Key::Enter, Modifiers::NONE);
     assert_path(state(&h, "dir"), "/raws/Selects");
     assert!(h.get_by_label("Filter, or type a path").is_focused());
@@ -2422,7 +2507,7 @@ fn a_row_says_its_facts_and_a_folder_has_no_size() {
         Some("1970-01-01 00:01 UTC, 3.0 KB, JPG")
     );
     assert_eq!(description(&h, "README").as_deref(), Some("1 B, File"));
-    assert_eq!(description(&h, "Albums/").as_deref(), Some("Folder"));
+    assert_eq!(description(&h, "Albums").as_deref(), Some("Folder"));
 }
 
 #[test]
@@ -2891,7 +2976,7 @@ fn saving_ctrl_l_keeps_the_name_and_a_path_brings_it_back() {
     h.get_by_label("File name, or a path").type_text("edited");
     settle(&mut h);
     assert_eq!(field(&h), "edited.png");
-    walk::reach(&mut h, walk::TAB, "sub/", 60).expect("Tab reaches the rows");
+    walk::reach(&mut h, walk::TAB, "sub", 60).expect("Tab reaches the rows");
     h.event(egui::Event::Text("/".into()));
     settle(&mut h);
     assert_path(field(&h), "/");
@@ -3071,7 +3156,8 @@ fn a_raw_and_its_sidecars_are_one_entry_and_choosing_it_gives_the_raw() {
         })
     );
     // The badges are there, and take nothing from the next column.
-    let row_rect = row(&h, "IMG_1.cr3").rect();
+    let main = "IMG_1.cr3 · Grouped with IMG_1.xmp, IMG_1.jpg";
+    let row_rect = row(&h, main).rect();
     let marks: Vec<(String, egui::Rect)> = badges(&h)
         .into_iter()
         .filter(|(_, at)| row_rect.contains_rect(*at))
@@ -3079,10 +3165,10 @@ fn a_raw_and_its_sidecars_are_one_entry_and_choosing_it_gives_the_raw() {
     let says: Vec<&str> = marks.iter().map(|(text, _)| text.as_str()).collect();
     // Painted from the end of the column: the last first.
     assert_eq!(says, ["+JPEG", "+XMP"]);
-    let cell = row(&h, "IMG_1.cr3");
+    let cell = row(&h, main);
     assert_eq!(
         cell.accesskit_node().description().as_deref(),
-        Some("Grouped with IMG_1.xmp, IMG_1.jpg, 1970-01-01 00:01 UTC, 30 B, CR3")
+        Some("1970-01-01 00:01 UTC, 30 B, CR3")
     );
     let name_ends = row(&h, "Modified").rect().left();
     assert!(marks[0].1.right() <= name_ends, "over the next column");
@@ -3482,10 +3568,12 @@ fn the_grid_asks_for_main_files_and_for_a_member_when_one_has_no_thumbnail() {
         ]
     );
     assert!(badges(&h).iter().any(|(text, _)| text == "+XMP"));
-    let cell = row(&h, "IMG_1.cr3");
-    assert_eq!(
-        cell.accesskit_node().description().as_deref(),
-        Some("Grouped with IMG_1.xmp, IMG_1.jpg")
+    // A cell is said with its group's members.
+    assert!(
+        row(&h, "IMG_1.cr3 · Grouped with IMG_1.xmp, IMG_1.jpg")
+            .rect()
+            .width()
+            > 0.0
     );
     // Arrows go through entries: a group is one cell.
     key(&mut h, Key::End, Modifiers::NONE);
@@ -3954,9 +4042,9 @@ fn the_picker_s_keys_hide_reload_and_go_back_and_forward() {
         let f = h.state().handle().service(&FILES).unwrap();
         f.picker(f.open_ids()[0]).unwrap().dir
     };
-    double_click(&mut h, "photos/");
+    double_click(&mut h, "photos");
     settle(&mut h);
-    double_click(&mut h, "2026/");
+    double_click(&mut h, "2026");
     settle(&mut h);
     assert_eq!(dir(&h), root.join("photos/2026"));
     // Back twice, forward once.
@@ -4048,7 +4136,7 @@ fn the_entries_are_a_list_box_and_a_new_folder_is_said() {
     // The preview pane is named.
     assert!(h.query_by_role_and_label(Role::Group, "Preview").is_some());
     // Another folder is said, with its count.
-    double_click(&mut h, "2026/");
+    double_click(&mut h, "2026");
     settle(&mut h);
     assert!(
         a11y::announcements(&h.ctx)
@@ -4108,7 +4196,7 @@ fn the_harness_refuses_the_system_chooser() {
     let open = &app.debug_snapshot()["files"]["open"][0];
     assert_eq!(open["via"], "in_app");
     assert!(h.query_by_label("Open an image").is_some());
-    assert!(h.query_by_label("photos/").is_some());
+    assert!(h.query_by_label("photos").is_some());
     let f = app.service(&FILES).unwrap();
     f.deliver(f.open_ids()[0], None).unwrap();
     assert_eq!(result(&mut h, &p), Ok(Chosen::Cancelled));

@@ -132,20 +132,17 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use egui::{AtomExt as _, EventFilter, Key, Modifiers, Sense, Ui, pos2, vec2};
+use egui::{EventFilter, Key, Modifiers, Ui, pos2, vec2};
 use egui_pop_core::a11y::{self, Politeness};
 use egui_pop_core::debug::FnCollector;
 use egui_pop_core::focus;
 use egui_pop_core::icon::Icon;
-use egui_pop_core::indicator::{Anchor, Indicator};
-use egui_pop_core::kit::{Kit, Part, State as PartState, Tone};
 use egui_pop_core::lock;
 use egui_pop_core::overlay::{self, Kind, OverlaySpec};
-use egui_pop_core::placeholder::SkeletonTokens;
 use egui_pop_core::slider::Slider;
 use egui_pop_core::strings::{self, Arg, CANCEL};
 use egui_pop_core::theme::Tokens;
-use egui_pop_core::thumbnail::{self, Thumbnail};
+use egui_pop_core::thumbnail::Band;
 use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
 use egui_pop_model::commands::{CommandSpec, Origin};
@@ -180,6 +177,7 @@ pub mod preview;
 pub mod providers;
 pub mod sort;
 
+use browser::ThumbnailProvider as _;
 use browser::ViewMode as _;
 use fs::{Meta, SharedFs};
 use groups::{FileGroup, FileGrouping, Groupings};
@@ -288,6 +286,8 @@ pub const GROUPED: &str = "settings/files.grouped";
 /// `[purpose, folder]` pairs, newest first). See [`FileRequest::purpose`].
 pub const LAST_FOLDERS: &str = "settings/files.last_folders";
 
+/// How many entries around those drawn have their facts read, at least.
+const FACTS_PAGE: usize = 64;
 /// How many folders the in-app picker goes back through.
 const HISTORY_KEPT: usize = 64;
 /// How many recent places are kept.
@@ -2738,15 +2738,6 @@ impl PickerView {
     }
 }
 
-/// A column of the picker's list, as it fits the width it has.
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct ListColumn {
-    column: SortColumn,
-    /// Where its text starts, from the row's left.
-    left: f32,
-    width: f32,
-}
-
 impl SortColumn {
     /// Its title, as a column's header and a sort menu say it.
     fn title(self) -> &'static strings::StrKey {
@@ -2758,91 +2749,6 @@ impl SortColumn {
             SortColumn::Taken => &txt::FILES_COLUMN_TAKEN,
         }
     }
-}
-
-/// A row's height in the picker's list, and its headers': a selectable row's.
-fn row_height(ui: &Ui) -> f32 {
-    let text = ui.text_style_height(&egui::TextStyle::Body);
-    ui.spacing()
-        .interact_size
-        .y
-        .max(text + 2.0 * ui.spacing().button_padding.y)
-}
-
-/// Lays columns out in a row `room` wide: `wanted` holds the width of each but
-/// the name, in the order they are given up, the last first, while the name has
-/// less than [`NAME_MIN_WIDTH`]. Their order on screen is the name, then
-/// `wanted`'s.
-fn fit_columns(room: f32, gap: f32, padding: f32, wanted: &[(SortColumn, f32)]) -> Vec<ListColumn> {
-    let mut kept = wanted.len();
-    let name_width = loop {
-        let others: f32 = wanted[..kept].iter().map(|(_, w)| w + gap).sum();
-        let name = room - 2.0 * padding - others;
-        if name >= NAME_MIN_WIDTH || kept == 0 {
-            break name.max(0.0);
-        }
-        kept -= 1;
-    };
-    let mut out = vec![ListColumn {
-        column: SortColumn::Name,
-        left: padding,
-        width: name_width,
-    }];
-    let mut left = padding + name_width + gap;
-    for &(column, width) in &wanted[..kept] {
-        out.push(ListColumn {
-            column,
-            left,
-            width,
-        });
-        left += width + gap;
-    }
-    out
-}
-
-/// The columns of a list `width` wide: wide enough for their title with its
-/// arrow, and for what they say. Choosing a folder lists only folders, which
-/// have no size and all one type.
-fn list_columns(ui: &Ui, width: f32, kind: ChooseKind) -> Vec<ListColumn> {
-    let ctx = ui.ctx();
-    let font = egui::TextStyle::Body.resolve(ui.style());
-    let measure = |text: String| {
-        ui.painter()
-            .layout_no_wrap(text, font.clone(), egui::Color32::PLACEHOLDER)
-            .size()
-    };
-    let inset = header_inset(ui, &Kit::of(ctx), &font);
-    let wanted = |column: SortColumn, sample: &str| {
-        let title = measure(strings::tr(ctx, column.title()));
-        // The arrow goes after the title, a little apart, as high as the text.
-        let header = title.x + title.y * 1.25 + inset;
-        (column, measure(sample.to_string()).x.max(header).ceil())
-    };
-    let folder = strings::tr(ctx, &txt::FILES_KIND_FOLDER);
-    let mut columns = vec![wanted(SortColumn::Modified, "0000-00-00 00:00 UTC")];
-    if kind != ChooseKind::Folder {
-        columns.push(wanted(SortColumn::Size, "999 MB"));
-        columns.push(wanted(SortColumn::Type, &folder));
-    }
-    let gap = Tokens::of(ctx).space.m;
-    fit_columns(width, gap, ui.spacing().button_padding.x, &columns)
-}
-
-/// How far a header's title starts from the left of its cell.
-fn header_inset(ui: &Ui, kit: &Kit, font: &egui::FontId) -> f32 {
-    let galley =
-        ui.painter()
-            .layout_no_wrap("A".to_string(), font.clone(), egui::Color32::PLACEHOLDER);
-    let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(100.0, 40.0));
-    let part = Part {
-        rect,
-        room: rect,
-        state: PartState::REST,
-        label: Some(&galley),
-    };
-    kit.table_header_cell
-        .label_rect(&part, galley.size())
-        .left()
 }
 
 /// One entry of a folder.
@@ -2877,14 +2783,6 @@ pub enum PickerAnswer {
 /// The keys a tip says: `Ctrl+H`, or `Ctrl+H, F8` when bound twice.
 fn keys_tip(keys: &[String]) -> String {
     keys.join(", ")
-}
-
-/// An entry of the list or the grid, as assistive technology reads it: an
-/// option of the list box, selected as its row says.
-fn as_option(ui: &Ui, r: &egui::Response) {
-    ui.ctx().accesskit_node_builder(r.id, |node| {
-        node.set_role(egui::accesskit::Role::ListBoxOption);
-    });
 }
 
 /// Where the file's own name starts in a name or a typed path.
@@ -3020,6 +2918,16 @@ struct Listing {
     members: Arc<HashMap<PathBuf, PathBuf>>,
 }
 
+/// The picker's thumbnails, the browser's over the previews.
+#[derive(Clone)]
+struct PickerThumbnails(Arc<browser::PreviewThumbnails>);
+
+impl std::fmt::Debug for PickerThumbnails {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("PickerThumbnails")
+    }
+}
+
 /// The subfolders the picker's columns list, by folder and whether hidden
 /// ones are shown.
 type ColumnCache = Arc<Mutex<browser::ColumnListings>>;
@@ -3144,6 +3052,14 @@ pub struct FilePicker {
     thumbnail_dragging: bool,
     /// The grid asked for thumbnails at the last frame.
     asked_thumbnails: bool,
+    /// The grid's thumbnails, from the previews (shared: the picker is
+    /// copied every frame it is drawn, and the thumbnails asked are renewed
+    /// from frame to frame).
+    thumbnails: Option<PickerThumbnails>,
+    /// The selection a rubber band adds to while it is drawn.
+    band_base: Option<BTreeSet<PathBuf>>,
+    /// The entries last drawn, whose facts are read.
+    drawn: std::ops::Range<usize>,
     /// The facts of the files the grid has shown, read once per listing:
     /// the cells in view would read them every frame otherwise.
     metas: Arc<Mutex<HashMap<PathBuf, Option<Meta>>>>,
@@ -3236,6 +3152,9 @@ impl FilePicker {
             focus_cell: false,
             thumbnail_dragging: false,
             asked_thumbnails: false,
+            thumbnails: None,
+            band_base: None,
+            drawn: 0..0,
             metas: Arc::default(),
             listing: None,
             fs,
@@ -3271,6 +3190,10 @@ impl FilePicker {
     /// Shows the selected entry's preview in a pane beside the list,
     /// from these providers (`Alt+P` hides it).
     pub fn with_previews(mut self, previews: Previews) -> Self {
+        self.thumbnails = Some(PickerThumbnails(Arc::new(browser::PreviewThumbnails::new(
+            previews.clone(),
+            self.fs.clone(),
+        ))));
         self.previews = Some(previews);
         self.show_preview = true;
         self
@@ -4612,13 +4535,14 @@ impl FilePicker {
             ui.vertical(|ui| {
                 ui.set_width(list_width);
                 let spacing = ui.spacing().item_spacing.y;
-                let row = row_height(ui);
+                let row = browser::row_height(ui);
                 let height = (list_height - row - spacing).max(0.0);
                 // The scroll bar takes its room only when there is one.
                 let scrolls = !grid && shown.len() as f32 * (row + spacing) > height;
                 let bar = ui.spacing().scroll.allocated_width();
                 let row_width = list_width - if scrolls { bar } else { 0.0 };
-                let columns = list_columns(ui, row_width, self.kind);
+                let folders_only = shown.iter().all(|e| e.is_dir);
+                let columns = browser::list_columns(ui, row_width, folders_only);
                 self.entries_view(ui, shown, &columns, row_width, list_width, height, answer);
             });
             if let Some(pane_width) = pane_width {
@@ -4645,8 +4569,12 @@ impl FilePicker {
                 });
             }
         });
-        if !grid && self.asked_thumbnails {
-            self.want_thumbnails(ui.ctx(), &[]);
+        // Out of the grid, the thumbnails it asked for are no longer wanted.
+        if !grid
+            && std::mem::take(&mut self.asked_thumbnails)
+            && let Some(previews) = &self.previews
+        {
+            previews.want(ui.ctx(), &self.fs, &[]);
         }
         if toggle {
             self.toggle();
@@ -5438,68 +5366,17 @@ impl FilePicker {
         chosen
     }
 
-    /// The headers above the entries, in the list and the grid alike: a click
-    /// sorts, and the arrow says by what. While the field's filter ranks the
-    /// entries, the order is not theirs to give, and they say so.
-    fn column_headers(&mut self, ui: &mut Ui, columns: &[ListColumn], width: f32) {
-        let ctx = ui.ctx().clone();
-        let height = row_height(ui);
-        let (rect, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
-        let ranks = self.ranks();
-        let kit = Kit::of(&ctx);
-        let font = egui::TextStyle::Body.resolve(ui.style());
-        let pointer = ui.input(|i| i.pointer.any_down() || i.pointer.any_released());
-        let inset = header_inset(ui, &kit, &font);
-        ui.add_enabled_ui(!ranks, |ui| {
-            for (n, c) in columns.iter().enumerate() {
-                let left = (rect.left() + c.left - inset).max(rect.left());
-                let right = columns
-                    .get(n + 1)
-                    .map_or(rect.right(), |next| rect.left() + next.left - inset);
-                let at =
-                    egui::Rect::from_min_max(pos2(left, rect.top()), pos2(right, rect.bottom()));
-                let title = strings::tr(&ctx, c.column.title());
-                let descending =
-                    (!ranks && self.sort.column == c.column).then_some(self.sort.descending);
-                let name = match descending {
-                    Some(true) => {
-                        strings::tr_args(&ctx, &txt::FILES_SORTED_DOWN, &[("column", &title)])
-                    }
-                    Some(false) => {
-                        strings::tr_args(&ctx, &txt::FILES_SORTED_UP, &[("column", &title)])
-                    }
-                    None => title.clone(),
-                };
-                let id = ui
-                    .scope_id()
-                    .with("egui_pop.files.header")
-                    .with(c.column.as_str());
-                let r = widgets::SortHeader {
-                    title: &title,
-                    name: &name,
-                    descending,
-                    sortable: true,
-                }
-                .show(ui, &kit, at, id)
-                .on_disabled_hover_text(strings::tr(&ctx, &txt::FILES_SORT_RANKED));
-                if r.clicked() {
-                    self.set_sort(self.sort.click(c.column));
-                    // By the pointer: the keys go on as before.
-                    self.refocus |= pointer;
-                }
-            }
-        });
-    }
-
-    /// The entries, drawn by the mode shown (`details` or `thumbnails`)
-    /// through the picker's drawer: its column headers, its rows and cells,
-    /// the groups' badges, the highlight the field drives, and its clicks.
+    /// The entries, drawn by the mode shown (`details`, `thumbnails` or
+    /// `columns`) with the file browser's own rows and cells
+    /// ([`browser::PlainDrawer`]): the picker adds its column headers, the
+    /// highlight its field drives, its groups' badges and its own rules on a
+    /// click, a rubber band choosing several files.
     #[allow(clippy::too_many_arguments)]
     fn entries_view(
         &mut self,
         ui: &mut Ui,
         shown: Vec<Entry>,
-        columns: &[ListColumn],
+        columns: &[browser::ListColumn],
         row_width: f32,
         list_width: f32,
         height: f32,
@@ -5519,24 +5396,25 @@ impl FilePicker {
         }
         let reveal = std::mem::take(&mut self.reveal_cell) && !shown.is_empty();
         let highlight = self.highlight.min(shown.len().saturating_sub(1));
+        // The facts of the entries about to be drawn, each read once: those
+        // last drawn, a page around them, and the highlight's.
+        let page = self.drawn.len().max(FACTS_PAGE);
+        let near = self.drawn.start.saturating_sub(page)..self.drawn.end + page;
+        let lit = highlight.saturating_sub(page)..highlight + page;
         let entries: Vec<browser::SourceEntry> = shown
             .iter()
-            .map(|e| browser::SourceEntry {
-                path: e.path.clone(),
-                name: e.name.clone(),
-                kind: if e.is_dir {
-                    browser::EntryKind::Folder
-                } else {
-                    browser::EntryKind::File
-                },
-                size: None,
-                modified: None,
-                taken: None,
-                app_id: None,
-            })
+            .enumerate()
+            .map(|(n, e)| self.source_entry(e, near.contains(&n) || lit.contains(&n)))
             .collect();
+        // Where a selection exists apart from the highlight, a ring says
+        // where the highlight is; otherwise the highlight is the selection.
+        let apart = self.selects_apart();
+        let mut paths = self.selected.clone();
+        if !apart && let Some(e) = shown.get(highlight) {
+            paths.insert(e.path.clone());
+        }
         let selection = browser::Selection {
-            paths: self.selected.clone(),
+            paths,
             anchor: self.anchor.clone(),
         };
         let mut settings = browser::ModeSettings {
@@ -5550,6 +5428,40 @@ impl FilePicker {
         );
         let many = self.kind == ChooseKind::OpenMany;
         self.row_ids.clear();
+        // A group's entry carries its members' badges, and stands in with a
+        // member's thumbnail.
+        let groups = self
+            .listing
+            .as_ref()
+            .map(|l| l.groups.clone())
+            .unwrap_or_default();
+        let absorbed: HashMap<PathBuf, browser::SourceEntry> = if grid {
+            groups
+                .values()
+                .flat_map(|g| g.members.iter())
+                .map(|m| {
+                    let e = Entry {
+                        path: m.clone(),
+                        name: m
+                            .file_name()
+                            .map_or_else(String::new, |n| n.to_string_lossy().into_owned()),
+                        is_dir: false,
+                    };
+                    (m.clone(), self.source_entry(&e, true))
+                })
+                .collect()
+        } else {
+            HashMap::new()
+        };
+        let ctx = ui.ctx().clone();
+        let marked = groups.clone();
+        let marks = move |e: &browser::SourceEntry| browser::EntryMarks {
+            chips: marked
+                .get(&e.path)
+                .map(|g| browser::group_chips(&ctx, g))
+                .unwrap_or_default(),
+            ..browser::EntryMarks::default()
+        };
         let mut details = std::mem::take(&mut self.details);
         let mut thumbs = std::mem::take(&mut self.thumbs);
         let mut cols = std::mem::take(&mut self.cols);
@@ -5586,21 +5498,25 @@ impl FilePicker {
         } else {
             (&[][..], None)
         };
-        // A column holds the names alone.
-        let name_only;
-        let (columns, row_width) = if columns_on {
-            let width = browser::ColumnsMode::COLUMN_WIDTH - ui.spacing().scroll.allocated_width();
-            name_only = fit_columns(
-                width,
-                Tokens::of(ui.ctx()).space.m,
-                ui.spacing().button_padding.x,
-                &[],
-            );
-            (name_only.as_slice(), width)
-        } else {
-            (columns, row_width)
+        let thumbnails = self.thumbnails.as_ref().map(|t| t.0.clone());
+        let no_thumbnails = browser::NoThumbnails;
+        let inner: &dyn browser::ThumbnailProvider = match &thumbnails {
+            Some(t) => t.as_ref(),
+            None => &no_thumbnails,
         };
+        let grouped = browser::GroupThumbnails {
+            inner,
+            groups: &groups,
+            absorbed: &absorbed,
+        };
+        let id = ui.scope_id().with("egui_pop.files.entries");
         let mut drawer = PickerDrawer {
+            plain: browser::PlainDrawer {
+                entries: &entries,
+                selection: &selection,
+                focus: (apart && !entries.is_empty()).then_some(highlight),
+                marks: Some(&marks),
+            },
             modifiers: ui.input(|i| i.modifiers),
             pointer: ui.input(|i| i.pointer.any_down() || i.pointer.any_released()),
             picker: self,
@@ -5609,15 +5525,14 @@ impl FilePicker {
             row_width,
             list_width,
             answer,
-            in_view: Vec::new(),
         };
         let cx = browser::ModeContext {
             entries: &entries,
             selection: &selection,
             focus: (!entries.is_empty()).then_some(highlight),
-            thumbnails: &browser::NoThumbnails,
+            thumbnails: &grouped,
             settings: &mut settings,
-            id: egui::Id::unique("egui_pop.files.entries"),
+            id,
             reveal_focus: reveal,
             max_height: Some(height),
             drawer: Some(&mut drawer),
@@ -5630,6 +5545,9 @@ impl FilePicker {
             generation: 0,
             marks: None,
         };
+        if grid {
+            grouped.begin_frame(ui.ctx());
+        }
         let out = if columns_on {
             cols.show(ui, cx)
         } else if grid {
@@ -5637,147 +5555,85 @@ impl FilePicker {
         } else {
             details.show(ui, cx)
         };
+        if grid {
+            grouped.end_frame(ui.ctx());
+        }
         drop(side);
-        let in_view = std::mem::take(&mut drawer.in_view);
         self.details = details;
         self.thumbs = thumbs;
         self.cols = cols;
         self.columns = out.columns;
+        self.drawn = out.visible.clone();
         if let Some(r) = out.reach {
             self.reach(r.place, r.focus);
             self.refocus = true;
             ui.ctx().request_repaint();
         }
-        if grid && (!in_view.is_empty() || self.asked_thumbnails) {
-            self.want_thumbnails(ui.ctx(), &in_view);
+        // A rubber band selects the files it touches as it is drawn.
+        if let Some(band) = browser::take_band(ui.ctx(), id) {
+            self.apply_band(&band, &entries);
         }
+        self.asked_thumbnails = grid;
     }
 
-    /// Draws row `n`: a selectable row, named by the entry's name, its other
-    /// columns said as its description.
-    fn list_row(
-        &mut self,
-        ui: &mut Ui,
-        e: &Entry,
-        n: usize,
-        columns: &[ListColumn],
-    ) -> egui::Response {
-        let t = Tokens::of(ui.ctx());
-        let label = if e.is_dir {
-            format!("{}/", e.name)
+    /// An entry as the browser's drawer shows it, with its facts when
+    /// `facts` (read from the file system once per listing).
+    fn source_entry(&self, e: &Entry, facts: bool) -> browser::SourceEntry {
+        let meta = if e.is_dir || !facts {
+            None
         } else {
-            e.name.clone()
+            self.meta_of(&e.path)
         };
-        // Where a selection exists apart from the highlight, a ring says where
-        // the highlight is.
-        let on = self.selected.contains(&e.path) || (n == self.highlight && !self.selects_apart());
-        // Inside the row's padding.
-        let height = row_height(ui) - 2.0 * ui.spacing().button_padding.y;
-        let mut atoms = egui::Atoms::default();
-        let mut facts = Vec::new();
-        let group = self.group_of(&e.path).cloned();
-        let name_column = columns.first().map_or(0.0, |c| c.width);
-        // The badges keep to the end of the name's column, and at most half of it.
-        let marks = group
-            .as_ref()
-            .map_or_else(Vec::new, |g| group_marks(ui, g, name_column / 2.0));
-        let marks_room = marks_width(ui, &marks);
-        let reserved = if marks.is_empty() {
-            0.0
-        } else {
-            marks_room + t.space.m
-        };
-        if let Some(group) = &group {
-            facts.push(group_said(ui.ctx(), group));
-        }
-        for c in columns {
-            let (text, align) = match c.column {
-                SortColumn::Name => {
-                    let width = (c.width - reserved).max(0.0);
-                    atoms.push_right(
-                        label
-                            .clone()
-                            .atom_max_width(width)
-                            .atom_size(vec2(width, height))
-                            .atom_align(egui::Align2::LEFT_CENTER),
-                    );
-                    if !marks.is_empty() {
-                        // In the place of the badges, painted over it: the
-                        // columns after it stay under their headers.
-                        atoms.push_right(String::new().atom_size(vec2(marks_room, height)));
-                    }
-                    continue;
-                }
-                column => {
-                    let fact = self.fact_text(ui.ctx(), e, column);
-                    if !fact.is_empty() {
-                        facts.push(fact.clone());
-                    }
-                    let align = if column == SortColumn::Size {
-                        egui::Align2::RIGHT_CENTER
-                    } else {
-                        egui::Align2::LEFT_CENTER
-                    };
-                    (fact, align)
-                }
-            };
-            atoms.push_right(
-                text.atom_max_width(c.width)
-                    .atom_size(vec2(c.width, height))
-                    .atom_align(align),
-            );
-        }
-        let name_width = name_column - reserved;
-        let font = egui::TextStyle::Body.resolve(ui.style());
-        let cut = ui
-            .painter()
-            .layout_no_wrap(label.clone(), font, egui::Color32::PLACEHOLDER)
-            .size()
-            .x
-            > name_width;
-        // By its path: the focus stays on it as the rows scroll.
-        let r = ui
-            .push_id(&e.path, |ui| {
-                ui.spacing_mut().icon_spacing = t.space.m;
-                ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
-                    ui.add(widgets::SelectableRow::new(on, atoms).name(label.clone()))
-                })
-                .inner
-            })
-            .inner;
-        if !facts.is_empty() {
-            ui.ctx().accesskit_node_builder(r.id, |node| {
-                node.set_description(facts.join(", "));
-            });
-        }
-        if let (Some(group), Some(c)) = (&group, columns.first()) {
-            let left = r.rect.left() + c.left;
-            let host = egui::Rect::from_x_y_ranges(left..=left + c.width, r.rect.y_range());
-            paint_marks(ui, host, Anchor::End, &marks, group);
-        }
-        if cut { r.on_hover_text(label) } else { r }
-    }
-
-    /// What a column says of an entry: empty for a folder's size, or a fact
-    /// the file system does not give.
-    fn fact_text(&self, ctx: &egui::Context, e: &Entry, column: SortColumn) -> String {
-        match column {
-            SortColumn::Name => e.name.clone(),
-            SortColumn::Size if e.is_dir => String::new(),
-            SortColumn::Size => self
-                .meta_of(&e.path)
-                .map_or_else(String::new, |m| preview::size_text(m.len)),
-            // A file system knows no capture time: the picker's is the
-            // time the file last changed.
-            SortColumn::Modified | SortColumn::Taken => self
-                .meta_of(&e.path)
-                .and_then(|m| m.modified)
-                .map_or_else(String::new, preview::time_text),
-            SortColumn::Type if e.is_dir => strings::tr(ctx, &txt::FILES_KIND_FOLDER),
-            SortColumn::Type => match extension_dot(&e.name) {
-                Some(dot) => e.name[dot + 1..].to_uppercase(),
-                None => strings::tr(ctx, &txt::FILES_KIND_FILE),
+        browser::SourceEntry {
+            path: e.path.clone(),
+            name: e.name.clone(),
+            kind: if e.is_dir {
+                browser::EntryKind::Folder
+            } else {
+                browser::EntryKind::File
             },
+            size: meta.map(|m| m.len),
+            modified: meta.and_then(|m| m.modified),
+            taken: None,
+            app_id: None,
+        }
+    }
+
+    /// Selects the files a rubber band touches (choosing several): alone, or
+    /// added to the selection it started from with Ctrl or Shift held. The
+    /// highlight goes to its last entry once it is let go.
+    fn apply_band(&mut self, band: &Band, entries: &[browser::SourceEntry]) {
+        if self.kind != ChooseKind::OpenMany {
+            self.band_base = None;
+            return;
+        }
+        let keep = band.modifiers.command || band.modifiers.shift;
+        let base = self
+            .band_base
+            .get_or_insert_with(|| {
+                if keep {
+                    self.selected.clone()
+                } else {
+                    BTreeSet::new()
+                }
+            })
+            .clone();
+        let mut paths = base;
+        paths.extend(
+            band.cells
+                .iter()
+                .filter_map(|&i| entries.get(i))
+                .filter(|e| !e.is_dir())
+                .map(|e| e.path.clone()),
+        );
+        self.error = None;
+        self.selected = paths;
+        if band.finished {
+            self.band_base = None;
+            if let Some(&last) = band.cells.last() {
+                self.highlight = last;
+                self.anchor = entries.get(last).map(|e| e.path.clone());
+            }
         }
     }
 
@@ -5785,7 +5641,7 @@ impl FilePicker {
     #[allow(clippy::too_many_arguments)]
     fn row_input(
         &mut self,
-        ui: &mut Ui,
+        _ui: &mut Ui,
         r: &egui::Response,
         n: usize,
         shown: &[Entry],
@@ -5793,16 +5649,6 @@ impl FilePicker {
         pointer: bool,
         answer: &mut Option<PickerAnswer>,
     ) {
-        if self.selects_apart() && n == self.highlight {
-            egui_pop_core::focus::own_ring(ui.ctx(), r.id);
-            let t = Tokens::of(ui.ctx());
-            ui.painter().rect_stroke(
-                r.rect,
-                t.radius.widget,
-                egui::Stroke::new(1.0, t.focus_ring),
-                egui::StrokeKind::Inside,
-            );
-        }
         self.row_ids.push(r.id);
         // Tab through the rows moves the highlight too.
         if r.gained_focus() && !pointer {
@@ -5810,112 +5656,6 @@ impl FilePicker {
             r.scroll_to_me(None);
         }
         self.entry_clicks(r, n, shown, modifiers, pointer, answer);
-    }
-
-    /// Tells the providers which files the grid has in view.
-    fn want_thumbnails(&mut self, ctx: &egui::Context, in_view: &[(PathBuf, Meta)]) {
-        if let Some(previews) = &self.previews {
-            previews.want(ctx, &self.fs, in_view);
-        }
-        self.asked_thumbnails = !in_view.is_empty();
-    }
-
-    /// Draws cell `n`, in the `Ui` the grid gave it: its thumbnail, or what
-    /// stands in for it. A cell in view that has no thumbnail yet asks for
-    /// one.
-    fn grid_cell(
-        &mut self,
-        ui: &mut Ui,
-        n: usize,
-        shown: &[Entry],
-        cell: egui::Vec2,
-        in_view: &mut Vec<(PathBuf, Meta)>,
-    ) -> egui::Response {
-        let e = &shown[n];
-        let selected = self.selected.contains(&e.path);
-        let highlighted = n == self.highlight;
-        let apart = self.selects_apart();
-        let label = if e.is_dir {
-            format!("{}/", e.name)
-        } else {
-            e.name.clone()
-        };
-        let mut cell_widget = Thumbnail::new(label)
-            .caption(e.name.as_str())
-            .size(cell)
-            .selected(selected || (highlighted && !apart));
-        let visible = ui.is_rect_visible(egui::Rect::from_min_size(ui.cursor().min, cell));
-        let mut failed = None;
-        if e.is_dir {
-            cell_widget = cell_widget.icon(Icon::Folder);
-        } else if !visible {
-            // In a row built around the view: nothing is asked for it.
-            cell_widget = cell_widget.placeholder(SkeletonTokens::of(ui.ctx()).fill);
-        } else {
-            match self.meta_of(&e.path) {
-                None => cell_widget = cell_widget.icon(Icon::Warning),
-                Some(meta) => {
-                    // Whatever it has now, for the cache to keep it.
-                    in_view.push((e.path.clone(), meta));
-                    let made = match &self.previews {
-                        Some(previews) => {
-                            let (made, _) = self.preview_of(e, |path| {
-                                if path == e.path {
-                                    return previews.thumbnail(path, &meta);
-                                }
-                                match self.meta_of(path) {
-                                    Some(meta) => {
-                                        in_view.push((path.to_path_buf(), meta));
-                                        previews.thumbnail(path, &meta)
-                                    }
-                                    None => preview::Shown::Nothing,
-                                }
-                            });
-                            made
-                        }
-                        None => preview::Shown::Nothing,
-                    };
-                    cell_widget = match &made {
-                        preview::Shown::Loading => {
-                            cell_widget.placeholder(SkeletonTokens::of(ui.ctx()).fill)
-                        }
-                        preview::Shown::Ready(ready) => {
-                            let image = match &ready.preview.body {
-                                preview::Body::Image(image) => Some(image.size),
-                                _ => None,
-                            };
-                            match (image, ready.texture(ui.ctx(), 0)) {
-                                (Some([w, h]), Some(texture)) => {
-                                    cell_widget.image(texture.id(), [w as u32, h as u32])
-                                }
-                                _ => cell_widget.icon(Icon::File),
-                            }
-                        }
-                        preview::Shown::Nothing => cell_widget.icon(Icon::File),
-                        preview::Shown::Failed(reason) => {
-                            failed = Some(reason.clone());
-                            cell_widget.icon(Icon::Warning)
-                        }
-                    };
-                }
-            }
-        }
-        // By its path: the focus stays on it as the rows scroll.
-        let r = ui.push_id(&e.path, |ui| ui.add(cell_widget)).inner;
-        let r = match failed {
-            Some(reason) => r.on_hover_text(reason),
-            None => r,
-        };
-        if let Some(group) = self.group_of(&e.path) {
-            let said = group_said(ui.ctx(), group);
-            ui.ctx().accesskit_node_builder(r.id, |node| {
-                node.set_description(said);
-            });
-            let host = r.rect.shrink(Tokens::of(ui.ctx()).space.xs);
-            let marks = group_marks(ui, group, host.width());
-            paint_marks(ui, host, Anchor::TopEnd, &marks, group);
-        }
-        r
     }
 
     /// A file's facts, read once per listing.
@@ -5937,16 +5677,6 @@ impl FilePicker {
         pointer: bool,
         answer: &mut Option<PickerAnswer>,
     ) {
-        if self.selects_apart() && n == self.highlight {
-            egui_pop_core::focus::own_ring(ui.ctx(), r.id);
-            let t = Tokens::of(ui.ctx());
-            ui.painter().rect_stroke(
-                r.rect,
-                t.radius.widget,
-                egui::Stroke::new(1.0, t.focus_ring),
-                egui::StrokeKind::Inside,
-            );
-        }
         self.row_ids.push(r.id);
         // The grid's own arrows, not egui's moves from widget to widget.
         if r.has_focus() {
@@ -6106,31 +5836,32 @@ impl FilePicker {
     }
 }
 
-/// The picker's [`browser::EntryDrawer`]: the layer between the modes and
-/// the picker. The modes lay the entries out; it draws the picker's rows
-/// with their columns and its thumbnail cells, with the groups' badges and
-/// the highlight, and runs the picker's own rules on a click.
+/// The picker's [`browser::EntryDrawer`]: the browser's own rows and cells
+/// ([`browser::PlainDrawer`]), with the picker's column headers that sort and
+/// its own rules on a click, on Tab and on the keys.
 struct PickerDrawer<'a> {
+    plain: browser::PlainDrawer<'a>,
     picker: &'a mut FilePicker,
     shown: Vec<Entry>,
-    columns: &'a [ListColumn],
+    columns: &'a [browser::ListColumn],
+    /// The rows' width: the list's, less the scroll bar's when it scrolls.
     row_width: f32,
     list_width: f32,
     modifiers: Modifiers,
     pointer: bool,
     answer: &'a mut Option<PickerAnswer>,
-    /// The files the cells in view showed, for the providers.
-    in_view: Vec<(PathBuf, Meta)>,
 }
 
 impl browser::EntryDrawer for PickerDrawer<'_> {
     fn headers(&mut self, ui: &mut Ui, _width: f32) {
-        let order = self.picker.sort;
-        self.picker
-            .column_headers(ui, self.columns, self.list_width);
-        // A click on a header shows in this frame.
-        if self.picker.sort != order {
-            self.shown = self.picker.visible();
+        let ranks = self.picker.ranks();
+        let clicked =
+            browser::sort_headers(ui, self.columns, self.list_width, self.picker.sort, ranks);
+        if let Some(sort) = clicked {
+            self.picker.set_sort(sort);
+            // By the pointer: the keys go on as before.
+            self.picker.refocus |= self.pointer;
+            ui.ctx().request_repaint();
         }
     }
 
@@ -6138,13 +5869,18 @@ impl browser::EntryDrawer for PickerDrawer<'_> {
         ui.weak(strings::tr(ui.ctx(), &txt::NOTHING_MATCHES));
     }
 
-    fn row_size(&self, ui: &Ui, _width: f32) -> egui::Vec2 {
-        vec2(self.row_width, row_height(ui))
+    fn row_size(&self, ui: &Ui, width: f32) -> egui::Vec2 {
+        // A column of Finder's view keeps its own width.
+        let width = if self.picker.columns_on() {
+            width
+        } else {
+            self.row_width
+        };
+        self.plain.row_size(ui, width)
     }
 
-    fn row(&mut self, ui: &mut Ui, n: usize, _size: egui::Vec2) -> egui::Response {
-        let r = self.picker.list_row(ui, &self.shown[n], n, self.columns);
-        as_option(ui, &r);
+    fn row(&mut self, ui: &mut Ui, n: usize, size: egui::Vec2) -> egui::Response {
+        let r = self.plain.row(ui, n, size);
         self.picker.row_input(
             ui,
             &r,
@@ -6157,9 +5893,8 @@ impl browser::EntryDrawer for PickerDrawer<'_> {
         r
     }
 
-    fn cell_size(&self, ui: &Ui, _side: f32) -> egui::Vec2 {
-        let side = self.picker.thumbnail_size;
-        vec2(side, side + thumbnail::caption_height(ui))
+    fn cell_size(&self, ui: &Ui, side: f32) -> egui::Vec2 {
+        self.plain.cell_size(ui, side)
     }
 
     fn cell(
@@ -6167,12 +5902,9 @@ impl browser::EntryDrawer for PickerDrawer<'_> {
         ui: &mut Ui,
         n: usize,
         size: egui::Vec2,
-        _thumbnail: browser::ThumbState,
+        thumbnail: browser::ThumbState,
     ) -> egui::Response {
-        let r = self
-            .picker
-            .grid_cell(ui, n, &self.shown, size, &mut self.in_view);
-        as_option(ui, &r);
+        let r = self.plain.cell(ui, n, size, thumbnail);
         self.picker.cell_input(
             ui,
             &r,
@@ -6183,57 +5915,6 @@ impl browser::EntryDrawer for PickerDrawer<'_> {
             self.answer,
         );
         r
-    }
-}
-
-/// What a group's entry says to a screen reader and in its badges' tip.
-fn group_said(ctx: &egui::Context, group: &FileGroup) -> String {
-    let members = group.member_names().join(", ");
-    strings::tr_args(ctx, &txt::FILES_GROUP_WITH, &[("members", &members)])
-}
-
-/// A badge of a group's entry.
-fn group_mark(text: &str) -> Indicator {
-    Indicator::text(text).tone(Tone::Neutral).overhang(false)
-}
-
-/// The room between a group's badges.
-fn marks_gap(ui: &Ui) -> f32 {
-    Tokens::of(ui.ctx()).space.xs
-}
-
-/// How wide these badges are, side by side.
-fn marks_width(ui: &Ui, marks: &[String]) -> f32 {
-    let gap = marks_gap(ui);
-    marks
-        .iter()
-        .map(|m| group_mark(m).measure(ui).x + gap)
-        .sum()
-}
-
-/// A group's badges, `+XMP` and `+JPEG`, in `room`; with too little, `+2`.
-fn group_marks(ui: &Ui, group: &FileGroup, room: f32) -> Vec<String> {
-    let all: Vec<String> = group.badges.iter().map(|b| format!("+{b}")).collect();
-    if !all.is_empty() && marks_width(ui, &all) <= room {
-        all
-    } else {
-        vec![format!("+{}", group.members.len())]
-    }
-}
-
-/// Paints badges from the end of `host`, the last at the end; their tip names
-/// the members. They take no click: the entry under them does.
-fn paint_marks(ui: &mut Ui, host: egui::Rect, anchor: Anchor, marks: &[String], group: &FileGroup) {
-    let said = group_said(ui.ctx(), group);
-    let gap = marks_gap(ui);
-    let mut host = host;
-    for mark in marks.iter().rev() {
-        // By an id: agents read them in the `indicators` collector.
-        let id = format!("files.badge:{}:{mark}", group.main.display());
-        let mark = group_mark(mark).id(id).tooltip(said.clone());
-        let width = mark.measure(ui).x;
-        mark.paint_at(ui, host, anchor);
-        host.set_right(host.right() - width - gap);
     }
 }
 
@@ -6347,6 +6028,7 @@ mod native {
 
 #[cfg(test)]
 mod tests {
+    use super::browser::fit_columns;
     use super::*;
 
     fn tree(name: &str) -> PathBuf {

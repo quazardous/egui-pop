@@ -383,20 +383,23 @@ fn the_filmstrip_moves_left_and_right_and_shows_the_focused_entry_large() {
     );
 }
 
-/// A click on a thumbnail at the strip's edge: its centre (where kittest's
-/// `click` presses) lies past the window, so that press reaches nothing,
-/// as a press off the window would. A press on its visible part, or a
-/// screen reader's click, takes it, and it scrolls whole into view.
+/// A click on a thumbnail cut by the strip's edge: a press on its visible
+/// part, or a screen reader's click, takes it, and it scrolls whole into
+/// view.
 #[test]
 fn the_filmstrip_takes_a_click_on_a_thumbnail_partly_in_view() {
     let width = 640.0;
     let mut h = harness(filmstrip("film-click", 200));
     h.run();
-    let rect = h.get_by_label("IMG_005.png").rect();
-    assert!(
-        rect.left() < width && rect.center().x > width,
-        "the fifth cell is cut by the window's edge: {rect:?}"
-    );
+    // The cell the window's edge cuts.
+    let (cut, rect) = (1..30)
+        .filter_map(|i| {
+            let r = h.query_by_label(&format!("IMG_{i:03}.png"))?.rect();
+            Some((i, r))
+        })
+        .find(|(_, r)| r.left() < width && r.right() > width)
+        .expect("a cell cut by the window's edge");
+    let name = |i: usize| format!("/p/IMG_{i:03}.png");
     // On its visible part.
     let at = egui::pos2((rect.left() + width) / 2.0, rect.center().y);
     h.event(egui::Event::PointerMoved(at));
@@ -410,15 +413,16 @@ fn the_filmstrip_takes_a_click_on_a_thumbnail_partly_in_view() {
     }
     h.run();
     h.run();
-    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_005.png")));
-    assert!(h.state().selection().contains(Path::new("/p/IMG_005.png")));
-    let rect = h.get_by_label("IMG_005.png").rect();
+    assert_eq!(h.state().focus(), Some(Path::new(&name(cut))));
+    assert!(h.state().selection().contains(Path::new(&name(cut))));
+    let rect = h.get_by_label(&format!("IMG_{cut:03}.png")).rect();
     assert!(rect.right() <= width, "scrolled whole into view: {rect:?}");
     // Through accessibility, the next one.
-    h.get_by_label("IMG_006.png").click_accesskit();
+    h.get_by_label(&format!("IMG_{:03}.png", cut + 1))
+        .click_accesskit();
     h.run();
-    assert_eq!(h.state().focus(), Some(Path::new("/p/IMG_006.png")));
-    assert!(h.state().selection().contains(Path::new("/p/IMG_006.png")));
+    assert_eq!(h.state().focus(), Some(Path::new(&name(cut + 1))));
+    assert!(h.state().selection().contains(Path::new(&name(cut + 1))));
 }
 
 #[test]
@@ -658,9 +662,9 @@ fn the_carousel_middle_follows_the_thumbnail_size_within_the_room() {
     large.run();
     let s = small.get_by_label("IMG_010.png").rect();
     let l = large.get_by_label("IMG_010.png").rect();
-    // The plain drawer's cell is its thumbnail and 8 points of margin.
-    assert!((s.width() - 104.0).abs() < 1.0, "{s:?}");
-    assert!((l.width() - 168.0).abs() < 1.0, "{l:?}");
+    // The plain drawer's cell is as wide as its thumbnail.
+    assert!((s.width() - 96.0).abs() < 1.0, "{s:?}");
+    assert!((l.width() - 160.0).abs() < 1.0, "{l:?}");
     // The largest size, clamped: the middle still fits a third of the room.
     large.state_mut().set_thumbnail_size(256.0);
     large.run();
