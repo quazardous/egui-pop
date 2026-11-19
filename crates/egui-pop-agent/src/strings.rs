@@ -61,6 +61,13 @@ pub const COL_CONNECTED: StrKey = StrKey::new("egui-pop-agent-agents-col-connect
 pub const COL_ACCESS: StrKey = StrKey::new("egui-pop-agent-agents-col-access", "Access");
 /// A column: the grant in words.
 pub const COL_DETAILS: StrKey = StrKey::new("egui-pop-agent-agents-col-details", "What it may do");
+/// A column: whether it reads private data.
+pub const COL_PRIVATE: StrKey = StrKey::new("egui-pop-agent-agents-col-private", "Private data");
+/// The private data switch's tooltip.
+pub const PRIVATE_HELP: StrKey = StrKey::new(
+    "egui-pop-agent-agents-private-help",
+    "Places, people and file paths in what it reads; off withholds them. Applies at once.",
+);
 /// A column: whom a default applies to.
 pub const COL_WHO: StrKey = StrKey::new("egui-pop-agent-agents-col-who", "Who");
 /// The access field's tooltip.
@@ -159,6 +166,8 @@ pub const ALL: &[StrKey] = &[
     COL_DETAILS,
     COL_WHO,
     ACCESS_HELP,
+    COL_PRIVATE,
+    PRIVATE_HELP,
     PRESET_READ_ONLY,
     PRESET_EDITOR,
     PRESET_FULL,
@@ -197,6 +206,8 @@ pub const PAGE: &[StrKey] = &[
     COL_DETAILS,
     COL_WHO,
     ACCESS_HELP,
+    COL_PRIVATE,
+    PRIVATE_HELP,
     PRESET_READ_ONLY,
     PRESET_EDITOR,
     PRESET_FULL,

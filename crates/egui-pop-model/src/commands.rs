@@ -156,6 +156,12 @@ pub struct CommandSpec {
     /// never asked.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub destructive: bool,
+    /// Its result carries the user's private data: places (GPS), people
+    /// (faces, names), absolute file paths. An agent whose grant
+    /// withholds private data is refused it (the agent socket's
+    /// `Grant::private`); the user's own runs are never held.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub private: bool,
     /// Its arguments: a JSON Schema ([`CommandSpec::schema`]), or a free
     /// description (an example, a text); `null` when it takes none. A
     /// schema (an object of schema keywords naming a `type`, see
@@ -198,6 +204,7 @@ impl CommandSpec {
             agent: true,
             read_only: false,
             destructive: false,
+            private: false,
             args: Json::Null,
             icon: None,
             icon_on: None,
@@ -309,6 +316,16 @@ impl CommandSpec {
     /// user's confirmation.
     pub fn destructive(mut self) -> Self {
         self.destructive = true;
+        self
+    }
+
+    /// Its result carries private data ([`CommandSpec::private`]): an
+    /// agent whose grant withholds private data is refused it. A command
+    /// whose result only partly is private may instead leave the private
+    /// parts out for such an agent (the agent socket's
+    /// `grants::reads_private`).
+    pub fn private(mut self) -> Self {
+        self.private = true;
         self
     }
 

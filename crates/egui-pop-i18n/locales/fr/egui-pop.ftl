@@ -883,6 +883,10 @@ egui-pop-agent-agents-col-who = Qui
 
 egui-pop-agent-agents-access-help = Ce qu’il peut faire ; s’applique aussitôt.
 
+egui-pop-agent-agents-col-private = Données privées
+
+egui-pop-agent-agents-private-help = Lieux, personnes et chemins de fichiers dans ce qu’il lit ; désactivé, il ne les reçoit pas. S’applique aussitôt.
+
 egui-pop-agent-agents-preset-read-only = Lecture seule
 
 egui-pop-agent-agents-preset-editor = Éditeur
@@ -3446,7 +3450,7 @@ command-pop-agent-confirm =
     .title = Répondre à la demande d’un agent
 
 command-pop-agent-grant =
-    .description = Fixe l’accès d’un agent appairé (`agent`), ou celui d’un défaut (`default` : unpaired ou paired), à un préréglage (`preset` : read-only, editor ou full). Réservé à l’utilisateur.
+    .description = Fixe l’accès d’un agent appairé (`agent`), ou celui d’un défaut (`default` : unpaired ou paired) : un préréglage (`preset` : read-only, editor ou full), les données privées montrées ou retenues (`private` : lieux, personnes, chemins de fichiers), ou les deux. Réservé à l’utilisateur.
     .title = Fixer l’accès d’un agent
 
 command-pop-agent-list =

@@ -618,7 +618,7 @@ command-pop-agent-confirm =
     .title = Answer an agent's request
 
 command-pop-agent-grant =
-    .description = Sets a paired agent's access (`agent`), or a default's (`default`: unpaired or paired), to a preset (`preset`: read-only, editor or full). The user's only.
+    .description = Sets a paired agent's access (`agent`), or a default's (`default`: unpaired or paired): a preset (`preset`: read-only, editor or full), private data shown or withheld (`private`: places, people, file paths), or both. The user's only.
     .title = Set an agent's access
 
 command-pop-agent-list =
@@ -1319,6 +1319,8 @@ egui-pop-agent-agents-col-name = Name
 
 egui-pop-agent-agents-col-paired = Paired since
 
+egui-pop-agent-agents-col-private = Private data
+
 egui-pop-agent-agents-col-seen = Last seen
 
 egui-pop-agent-agents-col-who = Who
@@ -1358,6 +1360,8 @@ egui-pop-agent-agents-preset-editor = Editor
 egui-pop-agent-agents-preset-full = Full
 
 egui-pop-agent-agents-preset-read-only = Read only
+
+egui-pop-agent-agents-private-help = Places, people and file paths in what it reads; off withholds them. Applies at once.
 
 egui-pop-agent-agents-revoke = Revoke
 

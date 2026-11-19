@@ -355,6 +355,13 @@ pub fn tools(describe: &Json) -> Vec<GeneratedTool> {
         }
         // Only said when declared: an undeclared command is not known to
         // be harmless, and MCP's default (destructive) stays.
+        // Private: its result carries places, people or file paths; an
+        // agent the user withholds them from is refused it.
+        if cap["private"] == true {
+            description.push_str(
+                " Gives private data (places, people, file paths): refused when the user withholds it.",
+            );
+        }
         let mut annotations = ToolAnnotations::new().read_only(!mutates);
         if destructive {
             annotations = annotations.destructive(true);

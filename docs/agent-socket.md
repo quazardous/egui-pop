@@ -272,12 +272,13 @@ The application says what each of the socket's agents may do, with an
 | `read_only` | only read-only commands and calls that change nothing |
 | `values` | the value paths `value.set` and `value.reset` may write: `*`, a prefix (`settings/*`) or a path |
 | `ui` | `ui` may act for it (click, type, keys, scroll); reading the tree is always allowed |
+| `private` | it reads private data: places (GPS), people (faces, names), absolute file paths ([Private data](#private-data)) |
 
 Three presets: `Grant::read_only()` (every command that reads, nothing
 written), `Grant::editor()` (every command offered to agents, no value
 written directly, no `ui` action) and `Grant::full()` (everything the
-bridge's mode allows). `.commands([..])`, `.values([..])` and `.ui(..)`
-narrow or widen one.
+bridge's mode allows), each reading private data. `.commands([..])`,
+`.values([..])`, `.ui(..)` and `.private(..)` narrow or widen one.
 
 ```rust
 use egui_pop_agent::{AgentGrants, AgentGrantsExt as _, Grant};
@@ -320,6 +321,30 @@ let app = App::builder()
   `grants::grants(app)` reads them, `grants::grant_of(app, origin)` the
   one an origin is held to.
 
+### Private data
+
+An agent may read everything the application offers it, private data
+included, unless the user or the application withholds it:
+
+- **A private read.** `CommandSpec::private()` says a command's result
+  is private data (where the photos were taken, who is in them, absolute
+  file paths). An agent whose grant has `private: false` is refused it,
+  in the same two places as any grant refusal (`-32001` "the agent does
+  not read private data", `command.refused` with
+  `by: "pop.agent.grants"`). `describe` lists `private: true`, and the
+  MCP tool's description says it.
+- **A read that is only partly private** (a photo list with places
+  among other fields) does not refuse the whole list: its handler asks
+  `egui_pop_agent::grants::reads_private(app, origin)` and leaves the
+  private fields out when it is `false`. It is `true` for every origin
+  that is not one of the socket's agents, the user's included.
+- **On by default.** Every preset reads private data;
+  `Grant::read_only().private(false)` withholds it, and the Agents page
+  has a switch for it per agent and for the defaults.
+- Only commands are judged: a collector action has no private flag, so
+  an application keeps private data out of what its collectors offer
+  agents, or offers it through a private command.
+
 **The escape hatch.** Before grants, an unpaired client wrote whatever
 the mode allowed. A client that does not say `hello` yet (the MCP
 binary, `egui_pop_test::scenario::live`, a script) and must write, for a
@@ -351,7 +376,13 @@ widgets of its own:
   `{ "agent", "preset" }`). A grant the application set that is none of
   the presets shows as "Set by the app" and stays until the user picks a
   preset.
-- **Defaults**: the same choice for clients that are not paired and for
+- **Private data**, a switch beside it: on, the agent reads places,
+  people and file paths; off, they are withheld
+  ([Private data](#private-data)). `pop.agent.grant` with
+  `{ "agent", "private": false }`; a preset chosen later keeps the
+  switch, and the switch alone does not make the preset "Set by the
+  app".
+- **Defaults**: the same choices for clients that are not paired and for
   paired agents without an access of their own (`pop.agent.grant` with
   `{ "default": "unpaired" | "paired", "preset" }`).
 - **Revoke**, a row action asking first: the pairing's stored token hash
@@ -484,6 +515,8 @@ application's own (`settled` stays reachable).
   application's grants hold again. Only presets are offered, not
   patterns. The MCP binary does not say `hello` yet, so it reads only
   unless the application allows unpaired writes.
+- **Private data is judged per command.** A collector action has no
+  private flag ([Private data](#private-data)).
 - **Collector actions' schemas are not enforced.** Only commands'
   are: an action's `FnCollector::schema` is listed and given to MCP,
   not checked.
