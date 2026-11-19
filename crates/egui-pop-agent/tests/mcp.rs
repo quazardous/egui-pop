@@ -183,8 +183,25 @@ impl Plugin for Writes {
             .description("Changes the application (a test's)."),
             |_| Ok(json!("written")),
         )?;
+        // Read-only, so a read-only bridge runs it: its schema is what
+        // refuses.
+        ctx.command(
+            CommandSpec::new(CommandId::from_static("test.zoom"), "Zoom", "Test")
+                .description("Reads at a factor (a test's).")
+                .read_only()
+                .schema(zoom_schema()),
+            |c| Ok(c.args["factor"].clone()),
+        )?;
         Ok(())
     }
+}
+
+fn zoom_schema() -> Json {
+    json!({
+        "type": "object",
+        "required": ["factor"],
+        "properties": { "factor": { "type": "number", "maximum": 8 } }
+    })
 }
 
 fn private_dir(name: &str) -> PathBuf {
@@ -292,6 +309,26 @@ fn mcp_lists_and_calls_through_the_socket() {
             for n in ["snapshot", "wait", "ui", "about_read", "test_write"] {
                 assert!(names.contains(&n), "{n} in {names:?}");
             }
+
+            // A command's schema is its tool's input schema, and it is
+            // enforced: a call it refuses is an error the model reads.
+            let zoom = listed["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|t| t["name"] == "test_zoom")
+                .cloned()
+                .unwrap();
+            assert_eq!(zoom["inputSchema"], zoom_schema(), "{zoom}");
+            let bad = c
+                .request("tools/call", json!({ "name": "test_zoom", "arguments": { "factor": 9 } }))
+                .await;
+            assert_eq!(bad["isError"], true, "{bad}");
+            assert!(bad.to_string().contains("pop.command.args"), "{bad}");
+            let good = c
+                .request("tools/call", json!({ "name": "test_zoom", "arguments": { "factor": 2 } }))
+                .await;
+            assert_ne!(good["isError"], true, "{good}");
 
             // A read-only command: run, and its result answered.
             let about = c

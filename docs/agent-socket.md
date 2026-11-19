@@ -335,6 +335,52 @@ App::builder()
 `allow_unpaired_writes` gives unpaired clients `Grant::full()`, today's
 behaviour. Put it behind the same switch that turns the bridge `On`.
 
+## Argument schemas
+
+A command declares its arguments' JSON Schema with
+`CommandSpec::schema` (the same as `CommandSpec::args` given a schema):
+
+```rust
+CommandSpec::new(ZOOM, "Zoom", "View").schema(json!({
+    "type": "object",
+    "required": ["factor"],
+    "additionalProperties": false,
+    "properties": { "factor": { "type": "number", "minimum": 0.1, "maximum": 8 } }
+}))
+```
+
+- **Enforced before the handler, for every origin.** A run whose
+  arguments do not match is refused before `pop.command.run` is asked
+  and before the handler runs, and the journal says `command.refused`
+  with `by: "pop.command.args"` and the reason, which says where and
+  why (``refused by `pop.command.args`: its arguments do not match its
+  schema: /factor: expected a number, got a string``). Over the socket, `commands.run`
+  answers the refusal at once (`ok: false`) rather than queueing a run
+  bound to fail; a destructive command's run refused so is never asked
+  about. `AppHandle::command_args_refusal` asks before a run.
+- **Why every origin, not only agents.** The schema is the handler's
+  contract, not a trust rule: a handler may rely on it whoever asks.
+  The user's runs carry arguments the application wrote (a key, a menu
+  entry, a palette prompt), so a mismatch there is a bug in the
+  application, better refused visibly than met by a handler that
+  assumed the shape. One rule is also simpler to state and to test.
+- **Additive.** A command whose `args` is a free description (an
+  example, a text) or `null` checks nothing, as before. Only an object
+  of schema keywords naming a `type` (or `properties`, a combinator,
+  `$schema`) is taken as a schema (`egui_pop_core::debug::is_schema`).
+  `null` arguments are checked as `{}` against an object's schema, so
+  a required property refuses a run with none.
+- **The subset checked** (`egui_pop_core::schema::check`, egui-pop's
+  own, no dependency): `type` (a name or a list; `integer` a number
+  without a fraction), `enum`, `const`, `properties`, `required`,
+  `additionalProperties` (`false` or a schema), `items`, `minItems`,
+  `maxItems`, `minimum`, `maximum`, `exclusiveMinimum`,
+  `exclusiveMaximum`, `minLength`, `maxLength`, `allOf`, `anyOf`,
+  `oneOf`, `not`. Other keywords (`pattern`, `format`, `$ref`...) are
+  read as notes and not checked.
+- **Published.** `describe` lists the schema as the command's `args`,
+  and MCP gives it as the tool's `inputSchema`.
+
 ## MCP
 
 With the `mcp` feature, the crate serves the socket as an MCP server
@@ -402,6 +448,9 @@ application's own (`settled` stays reachable).
   removing it from `agent-pairings.json`. The MCP binary does not say
   `hello` yet, so it reads only unless the application allows unpaired
   writes.
+- **Collector actions' schemas are not enforced.** Only commands'
+  are: an action's `FnCollector::schema` is listed and given to MCP,
+  not checked.
 - **In-process calls are not asked.** Calls made in the application's
   own process (`AppHandle::debug_call`) are not confirmed: only the
   socket's are.

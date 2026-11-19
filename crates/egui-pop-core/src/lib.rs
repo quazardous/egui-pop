@@ -118,6 +118,7 @@ mod reveal;
 mod ring;
 mod roving;
 pub mod scale;
+pub mod schema;
 mod scroll_keys;
 pub mod sections;
 pub mod slider;
