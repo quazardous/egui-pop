@@ -536,15 +536,33 @@ fn a_host_journal_given_to_the_kernel_is_reachable_from_the_apps_bus() {
     let m = multi(shared);
     let bus = m.app().bus();
     let journal = bus.journal().expect("the host's journal");
-    assert_eq!(journal.publish::<PhotoImported>("/a.raw".into()), Ok(1));
-    assert_eq!(*host.published.lock().unwrap(), ["photo.imported"]);
+    // egui-pop's journal is that journal (one per process): its own
+    // events go there, under `pop.journal`.
+    m.app()
+        .publish("test", None, "test.said", serde_json::Value::Null);
+    let before = journal.last_seq();
+    assert!(before > 0);
+    assert_eq!(m.app().last_event(), before);
+    assert_eq!(
+        journal.publish::<PhotoImported>("/a.raw".into()),
+        Ok(before + 1)
+    );
+    {
+        let published = host.published.lock().unwrap();
+        assert_eq!(published.last(), Some(&"photo.imported"));
+        assert!(
+            published[..published.len() - 1]
+                .iter()
+                .all(|p| *p == "pop.journal")
+        );
+    }
     assert!(bus.relay().is_none());
 
     let snapshot = m.app().debug_snapshot()["bus"].clone();
     assert_eq!(snapshot["capabilities"]["journal"], true);
     assert_eq!(snapshot["capabilities"]["relay"], false);
     assert_eq!(snapshot["capabilities"]["defer"], true);
-    assert_eq!(snapshot["journal_seq"], 1);
+    assert_eq!(snapshot["journal_seq"], journal.last_seq());
     let photo = snapshot["points"]
         .as_array()
         .unwrap()

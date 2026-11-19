@@ -1457,6 +1457,7 @@ name = "egui-pop-api"
 version = "0.14.0"
 dependencies = [
  "bus-contract",
+ "bus-kernel",
  "eframe",
  "egui",
  "egui-pop-core",
