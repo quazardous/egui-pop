@@ -1,5 +1,7 @@
-//! A fake host that scripts jobs: a test publishes `job.*` events as a
-//! kernel would ([`FakeHost::job`]), without threads or sleeps, and the
+//! A fake host that scripts jobs: a test publishes job events on
+//! `pop.job.event` as a kernel would ([`FakeHost::job`], with the
+//! publisher the application hands its host), without threads or
+//! sleeps, and the
 //! host answers the job commands (`job.cancel`, `job.pause`,
 //! `job.resume`, `job.retry`) now, later or not at all ([`Answer`]).
 //!
@@ -29,9 +31,10 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::rc::Rc;
 
+use egui_pop_api::bus::JobPublisher;
 use egui_pop_api::host::{self, Dispatch, Event, Host, Journal, Reply, Resolver, Seq, Waker};
 use egui_pop_core::binding::SharedStore;
-use egui_pop_model::jobs::{self as model, Request};
+use egui_pop_model::jobs::{JobEventKind, Request};
 use serde_json::{Value as Json, json};
 
 /// How the fake host answers a job command.
@@ -58,6 +61,8 @@ struct Inner {
     journal: Journal,
     store: SharedStore,
     waker: Waker,
+    /// Where the jobs are said: the application's, once built.
+    jobs: JobPublisher,
     answer: Answer,
     /// The job commands asked, in order: command and arguments.
     asked: Vec<(String, Json)>,
@@ -86,12 +91,12 @@ impl fmt::Debug for FakeHost {
 }
 
 /// The event that answers a request.
-fn answer_event(request: Request) -> &'static str {
+fn answer_event(request: Request) -> JobEventKind {
     match request {
-        Request::Cancel => model::CANCELLED,
-        Request::Pause => model::PAUSED,
-        Request::Resume => model::RESUMED,
-        Request::Retry => model::STARTED,
+        Request::Cancel => JobEventKind::Cancelled,
+        Request::Pause => JobEventKind::Paused,
+        Request::Resume => JobEventKind::Resumed,
+        Request::Retry => JobEventKind::Started,
     }
 }
 
@@ -105,19 +110,19 @@ impl FakeHost {
         self.0.borrow_mut().answer = answer;
     }
 
-    /// Publishes an event as the host, and wakes the interface.
-    pub fn emit(&self, name: &str, data: Json) -> Seq {
-        let (seq, waker) = {
+    /// Says a job event as the host, on `pop.job.event` (the publisher
+    /// wakes the interface).
+    pub fn emit(&self, kind: JobEventKind, data: Json) {
+        let jobs = {
             let mut i = self.0.borrow_mut();
-            if name == model::STARTED
+            if kind == JobEventKind::Started
                 && let Some(id) = data["id"].as_str()
             {
                 i.started.insert(id.into(), data.clone());
             }
-            (i.journal.publish("host", None, name, data), i.waker.clone())
+            i.jobs.clone()
         };
-        waker.wake();
-        seq
+        jobs.publish("host", kind, data);
     }
 
     /// A job to script.
@@ -244,9 +249,16 @@ impl Host for FakeHost {
     fn set_waker(&mut self, waker: Waker) {
         self.0.borrow_mut().waker = waker;
     }
+
+    fn set_job_publisher(&mut self, publisher: JobPublisher) {
+        self.0.borrow_mut().jobs = publisher;
+    }
 }
 
 /// One job of a [`FakeHost`], scripted event by event.
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
 #[derive(Clone, Debug)]
 pub struct JobScript {
     host: FakeHost,
@@ -254,71 +266,80 @@ pub struct JobScript {
 }
 
 impl JobScript {
-    /// Publishes `name` for this job, `data` merged with its id.
-    pub fn event(&self, name: &str, data: Json) -> &Self {
+    /// Says `kind` for this job, `data` merged with its id.
+    pub fn event(&self, kind: JobEventKind, data: Json) -> &Self {
         let mut data = match data {
             Json::Object(m) => Json::Object(m),
             _ => json!({}),
         };
         data["id"] = json!(self.id);
-        self.host.emit(name, data);
+        self.host.emit(kind, data);
         self
     }
 
     /// Starts it: a title, a total (none: indeterminate).
     pub fn start(&self, title: &str, total: Option<u64>) -> &Self {
-        self.event(model::STARTED, json!({ "title": title, "total": total }))
+        self.event(
+            JobEventKind::Started,
+            json!({ "title": title, "total": total }),
+        )
     }
 
     /// Starts it with the whole `job.started` data (steps, parent...).
     pub fn start_with(&self, data: Json) -> &Self {
-        self.event(model::STARTED, data)
+        self.event(JobEventKind::Started, data)
     }
 
     /// `done` items so far.
     pub fn progress(&self, done: u64) -> &Self {
-        self.event(model::PROGRESS, json!({ "done": done }))
+        self.event(JobEventKind::Progress, json!({ "done": done }))
     }
 
     /// `done` items so far, working on `item`.
     pub fn item(&self, done: u64, item: &str) -> &Self {
-        self.event(model::PROGRESS, json!({ "done": done, "item": item }))
+        self.event(
+            JobEventKind::Progress,
+            json!({ "done": done, "item": item }),
+        )
     }
 
     /// The current step and how far it is.
     pub fn step(&self, step: &str, done: u64, total: Option<u64>) -> &Self {
         self.event(
-            model::PROGRESS,
+            JobEventKind::Progress,
             json!({ "step": step, "step_done": done, "step_total": total }),
         )
     }
 
     /// Lines of its log.
     pub fn log(&self, text: &str) -> &Self {
-        self.event(model::LOG, json!({ "text": text }))
+        self.event(JobEventKind::Log, json!({ "text": text }))
     }
 
     pub fn item_failed(&self, item: &str, error: &str) -> &Self {
-        self.event(model::ITEM_FAILED, json!({ "item": item, "error": error }))
+        self.event(
+            JobEventKind::ItemFailed,
+            json!({ "item": item, "error": error }),
+        )
     }
 
     pub fn pause(&self) -> &Self {
-        self.event(model::PAUSED, Json::Null)
+        self.event(JobEventKind::Paused, Json::Null)
     }
 
     pub fn resume(&self) -> &Self {
-        self.event(model::RESUMED, Json::Null)
+        self.event(JobEventKind::Resumed, Json::Null)
     }
 
     pub fn fail(&self, error: &str) -> &Self {
-        self.event(model::FAILED, json!({ "error": error }))
+        self.event(JobEventKind::Failed, json!({ "error": error }))
     }
 
     pub fn finish(&self) -> &Self {
-        self.event(model::FINISHED, Json::Null)
+        self.event(JobEventKind::Finished, Json::Null)
     }
 
     pub fn cancelled(&self) -> &Self {
-        self.event(model::CANCELLED, Json::Null)
+        self.event(JobEventKind::Cancelled, Json::Null)
     }
 }

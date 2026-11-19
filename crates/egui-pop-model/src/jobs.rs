@@ -1,13 +1,15 @@
-//! Jobs: the application's background work, folded from the `job.*`
-//! events its host publishes on the journal (ADR 0010). egui-pop never
-//! runs jobs and never polls for them: the host publishes, [`Jobs`]
-//! follows, and the views (bars, the status bar, the jobs centre) draw
-//! what it holds.
+//! Jobs: the application's background work, folded from the job events
+//! its host publishes on the `pop.job.event` point (ADR 0010), each
+//! typed by a [`JobEventKind`]. egui-pop never runs jobs and never polls
+//! for them: the host publishes, [`Jobs`] follows, and the views (bars,
+//! the status bar, the jobs centre) draw what it holds. The table names
+//! each kind by the label it is journaled under; the model reads the
+//! kind, never a name.
 //!
 //! <div class="warning">Experimental: may change in any release
 //! (docs/stability.md).</div>
 //!
-//! | Event | Data |
+//! | Kind (journal label) | Data |
 //! |---|---|
 //! | `job.started` | `id`, `title`, `kind`, `parent`, `weight` (its share of its parent), `total` (none: indeterminate), `steps` (`[{id, title, weight}]` or names), `cancellable` (true), `pausable` (false), `retryable` (true), `owner` (the plugin the job runs for), `command` (the command that started it) |
 //! | `job.progress` | `id`, `done`, `total`, `failed`, `skipped`, `item` (the current item), `item_progress` (0 to 1), `phase`, `step` (the current step), `step_done`, `step_total`, `estimate` (the host's own fraction, 0 to 1) |
@@ -64,15 +66,15 @@
 //! refused request says why.
 //!
 //! ```
-//! use egui_pop_model::jobs::{Incoming, JobState, Jobs};
+//! use egui_pop_model::jobs::{Incoming, JobEventKind, JobState, Jobs};
 //! use serde_json::json;
 //!
 //! let mut jobs = Jobs::new();
-//! let mut at = |seq, name, data: serde_json::Value, now| {
-//!     jobs.apply(&Incoming::new(seq, name, &data), now);
+//! let mut at = |seq, kind, data: serde_json::Value, now| {
+//!     jobs.apply(&Incoming::new(seq, kind, &data), now);
 //! };
-//! at(1, "job.started", json!({ "id": "export", "title": "Export", "total": 4 }), 0.0);
-//! at(2, "job.progress", json!({ "id": "export", "done": 1, "item": "a.raw" }), 1.0);
+//! at(1, JobEventKind::Started, json!({ "id": "export", "title": "Export", "total": 4 }), 0.0);
+//! at(2, JobEventKind::Progress, json!({ "id": "export", "done": 1, "item": "a.raw" }), 1.0);
 //! let job = jobs.get("export").unwrap();
 //! assert_eq!(job.state, JobState::Running);
 //! assert_eq!(job.fraction, Some(0.25));
@@ -111,6 +113,87 @@ pub const CMD_CANCEL: &str = "job.cancel";
 pub const CMD_PAUSE: &str = "job.pause";
 pub const CMD_RESUME: &str = "job.resume";
 pub const CMD_RETRY: &str = "job.retry";
+
+/// What a job event says: the kind the host gives when it publishes the
+/// event on `pop.job.event` (egui-pop-api's `JobEvents`). The model folds
+/// events by this kind, never by a journal entry's name; [`name`]
+/// (`job.started`…) is only the label the event is journaled under.
+///
+/// [`name`]: JobEventKind::name
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum JobEventKind {
+    /// A job started (or started again).
+    Started,
+    /// A job moved on.
+    Progress,
+    /// One item failed; the job goes on.
+    ItemFailed,
+    Paused,
+    Resumed,
+    /// Cancelling was accepted; the job winds down.
+    Cancelling,
+    Failed,
+    Finished,
+    Cancelled,
+    /// The job's plugin is disconnected and the job goes on (said by
+    /// egui-pop, not by the host).
+    Orphaned,
+    /// The plugin of orphaned jobs is back (said by egui-pop).
+    Adopted,
+    /// Lines of a job's log.
+    Log,
+    /// A job command (`job.cancel`…) was dispatched (said by egui-pop).
+    CommandDispatched,
+    /// A job command ran (said by egui-pop; its cause is the dispatch).
+    CommandDone,
+    /// A job command failed (said by egui-pop; its cause is the dispatch).
+    CommandFailed,
+}
+
+impl JobEventKind {
+    /// Every kind, in declaration order.
+    pub const ALL: [JobEventKind; 15] = [
+        JobEventKind::Started,
+        JobEventKind::Progress,
+        JobEventKind::ItemFailed,
+        JobEventKind::Paused,
+        JobEventKind::Resumed,
+        JobEventKind::Cancelling,
+        JobEventKind::Failed,
+        JobEventKind::Finished,
+        JobEventKind::Cancelled,
+        JobEventKind::Orphaned,
+        JobEventKind::Adopted,
+        JobEventKind::Log,
+        JobEventKind::CommandDispatched,
+        JobEventKind::CommandDone,
+        JobEventKind::CommandFailed,
+    ];
+
+    /// The label the event is journaled under (`job.started`,
+    /// `command.done`…), for the journal's readers; nothing folds by it.
+    pub fn name(self) -> &'static str {
+        match self {
+            JobEventKind::Started => STARTED,
+            JobEventKind::Progress => PROGRESS,
+            JobEventKind::ItemFailed => ITEM_FAILED,
+            JobEventKind::Paused => PAUSED,
+            JobEventKind::Resumed => RESUMED,
+            JobEventKind::Cancelling => CANCELLING,
+            JobEventKind::Failed => FAILED,
+            JobEventKind::Finished => FINISHED,
+            JobEventKind::Cancelled => CANCELLED,
+            JobEventKind::Orphaned => ORPHANED,
+            JobEventKind::Adopted => ADOPTED,
+            JobEventKind::Log => LOG,
+            JobEventKind::CommandDispatched => "command.dispatched",
+            JobEventKind::CommandDone => "command.done",
+            JobEventKind::CommandFailed => "command.failed",
+        }
+    }
+}
 
 /// Time left is not given before a job ran this long (seconds).
 pub const ETA_AFTER: f64 = 3.0;
@@ -438,17 +521,18 @@ pub struct Incoming<'a> {
     pub seq: u64,
     pub source: &'a str,
     pub cause: Option<u64>,
-    pub name: &'a str,
+    /// What happened, typed: the model never reads an event's name.
+    pub kind: JobEventKind,
     pub data: &'a Json,
 }
 
 impl<'a> Incoming<'a> {
-    pub fn new(seq: u64, name: &'a str, data: &'a Json) -> Self {
+    pub fn new(seq: u64, kind: JobEventKind, data: &'a Json) -> Self {
         Self {
             seq,
             source: "",
             cause: None,
-            name,
+            kind,
             data,
         }
     }
@@ -544,27 +628,27 @@ impl Jobs {
         self
     }
 
-    /// Folds an event at time `now`; whether it changed a job. Events
-    /// other than `job.*` and the job commands' are ignored.
+    /// Folds an event at time `now`; whether it changed a job.
     pub fn apply(&mut self, e: &Incoming<'_>, now: f64) -> bool {
-        if let Some(rest) = e.name.strip_prefix("command.") {
-            return self.command(rest, e);
-        }
-        if !e.name.starts_with("job.") {
-            return false;
+        use JobEventKind as K;
+        if matches!(
+            e.kind,
+            K::CommandDispatched | K::CommandDone | K::CommandFailed
+        ) {
+            return self.command(e.kind, e);
         }
         let d = e.data;
-        if e.name == ADOPTED {
+        if e.kind == K::Adopted {
             return self.adopted(d);
         }
         let Some(id) = text(d, "id") else {
             return false;
         };
-        if e.name == ORPHANED && !self.jobs.get(&id).is_some_and(Job::active) {
+        if e.kind == K::Orphaned && !self.jobs.get(&id).is_some_and(Job::active) {
             // Only a job going on is left behind.
             return false;
         }
-        if e.name == STARTED {
+        if e.kind == K::Started {
             self.start(&id, e, now);
         } else if !self.jobs.contains_key(&id) {
             // A host that skipped `job.started`: the job is made up.
@@ -576,9 +660,9 @@ impl Jobs {
         let job = self.jobs.get_mut(&id).expect("just made");
         job.seq = e.seq;
         job.updated_at = now;
-        match e.name {
-            STARTED => {}
-            PROGRESS => {
+        match e.kind {
+            K::Started => {}
+            K::Progress => {
                 if let Some(n) = count(d, "total") {
                     job.total = Some(n);
                 }
@@ -642,7 +726,7 @@ impl Jobs {
                     job.state = JobState::Running;
                 }
             }
-            ITEM_FAILED => {
+            K::ItemFailed => {
                 job.failed += 1;
                 job.errors.push(ItemError {
                     item: text(d, "item").unwrap_or_default(),
@@ -653,34 +737,34 @@ impl Jobs {
                     job.errors.drain(..len - ITEM_ERRORS);
                 }
             }
-            PAUSED => {
+            K::Paused => {
                 job.state = JobState::Paused;
                 job.requested = None;
             }
-            RESUMED => {
+            K::Resumed => {
                 job.state = JobState::Running;
                 job.requested = None;
                 // The pause is not part of the rate.
                 job.sample = job.fraction.map(|f| (now, f));
             }
-            CANCELLING => {
+            K::Cancelling => {
                 job.state = JobState::Cancelling;
                 job.requested = None;
                 if let Some(reason) = text(d, "reason") {
                     job.reason = Some(reason);
                 }
             }
-            ORPHANED => {
+            K::Orphaned => {
                 job.orphaned = Some(text(d, "plugin").unwrap_or_default());
             }
-            FAILED => {
+            K::Failed => {
                 job.state = JobState::Failed;
                 job.error = text(d, "error").or_else(|| Some(String::new()));
                 job.ended_at = Some(now);
                 job.requested = None;
                 job.orphaned = None;
             }
-            FINISHED => {
+            K::Finished => {
                 job.state = match d["outcome"].as_str() {
                     Some("failed") => JobState::Failed,
                     Some("cancelled") => JobState::Cancelled,
@@ -722,7 +806,7 @@ impl Jobs {
                 job.requested = None;
                 job.orphaned = None;
             }
-            CANCELLED => {
+            K::Cancelled => {
                 job.state = JobState::Cancelled;
                 job.ended_at = Some(now);
                 job.requested = None;
@@ -731,7 +815,7 @@ impl Jobs {
                     job.reason = Some(reason);
                 }
             }
-            LOG => {
+            K::Log => {
                 let text = text(d, "text").unwrap_or_default();
                 let text = text.strip_suffix('\n').unwrap_or(&text);
                 let log = self.logs.entry(id.clone()).or_default();
@@ -819,9 +903,9 @@ impl Jobs {
     }
 
     /// Follows the job commands: asked, refused.
-    fn command(&mut self, what: &str, e: &Incoming<'_>) -> bool {
+    fn command(&mut self, what: JobEventKind, e: &Incoming<'_>) -> bool {
         match what {
-            "dispatched" => {
+            JobEventKind::CommandDispatched => {
                 let Some(req) = e.data["command"].as_str().and_then(Request::from_command) else {
                     return false;
                 };
@@ -841,14 +925,14 @@ impl Jobs {
                 self.changed.insert(id);
                 true
             }
-            "done" | "failed" => {
+            JobEventKind::CommandDone | JobEventKind::CommandFailed => {
                 let Some((id, req)) = e.cause.and_then(|c| self.dispatched.remove(&c)) else {
                     return false;
                 };
                 let Some(job) = self.jobs.get_mut(&id) else {
                     return false;
                 };
-                if what == "failed" {
+                if what == JobEventKind::CommandFailed {
                     job.request_error = Some(text(e.data, "error").unwrap_or_default());
                     if job.requested == Some(req) {
                         job.requested = None;
@@ -1266,7 +1350,12 @@ mod tests {
 
         fn at(&mut self, now: f64, name: &str, data: Json) -> u64 {
             self.seq += 1;
-            self.jobs.apply(&Incoming::new(self.seq, name, &data), now);
+            // The tests read best by label; the model takes the kind.
+            let kind = JobEventKind::ALL
+                .into_iter()
+                .find(|k| k.name() == name)
+                .expect("a job event label");
+            self.jobs.apply(&Incoming::new(self.seq, kind, &data), now);
             self.seq
         }
 
@@ -1399,7 +1488,7 @@ mod tests {
         f.seq += 1;
         let data = json!({ "command": "job.cancel", "error": "too late" });
         f.jobs.apply(
-            &Incoming::new(f.seq, "command.failed", &data).cause(Some(asked)),
+            &Incoming::new(f.seq, JobEventKind::CommandFailed, &data).cause(Some(asked)),
             1.5,
         );
         assert_eq!(f.job("e").requested, None);
@@ -1430,8 +1519,10 @@ mod tests {
         // One it published itself, naming no owner.
         f.seq += 1;
         let data = json!({ "id": "own" });
-        f.jobs
-            .apply(&Incoming::new(f.seq, STARTED, &data).source("p"), 0.0);
+        f.jobs.apply(
+            &Incoming::new(f.seq, JobEventKind::Started, &data).source("p"),
+            0.0,
+        );
         let left = f.jobs.left_by(&["p"], &["p.go"]);
         assert_eq!(left.cancel, ["mine", "by-command"]);
         assert_eq!(left.orphan, ["fixed", "own"]);

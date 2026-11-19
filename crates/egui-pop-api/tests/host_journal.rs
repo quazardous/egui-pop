@@ -224,17 +224,10 @@ fn egui_pops_application_bus_keeps_the_contract() {
     conformance::run(|| app_bus(Arc::new(Kernel::new())));
 }
 
-/// bus-kernel 0.3.0's check `crossing.declared_requests_fail_closed_alter_never`
-/// asserts that no point at all is declared after its refused table: on a
-/// bus an application has declared its points on, that never holds. It is
-/// left out here until bus-kernel narrows it to the points it refuses.
-const NEEDS_A_BARE_BUS: &[&str] = &["crossing.declared_requests_fail_closed_alter_never"];
-
 #[test]
 fn egui_pops_application_bus_with_a_journal_keeps_the_contract() {
     let failed: Vec<String> = conformance::report(|| app_bus(memory::full()))
         .into_iter()
-        .filter(|(name, _)| !NEEDS_A_BARE_BUS.contains(name))
         .filter_map(|(name, outcome)| match outcome {
             conformance::Outcome::Failed(why) => Some(format!("- {name}: {why}")),
             _ => None,

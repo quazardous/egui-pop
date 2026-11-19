@@ -9,6 +9,7 @@
 //! greyed, its panel's place is kept and given back, its components,
 //! hosts and mounts go.
 
+use egui_pop_model::jobs::JobEventKind;
 use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::{Mutex, Once};
@@ -372,7 +373,7 @@ fn with_jobs() -> (App, Asked) {
         .plugin(JobsPlugin::default().run_locally(move |app, request, id| {
             seen.borrow_mut().push((request, id.to_string()));
             if request == JobRequest::Cancel {
-                app.publish("host", None, "job.cancelled", json!({ "id": id }));
+                app.publish_job("host", JobEventKind::Cancelled, json!({ "id": id }));
             }
             Ok(Json::Null)
         }))
@@ -389,7 +390,7 @@ fn a_gone_plugins_running_job_is_cancelled_and_one_it_cannot_cancel_is_orphaned(
     let (mut app, asked) = with_jobs();
     let h = app.handle().clone();
     let start = |source: &str, data: Json| {
-        h.publish(source, None, "job.started", data);
+        h.publish_job(source, JobEventKind::Started, data);
     };
     // Run by the host for the plugin: one it can cancel, one it cannot.
     start(
@@ -509,10 +510,9 @@ fn a_wait_for_idle_returns_with_an_orphaned_job_going_on() {
     );
     harness.run_ok();
     let h = harness.state().handle().clone();
-    h.publish(
+    h.publish_job(
         "host",
-        None,
-        "job.started",
+        JobEventKind::Started,
         json!({ "id": "render", "title": "Render", "owner": "worker", "cancellable": false }),
     );
     // A pass: the job is followed (the jobs plugin folds the journal).

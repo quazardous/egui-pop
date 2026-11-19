@@ -86,9 +86,10 @@
 //! The job lifecycle is the second family. Asking about a job is a
 //! request ([`JobCancel`], [`JobPause`], [`JobResume`], [`JobRetry`], each
 //! a [`JobAsk`], asked by [`AppHandle::request_job`]); whoever runs the
-//! job does the work and answers with its `job.*` events. Those events,
-//! and the job commands' `command.*` events, are delivered to the
-//! listeners of [`JobEvents`] (`pop.job.event`) in journal order, once each
+//! job does the work and answers with its job events, published typed on
+//! [`JobEvents`] (`pop.job.event`, a [`JobEvent`] of a [`JobEventKind`])
+//! with a [`JobPublisher`]. Those events, and the job commands' dispatch
+//! and answer, are delivered to its listeners in journal order, once each
 //! ([`AppHandle::deliver_events`]): the jobs plugin's model is one of them
 //! (`pop.jobs.model`), so no job state changes but on the bus. A plugin
 //! connecting or disconnecting is asked on [`PluginConnect`] and
@@ -154,6 +155,7 @@ use serde_json::json;
 use crate::app::{AppHandle, WeakApp};
 use crate::host::{Event, Seq};
 use crate::windows::WindowId;
+pub use egui_pop_model::jobs::JobEventKind;
 
 pub use bus_contract;
 pub use bus_contract::{missing_targets, order_dump};
@@ -489,17 +491,85 @@ impl Point for JobRetry {
     type Value = Vec<String>;
 }
 
-/// A job event was said (`pop.job.event`): each `job.*` event of the journal, and
-/// each `command.*` event of a job command, delivered once, in journal
-/// order ([`AppHandle::deliver_events`]).
+/// A job event, as [`JobEvents`] carries it: what happened, typed
+/// ([`JobEventKind`]), its data (see [`egui_pop_model::jobs`]), who said
+/// it, and its number and cause in the journal it is recorded in.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct JobEvent {
+    pub seq: Seq,
+    pub source: String,
+    pub cause: Option<Seq>,
+    pub kind: JobEventKind,
+    pub data: serde_json::Value,
+}
+
+/// A job event was said (`pop.job.event`): each event the host published
+/// with a [`JobPublisher`] ([`AppHandle::publish_job`]), and each event of
+/// a job command (dispatched, done, failed), delivered once, in journal
+/// order ([`AppHandle::deliver_events`]). The point's kind is typed: no
+/// listener reads a journal entry's name, and an entry named `job.*`
+/// that was not published on this point is not a job event.
 #[derive(Debug)]
 pub struct JobEvents;
 impl Point for JobEvents {
     const KIND: PointKind = PointKind::Event;
     const ID: PointId = PointId::new("pop.job.event");
-    type Input = Event;
+    type Input = JobEvent;
     type Value = ();
 }
+
+/// A job event said, not delivered yet.
+#[derive(Debug)]
+struct Said {
+    source: String,
+    kind: JobEventKind,
+    data: serde_json::Value,
+}
+
+/// Publishes job events on `pop.job.event`, from any thread: the host's
+/// side of the jobs contract. The application hands one to its host
+/// ([`Host::set_job_publisher`](crate::host::Host::set_job_publisher));
+/// [`AppHandle::job_publisher`] gives one too. Each event is recorded in
+/// the journal (under its kind's label, [`JobEventKind::name`], for the
+/// journal's readers) and delivered to the point's listeners at the next
+/// delivery, in the order said; the interface is woken.
+#[derive(Clone, Default)]
+pub struct JobPublisher {
+    said: Arc<Mutex<Vec<Said>>>,
+    wake: Arc<Mutex<Option<egui::Context>>>,
+}
+
+impl std::fmt::Debug for JobPublisher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("JobPublisher")
+            .field("waiting", &lock(&self.said).len())
+            .finish()
+    }
+}
+
+impl JobPublisher {
+    /// Says a job event: `kind`, with its data, by `source` (`host`, a
+    /// plugin…).
+    pub fn publish(&self, source: &str, kind: JobEventKind, data: serde_json::Value) {
+        lock(&self.said).push(Said {
+            source: source.into(),
+            kind,
+            data,
+        });
+        if let Some(ctx) = lock(&self.wake).as_ref() {
+            ctx.request_repaint_of(ViewportId::ROOT);
+        }
+    }
+
+    fn take(&self) -> Vec<Said> {
+        std::mem::take(&mut *lock(&self.said))
+    }
+}
+
+/// How many journal numbers of job events are kept, for a jobs plugin
+/// connected late to read them back.
+const JOB_TAGS: usize = 100_000;
 
 /// A plugin connecting or disconnecting: which, its owner id, why, and
 /// the commands it registered (gone with it on a disconnection).
@@ -623,7 +693,7 @@ pub const CONTRACT: &[PointDecl] = &[
     PointDecl::of::<JobResume>("A paused job is asked to go on."),
     PointDecl::of::<JobRetry>("A failed or cancelled job is asked to run again."),
     PointDecl::of::<JobEvents>(
-        "A `job.*` event, or a job command's `command.*` event, was said: delivered once each, in journal order.",
+        "A job event was said, typed by its kind (started, progress, finished, failed…): published by the host, or a job command's dispatch and answer; delivered once each, in journal order.",
     ),
     PointDecl::of::<PluginConnect>("A plugin is connected: what it had left is taken back."),
     PointDecl::of::<PluginDisconnect>(
@@ -831,6 +901,11 @@ pub(crate) struct Bus {
     delivered: Cell<Seq>,
     /// A delivery runs: one asked from inside it is left to it.
     delivering: Cell<bool>,
+    /// The job events said, not recorded yet.
+    pub(crate) jobs: JobPublisher,
+    /// The journal numbers of the job events, with their kind: what goes
+    /// to [`JobEvents`], by number, never by name.
+    job_tags: RefCell<std::collections::BTreeMap<Seq, JobEventKind>>,
     /// The settings the value store changed, not said yet
     /// ([`AppHandle::deliver_settings`]).
     pub(crate) settings_heard: settings::Heard,
@@ -892,6 +967,10 @@ impl Bus {
         panel_describe::install(&*kernel);
         areas::install(&*kernel, wake.clone());
         let over_budget = budget::install(&*kernel);
+        let jobs = JobPublisher {
+            said: Arc::default(),
+            wake: wake.clone(),
+        };
         Bus {
             kernel,
             registry,
@@ -902,6 +981,8 @@ impl Bus {
             keys_epoch,
             delivered: Cell::new(0),
             delivering: Cell::new(false),
+            jobs,
+            job_tags: RefCell::default(),
             settings_heard: settings::Heard::default(),
             settings_delivering: Cell::new(false),
             wake,
@@ -993,16 +1074,6 @@ where
         log::error!(target: "egui_pop", "{f}");
     }
     out.value
-}
-
-/// Whether a journal event goes to [`JobEvents`]: a `job.*` event, or a
-/// job command's `command.*` event.
-pub(crate) fn is_job_event(e: &Event) -> bool {
-    e.name.starts_with("job.")
-        || (e.name.starts_with("command.")
-            && e.data["command"]
-                .as_str()
-                .is_some_and(|c| c.starts_with("job.")))
 }
 
 /// Ends a delivery, even by a panic a listener's boundary did not catch.
@@ -1490,7 +1561,7 @@ impl AppHandle {
     /// Asks about a job (`pop.job.cancel`, `pop.job.pause`, `pop.job.resume`,
     /// `pop.job.retry`): its listeners run now, in their declared order (the
     /// jobs plugin's: the job shows as asked, then whoever runs it is
-    /// asked); the answer comes as the runner's `job.*` events. What they
+    /// asked); the answer comes as the runner's job events. What they
     /// did, one line each; with nobody listening (no jobs plugin) it is
     /// refused, said as `job.refused`.
     ///
@@ -1533,12 +1604,64 @@ impl AppHandle {
             return;
         }
         let _delivering = Delivering(&bus.delivering);
+        self.record_job_events();
         let events = self.events_since(bus.delivered.get());
         for e in events {
             bus.delivered.set(e.seq);
-            if is_job_event(&e) {
-                emit_with::<JobEvents>(self, e, ());
+            if let Some(job) = self.job_event_of(&e) {
+                emit_with::<JobEvents>(self, job, ());
             }
+        }
+    }
+
+    /// Says a job event on `pop.job.event` ([`JobPublisher::publish`]):
+    /// recorded and delivered at the next delivery.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn publish_job(&self, source: &str, kind: JobEventKind, data: serde_json::Value) {
+        self.0.bus.jobs.publish(source, kind, data);
+    }
+
+    /// A publisher of job events, for any thread.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn job_publisher(&self) -> JobPublisher {
+        self.0.bus.jobs.clone()
+    }
+
+    /// Notes that the journal's event `seq` is a job event of `kind`.
+    pub(crate) fn tag_job_event(&self, seq: Seq, kind: JobEventKind) {
+        let mut tags = self.0.bus.job_tags.borrow_mut();
+        tags.insert(seq, kind);
+        while tags.len() > JOB_TAGS {
+            tags.pop_first();
+        }
+    }
+
+    /// The job event a journal event is, by its number: one recorded as
+    /// such, never one named like one.
+    pub(crate) fn job_event_of(&self, e: &Event) -> Option<JobEvent> {
+        let kind = *self.0.bus.job_tags.borrow().get(&e.seq)?;
+        Some(JobEvent {
+            seq: e.seq,
+            source: e.source.clone(),
+            cause: e.cause,
+            kind,
+            data: e.data.clone(),
+        })
+    }
+
+    /// Records the job events said in the journal, in order, when the
+    /// host is free (else they wait for the next delivery).
+    fn record_job_events(&self) {
+        if !self.host_free() {
+            return;
+        }
+        for said in self.0.bus.jobs.take() {
+            let seq = self.publish_now(&said.source, None, said.kind.name(), said.data);
+            self.tag_job_event(seq, said.kind);
         }
     }
 

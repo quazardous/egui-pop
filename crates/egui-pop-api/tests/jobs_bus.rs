@@ -1,6 +1,8 @@
 //! The job lifecycle on the bus (ADR 0029): asking about a job is a
 //! request whose listeners run in a declared, reviewed order; the jobs
-//! model is a listener of the `job.*` events and changes on nothing else;
+//! model is a listener of `pop.job.event`, typed events the host
+//! publishes, and changes on nothing else (never on a journal entry's
+//! name);
 //! a plugin's jobs follow its disconnection and its return through
 //! listeners of the plugin points.
 
@@ -12,8 +14,9 @@ use egui_pop_api::bus::egui_pop_hooks::ListenOpts;
 use egui_pop_api::bus::{self, JOB_POINTS, JobAsk, JobEvents, PLUGIN_POINTS};
 use egui_pop_api::jobs::{self, JOBS, JobsPlugin, MODEL};
 use egui_pop_api::{App, AppHandle};
-use egui_pop_model::jobs::{JobState, Request};
+use egui_pop_model::jobs::{JobEventKind, JobState, Request};
 use egui_pop_test::jobs::{Answer, FakeHost};
+use serde_json::json;
 
 fn with_host(host: &FakeHost) -> App {
     App::builder()
@@ -68,7 +71,7 @@ fn watch(h: &AppHandle) -> Seen {
         .listen::<JobEvents>("test.watch", ListenOpts::new().after(MODEL), move |e, _| {
             let job = jobs.job("export");
             s.lock().unwrap().push((
-                e.name.clone(),
+                e.kind.name().to_string(),
                 job.as_ref().map(|j| j.state),
                 job.and_then(|j| j.requested),
             ));
@@ -159,4 +162,69 @@ fn asked_without_the_jobs_plugin_a_request_is_refused_on_the_journal() {
             .count(),
         2
     );
+}
+
+/// The jobs centre follows the declared point, not the journal: an entry
+/// merely named like a job event changes nothing.
+#[test]
+fn a_journal_entry_named_like_a_job_event_is_not_one() {
+    let mut app = with_host(&FakeHost::new());
+    let h = app.handle().clone();
+    let jobs = h.service(&JOBS).unwrap();
+    h.publish(
+        "host",
+        None,
+        "job.started",
+        json!({ "id": "export", "title": "Export", "total": 4 }),
+    );
+    h.publish(
+        "host",
+        None,
+        "job.progress",
+        json!({ "id": "export", "done": 2 }),
+    );
+    h.deliver_events();
+    pass(&mut app);
+    assert!(jobs.job("export").is_none());
+    assert!(jobs.all().is_empty());
+}
+
+/// The host publishes `pop.job.event` from any thread, with the
+/// publisher the application handed it: the centre follows at the next
+/// delivery, and the journal records each event under its label.
+#[test]
+fn the_centre_follows_the_job_points_the_host_publishes() {
+    let mut app = with_host(&FakeHost::new());
+    let h = app.handle().clone();
+    let jobs = h.service(&JOBS).unwrap();
+    let publisher = h.job_publisher();
+    std::thread::spawn(move || {
+        publisher.publish(
+            "host",
+            JobEventKind::Started,
+            json!({ "id": "export", "title": "Export", "total": 4 }),
+        );
+        publisher.publish(
+            "host",
+            JobEventKind::Progress,
+            json!({ "id": "export", "done": 2 }),
+        );
+    })
+    .join()
+    .unwrap();
+    assert!(jobs.job("export").is_none(), "nothing before a delivery");
+    pass(&mut app);
+    let job = jobs.job("export").unwrap();
+    assert_eq!(job.fraction, Some(0.5));
+    assert_eq!(job.state, JobState::Running);
+    h.publish_job("host", JobEventKind::Finished, json!({ "id": "export" }));
+    pass(&mut app);
+    assert_eq!(jobs.job("export").unwrap().state, JobState::Done);
+    let names: Vec<String> = h
+        .events_since(0)
+        .into_iter()
+        .map(|e| e.name)
+        .filter(|n| n.starts_with("job."))
+        .collect();
+    assert_eq!(names, ["job.started", "job.progress", "job.finished"]);
 }
