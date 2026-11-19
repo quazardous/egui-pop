@@ -16,7 +16,10 @@
 //!   number instead of sleeping. A host keeps it in a [`Journal`] it
 //!   hands out ([`Host::journal`]), or on its own bus (it answers
 //!   `publish`, `since` and `last_seq` itself), or not at all: egui-pop
-//!   then keeps one in memory, as `LocalHost` does;
+//!   then keeps one in memory, as `LocalHost` does. When the
+//!   application's bus offers the contract's journal and the host keeps
+//!   none of its own (`LocalHost` keeps none then), the journal is the
+//!   bus's: one per process (`crate::bus::HOST_JOURNAL`);
 //! - the value store holding settings ([`Host::store`]);
 //! - the owner of the application's histories ([`Host::history`], ADR
 //!   0014): its scopes, their steps and labels ("Undo exposure change"),

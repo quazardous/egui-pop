@@ -1,7 +1,10 @@
 # 0030: The bus is a contract the application supplies
 
 Date: 2026-11-16. Status: accepted (2026-11-16, by the lead maintainer's
-decision under GOVERNANCE, without the comment period).
+decision under GOVERNANCE, without the comment period). Slices 1 to 3
+done; slice 3 (2026-11-19, egui-pop 0.17) took the contract's `Journal`
+as it shipped in bus-contract 0.3 rather than a new trait: see its
+entry below.
 
 This ADR decides; the slices at the end are each their own change.
 
@@ -261,7 +264,15 @@ contract.
    requests asked on it.
 3. **The journal contract**: `Journal` in `bus-contract`, the host's
    journal implementing it, `AppBuilder::journal`; cut against Helios's
-   journal as the second implementation.
+   journal as the second implementation. *Done (2026-11-19)*:
+   `Journal` came in bus-contract 0.3 as a capability of the bus
+   (`Bus::journal`), cut against Helios's fact journal. So no
+   `AppBuilder::journal`: when the bus given to `AppBuilder::bus` offers
+   the capability and the host keeps no journal of its own, egui-pop's
+   journal is that one, its events entries of the journaled point
+   `pop.journal` sharing one numbered sequence with the application's
+   facts; agents' `wait` reads it ([The hook kernel](../hook-kernel.md),
+   "One journal per process", says what changes for a `wait`).
 4. **Helios** (its own pull requests): one bus built in `main.rs`, given
    to egui-pop and to each crate; its points declared from their
    owners' tables; the vault, engine and node relay on it (B11).

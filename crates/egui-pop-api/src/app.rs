@@ -821,6 +821,10 @@ pub(crate) struct Shared {
     held: RefCell<Vec<Held>>,
     /// The journal kept for a host that keeps none.
     journal: RefCell<crate::host::Journal>,
+    /// egui-pop's journal is the bus's (`crate::bus::HOST_JOURNAL`): the
+    /// bus offers the journal capability and the host keeps no journal
+    /// of its own (the default host keeps none then).
+    journal_on_bus: std::cell::Cell<bool>,
     /// Commands whose result is to come, by id: how many.
     running: RefCell<BTreeMap<CommandId, usize>>,
     /// When each running command's oldest run started (motion clock).
@@ -918,9 +922,11 @@ impl AppHandle {
     fn new(
         ctx: &Context,
         host: Box<dyn Host>,
+        default_host: bool,
         bus: Option<Arc<dyn crate::bus::bus_contract::Bus>>,
     ) -> Self {
         let store = host.store();
+        let keeps_journal = !default_host && host.last_seq().is_some();
         let handle = AppHandle(Rc::new(Shared {
             ctx: RefCell::new(ctx.clone()),
             store,
@@ -966,6 +972,7 @@ impl AppHandle {
             gone_commands: RefCell::new(BTreeMap::new()),
             held: RefCell::new(Vec::new()),
             journal: RefCell::new(crate::host::Journal::default()),
+            journal_on_bus: std::cell::Cell::new(false),
             running: RefCell::new(BTreeMap::new()),
             running_since: RefCell::new(BTreeMap::new()),
             collectors: RefCell::new(Vec::new()),
@@ -987,6 +994,20 @@ impl AppHandle {
             bus: crate::bus::Bus::new(bus),
             keymap: RefCell::default(),
         }));
+        // One journal per process: the bus's, when it offers one and the
+        // host keeps none of its own.
+        let kernel = &handle.0.bus.kernel;
+        if kernel.journal().is_some() && !keeps_journal {
+            match crate::bus::bus_contract::declare_all(&**kernel, &[crate::bus::HOST_JOURNAL])
+                .into_iter()
+                .next()
+            {
+                None => handle.0.journal_on_bus.set(true),
+                Some(refused) => {
+                    log::error!(target: "egui_pop", "{refused}: egui-pop keeps its own journal");
+                }
+            }
+        }
         // Every setting changed is said once on the bus.
         crate::bus::settings::hear(&mut lock(&handle.0.store), &handle.0.bus.settings_heard);
         handle
@@ -1491,6 +1512,15 @@ impl AppHandle {
         name: &str,
         data: Json,
     ) -> Seq {
+        if let Some(journal) = self.bus_journal() {
+            match crate::bus::journal::publish(journal, source, cause, name, data) {
+                Ok(seq) => return seq,
+                Err(refused) => {
+                    log::error!(target: "egui_pop", "`{name}` not journaled: {refused}");
+                    return journal.last_seq();
+                }
+            }
+        }
         // The data goes to whichever keeps it: a host keeping no journal
         // gets it back unused, so it is cloned only for the fallback.
         match h.publish(source, cause, name, data.clone()) {
@@ -1509,6 +1539,14 @@ impl AppHandle {
     /// <div class="warning">Experimental: may change in any release
     /// (docs/stability.md).</div>
     pub fn events_since(&self, seq: Seq) -> Vec<Event> {
+        if let Some(journal) = self.bus_journal() {
+            return journal
+                .since(seq, usize::MAX)
+                .entries
+                .iter()
+                .map(crate::bus::journal::event_of)
+                .collect();
+        }
         self.0
             .host
             .borrow()
@@ -1518,6 +1556,15 @@ impl AppHandle {
                     .unwrap_or_else(|| self.0.journal.borrow().since(seq))
             })
             .unwrap_or_default()
+    }
+
+    /// The bus's journal, when it is egui-pop's (`crate::bus::HOST_JOURNAL`).
+    fn bus_journal(&self) -> Option<&dyn crate::bus::bus_contract::Journal> {
+        if self.0.journal_on_bus.get() {
+            self.0.bus.kernel.journal()
+        } else {
+            None
+        }
     }
 
     /// Reads the host (`None` while it dispatches a command).
@@ -1719,6 +1766,9 @@ impl AppHandle {
     /// <div class="warning">Experimental: may change in any release
     /// (docs/stability.md).</div>
     pub fn last_event(&self) -> Seq {
+        if let Some(journal) = self.bus_journal() {
+            return journal.last_seq();
+        }
         self.0.host.borrow().as_ref().map_or(0, |h| {
             h.last_seq()
                 .unwrap_or_else(|| self.0.journal.borrow().last())
@@ -4182,13 +4232,14 @@ impl AppBuilder {
                 }
             })
             .collect();
+        let default_host = self.host.is_none();
         let host = self.host.unwrap_or_else(|| {
             Box::new(LocalHost::new(
                 self.store
                     .unwrap_or_else(|| Arc::new(Mutex::new(Store::new()))),
             ))
         });
-        let handle = AppHandle::new(ctx, host, self.bus);
+        let handle = AppHandle::new(ctx, host, default_host, self.bus);
         if let Some(check) = self.writer_check {
             lock(&handle.store()).set_writer_check(check);
         }

@@ -195,6 +195,35 @@ assert!(report.failures.is_empty());
   `AppHandle::bus` returns. The debug collector `bus` shows each point's
   `journaled` and `relayable`, the bus's `capabilities` and its
   `journal_seq`.
+- **One journal per process** (ADR 0030, slice 3): when the
+  application's bus offers the `Journal` capability, egui-pop's own
+  journal (`AppHandle::publish`, `AppHandle::events_since`,
+  `AppHandle::last_event`, so the agents' `wait`, the debug bridge's
+  `journal` reads, the jobs' `job.*` events, the links' `link.*` and the
+  agent sessions' `agent.*`) **is** that journal, unless the host keeps
+  a journal of its own (`Host::last_seq` answers): the default host
+  then keeps none. egui-pop declares one journaled point for it,
+  `pop.journal` (`bus::HOST_JOURNAL`, kept out of `CONTRACT` since a
+  bus without a journal refuses it); each event it publishes is an
+  entry of that point, its input a `bus::HostEvent` (source, name,
+  data), its number and cause the entry's. Read back through
+  `AppHandle::events_since`, an egui-pop entry keeps its name
+  (`command.done`); any other entry, a fact of the application's, is
+  an event named by its point (`library.imported`), its source the
+  process it was relayed from or `bus`, its data its text read as JSON
+  (null when the entry holds its input only typed). What changes for a
+  `wait` on such a bus:
+  - numbers are the process journal's: egui-pop's events and the
+    application's facts share them, so two egui-pop events in a row may
+    be numbers apart, and `last` (the next `since`) counts the facts too;
+  - `{ "event": <name> }` matches an application fact by its point's id
+    as well as egui-pop's events by name;
+  - the window is the bus journal's (an application's, sized for its
+    facts too), not egui-pop's 1024 events: an agent that falls behind
+    it misses entries as before, sooner when facts are many.
+
+  Without a journal on the bus, or with a host keeping its own, nothing
+  changes: egui-pop's in-memory journal, or the host's.
 - **Names**: several libraries share one bus, so a point's id starts
   with the prefix of the crate declaring it (bus-contract's "Naming
   points": `<crate>.<subject>.<moment>`). egui-pop's prefix is `pop.`:
@@ -245,7 +274,14 @@ introspection; with an in-memory host journal, entries delivered once
 in order off the publisher's thread, local listeners at their thread's
 `run_pending`, a slow listener not holding the publisher, publishes on
 other points refused by the kernel, and a relay's resume and ingest
-between two kernels (a restart and refusals included). `crates/egui-pop-api/tests/bus_defer.rs`: an ask made in a panel heard after
+between two kernels (a restart and refusals included).
+`crates/egui-pop-api/tests/host_journal.rs`: egui-pop's journal on a
+bus offering one, its events and the application's facts in one
+sequence with no hole, a `wait` (in-process and through the bridge)
+returning the `command.done` entry among facts, a host keeping its own
+journal and a bus without one unchanged; and bus-kernel's conformance
+suite on egui-pop's application bus, bare and with a journal and relay.
+`crates/egui-pop-api/tests/bus_defer.rs`: an ask made in a panel heard after
 it in the same pass, asks made before and during exit heard, a palette
 command refused by a `pop.command.run` listener, a failing listener refusing
 on the fail-closed point. `crates/egui-pop-api/tests/app_bus.rs`: a local listener

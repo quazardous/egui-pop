@@ -83,6 +83,8 @@ winit = { version = "0.30", optional = true, default-features = false, features 
 egui-pop-winit = { workspace = true, optional = true }
 
 [dev-dependencies]
+# The conformance suite, run on egui-pop's application bus.
+bus-kernel = { workspace = true, features = ["conformance"] }
 egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true }
 # No version: a dev-dependency back up the layers, dropped when published.
