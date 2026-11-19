@@ -7775,7 +7775,15 @@ fn sized_window(
             egui_pop::core::motion::freeze(&cc.egui_ctx, 0.0);
             veiled(Gallery::from_creation_context(cc, options).expect("the gallery builds"))
         });
-    h.run();
+    // The viewport page's tiles come from worker threads, each asking a
+    // frame as it lands: how many frames they span depends on the
+    // machine's load, so `run`'s step limit is no measure of them. The
+    // page settles on its source's own signal instead.
+    if page == "viewport" {
+        settle_viewport(&mut h);
+    } else {
+        h.run();
+    }
     h
 }
 
