@@ -21,6 +21,8 @@ use serde_json::{Value as Json, json};
 struct Writes;
 
 const WRITE: CommandId = CommandId::from_static("test.write");
+/// A destructive command offered to agents: what the user confirms.
+const PURGE: CommandId = CommandId::from_static("test.purge");
 
 impl Plugin for Writes {
     fn id(&self) -> PluginId {
@@ -32,6 +34,12 @@ impl Plugin for Writes {
             CommandSpec::new(WRITE, "Write something", "Test")
                 .description("Changes the application (a test's)."),
             |_| Ok(json!("written")),
+        )?;
+        ctx.command(
+            CommandSpec::new(PURGE, "Purge something", "Test")
+                .description("Discards what cannot be had back (a test's).")
+                .destructive(),
+            |_| Ok(json!("purged")),
         )?;
         Ok(())
     }
@@ -593,4 +601,165 @@ fn hello_checks_its_params() {
     for r in [&none, &empty, &long] {
         assert_eq!(r["error"]["code"], -32602, "{r}");
     }
+}
+
+// Destructive calls: the user confirms an agent's.
+
+/// The `command.done` events of `test.purge`.
+fn purged(h: &Harness<'static, App>) -> Vec<egui_pop_api::host::Event> {
+    events(h, "command.done")
+        .into_iter()
+        .filter(|e| e.data["command"] == "test.purge")
+        .collect()
+}
+
+/// An application whose bridge lets agents write.
+fn writable(name: &str) -> (Harness<'static, App>, PathBuf) {
+    let dir = private_dir(name);
+    let path = dir.join("app.sock");
+    let h = app(
+        App::builder().debug_bridge(egui_pop_api::core::debug::BridgeMode::On),
+        &path,
+    );
+    (h, path)
+}
+
+fn purge(deadline_ms: u64) -> Json {
+    json!({
+        "collector": "commands",
+        "action": "run",
+        "args": { "id": "test.purge", "args": { "what": "everything" } },
+        "deadline_ms": deadline_ms,
+    })
+}
+
+#[test]
+fn an_agents_destructive_call_waits_for_the_user_and_runs_once_accepted() {
+    let (mut h, path) = writable("destructive-accept");
+    let p = path.clone();
+    let client = std::thread::spawn(move || {
+        let mut c = Client::connect(&p);
+        let described = c.result("describe", json!({}));
+        let since = c.result("wait", json!({ "settled": true, "deadline_ms": 10_000 }))["last"]
+            .as_u64()
+            .unwrap();
+        let f = c.result("call", purge(20_000));
+        let done = c.result(
+            "wait",
+            json!({ "event": "command.done", "since": since, "deadline_ms": 10_000 }),
+        );
+        (described, f, done)
+    });
+    // The dialog shows; the command has not run.
+    answer_pairing(&mut h, true, egui_pop_api::model::commands::Origin::User).unwrap();
+    assert!(purged(&h).is_empty(), "it ran before the user answered");
+    let (described, f, done) = finish(&mut h, client);
+    let cap = described["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "test.purge")
+        .cloned()
+        .unwrap();
+    assert_eq!(cap["destructive"], true, "{cap}");
+    assert_eq!(f["ok"], true, "{f}");
+    assert_eq!(done["met"], true, "{done}");
+    let ran = purged(&h);
+    assert_eq!(ran.len(), 1);
+    // It ran as the agent, not as the user who confirmed it.
+    assert_eq!(ran[0].source, "agent:agent-socket");
+    assert!(events(&h, "command.refused").is_empty());
+}
+
+#[test]
+fn an_agents_destructive_call_the_user_declines_is_refused_and_an_agent_may_not_accept_it() {
+    let (mut h, path) = writable("destructive-decline");
+    let p = path.clone();
+    let client = std::thread::spawn(move || Client::connect(&p).request("call", purge(20_000)));
+    // An agent's accept is vetoed: only the user confirms.
+    let agent = egui_pop_api::model::commands::Origin::Agent("intruder".into());
+    answer_pairing(&mut h, true, agent).unwrap();
+    for _ in 0..5 {
+        h.step();
+    }
+    assert!(purged(&h).is_empty());
+    // The user declines.
+    answer_pairing(&mut h, false, egui_pop_api::model::commands::Origin::User).unwrap();
+    let r = finish(&mut h, client);
+    assert_eq!(r["error"]["code"], -32001, "{r}");
+    assert!(
+        r["error"]["message"].as_str().unwrap().contains("declined"),
+        "{r}"
+    );
+    for _ in 0..3 {
+        h.step();
+    }
+    assert!(purged(&h).is_empty());
+    let refused = events(&h, "command.refused");
+    assert_eq!(refused.len(), 1, "{refused:?}");
+    assert_eq!(refused[0].data["command"], "test.purge");
+    assert_eq!(refused[0].data["by"], "pop.agent.confirm");
+    assert_eq!(refused[0].source, "agent:agent-socket");
+}
+
+#[test]
+fn an_agents_destructive_call_unconfirmed_ends_at_its_deadline() {
+    let (mut h, path) = writable("destructive-deadline");
+    let p = path.clone();
+    let r = with_client(&mut h, move || {
+        Client::connect(&p).request("call", purge(100))
+    });
+    assert_eq!(r["error"]["code"], -32002, "{r}");
+    for _ in 0..3 {
+        h.step();
+    }
+    assert!(purged(&h).is_empty());
+    let refused = events(&h, "command.refused");
+    assert_eq!(refused.len(), 1, "{refused:?}");
+    assert_eq!(refused[0].data["by"], "pop.agent.confirm");
+}
+
+#[test]
+fn a_call_that_is_not_destructive_is_not_held_nor_is_the_users_destructive_one() {
+    use egui_pop_api::dialogs::DIALOGS;
+    let (mut h, path) = writable("destructive-not-asked");
+    let p = path.clone();
+    // An agent's write that destroys nothing runs at once, no dialog.
+    let f = with_client(&mut h, move || {
+        Client::connect(&p).result(
+            "call",
+            json!({ "collector": "commands", "action": "run", "args": { "id": "test.write" } }),
+        )
+    });
+    assert_eq!(f["ok"], true, "{f}");
+    assert!(
+        h.state()
+            .handle()
+            .service(&DIALOGS)
+            .unwrap()
+            .current()
+            .is_none(),
+        "nothing was asked"
+    );
+    // The user's own destructive run is never asked.
+    let f = h.state_mut().debug_call_as(
+        "commands",
+        "run",
+        &json!({ "id": "test.purge" }),
+        egui_pop_api::model::commands::Origin::User,
+    );
+    assert!(f.ok, "{f:?}");
+    h.step();
+    assert!(
+        h.state()
+            .handle()
+            .service(&DIALOGS)
+            .unwrap()
+            .current()
+            .is_none(),
+        "nothing was asked"
+    );
+    let ran = purged(&h);
+    assert_eq!(ran.len(), 1);
+    assert_eq!(ran[0].source, "user");
 }

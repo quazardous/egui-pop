@@ -158,6 +158,13 @@ pub trait Collector {
             .find(|a| a.name == action)
             .map(|a| a.mutates)
     }
+    /// Whether this call of an action destroys or discards what cannot
+    /// easily be had back (`commands.run` of a destructive command): an
+    /// agent's call then waits for the user to confirm it (the agent
+    /// socket asks). `false` by default, and for an unknown action.
+    fn destructive(&self, _action: &str, _args: &Json) -> bool {
+        false
+    }
     /// Runs an action for `origin`, who called it: an action that acts
     /// does so as its caller (writes a value, runs a command, answers a
     /// dialog).
@@ -180,6 +187,7 @@ pub trait Collector {
 type SnapshotFn = Box<dyn Fn(&Context) -> Json>;
 type ActionFn = Box<dyn FnMut(&Context, &Json, &Origin) -> Result<Json, String>>;
 type MutatesFn = Box<dyn Fn(&Json) -> bool>;
+type DestructiveFn = Box<dyn Fn(&Json) -> bool>;
 
 /// A collector made of closures.
 pub struct FnCollector {
@@ -191,6 +199,8 @@ pub struct FnCollector {
     mutates_when: Vec<(String, MutatesFn)>,
     /// Per action, its schemas.
     schemas: Vec<(String, Schemas)>,
+    /// Per action, whether a call is destructive.
+    destructive: Vec<(String, DestructiveFn)>,
 }
 
 impl fmt::Debug for FnCollector {
@@ -210,6 +220,7 @@ impl FnCollector {
             actions: Vec::new(),
             mutates_when: Vec::new(),
             schemas: Vec::new(),
+            destructive: Vec::new(),
         }
     }
 
@@ -270,6 +281,24 @@ impl FnCollector {
         if let Some((spec, _)) = self.actions.last() {
             let name = spec.name.clone();
             self.mutates_when.push((name, Box::new(f)));
+        }
+        self
+    }
+
+    /// The last action added is destructive: every call of it
+    /// ([`Collector::destructive`]); an agent's call waits for the
+    /// user's confirmation.
+    pub fn destructive(self) -> Self {
+        self.destructive_when(|_| true)
+    }
+
+    /// Whether a call of the last action added is destructive, from its
+    /// arguments (`commands.run`: when its command is).
+    pub fn destructive_when(mut self, f: impl Fn(&Json) -> bool + 'static) -> Self {
+        if let Some((spec, _)) = self.actions.last() {
+            let name = spec.name.clone();
+            self.destructive.retain(|(n, _)| *n != name);
+            self.destructive.push((name, Box::new(f)));
         }
         self
     }
@@ -350,6 +379,13 @@ impl Collector for FnCollector {
                     .find(|(n, _)| n == action)
                     .is_none_or(|(_, f)| f(args)),
         )
+    }
+
+    fn destructive(&self, action: &str, args: &Json) -> bool {
+        self.destructive
+            .iter()
+            .find(|(n, _)| n == action)
+            .is_some_and(|(_, f)| f(args))
     }
 
     fn call(
@@ -500,6 +536,16 @@ impl DebugBridge {
             .mutates(action, args)
     }
 
+    /// Whether this call destroys or discards what cannot easily be had
+    /// back ([`Collector::destructive`]); `false` when there is no such
+    /// collector.
+    pub fn destructive(&self, collector: &str, action: &str, args: &Json) -> bool {
+        self.collectors
+            .iter()
+            .find(|c| c.name() == collector)
+            .is_some_and(|c| c.destructive(action, args))
+    }
+
     /// Why `origin` may not make this call: `None` when it may (or when
     /// there is no such action: the call says so). Anyone but the user is
     /// held to the bridge's mode ([`BridgeMode`]) and to the action's
@@ -558,6 +604,10 @@ impl DebugBridge {
                             if let Some(s) = schemas.result {
                                 j["result"] = s;
                             }
+                            // Said only when it is, without arguments.
+                            if c.destructive(&a.name, &Json::Null) {
+                                j["destructive"] = json!(true);
+                            }
                             j
                         })
                         .collect();
@@ -573,8 +623,8 @@ impl DebugBridge {
 
     /// Every collector action as a capability of [`PROTOCOL`] 1, one
     /// entry each: `kind` (`action`), `name` (`collector.action`),
-    /// `description`, `mutates`, `agent`, `args` (a JSON Schema, or
-    /// `null`), `example` (example arguments), `result` (a JSON Schema,
+    /// `description`, `mutates`, `agent`, `destructive` (without
+    /// arguments), `args` (a JSON Schema, or `null`), `example` (example arguments), `result` (a JSON Schema,
     /// or `null`) and `call` (`collector`, `action`). An application adds
     /// its commands beside them (`AppHandle::debug_capabilities`).
     pub fn capabilities(&self) -> Vec<Json> {
@@ -593,6 +643,7 @@ impl DebugBridge {
                     "description": a.description,
                     "mutates": a.mutates,
                     "agent": a.agent,
+                    "destructive": c.destructive(&a.name, &Json::Null),
                     "args": args,
                     "example": example,
                     "result": schemas.result,

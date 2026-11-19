@@ -614,8 +614,8 @@ command-pointer-overrides =
     .title = Keep or drop pointer gesture changes
 
 command-pop-agent-confirm =
-    .description = The user's answer to an agent's pairing request (`id`).
-    .title = Pair the agent
+    .description = The user's answer to an agent's request: to be paired (`id`), or to run a destructive call (`run`).
+    .title = Answer an agent's request
 
 command-settings-export =
     .description = Writes the settings you changed to a file; secrets are left out.
@@ -1290,6 +1290,12 @@ egui-pop-admin-wizard-summary = Summary
 egui-pop-admin-wizard-summary-about = Check your choices: Change goes back to a step.
 
 egui-pop-admin-wizard-yes = Yes
+
+egui-pop-agent-confirm-detail = An agent asks for something that cannot easily be undone. Arguments: { $args }. Allow it only if you asked for it.
+
+egui-pop-agent-confirm-title = Let “{ $agent }” run “{ $what }”?
+
+egui-pop-agent-confirm-verb = Run
 
 egui-pop-agent-pair-detail = A program on this computer asks to drive this app as “{ $id }”, within what the app allows agents. Pair it only if you started it.
 

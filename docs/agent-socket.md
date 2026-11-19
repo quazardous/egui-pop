@@ -90,7 +90,7 @@ agent.
 | `hello` | `{ "name", "token"?, "deadline_ms"? }` | `{ "agent", "name", "origin", "paired": true, "token"? }`: see [Identity](#identity-hello-and-pairing) |
 | `describe` | none | `bridge.describe`: `{ "protocol": 1, "capabilities": [..] }` ([Capabilities](agents.md#capabilities)) |
 | `snapshot` | `{ "collector"? }` | every collector's snapshot by name, or one collector's |
-| `call` | `{ "collector", "action", "args"? }` | the bridge's feedback block: `{ "ok", "collector", "action", "mutates", "message", "data" }`, a refusal included (`ok: false`) |
+| `call` | `{ "collector", "action", "args"?, "deadline_ms"? }` | the bridge's feedback block: `{ "ok", "collector", "action", "mutates", "message", "data" }`, a refusal included (`ok: false`); a destructive call is held until the user confirms it, see [Destructive calls](#destructive-calls-the-user-confirms) |
 | `wait` | `bridge.wait`'s arguments (`event` and `cause`, `settled: true`, or `any`; `since`) and `deadline_ms` (5 s by default, 120 s at most) | `{ "met", "by", "event", "last" }`; `met: false` at the deadline |
 | `ui` | `{ "action": "tree", "label"?, "role"?, "window"? }` | `{ "count", "nodes" }`: the accessibility tree's nodes (`id`, `parent`, `role`, `label`, `value`, `rect` in points, `disabled`), every one or those matching |
 | `ui` | `{ "action": "click" \| "hover" \| "secondary_click" \| "type" \| "scroll", "label"?, "role"?, "nth"?, "text"?, "up"?, "window"? }` | `{ "node" }`, once the input went in |
@@ -138,9 +138,10 @@ an earlier `wait`.
 Errors: `-32700` (not JSON), `-32600` (not a request), `-32601` (no such
 method), `-32602` (bad params), `-32001` (the bridge refused `describe`,
 `snapshot` or `wait`, `data` being the feedback block when there is
-one; or the user declined a pairing, or a token is unknown), `-32002`
-(the application did not answer: it ran no frame, or it closed; or the
-user did not answer a pairing in time), `-32003` (`ui` found no
+one; or the user declined a pairing or a destructive call, or a token
+is unknown), `-32002` (the application did not answer: it ran no frame,
+or it closed; or the user did not answer a pairing or a destructive
+call in time), `-32003` (`ui` found no
 node, or more than one, to act on), `-32004` (a transport limit: too
 many clients, a request too long; the connection closes).
 
@@ -201,6 +202,43 @@ $ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"hello","params":{"name":"my s
 {"id":1,"jsonrpc":"2.0","result":{"agent":"my-script","name":"my script","origin":"agent:my-script","paired":true,"token":"egp_…"}}
 ```
 
+## Destructive calls: the user confirms
+
+A call that destroys or discards what cannot easily be had back waits
+for the user: `commands.run` of a command declared
+`CommandSpec::destructive()`, or an action its collector says is
+(`Collector::destructive(action, args)`; `FnCollector::destructive`,
+`FnCollector::destructive_when`). `describe` says it (`destructive` on
+each capability; for an action, without arguments).
+
+- **Held.** The agent's `call` opens a confirmation dialog, in the
+  danger style: "Let “claude-code” run “files.trash”?", with the call's
+  arguments (the command's own for `commands.run`, cut at 240
+  characters). The request is held until the user answers, as `hello`
+  is: `deadline_ms`, 60 s by default (`CONFIRM_DEADLINE`), 120 s at
+  most (`MAX_CONFIRM_DEADLINE`).
+- **Accepted**, the call runs as the agent asked it, with the agent's
+  origin (the journal's `command.done` says `agent:<id>`, not `user`),
+  and answers as any `call`.
+- **Declined** (Cancel, or the dialog closed), it is error `-32001`;
+  unanswered at the deadline, `-32002`. Either way the journal says
+  `command.refused` (`command`, `origin`, `reason`, `by:
+  "pop.agent.confirm"`) for `commands.run`, `debug.call.refused` (with
+  the same `by`) for another action, from the agent's origin.
+- **Only the user answers.** The dialog's answer runs
+  `pop.agent.confirm` (`CMD_CONFIRM`, the pairing's), kept from agents;
+  an agent's accept through `dialogs.answer` is vetoed, its cancel goes
+  through.
+- **Never asked**: the user's own calls and runs, a call that is not
+  destructive, and a call the bridge refuses anyway (its mode, the
+  `agent` flags): that one is refused at once, as before.
+
+```console
+$ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"call","params":{"collector":"commands","action":"run","args":{"id":"files.trash","args":{"path":"a.jpg"}},"deadline_ms":30000}}' \
+    | socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/egui-pop-agent-org.example.App.sock
+{"error":{"code":-32001,"message":"the user declined `files.trash`: it is destructive and needs the user's confirmation"},"id":1,"jsonrpc":"2.0"}
+```
+
 ## MCP
 
 With the `mcp` feature, the crate serves the socket as an MCP server
@@ -221,7 +259,9 @@ $ claude mcp add my-app -- egui-pop-agent-mcp $XDG_RUNTIME_DIR/egui-pop-agent-or
   its input schema (the args' JSON Schema; without one, an object schema
   made from the example; a schema that is not an object's is taken as
   `args`), its output schema when it declares a result schema of an
-  object, and `readOnlyHint` from `mutates`.
+  object, `readOnlyHint` from `mutates`, and `destructiveHint: true`
+  for a destructive one (its description says the user confirms each
+  run; an undeclared command keeps MCP's default).
 - **Calls.** An action's tool is the socket's `call`: its `data` is the
   result (structured when there is an output schema), a refusal an error
   result (`isError: true`) the model reads. A command's tool runs it
@@ -266,3 +306,10 @@ application's own (`settled` stays reachable).
   not held to less; a pairing cannot be revoked yet but by removing
   it from `agent-pairings.json`. The MCP binary does not say `hello`
   yet.
+- **Confirmation through `ui`.** An agent allowed to act through `ui`
+  (the bridge on) can click the confirmation's button, which answers as
+  the user; the input lock while a confirmation is open comes later.
+- **A confirmation left open.** Past its deadline the dialog stays
+  open; accepting it then runs nothing. Calls made in the application's
+  own process (`AppHandle::debug_call`) are not asked: only the
+  socket's are.

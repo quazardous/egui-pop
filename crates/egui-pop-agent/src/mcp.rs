@@ -348,8 +348,18 @@ pub fn tools(describe: &Json) -> Vec<GeneratedTool> {
             description.push_str(" Runs the command and answers its result.");
         }
         let (schema, wrapped) = input_schema(&cap["args"], &cap["example"]);
-        let mut tool = Tool::new(tname, description, object(schema))
-            .with_annotations(ToolAnnotations::new().read_only(!mutates));
+        // Destructive: the user confirms each run (`destructiveHint`).
+        let destructive = mutates && cap["destructive"] == true;
+        if destructive {
+            description.push_str(" Destructive: the user confirms each run.");
+        }
+        // Only said when declared: an undeclared command is not known to
+        // be harmless, and MCP's default (destructive) stays.
+        let mut annotations = ToolAnnotations::new().read_only(!mutates);
+        if destructive {
+            annotations = annotations.destructive(true);
+        }
+        let mut tool = Tool::new(tname, description, object(schema)).with_annotations(annotations);
         if let Some(t) = cap["title"].as_str() {
             tool = tool.with_title(t);
         }

@@ -289,8 +289,9 @@ application may add its own waits (the gallery's
 an agent may name as one list, under `protocol: 1`: every collector
 action (`kind: "action"`, `name` as `collector.action`) and every
 command (`kind: "command"`, run through `commands.run`), each with
-`description`, `mutates`, `agent`, `args` (a JSON Schema when the author
-gives one, else `null`), `example` (example arguments), `result` (a JSON
+`description`, `mutates`, `agent`, `destructive` (the user confirms an
+agent's call; an action's without arguments), `args` (a JSON Schema
+when the author gives one, else `null`), `example` (example arguments), `result` (a JSON
 Schema of the result, or `null`) and `call` (how to call it). A
 collector gives its schemas with `FnCollector::schema` and
 `FnCollector::result_schema`; a command whose `args` is a JSON Schema is
@@ -443,6 +444,14 @@ The bridge has one caller identity: every command it runs is
 - **Where a command applies.** A command whose `when` clause does not
   hold in the current context is refused ("does not apply here"), for an
   agent as for a key.
+- **Destructive commands.** A command declared
+  `CommandSpec::destructive()` (it deletes files, empties a trash,
+  drops unsaved work), or an action its collector says is destructive
+  (`Collector::destructive`), waits for the user's confirmation when an
+  agent calls it through the agent socket: a dialog names the agent,
+  the command and its arguments, and a decline or a deadline refuses it
+  (`command.refused`, `by: "pop.agent.confirm"`). The user's own runs
+  are never asked ([The agent socket](agent-socket.md#destructive-calls-the-user-confirms)).
 - **Links.** A link an agent asks to open (`links.open`, `files.reveal`,
   `viewer.open_outside`) is always confirmed by the user, and the links
   plugin vetoes any answer to that confirmation but the user's: an agent

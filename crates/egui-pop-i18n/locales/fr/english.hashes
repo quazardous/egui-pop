@@ -299,8 +299,8 @@ command-palettes-toggle.description 1a2c28e8cada63a6
 command-palettes-toggle.title e04e6c2585b9d999
 command-pointer-overrides.description 306190a9bd097c45
 command-pointer-overrides.title 977af8cf4162cf41
-command-pop-agent-confirm.description ab5df09aee4f6e3b
-command-pop-agent-confirm.title 9966a3b11d98331f
+command-pop-agent-confirm.description 377bef9d552d30da
+command-pop-agent-confirm.title 2f410522f0fb065a
 command-settings-export.description 53206e7bf5f0d8af
 command-settings-export.title 73eb1e23b46477c2
 command-settings-import.description 29c11f61457160ed
@@ -637,6 +637,9 @@ egui-pop-admin-wizard-steps 76c10e303d614862
 egui-pop-admin-wizard-summary db57a18098a06bb3
 egui-pop-admin-wizard-summary-about e82e1c4454fe7b45
 egui-pop-admin-wizard-yes 9fbfd6e4caae0cc6
+egui-pop-agent-confirm-detail d3c8a5e65cd2c834
+egui-pop-agent-confirm-title 4e6b0f34607623d1
+egui-pop-agent-confirm-verb 635d6743d539ce78
 egui-pop-agent-pair-detail b9b0576383312c4e
 egui-pop-agent-pair-title bc0fc7d15161486e
 egui-pop-agent-pair-verb d6cfa37fba0790c9

@@ -843,6 +843,12 @@ egui-pop-about-version = Version { $version }
 
 egui-pop-about-website = Site web
 
+egui-pop-agent-confirm-detail = Un agent demande une action difficile à annuler. Arguments : { $args }. Ne l’autorisez que si vous l’avez demandée.
+
+egui-pop-agent-confirm-title = Laisser « { $agent } » exécuter « { $what } » ?
+
+egui-pop-agent-confirm-verb = Exécuter
+
 egui-pop-agent-pair-detail = Un programme de cet ordinateur demande à piloter cette application en tant que « { $id } », dans les limites que l’application accorde aux agents. Ne l’appairez que si vous l’avez lancé.
 
 egui-pop-agent-pair-title = Appairer l’agent « { $name } » ?
@@ -3370,8 +3376,8 @@ command-view-zoom-out =
     .title = Zoom arrière
 
 command-pop-agent-confirm =
-    .description = La réponse de l’utilisateur à la demande d’appairage d’un agent (`id`).
-    .title = Appairer l’agent
+    .description = La réponse de l’utilisateur à la demande d’un agent : être appairé (`id`) ou exécuter un appel destructif (`run`).
+    .title = Répondre à la demande d’un agent
 
 command-settings-export =
     .description = Écrit dans un fichier les réglages que vous avez modifiés ; les secrets sont laissés de côté.

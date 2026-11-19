@@ -39,8 +39,9 @@ use crate::Reply;
 use crate::rpc::RpcError;
 use crate::strings as txt;
 
-/// The user's answer to a pairing request (`id`): kept from agents and
-/// the palette.
+/// The user's answer to an agent's request: a pairing (`id`) or a
+/// destructive call ([`crate::confirm`], `run`); kept from agents and the
+/// palette.
 pub const CMD_CONFIRM: CommandId = CommandId::from_static("pop.agent.confirm");
 /// The document the pairings are kept in, in the application's
 /// persistence directory (`AppBuilder::persist`); without one, they
@@ -340,7 +341,10 @@ pub(crate) fn hello(
 /// The user's answer: the agent is paired, its token handed to it.
 fn confirm(app: &AppHandle, args: &Json, origin: &Origin) -> Result<Json, String> {
     if *origin != Origin::User {
-        return Err("only the user pairs an agent".into());
+        return Err("only the user answers an agent's request".into());
+    }
+    if let Some(n) = args["run"].as_u64() {
+        return crate::confirm::accept(app, n);
     }
     let n = args["id"].as_u64().ok_or("`id` is missing")?;
     let st = state(app);
@@ -451,11 +455,14 @@ pub(crate) fn gone(app: &AppHandle, agent: &str) {
     );
 }
 
-/// The answer command, and the dialog's answers held to the user.
+/// The answer command, and the dialog's answers held to the user (the
+/// pairing requests' and the destructive calls').
 pub(crate) fn register(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     ctx.command(
-        CommandSpec::new(CMD_CONFIRM, "Pair the agent", "Agents")
-            .description("The user's answer to an agent's pairing request (`id`).")
+        CommandSpec::new(CMD_CONFIRM, "Answer an agent's request", "Agents")
+            .description(
+                "The user's answer to an agent's request: to be paired (`id`), or to run a destructive call (`run`).",
+            )
             .args(json!({ "id": 1 }))
             .hidden()
             .no_agent(),
@@ -468,7 +475,7 @@ pub(crate) fn register(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         let ours = args["dialog"]["command"].as_str() == Some(CMD_CONFIRM.as_str());
         let cancel = args["answer"]["answer"].as_str() == Some("cancel");
         if ours && !cancel && args["origin"].as_str() != Some("user") {
-            Before::Veto("only the user pairs an agent".into())
+            Before::Veto("only the user answers an agent's request".into())
         } else {
             Before::Go
         }
@@ -477,10 +484,15 @@ pub(crate) fn register(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         if args["dialog"]["command"].as_str() != Some(CMD_CONFIRM.as_str()) || result.is_err() {
             return;
         }
+        let cancel = args["answer"]["answer"].as_str() == Some("cancel");
+        if let Some(n) = args["dialog"]["args"]["run"].as_u64() {
+            crate::confirm::answered(app, n, cancel);
+            return;
+        }
         let Some(n) = args["dialog"]["args"]["id"].as_u64() else {
             return;
         };
-        if args["answer"]["answer"].as_str() == Some("cancel") {
+        if cancel {
             let name = state(app)
                 .asking
                 .borrow()
