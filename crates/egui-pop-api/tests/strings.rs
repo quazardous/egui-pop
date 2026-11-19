@@ -125,8 +125,9 @@ fn menus_panels_and_devtools_show_the_translations() {
     h.state().handle().focus_panel(&PANEL_DEVTOOLS);
     h.run();
     h.run();
-    // The tab names its panel; the devtools' own tabs are translated.
-    assert!(h.query_by_label("Outils").is_some());
+    // The tab names its panel (as does the panel's own stop, which holds
+    // the focus); the devtools' own tabs are translated.
+    assert!(h.query_all_by_label("Outils").next().is_some());
     assert!(h.query_by_label("Historique").is_some());
     assert!(h.query_by_label("Journal").is_none());
 }
