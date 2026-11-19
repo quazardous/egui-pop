@@ -225,6 +225,29 @@ pub(crate) fn gesture(ui: &egui::Ui, response: &egui::Response) -> Gesture {
     Gesture::None
 }
 
+/// Allocates a tool's rect and senses it under an id of its own, keyed by
+/// `salt` in `ui`'s id, rather than egui's automatic id. The automatic id
+/// follows how many widgets came before in every enclosing `Ui`: a widget
+/// appearing or going anywhere above while the tool is dragged (a mark, a
+/// card, a button shown once a value moves) would give the tool another
+/// id, and egui would end its drag.
+pub(crate) fn allocate(
+    ui: &mut egui::Ui,
+    size: egui::Vec2,
+    sense: egui::Sense,
+    salt: impl std::hash::Hash + std::fmt::Debug,
+) -> (egui::Rect, egui::Response) {
+    let (_, outer) = ui.allocate_space(size);
+    let rect = ui.layout().align_size_within_rect(size, outer);
+    let response = ui.interact(rect, tool_id(ui, salt), sense);
+    (rect, response)
+}
+
+/// The id [`allocate`] senses a tool under.
+pub(crate) fn tool_id(ui: &egui::Ui, salt: impl std::hash::Hash + std::fmt::Debug) -> egui::Id {
+    ui.make_persistent_id(("egui_pop.viewport.tool", salt))
+}
+
 /// Keeps the arrow keys on a focused tool (egui would move the focus).
 pub(crate) fn lock_arrows(ui: &egui::Ui, id: egui::Id) {
     ui.memory_mut(|m| {

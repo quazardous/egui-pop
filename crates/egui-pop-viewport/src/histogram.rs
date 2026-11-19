@@ -268,8 +268,15 @@ impl<'a> Histogram<'a> {
             edits,
         } = self;
         // An edit area is inert while its panel is not current: no drag,
-        // no grip, nothing edited from a picture of the previous state.
-        let inert = draggable && areas::inert(ui);
+        // no grip, nothing edited from a picture of the previous state. A
+        // drag begun on a current picture goes on to its release: the
+        // panel it edits turns stale under it, its own change the cause.
+        let salt = ("histogram", &label);
+        let dragging = DRAG
+            .keyed(change::tool_id(ui, salt))
+            .get(ui.ctx())
+            .is_some();
+        let inert = draggable && areas::inert(ui) && !dragging;
         let draggable = draggable && !inert;
         let size = size.unwrap_or_else(|| {
             let w = ui.available_width().clamp(120.0, 600.0);
@@ -280,7 +287,7 @@ impl<'a> Histogram<'a> {
         } else {
             Sense::hover()
         };
-        let (rect, mut response) = ui.allocate_exact_size(size, sense);
+        let (rect, mut response) = change::allocate(ui, size, sense, salt);
         let mut changes = Vec::new();
         if draggable {
             drag(ui, &response, rect, step, &mut hook, &mut changes);
