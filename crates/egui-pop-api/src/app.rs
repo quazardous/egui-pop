@@ -1049,6 +1049,7 @@ impl AppHandle {
                 "description": s.description,
                 "mutates": !s.read_only,
                 "agent": s.agent,
+                "destructive": s.destructive,
                 "args": args,
                 "example": example,
                 "result": Json::Null,
@@ -1135,6 +1136,31 @@ impl AppHandle {
                     .ok_or_else(|| format!("no open window `{w}`"))
             }
         }
+    }
+
+    /// Whether this bridge call destroys or discards what cannot easily
+    /// be had back: an action declared so, `commands.run` of a
+    /// destructive command (`CommandSpec::destructive`). The agent
+    /// socket asks the user before it runs such a call for an agent.
+    pub fn debug_destructive(&self, collector: &str, action: &str, args: &Json) -> bool {
+        self.0.bridge.borrow().destructive(collector, action, args)
+    }
+
+    /// Why `origin` may not make this bridge call (its mode, the
+    /// action's `agent` flag), `None` when it may or when there is no
+    /// such action. The call itself is refused the same way; this asks
+    /// before (the agent socket, before asking the user to confirm).
+    pub fn debug_refusal(
+        &self,
+        collector: &str,
+        action: &str,
+        args: &Json,
+        origin: &Origin,
+    ) -> Option<String> {
+        self.0
+            .bridge
+            .borrow()
+            .refusal(collector, action, args, origin)
     }
 
     /// Every collector's snapshot, seen from a window (an application
@@ -5222,7 +5248,7 @@ impl App {
                 .ok_or_else(|| "the application is gone".to_string())
         };
         let mut b = h.0.bridge.borrow_mut();
-        let (w1, w2, w3) = (h.weak(), h.weak(), h.weak());
+        let (w1, w2, w3, w4) = (h.weak(), h.weak(), h.weak(), h.weak());
         b.register(
             FnCollector::new("commands", "Every command: id, title, keys, where it applies, its icon and \"on\" icon by name (with the names that do not resolve), owner; the last runs.")
                 .snapshot(move |_| {
@@ -5239,6 +5265,7 @@ impl App {
                             "keys": palette.iter().find(|e| e.command == s.id).map(|e| e.keys.clone()).unwrap_or_default(),
                             "agent": s.agent,
                             "read_only": s.read_only,
+                            "destructive": s.destructive,
                             "args": s.args,
                             "running": app.running(&s.id),
                             "owner": owner,
@@ -5273,6 +5300,16 @@ impl App {
                     let Ok(app) = up(&w3) else { return true };
                     let Some(id) = args.get("id").and_then(Json::as_str) else { return true };
                     !app.commands().iter().any(|(s, _)| s.id.as_str() == id && s.read_only)
+                })
+                // Destructive when its command is: an agent's run waits
+                // for the user's confirmation. A command kept from agents
+                // is refused to them without asking.
+                .destructive_when(move |args| {
+                    let Ok(app) = up(&w4) else { return false };
+                    let Some(id) = args.get("id").and_then(Json::as_str) else { return false };
+                    app.commands()
+                        .iter()
+                        .any(|(s, _)| s.id.as_str() == id && s.destructive && s.agent)
                 })
                 .args(json!({ "id": "app.palette", "args": null })),
         )

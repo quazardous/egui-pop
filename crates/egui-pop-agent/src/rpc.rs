@@ -9,6 +9,7 @@ use egui_pop_core::debug::Feedback;
 use egui_pop_model::commands::Origin;
 use serde_json::{Value as Json, json};
 
+use crate::confirm::{CONFIRM_DEADLINE, MAX_CONFIRM_DEADLINE};
 use crate::limits::MAX_REQUEST_BYTES;
 use crate::pairing::{HELLO_DEADLINE, MAX_NAME_CHARS};
 use crate::{AGENT, DEFAULT_DEADLINE, Job, MAX_DEADLINE, Waker};
@@ -303,14 +304,25 @@ fn dispatch(
             window,
             reply,
         },
-        "call" => Job::Call {
-            collector: str_param("collector")?,
-            action: str_param("action")?,
-            args: params.get("args").cloned().unwrap_or(Json::Null),
-            window,
-            origin,
-            reply,
-        },
+        "call" => {
+            // A destructive call is held until the user confirms it, at
+            // most this long.
+            let held = params
+                .get("deadline_ms")
+                .and_then(Json::as_u64)
+                .map_or(CONFIRM_DEADLINE, Duration::from_millis)
+                .min(MAX_CONFIRM_DEADLINE);
+            within = within.max(held + Duration::from_secs(2));
+            Job::Call {
+                collector: str_param("collector")?,
+                action: str_param("action")?,
+                args: params.get("args").cloned().unwrap_or(Json::Null),
+                window,
+                origin,
+                deadline: Instant::now() + held,
+                reply,
+            }
+        }
         "wait" => {
             let held = params
                 .get("deadline_ms")

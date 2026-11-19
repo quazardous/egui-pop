@@ -149,6 +149,13 @@ pub struct CommandSpec {
     /// (`commands.run` does not mutate then) and a read-only bridge runs
     /// only these.
     pub read_only: bool,
+    /// It destroys or discards what cannot easily be had back (deletes
+    /// files, empties a trash, drops unsaved work). Asked by anyone but
+    /// the user (an agent), it waits for the user to confirm it first:
+    /// the agent socket asks, through a dialog. The user's own runs are
+    /// never asked.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub destructive: bool,
     /// A description of its arguments (free JSON, a schema or an
     /// example); `null` when it takes none.
     pub args: Json,
@@ -185,6 +192,7 @@ impl CommandSpec {
             palette: true,
             agent: true,
             read_only: false,
+            destructive: false,
             args: Json::Null,
             icon: None,
             icon_on: None,
@@ -288,6 +296,14 @@ impl CommandSpec {
     /// a read-only debug bridge runs these and refuses the others.
     pub fn read_only(mut self) -> Self {
         self.read_only = true;
+        self
+    }
+
+    /// It destroys or discards what cannot easily be had back
+    /// ([`CommandSpec::destructive`]): an agent's run waits for the
+    /// user's confirmation.
+    pub fn destructive(mut self) -> Self {
+        self.destructive = true;
         self
     }
 

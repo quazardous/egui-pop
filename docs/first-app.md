@@ -338,8 +338,10 @@ Every command is offered to agents unless it says otherwise: an agent
 (a test, a script, an assistant behind a transport you write) holds the
 `App`, reads what it offers as JSON and runs commands as
 `Origin::Agent`. Describe a command's arguments with an example; keep a
-command off that surface with `.no_agent()`; the whole bridge can be
-read-only or off (`AppBuilder::debug_bridge`).
+command off that surface with `.no_agent()`; declare one that destroys
+or discards what cannot easily be had back with `.destructive()`, and
+the agent socket asks the user before an agent runs it; the whole
+bridge can be read-only or off (`AppBuilder::debug_bridge`).
 
 ```rust
 use egui_pop::egui;

@@ -25,7 +25,7 @@
 //! | `hello` | `{ "name", "token"?, "deadline_ms"? }` | `{ "agent", "name", "origin", "paired", "token"? }`: the connection's identity from then on |
 //! | `describe` | none | `bridge.describe`: the capabilities, protocol 1, and the open `windows` (`id`, `title`, `main`, `active`) |
 //! | `snapshot` | `{ "collector"?, "window"? }` | every collector's snapshot, or one |
-//! | `call` | `{ "collector", "action", "args"?, "window"? }` | the bridge's feedback block (`ok`, `message`, `data`...) |
+//! | `call` | `{ "collector", "action", "args"?, "window"?, "deadline_ms"? }` | the bridge's feedback block (`ok`, `message`, `data`...) |
 //! | `wait` | `bridge.wait`'s arguments and `deadline_ms` | `{ "met", "by", "event", "last", "orphaned" }` |
 //! | `ui` | `{ "action", "label"?, "role"?, "nth"?, "text"?, "key"?, "up"?, "window"? }` | the accessibility tree, or the node acted on |
 //!
@@ -54,6 +54,17 @@
 //! bridge's mode, the `agent` flags and the `debug.call` step apply as to
 //! any agent.
 //!
+//! **Destructive calls.** A `call` that destroys or discards what
+//! cannot easily be had back (`commands.run` of a command declared
+//! `CommandSpec::destructive`, an action its collector says is) waits
+//! for the user ([`confirm`]): a dialog names the agent, what it asks
+//! and its arguments, and the call is held until the user answers
+//! (`deadline_ms`, [`CONFIRM_DEADLINE`] by default, at most
+//! [`MAX_CONFIRM_DEADLINE`]). Accepted, it runs and answers as any call;
+//! declined or unanswered, it is refused (`-32001`, `-32002` past the
+//! deadline) and the journal says so (`command.refused`, `by`
+//! `pop.agent.confirm`).
+//!
 //! **Threading.** The socket's threads never touch the application: a
 //! request goes to the UI thread through a channel, drained at each pass
 //! of the application's logic ([`On::Pass`]), and the reply comes back on
@@ -75,6 +86,7 @@ use egui_pop_model::ids::{PluginId, SettingId};
 use egui_pop_model::values::Descriptor;
 use serde_json::{Value as Json, json};
 
+pub mod confirm;
 mod limits;
 #[cfg(feature = "mcp")]
 pub mod mcp;
@@ -87,6 +99,7 @@ mod unix;
 #[cfg(windows)]
 mod windows;
 
+pub use confirm::{CONFIRM_DEADLINE, MAX_CONFIRM_DEADLINE};
 pub use limits::{MAX_CONNECTIONS, MAX_REQUEST_BYTES};
 pub use pairing::{CMD_CONFIRM, Pairing, pairings};
 pub use rpc::RpcError;
@@ -508,6 +521,9 @@ pub(crate) enum Job {
         /// without).
         window: Option<String>,
         origin: Origin,
+        /// How long a destructive call waits for the user's
+        /// confirmation ([`confirm`]).
+        deadline: Instant,
         reply: Reply,
     },
     Wait {
@@ -557,6 +573,7 @@ impl UiSide {
     /// and the waits held end.
     fn refuse_all(&mut self, app: &AppHandle) {
         pairing::refuse_all(app);
+        confirm::refuse_all(app);
         while let Ok(job) = self.rx.try_recv() {
             let reply = match job {
                 Job::Gone { agent } => {
@@ -603,6 +620,7 @@ impl UiSide {
             true
         });
         pairing::pass(app);
+        confirm::pass(app);
         self.ui_pass(app, &ctx, now);
         // After the checks: a repaint asked for now is not one the
         // application asked for.
@@ -660,8 +678,28 @@ impl UiSide {
                 args,
                 window,
                 origin,
+                deadline,
                 reply,
             } => {
+                let call = confirm::Call {
+                    collector,
+                    action,
+                    args,
+                    window,
+                    origin,
+                };
+                // A destructive call waits for the user's confirmation.
+                if confirm::needed(app, &call) {
+                    confirm::hold(app, call, deadline, reply);
+                    return;
+                }
+                let confirm::Call {
+                    collector,
+                    action,
+                    args,
+                    window,
+                    origin,
+                } = call;
                 let f = app.debug_call_in(window.as_deref(), &collector, &action, &args, origin);
                 let _ = reply.send(Ok(serde_json::to_value(&f).unwrap_or(Json::Null)));
             }
