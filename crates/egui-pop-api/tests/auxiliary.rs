@@ -239,7 +239,10 @@ fn a_panel_that_may_not_leave_is_refused_by_the_window_it_is_dropped_on() {
     let app = h.state().handle().clone();
     assert!(app.detach_panel(&LOG).unwrap().ok());
     h.run();
-    let from = h.get_by_label("Pinned").rect().center();
+    let from = h
+        .get_by_role_and_label(egui::accesskit::Role::Tab, "Pinned")
+        .rect()
+        .center();
     let to = h.get_by_label("log body").rect().center();
     drag(&mut h, from, to, true);
     let over = app.window_drop().expect("the window shows its zone");

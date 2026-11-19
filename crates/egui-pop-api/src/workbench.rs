@@ -5733,12 +5733,14 @@ impl TabViewer for Viewer<'_> {
     }
 
     fn on_tab_button(&mut self, tab: &mut PanelId, response: &egui::Response) {
-        // egui_stack's tab buttons carry no name: give them their panel's.
+        // A tab, named by its panel's title, as egui_stack's accessible tab
+        // pattern has it: its list names the dock, and the active tab's body
+        // is a tab panel of the same name.
         match self.prepared.get(tab) {
-            Some(p) => egui_pop_core::a11y::name(response, egui::Role::Button, &p.title),
+            Some(p) => egui_pop_core::a11y::name(response, egui::Role::Tab, &p.title),
             None => {
                 let title = self.app.panel_title(&response.ctx, tab);
-                egui_pop_core::a11y::name(response, egui::Role::Button, &title);
+                egui_pop_core::a11y::name(response, egui::Role::Tab, &title);
             }
         }
         // Its state's mark (`pop.panel.state`) or its kind's, the tab's one

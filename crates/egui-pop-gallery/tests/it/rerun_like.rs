@@ -334,11 +334,10 @@ fn at_most_one_line_between_two_panels_at_rest() {
         h.run();
         let img = h.render().expect("render");
         let ppp = h.ctx.pixels_per_point();
-        // A panel's tab: the shortest node named after it.
+        // A panel's tab (its body is a tab panel of the same name).
         let tab = |name: &str| {
-            h.query_all_by_label(name)
+            h.query_by_role_and_label(egui::accesskit::Role::Tab, name)
                 .map(|n| n.rect())
-                .min_by(|a, b| a.height().total_cmp(&b.height()))
                 .unwrap_or_else(|| panic!("{theme}: no tab {name}"))
         };
         let (left, right) = (tab(audit::LEFT), tab(audit::RIGHT));

@@ -100,7 +100,11 @@ fn a_tab_dragged_saves_nothing_until_it_is_let_go_then_once() {
     let dir = dir("drag");
     let mut h = harness(builder(&dir));
     let app = h.state().handle().clone();
-    let from = h.get_by_label("Tree").rect().center();
+    // The tab, not its body: the active tab's body is a panel named by it.
+    let from = h
+        .get_by_role_and_label(egui::accesskit::Role::Tab, "Tree")
+        .rect()
+        .center();
     let to = app.area_rect(Area::Bottom).unwrap().center();
     let pointer = |h: &mut Harness<'_, App>, e: egui::Event| {
         h.input_mut().events.push(e);

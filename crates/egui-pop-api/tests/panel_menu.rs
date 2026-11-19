@@ -226,7 +226,8 @@ fn a_tab_of_a_floating_group_opens_the_same_menu() {
 #[test]
 fn a_docked_tab_opens_the_same_menu() {
     let mut h = harness();
-    h.get_by_label("Tree").click_secondary();
+    h.get_by_role_and_label(egui::accesskit::Role::Tab, "Tree")
+        .click_secondary();
     h.run();
     for entry in [
         "Detach into a window",
