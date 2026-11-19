@@ -687,8 +687,14 @@ impl UiSide {
                 reply,
             } => {
                 // What the agent's grant does not allow is refused before
-                // anything runs or is asked.
-                if let Some(reason) = grants::call_refusal(app, &origin, &collector, &action, &args)
+                // anything runs or is asked; a call the bridge refuses
+                // anyway (its mode, an `agent` flag) is left to it, as
+                // before grants.
+                if app
+                    .debug_refusal(&collector, &action, &args, &origin)
+                    .is_none()
+                    && let Some(reason) =
+                        grants::call_refusal(app, &origin, &collector, &action, &args)
                 {
                     grants::refuse_call(app, &origin, &collector, &action, &args, &reason, reply);
                     return;
