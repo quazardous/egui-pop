@@ -2922,10 +2922,47 @@ fn first_crumb(widths: &[f32], room: f32, collapsed: f32) -> usize {
     first
 }
 
-/// The file browser the picker lists through, never drawn: made at the
-/// first listing, once the picker's groupings are known. Shared: the picker
-/// is copied every frame it is drawn.
-type Lister = Arc<Mutex<Option<browser::FileBrowser>>>;
+/// The file browser the picker lists through and keeps its highlight and
+/// selection in, never drawn: made at the first listing, once the picker's
+/// groupings are known. Shared: the picker is copied every frame it is drawn.
+type Lister = Arc<Mutex<Listing>>;
+
+/// The picker's browser, and its focus and selection as the picker's public
+/// fields last read them: a field changed since, by the application, goes
+/// to the browser before the picker's next step.
+#[derive(Debug, Default)]
+struct Listing {
+    browser: Option<browser::FileBrowser>,
+    highlight: usize,
+    selected: BTreeSet<PathBuf>,
+}
+
+impl Listing {
+    /// What the application wrote to the picker's fields since they were
+    /// read goes to the browser: the highlight as the focus, the selection
+    /// as the policy lets it.
+    fn push(&mut self, highlight: usize, selected: &BTreeSet<PathBuf>) {
+        let Some(b) = self.browser.as_mut() else {
+            return;
+        };
+        if highlight != self.highlight {
+            let path = b.entries().get(highlight).map(|e| e.path.clone());
+            b.set_focus(path.as_deref());
+        }
+        if *selected != self.selected {
+            b.set_selection(selected.iter().cloned());
+        }
+    }
+
+    /// The browser's focus and selection, as the picker's fields say them.
+    fn pull(&mut self) -> (usize, BTreeSet<PathBuf>) {
+        if let Some(b) = &self.browser {
+            self.highlight = b.focus_index().unwrap_or(0);
+            self.selected = b.selection().paths.clone();
+        }
+        (self.highlight, self.selected.clone())
+    }
+}
 
 /// The picker's thumbnails, the browser's over the previews.
 #[derive(Clone)]
@@ -2956,10 +2993,15 @@ pub struct FilePicker {
     /// with `~`.
     pub text: String,
     /// The entry highlighted among those shown: where the arrows are, what
-    /// the preview is of, and what Enter acts on.
+    /// the preview is of, and what Enter acts on. The picker's browser
+    /// focus, read after each step; set it and the browser focuses that
+    /// entry at the next.
     pub highlight: usize,
     /// What is selected, in the folder shown: files (choosing several), or
-    /// one folder (choosing a folder, or saving: Enter goes into it).
+    /// one folder (choosing a folder, or saving: Enter goes into it). The
+    /// picker's browser selection, kept to its [`SelectionPolicy`](browser::SelectionPolicy)
+    /// and read after each step; set it and the browser selects what the
+    /// policy lets at the next.
     pub selected: BTreeSet<PathBuf>,
     pub show_hidden: bool,
     /// The preview pane is shown (with previews, [`FilePicker::with_previews`]).
@@ -3003,8 +3045,6 @@ pub struct FilePicker {
     /// The selection's keys are commands ([`Files`] draws this picker);
     /// drawn on its own, it has no keymap and reads them itself.
     declared_keys: bool,
-    /// Where `Shift` extends the selection from.
-    anchor: Option<PathBuf>,
     /// What the selection line said last: a change is announced.
     said: Option<String>,
     /// The folder last announced: another one is.
@@ -3076,8 +3116,6 @@ pub struct FilePicker {
     /// copied every frame it is drawn, and the thumbnails asked are renewed
     /// from frame to frame).
     thumbnails: Option<PickerThumbnails>,
-    /// The selection a rubber band adds to while it is drawn.
-    band_base: Option<BTreeSet<PathBuf>>,
     /// Lists the folder, filters, orders, groups and ranks its entries.
     lister: Lister,
     /// The folder's groups as last listed, by main file.
@@ -3145,7 +3183,6 @@ impl FilePicker {
             back: Vec::new(),
             forward: Vec::new(),
             declared_keys: false,
-            anchor: None,
             said: None,
             said_dir: None,
             row_ids: Vec::new(),
@@ -3179,7 +3216,6 @@ impl FilePicker {
             grid_room: (800.0, 4.0),
             asked_thumbnails: false,
             thumbnails: None,
-            band_base: None,
             lister: Arc::default(),
             groups: Arc::default(),
             loading: false,
@@ -3280,11 +3316,12 @@ impl FilePicker {
     /// Shows `dir`, the history left as it is.
     fn show_dir(&mut self, dir: PathBuf) {
         self.dir = dir;
-        self.highlight = 0;
+        self.on_browser(|b| {
+            b.set_focus(None);
+            b.set_selection([]);
+        });
         self.reveal_cell = true;
         self.error = None;
-        self.selected.clear();
-        self.anchor = None;
         self.reach_focus = None;
         if self.kind != ChooseKind::Save {
             self.text.clear();
@@ -3315,7 +3352,7 @@ impl FilePicker {
 
     /// Reads the folder again, and the facts of its files.
     pub fn reload(&mut self) {
-        if let Some(b) = lock(&self.lister).as_mut() {
+        if let Some(b) = lock(&self.lister).browser.as_mut() {
             b.reload();
         }
         lock(&self.column_cache).clear();
@@ -3377,9 +3414,11 @@ impl FilePicker {
             String::new()
         };
         let grouped = self.grouping_on();
+        let policy = self.policy();
         let lister = Arc::clone(&self.lister);
         let mut lister = lock(&lister);
-        let b = lister.get_or_insert_with(|| {
+        lister.push(self.highlight, &self.selected);
+        let b = lister.browser.get_or_insert_with(|| {
             let source = Arc::new(browser::FsSource::new(self.fs.clone()));
             let b = browser::FileBrowser::new("egui_pop.files.picker", source, self.dir.clone())
                 .with_modes(browser::ViewModes::empty());
@@ -3390,6 +3429,9 @@ impl FilePicker {
         });
         if b.place() != self.dir {
             b.open(self.dir.clone());
+        }
+        if b.selection_policy() != policy {
+            b.set_selection_policy(policy);
         }
         b.set_show_hidden(self.show_hidden);
         b.set_grouped(grouped);
@@ -3405,6 +3447,18 @@ impl FilePicker {
         {
             ctx.request_repaint();
         }
+        if let Some(focus) = self.reach_focus.take() {
+            if b.entries().iter().any(|e| e.path == focus) {
+                if self.kind == ChooseKind::Open {
+                    b.set_focus(Some(&focus));
+                } else {
+                    b.click(&focus, Modifiers::NONE);
+                }
+                self.reveal_cell = true;
+            } else if self.loading {
+                self.reach_focus = Some(focus);
+            }
+        }
         let entries: Vec<Entry> = (b.entries().iter())
             .map(|e| Entry {
                 path: e.path.clone(),
@@ -3412,18 +3466,38 @@ impl FilePicker {
                 is_dir: e.is_dir(),
             })
             .collect();
-        drop(lister);
-        if let Some(focus) = self.reach_focus.take() {
-            if let Some(at) = entries.iter().position(|e| e.path == focus) {
-                self.highlight = at;
-                self.reveal_cell = true;
-                self.selected.clear();
-                self.selected.insert(focus);
-            } else if self.loading {
-                self.reach_focus = Some(focus);
-            }
-        }
+        (self.highlight, self.selected) = lister.pull();
         entries
+    }
+
+    /// What can be selected, by the kind of choice: files, one or several
+    /// (those the field's filter hides stay selected), or a folder (saving:
+    /// the folder Enter goes into). Choosing one file, the highlight is the
+    /// choice: the picker selects nothing apart from it.
+    fn policy(&self) -> browser::SelectionPolicy {
+        use browser::{SelectMode, SelectionPolicy};
+        match self.kind {
+            ChooseKind::OpenMany => SelectionPolicy::files(SelectMode::Many).keeping_filtered(true),
+            ChooseKind::Open => SelectionPolicy::files(SelectMode::One),
+            ChooseKind::Folder | ChooseKind::Save => SelectionPolicy::folders(SelectMode::One),
+        }
+    }
+
+    /// A step on the browser's focus and selection, the application's
+    /// writes to the fields taken first, the fields read back after.
+    fn on_browser<R>(&mut self, step: impl FnOnce(&mut browser::FileBrowser) -> R) -> Option<R> {
+        let lister = Arc::clone(&self.lister);
+        let mut lister = lock(&lister);
+        lister.push(self.highlight, &self.selected);
+        let out = lister.browser.as_mut().map(step);
+        (self.highlight, self.selected) = lister.pull();
+        if lister.browser.is_none() {
+            self.highlight = 0;
+            self.selected.clear();
+            lister.highlight = 0;
+            lister.selected.clear();
+        }
+        out
     }
 
     /// Whether the folder's listing, or its groups, are still under way.
@@ -3438,25 +3512,18 @@ impl FilePicker {
         if on == self.grouped {
             return;
         }
+        let before = self.selected.clone();
         self.reorder(|p| p.grouped = on);
         self.entries();
-        let taken: Vec<PathBuf> = (self.selected.iter())
-            .filter(|p| self.main_of(p).is_some())
+        // The browser puts a member's group in its place: the picker leaves
+        // the member out instead.
+        let kept: Vec<PathBuf> = (self.selected.iter())
+            .filter(|p| before.contains(*p))
             .cloned()
             .collect();
-        for path in taken {
-            self.selected.remove(&path);
+        if kept.len() != self.selected.len() {
+            self.on_browser(|b| b.set_selection(kept));
         }
-    }
-
-    /// The main file of a group's member shown as its group, in the folder as
-    /// last listed.
-    fn main_of(&self, path: &Path) -> Option<&PathBuf> {
-        self.groups
-            .values()
-            .find(|g| g.members.iter().any(|m| m == path))
-            .map(|g| &g.main)
-            .filter(|main| self.accepts(main))
     }
 
     /// Takes another order; the highlighted entry stays highlighted, wherever
@@ -3475,16 +3542,12 @@ impl FilePicker {
         }
     }
 
+    /// The browser keeps its focus on its entry, or on the group that takes
+    /// it in, wherever it lands.
     fn reorder(&mut self, change: impl FnOnce(&mut FilePicker)) {
-        let at = self.highlighted().map(|e| e.path);
+        self.entries();
         change(self);
-        if let Some(path) = at {
-            let shown = self.visible();
-            let path = self.main_of(&path).cloned().unwrap_or(path);
-            if let Some(n) = shown.iter().position(|e| e.path == *path) {
-                self.highlight = n;
-            }
-        }
+        self.entries();
         self.reveal_cell = true;
         if let Some(ctx) = &self.ctx {
             ctx.request_repaint();
@@ -3541,12 +3604,15 @@ impl FilePicker {
     /// The field says something else now: a name, or a filter's first match.
     /// Files selected stay, and the line under the list counts them.
     fn text_changed(&mut self) {
-        self.highlight = 0;
+        let many = self.kind == ChooseKind::OpenMany;
+        self.on_browser(|b| {
+            b.set_focus(None);
+            if !many {
+                b.set_selection([]);
+            }
+        });
         self.reveal_cell = true;
         self.error = None;
-        if self.kind != ChooseKind::OpenMany {
-            self.selected.clear();
-        }
     }
 
     /// Whether the field holds a path rather than a filter.
@@ -3737,7 +3803,7 @@ impl FilePicker {
     /// under a filter without extensions.
     pub fn set_filter(&mut self, index: usize) {
         self.filter_index = index;
-        self.highlight = 0;
+        self.on_browser(|b| b.set_focus(None));
         if self.kind != ChooseKind::Save {
             return;
         }
@@ -3919,22 +3985,24 @@ impl FilePicker {
 
     /// See [`toggle`](Self::toggle).
     fn toggle_entry(&mut self, e: &Entry) {
+        let path = e.path.clone();
         match self.kind {
             ChooseKind::OpenMany if e.is_dir => {
                 self.error = Some(self.say(&txt::FILES_SELECT_FOLDER, &[("name", &e.name)]));
+                self.on_browser(|b| b.set_focus(Some(&path)));
             }
             ChooseKind::OpenMany => {
-                if !self.selected.remove(&e.path) {
-                    self.selected.insert(e.path.clone());
-                }
-                self.anchor = Some(e.path.clone());
+                self.on_browser(|b| b.click(&path, Modifiers::COMMAND));
             }
             ChooseKind::Folder => {
-                let was = self.selected.contains(&e.path);
-                self.selected.clear();
-                if !was {
-                    self.selected.insert(e.path.clone());
-                }
+                self.on_browser(|b| {
+                    if b.selection().contains(&path) {
+                        b.set_selection([]);
+                        b.set_focus(Some(&path));
+                    } else {
+                        b.click(&path, Modifiers::NONE);
+                    }
+                });
             }
             ChooseKind::Open | ChooseKind::Save => {}
         }
@@ -3947,18 +4015,13 @@ impl FilePicker {
         if self.kind != ChooseKind::OpenMany {
             return Err("selecting all is offered when choosing several files".into());
         }
-        let files: Vec<PathBuf> = self
-            .visible()
-            .into_iter()
-            .filter(|e| !e.is_dir)
-            .map(|e| e.path)
-            .collect();
-        if files.is_empty() {
+        if self.visible().iter().all(|e| e.is_dir) {
             let reason = self.say(&txt::FILES_SELECT_ALL_NONE, &[]);
             self.error = Some(reason.clone());
             return Err(reason);
         }
-        self.selected.extend(files);
+        // The files the field hides stay selected (the policy keeps them).
+        self.on_browser(|b| b.select_all());
         Ok(())
     }
 
@@ -3971,38 +4034,23 @@ impl FilePicker {
     /// The highlight goes to the `to`th entry shown, from the arrows or Tab:
     /// choosing several, it extends the selection with `extend`; choosing a
     /// folder, or saving, it selects the folder it lands on.
+    /// The browser's focus moves, and its policy says what the selection
+    /// does: the files from the anchor with `extend`, choosing several; the
+    /// folder landed on alone, choosing a folder or saving.
     fn move_highlight(&mut self, to: usize, shown: &[Entry], extend: bool) {
         let Some(e) = shown.get(to) else {
             return;
         };
         self.error = None;
-        let from = std::mem::replace(&mut self.highlight, to);
-        match self.kind {
-            ChooseKind::OpenMany if extend => self.extend_selection(from, to, shown),
-            ChooseKind::OpenMany => self.anchor = Some(e.path.clone()),
-            ChooseKind::Folder | ChooseKind::Save => {
-                self.selected.clear();
-                if e.is_dir {
-                    self.selected.insert(e.path.clone());
-                }
+        let path = e.path.clone();
+        let open = self.kind == ChooseKind::Open;
+        self.on_browser(|b| {
+            if open {
+                b.set_focus(Some(&path));
+            } else {
+                b.focus_on(&path, extend);
             }
-            ChooseKind::Open => {}
-        }
-    }
-
-    /// The files between the anchor (else `from`) and `to`, as the selection.
-    fn extend_selection(&mut self, from: usize, to: usize, shown: &[Entry]) {
-        let anchor = self
-            .anchor
-            .as_ref()
-            .and_then(|a| shown.iter().position(|e| &e.path == a))
-            .unwrap_or(from);
-        self.anchor = shown.get(anchor).map(|e| e.path.clone());
-        self.selected = shown[anchor.min(to)..=anchor.max(to)]
-            .iter()
-            .filter(|e| !e.is_dir)
-            .map(|e| e.path.clone())
-            .collect();
+        });
     }
 
     /// A click on the `n`th entry shown, with these modifiers. It selects; it
@@ -4012,31 +4060,24 @@ impl FilePicker {
             return;
         };
         self.error = None;
-        let from = std::mem::replace(&mut self.highlight, n);
+        let path = e.path.clone();
         match self.kind {
-            ChooseKind::OpenMany if modifiers.shift => self.extend_selection(from, n, shown),
+            ChooseKind::OpenMany if modifiers.shift => {
+                self.on_browser(|b| b.click(&path, Modifiers::SHIFT));
+            }
             ChooseKind::Folder | ChooseKind::OpenMany if modifiers.command => self.toggle_entry(e),
-            ChooseKind::OpenMany => {
-                self.selected.clear();
-                if !e.is_dir {
-                    self.selected.insert(e.path.clone());
-                }
-                self.anchor = Some(e.path.clone());
-            }
-            ChooseKind::Folder => {
-                self.selected.clear();
-                self.selected.insert(e.path.clone());
-            }
-            ChooseKind::Save => {
-                self.selected.clear();
-                if e.is_dir {
-                    self.selected.insert(e.path.clone());
-                } else {
+            ChooseKind::OpenMany | ChooseKind::Folder | ChooseKind::Save => {
+                // The policy selects a file choosing several, a folder
+                // otherwise; anything else leaves nothing selected.
+                self.on_browser(|b| b.click(&path, Modifiers::NONE));
+                if self.kind == ChooseKind::Save && !e.is_dir {
                     self.text = e.name.clone();
                     self.select_stem = true;
                 }
             }
-            ChooseKind::Open => {}
+            ChooseKind::Open => {
+                self.on_browser(|b| b.set_focus(Some(&path)));
+            }
         }
     }
 
@@ -4449,7 +4490,7 @@ impl FilePicker {
         }
         let completed = tab && self.complete();
         if completed {
-            self.highlight = 0;
+            self.on_browser(|b| b.set_focus(None));
         }
         if std::mem::take(&mut self.cursor_to_end) || completed {
             let mut state = egui::TextEdit::load_state(ui.ctx(), field.id).unwrap_or_default();
@@ -5181,7 +5222,7 @@ impl FilePicker {
         if let Some(dir) = chosen {
             // The folder shown, asked again: it is read again.
             if dir == self.dir
-                && let Some(b) = lock(&self.lister).as_mut()
+                && let Some(b) = lock(&self.lister).browser.as_mut()
             {
                 b.reload();
             }
@@ -5436,21 +5477,21 @@ impl FilePicker {
         let reveal = std::mem::take(&mut self.reveal_cell) && !shown.is_empty();
         let highlight = self.highlight.min(shown.len().saturating_sub(1));
         // The browser's entries, with their facts, in the order shown.
-        let (entries, groups, absorbed) = match lock(&self.lister).as_ref() {
-            Some(b) => (b.entries().to_vec(), b.groups(), b.absorbed().clone()),
+        let (entries, groups, absorbed, mut selection) = match lock(&self.lister).browser.as_ref() {
+            Some(b) => (
+                b.entries().to_vec(),
+                b.groups(),
+                b.absorbed().clone(),
+                b.selection().clone(),
+            ),
             None => Default::default(),
         };
         // Where a selection exists apart from the highlight, a ring says
         // where the highlight is; otherwise the highlight is the selection.
         let apart = self.selects_apart();
-        let mut paths = self.selected.clone();
         if !apart && let Some(e) = shown.get(highlight) {
-            paths.insert(e.path.clone());
+            selection.paths.insert(e.path.clone());
         }
-        let selection = browser::Selection {
-            paths,
-            anchor: self.anchor.clone(),
-        };
         let mut settings = browser::ModeSettings {
             thumbnail_size: if grid {
                 self.thumbnail_side(ui)
@@ -5585,7 +5626,7 @@ impl FilePicker {
         }
         // A rubber band selects the files it touches as it is drawn.
         if let Some(band) = browser::take_band(ui.ctx(), id) {
-            self.apply_band(&band, &entries);
+            self.apply_band(&band);
         }
         self.asked_thumbnails = grid;
     }
@@ -5593,39 +5634,13 @@ impl FilePicker {
     /// Selects the files a rubber band touches (choosing several): alone, or
     /// added to the selection it started from with Ctrl or Shift held. The
     /// highlight goes to its last entry once it is let go.
-    fn apply_band(&mut self, band: &Band, entries: &[browser::SourceEntry]) {
-        if self.kind != ChooseKind::OpenMany {
-            self.band_base = None;
-            return;
+    fn apply_band(&mut self, band: &Band) {
+        // The browser's policy: files alone, several at once; one entry at a
+        // time, a band selects nothing.
+        if self.kind == ChooseKind::OpenMany {
+            self.error = None;
         }
-        let keep = band.modifiers.command || band.modifiers.shift;
-        let base = self
-            .band_base
-            .get_or_insert_with(|| {
-                if keep {
-                    self.selected.clone()
-                } else {
-                    BTreeSet::new()
-                }
-            })
-            .clone();
-        let mut paths = base;
-        paths.extend(
-            band.cells
-                .iter()
-                .filter_map(|&i| entries.get(i))
-                .filter(|e| !e.is_dir())
-                .map(|e| e.path.clone()),
-        );
-        self.error = None;
-        self.selected = paths;
-        if band.finished {
-            self.band_base = None;
-            if let Some(&last) = band.cells.last() {
-                self.highlight = last;
-                self.anchor = entries.get(last).map(|e| e.path.clone());
-            }
-        }
+        self.on_browser(|b| b.apply_band(band));
     }
 
     /// What the row just drawn does with the pointer and the keys.
@@ -6442,5 +6457,148 @@ mod tests {
             ]))
         );
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    /// A memory folder of two subfolders and three files, listed at once.
+    fn selection_picker(request: FileRequest) -> FilePicker {
+        let root = PathBuf::from("/sel");
+        let fs: SharedFs = Arc::new(
+            fs::MemoryFs::new()
+                .file(root.join("Raw/x.png"), b"x".to_vec())
+                .file(root.join("Done/y.png"), b"y".to_vec())
+                .file(root.join("a.png"), b"a".to_vec())
+                .file(root.join("b.png"), b"b".to_vec())
+                .file(root.join("c.png"), b"c".to_vec()),
+        );
+        let mut p = FilePicker::new_in(&request.directory(&root), fs);
+        if p.kind != ChooseKind::Folder {
+            assert_eq!(listed(&mut p), ["Done", "Raw", "a.png", "b.png", "c.png"]);
+        }
+        p
+    }
+
+    fn names_of(p: &FilePicker) -> Vec<String> {
+        (p.selected.iter())
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect()
+    }
+
+    #[test]
+    fn choosing_one_file_the_highlight_is_the_choice() {
+        let mut p = selection_picker(FileRequest::open("Open"));
+        let shown = p.visible();
+        p.click_entry(3, &shown, Modifiers::NONE);
+        assert_eq!(p.highlight, 3);
+        // Nothing selected apart from the highlight, Ctrl or Shift held.
+        p.click_entry(4, &shown, Modifiers::SHIFT);
+        p.click_entry(2, &shown, Modifiers::COMMAND);
+        assert_eq!(p.highlight, 2);
+        assert!(p.selected.is_empty());
+        p.move_highlight(4, &shown, true);
+        assert_eq!(p.highlight, 4);
+        assert!(p.selected.is_empty());
+        assert_eq!(
+            p.activate(),
+            Some(PickerAnswer::Chosen(vec![PathBuf::from("/sel/c.png")]))
+        );
+        // The highlight the application sets is the browser's focus.
+        p.highlight = 2;
+        assert_eq!(p.highlighted().unwrap().name, "a.png");
+    }
+
+    #[test]
+    fn choosing_several_files_the_policy_keeps_folders_out() {
+        let mut p = selection_picker(FileRequest::open_many("Many"));
+        let shown = p.visible();
+        // A click on a file selects it alone; on a folder, nothing.
+        p.click_entry(2, &shown, Modifiers::NONE);
+        assert_eq!(names_of(&p), ["a.png"]);
+        p.click_entry(1, &shown, Modifiers::NONE);
+        assert!(p.selected.is_empty());
+        // Ctrl adds and takes away; on a folder it is refused, and said.
+        p.click_entry(2, &shown, Modifiers::COMMAND);
+        p.click_entry(4, &shown, Modifiers::COMMAND);
+        assert_eq!(names_of(&p), ["a.png", "c.png"]);
+        p.click_entry(0, &shown, Modifiers::COMMAND);
+        assert!(p.error.is_some());
+        assert_eq!(names_of(&p), ["a.png", "c.png"]);
+        p.click_entry(4, &shown, Modifiers::COMMAND);
+        assert_eq!(names_of(&p), ["a.png"]);
+        // Shift selects the files from the anchor, the folders left out.
+        p.click_entry(0, &shown, Modifiers::NONE);
+        p.click_entry(3, &shown, Modifiers::SHIFT);
+        assert_eq!(names_of(&p), ["a.png", "b.png"]);
+        // A move without Shift takes the anchor along.
+        p.move_highlight(4, &shown, false);
+        assert_eq!(names_of(&p), ["a.png", "b.png"]);
+        p.move_highlight(3, &shown, true);
+        assert_eq!(names_of(&p), ["b.png", "c.png"]);
+        // Files the field hides stay selected, and are counted.
+        p.text = "a.p".into();
+        p.text_changed();
+        assert_eq!(listed(&mut p), ["a.png"]);
+        assert_eq!(names_of(&p), ["b.png", "c.png"]);
+        p.select_all().unwrap();
+        assert_eq!(names_of(&p), ["a.png", "b.png", "c.png"]);
+        let line = p.selection_line().unwrap();
+        assert!(line.contains('3') && line.contains('2'), "{line}");
+        // Another folder leaves the selection behind.
+        p.text.clear();
+        p.text_changed();
+        p.go(PathBuf::from("/sel/Raw"));
+        assert_eq!(listed(&mut p), ["x.png"]);
+        assert!(p.selected.is_empty());
+    }
+
+    #[test]
+    fn choosing_a_folder_selects_one_folder() {
+        let mut p = selection_picker(FileRequest::folder("Folder"));
+        assert_eq!(listed(&mut p), ["Done", "Raw"]);
+        let shown = p.visible();
+        p.click_entry(1, &shown, Modifiers::NONE);
+        assert_eq!(names_of(&p), ["Raw"]);
+        // One at a time: Shift is a plain click, Ctrl unselects.
+        p.click_entry(0, &shown, Modifiers::SHIFT);
+        assert_eq!(names_of(&p), ["Done"]);
+        p.click_entry(0, &shown, Modifiers::COMMAND);
+        assert!(p.selected.is_empty());
+        assert_eq!(p.highlight, 0);
+        assert_eq!(
+            p.accept(),
+            Some(PickerAnswer::Chosen(vec![PathBuf::from("/sel")]))
+        );
+        // The arrows select the folder they land on.
+        p.move_highlight(1, &shown, true);
+        assert_eq!(names_of(&p), ["Raw"]);
+        p.toggle();
+        assert!(p.selected.is_empty());
+        p.toggle();
+        assert_eq!(
+            p.accept(),
+            Some(PickerAnswer::Chosen(vec![PathBuf::from("/sel/Raw")]))
+        );
+        // The selection the application sets is kept to the policy.
+        p.selected = BTreeSet::from([PathBuf::from("/sel/Done"), PathBuf::from("/sel/Raw")]);
+        p.visible();
+        assert_eq!(names_of(&p), ["Done"]);
+    }
+
+    #[test]
+    fn saving_a_click_on_a_file_takes_its_name_on_a_folder_selects_it() {
+        let mut p = selection_picker(FileRequest::save("Save", "new.png"));
+        let shown = p.visible();
+        p.click_entry(3, &shown, Modifiers::NONE);
+        assert_eq!(p.text, "b.png");
+        assert!(p.selected.is_empty());
+        p.click_entry(1, &shown, Modifiers::NONE);
+        assert_eq!(names_of(&p), ["Raw"]);
+        p.move_highlight(2, &shown, false);
+        assert!(p.selected.is_empty());
+        p.move_highlight(0, &shown, false);
+        assert_eq!(names_of(&p), ["Done"]);
+        // Enter goes into the folder selected.
+        assert_eq!(p.activate(), None);
+        assert_eq!(p.dir, PathBuf::from("/sel/Done"));
+        assert!(p.selected.is_empty());
     }
 }
