@@ -472,15 +472,6 @@ fn library(ui: &mut Ui, app: &AppHandle, p: &mut PageState, thumbs: &Thumbs) {
                 p.panel = share;
             }
         }
-        ui.label("On resize");
-        for (name, resize) in [
-            ("Per row", GridResize::PerRow),
-            ("Fixed size", GridResize::FixedSize),
-        ] {
-            if widgets::selectable_label(ui, p.resize == resize, name).clicked() {
-                p.resize = resize;
-            }
-        }
         if ui.button("Zoom in").clicked() {
             p.state.set_zoom(p.state.zoom().zoomed_in());
         }
@@ -491,6 +482,18 @@ fn library(ui: &mut Ui, app: &AppHandle, p: &mut PageState, thumbs: &Thumbs) {
             Zoom::PerRow(n) => ui.label(format!("{n} per row")),
             Zoom::Points(s) => ui.label(format!("{s} points")),
         };
+    });
+    // What the zoom means on a resize, on a line of its own.
+    ui.horizontal(|ui| {
+        ui.label("On resize");
+        for (name, resize) in [
+            ("Per row", GridResize::PerRow),
+            ("Fixed size", GridResize::FixedSize),
+        ] {
+            if widgets::selectable_label(ui, p.resize == resize, name).clicked() {
+                p.resize = resize;
+            }
+        }
     });
     let keymap = CullKeymap::lightroom().auto_advance(p.auto_advance);
     let signals = {
