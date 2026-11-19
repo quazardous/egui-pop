@@ -2,7 +2,8 @@
 
 The contract of the family "Hook kernel"
 ([ADR 0027](adr/0027-component-families.md)): `egui-pop-hooks`, a small
-crate without egui whose only dependency is the bus contract
+crate without egui that re-exports [`bus-kernel`](https://crates.io/crates/bus-kernel),
+an implementation of the bus contract
 ([`bus-contract`](https://github.com/quazardous/bus-contract), no
 dependencies of its own), for named points where
 several parts of a program contribute to one result, in an order they
@@ -66,7 +67,7 @@ let report = kernel.collect::<HealthReport>(());
 assert!(report.failures.is_empty());
 ```
 
-- **A point is a type** (`egui_pop_hooks::Point`): its id, the `Input`
+- **A point is a type** (`bus_kernel::Point`): its id, the `Input`
   every listener reads, the `Value` a listener edits. Declaring it
   (`Kernel::declare`, with a `PointSpec`) is optional and adds a
   description and a deadline for introspection.
@@ -74,7 +75,7 @@ assert!(report.failures.is_empty());
   ordered by `after`/`before`, then by priority (higher first), then by
   registration order: the same listeners always run in the same order.
   `ListenOpts::last` runs one after every other listener of its point
-  (its `after` holds `egui_pop_hooks::LAST`); a second one on a point
+  (its `after` holds `bus_kernel::LAST`); a second one on a point
   closes a cycle and is refused. `Kernel::unlisten` removes one,
   `Kernel::forget` every listener of an owner.
 - **`alter`** passes one value through the listeners in order
@@ -95,7 +96,7 @@ assert!(report.failures.is_empty());
   the edit is dropped, the other listeners still run, and the emit
   returns a `Failure` (`FailureKind::Error`, `Panic`, `Late`).
 - **Deadlines**: one second by default
-  (`egui_pop_hooks::DEFAULT_DEADLINE`), set per point and per listener
+  (`bus_kernel::DEFAULT_DEADLINE`), set per point and per listener
   (`PLUGIN_DEADLINE`, five seconds, for listeners answering from another
   process); a listener's own deadline wins over its point's, which wins
   over the kernel's. An inline listener runs on the emitting thread and
@@ -108,7 +109,7 @@ assert!(report.failures.is_empty());
   and reports `FailureKind::TypeMismatch`.
 - **Sinks** (`Kernel::on_failure`) receive each dropped contribution as
   it happens; a host publishes them as a `hook.failed` fact
-  (`egui_pop_hooks::FAILED_FACT`) or logs them.
+  (`bus_kernel::FAILED_FACT`) or logs them.
 - Listeners may call the kernel again (re-entry), and emits may come
   from several threads: the kernel is `Send + Sync`.
 - **Local listeners** (`listen_local::<P>`) hold state that is not
@@ -224,18 +225,21 @@ health report, a menu) follows the rules of the family that draws it.
 
 From [API stability](stability.md): **Experimental** ("The hook kernel
 (`egui-pop-hooks`): new; its API may move while the first applications
-move their extension points onto it"). The crate is not on crates.io
-yet.
+move their extension points onto it"). The kernel itself is the
+[`bus-kernel`](https://crates.io/crates/bus-kernel) crate, which
+`egui-pop-hooks` re-exports.
 
 ## Tests
 
-`crates/egui-pop-hooks/tests/kernel.rs`: ordering by constraints,
+The kernel's own tests live in `bus-kernel` (its `tests/kernel.rs`,
+`tests/journal.rs`, `tests/timings.rs`, and its conformance suite run on
+itself). `tests/kernel.rs` there: ordering by constraints,
 priority and registration; cycles refused; missing targets; duplicate
 ids and mismatched types; `alter` keeping only successful edits;
 `collect` in order; inline and threaded deadlines and their resolution;
 sinks; introspection; `forget` and `unlisten`; re-entry and emits across
 threads; local listeners in order, deferred from another thread, removed
-from any thread. `crates/egui-pop-hooks/tests/journal.rs`: journaled
+from any thread. `tests/journal.rs` there: journaled
 and relayable points refused without a host journal or relay, shown by
 introspection; with an in-memory host journal, entries delivered once
 in order off the publisher's thread, local listeners at their thread's

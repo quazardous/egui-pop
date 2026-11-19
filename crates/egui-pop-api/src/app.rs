@@ -4027,7 +4027,7 @@ impl AppBuilder {
     /// bus, or one of several. egui-pop declares its points on it
     /// ([`crate::bus::CONTRACT`]) and registers its listeners; it never
     /// constructs a bus when one is given. Without it, the default: an
-    /// `egui_pop_hooks::Kernel` of its own.
+    /// `bus_kernel::Kernel` of its own.
     ///
     /// One egui-pop application per bus: its listeners hold that
     /// application's window registry, and a second application on the

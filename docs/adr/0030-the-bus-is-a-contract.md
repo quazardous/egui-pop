@@ -134,7 +134,7 @@ ones for code that holds a `Kernel` and not a `dyn Bus`. It depends on
   its points (`POINTS`), registers its listeners, and asks requests on
   the bus the application gives it.
 - egui-pop: `App::builder().bus(bus)` takes an `Arc<dyn Bus>`. Without
-  it the builder makes the default, an `egui_pop_hooks::Kernel`: an
+  it the builder makes the default, an `bus_kernel::Kernel`: an
   application that does not care changes nothing but the major version.
   `AppHandle::bus()` returns the `Arc<dyn Bus>`.
 - **One egui-pop application per bus.** egui-pop's listeners hold that
