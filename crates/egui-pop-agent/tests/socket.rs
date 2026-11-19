@@ -353,3 +353,244 @@ fn a_request_too_long_is_refused_and_its_connection_closed() {
         assert_eq!(r["error"]["code"], egui_pop_agent::RpcError::LIMIT, "{r}");
     });
 }
+
+// Identity: `hello`, pairing through the user's approval, tokens.
+
+/// The application's journal events named `name`, oldest first.
+fn events(h: &Harness<'static, App>, name: &str) -> Vec<egui_pop_api::host::Event> {
+    h.state()
+        .handle()
+        .events_since(0)
+        .into_iter()
+        .filter(|e| e.name == name)
+        .collect()
+}
+
+/// Steps frames until the pairing dialog shows, then answers it as
+/// `origin`; the client thread runs meanwhile.
+fn answer_pairing(
+    h: &mut Harness<'static, App>,
+    accept: bool,
+    origin: egui_pop_api::model::commands::Origin,
+) -> Result<(), String> {
+    use egui_pop_api::dialogs::{Answer, DIALOGS, Dialog};
+    let start = Instant::now();
+    loop {
+        h.step();
+        let d = h.state().handle().service(&DIALOGS).unwrap();
+        if let Some((_, Dialog::Confirm(c))) = d.current()
+            && c.command == egui_pop_agent::CMD_CONFIRM
+        {
+            let answer = if accept {
+                Answer::Accept {
+                    values: Default::default(),
+                }
+            } else {
+                Answer::Cancel
+            };
+            return d.answer(answer, origin);
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(20),
+            "no pairing dialog showed"
+        );
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
+/// Steps frames until `thread` ends.
+fn finish<T>(h: &mut Harness<'static, App>, thread: std::thread::JoinHandle<T>) -> T {
+    let start = Instant::now();
+    while !thread.is_finished() {
+        assert!(
+            start.elapsed() < Duration::from_secs(30),
+            "the client did not finish"
+        );
+        h.step();
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    thread.join().expect("the client passes")
+}
+
+/// The journal's `command.done` origins of `about.read` runs.
+fn about_read_origins(h: &Harness<'static, App>) -> Vec<String> {
+    events(h, "command.done")
+        .into_iter()
+        .filter(|e| e.data["command"] == "about.read")
+        .map(|e| e.source.clone())
+        .collect()
+}
+
+/// Runs `about.read` and waits for it, on `c`.
+fn run_about_read(c: &mut Client) {
+    let since = c.result("wait", json!({ "settled": true, "deadline_ms": 10_000 }))["last"]
+        .as_u64()
+        .unwrap();
+    let f = c.result(
+        "call",
+        json!({ "collector": "commands", "action": "run", "args": { "id": "about.read" } }),
+    );
+    assert_eq!(f["ok"], true, "{f}");
+    let done = c.result(
+        "wait",
+        json!({ "event": "command.done", "since": since, "deadline_ms": 10_000 }),
+    );
+    assert_eq!(done["met"], true, "{done}");
+}
+
+#[test]
+fn a_hello_paired_by_the_user_names_the_connections_calls_and_its_token_pairs_again() {
+    let dir = private_dir("hello");
+    let path = dir.join("app.sock");
+    let persist = dir.join("persist");
+    let mut h = app(App::builder().persist(&persist), &path);
+
+    // Without `hello`: the socket's agent, as before.
+    let p = path.clone();
+    with_client(&mut h, move || run_about_read(&mut Client::connect(&p)));
+    assert_eq!(about_read_origins(&h), ["agent:agent-socket"]);
+
+    // `hello` is held until the user accepts.
+    let p = path.clone();
+    let client = std::thread::spawn(move || {
+        let mut c = Client::connect(&p);
+        let hello = c.result(
+            "hello",
+            json!({ "name": "Claude Code", "deadline_ms": 20_000 }),
+        );
+        // A second one on the same connection is refused.
+        let again = c.request("hello", json!({ "name": "other" }));
+        run_about_read(&mut c);
+        (hello, again)
+    });
+    answer_pairing(&mut h, true, egui_pop_api::model::commands::Origin::User).unwrap();
+    let (hello, again) = finish(&mut h, client);
+    assert_eq!(hello["agent"], "claude-code", "{hello}");
+    assert_eq!(hello["origin"], "agent:claude-code", "{hello}");
+    let token = hello["token"].as_str().unwrap().to_string();
+    assert!(token.starts_with("egp_"), "{hello}");
+    assert_eq!(again["error"]["code"], -32602, "{again}");
+    assert_eq!(
+        about_read_origins(&h),
+        ["agent:agent-socket", "agent:claude-code"]
+    );
+
+    // The journal: paired, connected, then disconnected once it closed.
+    let paired = events(&h, "agent.paired");
+    assert_eq!(paired.len(), 1);
+    assert_eq!(paired[0].data["agent"], "claude-code");
+    assert_eq!(paired[0].source, "agent:claude-code");
+    // The token is nowhere on the journal.
+    let all = serde_json::to_string(&h.state().handle().events_since(0)).unwrap();
+    assert!(!all.contains(&token), "the token leaked to the journal");
+    let start = Instant::now();
+    while events(&h, "agent.disconnected").is_empty() {
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "no disconnection"
+        );
+        h.step();
+        std::thread::sleep(Duration::from_millis(2));
+    }
+
+    // Kept on disk as a hash only.
+    let pairings = std::fs::read_to_string(persist.join("agent-pairings.json")).unwrap();
+    assert!(pairings.contains("claude-code"), "{pairings}");
+    assert!(!pairings.contains(&token), "the token is never written");
+    drop(h);
+
+    // A new run of the application: the token pairs at once, no dialog.
+    let mut h = app(App::builder().persist(&persist), &path);
+    assert_eq!(
+        egui_pop_agent::pairings(h.state().handle())
+            .iter()
+            .map(|p| p.id.as_str())
+            .collect::<Vec<_>>(),
+        ["claude-code"]
+    );
+    let p = path.clone();
+    let (known, unknown) = with_client(&mut h, move || {
+        let mut c = Client::connect(&p);
+        let known = c.result("hello", json!({ "name": "Claude Code", "token": token }));
+        run_about_read(&mut c);
+        let unknown =
+            Client::connect(&p).request("hello", json!({ "name": "x", "token": "egp_nope" }));
+        (known, unknown)
+    });
+    assert_eq!(known["agent"], "claude-code", "{known}");
+    assert!(known.get("token").is_none(), "{known}");
+    assert_eq!(unknown["error"]["code"], -32001, "{unknown}");
+    assert_eq!(about_read_origins(&h), ["agent:claude-code"]);
+    assert_eq!(events(&h, "agent.connected").len(), 1);
+}
+
+#[test]
+fn a_pairing_the_user_declines_is_refused_and_an_agent_may_not_accept_it() {
+    let dir = private_dir("decline");
+    let path = dir.join("app.sock");
+    let mut h = app(
+        App::builder().debug_bridge(egui_pop_api::core::debug::BridgeMode::On),
+        &path,
+    );
+    let p = path.clone();
+    let client = std::thread::spawn(move || {
+        Client::connect(&p).request("hello", json!({ "name": "bot", "deadline_ms": 20_000 }))
+    });
+    // An agent's accept is vetoed: only the user pairs.
+    let agent = egui_pop_api::model::commands::Origin::Agent("intruder".into());
+    answer_pairing(&mut h, true, agent).unwrap();
+    for _ in 0..5 {
+        h.step();
+    }
+    assert!(events(&h, "agent.paired").is_empty());
+    // The command itself is kept from agents.
+    let f = h.state().handle().debug_call(
+        "commands",
+        "run",
+        &json!({ "id": "pop.agent.confirm", "args": { "id": 1 } }),
+    );
+    assert_eq!(f.ok, false, "{f:?}");
+    // The user declines.
+    answer_pairing(&mut h, false, egui_pop_api::model::commands::Origin::User).unwrap();
+    let r = finish(&mut h, client);
+    assert_eq!(r["error"]["code"], -32001, "{r}");
+    assert!(
+        r["error"]["message"].as_str().unwrap().contains("declined"),
+        "{r}"
+    );
+    assert_eq!(events(&h, "agent.declined").len(), 1);
+    assert!(events(&h, "agent.paired").is_empty());
+    assert!(egui_pop_agent::pairings(h.state().handle()).is_empty());
+}
+
+#[test]
+fn a_pairing_unanswered_ends_at_its_deadline() {
+    let dir = private_dir("unanswered");
+    let path = dir.join("app.sock");
+    let mut h = app(App::builder(), &path);
+    let p = path.clone();
+    let r = with_client(&mut h, move || {
+        Client::connect(&p).request("hello", json!({ "name": "bot", "deadline_ms": 100 }))
+    });
+    assert_eq!(r["error"]["code"], -32002, "{r}");
+    assert!(events(&h, "agent.paired").is_empty());
+}
+
+#[test]
+fn hello_checks_its_params() {
+    let dir = private_dir("hello-params");
+    let path = dir.join("app.sock");
+    let mut h = app(App::builder(), &path);
+    let p = path.clone();
+    let (none, empty, long) = with_client(&mut h, move || {
+        let mut c = Client::connect(&p);
+        (
+            c.request("hello", json!({})),
+            c.request("hello", json!({ "name": " " })),
+            c.request("hello", json!({ "name": "x".repeat(65) })),
+        )
+    });
+    for r in [&none, &empty, &long] {
+        assert_eq!(r["error"]["code"], -32602, "{r}");
+    }
+}

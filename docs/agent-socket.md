@@ -61,8 +61,9 @@ application chose no mode, the setting on or off.
   lets in only its owner, the user the application runs as, and the
   system; remote clients are rejected, and the first instance is created
   with `FILE_FLAG_FIRST_PIPE_INSTANCE`, so a pipe another process made
-  first under the name is never served. Every client of that user is
-  the same agent for now (`Origin::Agent("agent-socket")`).
+  first under the name is never served. A client that does not say
+  [`hello`](#identity-hello-and-pairing) is the agent
+  `Origin::Agent("agent-socket")`.
 - **Limits.** At most 8 clients at once (`MAX_CONNECTIONS`): one more is
   answered `-32004` and closed. A request line longer than 1 MiB
   (`MAX_REQUEST_BYTES`) is answered `-32004` and its connection closed.
@@ -78,12 +79,15 @@ application chose no mode, the setting on or off.
 
 JSON-RPC 2.0, one request per line and one response per line (UTF-8
 JSON, `\n`-terminated). A request without `id` is a notification: run,
-not answered. Every call is made as `Origin::Agent("agent-socket")`, so
-the bridge's mode, the `agent` flags, the `debug.call` step and the
-journal apply as to any agent.
+not answered. A connection's calls are made as
+`Origin::Agent("agent-socket")`, or, once it said `hello`, as its paired
+agent, `Origin::Agent("<id>")`; either way the bridge's mode, the
+`agent` flags, the `debug.call` step and the journal apply as to any
+agent.
 
 | Method | Params | Result |
 |---|---|---|
+| `hello` | `{ "name", "token"?, "deadline_ms"? }` | `{ "agent", "name", "origin", "paired": true, "token"? }`: see [Identity](#identity-hello-and-pairing) |
 | `describe` | none | `bridge.describe`: `{ "protocol": 1, "capabilities": [..] }` ([Capabilities](agents.md#capabilities)) |
 | `snapshot` | `{ "collector"? }` | every collector's snapshot by name, or one collector's |
 | `call` | `{ "collector", "action", "args"? }` | the bridge's feedback block: `{ "ok", "collector", "action", "mutates", "message", "data" }`, a refusal included (`ok: false`) |
@@ -133,8 +137,10 @@ an earlier `wait`.
 
 Errors: `-32700` (not JSON), `-32600` (not a request), `-32601` (no such
 method), `-32602` (bad params), `-32001` (the bridge refused `describe`,
-`snapshot` or `wait`; `data` is the feedback block, when there is one), `-32002` (the application did
-not answer: it ran no frame, or it closed), `-32003` (`ui` found no
+`snapshot` or `wait`, `data` being the feedback block when there is
+one; or the user declined a pairing, or a token is unknown), `-32002`
+(the application did not answer: it ran no frame, or it closed; or the
+user did not answer a pairing in time), `-32003` (`ui` found no
 node, or more than one, to act on), `-32004` (a transport limit: too
 many clients, a request too long; the connection closes).
 
@@ -144,8 +150,56 @@ $ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"wait","params":{"settled":tru
 {"id":1,"jsonrpc":"2.0","result":{"by":"settled","event":null,"last":42,"met":true}}
 ```
 
-When the bridge is `Off`, `describe`, `snapshot`, `wait` and every
-`call` are refused: nothing but the user reads or drives it.
+When the bridge is `Off`, `hello`, `describe`, `snapshot`, `wait` and
+every `call` are refused: nothing but the user reads or drives it.
+
+## Identity: hello and pairing
+
+An agent names itself once per connection, with `hello`; from then on
+the connection's calls run as `Origin::Agent("<id>")`, so the journal,
+the histories and the bridge's log tell agents apart. A connection that
+never says `hello` keeps working as before, as
+`Origin::Agent("agent-socket")`, with the same rights.
+
+- **The first time**, `hello { "name": "Claude Code" }` asks the user:
+  a confirmation dialog, "Pair the agent “Claude Code”?", says which id
+  it would act as. The request is held until the user answers, as a
+  `wait` is (`deadline_ms`, 120 s by default and at most). Accepted,
+  the answer carries the agent's `id` (`claude-code`: the name in lower
+  case, `[a-z0-9._-]`, 32 characters at most, a number added when the
+  id is taken or reserved: `agent-socket`, `anonymous`, `user`,
+  `debug-bridge`) and its `token`, given this once. Declined, it is
+  error `-32001`; unanswered at the deadline, `-32002` (the dialog stays
+  open, and accepting it then pairs nothing).
+- **The next times**, `hello { "name": "Claude Code", "token": "egp_…" }`
+  is paired at once; an unknown token is error `-32001`, and the agent
+  asks again without one.
+- **Only the user pairs.** The dialog's answer runs the command
+  `pop.agent.confirm` (`egui_pop_agent::CMD_CONFIRM`), hidden and kept
+  from agents; an agent's accept through `dialogs.answer` is vetoed,
+  its cancel goes through.
+- **Kept.** The pairings are written to `agent-pairings.json` in the
+  application's persistence directory (`AppBuilder::persist`), with
+  each token's SHA-256, never the token; without a directory they last
+  as long as the application runs. `egui_pop_agent::pairings(app)`
+  lists them.
+- **One `hello` per connection**: a second one is error `-32602`.
+- **The journal** says `agent.paired` (`agent`, `name`),
+  `agent.declined` (`name`, `reason`), `agent.connected` (a `hello`
+  that paired the connection) and `agent.disconnected` (a paired
+  connection closed), from the agent's origin (`agent:<id>`; `user` for
+  a decline).
+
+A token says which agent calls; it does not isolate agents from one
+another: every process of the user may read what another one keeps.
+Whatever an agent may do still comes from the bridge's mode and the
+`agent` flags, the same for every agent; grants per agent come later.
+
+```console
+$ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"hello","params":{"name":"my script"}}' \
+    | socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/egui-pop-agent-org.example.App.sock
+{"id":1,"jsonrpc":"2.0","result":{"agent":"my-script","name":"my script","origin":"agent:my-script","paired":true,"token":"egp_…"}}
+```
 
 ## MCP
 
@@ -207,5 +261,8 @@ application's own (`settled` stays reachable).
   `inspection` feature ([inspection.md](inspection.md)), a second
   connection.
 - **Windows** is compile-checked only.
-- **One agent.** Every client is `Origin::Agent("agent-socket")`: agents
-  cannot yet be told apart nor granted differently.
+- **Same rights for every agent.** Agents are told apart (`hello`), not
+  yet granted differently, and a client that does not say `hello` is
+  not held to less; a pairing cannot be revoked yet but by removing
+  it from `agent-pairings.json`. The MCP binary does not say `hello`
+  yet.

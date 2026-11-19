@@ -125,6 +125,7 @@ fn messages() -> Messages {
     ));
     found.extend(strings(egui_pop_views::strings::ALL, "egui-pop-views"));
     found.extend(strings(egui_pop_editors::strings::ALL, "egui-pop-editors"));
+    found.extend(strings(egui_pop_agent::strings::ALL, "egui-pop-agent"));
     drop(app);
     let _ = std::fs::remove_dir_all(&scratch);
     extract::messages(&found).expect("one English text per key")

@@ -1,6 +1,8 @@
 # Le texte d’egui-pop et ce que déclarent ses plugins, en français.
 # Traduction de ../en/egui-pop.ftl, sous les mêmes clés.
 
+category-agents = Agents
+
 category-clipboard = Presse-papiers
 
 category-dialogs = Dialogues
@@ -840,6 +842,12 @@ egui-pop-about-title = À propos de { $application }
 egui-pop-about-version = Version { $version }
 
 egui-pop-about-website = Site web
+
+egui-pop-agent-pair-detail = Un programme de cet ordinateur demande à piloter cette application en tant que « { $id } », dans les limites que l’application accorde aux agents. Ne l’appairez que si vous l’avez lancé.
+
+egui-pop-agent-pair-title = Appairer l’agent « { $name } » ?
+
+egui-pop-agent-pair-verb = Appairer
 
 egui-pop-area-activity-bar = la barre d’activité
 
@@ -3360,6 +3368,10 @@ command-view-zoom-in =
 command-view-zoom-out =
     .description = Réduit le canevas en cours, autour de son centre.
     .title = Zoom arrière
+
+command-pop-agent-confirm =
+    .description = La réponse de l’utilisateur à la demande d’appairage d’un agent (`id`).
+    .title = Appairer l’agent
 
 command-settings-export =
     .description = Écrit dans un fichier les réglages que vous avez modifiés ; les secrets sont laissés de côté.

@@ -1,5 +1,6 @@
 # The hash of the English text each key was translated from: a key
 # whose English changed since is reported by the catalogue check.
+category-agents 34a70d1cc945bf27
 category-clipboard d9ee853515a6a499
 category-dialogs 93177f9aec8337b4
 category-edit 329d5a4f3eb93fa9
@@ -298,6 +299,8 @@ command-palettes-toggle.description 1a2c28e8cada63a6
 command-palettes-toggle.title e04e6c2585b9d999
 command-pointer-overrides.description 306190a9bd097c45
 command-pointer-overrides.title 977af8cf4162cf41
+command-pop-agent-confirm.description ab5df09aee4f6e3b
+command-pop-agent-confirm.title 9966a3b11d98331f
 command-settings-export.description 53206e7bf5f0d8af
 command-settings-export.title 73eb1e23b46477c2
 command-settings-import.description 29c11f61457160ed
@@ -634,6 +637,9 @@ egui-pop-admin-wizard-steps 76c10e303d614862
 egui-pop-admin-wizard-summary db57a18098a06bb3
 egui-pop-admin-wizard-summary-about e82e1c4454fe7b45
 egui-pop-admin-wizard-yes 9fbfd6e4caae0cc6
+egui-pop-agent-pair-detail b9b0576383312c4e
+egui-pop-agent-pair-title bc0fc7d15161486e
+egui-pop-agent-pair-verb d6cfa37fba0790c9
 egui-pop-area-activity-bar 0f96ccff2bbfdb02
 egui-pop-area-bottom 524a384390fd3b6d
 egui-pop-area-center be338e13d993b71f

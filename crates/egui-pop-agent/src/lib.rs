@@ -22,6 +22,7 @@
 //!
 //! | Method | Params | Result |
 //! |---|---|---|
+//! | `hello` | `{ "name", "token"?, "deadline_ms"? }` | `{ "agent", "name", "origin", "paired", "token"? }`: the connection's identity from then on |
 //! | `describe` | none | `bridge.describe`: the capabilities, protocol 1, and the open `windows` (`id`, `title`, `main`, `active`) |
 //! | `snapshot` | `{ "collector"?, "window"? }` | every collector's snapshot, or one |
 //! | `call` | `{ "collector", "action", "args"?, "window"? }` | the bridge's feedback block (`ok`, `message`, `data`...) |
@@ -44,9 +45,14 @@
 //! there, and `dialogs.answer` answers the dialog shown there. An unknown
 //! window is refused.
 //!
-//! Every call is made as `Origin::Agent("agent-socket")`, so the bridge's
-//! mode, the `agent` flags and the `debug.call` step apply as to any
-//! agent.
+//! **Identity.** A connection's calls are made as
+//! `Origin::Agent("agent-socket")` until it says `hello`, then as
+//! `Origin::Agent("<id>")`, its paired id ([`pairing`]): a `hello`
+//! without a token asks the user, through a dialog, to pair the agent
+//! (held until the user answers), and hands it a token for the next
+//! times; a `hello` with a known token is paired at once. Either way the
+//! bridge's mode, the `agent` flags and the `debug.call` step apply as to
+//! any agent.
 //!
 //! **Threading.** The socket's threads never touch the application: a
 //! request goes to the UI thread through a channel, drained at each pass
@@ -72,7 +78,9 @@ use serde_json::{Value as Json, json};
 mod limits;
 #[cfg(feature = "mcp")]
 pub mod mcp;
+pub mod pairing;
 mod rpc;
+pub mod strings;
 mod ui;
 #[cfg(unix)]
 mod unix;
@@ -80,12 +88,14 @@ mod unix;
 mod windows;
 
 pub use limits::{MAX_CONNECTIONS, MAX_REQUEST_BYTES};
+pub use pairing::{CMD_CONFIRM, Pairing, pairings};
 pub use rpc::RpcError;
 
 /// The environment variable that turns the socket on
 /// ([`AgentSocket::from_env`]): `1` for the default path, or a path.
 pub const ENV: &str = "EGUI_POP_AGENT_SOCKET";
-/// The agent's name in the calls' origin: `Origin::Agent("agent-socket")`.
+/// The agent's name in the calls' origin before the connection says
+/// `hello`: `Origin::Agent("agent-socket")`.
 pub const AGENT: &str = "agent-socket";
 /// The plugin's id.
 pub const AGENT_PLUGIN: PluginId = PluginId::from_static("egui_pop.agent_socket");
@@ -294,6 +304,12 @@ impl Plugin for AgentPlugin {
         "Agent socket".into()
     }
 
+    /// After the dialogs plugin, whose answers to a pairing request it
+    /// holds to the user.
+    fn priority(&self) -> i32 {
+        -1
+    }
+
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         if self.setting {
             ctx.setting(
@@ -303,6 +319,7 @@ impl Plugin for AgentPlugin {
                 ),
             )?;
         }
+        pairing::register(ctx)?;
         let app = ctx.app();
         let path = match self.socket.resolve(&app.app_id()) {
             Ok(p) => p,
@@ -332,7 +349,7 @@ impl Plugin for AgentPlugin {
             if listen.follow(app) {
                 side.pass(app);
             } else {
-                side.refuse_all();
+                side.refuse_all(app);
             }
         });
         Ok(())
@@ -463,7 +480,18 @@ pub(crate) type Reply = SyncSender<Result<Json, RpcError>>;
 /// A request for the UI thread.
 #[derive(Debug)]
 pub(crate) enum Job {
+    /// A connection names itself (see [`pairing`]).
+    Hello {
+        name: String,
+        token: Option<String>,
+        deadline: Instant,
+        reply: Reply,
+    },
+    /// A paired agent's connection closed.
+    Gone { agent: String },
     Describe {
+        /// Who asks: the connection's agent.
+        origin: Origin,
         reply: Reply,
     },
     Snapshot {
@@ -479,11 +507,13 @@ pub(crate) enum Job {
         /// The application window the call is for (the active one
         /// without).
         window: Option<String>,
+        origin: Origin,
         reply: Reply,
     },
     Wait {
         args: Json,
         deadline: Instant,
+        origin: Origin,
         reply: Reply,
     },
     Ui {
@@ -522,17 +552,19 @@ struct UiSide {
     wake: Waker,
 }
 
-fn origin() -> Origin {
-    Origin::Agent(AGENT.into())
-}
-
 impl UiSide {
     /// The socket is off: what clients still connected ask is refused,
     /// and the waits held end.
-    fn refuse_all(&mut self) {
+    fn refuse_all(&mut self, app: &AppHandle) {
+        pairing::refuse_all(app);
         while let Ok(job) = self.rx.try_recv() {
             let reply = match job {
-                Job::Describe { reply }
+                Job::Gone { agent } => {
+                    pairing::gone(app, &agent);
+                    continue;
+                }
+                Job::Hello { reply, .. }
+                | Job::Describe { reply, .. }
                 | Job::Snapshot { reply, .. }
                 | Job::Call { reply, .. }
                 | Job::Wait { reply, .. }
@@ -570,6 +602,7 @@ impl UiSide {
             }
             true
         });
+        pairing::pass(app);
         self.ui_pass(app, &ctx, now);
         // After the checks: a repaint asked for now is not one the
         // application asked for.
@@ -580,8 +613,15 @@ impl UiSide {
 
     fn start(&mut self, app: &AppHandle, job: Job) {
         match job {
-            Job::Describe { reply } => {
-                let f = app.debug_call_as("bridge", "describe", &json!({}), origin());
+            Job::Hello {
+                name,
+                token,
+                deadline,
+                reply,
+            } => pairing::hello(app, name, token, deadline, reply),
+            Job::Gone { agent } => pairing::gone(app, &agent),
+            Job::Describe { origin, reply } => {
+                let f = app.debug_call_as("bridge", "describe", &json!({}), origin);
                 let _ = reply.send(if f.ok {
                     Ok(f.data)
                 } else {
@@ -619,14 +659,16 @@ impl UiSide {
                 action,
                 args,
                 window,
+                origin,
                 reply,
             } => {
-                let f = app.debug_call_in(window.as_deref(), &collector, &action, &args, origin());
+                let f = app.debug_call_in(window.as_deref(), &collector, &action, &args, origin);
                 let _ = reply.send(Ok(serde_json::to_value(&f).unwrap_or(Json::Null)));
             }
             Job::Wait {
                 args,
                 deadline,
+                origin,
                 reply,
             } => {
                 let until = match WaitFor::from_args(&args) {
@@ -637,7 +679,7 @@ impl UiSide {
                     }
                 };
                 // Through the bridge, so the mode and the step apply.
-                let f = app.debug_call_as("bridge", "wait", &args, origin());
+                let f = app.debug_call_as("bridge", "wait", &args, origin);
                 if !f.ok {
                     let _ = reply.send(Err(RpcError::refused(&f)));
                     return;
