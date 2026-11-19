@@ -59,6 +59,8 @@ tracing = { version = "0.1", optional = true }
 # A shell in the terminal page, on the desktop.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 egui-pop = { workspace = true, features = ["editors-pty"] }
+# The agent socket behind its setting, and the Agents page in Settings.
+egui-pop-agent.workspace = true
 # The endpoint's address, read as eframe reads it, for the start line.
 egui_inspection = { workspace = true, optional = true, features = ["plugin"] }
 

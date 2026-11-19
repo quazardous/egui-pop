@@ -1325,3 +1325,187 @@ fn a_commands_schema_holds_every_origin_the_users_runs_included() {
             .is_none()
     );
 }
+
+// The Agents page (`developer/agents`): the paired agents listed, their
+// access set live, a pairing revoked; all of it the user's only.
+
+#[test]
+fn the_agents_page_lists_a_paired_agent_sets_its_access_live_and_revokes_it() {
+    use egui_pop_agent::{CMD_GRANT, CMD_LIST, CMD_REVOKE};
+    use egui_pop_api::model::commands::Origin;
+    use std::sync::mpsc;
+    let dir = private_dir("agents-page");
+    let path = dir.join("app.sock");
+    let persist = dir.join("persist");
+    let mut h = app(
+        App::builder()
+            .persist(&persist)
+            .debug_bridge(egui_pop_api::core::debug::BridgeMode::On),
+        &path,
+    );
+
+    // An agent pairs, then tries to revoke itself and change its access
+    // through commands: kept from agents. Its connection stays open until
+    // told to go on.
+    let (told, token_rx) = mpsc::channel();
+    let (go, go_rx) = mpsc::channel::<()>();
+    let p = path.clone();
+    let client = std::thread::spawn(move || {
+        let mut c = Client::connect(&p);
+        let hello = c.result(
+            "hello",
+            json!({ "name": "Test bot", "deadline_ms": 20_000 }),
+        );
+        let revoke = c.request(
+            "call",
+            run_call("pop.agent.revoke", json!({ "agent": "test-bot" })),
+        );
+        let grant = c.request(
+            "call",
+            run_call(
+                "pop.agent.grant",
+                json!({ "agent": "test-bot", "preset": "full" }),
+            ),
+        );
+        told.send((hello["token"].as_str().unwrap().to_string(), revoke, grant))
+            .unwrap();
+        go_rx.recv().unwrap();
+        // Revoked meanwhile: the connection is closed, nothing answers.
+        let _ = writeln!(
+            c.write,
+            "{}",
+            json!({ "jsonrpc": "2.0", "id": 99, "method": "describe" })
+        );
+        let mut line = String::new();
+        let n = c.read.read_line(&mut line).unwrap_or(0);
+        (n, line)
+    });
+    answer_pairing(&mut h, true, Origin::User).unwrap();
+    let start = Instant::now();
+    let (token, revoke, grant) = loop {
+        if let Ok(t) = token_rx.try_recv() {
+            break t;
+        }
+        assert!(start.elapsed() < Duration::from_secs(20), "no pairing");
+        h.step();
+        std::thread::sleep(Duration::from_millis(2));
+    };
+    let refused = |r: &Json| r.get("error").is_some() || r["result"]["ok"] == false;
+    assert!(refused(&revoke), "an agent may not revoke: {revoke}");
+    assert!(refused(&grant), "an agent may not change access: {grant}");
+    // Nor through any other origin than the user's.
+    let bot = Origin::Agent("test-bot".into());
+    let run = |h: &mut Harness<'static, App>, id: &CommandId, args: Json, origin: Origin| {
+        h.state_mut().run(id, args, origin).now().unwrap()
+    };
+    assert!(
+        run(
+            &mut h,
+            &CMD_REVOKE,
+            json!({ "agent": "test-bot" }),
+            bot.clone()
+        )
+        .is_err()
+    );
+    assert!(
+        run(
+            &mut h,
+            &CMD_GRANT,
+            json!({ "agent": "test-bot", "preset": "full" }),
+            bot.clone()
+        )
+        .is_err()
+    );
+    assert_eq!(egui_pop_agent::pairings(h.state().handle()).len(), 1);
+
+    // Listed: connected now, the editor preset by default.
+    let list = run(&mut h, &CMD_LIST, Json::Null, Origin::User).unwrap();
+    let row = &list["agents"][0];
+    assert_eq!(row["id"], "test-bot", "{list}");
+    assert_eq!(row["name"], "Test bot", "{list}");
+    assert_eq!(row["connections"], 1, "{list}");
+    assert_eq!(row["preset"], "editor", "{list}");
+    assert_eq!(list["defaults"][0]["preset"], "read-only", "{list}");
+
+    // The page shows it.
+    run(
+        &mut h,
+        &CommandId::from_static("admin.open"),
+        json!({ "path": "developer/agents" }),
+        Origin::User,
+    )
+    .unwrap();
+    let start = Instant::now();
+    while h.query_by_label("Test bot").is_none() {
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "the Agents page does not list the agent"
+        );
+        h.step();
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert!(h.query_by_label("Paired agents").is_some());
+    assert!(h.query_by_label("Revoke").is_some());
+
+    // Its access set to read-only by the user: applies at once.
+    assert!(
+        run(&mut h, &WRITE, Json::Null, bot.clone()).is_ok(),
+        "the editor runs a write"
+    );
+    run(
+        &mut h,
+        &CMD_GRANT,
+        json!({ "agent": "test-bot", "preset": "read-only" }),
+        Origin::User,
+    )
+    .unwrap();
+    assert_eq!(
+        egui_pop_agent::grants::grant_of(h.state().handle(), &bot),
+        Some(Grant::read_only())
+    );
+    let refused_write = run(&mut h, &WRITE, Json::Null, bot.clone()).unwrap_err();
+    assert!(refused_write.contains("read-only"), "{refused_write}");
+    // A default too.
+    run(
+        &mut h,
+        &CMD_GRANT,
+        json!({ "default": "unpaired", "preset": "full" }),
+        Origin::User,
+    )
+    .unwrap();
+    assert_eq!(
+        egui_pop_agent::grants::grants(h.state().handle()).unpaired,
+        Grant::full()
+    );
+
+    // Revoked by the user: its connection closes, its token no longer
+    // pairs, the journal says so.
+    let out = run(
+        &mut h,
+        &CMD_REVOKE,
+        json!({ "agent": "test-bot" }),
+        Origin::User,
+    )
+    .unwrap();
+    assert_eq!(out["closed"], 1, "{out}");
+    go.send(()).unwrap();
+    let (n, line) = finish(&mut h, client);
+    assert!(n == 0, "the revoked connection still answered: {line}");
+    let revoked = events(&h, "agent.revoked");
+    assert_eq!(revoked.len(), 1);
+    assert_eq!(revoked[0].data["agent"], "test-bot");
+    assert_eq!(revoked[0].source, "user");
+    assert!(egui_pop_agent::pairings(h.state().handle()).is_empty());
+    assert!(
+        !egui_pop_agent::grants::grants(h.state().handle())
+            .agents
+            .contains_key("test-bot")
+    );
+    let kept = std::fs::read_to_string(persist.join("agent-pairings.json")).unwrap();
+    assert!(!kept.contains("test-bot"), "{kept}");
+    let p = path.clone();
+    let again = with_client(&mut h, move || {
+        Client::connect(&p).request("hello", json!({ "name": "Test bot", "token": token }))
+    });
+    assert_eq!(again["error"]["code"], -32001, "{again}");
+}

@@ -617,6 +617,18 @@ command-pop-agent-confirm =
     .description = The user's answer to an agent's request: to be paired (`id`), or to run a destructive call (`run`).
     .title = Answer an agent's request
 
+command-pop-agent-grant =
+    .description = Sets a paired agent's access (`agent`), or a default's (`default`: unpaired or paired), to a preset (`preset`: read-only, editor or full). The user's only.
+    .title = Set an agent's access
+
+command-pop-agent-list =
+    .description = The paired agents (connected now, last seen) and the defaults, with what each may do.
+    .title = List paired agents
+
+command-pop-agent-revoke =
+    .description = Revokes a pairing (`agent`): its token no longer pairs and its open connections close. The user's only.
+    .title = Revoke an agent's pairing
+
 command-settings-export =
     .description = Writes the settings you changed to a file; secrets are left out.
     .title = Export settings
@@ -1290,6 +1302,72 @@ egui-pop-admin-wizard-summary = Summary
 egui-pop-admin-wizard-summary-about = Check your choices: Change goes back to a step.
 
 egui-pop-admin-wizard-yes = Yes
+
+egui-pop-agent-agents-about = Programs on this computer paired to drive this app, and what each may do. Changes apply at once.
+
+egui-pop-agent-agents-access-help = What it may do; applies at once.
+
+egui-pop-agent-agents-col-access = Access
+
+egui-pop-agent-agents-col-connected = Connected
+
+egui-pop-agent-agents-col-details = What it may do
+
+egui-pop-agent-agents-col-id = Id
+
+egui-pop-agent-agents-col-name = Name
+
+egui-pop-agent-agents-col-paired = Paired since
+
+egui-pop-agent-agents-col-seen = Last seen
+
+egui-pop-agent-agents-col-who = Who
+
+egui-pop-agent-agents-connected-yes = Yes ({ $count })
+
+egui-pop-agent-agents-default-paired = Paired agents without their own access
+
+egui-pop-agent-agents-default-unpaired = Clients that are not paired
+
+egui-pop-agent-agents-defaults = Defaults
+
+egui-pop-agent-agents-detail-custom = Commands: { $commands }. Values: { $values }. Interface input: { $ui }.
+
+egui-pop-agent-agents-detail-custom-read = Read only. Commands: { $commands }.
+
+egui-pop-agent-agents-detail-editor = Runs the commands offered to agents, destructive ones once you confirm; writes no value directly; no interface input.
+
+egui-pop-agent-agents-detail-full = Everything the app lets agents do, interface input included.
+
+egui-pop-agent-agents-detail-read-only = Reads everything, changes nothing.
+
+egui-pop-agent-agents-empty = No agent is paired. An agent asks to be paired when it connects, and you approve it then.
+
+egui-pop-agent-agents-never = Never
+
+egui-pop-agent-agents-no = No
+
+egui-pop-agent-agents-none = none
+
+egui-pop-agent-agents-paired = Paired agents
+
+egui-pop-agent-agents-preset-custom = Set by the app
+
+egui-pop-agent-agents-preset-editor = Editor
+
+egui-pop-agent-agents-preset-full = Full
+
+egui-pop-agent-agents-preset-read-only = Read only
+
+egui-pop-agent-agents-revoke = Revoke
+
+egui-pop-agent-agents-revoke-text = Its token stops working and its open connections close now. To drive this app again, it must be paired again, with your approval.
+
+egui-pop-agent-agents-revoke-title = Revoke this agent's pairing?
+
+egui-pop-agent-agents-section = Agents
+
+egui-pop-agent-agents-yes = Yes
 
 egui-pop-agent-confirm-detail = An agent asks for something that cannot easily be undone. Arguments: { $args }. Allow it only if you asked for it.
 

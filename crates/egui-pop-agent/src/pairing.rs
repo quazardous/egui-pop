@@ -57,6 +57,19 @@ pub const EVENT_DECLINED: &str = "agent.declined";
 pub const EVENT_CONNECTED: &str = "agent.connected";
 /// On the journal: a paired agent's connection closed (`agent`).
 pub const EVENT_DISCONNECTED: &str = "agent.disconnected";
+/// On the journal: the user revoked a pairing (`agent`, `name`, and
+/// `closed`, how many of its connections closed).
+pub const EVENT_REVOKED: &str = "agent.revoked";
+/// The paired agents and the defaults, with their grants, for the
+/// Agents page: `{ "agents": [...], "defaults": [...] }` (read-only).
+pub const CMD_LIST: CommandId = CommandId::from_static("pop.agent.list");
+/// Sets a grant to a preset (`read-only`, `editor`, `full`): a paired
+/// agent's (`{ "agent": id, "preset" }`) or a default's (`{ "default":
+/// "unpaired" | "paired", "preset" }`); the user's only.
+pub const CMD_GRANT: CommandId = CommandId::from_static("pop.agent.grant");
+/// Revokes a pairing (`{ "agent": id }`): its token stops pairing and
+/// its connections close; the user's only.
+pub const CMD_REVOKE: CommandId = CommandId::from_static("pop.agent.revoke");
 /// The longest agent name, in characters.
 pub const MAX_NAME_CHARS: usize = 64;
 /// How long a `hello` waits for the user's answer when it gives no
@@ -77,6 +90,9 @@ pub struct Pairing {
     pub name: String,
     /// When the user paired it, in seconds since the Unix epoch.
     pub paired_at: u64,
+    /// When it last asked something, in seconds since the Unix epoch;
+    /// 0 when never since it was paired.
+    pub last_seen: u64,
 }
 
 /// A pairing as kept: its token's SHA-256, never the token.
@@ -161,6 +177,7 @@ fn parse(text: &str) -> Result<Vec<Kept>, String> {
                     id: s("id")?,
                     name: s("name")?,
                     paired_at: p["paired_at"].as_u64().unwrap_or(0),
+                    last_seen: p["last_seen"].as_u64().unwrap_or(0),
                 },
                 token_sha256: s("token_sha256")?,
             })
@@ -177,6 +194,7 @@ fn render(kept: &[Kept]) -> String {
                 "id": k.pairing.id,
                 "name": k.pairing.name,
                 "paired_at": k.pairing.paired_at,
+                "last_seen": k.pairing.last_seen,
                 "token_sha256": k.token_sha256,
             })
         })
@@ -293,6 +311,7 @@ pub(crate) fn hello(
             .map(|k| k.pairing.clone());
         let _ = reply.send(match found {
             Some(p) => {
+                seen(app, &Origin::Agent(p.id.clone()));
                 app.publish(
                     &source(&p.id),
                     None,
@@ -363,10 +382,12 @@ fn confirm(app: &AppHandle, args: &Json, origin: &Origin) -> Result<Json, String
             return Err(e);
         }
     };
+    let now = now_secs();
     let pairing = Pairing {
         id: id_for(&asking.name, &st.kept.borrow()),
         name: asking.name,
-        paired_at: now_secs(),
+        paired_at: now,
+        last_seen: now,
     };
     st.kept.borrow_mut().push(Kept {
         pairing: pairing.clone(),
@@ -457,14 +478,68 @@ pub(crate) fn refuse_all(app: &AppHandle) {
     }
 }
 
-/// A paired agent's connection closed.
+/// A paired agent's connection closed: when it was last seen is kept.
 pub(crate) fn gone(app: &AppHandle, agent: &str) {
+    if seen(app, &Origin::Agent(agent.into())) {
+        save(app);
+    }
     app.publish(
         &source(agent),
         None,
         EVENT_DISCONNECTED,
         json!({ "agent": agent }),
     );
+}
+
+/// A paired agent asked something now; whether it is one.
+pub(crate) fn seen(app: &AppHandle, origin: &Origin) -> bool {
+    let Origin::Agent(id) = origin else {
+        return false;
+    };
+    let st = state(app);
+    let mut kept = st.kept.borrow_mut();
+    match kept.iter_mut().find(|k| &k.pairing.id == id) {
+        Some(k) => {
+            k.pairing.last_seen = now_secs();
+            true
+        }
+        None => false,
+    }
+}
+
+/// How many connections the paired agent `id` has open now.
+pub fn connected(app: &AppHandle, id: &str) -> usize {
+    crate::live::of(app).count(id)
+}
+
+/// Revokes the pairing of `id`, as the user: its stored token hash is
+/// removed (the token no longer pairs), its own grant dropped, its open
+/// connections closed, and the journal says so ([`EVENT_REVOKED`]).
+/// How many connections closed.
+pub fn revoke(app: &AppHandle, id: &str) -> Result<usize, String> {
+    load(app);
+    let st = state(app);
+    let gone = {
+        let mut kept = st.kept.borrow_mut();
+        let i = kept
+            .iter()
+            .position(|k| k.pairing.id == id)
+            .ok_or_else(|| format!("no agent is paired as `{id}`"))?;
+        kept.remove(i).pairing
+    };
+    save(app);
+    let mut g = crate::grants::grants(app);
+    if g.agents.remove(id).is_some() {
+        crate::grants::set_grants(app, g);
+    }
+    let closed = crate::live::of(app).revoke(id);
+    app.publish(
+        "user",
+        None,
+        EVENT_REVOKED,
+        json!({ "agent": gone.id, "name": gone.name, "closed": closed }),
+    );
+    Ok(closed)
 }
 
 /// The answer command, and the dialog's answers held to the user (the
@@ -529,6 +604,7 @@ mod tests {
                 id: id.into(),
                 name: id.into(),
                 paired_at: 0,
+                last_seen: 0,
             },
             token_sha256: String::new(),
         }

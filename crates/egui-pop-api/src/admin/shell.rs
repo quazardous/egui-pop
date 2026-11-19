@@ -22,9 +22,9 @@ use egui_pop_core::widgets;
 use egui_pop_model::admin::hooks::Values;
 use egui_pop_model::admin::layers::ValueScope;
 use egui_pop_model::admin::{
-    Action, ActionStyle, CellKind, Column, Field, FieldKind, Item, RecordSource, Records, RowField,
-    Scope, Section, StatusSource, Tone, Tree, cell_text, form_context, holds, meter_share,
-    row_context, template, tone_named,
+    Action, ActionStyle, CellKind, Column, Confirmation, Field, FieldKind, Item, RecordSource,
+    Records, RowField, Scope, Section, StatusSource, Tone, Tree, cell_text, form_context, holds,
+    meter_share, row_context, template, tone_named,
 };
 use egui_pop_model::fuzzy;
 use egui_pop_model::ids::{CommandId, SettingId};
@@ -617,14 +617,20 @@ fn section_title(
         });
     match first {
         Some(e) if e.section == s.meta.title => app.section_title(ctx, &e.owner, &e.section),
-        _ => builtin_text(ctx, &s.meta.title),
+        _ => builtin_text(ctx, app, &s.meta.title),
     }
 }
 
-/// A text of the pages egui-pop declares itself (the shortcuts, gestures,
-/// fonts and Advanced pages), in the interface's language; any other as
-/// declared.
-fn builtin_text(ctx: &egui::Context, text: &str) -> String {
+/// A declared text in the interface's language: egui-pop's own pages'
+/// (the shortcuts, gestures, fonts and Advanced pages), and those a
+/// component registered ([`Admin::texts`]); any other as declared.
+pub(super) fn builtin_text(ctx: &egui::Context, app: &AppHandle, text: &str) -> String {
+    if text.is_empty() {
+        return String::new();
+    }
+    if let Some(k) = app.service(&ADMIN).and_then(|a| a.text_key(text)) {
+        return strings::tr(ctx, &k);
+    }
     [
         &txt::SETTINGS_SHORTCUTS,
         &txt::SETTINGS_FONTS,
@@ -754,7 +760,7 @@ fn section_found(
     let text = format!(
         "{} {} {}",
         section_title(ctx, app, entries, s),
-        builtin_text(ctx, &s.meta.description),
+        builtin_text(ctx, app, &s.meta.description),
         s.meta.keywords.join(" ")
     )
     .to_lowercase();
@@ -892,7 +898,7 @@ fn section_page(
         });
     });
     if !s.meta.description.is_empty() {
-        ui.weak(builtin_text(&ctx, &s.meta.description));
+        ui.weak(builtin_text(&ctx, app, &s.meta.description));
     }
     ui.add_space(t.space.s);
     let values = values_of(app, entries, s);
@@ -902,7 +908,7 @@ fn section_page(
             continue;
         }
         if !g.meta.title.is_empty() {
-            ui.strong(&g.meta.title);
+            ui.strong(builtin_text(&ctx, app, &g.meta.title));
         }
         inset(ui, |ui| {
             for item in &g.items {
@@ -991,7 +997,7 @@ pub(super) fn item_row(
                     .map(|r| r.map(|answer| status_of(&answer, pointer))),
             };
             ui.horizontal_wrapped(|ui| {
-                ui.label(&st.meta.title);
+                ui.label(builtin_text(&ctx, app, &st.meta.title));
                 ui.with_layout(
                     egui::Layout::right_to_left(Align::Center),
                     |ui| match shown {
@@ -1010,7 +1016,7 @@ pub(super) fn item_row(
         }
         Item::Callout(c) => {
             ui.horizontal_wrapped(|ui| {
-                ui.add(Indicator::text(&c.text).tone(kit_tone(c.tone)));
+                ui.add(Indicator::text(builtin_text(&ctx, app, &c.text)).tone(kit_tone(c.tone)));
                 if let Some(a) = &c.action {
                     action_button(ui, app, admin, a, values);
                 }
@@ -1072,7 +1078,7 @@ fn action_title(app: &AppHandle, a: &Action) -> String {
 /// from the values, after its confirmation when it asks one; answers
 /// read are read again after it.
 fn action_button(ui: &mut Ui, app: &AppHandle, admin: &Admin, a: &Action, values: &Values) {
-    let title = builtin_text(ui.ctx(), &action_title(app, a));
+    let title = builtin_text(ui.ctx(), app, &action_title(app, a));
     let r = match a.style {
         ActionStyle::Link => ui.link(title),
         ActionStyle::Primary => ui.add(egui::Button::new(title).selected(true)),
@@ -1088,7 +1094,16 @@ fn action_button(ui: &mut Ui, app: &AppHandle, admin: &Admin, a: &Action, values
         let asked = a
             .confirmation
             .as_ref()
-            .map(|c| c.filled(values))
+            .map(|c| {
+                let tr = |t: &str| builtin_text(ui.ctx(), app, t);
+                Confirmation {
+                    title: tr(&c.title),
+                    text: tr(&c.text),
+                    verb: tr(&c.verb),
+                    danger: c.danger,
+                }
+                .filled(values)
+            })
             .map(|c| (c.title, c.text, c.verb, c.danger))
             .or_else(|| {
                 a.confirm
@@ -1136,27 +1151,31 @@ fn row_field(
 ) {
     let value = &row[f.key.as_str()];
     let row_id = cell_text(&row[r.key.as_str()]);
+    let title = builtin_text(ui.ctx(), app, &f.meta.title);
     let mut wrote = None;
     let resp = match f.kind {
         FieldKind::Toggle => {
             let mut on = value.as_bool().unwrap_or(false);
-            let text = if labelled { f.meta.title.as_str() } else { "" };
+            let text = if labelled { title.as_str() } else { "" };
             let resp = ui.checkbox(&mut on, text);
             if resp.changed() {
                 wrote = Some(Json::Bool(on));
             }
-            a11y::name(&resp, Role::CheckBox, &f.meta.title);
+            a11y::name(&resp, Role::CheckBox, &title);
             resp
         }
         FieldKind::Choice => {
-            let choices = f.choices_of(row);
+            let mut choices = f.choices_of(row);
+            for c in &mut choices {
+                c.label = builtin_text(ui.ctx(), app, &c.label);
+            }
             let now = cell_text(value);
             let shown = choices
                 .iter()
                 .find(|c| cell_text(&c.value) == now)
                 .map_or(now.clone(), |c| c.label.clone());
             if labelled {
-                ui.label(&f.meta.title);
+                ui.label(&title);
             }
             let mut picked = None;
             let resp = ui
@@ -1183,7 +1202,7 @@ fn row_field(
                     },
                 )
                 .response;
-            a11y::name(&resp, Role::ComboBox, &f.meta.title);
+            a11y::name(&resp, Role::ComboBox, &title);
             if let Some(p) = picked.filter(|p| cell_text(p) != now) {
                 wrote = Some(p);
             }
@@ -1197,14 +1216,14 @@ fn row_field(
                 .data(|d| d.get_temp::<String>(id))
                 .unwrap_or_else(|| now.clone());
             if labelled {
-                ui.label(&f.meta.title);
+                ui.label(&title);
             }
             let resp = ui.add(
                 egui::TextEdit::singleline(&mut text)
                     .id(id.with("edit"))
                     .desired_width(180.0),
             );
-            a11y::name(&resp, Role::TextInput, &f.meta.title);
+            a11y::name(&resp, Role::TextInput, &title);
             if resp.has_focus() {
                 ui.data_mut(|d| d.insert_temp(id, text.clone()));
             } else {
@@ -1217,7 +1236,7 @@ fn row_field(
         }
     };
     if !f.meta.description.is_empty() {
-        resp.on_hover_text(&f.meta.description);
+        resp.on_hover_text(builtin_text(ui.ctx(), app, &f.meta.description));
     }
     if let Some(v) = wrote
         && let Ok(id) = CommandId::new(&f.command)
@@ -1347,7 +1366,7 @@ fn records_read(
     let ctx = ui.ctx().clone();
     let t = Tokens::of(&ctx);
     if !r.meta.title.is_empty() {
-        ui.label(egui::RichText::new(&r.meta.title).strong());
+        ui.label(egui::RichText::new(builtin_text(&ctx, app, &r.meta.title)).strong());
     }
     let rows = match &r.source {
         RecordSource::Hook { hook } => admin
@@ -1377,7 +1396,7 @@ fn records_read(
         ui.horizontal_wrapped(|ui| {
             let text = r.empty.as_ref().map_or_else(
                 || strings::tr(&ctx, &txt::ADMIN_NO_RECORDS),
-                |e| e.text.clone(),
+                |e| builtin_text(&ctx, app, &e.text),
             );
             ui.weak(text);
             if let Some(a) = r.empty.as_ref().and_then(|e| e.action.as_ref()) {
@@ -1429,10 +1448,15 @@ fn records_read(
                     .spacing([t.space.l, t.space.s])
                     .show(ui, |ui| {
                         for c in &r.columns {
-                            ui.label(egui::RichText::new(&c.title).strong());
+                            ui.label(
+                                egui::RichText::new(builtin_text(&ctx, app, &c.title)).strong(),
+                            );
                         }
                         for f in &extra {
-                            ui.label(egui::RichText::new(&f.meta.title).strong());
+                            ui.label(
+                                egui::RichText::new(builtin_text(&ctx, app, &f.meta.title))
+                                    .strong(),
+                            );
                         }
                         if !r.row_actions.is_empty() {
                             ui.label("");
