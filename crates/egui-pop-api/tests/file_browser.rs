@@ -1839,3 +1839,162 @@ fn a_group_without_an_image_of_its_own_shows_its_members() {
     // A group whose main has an image asks nothing of its members.
     assert!(!asked.contains(&PathBuf::from("/g/c.xmp")));
 }
+
+fn shown(b: &FileBrowser) -> Vec<String> {
+    b.entries().iter().map(|e| e.name.clone()).collect()
+}
+
+fn mixed_fs() -> Arc<dyn FileSource> {
+    let fs = MemoryFs::new()
+        .dir("/m")
+        .dir("/m/sub")
+        .dir("/m/zips")
+        .file("/m/a.png", vec![1])
+        .file("/m/b.JPG", vec![1])
+        .file("/m/c.txt", vec![1])
+        .file("/m/beach.png", vec![1]);
+    Arc::new(FsSource::new(Arc::new(fs)))
+}
+
+#[test]
+fn set_filter_shows_files_by_extension_and_entries_by_kind() {
+    use egui_pop_api::files::browser::{EntryFilter, EntryKind};
+    let mut h = harness(FileBrowser::new("filter", mixed_fs(), "/m"));
+    let all = shown(h.state());
+    assert_eq!(all.len(), 6);
+    h.get_by_label("c.txt").click();
+    h.run();
+    assert!(h.state().selection().contains(Path::new("/m/c.txt")));
+    // Extensions in any case; folders pass, the person goes through them.
+    h.state_mut()
+        .set_filter(EntryFilter::extensions(&["png", "jpg"]));
+    h.run();
+    assert_eq!(
+        shown(h.state()),
+        ["sub", "zips", "a.png", "b.JPG", "beach.png"]
+    );
+    assert!(h.query_by_label("c.txt").is_none(), "left out of the view");
+    assert!(h.state().selection().is_empty(), "and of the selection");
+    assert_eq!(h.state().focus(), None, "and of the focus");
+    h.state_mut()
+        .set_filter(EntryFilter::kind(EntryKind::Folder));
+    assert_eq!(shown(h.state()), ["sub", "zips"]);
+    h.state_mut()
+        .set_filter(EntryFilter::extensions(&["png"]).with_kind(EntryKind::File));
+    assert_eq!(shown(h.state()), ["a.png", "beach.png"]);
+    assert_eq!(
+        h.state().filter(),
+        &EntryFilter::extensions(&["PNG"]).with_kind(EntryKind::File)
+    );
+    h.state_mut().set_filter(EntryFilter::all());
+    assert_eq!(shown(h.state()), all, "all back, in the browser's order");
+}
+
+#[test]
+fn set_filter_keeps_a_group_whose_main_file_passes() {
+    use egui_pop_api::files::browser::EntryFilter;
+    let mut h = harness(
+        FileBrowser::new("filter-groups", shoot_fs(), "/g").with_grouping(photo_groupings()),
+    );
+    h.state_mut().set_filter(EntryFilter::extensions(&["cr3"]));
+    h.run();
+    assert_eq!(shown(h.state()), ["a.cr3"]);
+    assert!(h.state().group_of(Path::new("/g/a.cr3")).is_some());
+    // Ungrouped, the members are filtered as files of their own.
+    h.state_mut().set_grouped(false);
+    assert_eq!(shown(h.state()), ["a.cr3"]);
+    h.state_mut().set_filter(EntryFilter::all());
+    h.state_mut().set_grouped(true);
+    assert_eq!(shown(h.state()), ["a.cr3", "b.jpg", "c.nef"]);
+}
+
+#[test]
+fn set_query_ranks_the_best_matches_first_and_focuses_the_best() {
+    let mut h = harness(FileBrowser::new("query", mixed_fs(), "/m"));
+    let all = shown(h.state());
+    h.state_mut().set_query("png");
+    h.run();
+    let list = shown(h.state());
+    assert!(list.contains(&"a.png".to_string()) && list.contains(&"beach.png".to_string()));
+    assert!(
+        !list.contains(&"c.txt".to_string()),
+        "what does not match leaves"
+    );
+    h.state_mut().set_query("bea");
+    h.run();
+    assert_eq!(shown(h.state())[0], "beach.png", "the best first");
+    assert_eq!(h.state().focus(), Some(Path::new("/m/beach.png")));
+    assert_eq!(h.state().query(), "bea");
+    h.state_mut().set_query("");
+    assert_eq!(shown(h.state()), all, "all back, in the browser's order");
+}
+
+#[test]
+fn set_query_finds_a_group_by_its_members_names() {
+    let mut h = harness(
+        FileBrowser::new("query-groups", shoot_fs(), "/g").with_grouping(photo_groupings()),
+    );
+    h.state_mut().set_query("a.jpg");
+    h.run();
+    assert_eq!(shown(h.state())[0], "a.cr3", "the group of a.jpg");
+}
+
+#[test]
+fn a_files_only_policy_never_selects_a_folder() {
+    use egui_pop_api::files::browser::{SelectMode, SelectionPolicy};
+    let mut h = harness(
+        FileBrowser::new("files-only", mixed_fs(), "/m")
+            .with_selection_policy(SelectionPolicy::files(SelectMode::Many)),
+    );
+    assert_eq!(
+        h.state().selection_policy(),
+        SelectionPolicy::files(SelectMode::Many)
+    );
+    h.get_by_label("sub").click();
+    h.run();
+    assert_eq!(h.state().focus(), Some(Path::new("/m/sub")), "focused");
+    assert!(h.state().selection().is_empty(), "not selected");
+    h.get_by_label("a.png").click();
+    h.run();
+    h.get_by_label("zips").click_modifiers(Modifiers::COMMAND);
+    h.run();
+    assert_eq!(h.state().selection().len(), 1, "Ctrl adds no folder");
+    h.state_mut().select_all();
+    assert_eq!(h.state().selection().len(), 4, "every file, no folder");
+    // A range over folders and files keeps the files.
+    h.get_by_label("sub").click();
+    h.run();
+    h.get_by_label("b.JPG").click_modifiers(Modifiers::SHIFT);
+    h.run();
+    let sel = h.state().selection().clone();
+    assert!(sel.contains(Path::new("/m/a.png")) && sel.contains(Path::new("/m/b.JPG")));
+    assert!(!sel.contains(Path::new("/m/sub")) && !sel.contains(Path::new("/m/zips")));
+    h.state_mut()
+        .set_selection([PathBuf::from("/m/sub"), PathBuf::from("/m/c.txt")]);
+    assert_eq!(h.state().selection().len(), 1);
+    assert!(h.state().selection().contains(Path::new("/m/c.txt")));
+}
+
+#[test]
+fn a_single_folder_policy_selects_one_folder_and_no_file() {
+    use egui_pop_api::files::browser::{SelectMode, SelectionPolicy};
+    let mut h = harness(FileBrowser::new("folder-one", mixed_fs(), "/m"));
+    h.state_mut().select_all();
+    assert_eq!(h.state().selection().len(), 6);
+    // The new policy drops what it refuses.
+    h.state_mut()
+        .set_selection_policy(SelectionPolicy::folders(SelectMode::One));
+    assert_eq!(h.state().selection().len(), 1);
+    assert!(h.state().selection().contains(Path::new("/m/sub")));
+    h.get_by_label("a.png").click();
+    h.run();
+    assert!(h.state().selection().is_empty());
+    h.get_by_label("zips").click();
+    h.run();
+    assert!(h.state().selection().contains(Path::new("/m/zips")));
+    h.get_by_label("sub").click_modifiers(Modifiers::COMMAND);
+    h.run();
+    assert_eq!(h.state().selection().len(), 1, "one at most");
+    h.state_mut().select_all();
+    assert_eq!(h.state().selection().len(), 1, "select all is for several");
+}

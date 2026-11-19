@@ -3640,6 +3640,159 @@ pub enum SelectMode {
     Many,
 }
 
+/// Which kind of entry can be selected ([`SelectionPolicy`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Selectable {
+    /// Files alone: a folder is focused and opened, never selected.
+    Files,
+    /// Folders alone: a file is shown, never selected.
+    Folders,
+    /// Files and folders.
+    #[default]
+    Any,
+}
+
+impl Selectable {
+    /// Whether an entry of this kind can be selected.
+    pub fn accepts(self, kind: EntryKind) -> bool {
+        match self {
+            Selectable::Files => kind == EntryKind::File,
+            Selectable::Folders => kind == EntryKind::Folder,
+            Selectable::Any => true,
+        }
+    }
+}
+
+/// What a browser lets the person select ([`FileBrowser::set_selection_policy`]):
+/// which kind of entry, and one or several. A click, the keys, a rubber band,
+/// select all and [`FileBrowser::set_selection`] all keep to it; an entry it
+/// refuses is still focused and opened.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct SelectionPolicy {
+    pub selectable: Selectable,
+    pub mode: SelectMode,
+}
+
+impl Default for SelectionPolicy {
+    /// Any entry, several at once: the browser's default.
+    fn default() -> Self {
+        Self::any(SelectMode::Many)
+    }
+}
+
+impl SelectionPolicy {
+    pub fn new(selectable: Selectable, mode: SelectMode) -> Self {
+        Self { selectable, mode }
+    }
+
+    /// Files alone (a file picker).
+    pub fn files(mode: SelectMode) -> Self {
+        Self::new(Selectable::Files, mode)
+    }
+
+    /// Folders alone (a folder picker).
+    pub fn folders(mode: SelectMode) -> Self {
+        Self::new(Selectable::Folders, mode)
+    }
+
+    /// Files and folders.
+    pub fn any(mode: SelectMode) -> Self {
+        Self::new(Selectable::Any, mode)
+    }
+}
+
+/// Which entries a browser shows ([`FileBrowser::set_filter`]): files by
+/// extension, and one kind of entry or both. Folders pass an extension
+/// filter (the person goes through them), unless the kind leaves them out.
+/// A group is shown when its main file passes, its members with it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct EntryFilter {
+    /// The files' extensions, without the dot, in any case; empty: every
+    /// file.
+    pub extensions: Vec<String>,
+    /// Only entries of this kind; none: both.
+    pub kind: Option<EntryKind>,
+}
+
+impl EntryFilter {
+    /// Every entry.
+    pub fn all() -> Self {
+        Self::default()
+    }
+
+    /// Files with one of these extensions (without the dot), and folders.
+    pub fn extensions(extensions: &[&str]) -> Self {
+        Self {
+            extensions: extensions.iter().map(|e| e.to_lowercase()).collect(),
+            kind: None,
+        }
+    }
+
+    /// Entries of this kind alone.
+    pub fn kind(kind: EntryKind) -> Self {
+        Self::all().with_kind(kind)
+    }
+
+    /// The same filter, for entries of this kind alone.
+    pub fn with_kind(mut self, kind: EntryKind) -> Self {
+        self.kind = Some(kind);
+        self
+    }
+
+    /// Whether it lets every entry through.
+    pub fn is_all(&self) -> bool {
+        self.extensions.is_empty() && self.kind.is_none()
+    }
+
+    /// Whether an entry passes.
+    pub fn accepts(&self, entry: &SourceEntry) -> bool {
+        if self.kind.is_some_and(|k| k != entry.kind) {
+            return false;
+        }
+        entry.is_dir() || has_extension(&self.extensions, &entry.path)
+    }
+}
+
+impl From<&super::FileFilter> for EntryFilter {
+    fn from(f: &super::FileFilter) -> Self {
+        Self {
+            extensions: f.extensions.clone(),
+            kind: None,
+        }
+    }
+}
+
+/// Whether a file's name has one of `extensions` (any case; any extension,
+/// or none, when `extensions` is empty).
+pub(crate) fn has_extension(extensions: &[String], path: &Path) -> bool {
+    extensions.is_empty()
+        || path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| extensions.iter().any(|x| x.eq_ignore_ascii_case(e)))
+}
+
+/// The items a fuzzy query matches, best first, equals in their order: each
+/// answers to its names (an entry's own, and a group's members' too).
+pub(crate) fn rank_by_names<T>(
+    items: &[T],
+    query: &str,
+    names: impl Fn(&T) -> Vec<String>,
+) -> Vec<usize> {
+    let mut all = Vec::with_capacity(items.len());
+    for (n, it) in items.iter().enumerate() {
+        all.extend(names(it).into_iter().map(|name| (n, name)));
+    }
+    let mut seen = HashSet::new();
+    egui_pop_model::fuzzy::rank(&all, query, |(_, name)| name.clone())
+        .into_iter()
+        .map(|(i, _)| all[i].0)
+        .filter(|n| seen.insert(*n))
+        .collect()
+}
+
 /// What the browser did this frame.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BrowserOutput {
@@ -3724,6 +3877,15 @@ pub struct FileBrowser {
     groups: Arc<HashMap<PathBuf, FileGroup>>,
     /// The groups' members, out of the entries while their group shows.
     absorbed: HashMap<PathBuf, SourceEntry>,
+    /// Which entries are shown ([`FileBrowser::set_filter`]).
+    filter: EntryFilter,
+    /// The fuzzy query the shown entries match, best first
+    /// ([`FileBrowser::set_query`]).
+    query: String,
+    /// Which kind of entry can be selected.
+    selectable: Selectable,
+    /// The entries listed that the filter or the query leaves out.
+    filtered_out: Vec<SourceEntry>,
 }
 
 /// The browser's default order: folders first, then names as people read
@@ -4202,6 +4364,10 @@ impl FileBrowser {
             grouper: None,
             groups: Arc::default(),
             absorbed: HashMap::new(),
+            filter: EntryFilter::all(),
+            query: String::new(),
+            selectable: Selectable::Any,
+            filtered_out: Vec::new(),
         };
         b.reload();
         b
@@ -4223,6 +4389,142 @@ impl FileBrowser {
     pub fn with_select(mut self, select: SelectMode) -> Self {
         self.select = select;
         self
+    }
+
+    /// Lets the person select what `policy` says, from the start.
+    pub fn with_selection_policy(mut self, policy: SelectionPolicy) -> Self {
+        self.set_selection_policy(policy);
+        self
+    }
+
+    /// What can be selected: which kind of entry, one or several. What the
+    /// selection holds against it leaves it (the first entry kept, for one).
+    pub fn set_selection_policy(&mut self, policy: SelectionPolicy) {
+        self.select = policy.mode;
+        self.selectable = policy.selectable;
+        let kept: Vec<PathBuf> = self.selection.paths.iter().cloned().collect();
+        self.set_selection(kept);
+    }
+
+    /// What can be selected.
+    pub fn selection_policy(&self) -> SelectionPolicy {
+        SelectionPolicy::new(self.selectable, self.select)
+    }
+
+    /// Shows only the entries `filter` passes, from the start.
+    pub fn with_filter(mut self, filter: EntryFilter) -> Self {
+        self.set_filter(filter);
+        self
+    }
+
+    /// Shows only the entries `filter` passes (by extension, by kind): the
+    /// others leave [`FileBrowser::entries`], the selection and the focus,
+    /// and come back when the filter lets them.
+    pub fn set_filter(&mut self, filter: EntryFilter) {
+        if filter != self.filter {
+            self.filter = filter;
+            self.resort();
+        }
+    }
+
+    pub fn filter(&self) -> &EntryFilter {
+        &self.filter
+    }
+
+    /// Shows only the entries a fuzzy query matches (a group by its members'
+    /// names too), best first, equals in the browser's order; the focus goes
+    /// to the best. An empty query shows them all again, in that order.
+    pub fn set_query(&mut self, query: &str) {
+        if query == self.query {
+            return;
+        }
+        self.query = query.to_owned();
+        self.arrange();
+        if !self.query.trim().is_empty()
+            && let Some(first) = self.entries.first().map(|e| e.path.clone())
+        {
+            self.focus = Some(first.clone());
+            if self.select == SelectMode::One {
+                self.select_only(&first);
+            }
+            self.reveal = true;
+        }
+    }
+
+    /// The fuzzy query the entries shown match.
+    pub fn query(&self) -> &str {
+        &self.query
+    }
+
+    /// Whether this entry can be selected; one not listed (yet) can.
+    fn can_select(&self, path: &Path) -> bool {
+        self.entries
+            .iter()
+            .find(|e| e.path == path)
+            .is_none_or(|e| self.selectable.accepts(e.kind))
+    }
+
+    /// Selects this entry alone, or nothing when it cannot be selected; the
+    /// anchor goes to it either way.
+    fn select_only(&mut self, path: &Path) {
+        if self.can_select(path) {
+            self.selection.only(path);
+        } else {
+            self.selection.paths.clear();
+            self.selection.anchor = Some(path.to_path_buf());
+        }
+    }
+
+    /// Puts the entries listed in the order asked, those the filter and the
+    /// query leave out set aside; the selection and the focus leave those.
+    fn arrange(&mut self) {
+        self.entries.append(&mut self.filtered_out);
+        let query = self.query.trim().to_owned();
+        if !self.filter.is_all() {
+            let filter = &self.filter;
+            let (keep, out): (Vec<_>, Vec<_>) = std::mem::take(&mut self.entries)
+                .into_iter()
+                .partition(|e| filter.accepts(e));
+            self.entries = keep;
+            self.filtered_out = out;
+        }
+        sort_in(&mut self.entries, self.sort, self.folders_first);
+        if !query.is_empty() {
+            let groups = Arc::clone(&self.groups);
+            let order = rank_by_names(&self.entries, &query, |e| {
+                let mut names = vec![e.name.clone()];
+                if let Some(g) = groups.get(&e.path) {
+                    names.extend(g.member_names());
+                }
+                names
+            });
+            let mut slots: Vec<Option<SourceEntry>> = std::mem::take(&mut self.entries)
+                .into_iter()
+                .map(Some)
+                .collect();
+            self.entries = order.iter().filter_map(|&i| slots[i].take()).collect();
+            self.filtered_out.extend(slots.into_iter().flatten());
+        }
+        if !self.filtered_out.is_empty() {
+            let shown: HashSet<&Path> = self.entries.iter().map(|e| e.path.as_path()).collect();
+            self.selection.paths.retain(|p| shown.contains(p.as_path()));
+            if self
+                .selection
+                .anchor
+                .as_ref()
+                .is_some_and(|a| !shown.contains(a.as_path()))
+            {
+                self.selection.anchor = None;
+            }
+            if self
+                .focus
+                .as_ref()
+                .is_some_and(|f| !shown.contains(f.as_path()))
+            {
+                self.focus = None;
+            }
+        }
+        self.generation += 1;
     }
 
     /// Marks entries as the application sees them: badges on their cells
@@ -4283,8 +4585,7 @@ impl FileBrowser {
 
     /// Puts the entries in the order asked, the focus brought into view.
     fn resort(&mut self) {
-        sort_in(&mut self.entries, self.sort, self.folders_first);
-        self.generation += 1;
+        self.arrange();
         self.reveal = self.focus.is_some();
     }
 
@@ -4379,14 +4680,16 @@ impl FileBrowser {
             }
         }
         let absorbed = &mut self.absorbed;
-        self.entries.retain(|e| {
+        let mut absorb = |e: &SourceEntry| {
             if main_of.contains_key(&e.path) {
                 absorbed.insert(e.path.clone(), e.clone());
                 false
             } else {
                 true
             }
-        });
+        };
+        self.entries.retain(&mut absorb);
+        self.filtered_out.retain(&mut absorb);
         let to_main = |p: &mut PathBuf| {
             if let Some(main) = main_of.get(p) {
                 *p = (*main).clone();
@@ -4410,8 +4713,8 @@ impl FileBrowser {
         }
         drop(main_of);
         self.groups = Arc::new(groups);
-        if restored {
-            sort_in(&mut self.entries, self.sort, self.folders_first);
+        if restored || !self.filter.is_all() || !self.query.trim().is_empty() {
+            self.arrange();
         }
         self.generation += 1;
     }
@@ -4421,9 +4724,13 @@ impl FileBrowser {
     /// stays. An application's own "select all of that day".
     pub fn set_selection(&mut self, paths: impl IntoIterator<Item = PathBuf>) {
         let listed: HashSet<&Path> = self.entries.iter().map(|e| e.path.as_path()).collect();
+        let selectable: HashSet<&Path> = (self.entries.iter())
+            .filter(|e| self.selectable.accepts(e.kind))
+            .map(|e| e.path.as_path())
+            .collect();
         let mut chosen: BTreeSet<PathBuf> = paths
             .into_iter()
-            .filter(|p| listed.contains(p.as_path()))
+            .filter(|p| listed.contains(p.as_path()) && selectable.contains(p.as_path()))
             .collect();
         if self.select == SelectMode::One {
             chosen = chosen.into_iter().take(1).collect();
@@ -4573,7 +4880,7 @@ impl FileBrowser {
             self.open(reach.place.clone());
         }
         if let Some(f) = &reach.focus {
-            self.selection.only(f);
+            self.select_only(f);
             self.focus = Some(f.clone());
             self.reveal = true;
         }
@@ -4618,7 +4925,7 @@ impl FileBrowser {
                 let path = self.entries[to].path.clone();
                 self.focus = Some(path.clone());
                 if self.select == SelectMode::One {
-                    self.selection.only(&path);
+                    self.select_only(&path);
                 }
                 self.reveal = true;
             }
@@ -4689,7 +4996,7 @@ impl FileBrowser {
         if let Some(first) = self.entries.first().map(|e| e.path.clone()) {
             self.focus_first = false;
             self.focus = Some(first.clone());
-            self.selection.only(&first);
+            self.select_only(&first);
             self.reveal = true;
         } else if !self.loading() {
             self.focus_first = false;
@@ -4711,6 +5018,7 @@ impl FileBrowser {
     /// Lists the place again, keeping the selection and the focus by path.
     pub fn reload(&mut self) {
         self.entries.clear();
+        self.filtered_out.clear();
         self.absorbed.clear();
         self.groups = Arc::default();
         self.generation += 1;
@@ -4741,7 +5049,9 @@ impl FileBrowser {
                     for u in e {
                         if let Some(old) = self.absorbed.get_mut(&u.path) {
                             *old = u;
-                        } else if let Some(old) = self.entries.iter_mut().find(|o| o.path == u.path)
+                        } else if let Some(old) = (self.entries.iter_mut())
+                            .chain(self.filtered_out.iter_mut())
+                            .find(|o| o.path == u.path)
                         {
                             *old = u;
                         }
@@ -4759,6 +5069,7 @@ impl FileBrowser {
                         g.tell(GroupWork::Remove(names));
                     }
                     self.entries.retain(|e| !paths.contains(&e.path));
+                    self.filtered_out.retain(|e| !paths.contains(&e.path));
                     self.generation += 1;
                     for p in &paths {
                         self.absorbed.remove(p);
@@ -4777,8 +5088,7 @@ impl FileBrowser {
             }
         }
         if changed {
-            sort_in(&mut self.entries, self.sort, self.folders_first);
-            self.generation += 1;
+            self.arrange();
         }
         if done {
             self.listing = None;
@@ -4879,10 +5189,11 @@ impl FileBrowser {
             let (lo, hi) = (anchor.min(at), anchor.max(at));
             self.selection.paths = self.entries[lo..=hi]
                 .iter()
+                .filter(|e| self.selectable.accepts(e.kind))
                 .map(|e| e.path.clone())
                 .collect();
         } else if self.select == SelectMode::One {
-            self.selection.only(path);
+            self.select_only(path);
         }
     }
 
@@ -4892,13 +5203,13 @@ impl FileBrowser {
         if modifiers.shift && self.select == SelectMode::Many {
             self.focus_on(path, true);
         } else if modifiers.command && self.select == SelectMode::Many {
-            if !self.selection.paths.remove(path) {
+            if !self.selection.paths.remove(path) && self.can_select(path) {
                 self.selection.paths.insert(path.to_path_buf());
             }
             self.selection.anchor = Some(path.to_path_buf());
             self.focus = Some(path.to_path_buf());
         } else {
-            self.selection.only(path);
+            self.select_only(path);
             self.focus = Some(path.to_path_buf());
         }
     }
@@ -4945,6 +5256,7 @@ impl FileBrowser {
             band.cells
                 .iter()
                 .filter_map(|&i| self.entries.get(i))
+                .filter(|e| self.selectable.accepts(e.kind))
                 .map(|e| e.path.clone()),
         );
         let changed = paths != self.selection.paths;
@@ -4961,7 +5273,10 @@ impl FileBrowser {
 
     pub fn select_all(&mut self) {
         if self.select == SelectMode::Many {
-            self.selection.paths = self.entries.iter().map(|e| e.path.clone()).collect();
+            self.selection.paths = (self.entries.iter())
+                .filter(|e| self.selectable.accepts(e.kind))
+                .map(|e| e.path.clone())
+                .collect();
         }
     }
 
@@ -5000,7 +5315,7 @@ impl FileBrowser {
                 let path = self.entries[i].path.clone();
                 self.focus = Some(path.clone());
                 if self.select == SelectMode::One {
-                    self.selection.only(&path);
+                    self.select_only(&path);
                 }
                 self.reveal = true;
                 true

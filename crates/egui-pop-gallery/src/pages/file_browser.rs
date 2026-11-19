@@ -8,14 +8,18 @@
 //! drops: a file dragged from the page (or from the system) onto a folder,
 //! the folder shown or the page's own target. A panel of places beside it
 //! (the picker's, with the gallery's own "Import" section) opens a folder
-//! in the browser. The mode is kept in the host's store under this page's
+//! in the browser. A field above it ranks the entries by a fuzzy query, a
+//! filter keeps images or folders, and a check box lets only files be
+//! selected (the browser's filter, query and selection policy, as a picker
+//! sets them). The mode is kept in the host's store under this page's
 //! dialog id, as a file dialog's is.
 
 use std::sync::{Arc, Mutex};
 
 use egui::Ui;
 use egui_pop::api::files::browser::{
-    AppDropTarget, DraggedPaths, DropTarget, FileBrowser, FsSource, PreviewThumbnails, ViewModes,
+    AppDropTarget, DraggedPaths, DropTarget, EntryFilter, EntryKind, FileBrowser, FsSource,
+    PreviewThumbnails, SelectMode, Selectable, SelectionPolicy, ViewModes,
 };
 use egui_pop::api::files::places::PlacesPanel;
 use egui_pop::api::files::{self, FILES};
@@ -115,6 +119,47 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         );
     });
     let mut b = browser.lock().unwrap_or_else(|e| e.into_inner());
+    ui.horizontal(|ui| {
+        let label = ui.label("Find:");
+        let mut query = b.query().to_owned();
+        let field = ui
+            .add(egui::TextEdit::singleline(&mut query).desired_width(140.0))
+            .labelled_by(label.id);
+        if field.changed() {
+            b.set_query(&query);
+        }
+        let filters = [
+            ("All entries", EntryFilter::all()),
+            (
+                "Images",
+                EntryFilter::extensions(&["png", "jpg", "jpeg", "cr3"]),
+            ),
+            ("Folders", EntryFilter::kind(EntryKind::Folder)),
+        ];
+        let mut at = filters
+            .iter()
+            .position(|(_, f)| f == b.filter())
+            .unwrap_or(0);
+        let before = at;
+        egui::ComboBox::from_label("Show")
+            .selected_text(filters[at].0)
+            .show_ui(ui, |ui| {
+                for (n, (name, _)) in filters.iter().enumerate() {
+                    ui.selectable_value(&mut at, n, *name);
+                }
+            });
+        if at != before {
+            b.set_filter(filters[at].1.clone());
+        }
+        let mut files_only = b.selection_policy().selectable == Selectable::Files;
+        if ui.checkbox(&mut files_only, "Select files only").changed() {
+            b.set_selection_policy(if files_only {
+                SelectionPolicy::files(SelectMode::Many)
+            } else {
+                SelectionPolicy::any(SelectMode::Many)
+            });
+        }
+    });
     let height = ui.available_height().clamp(160.0, 360.0);
     let place = PLACE.get_or_insert_with(ui.ctx(), Arc::default);
     let sections = f.places(app).sections(ui.ctx());
