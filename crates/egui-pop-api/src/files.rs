@@ -147,7 +147,6 @@ use egui_pop_core::thumbnail::Band;
 use egui_pop_core::ui::UiPop as _;
 use egui_pop_core::widgets;
 use egui_pop_model::commands::{CommandSpec, Origin};
-use egui_pop_model::fuzzy;
 use egui_pop_model::ids::{BlockId, CommandId, OwnerId, PluginId, SettingId, StepId};
 use egui_pop_model::keymap::BindOptions;
 use egui_pop_model::values::{Change, Descriptor, Set, Value};
@@ -336,11 +335,7 @@ impl FileFilter {
     /// Whether a file's name has one of the extensions (any, without
     /// extensions).
     pub fn accepts(&self, path: &Path) -> bool {
-        self.extensions.is_empty()
-            || path
-                .extension()
-                .and_then(|e| e.to_str())
-                .is_some_and(|e| self.extensions.iter().any(|x| x.eq_ignore_ascii_case(e)))
+        browser::has_extension(&self.extensions, path)
     }
 }
 
@@ -3603,20 +3598,17 @@ impl FilePicker {
         if !self.ranks() {
             return entries;
         }
-        // A group answers to its members' names too.
-        let mut names = Vec::with_capacity(entries.len());
-        for (n, e) in entries.iter().enumerate() {
-            names.push((n, e.name.clone()));
+        // The browser's ranking: a group answers to its members' names too.
+        browser::rank_by_names(&entries, self.text.trim(), |e| {
+            let mut names = vec![e.name.clone()];
             if let Some(group) = self.group_of(&e.path) {
-                names.extend(group.member_names().into_iter().map(|m| (n, m)));
+                names.extend(group.member_names());
             }
-        }
-        let mut seen = HashSet::new();
-        fuzzy::rank(&names, self.text.trim(), |(_, name)| name.clone())
-            .into_iter()
-            .filter(|(i, _)| seen.insert(names[*i].0))
-            .map(|(i, _)| entries[names[i].0].clone())
-            .collect()
+            names
+        })
+        .into_iter()
+        .map(|n| entries[n].clone())
+        .collect()
     }
 
     /// What a typed path may complete to: the names in its folder its

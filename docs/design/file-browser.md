@@ -396,8 +396,12 @@ pub enum ThumbState {
 
 ## 4. Shared behaviour
 
-- **Selection** is the browser's: one, several or folders, as
-  [Choosing files](../files.md) says today; a mode change keeps the selection,
+- **Selection** is the browser's: one or several, of files, folders or
+  any (`SelectionPolicy`), as [Choosing files](../files.md) says; a click,
+  the keys, a rubber band, select all and `set_selection` keep to it, and
+  an entry it refuses is still focused and opened. A filter or a query
+  (`set_filter`, `set_query`) takes what it hides out of the selection and
+  the focus; a mode change keeps the selection,
   the anchor and the focus, and the new mode scrolls the focus into view.
 - **Type-ahead**: when a mode's entry has the focus and there is no field
   (or the field is not focused), printable keys build a prefix (reset after
@@ -467,8 +471,14 @@ pub enum ThumbState {
    rules on a click, on Tab and on the keys (the selection by kind, the
    highlight its field drives). It takes the browser's thumbnails
    (`PreviewThumbnails`, a group's member standing in), its group chips and
-   its rubber band. The listing, the filter and the selection stay the
-   picker's: `FileBrowser` has no filter, ranking or per-kind selection yet.
+   its rubber band. The filter, the ranking and the selection by kind are
+   the browser's public API since (`FileBrowser::set_filter` with an
+   `EntryFilter` of extensions and kinds, `set_query` for fuzzy ranking, a
+   group answering to its members' names, and a `SelectionPolicy`: files,
+   folders or any, one or several); the picker ranks and filters through the
+   same code. Left: the picker holding a `FileBrowser` instance for its
+   listing, keeping only its frame (the path bar, the save name, the
+   buttons).
 3. **The folder chooser** is the same picker with `ChooseKind::Folder`; it
    gets `details` and `columns` (thumbnails are of little use for folders).
 4. **Helios's import** draws a `FileBrowser` with its `FileSource` (the
