@@ -1,6 +1,7 @@
 ---
 egui-pop-core: major
 egui-pop-api: major
+egui-pop-viewport: major
 egui-pop: major
 ---
 
