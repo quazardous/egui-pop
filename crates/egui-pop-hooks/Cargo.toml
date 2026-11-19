@@ -1,6 +1,6 @@
 [package]
 name = "egui-pop-hooks"
-version = "0.2.1"
+version = "0.3.0"
 description = "egui-pop's name for bus-kernel, the hook kernel implementing the bus-contract crate (no GUI toolkit); it re-exports bus-kernel"
 readme = "README.md"
 keywords = ["hooks", "plugins", "extension-points", "listeners", "events"]
