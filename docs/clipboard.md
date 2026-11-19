@@ -287,6 +287,27 @@ pastes with `no_text`: the system backend reads what the clipboard
 holds. With the default backend, which reads nothing, such a paste is
 refused when the owner's text is no longer on the system clipboard.
 
+### The chords in the keymap
+
+With a backend that reads the system clipboard (`SystemClipboardPlugin`
+added), `AppBuilder::run_native` turns eframe's
+`NativeOptions::clipboard_shortcuts` off: egui-winit sends the chords
+as plain keys, and the keymap runs them everywhere. While a text field
+has the focus, `edit.copy`, `edit.cut` and `edit.paste` (their `when`
+also holds for `textInputFocus && clipboardKeymap`) give it egui's own
+`Event::Copy`, `Event::Cut` and `Event::Paste`, the pasted text read
+through the backend, so the field edits as before. A remapped chord
+(Ctrl+Shift+C for `edit.copy`) then copies from text fields too, and
+the paste key is seen on its press whatever the clipboard holds.
+
+An application whose `NativeOptions` already have the shortcuts off
+gets the same; it then needs a backend that reads, or a text field
+pastes nothing. Elsewhere nothing changes: on the web, with the default
+backend (which reads nothing) and on eframe's own runner, text fields
+keep egui's events and the events of an endpoint go to the commands as
+above. `clipboard::set_keymap_shortcuts` says which applies (a host on
+its own loop calls it); the `clipboardKeymap` context key shows it.
+
 ## Agents
 
 Agents go through the same steps, with the user's refusals:

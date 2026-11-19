@@ -4341,6 +4341,7 @@ impl AppBuilder {
             crate::windows::present_mode(&mut options);
         }
         crate::window::transparent_for_corners(&mut options, self.rounded_windows);
+        let keymap_shortcuts = self.clipboard_shortcuts(&mut options);
         crate::runner::run(
             title,
             options,
@@ -4349,6 +4350,7 @@ impl AppBuilder {
                 let app = self
                     .build(&cc.egui_ctx)
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+                crate::clipboard::set_keymap_shortcuts(app.handle(), keymap_shortcuts);
                 Ok(Box::new(app))
             }),
         )
@@ -4385,6 +4387,7 @@ impl AppBuilder {
             crate::windows::present_mode(&mut options);
         }
         crate::window::transparent_for_corners(&mut options, self.rounded_windows);
+        let keymap_shortcuts = self.clipboard_shortcuts(&mut options);
         crate::runner::run(
             title,
             options,
@@ -4393,10 +4396,31 @@ impl AppBuilder {
                 let app = self
                     .build(&cc.egui_ctx)
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+                crate::clipboard::set_keymap_shortcuts(app.handle(), keymap_shortcuts);
                 let handle = app.handle().clone();
                 make(app, cc).inspect_err(|e| report_make_error(&handle, e.as_ref()))
             }),
         )
+    }
+}
+
+impl AppBuilder {
+    /// Whether the keymap runs the copy, cut and paste chords: eframe's
+    /// clipboard shortcuts turned off when a plugin reading the system
+    /// clipboard is added ([`crate::clipboard::SYSTEM_PLUGIN`]); kept
+    /// off when the application's options already have them off.
+    /// Otherwise egui-winit keeps making events of the chords, which
+    /// text fields read themselves.
+    #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
+    fn clipboard_shortcuts(&self, options: &mut eframe::NativeOptions) -> bool {
+        if self
+            .plugins
+            .iter()
+            .any(|p| p.id() == crate::clipboard::SYSTEM_PLUGIN)
+        {
+            options.clipboard_shortcuts = false;
+        }
+        !options.clipboard_shortcuts
     }
 }
 
@@ -7862,6 +7886,41 @@ fn top_bar_end(ui: &mut Ui, h: &AppHandle) -> f32 {
 #[cfg(test)]
 mod make_tests {
     use super::*;
+
+    /// eframe's clipboard shortcuts go off only with a plugin reading the
+    /// system clipboard, or when the options have them off already; the
+    /// keymap then runs the chords.
+    #[cfg(all(feature = "eframe", not(target_arch = "wasm32")))]
+    #[test]
+    fn a_reading_clipboard_turns_eframes_clipboard_shortcuts_off() {
+        struct Reading;
+        impl Plugin for Reading {
+            fn id(&self) -> PluginId {
+                crate::clipboard::SYSTEM_PLUGIN
+            }
+            fn connect(&mut self, _: &mut Ctx<'_>) -> Result<(), PluginError> {
+                Ok(())
+            }
+        }
+        let mut options = eframe::NativeOptions::default();
+        assert!(!App::builder().clipboard_shortcuts(&mut options));
+        assert!(options.clipboard_shortcuts, "no reading backend: kept on");
+        assert!(
+            App::builder()
+                .plugin(Reading)
+                .clipboard_shortcuts(&mut options)
+        );
+        assert!(!options.clipboard_shortcuts);
+        let mut options = eframe::NativeOptions {
+            clipboard_shortcuts: false,
+            ..Default::default()
+        };
+        assert!(App::builder().clipboard_shortcuts(&mut options));
+        assert!(
+            !options.clipboard_shortcuts,
+            "the application's choice kept"
+        );
+    }
 
     #[test]
     fn a_failed_make_is_logged_and_published() {

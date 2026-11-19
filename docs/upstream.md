@@ -727,13 +727,15 @@ limit.
   nothing, that paste is refused when the owner's text is no longer
   there. It fires on the release, not the press, and a key repeat
   pastes once.
-- **Remove when**: now, egui-pop being on egui 0.37 (a follow-up of the
-  move, issue #24): turn `clipboard_shortcuts` off in the native options, bind Ctrl+C, Ctrl+X
-  and Ctrl+V (and Windows' Insert and Delete chords) in the keymap for
-  every backend, and give text fields their copy, cut and paste events
-  from the system backend (egui's `TextEdit` reads `Event::Copy`,
-  `Event::Cut` and `Event::Paste`), so the key is seen on its press
+- **Partly removed**: with a backend that reads the system clipboard
+  (`SystemClipboardPlugin`), `run_native` turns `clipboard_shortcuts`
+  off; the keymap runs the chords and gives text fields their copy, cut
+  and paste events, the text read through the backend
+  (`clipboard::set_keymap_shortcuts`), so the key is seen on its press
   whatever the clipboard holds.
+- **Remove when**: the default backend reads the system clipboard too
+  (then the shortcuts go off everywhere natively); on the web, the
+  browser's clipboard events stay the only way to read it.
 
 ## Wayland: no colour management through winit
 

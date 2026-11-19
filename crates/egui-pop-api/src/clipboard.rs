@@ -44,7 +44,12 @@
 //!   fields keep egui's own copy and paste. egui-winit turns the
 //!   platform's copy, cut and paste chords into events and swallows the
 //!   keys; those events are dispatched to the commands when an endpoint
-//!   has the focus (Shift held on a paste: paste special). For agents:
+//!   has the focus (Shift held on a paste: paste special). Where a
+//!   backend reads the system clipboard (`egui-pop-platform`'s
+//!   `SystemClipboardPlugin`), `run_native` turns eframe's clipboard
+//!   shortcuts off instead: the chords arrive as keys, and the keymap
+//!   runs them in text fields too ([`set_keymap_shortcuts`]), so a
+//!   remapped chord edits text as well. For agents:
 //!   `clipboard.copy`, `clipboard.paste` (with `format`, `transform`,
 //!   `parts`, `if_rev` and `dry_run`), `clipboard.offers`,
 //!   `clipboard.read`, `clipboard.write`, each in the session's own slot
@@ -129,6 +134,16 @@ pub use egui_pop_model::clipboard::{
 
 /// The plugin's id.
 pub const PLUGIN: PluginId = PluginId::from_static("egui_pop.clipboard");
+
+/// The id of `egui-pop-platform`'s `SystemClipboardPlugin`, whose
+/// backend reads the system clipboard: with it added, `run_native` turns
+/// eframe's clipboard shortcuts off and the keymap runs the chords
+/// ([`set_keymap_shortcuts`]).
+pub const SYSTEM_PLUGIN: PluginId = PluginId::from_static("egui_pop.system_clipboard");
+
+/// The context key true while the keymap runs the copy, cut and paste
+/// chords in text fields too ([`set_keymap_shortcuts`]).
+pub const CONTEXT_KEYMAP_SHORTCUTS: &str = "clipboardKeymap";
 
 /// The Edit menu's group of the clipboard commands, under undo.
 pub const MENU_GROUP: &str = "1_clipboard";
@@ -350,6 +365,71 @@ fn system_read(app: &AppHandle) -> Option<Vec<Repr>> {
     let reprs = with_backend(app, |b| b.read(&ctx));
     *st.read_cache.borrow_mut() = Some((now, reprs.clone()));
     reprs
+}
+
+/// Says that the copy, cut and paste chords arrive as plain keys
+/// (eframe's `NativeOptions::clipboard_shortcuts` off), so the keymap
+/// runs them everywhere: `edit.copy`, `edit.cut` and `edit.paste` then
+/// also run while a text field has the focus, and give it egui's own
+/// `Event::Copy`, `Event::Cut` and `Event::Paste` (the text read through
+/// the system backend), as egui-winit would have. A remapped chord then
+/// edits text fields too.
+///
+/// `AppBuilder::run_native` sets it when it turns the shortcuts off:
+/// with [`SYSTEM_PLUGIN`] added, or when the application's options
+/// already have them off. Off (the default), text fields keep egui's own
+/// copy and paste: the web, the default backend (which reads nothing, so
+/// it could not paste into a text field) and applications on eframe's
+/// own runner.
+pub fn set_keymap_shortcuts(app: &AppHandle, on: bool) {
+    state(app).keymap_shortcuts.set(on);
+}
+
+/// Whether the keymap runs the copy, cut and paste chords in text fields
+/// too ([`set_keymap_shortcuts`]).
+pub fn keymap_shortcuts(app: &AppHandle) -> bool {
+    state(app).keymap_shortcuts.get()
+}
+
+/// An Edit command for the text field with the focus, when the keymap
+/// runs the chords there ([`set_keymap_shortcuts`]) and the command
+/// names no endpoint: egui's own event, as egui-winit would have sent
+/// it, read by the field later in this pass. A paste takes `args.text`,
+/// else the system clipboard's text.
+fn to_text_field(app: &AppHandle, args: &Json, event: egui::Event) -> Option<Result<Json, String>> {
+    if !keymap_shortcuts(app) || args.get("source").is_some() || args.get("target").is_some() {
+        return None;
+    }
+    let ctx = app.egui();
+    if !ctx.text_edit_focused() {
+        return None;
+    }
+    let event = match event {
+        egui::Event::Paste(_) => {
+            let text = match args.get("text").and_then(Json::as_str) {
+                Some(t) => Some(t.to_string()),
+                None => system_read(app).and_then(|reprs| {
+                    reprs
+                        .iter()
+                        .find(|r| r.format == TEXT)
+                        .and_then(Repr::text)
+                        .map(|t| t.replace("\r\n", "\n"))
+                }),
+            };
+            match text {
+                Some(t) if !t.is_empty() => egui::Event::Paste(t),
+                _ => return Some(Err("the system clipboard holds no text".into())),
+            }
+        }
+        e => e,
+    };
+    let name = match &event {
+        egui::Event::Copy => "copy",
+        egui::Event::Cut => "cut",
+        _ => "paste",
+    };
+    ctx.input_mut(|i| i.events.push(event));
+    Some(Ok(json!({ "text_field": name })))
 }
 
 /// The primary selection's text, through the system backend (opt-in:
@@ -826,6 +906,9 @@ struct State {
     paste_key: RefCell<PasteKey>,
     /// The last read of the system clipboard, with its pass.
     read_cache: RefCell<Option<(u64, Option<Vec<Repr>>)>>,
+    /// The keymap runs the chords in text fields too
+    /// ([`set_keymap_shortcuts`]).
+    keymap_shortcuts: Cell<bool>,
 }
 
 fn state(app: &AppHandle) -> Rc<State> {
@@ -1983,14 +2066,20 @@ fn toast(app: &AppHandle, key: &strings::StrKey, name: &str, value: &str, warnin
 /// The context keys `canCopy`, `canCut` and `canPaste` for the focused
 /// endpoint (`None` without the plugin). A paste counts text as offered:
 /// the system clipboard may hold some.
-pub(crate) fn keys(app: &AppHandle) -> Option<[(&'static str, bool); 3]> {
+pub(crate) fn keys(app: &AppHandle) -> Option<[(&'static str, bool); 4]> {
     let st = state(app);
     if !st.connected.get() {
         return None;
     }
+    let keymap = (CONTEXT_KEYMAP_SHORTCUTS, st.keymap_shortcuts.get());
     let ep = focused(app).and_then(|n| endpoint(app, &n).map(|e| (n, e)));
     let Some((name, ep)) = ep else {
-        return Some([("canCopy", false), ("canCut", false), ("canPaste", false)]);
+        return Some([
+            ("canCopy", false),
+            ("canCut", false),
+            ("canPaste", false),
+            keymap,
+        ]);
     };
     let (copy, cut) = match &ep.source {
         Some(s) => {
@@ -2022,7 +2111,12 @@ pub(crate) fn keys(app: &AppHandle) -> Option<[(&'static str, bool); 3]> {
             .collect();
         model::negotiate(&offers, &t.accepts(app), &specs).is_ok()
     });
-    Some([("canCopy", copy), ("canCut", cut), ("canPaste", paste)])
+    Some([
+        ("canCopy", copy),
+        ("canCut", cut),
+        ("canPaste", paste),
+        keymap,
+    ])
 }
 
 /// Each pass: the copy, cut and paste events egui-winit made of the
@@ -2273,9 +2367,12 @@ impl Plugin for ClipboardPlugin {
                 .description("Cut the selection: copied once its delete is accepted.")
                 .key("Ctrl+X")
                 .key("Shift+Delete")
-                .when("!textInputFocus && canCut")
+                .when("!textInputFocus && canCut || textInputFocus && clipboardKeymap")
                 .menu(MENU_EDIT, MENU_GROUP, 0),
             |call| {
+                if let Some(r) = to_text_field(call.app, call.args, egui::Event::Cut) {
+                    return r;
+                }
                 let source = endpoint_arg(call.app, call.args, "source")?;
                 let mut req = CopyRequest::new(&source).cut();
                 req.element = element_arg(call.app, call.args, &source);
@@ -2288,9 +2385,12 @@ impl Plugin for ClipboardPlugin {
                 .description("Copy the selection.")
                 .key("Ctrl+C")
                 .key("Ctrl+Insert")
-                .when("!textInputFocus && canCopy")
+                .when("!textInputFocus && canCopy || textInputFocus && clipboardKeymap")
                 .menu(MENU_EDIT, MENU_GROUP, 1),
             |call| {
+                if let Some(r) = to_text_field(call.app, call.args, egui::Event::Copy) {
+                    return r;
+                }
                 let source = endpoint_arg(call.app, call.args, "source")?;
                 let mut req = CopyRequest::new(&source);
                 req.element = element_arg(call.app, call.args, &source);
@@ -2303,9 +2403,13 @@ impl Plugin for ClipboardPlugin {
                 .description("Paste in the richest format the focused element accepts.")
                 .key("Ctrl+V")
                 .key("Shift+Insert")
-                .when("!textInputFocus && canPaste")
+                .when("!textInputFocus && canPaste || textInputFocus && clipboardKeymap")
                 .menu(MENU_EDIT, MENU_GROUP, 2),
             |call| {
+                let event = egui::Event::Paste(String::new());
+                if let Some(r) = to_text_field(call.app, call.args, event) {
+                    return r;
+                }
                 let target = endpoint_arg(call.app, call.args, "target")?;
                 let mut req = paste_args(call.args, target)?;
                 if req.element.is_none() {
