@@ -125,8 +125,12 @@ fn menus_panels_and_devtools_show_the_translations() {
     h.state().handle().focus_panel(&PANEL_DEVTOOLS);
     h.run();
     h.run();
-    // The tab names its panel; the devtools' own tabs are translated.
-    assert!(h.query_by_label("Outils").is_some());
+    // The tab names its panel (the focused panel's own stop bears its name
+    // too); the devtools' own tabs are translated.
+    assert!(
+        h.query_by_role_and_label(egui::accesskit::Role::Tab, "Outils")
+            .is_some()
+    );
     assert!(h.query_by_label("Historique").is_some());
     assert!(h.query_by_label("Journal").is_none());
 }
