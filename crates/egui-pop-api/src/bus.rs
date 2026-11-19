@@ -930,6 +930,30 @@ pub fn asking() -> Option<AppHandle> {
     ASKING.with_borrow(|a| a.last().and_then(|w| w.get().ok()))
 }
 
+thread_local! {
+    /// The context whose main window's pass runs [`AppHandle::run_pending`]
+    /// now: a listener it runs is drawn by that pass, which asks for no
+    /// other main pass ([`AppHandle::wake_window`]).
+    static MAIN_PENDING: RefCell<Option<egui::Context>> = const { RefCell::new(None) };
+}
+
+/// Marks [`MAIN_PENDING`] while the main window's pass runs the pending
+/// listeners; the previous mark back when they end, even by a panic.
+struct MainPending(Option<egui::Context>);
+
+impl MainPending {
+    fn enter(ctx: egui::Context) -> Self {
+        Self(MAIN_PENDING.with_borrow_mut(|m| m.replace(ctx)))
+    }
+}
+
+impl Drop for MainPending {
+    fn drop(&mut self) {
+        let previous = self.0.take();
+        MAIN_PENDING.with_borrow_mut(|m| *m = previous);
+    }
+}
+
 /// Takes the application off [`ASKING`] when the request ends, even by a
 /// panic a listener's boundary did not catch.
 struct Asking;
@@ -1149,26 +1173,35 @@ impl AppHandle {
     /// Asks for a pass of the window `window`: its own viewport's when
     /// it is an open application window with a system window of its own;
     /// else the main window's, where it is drawn (or nothing is).
+    /// Asked by a listener [`AppHandle::run_pending`] runs in the main
+    /// window's pass, the main window's pass is not asked for: that pass
+    /// has not drawn yet, so it draws what the listener changed.
     ///
     /// <div class="warning">Experimental: may change in any release
     /// (docs/stability.md).</div>
     pub fn wake_window(&self, window: &WindowId) {
         let ctx = self.egui();
+        let wake_main = || {
+            if !MAIN_PENDING.with_borrow(|m| m.as_ref() == Some(&ctx)) {
+                ctx.request_repaint_of(ViewportId::ROOT);
+            }
+        };
         let viewport = match self.0.windows.try_borrow() {
             Ok(w) => w.viewport_of(window),
             // Asked while the registry is changed (a listener run from a
             // window's opening or closing): its viewport and the main
             // window's, whichever draws it.
             Err(_) => {
-                ctx.request_repaint_of(ViewportId::ROOT);
+                wake_main();
                 Some(window.deferred_viewport())
             }
         };
-        let at = match viewport {
-            Some(v) if v != ViewportId::ROOT && !ctx.embed_viewports() => v,
-            _ => ViewportId::ROOT,
-        };
-        ctx.request_repaint_of(at);
+        match viewport {
+            Some(v) if v != ViewportId::ROOT && !ctx.embed_viewports() => {
+                ctx.request_repaint_of(v);
+            }
+            _ => wake_main(),
+        }
     }
 
     /// Runs the local listeners ([`bus_contract::Bus::listen_local_any`])
@@ -1182,6 +1215,12 @@ impl AppHandle {
     pub fn run_pending(&self) -> Vec<bus_contract::PendingRun> {
         ASKING.with_borrow_mut(|a| a.push(self.downgrade()));
         let _asking = Asking;
+        let ctx = self.egui();
+        let in_main = matches!(
+            crate::app::pass_in_progress(&ctx),
+            Some((ViewportId::ROOT, _))
+        );
+        let _main = in_main.then(|| MainPending::enter(ctx));
         let ran = self.0.bus.kernel.run_pending();
         for f in ran.iter().flat_map(|r| &r.failures) {
             log::error!(target: "egui_pop", "{f}");
