@@ -643,6 +643,7 @@ Settings, the Settings app (generated pages, a manifest's section, value scopes,
   </tr>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/admin-import-diff-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/admin-import-diff-pop-dark.png" width="200" alt="admin-import-diff-pop-dark"></a><br>admin-import-diff-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/admin-agents-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/admin-agents-pop-dark.png" width="200" alt="admin-agents-pop-dark"></a><br>admin-agents-pop-dark</td>
   </tr>
 </table>
 
