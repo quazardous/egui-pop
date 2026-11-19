@@ -124,7 +124,7 @@ comment at the code site.
 | No surface format or colour space | the viewport reports sRGB truthfully; on Wayland the image gets its own surface | [upstream.md:660](upstream.md#egui-wgpu-no-surface-format-or-colour-space-to-choose), [upstream.md:729](upstream.md#wayland-no-colour-management-through-winit) |
 | No hit-test hook on Windows (winit) | `egui-pop-win32` subclasses the root window | [upstream.md:628](upstream.md#winit-no-hit-test-hook-for-a-custom-title-bar-on-windows) |
 | Custom cursors dropped on the web and in immediate viewports | a system cursor fallback per bitmap cursor | [upstream.md:430](upstream.md#eframe-no-custom-cursor-on-the-web-or-in-immediate-viewports) |
-| Clipboard chords arrive as events | the clipboard plugin maps the events to commands; `clipboard_shortcuts` (new in 0.37) makes most of it removable | [upstream.md:691](upstream.md#egui-winit-copy-cut-and-paste-arrive-as-events-their-keys-swallowed) |
+| Clipboard chords arrive as events | with a reading backend (`SystemClipboardPlugin`), `run_native` turns `clipboard_shortcuts` off and the keymap runs the chords, text fields included; elsewhere (the web, the default backend) the clipboard plugin maps the events to commands | [upstream.md:691](upstream.md#egui-winit-copy-cut-and-paste-arrive-as-events-their-keys-swallowed) |
 | No release after a compositor move on Wayland (winit) | `frame::compositor_grab` (`crates/egui-pop-core/src/frame.rs:395`) | [upstream.md:458](upstream.md#winit-no-release-after-a-compositor-move-on-wayland) |
 | A FIFO present stalls every window on Wayland | `windows::present_mode` picks `AutoNoVsync` there (`crates/egui-pop-api/src/windows.rs:450`) | ADR 0025 |
 | Deferred viewports must be `Send + Sync` | the `Rc` shim and its thread-local registry | ADR 0025 |
@@ -180,7 +180,7 @@ comment at the code site.
    deferred callbacks on the main thread, which egui-pop asserts.
 6. **Things eframe has that egui-pop replaces on purpose**: keyboard
    zoom (egui-pop owns the interface zoom, upstream.md:583), clipboard
-   events (until `clipboard_shortcuts` is adopted), the window frame
+   events (`clipboard_shortcuts` off where a backend reads), the window frame
    (drawn by the kit). These are design choices, not conflicts.
 
 ## Options
@@ -264,7 +264,8 @@ Keep eframe (A), and organise egui-pop's work around it in three parts.
   backend): with the shortcuts off, `TextEdit` no longer copies or
   pastes on its own, and egui-pop must push the events and read the text
   itself, which the default backend cannot do natively. The event
-  mapping stays for the web and the default backend.
+  mapping stays for the web and the default backend (done:
+  `clipboard::set_keymap_shortcuts`, [clipboard.md](clipboard.md)).
 
 ### 3. Gaps only eframe (or below) can fill
 

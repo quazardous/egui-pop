@@ -1043,3 +1043,147 @@ fn a_deferred_paste_answers_pending_then_publishes_its_result() {
     assert_eq!(pasted.data["changes"], "two counted");
     assert_eq!(pasted.data["pending"], false);
 }
+
+/// The demo's name field, focused.
+fn focus_name(h: &mut Harness<'static, App>) {
+    h.query_all_by_label("Name")
+        .find(|n| n.accesskit_node().role() == egui::accesskit::Role::TextInput)
+        .expect("the name field")
+        .focus();
+    h.run();
+}
+
+fn name(h: &Harness<'static, App>) -> String {
+    h.ctx
+        .data(|d| d.get_temp::<String>(egui::Id::unique("demo.name")))
+        .unwrap_or_default()
+}
+
+/// The text the last pass copied through egui.
+fn copied(h: &Harness<'static, App>) -> Option<String> {
+    h.output()
+        .platform_output
+        .commands
+        .iter()
+        .find_map(|c| match c {
+            egui::OutputCommand::CopyText(t) => Some(t.clone()),
+            _ => None,
+        })
+}
+
+/// A chord as egui-winit sends it with `clipboard_shortcuts` off: plain
+/// key events, no clipboard event, one pass each. Gives what the
+/// press's pass copied through egui.
+fn chord(h: &mut Harness<'static, App>, modifiers: Modifiers, key: Key) -> Option<String> {
+    let event = |pressed| egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers,
+    };
+    h.event(egui::Event::ModifiersChanged(modifiers));
+    h.step();
+    h.event(event(true));
+    h.step();
+    let copied = copied(h);
+    h.event(event(false));
+    h.step();
+    h.event(egui::Event::ModifiersChanged(Modifiers::NONE));
+    h.run();
+    copied
+}
+
+/// A harness and a reading system backend holding `text`, the chords in
+/// the keymap as `run_native` sets them with `SystemClipboardPlugin`.
+fn with_system_backend(text: &str) -> (Harness<'static, App>, AppHandle, FakeSystem) {
+    let (b, _) = builder();
+    let h = harness(b);
+    let app = h.state().handle().clone();
+    let system = FakeSystem::default();
+    *system.held.borrow_mut() = Some(vec![clipboard::Repr::new(TEXT, json!(text))]);
+    clipboard::set_backend(&app, Box::new(system.clone()));
+    clipboard::set_keymap_shortcuts(&app, true);
+    (h, app, system)
+}
+
+#[test]
+fn with_the_system_backend_the_keymap_copies_cuts_and_pastes_in_a_text_field() {
+    let (mut h, app, system) = with_system_backend("Ada");
+    focus_name(&mut h);
+    assert_eq!(key(&app, "textInputFocus"), "true");
+    assert_eq!(key(&app, clipboard::CONTEXT_KEYMAP_SHORTCUTS), "true");
+    let before = rev(&app);
+    // Ctrl+V reads the system clipboard's text into the field.
+    chord(&mut h, Modifiers::COMMAND, Key::V);
+    assert_eq!(name(&h), "Ada");
+    let ran = |app: &AppHandle| {
+        app.key_traces()
+            .last()
+            .map(|t| format!("{:?}", t.resolution))
+    };
+    assert_eq!(ran(&app).as_deref(), Some("Run(CommandId(\"edit.paste\"))"));
+    // Ctrl+C copies the selection through egui, as egui-winit's event
+    // would have.
+    chord(&mut h, Modifiers::COMMAND, Key::A);
+    assert_eq!(
+        chord(&mut h, Modifiers::COMMAND, Key::C).as_deref(),
+        Some("Ada")
+    );
+    assert_eq!(ran(&app).as_deref(), Some("Run(CommandId(\"edit.copy\"))"));
+    assert_eq!(name(&h), "Ada");
+    // Ctrl+X copies it and empties the field.
+    chord(&mut h, Modifiers::COMMAND, Key::A);
+    assert_eq!(
+        chord(&mut h, Modifiers::COMMAND, Key::X).as_deref(),
+        Some("Ada")
+    );
+    assert_eq!(name(&h), "");
+    // The field's own copy: the owner's clipboard is not touched.
+    assert_eq!(rev(&app), before);
+    assert!(system.written.borrow().is_empty());
+    // An endpoint still copies its typed item with the same chord.
+    h.get_by_label("Swatch A").focus();
+    h.run();
+    chord(&mut h, Modifiers::COMMAND, Key::C);
+    assert_eq!(user_item(&app).expect("copied").kind, COLOR);
+    assert!(app.diagnostics().is_empty(), "{:?}", app.diagnostics());
+}
+
+#[test]
+fn a_remapped_copy_chord_copies_from_a_text_field() {
+    let (mut h, app, _) = with_system_backend("Grace");
+    app.rebind(clipboard::CMD_COPY, Some("Ctrl+Shift+C".into()));
+    h.run();
+    focus_name(&mut h);
+    chord(&mut h, Modifiers::COMMAND, Key::V);
+    assert_eq!(name(&h), "Grace");
+    chord(&mut h, Modifiers::COMMAND, Key::A);
+    // The old chord is a plain key now.
+    assert_eq!(chord(&mut h, Modifiers::COMMAND, Key::C), None);
+    assert_eq!(
+        chord(&mut h, Modifiers::COMMAND | Modifiers::SHIFT, Key::C).as_deref(),
+        Some("Grace")
+    );
+}
+
+#[test]
+fn without_the_keymap_shortcuts_text_fields_keep_egui_s_events() {
+    // As on the web, with the default backend and on eframe's own
+    // runner: the chords' keys do nothing in a text field, egui's events
+    // do, even with a backend that reads.
+    let (mut h, app, _) = with_system_backend("Ada");
+    clipboard::set_keymap_shortcuts(&app, false);
+    focus_name(&mut h);
+    assert_eq!(key(&app, clipboard::CONTEXT_KEYMAP_SHORTCUTS), "false");
+    chord(&mut h, Modifiers::COMMAND, Key::V);
+    assert_eq!(name(&h), "");
+    h.event(egui::Event::Paste("Lin".into()));
+    h.run();
+    assert_eq!(name(&h), "Lin");
+    chord(&mut h, Modifiers::COMMAND, Key::A);
+    assert_eq!(chord(&mut h, Modifiers::COMMAND, Key::C), None);
+    h.event(egui::Event::Copy);
+    h.step();
+    assert_eq!(copied(&h).as_deref(), Some("Lin"));
+}

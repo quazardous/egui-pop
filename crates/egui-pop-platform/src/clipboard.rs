@@ -66,8 +66,10 @@ use egui_pop_api::{Ctx, Plugin, PluginError};
 use egui_pop_model::ids::PluginId;
 use serde_json::{Value as Json, json};
 
-/// The plugin's id.
-pub const PLUGIN: PluginId = PluginId::from_static("egui_pop.system_clipboard");
+/// The plugin's id: with it added, `run_native` turns eframe's clipboard
+/// shortcuts off and the keymap runs the copy, cut and paste chords, in
+/// text fields too (`egui_pop_api::clipboard::set_keymap_shortcuts`).
+pub const PLUGIN: PluginId = clipboard::SYSTEM_PLUGIN;
 
 /// The formats [`Arboard`] writes and reads, richest first.
 const FORMATS: [FormatId; 4] = [URI_LIST, PNG, HTML, TEXT];
