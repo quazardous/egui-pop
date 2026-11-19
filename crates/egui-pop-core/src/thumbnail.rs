@@ -442,8 +442,12 @@ fn rubber_band(
     origin: egui::Pos2,
     cells: impl Fn(Rect) -> Vec<usize>,
 ) -> Option<Band> {
-    // The room in view, the grid's empty end included.
-    let bg = ui.interact(ui.clip_rect(), id, Sense::drag());
+    // The room in view, the grid's empty end included: the scroll area
+    // clips its rows only up and down, so the clip rect is narrowed to the
+    // grid's own width, never sensing what lies beside the grid.
+    let clip = ui.clip_rect();
+    let room = Rect::from_x_y_ranges(ui.max_rect().x_range(), clip.y_range()).intersect(clip);
+    let bg = ui.interact(room, id, Sense::drag());
     let mut drag: Option<BandDrag> = ui.data(|d| d.get_temp(id));
     if bg.drag_started()
         && let Some(p) = bg.interact_pointer_pos()

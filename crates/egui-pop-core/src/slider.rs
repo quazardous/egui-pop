@@ -1305,6 +1305,18 @@ pub(crate) fn drag_along(
     Drag::None
 }
 
+/// The keys a focused slider, range slider or knob reads itself.
+const READS: [Key; 8] = [
+    Key::ArrowLeft,
+    Key::ArrowRight,
+    Key::ArrowUp,
+    Key::ArrowDown,
+    Key::PageUp,
+    Key::PageDown,
+    Key::Home,
+    Key::End,
+];
+
 /// The keys (when focused), the wheel (when focused or with its
 /// modifier) and assistive actions: the value they lead to, kept in
 /// `bounds` unless already past them, and what moved it.
@@ -1321,6 +1333,20 @@ pub(crate) fn keys_wheel_access(
     let mut v = value;
     let mut cause = None;
     if response.has_focus() {
+        // The arrows step the value, they do not move the keyboard (egui's
+        // arrow navigation), and the key dispatcher leaves them, Page Up,
+        // Page Down, Home and End to the widget before a global binding.
+        ui.memory_mut(|m| {
+            m.set_focus_lock_filter(
+                response.id,
+                egui::EventFilter {
+                    horizontal_arrows: true,
+                    vertical_arrows: true,
+                    ..Default::default()
+                },
+            );
+        });
+        crate::focus::reads_keys(ui.ctx(), response.id, &READS);
         let key_scale = key_scale(ui, g);
         ui.input(|i| {
             let count = |keys: &[Key]| keys.iter().map(|k| i.num_presses(*k) as f64).sum::<f64>();
