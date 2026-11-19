@@ -264,3 +264,100 @@ fn a_window_drawn_in_the_main_one_wakes_the_main_window() {
     assert!(due.contains(&ViewportId::ROOT), "{due:?}");
     assert!(!due.contains(&f.viewport()), "{due:?}");
 }
+
+/// A plain local listener of `test.changed` (it wakes no window): the
+/// passes a fact from a worker costs with it alone are the bus waker's.
+fn listen_plain(f: &Fixture) {
+    let heard = f.heard.clone();
+    f.m.app()
+        .bus()
+        .listen_local::<Changed>(
+            "test.plain",
+            ListenOpts::new().owner("test"),
+            move |i, _| {
+                heard.borrow_mut().push(format!("plain {i}"));
+                Ok(())
+            },
+        )
+        .unwrap();
+}
+
+/// The passes a fact from a worker costs, the loop idle before.
+fn passes_for_a_worker_fact(f: &mut Fixture, what: &str) -> Vec<ViewportId> {
+    f.settle();
+    f.m.clear_repaints();
+    f.changed_from_a_worker(what);
+    let due = f.m.repaints_due();
+    assert!(due.contains(&ViewportId::ROOT), "the fact wakes: {due:?}");
+    f.settle()
+}
+
+/// A listener of a closed window, run by the main window's pass from the
+/// queue a worker filled, is drawn by that very pass: it asks for no main
+/// pass beyond the bus waker's.
+#[test]
+fn a_listener_of_a_closed_window_run_by_the_main_pass_asks_no_other_pass() {
+    let mut f = fixture();
+    f.m.app().close_window(&Fixture::w());
+    listen_plain(&f);
+    let waker = passes_for_a_worker_fact(&mut f, "photo 6");
+    assert!(
+        !waker.is_empty() && waker.iter().all(|v| *v == ViewportId::ROOT),
+        "{waker:?}"
+    );
+
+    f.listen_in::<Changed>(&Fixture::w());
+    let ran = passes_for_a_worker_fact(&mut f, "photo 7");
+
+    assert_eq!(
+        *f.heard.borrow(),
+        ["plain photo 6", "plain photo 7", "photo 7"]
+    );
+    assert_eq!(ran, waker, "the bus waker's passes, no more");
+}
+
+/// The same for a window drawn in the main one (the windows embedded).
+#[test]
+fn a_listener_of_an_embedded_window_run_by_the_main_pass_asks_no_other_pass() {
+    let mut f = fixture();
+    f.m.ctx().set_embed_viewports(true);
+    // The main window's pass draws w in it from now on.
+    f.m.root_pass();
+    listen_plain(&f);
+    let waker = passes_for_a_worker_fact(&mut f, "photo 8");
+    assert!(
+        !waker.is_empty() && waker.iter().all(|v| *v == ViewportId::ROOT),
+        "{waker:?}"
+    );
+
+    f.listen_in::<Changed>(&Fixture::w());
+    let ran = passes_for_a_worker_fact(&mut f, "photo 9");
+
+    assert_eq!(
+        *f.heard.borrow(),
+        ["plain photo 8", "plain photo 9", "photo 9"]
+    );
+    assert_eq!(ran, waker, "the bus waker's passes, no more");
+}
+
+/// Run inline between passes, a listener of a closed window still wakes
+/// the main window: no pass is under way to draw what it changed.
+#[test]
+fn a_listener_of_a_closed_window_run_between_passes_wakes_the_main_window() {
+    let mut f = fixture();
+    f.listen_in::<Changed>(&Fixture::w());
+    f.m.app().close_window(&Fixture::w());
+    f.settle();
+    f.m.clear_repaints();
+
+    let out = f.m.app().bus().alter::<Changed>("photo 10".into(), ());
+    assert!(out.deferred.is_empty(), "run inline");
+    assert_eq!(*f.heard.borrow(), ["photo 10"]);
+    let due = f.m.repaints_due();
+    assert!(due.contains(&ViewportId::ROOT), "{due:?}");
+    let ran = f.settle();
+    assert!(
+        !ran.is_empty() && ran.iter().all(|v| *v == ViewportId::ROOT),
+        "{ran:?}"
+    );
+}
