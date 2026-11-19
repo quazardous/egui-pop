@@ -2034,6 +2034,35 @@ fn a_rubber_band_in_the_grid_selects_the_files_it_crosses() {
 }
 
 #[test]
+fn a_rubber_band_without_keys_replaces_the_selection() {
+    let (mut h, _raws) = grid_harness(3, PickerView::Grid);
+    let _p = choose(&mut h, FileRequest::open_many("Open").directory("/raws"));
+    settle_thumbnails(&mut h);
+    row(&h, "IMG_00002.cr3").click();
+    h.run();
+    assert_eq!(selected_names(&h), ["IMG_00002.cr3"]);
+    let first = row(&h, "IMG_00000.cr3").rect();
+    let second = row(&h, "IMG_00001.cr3").rect();
+    let from = egui::pos2(second.center().x, second.bottom() + 40.0);
+    band(&mut h, from, first.center(), true);
+    assert_eq!(selected_names(&h), ["IMG_00000.cr3", "IMG_00001.cr3"]);
+    // The highlight goes to the band's last cell, in the grid's order, once
+    // it is let go.
+    assert_eq!(state(&h, "shown")[at(&h) as usize], "IMG_00001.cr3");
+}
+
+#[test]
+fn a_rubber_band_selects_nothing_when_a_folder_is_chosen() {
+    let (mut h, _raws) = grid_harness(3, PickerView::Grid);
+    let _p = choose(&mut h, FileRequest::folder("Folder").directory("/raws"));
+    settle_thumbnails(&mut h);
+    let folder = row(&h, "Selects").rect();
+    let from = egui::pos2(folder.center().x, folder.bottom() + 40.0);
+    band(&mut h, from, folder.center(), true);
+    assert!(selected_names(&h).is_empty());
+}
+
+#[test]
 fn a_rubber_band_selects_nothing_when_one_file_is_chosen() {
     let (mut h, _raws) = grid_harness(3, PickerView::Grid);
     let _p = choose(&mut h, FileRequest::open("Open").directory("/raws"));

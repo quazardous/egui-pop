@@ -3672,6 +3672,10 @@ impl Selectable {
 pub struct SelectionPolicy {
     pub selectable: Selectable,
     pub mode: SelectMode,
+    /// The selection keeps the entries the filter or the query sets aside,
+    /// for when they show again (a picker's field narrowing the list while
+    /// files stay chosen); off by default: they leave it.
+    pub keeps_filtered: bool,
 }
 
 impl Default for SelectionPolicy {
@@ -3683,7 +3687,18 @@ impl Default for SelectionPolicy {
 
 impl SelectionPolicy {
     pub fn new(selectable: Selectable, mode: SelectMode) -> Self {
-        Self { selectable, mode }
+        Self {
+            selectable,
+            mode,
+            keeps_filtered: false,
+        }
+    }
+
+    /// The selection keeps the entries the filter or the query sets aside
+    /// ([`SelectionPolicy::keeps_filtered`]).
+    pub fn keeping_filtered(mut self, on: bool) -> Self {
+        self.keeps_filtered = on;
+        self
     }
 
     /// Files alone (a file picker).
@@ -3829,7 +3844,8 @@ pub struct FileBrowser {
     error: Option<SourceError>,
     selection: Selection,
     focus: Option<PathBuf>,
-    select: SelectMode,
+    /// What can be selected ([`FileBrowser::set_selection_policy`]).
+    policy: SelectionPolicy,
     modes: ViewModes,
     mode_id: String,
     mode: Box<dyn ViewMode>,
@@ -3882,8 +3898,6 @@ pub struct FileBrowser {
     /// The fuzzy query the shown entries match, best first
     /// ([`FileBrowser::set_query`]).
     query: String,
-    /// Which kind of entry can be selected.
-    selectable: Selectable,
     /// The entries listed that the filter or the query leaves out.
     filtered_out: Vec<SourceEntry>,
 }
@@ -4336,7 +4350,7 @@ impl FileBrowser {
             error: None,
             selection: Selection::default(),
             focus: None,
-            select: SelectMode::Many,
+            policy: SelectionPolicy::default(),
             modes,
             mode_id,
             mode,
@@ -4366,7 +4380,6 @@ impl FileBrowser {
             absorbed: HashMap::new(),
             filter: EntryFilter::all(),
             query: String::new(),
-            selectable: Selectable::Any,
             filtered_out: Vec::new(),
         };
         b.reload();
@@ -4387,7 +4400,7 @@ impl FileBrowser {
     }
 
     pub fn with_select(mut self, select: SelectMode) -> Self {
-        self.select = select;
+        self.policy.mode = select;
         self
     }
 
@@ -4400,15 +4413,14 @@ impl FileBrowser {
     /// What can be selected: which kind of entry, one or several. What the
     /// selection holds against it leaves it (the first entry kept, for one).
     pub fn set_selection_policy(&mut self, policy: SelectionPolicy) {
-        self.select = policy.mode;
-        self.selectable = policy.selectable;
+        self.policy = policy;
         let kept: Vec<PathBuf> = self.selection.paths.iter().cloned().collect();
         self.set_selection(kept);
     }
 
     /// What can be selected.
     pub fn selection_policy(&self) -> SelectionPolicy {
-        SelectionPolicy::new(self.selectable, self.select)
+        self.policy
     }
 
     /// Shows only the entries `filter` passes, from the start.
@@ -4444,7 +4456,7 @@ impl FileBrowser {
             && let Some(first) = self.entries.first().map(|e| e.path.clone())
         {
             self.focus = Some(first.clone());
-            if self.select == SelectMode::One {
+            if self.policy.mode == SelectMode::One {
                 self.select_only(&first);
             }
             self.reveal = true;
@@ -4461,7 +4473,7 @@ impl FileBrowser {
         self.entries
             .iter()
             .find(|e| e.path == path)
-            .is_none_or(|e| self.selectable.accepts(e.kind))
+            .is_none_or(|e| self.policy.selectable.accepts(e.kind))
     }
 
     /// Selects this entry alone, or nothing when it cannot be selected; the
@@ -4542,7 +4554,9 @@ impl FileBrowser {
         }
         if !self.filtered_out.is_empty() {
             let shown: HashSet<&Path> = self.entries.iter().map(|e| e.path.as_path()).collect();
-            self.selection.paths.retain(|p| shown.contains(p.as_path()));
+            if !self.policy.keeps_filtered {
+                self.selection.paths.retain(|p| shown.contains(p.as_path()));
+            }
             if self
                 .selection
                 .anchor
@@ -4768,16 +4782,23 @@ impl FileBrowser {
     /// [`SelectMode::One`]); the paths not listed are dropped, the focus
     /// stays. An application's own "select all of that day".
     pub fn set_selection(&mut self, paths: impl IntoIterator<Item = PathBuf>) {
-        let listed: HashSet<&Path> = self.entries.iter().map(|e| e.path.as_path()).collect();
-        let selectable: HashSet<&Path> = (self.entries.iter())
-            .filter(|e| self.selectable.accepts(e.kind))
+        let aside: &[SourceEntry] = if self.policy.keeps_filtered {
+            &self.filtered_out
+        } else {
+            &[]
+        };
+        let listed: HashSet<&Path> = (self.entries.iter().chain(aside))
+            .map(|e| e.path.as_path())
+            .collect();
+        let selectable: HashSet<&Path> = (self.entries.iter().chain(aside))
+            .filter(|e| self.policy.selectable.accepts(e.kind))
             .map(|e| e.path.as_path())
             .collect();
         let mut chosen: BTreeSet<PathBuf> = paths
             .into_iter()
             .filter(|p| listed.contains(p.as_path()) && selectable.contains(p.as_path()))
             .collect();
-        if self.select == SelectMode::One {
+        if self.policy.mode == SelectMode::One {
             chosen = chosen.into_iter().take(1).collect();
         }
         if self
@@ -4969,7 +4990,7 @@ impl FileBrowser {
                 };
                 let path = self.entries[to].path.clone();
                 self.focus = Some(path.clone());
-                if self.select == SelectMode::One {
+                if self.policy.mode == SelectMode::One {
                     self.select_only(&path);
                 }
                 self.reveal = true;
@@ -5179,7 +5200,21 @@ impl FileBrowser {
         self.focus.as_deref()
     }
 
-    fn focus_index(&self) -> Option<usize> {
+    /// Focuses an entry, by path, or nothing; the selection stays. A path
+    /// not listed leaves the focus as it is.
+    pub fn set_focus(&mut self, path: Option<&Path>) {
+        match path {
+            Some(p) if self.entries.iter().any(|e| e.path == p) => {
+                self.focus = Some(p.to_path_buf());
+                self.reveal = true;
+            }
+            Some(_) => {}
+            None => self.focus = None,
+        }
+        self.focus_first = false;
+    }
+
+    pub(crate) fn focus_index(&self) -> Option<usize> {
         let f = self.focus.as_ref()?;
         self.entries.iter().position(|e| &e.path == f)
     }
@@ -5236,32 +5271,40 @@ impl FileBrowser {
         let Some(at) = self.entries.iter().position(|e| e.path == path) else {
             return;
         };
+        let from = self.focus_index();
         self.focus = Some(path.to_path_buf());
         self.reveal = true;
-        if extend && self.select == SelectMode::Many {
+        if extend && self.policy.mode == SelectMode::Many {
+            // From the anchor, else from the entry the focus leaves.
             let anchor = self
                 .selection
                 .anchor
                 .as_ref()
                 .and_then(|a| self.entries.iter().position(|e| &e.path == a))
+                .or(from)
                 .unwrap_or(at);
+            self.selection.anchor = Some(self.entries[anchor].path.clone());
             let (lo, hi) = (anchor.min(at), anchor.max(at));
             self.selection.paths = self.entries[lo..=hi]
                 .iter()
-                .filter(|e| self.selectable.accepts(e.kind))
+                .filter(|e| self.policy.selectable.accepts(e.kind))
                 .map(|e| e.path.clone())
                 .collect();
-        } else if self.select == SelectMode::One {
+        } else if self.policy.mode == SelectMode::One {
             self.select_only(path);
+        } else {
+            // A move without Shift takes the anchor along: the next range
+            // starts here.
+            self.selection.anchor = Some(path.to_path_buf());
         }
     }
 
     /// What a click does: selects that entry alone, or with Ctrl adds or
     /// takes it away, or with Shift selects the range.
     pub fn click(&mut self, path: &Path, modifiers: Modifiers) {
-        if modifiers.shift && self.select == SelectMode::Many {
+        if modifiers.shift && self.policy.mode == SelectMode::Many {
             self.focus_on(path, true);
-        } else if modifiers.command && self.select == SelectMode::Many {
+        } else if modifiers.command && self.policy.mode == SelectMode::Many {
             if !self.selection.paths.remove(path) && self.can_select(path) {
                 self.selection.paths.insert(path.to_path_buf());
             }
@@ -5287,18 +5330,20 @@ impl FileBrowser {
             None => 0,
         };
         let path = self.entries[to].path.clone();
-        let before = self.selection.clone();
+        let before = self.selection.paths.clone();
         self.focus_on(&path, shift);
-        if !shift && self.select == SelectMode::Many && self.selection.anchor.is_none() {
-            self.selection.anchor = Some(path);
-        }
-        before != self.selection
+        before != self.selection.paths
     }
 
     /// Selects what a rubber band touches: alone, or added to the
     /// selection it started from with Ctrl or Shift held. `true` when the
     /// selection changed.
-    fn apply_band(&mut self, band: &Band) -> bool {
+    pub(crate) fn apply_band(&mut self, band: &Band) -> bool {
+        if self.policy.mode == SelectMode::One {
+            // One entry at a time: a band selects nothing.
+            self.band_base = None;
+            return false;
+        }
         let keep = band.modifiers.command || band.modifiers.shift;
         let base = self
             .band_base
@@ -5315,7 +5360,7 @@ impl FileBrowser {
             band.cells
                 .iter()
                 .filter_map(|&i| self.entries.get(i))
-                .filter(|e| self.selectable.accepts(e.kind))
+                .filter(|e| self.policy.selectable.accepts(e.kind))
                 .map(|e| e.path.clone()),
         );
         let changed = paths != self.selection.paths;
@@ -5330,12 +5375,18 @@ impl FileBrowser {
         changed
     }
 
+    /// Selects every entry shown the policy accepts (several only); with
+    /// [`SelectionPolicy::keeps_filtered`], those set aside stay selected.
     pub fn select_all(&mut self) {
-        if self.select == SelectMode::Many {
-            self.selection.paths = (self.entries.iter())
-                .filter(|e| self.selectable.accepts(e.kind))
-                .map(|e| e.path.clone())
-                .collect();
+        if self.policy.mode == SelectMode::Many {
+            let shown = (self.entries.iter())
+                .filter(|e| self.policy.selectable.accepts(e.kind))
+                .map(|e| e.path.clone());
+            if self.policy.keeps_filtered {
+                self.selection.paths.extend(shown);
+            } else {
+                self.selection.paths = shown.collect();
+            }
         }
     }
 
@@ -5373,7 +5424,7 @@ impl FileBrowser {
             Some(i) => {
                 let path = self.entries[i].path.clone();
                 self.focus = Some(path.clone());
-                if self.select == SelectMode::One {
+                if self.policy.mode == SelectMode::One {
                     self.select_only(&path);
                 }
                 self.reveal = true;
@@ -5729,7 +5780,7 @@ impl FileBrowser {
             band
         });
         match band {
-            Some(band) if self.select == SelectMode::Many => {
+            Some(band) if self.policy.mode == SelectMode::Many => {
                 out.selection_changed |= self.apply_band(&band);
                 if band.finished {
                     ui.memory_mut(|m| m.request_focus(keys_id));
