@@ -2,8 +2,10 @@
 //!
 //! A [`Grant`] says which commands an agent may run (patterns), whether
 //! it may only read, which values it may write through `value.set` and
-//! `value.reset`, and whether `ui` may act (click, type) for it. Three
-//! presets: [`Grant::read_only`], [`Grant::editor`], [`Grant::full`].
+//! `value.reset`, whether `ui` may act (click, type) for it, and whether
+//! it reads private data (places, people, file paths). Three presets:
+//! [`Grant::read_only`], [`Grant::editor`], [`Grant::full`], each with
+//! private data shown ([`Grant::private`] turns it off).
 //!
 //! [`AgentGrants`] gives one to each agent:
 //!
@@ -81,6 +83,12 @@ pub struct Grant {
     /// `ui` may act for it (click, type, press keys, scroll); reading
     /// the tree is always allowed.
     pub ui: bool,
+    /// It reads private data: places (GPS), people (faces, names),
+    /// absolute file paths. Without it, a command declared
+    /// `CommandSpec::private` is refused to it, and a command whose
+    /// result only partly is private leaves those parts out
+    /// ([`reads_private`]). On in every preset.
+    pub private: bool,
 }
 
 impl Grant {
@@ -91,6 +99,7 @@ impl Grant {
             read_only: true,
             values: Vec::new(),
             ui: false,
+            private: true,
         }
     }
 
@@ -112,6 +121,7 @@ impl Grant {
             read_only: false,
             values: vec!["*".into()],
             ui: true,
+            private: true,
         }
     }
 
@@ -134,6 +144,21 @@ impl Grant {
     pub fn ui(mut self, on: bool) -> Self {
         self.ui = on;
         self
+    }
+
+    /// Private data shown or withheld ([`Grant::private`]).
+    #[must_use]
+    pub fn private(mut self, on: bool) -> Self {
+        self.private = on;
+        self
+    }
+
+    /// Why this grant refuses a command whose result carries private
+    /// data (`CommandSpec::private`); `None` when it allows it.
+    pub fn private_refusal(&self, command: &str, private: bool) -> Option<String> {
+        (private && !self.private).then(|| {
+            format!("the agent does not read private data: `{command}` gives places, people or file paths")
+        })
     }
 
     /// Why this grant refuses running `command` (whose spec says
@@ -268,14 +293,25 @@ pub fn grant_of(app: &AppHandle, origin: &Origin) -> Option<Grant> {
         .then_some(g.paired)
 }
 
+/// Whether `origin` reads private data (places, people, file paths):
+/// `false` only for one of the socket's agents whose grant withholds it
+/// ([`Grant::private`]). A handler whose result only partly is private
+/// leaves those parts out when it is `false` (a photo list without its
+/// places, say), rather than being refused whole as a command declared
+/// `CommandSpec::private` is.
+pub fn reads_private(app: &AppHandle, origin: &Origin) -> bool {
+    grant_of(app, origin).is_none_or(|g| g.private)
+}
+
 /// Why `origin`'s grant refuses running `command` with `args`.
 fn command_refusal(app: &AppHandle, origin: &Origin, command: &str, args: &Json) -> Option<String> {
     let grant = grant_of(app, origin)?;
-    let read_only = CommandId::new(command)
-        .ok()
-        .and_then(|id| app.command(&id))
-        .is_some_and(|s| s.read_only);
-    grant.refusal(command, read_only, args)
+    let spec = CommandId::new(command).ok().and_then(|id| app.command(&id));
+    let read_only = spec.as_ref().is_some_and(|s| s.read_only);
+    let private = spec.as_ref().is_some_and(|s| s.private);
+    grant
+        .refusal(command, read_only, args)
+        .or_else(|| grant.private_refusal(command, private))
 }
 
 /// Why `origin`'s grant refuses this bridge call: `commands.run` judged
@@ -453,6 +489,22 @@ mod tests {
             g.refusal("value.set", false, &json!({ "path": "layout/x" }))
                 .is_some()
         );
+    }
+
+    #[test]
+    fn private_data() {
+        for g in [Grant::read_only(), Grant::editor(), Grant::full()] {
+            assert!(g.private);
+            assert_eq!(g.private_refusal("photo.places", true), None);
+        }
+        let g = Grant::editor().private(false);
+        assert!(
+            g.private_refusal("photo.places", true)
+                .unwrap()
+                .contains("photo.places")
+        );
+        assert_eq!(g.private_refusal("about.read", false), None);
+        assert_eq!(g.refusal("photo.places", true, &Json::Null), None);
     }
 
     #[test]

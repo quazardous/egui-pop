@@ -290,7 +290,8 @@ an agent may name as one list, under `protocol: 1`: every collector
 action (`kind: "action"`, `name` as `collector.action`) and every
 command (`kind: "command"`, run through `commands.run`), each with
 `description`, `mutates`, `agent`, `destructive` (the user confirms an
-agent's call; an action's without arguments), `args` (a JSON Schema
+agent's call; an action's without arguments), `private` (a command's
+result is private data an agent may be refused), `args` (a JSON Schema
 when the author gives one, else `null`), `example` (example arguments), `result` (a JSON
 Schema of the result, or `null`) and `call` (how to call it). A
 collector gives its schemas with `FnCollector::schema` and
@@ -471,9 +472,15 @@ The bridge has one caller identity: every command it runs is
   grant does not allow (`command.refused`, `by: "pop.agent.grants"`),
   before the application's own listeners
   ([The agent socket](agent-socket.md#grants-what-each-agent-may-do)).
+- **Private data.** A command declared `CommandSpec::private()` (places,
+  people, absolute file paths) is refused to an agent whose grant
+  withholds private data; a read only partly private leaves those fields
+  out when `grants::reads_private(app, origin)` is `false`. Every preset
+  reads it until the user turns it off on the Agents page
+  ([The agent socket](agent-socket.md#private-data)).
 - **The user's say.** Settings › Developer › Agents lists the paired
   agents (connected now, last seen), sets each one's access and the
-  defaults to a preset, live, and revokes a pairing: its token stops
+  defaults to a preset, and private data shown or withheld, live, and revokes a pairing: its token stops
   pairing and its connections close. Agents cannot change any of it
   ([The Agents page](agent-socket.md#the-agents-page-the-users-view-and-say)).
 - **Links.** A link an agent asks to open (`links.open`, `files.reveal`,

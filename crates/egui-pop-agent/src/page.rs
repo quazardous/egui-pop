@@ -1,7 +1,8 @@
 //! The Agents page of the Settings app (`developer/agents`), declared as
 //! a manifest: the paired agents (name, id, paired since, last seen,
 //! connected now) with their access, and the defaults. The access is a
-//! preset chosen in a row field ([`CMD_GRANT`], applied live through
+//! preset chosen in a row field, private data (places, people, file
+//! paths) a switch beside it ([`CMD_GRANT`], applied live through
 //! `set_grants`); a row's Revoke asks, then revokes ([`CMD_REVOKE`]).
 //!
 //! Its commands that change something are the user's: kept from agents
@@ -33,11 +34,13 @@ fn preset(name: &str) -> Option<Grant> {
     }
 }
 
-/// The preset a grant is, or `custom`.
+/// The preset a grant is, or `custom`. Private data is a switch of its
+/// own: withholding it leaves the preset as it was.
 fn preset_of(g: &Grant) -> &'static str {
+    let g = g.clone().private(true);
     PRESETS
         .into_iter()
-        .find(|p| preset(p).as_ref() == Some(g))
+        .find(|p| preset(p).as_ref() == Some(&g))
         .unwrap_or("custom")
 }
 
@@ -132,6 +135,7 @@ fn list(app: &AppHandle) -> Json {
                 "connections": open,
                 "state": if open == 0 { "info" } else { "success" },
                 "preset": preset,
+                "private": grant.private,
                 "own": g.agents.contains_key(&p.id),
                 "custom": custom_choice(&ctx, preset),
                 "details": details(&ctx, grant),
@@ -144,6 +148,7 @@ fn list(app: &AppHandle) -> Json {
             "id": id,
             "who": strings::tr(&ctx, who),
             "preset": preset,
+            "private": grant.private,
             "custom": custom_choice(&ctx, preset),
             "details": details(&ctx, grant),
         })
@@ -166,30 +171,62 @@ fn user_only(origin: &Origin) -> Result<(), String> {
     }
 }
 
-/// `pop.agent.grant`: a preset set live.
+/// A switch's value: a boolean, or its text.
+fn switch(v: &Json) -> Option<bool> {
+    match v {
+        Json::Bool(b) => Some(*b),
+        Json::String(s) if s == "true" => Some(true),
+        Json::String(s) if s == "false" => Some(false),
+        _ => None,
+    }
+}
+
+/// `pop.agent.grant`: a preset, private data shown or withheld, or both,
+/// set live.
 fn grant(app: &AppHandle, args: &Json) -> Result<Json, String> {
-    let name = args["preset"].as_str().ok_or("`preset` is missing")?;
-    if name == "custom" {
-        // The grant the app set stays: nothing to do.
+    let name = args["preset"].as_str();
+    let private = match &args["private"] {
+        Json::Null => None,
+        v => Some(switch(v).ok_or("`private` is a boolean")?),
+    };
+    if name.is_none() && private.is_none() {
+        return Err("`preset` or `private` is missing".into());
+    }
+    // `custom` keeps the grant the app set.
+    let chosen = match name {
+        None | Some("custom") => None,
+        Some(n) => {
+            Some(preset(n).ok_or_else(|| format!("no preset `{n}`: read-only, editor or full"))?)
+        }
+    };
+    if chosen.is_none() && private.is_none() {
         return Ok(json!({ "changed": false }));
     }
-    let grant =
-        preset(name).ok_or_else(|| format!("no preset `{name}`: read-only, editor or full"))?;
     let mut g = grants::grants(app);
-    if let Some(id) = args["agent"].as_str() {
+    let slot = if let Some(id) = args["agent"].as_str() {
         if !pairing::pairings(app).iter().any(|p| p.id == id) {
             return Err(format!("no agent is paired as `{id}`"));
         }
-        g.agents.insert(id.into(), grant);
+        let paired = g.paired.clone();
+        g.agents.entry(id.into()).or_insert(paired)
     } else {
         match args["default"].as_str() {
-            Some("unpaired") => g.unpaired = grant,
-            Some("paired") => g.paired = grant,
+            Some("unpaired") => &mut g.unpaired,
+            Some("paired") => &mut g.paired,
             _ => return Err("`agent`, or `default` (unpaired or paired), is missing".into()),
         }
+    };
+    // A new preset keeps the private switch; the switch keeps the rest.
+    let keep = slot.private;
+    if let Some(p) = chosen {
+        *slot = p.private(keep);
     }
+    if let Some(on) = private {
+        slot.private = on;
+    }
+    let result = json!({ "changed": true, "preset": preset_of(slot), "private": slot.private });
     grants::set_grants(app, g);
-    Ok(json!({ "changed": true, "preset": name }))
+    Ok(result)
 }
 
 /// The commands and the page.
@@ -203,8 +240,8 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
     )?;
     ctx.command(
         CommandSpec::new(CMD_GRANT, "Set an agent's access", "Agents")
-            .description("Sets a paired agent's access (`agent`), or a default's (`default`: unpaired or paired), to a preset (`preset`: read-only, editor or full). The user's only.")
-            .args(json!({ "agent": "claude-code", "preset": "editor" }))
+            .description("Sets a paired agent's access (`agent`), or a default's (`default`: unpaired or paired): a preset (`preset`: read-only, editor or full), private data shown or withheld (`private`: places, people, file paths), or both. The user's only.")
+            .args(json!({ "agent": "claude-code", "preset": "editor", "private": true }))
             .hidden()
             .no_agent(),
         |call| {
@@ -251,6 +288,10 @@ pub(crate) fn manifest() -> Manifest {
         .choices_from("custom")
         .help(t(&txt::ACCESS_HELP))
     };
+    let private = |cmd_arg: Json| {
+        RowField::toggle("private", t(&txt::COL_PRIVATE), CMD_GRANT.as_str(), cmd_arg)
+            .help(t(&txt::PRIVATE_HELP))
+    };
     Manifest::new(FORMAT).section(PATH, t(&txt::AGENTS_SECTION), |s| {
         s.description(t(&txt::AGENTS_ABOUT))
             .keywords(&["agent", "pairing", "token", "grant", "mcp", "socket"])
@@ -267,6 +308,9 @@ pub(crate) fn manifest() -> Manifest {
                     .tone("state")
                     .row_field(choices(
                         json!({ "agent": "${row.id}", "preset": "${value}" }),
+                    ))
+                    .row_field(private(
+                        json!({ "agent": "${row.id}", "private": "${value}" }),
                     ))
                     .row_action(
                         Action::command(CMD_REVOKE.as_str())
@@ -293,6 +337,9 @@ pub(crate) fn manifest() -> Manifest {
                     .column("details", t(&txt::COL_DETAILS))
                     .row_field(choices(
                         json!({ "default": "${row.id}", "preset": "${value}" }),
+                    ))
+                    .row_field(private(
+                        json!({ "default": "${row.id}", "private": "${value}" }),
                     )),
             );
     })
@@ -314,6 +361,8 @@ mod tests {
         assert_eq!(preset_of(&Grant::editor()), "editor");
         assert_eq!(preset_of(&Grant::full()), "full");
         assert_eq!(preset_of(&Grant::editor().commands(["about.*"])), "custom");
+        // Private data withheld leaves the preset as it was.
+        assert_eq!(preset_of(&Grant::editor().private(false)), "editor");
     }
 
     #[test]

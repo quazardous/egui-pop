@@ -883,6 +883,10 @@ egui-pop-agent-agents-col-who = Qui
 
 egui-pop-agent-agents-access-help = Ce qu’il peut faire ; s’applique aussitôt.
 
+egui-pop-agent-agents-col-private = Données privées
+
+egui-pop-agent-agents-private-help = Lieux, personnes et chemins de fichiers dans ce qu’il lit ; désactivé, il ne les reçoit pas. S’applique aussitôt.
+
 egui-pop-agent-agents-preset-read-only = Lecture seule
 
 egui-pop-agent-agents-preset-editor = Éditeur

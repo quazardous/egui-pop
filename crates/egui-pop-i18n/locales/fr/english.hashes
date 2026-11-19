@@ -651,6 +651,7 @@ egui-pop-agent-agents-col-details e2388ab38593780c
 egui-pop-agent-agents-col-id f1f0362a9ffadd86
 egui-pop-agent-agents-col-name e8f800548ef8413c
 egui-pop-agent-agents-col-paired eaeaa345afc45070
+egui-pop-agent-agents-col-private 8760b0ed36392dba
 egui-pop-agent-agents-col-seen f0f9101aa26f6f3e
 egui-pop-agent-agents-col-who b518f81a66d361a7
 egui-pop-agent-agents-connected-yes 49de894e8d7d04cc
@@ -671,6 +672,7 @@ egui-pop-agent-agents-preset-custom fc74275330d68a0e
 egui-pop-agent-agents-preset-editor 1506bdc27aacc0ce
 egui-pop-agent-agents-preset-full 7c4a178fb1fd001a
 egui-pop-agent-agents-preset-read-only d8b53ec0b19db359
+egui-pop-agent-agents-private-help e921f842d1a89e90
 egui-pop-agent-agents-revoke 98866bb24d37add3
 egui-pop-agent-agents-revoke-text 9cae41097dd22126
 egui-pop-agent-agents-revoke-title 0159332d8f3653a3

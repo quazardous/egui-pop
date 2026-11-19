@@ -57,7 +57,7 @@ fn tools_from_a_describe_fixture() {
             },
             {
                 "kind": "command", "name": "about.read", "title": "About",
-                "description": "", "mutates": false, "agent": true,
+                "description": "", "mutates": false, "agent": true, "private": true,
                 "args": null, "example": null, "result": null,
                 "call": { "collector": "commands", "action": "run", "id": "about.read" },
             },
@@ -149,6 +149,23 @@ fn tools_from_a_describe_fixture() {
             .as_ref()
             .unwrap()
             .contains("about.read")
+    );
+    // Private: the description says so; another command's does not.
+    assert!(
+        about
+            .tool
+            .description
+            .as_ref()
+            .unwrap()
+            .contains("private data")
+    );
+    assert!(
+        !by("file_open")
+            .tool
+            .description
+            .as_ref()
+            .unwrap()
+            .contains("private data")
     );
 
     // A schema that is not an object's is taken as `args`.

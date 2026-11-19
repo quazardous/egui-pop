@@ -31,6 +31,13 @@ const ZOOM: CommandId = CommandId::from_static("test.zoom");
 /// arguments do not match, never asked about.
 const WIPE: CommandId = CommandId::from_static("test.wipe");
 
+/// A read whose result is private data (places): refused to an agent
+/// whose grant withholds it.
+const PLACES: CommandId = CommandId::from_static("test.places");
+/// A read whose result is only partly private: it leaves the places out
+/// for an agent whose grant withholds them.
+const PHOTOS: CommandId = CommandId::from_static("test.photos");
+
 /// The schema `test.zoom` and `test.wipe` declare.
 fn factor_schema() -> Json {
     json!({
@@ -70,6 +77,27 @@ impl Plugin for Writes {
                 .destructive()
                 .schema(factor_schema()),
             |_| Ok(json!("wiped")),
+        )?;
+        ctx.command(
+            CommandSpec::new(PLACES, "Places", "Test")
+                .description("Where the photos were taken (a test's).")
+                .read_only()
+                .private(),
+            |_| Ok(json!({ "places": ["48.85,2.35"] })),
+        )?;
+        ctx.command(
+            CommandSpec::new(PHOTOS, "Photos", "Test")
+                .description(
+                    "The photos, with their places when the caller reads private data (a test's).",
+                )
+                .read_only(),
+            |c| {
+                let mut photo = json!({ "id": 1 });
+                if egui_pop_agent::grants::reads_private(c.app, c.origin) {
+                    photo["gps"] = json!("48.85,2.35");
+                }
+                Ok(json!([photo]))
+            },
         )?;
         Ok(())
     }
@@ -1508,4 +1536,123 @@ fn the_agents_page_lists_a_paired_agent_sets_its_access_live_and_revokes_it() {
         Client::connect(&p).request("hello", json!({ "name": "Test bot", "token": token }))
     });
     assert_eq!(again["error"]["code"], -32001, "{again}");
+}
+
+#[test]
+fn private_data_is_refused_or_left_out_for_an_agent_whose_grant_withholds_it() {
+    use egui_pop_agent::{CMD_GRANT, CMD_LIST};
+    use egui_pop_api::model::commands::Origin;
+    let dir = private_dir("grants-private");
+    let path = dir.join("app.sock");
+    let mut h = app(
+        App::builder().debug_bridge(egui_pop_api::core::debug::BridgeMode::On),
+        &path,
+    );
+    let unpaired = Origin::Agent("agent-socket".into());
+    let run = |h: &mut Harness<'static, App>, id: &CommandId, args: Json, origin: Origin| {
+        h.state_mut().run(id, args, origin).now().unwrap()
+    };
+
+    // By default every preset reads private data.
+    assert_eq!(
+        run(&mut h, &PLACES, Json::Null, unpaired.clone()).unwrap(),
+        json!({ "places": ["48.85,2.35"] })
+    );
+    assert_eq!(
+        run(&mut h, &PHOTOS, Json::Null, unpaired.clone()).unwrap()[0]["gps"],
+        "48.85,2.35"
+    );
+
+    // The user withholds it from unpaired clients, on the Agents page:
+    // the preset stays read-only.
+    let set = run(
+        &mut h,
+        &CMD_GRANT,
+        json!({ "default": "unpaired", "private": false }),
+        Origin::User,
+    )
+    .unwrap();
+    assert_eq!(set["preset"], "read-only", "{set}");
+    assert_eq!(set["private"], false, "{set}");
+    let app_handle = h.state().handle().clone();
+    assert_eq!(
+        egui_pop_agent::grants::grants(&app_handle).unpaired,
+        Grant::read_only().private(false)
+    );
+    let list = run(&mut h, &CMD_LIST, Json::Null, Origin::User).unwrap();
+    let row = &list["defaults"][0];
+    assert_eq!(
+        (row["id"].as_str(), row["preset"].as_str()),
+        (Some("unpaired"), Some("read-only"))
+    );
+    assert_eq!(row["private"], false, "{list}");
+    assert!(!egui_pop_agent::grants::reads_private(
+        &app_handle,
+        &unpaired
+    ));
+    assert!(egui_pop_agent::grants::reads_private(
+        &app_handle,
+        &Origin::User
+    ));
+
+    // Through the socket: the private read is refused at once, the mixed
+    // one answers without its places; `describe` says which is private.
+    let ran = done_runs(&h, "test.places").len();
+    let p = path.clone();
+    let (describe, places) = with_client(&mut h, move || {
+        let mut c = Client::connect(&p);
+        (
+            c.result("describe", Json::Null),
+            c.request("call", run_call("test.places", Json::Null)),
+        )
+    });
+    let caps = describe["capabilities"].as_array().unwrap();
+    let cap = |name: &str| caps.iter().find(|c| c["name"] == name).unwrap().clone();
+    assert_eq!(cap("test.places")["private"], true);
+    assert_eq!(cap("test.photos")["private"], false);
+    assert_eq!(places["error"]["code"], -32001, "{places}");
+    assert!(
+        places["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("does not read private data: `test.places`"),
+        "{places}"
+    );
+    let refused = refused_runs(&h, "test.places");
+    assert_eq!(refused.len(), 1, "{refused:?}");
+    assert_eq!(refused[0].data["by"], "pop.agent.grants");
+    assert_eq!(refused[0].source, "agent:agent-socket");
+    h.step();
+    assert_eq!(
+        done_runs(&h, "test.places").len(),
+        ran,
+        "never ran for the socket"
+    );
+
+    // Any other path holds too (the grants listener), and the mixed read
+    // leaves the places out.
+    assert_eq!(
+        run(&mut h, &PLACES, Json::Null, unpaired.clone()).unwrap_err(),
+        "refused by `pop.agent.grants`: the agent does not read private data: `test.places` gives places, people or file paths"
+    );
+    assert_eq!(
+        run(&mut h, &PHOTOS, Json::Null, unpaired.clone()).unwrap(),
+        json!([{ "id": 1 }])
+    );
+    // The user is never held.
+    assert!(run(&mut h, &PLACES, Json::Null, Origin::User).is_ok());
+
+    // Shown again: the switch alone, the preset untouched.
+    run(
+        &mut h,
+        &CMD_GRANT,
+        json!({ "default": "unpaired", "private": true }),
+        Origin::User,
+    )
+    .unwrap();
+    assert_eq!(
+        egui_pop_agent::grants::grants(&app_handle).unpaired,
+        Grant::read_only()
+    );
+    assert!(run(&mut h, &PLACES, Json::Null, unpaired).is_ok());
 }

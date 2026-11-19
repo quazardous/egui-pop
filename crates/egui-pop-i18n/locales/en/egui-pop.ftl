@@ -1319,6 +1319,8 @@ egui-pop-agent-agents-col-name = Name
 
 egui-pop-agent-agents-col-paired = Paired since
 
+egui-pop-agent-agents-col-private = Private data
+
 egui-pop-agent-agents-col-seen = Last seen
 
 egui-pop-agent-agents-col-who = Who
@@ -1358,6 +1360,8 @@ egui-pop-agent-agents-preset-editor = Editor
 egui-pop-agent-agents-preset-full = Full
 
 egui-pop-agent-agents-preset-read-only = Read only
+
+egui-pop-agent-agents-private-help = Places, people and file paths in what it reads; off withholds them. Applies at once.
 
 egui-pop-agent-agents-revoke = Revoke
 
