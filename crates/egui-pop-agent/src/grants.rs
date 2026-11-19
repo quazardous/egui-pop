@@ -303,6 +303,19 @@ pub fn reads_private(app: &AppHandle, origin: &Origin) -> bool {
     grant_of(app, origin).is_none_or(|g| g.private)
 }
 
+/// `answer` as `origin` may read it: what private commands carry (their
+/// arguments, results and errors in the journal, a `wait`'s event and
+/// the `commands` collector's run history) is redacted
+/// (`egui_pop_api::host::redact_private`) when `origin` does not read
+/// private data ([`reads_private`]), and left whole otherwise. The socket
+/// passes every `snapshot`, `call` and `wait` answer through it.
+pub fn redacted_for(app: &AppHandle, origin: &Origin, mut answer: Json) -> Json {
+    if !reads_private(app, origin) {
+        egui_pop_api::host::redact_private(&mut answer);
+    }
+    answer
+}
+
 /// Why `origin`'s grant refuses running `command` with `args`.
 fn command_refusal(app: &AppHandle, origin: &Origin, command: &str, args: &Json) -> Option<String> {
     let grant = grant_of(app, origin)?;

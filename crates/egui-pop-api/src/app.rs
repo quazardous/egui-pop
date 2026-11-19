@@ -5363,7 +5363,17 @@ impl App {
                             "icon_set_by": app.icon_set_by(&s.id),
                         })).collect::<Vec<_>>(),
                         "context": cx.iter().map(|(k, v, d)| json!({"key": k, "value": v, "depth": d})).collect::<Vec<_>>(),
-                        "history": app.history(),
+                        // Each run says whether its command is private
+                        // (one no longer declared counts as private), so
+                        // a reader is given it redacted
+                        // (`host::redact_private`).
+                        "history": app.history().iter().map(|r| {
+                            let mut run = json!(r);
+                            if app.command(&r.id).is_none_or(|s| s.private) {
+                                run["private"] = Json::Bool(true);
+                            }
+                            run
+                        }).collect::<Vec<_>>(),
                     })
                 })
                 .action_as("run", "Runs a command (`id`, `args`) as its caller: anyone but the user only a command offered to agents.", true, move |_, args, origin| {
@@ -7215,12 +7225,16 @@ impl App {
         }
         let source = source_of(&origin);
         let _running = RunningCommand::new(&self.handle, command, self.reg.commands.owner(command));
-        let seq = self.handle.publish_now(
-            &source,
-            None,
-            "command.dispatched",
-            json!({ "command": command, "args": args }),
-        );
+        // A private command's events keep their data, marked: readers
+        // that do not read private data get it redacted
+        // (`host::redact_private`).
+        let mut dispatched = json!({ "command": command, "args": args });
+        if self.is_private(command) {
+            dispatched["private"] = Json::Bool(true);
+        }
+        let seq = self
+            .handle
+            .publish_now(&source, None, "command.dispatched", dispatched);
         if crate::jobs::is_job_command(command) {
             self.handle
                 .tag_job_event(seq, egui_pop_model::jobs::JobEventKind::CommandDispatched);
@@ -7315,6 +7329,11 @@ impl App {
         }
     }
 
+    /// Whether `command` is declared private (`CommandSpec::private`).
+    fn is_private(&self, command: &CommandId) -> bool {
+        self.reg.commands.spec(command).is_some_and(|s| s.private)
+    }
+
     /// A result arrived: the history and the journal keep it.
     fn finish(
         &mut self,
@@ -7325,7 +7344,7 @@ impl App {
         result: Result<Json, String>,
     ) {
         use egui_pop_model::jobs::JobEventKind;
-        let (kind, data) = match &result {
+        let (kind, mut data) = match &result {
             Ok(v) => (
                 JobEventKind::CommandDone,
                 json!({ "command": command, "result": v }),
@@ -7335,6 +7354,9 @@ impl App {
                 json!({ "command": command, "error": e }),
             ),
         };
+        if self.is_private(command) {
+            data["private"] = Json::Bool(true);
+        }
         let done = self
             .handle
             .publish_now(&source_of(origin), Some(seq), kind.name(), data);

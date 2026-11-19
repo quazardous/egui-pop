@@ -595,6 +595,80 @@ pub fn source_of(origin: &Origin) -> String {
     origin.to_string()
 }
 
+/// What stands for a private command's arguments, result or error when
+/// its reader does not read private data ([`redact_private`]).
+pub const REDACTED: &str = "<private>";
+
+/// Hides what a private command (`CommandSpec::private`) carries from a
+/// reader that does not read private data, wherever it sits in `v`: a
+/// debug-bridge answer, a snapshot, a wait's event.
+///
+/// The journal keeps a private command's events whole, marked
+/// `"private": true` in their data (`command.dispatched`, `command.done`,
+/// `command.failed`), and the `commands` collector marks its runs the
+/// same way in `history`; this is the redaction at read time, per
+/// reader. So a reader allowed private data (the user, the application,
+/// an agent whose grant shows it) still reads a queued command's result
+/// from its `command.done`, as `egui-pop-agent-mcp` does, and one that is
+/// not reads [`REDACTED`] instead:
+///
+/// - an event (`seq`, `name`, `data`) whose data says `private: true`:
+///   its `args`, `result` and `error` become [`REDACTED`];
+/// - a run (`id`, `origin`, `result`) that says `private: true`: its
+///   `args` become [`REDACTED`], and so does its result's value or error
+///   (`{"Ok": "<private>"}`, `{"Err": "<private>"}`).
+///
+/// The rest is left as it is: a command's declaration (`private`,
+/// `args` as a schema) is not data and is not touched.
+///
+/// ```
+/// use egui_pop_api::host::{REDACTED, redact_private};
+/// use serde_json::json;
+///
+/// let mut events = json!([
+///     { "seq": 1, "name": "command.done", "source": "user", "cause": null,
+///       "data": { "command": "library.folder", "result": "/home/me", "private": true } },
+///     { "seq": 2, "name": "command.done", "source": "user", "cause": null,
+///       "data": { "command": "view.zoom", "result": 2 } },
+/// ]);
+/// redact_private(&mut events);
+/// assert_eq!(events[0]["data"]["result"], REDACTED);
+/// assert_eq!(events[1]["data"]["result"], 2);
+/// ```
+pub fn redact_private(v: &mut Json) {
+    match v {
+        Json::Array(items) => items.iter_mut().for_each(redact_private),
+        Json::Object(o) => {
+            let event = o.contains_key("seq") && o.get("name").is_some_and(Json::is_string);
+            if event
+                && let Some(Json::Object(data)) = o.get_mut("data")
+                && data.get("private") == Some(&Json::Bool(true))
+            {
+                for key in ["args", "result", "error"] {
+                    if let Some(x) = data.get_mut(key) {
+                        *x = Json::from(REDACTED);
+                    }
+                }
+                return;
+            }
+            let run = o.contains_key("id") && o.contains_key("origin") && o.contains_key("result");
+            if run && o.get("private") == Some(&Json::Bool(true)) {
+                if let Some(x) = o.get_mut("args") {
+                    *x = Json::from(REDACTED);
+                }
+                match o.get_mut("result") {
+                    Some(Json::Object(r)) => r.values_mut().for_each(|x| *x = Json::from(REDACTED)),
+                    Some(x) => *x = Json::from(REDACTED),
+                    None => {}
+                }
+                return;
+            }
+            o.values_mut().for_each(redact_private);
+        }
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

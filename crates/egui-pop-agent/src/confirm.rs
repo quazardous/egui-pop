@@ -252,11 +252,12 @@ pub(crate) fn pass(app: &AppHandle) {
             &c.collector,
             &c.action,
             &c.args,
-            c.origin,
+            c.origin.clone(),
         );
+        let f = serde_json::to_value(&f).unwrap_or(Json::Null);
         let _ = h
             .reply
-            .send(Ok(serde_json::to_value(&f).unwrap_or(Json::Null)));
+            .send(Ok(crate::grants::redacted_for(app, &c.origin, f)));
     }
     for (n, e) in ended {
         end(app, n, e);
