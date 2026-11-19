@@ -664,8 +664,8 @@ fn the_carousel_middle_follows_the_zoom_within_the_room() {
     let l = large.get_by_label("IMG_010.png").rect();
     // The plain drawer's cell is as wide as its thumbnail: a sixth, then
     // a quarter of the room, gaps aside.
-    assert!(s.width() > 90.0 && s.width() < 110.0, "{s:?}");
-    assert!(l.width() > 140.0 && l.width() < 160.0, "{l:?}");
+    assert!((90.0..110.0).contains(&s.width()), "{s:?}");
+    assert!((140.0..160.0).contains(&l.width()), "{l:?}");
     // One across, clamped: the middle still fits a third of the room.
     large.state_mut().set_thumbnails_per_row(1);
     large.run();
