@@ -61,6 +61,10 @@ assert_eq!(d.len(), 2);
   with Alt+F7 for the keyboard), `backdrop` (`Backdrop::Dim` or `Clear`,
   modal either way), `remember_position`. The settings `dialogs.closable`
   and `dialogs.movable` apply them to every dialog.
+- **Withdrawn**: `Dialogs::cancel(id, origin)` cancels a dialog by the
+  id `open` returned, shown or waiting, on the next frame and through
+  the answer step, when its question no longer stands (it expired);
+  `false` when it was no longer open.
 - **Windows** (ADR 0025): each application window has its own queue and
   a dialog blocks its own window group only; a dialog whose window
   closes is cancelled with it.

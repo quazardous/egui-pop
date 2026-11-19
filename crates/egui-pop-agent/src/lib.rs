@@ -554,6 +554,10 @@ struct UiJob {
     /// Once its events went in, this answer.
     answer: Option<Json>,
     deadline: Instant,
+    /// Who asks: the connection's agent.
+    origin: Origin,
+    /// As it was asked, for the journal.
+    params: Json,
     reply: Reply,
 }
 
@@ -798,6 +802,12 @@ impl UiSide {
                     );
                     return;
                 }
+                // While the user answers an agent's request, agents do not
+                // act on the interface: they could click the confirmation.
+                if request.writes() && confirm::input_locked(app) {
+                    confirm::refuse_ui(app, &origin, &params, reply);
+                    return;
+                }
                 let scope = match ui_scope(app, request.window.as_deref()) {
                     Ok(s) => s,
                     Err(e) => {
@@ -817,6 +827,8 @@ impl UiSide {
                     scope,
                     answer: None,
                     deadline,
+                    origin,
+                    params,
                     reply,
                 });
             }
@@ -850,6 +862,9 @@ impl UiSide {
         // One action at a time: a second one's node is found once the
         // first one's events went in.
         let mut busy = s.queued();
+        // A confirmation opened since the request came: its events do not
+        // go in (see `confirm::input_locked`).
+        let locked = confirm::input_locked(app);
         for mut j in self.ui_jobs.drain(..) {
             if let Some(mut answer) = j.answer.take() {
                 if !s.queued() {
@@ -881,6 +896,9 @@ impl UiSide {
                 Some((_, tree)) if !busy => match j.request.on_tree(tree, &j.scope) {
                     Ok((batches, answer)) if batches.is_empty() => {
                         let _ = j.reply.send(Ok(answer));
+                    }
+                    Ok(_) if locked => {
+                        confirm::refuse_ui(app, &j.origin, &j.params, j.reply);
                     }
                     Ok((batches, answer)) => {
                         s.queues

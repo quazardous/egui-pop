@@ -382,11 +382,13 @@ fn confirm(app: &AppHandle, args: &Json, origin: &Origin) -> Result<Json, String
     Ok(data)
 }
 
-/// A request declined (or dropped unanswered): the agent hears why.
+/// A request declined (or dropped unanswered): the agent hears why, and
+/// its dialog, if still open, is cancelled.
 fn declined(app: &AppHandle, n: u64, error: RpcError) {
     let Some(asking) = state(app).asking.borrow_mut().remove(&n) else {
         return;
     };
+    crate::confirm::close(app, asking.dialog, Origin::Agent(crate::AGENT.into()));
     app.publish(
         "user",
         None,
@@ -435,6 +437,16 @@ fn declined_error(name: &str) -> RpcError {
         RpcError::REFUSED,
         format!("the user declined to pair “{name}”"),
     )
+}
+
+/// Whether a pairing request waits for the user's answer, its dialog
+/// open.
+pub(crate) fn asking(app: &AppHandle, dialogs: &dialogs::Dialogs) -> bool {
+    state(app)
+        .asking
+        .borrow()
+        .values()
+        .any(|a| !a.answered && dialogs.is_open(a.dialog))
 }
 
 /// The socket is off: the requests held end.
