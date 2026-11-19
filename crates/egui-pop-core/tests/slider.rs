@@ -1224,3 +1224,67 @@ fn a_scrub_field_moves_its_travel_a_soft_range_whatever_its_width() {
     h.event(Event::ModifiersChanged(Modifiers::NONE));
     assert!((ev(&h) - 21.0).abs() < 0.2, "a hundredth more: {}", ev(&h));
 }
+
+#[test]
+fn a_focused_slider_keeps_its_arrows_and_says_it_reads_them() {
+    // A button on either side of the slider and below it: egui's arrow
+    // navigation would move the keyboard to one of them after the first
+    // press, unless the slider holds its arrows.
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(520.0, 120.0))
+        .build_ui_state(
+            |ui, p: &mut Two| {
+                let [a, _] = &mut p.values;
+                let mut ids = Vec::new();
+                ui.horizontal(|ui| {
+                    let _ = ui.button("Left");
+                    ids.push(ui.add(Slider::new(a, "Level", 0.0..=1.0).step(0.1)).id);
+                    let _ = ui.button("Right");
+                });
+                let _ = ui.button("Below");
+                p.ids = ids;
+            },
+            Two::default(),
+        );
+    h.run();
+    h.get_by_label("Level").click();
+    h.run();
+    let slider = h.state().ids[0];
+    for _ in 0..3 {
+        h.key_press(Key::ArrowRight);
+        h.run();
+    }
+    assert_eq!(
+        h.ctx.memory(|m| m.focused()),
+        Some(slider),
+        "the arrows step the slider, they do not move the keyboard"
+    );
+    assert!(
+        (h.state().values[0] - 0.3).abs() < 1e-9,
+        "{}",
+        h.state().values[0]
+    );
+    for _ in 0..2 {
+        h.key_press(Key::ArrowDown);
+        h.run();
+    }
+    assert_eq!(h.ctx.memory(|m| m.focused()), Some(slider));
+    assert!(
+        (h.state().values[0] - 0.1).abs() < 1e-9,
+        "{}",
+        h.state().values[0]
+    );
+    // The key dispatcher knows them: they reach the slider before a
+    // global binding of theirs.
+    let read = egui_pop_core::focus::keys_read_by_focus(&h.ctx);
+    for key in [
+        Key::ArrowLeft,
+        Key::ArrowRight,
+        Key::ArrowUp,
+        Key::ArrowDown,
+        Key::Home,
+        Key::End,
+    ] {
+        assert!(read.contains(&key), "{key:?} not said: {read:?}");
+    }
+}
