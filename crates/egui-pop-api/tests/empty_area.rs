@@ -64,7 +64,7 @@ fn harness() -> Harness<'static, App> {
 }
 
 fn tab(h: &Harness<'_, App>, title: &str) -> Rect {
-    h.get_by_role_and_label(egui::accesskit::Role::Button, title)
+    h.get_by_role_and_label(egui::accesskit::Role::Tab, title)
         .rect()
 }
 

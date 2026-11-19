@@ -2670,7 +2670,8 @@ pub(crate) fn windows(
 }
 
 /// The floats showing the detached windows drawn: one per window, keyed
-/// by its panel, at its place (egui-pop's, read on egui_stack's screens).
+/// by its panel, opened at its place (egui-pop's, read on egui_stack's
+/// screens).
 /// A window no longer drawn loses its dock, and egui_stack closes its
 /// float (forgetting its window's builder).
 ///
@@ -2698,12 +2699,13 @@ fn sync_floats(
     }
     for aux in drawn {
         let float = window_host::float_of(aux, screens);
-        match floats.float_mut(&float.key) {
-            Some(open) => open.place = float.place,
-            None => {
-                let place = float.place.clone();
-                floats.open_float(float).place = place;
-            }
+        // An open float keeps the place egui_stack follows from the system:
+        // egui_stack moves a window whose place changed from code (0.28.9),
+        // and egui-pop asks its own moves itself (`window_asks`), so its
+        // place, told by the system, is never written back (#5241).
+        if floats.float_mut(&float.key).is_none() {
+            let place = float.place.clone();
+            floats.open_float(float).place = place;
         }
     }
 }
@@ -5731,12 +5733,14 @@ impl TabViewer for Viewer<'_> {
     }
 
     fn on_tab_button(&mut self, tab: &mut PanelId, response: &egui::Response) {
-        // egui_stack's tab buttons carry no name: give them their panel's.
+        // A tab, named by its panel's title, as egui_stack's accessible tab
+        // pattern has it: its list names the dock, and the active tab's body
+        // is a tab panel of the same name.
         match self.prepared.get(tab) {
-            Some(p) => egui_pop_core::a11y::name(response, egui::Role::Button, &p.title),
+            Some(p) => egui_pop_core::a11y::name(response, egui::Role::Tab, &p.title),
             None => {
                 let title = self.app.panel_title(&response.ctx, tab);
-                egui_pop_core::a11y::name(response, egui::Role::Button, &title);
+                egui_pop_core::a11y::name(response, egui::Role::Tab, &title);
             }
         }
         // Its state's mark (`pop.panel.state`) or its kind's, the tab's one

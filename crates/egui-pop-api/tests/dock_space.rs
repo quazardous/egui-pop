@@ -101,9 +101,9 @@ fn harness(veto: bool) -> (Harness<'static, App>, Arc<AtomicUsize>) {
     (h, moves)
 }
 
-/// A tab's rect (the tab, a button, not a body's label).
+/// A tab's rect (the tab, not its body, a tab panel of the same name).
 fn tab(h: &Harness<'_, App>, title: &str) -> Rect {
-    h.get_by_role_and_label(egui::accesskit::Role::Button, title)
+    h.get_by_role_and_label(egui::accesskit::Role::Tab, title)
         .rect()
 }
 

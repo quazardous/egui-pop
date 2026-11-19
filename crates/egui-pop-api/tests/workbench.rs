@@ -203,7 +203,10 @@ fn the_drop_hint_is_published_with_its_rect_and_name() {
     let app = h.state().handle().clone();
     assert!(app.drop_hint().is_none());
     // Drag the Log tab (bottom only) over the start side bar.
-    let from = h.get_by_label("Log").rect().center();
+    let from = h
+        .get_by_role_and_label(egui::accesskit::Role::Tab, "Log")
+        .rect()
+        .center();
     let to = h.get_by_label("tree body").rect().center();
     let pointer = |h: &mut Harness<'_, App>, e: egui::Event| {
         h.input_mut().events.push(e);
@@ -264,7 +267,10 @@ fn a_tab_dragged_over_another_area_shows_where_it_would_join_its_tabs() {
     let app = h.state().handle().clone();
     // Drag the Tree tab (start side) over the middle of the bottom area,
     // which holds the Log tab.
-    let from = h.get_by_label("Tree").rect().center();
+    let from = h
+        .get_by_role_and_label(egui::accesskit::Role::Tab, "Tree")
+        .rect()
+        .center();
     let to = app.area_rect(Area::Bottom).unwrap().center();
     let pointer = |h: &mut Harness<'_, App>, e: egui::Event| {
         h.input_mut().events.push(e);
