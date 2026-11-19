@@ -11,6 +11,7 @@ use egui_pop::api::stories::Story;
 use egui_pop::api::strips::{self, Alignment, Indicator, Tone};
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::hover_card::Card;
+use egui_pop::core::ui::UiPop;
 use egui_pop::model::commands::CommandSpec;
 use egui_pop::model::ids::{CommandId, PluginId, StoryId};
 use egui_pop::model::panels::Area;
@@ -257,7 +258,7 @@ fn problems_popover(ui: &mut Ui, app: &AppHandle) {
         .find(|(i, _)| i.id == "gallery.problems")
         .map(|(_, s)| s)
         .unwrap_or_default();
-    ui.strong("Problems");
+    ui.strong_text("Problems");
     ui.label(format!(
         "{} errors, {} warnings from the pretend checks.",
         state.errors, state.warnings
@@ -278,7 +279,7 @@ fn node_popover(ui: &mut Ui, app: &AppHandle) {
     let mut host: String = ui
         .data(|d| d.get_temp(id))
         .unwrap_or_else(|| "node-1.local".to_string());
-    ui.strong("Render node");
+    ui.strong_text("Render node");
     ui.horizontal(|ui| {
         ui.label("Host");
         ui.text_edit_singleline(&mut host);

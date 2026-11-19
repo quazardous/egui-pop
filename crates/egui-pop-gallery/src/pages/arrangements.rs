@@ -1,6 +1,7 @@
 //! The arrangements page: named layouts saved, switched and reset, two
 //! templates of the gallery's own, and a veto on switching.
 
+use egui_pop::core::ui::UiPop;
 use std::sync::Mutex;
 
 use egui::Ui;
@@ -92,7 +93,7 @@ impl Plugin for ArrangementsPage {
 fn show(ui: &mut Ui, app: &AppHandle, name: &Mutex<String>) {
     ui.horizontal(|ui| {
         ui.label("Current:");
-        ui.strong(arrangements::current(app));
+        ui.strong_text(arrangements::current(app));
     });
     let mut veto = app.context().get(VETO) == "true";
     if widgets::checkbox(

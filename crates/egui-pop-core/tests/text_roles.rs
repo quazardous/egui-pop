@@ -29,7 +29,7 @@ fn texts() -> Harness<'static, Texts> {
                 ui.text_tone(Tone::Danger, "Failed: disk full");
                 ui.text_tone(Tone::Success, "Done");
                 ui.text_tone(Tone::Muted, "Skipped");
-                ui.strong("Two copies");
+                ui.strong_text("Two copies");
                 s.rule = Some(ui.divider().rect);
                 ui.horizontal(|ui| {
                     ui.label("left");

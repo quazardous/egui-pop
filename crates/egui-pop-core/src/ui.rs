@@ -222,6 +222,190 @@ pub fn set_scroll_offset(ctx: &egui::Context, id: egui::Id, offset: egui::Vec2) 
     true
 }
 
+/// The inherent methods of egui's [`Ui`] (egui 0.37), which an extension
+/// trait on `Ui` must not reuse: an inherent method always wins, so a
+/// [`UiPop`] method of the same name would never be called by
+/// `ui.name(..)`. A test checks the trait's names against it; refresh it
+/// on each egui bump (every `pub fn` in egui's `impl Ui` blocks).
+#[cfg(test)]
+const EGUI_UI_METHODS: &[&str] = &[
+    "add",
+    "add_enabled",
+    "add_enabled_ui",
+    "add_sized",
+    "add_space",
+    "add_visible",
+    "advance_cursor_after_rect",
+    "allocate_at_least",
+    "allocate_exact_size",
+    "allocate_painter",
+    "allocate_rect",
+    "allocate_response",
+    "allocate_space",
+    "allocate_ui",
+    "allocate_ui_with_layout",
+    "auto_id_with",
+    "available_height",
+    "available_rect_before_wrap",
+    "available_size",
+    "available_size_before_wrap",
+    "available_width",
+    "button",
+    "centered_and_justified",
+    "checkbox",
+    "clip_rect",
+    "close",
+    "close_kind",
+    "code",
+    "code_editor",
+    "collapsing",
+    "color_edit_button_hsva",
+    "color_edit_button_rgb",
+    "color_edit_button_rgba_premultiplied",
+    "color_edit_button_rgba_unmultiplied",
+    "color_edit_button_srgb",
+    "color_edit_button_srgba",
+    "color_edit_button_srgba_premultiplied",
+    "color_edit_button_srgba_unmultiplied",
+    "colored_label",
+    "columns",
+    "columns_const",
+    "ctx",
+    "cursor",
+    "debug_paint_cursor",
+    "disable",
+    "dnd_drag_source",
+    "dnd_drop_zone",
+    "drag_angle",
+    "drag_angle_tau",
+    "end_row",
+    "expand_to_include_rect",
+    "expand_to_include_x",
+    "expand_to_include_y",
+    "force_set_min_rect",
+    "group",
+    "heading",
+    "horizontal",
+    "horizontal_centered",
+    "horizontal_top",
+    "horizontal_wrapped",
+    "hyperlink",
+    "hyperlink_to",
+    "id",
+    "image",
+    "indent",
+    "interact",
+    "interact_opt",
+    "is_enabled",
+    "is_grid",
+    "is_rect_visible",
+    "is_sizing_pass",
+    "is_tooltip",
+    "is_visible",
+    "label",
+    "label_inputs_by",
+    "layer_id",
+    "layout",
+    "link",
+    "make_persistent_id",
+    "max_rect",
+    "menu_button",
+    "menu_image_button",
+    "menu_image_text_button",
+    "min_rect",
+    "min_size",
+    "monospace",
+    "multiply_opacity",
+    "name_inputs",
+    "new",
+    "new_child",
+    "next_auto_id",
+    "next_widget_position",
+    "opacity",
+    "painter",
+    "painter_at",
+    "pixels_per_point",
+    "place",
+    "placer",
+    "push_id",
+    "put",
+    "radio",
+    "radio_value",
+    "rect_contains_pointer",
+    "reset_style",
+    "response",
+    "save_grid",
+    "scope",
+    "scope_builder",
+    "scope_dyn",
+    "scope_id",
+    "scroll_to_cursor",
+    "scroll_to_cursor_animation",
+    "scroll_to_rect",
+    "scroll_to_rect_animation",
+    "scroll_with_delta",
+    "scroll_with_delta_animation",
+    "selectable_label",
+    "selectable_value",
+    "separator",
+    "set_clip_rect",
+    "set_cursor",
+    "set_grid",
+    "set_height",
+    "set_height_range",
+    "set_invisible",
+    "set_max_height",
+    "set_max_size",
+    "set_max_width",
+    "set_min_height",
+    "set_min_size",
+    "set_min_width",
+    "set_opacity",
+    "set_row_height",
+    "set_style",
+    "set_width",
+    "set_width_range",
+    "should_close",
+    "shrink_clip_rect",
+    "shrink_height_to_current",
+    "shrink_width_to_current",
+    "skip_ahead_auto_ids",
+    "small",
+    "small_button",
+    "spacing",
+    "spacing_mut",
+    "spinner",
+    "stack",
+    "strong",
+    "style",
+    "style_mut",
+    "take_available_height",
+    "take_available_space",
+    "take_available_width",
+    "text_edit_multiline",
+    "text_edit_singleline",
+    "text_style_height",
+    "text_valign",
+    "toggle_value",
+    "ui_contains_pointer",
+    "unique_id",
+    "vertical",
+    "vertical_centered",
+    "vertical_centered_justified",
+    "visuals",
+    "visuals_mut",
+    "weak",
+    "widget_style",
+    "will_parent_close",
+    "with_layout",
+    "with_visual_transform",
+    "wrap_mode",
+];
+
+/// [`UiPop`] names kept only as deprecated forwarders, shadowed on purpose.
+#[cfg(test)]
+const SHADOWED_DEPRECATED: &[&str] = &["strong"];
+
 mod sealed {
     pub trait Sealed {}
     impl Sealed for egui::Ui {}
@@ -260,7 +444,17 @@ pub trait UiPop: sealed::Sealed {
     /// (docs/stability.md).</div>
     ///
     /// Need (text): strong or bold text inline, a word that must stand out.
-    fn strong(&mut self, text: impl Into<String>) -> Response;
+    fn strong_text(&mut self, text: impl Into<String>) -> Response;
+
+    /// The former name of [`UiPop::strong_text`]. egui's `Ui` has an
+    /// inherent `strong`, and an inherent method wins over a trait one:
+    /// `ui.strong(..)` draws egui's label, never this one. Call
+    /// [`UiPop::strong_text`]; ban `egui::Ui::strong` in Clippy's
+    /// `disallowed-methods` (docs/first-app.md).
+    #[deprecated(note = "egui's inherent `Ui::strong` shadows it: use `UiPop::strong_text`")]
+    fn strong(&mut self, text: impl Into<String>) -> Response {
+        self.strong_text(text)
+    }
 
     /// Monospace text: a log's or a console's line, a path, a piece of
     /// code. egui's monospace text style (`font.text-style.monospace`,
@@ -496,7 +690,7 @@ impl UiPop for Ui {
         self.text_role(TextRole::Meta, text)
     }
 
-    fn strong(&mut self, text: impl Into<String>) -> Response {
+    fn strong_text(&mut self, text: impl Into<String>) -> Response {
         let rich = strong_text(self, text);
         self.label(rich)
     }
@@ -725,6 +919,41 @@ impl UiPop for Ui {
 mod tests {
     use super::*;
     use crate::theme::{self, ThemeSpec};
+
+    /// The method names of the `UiPop` trait, read from this file.
+    fn ui_pop_methods() -> Vec<&'static str> {
+        let source = include_str!("ui.rs");
+        let start = source.find("pub trait UiPop").expect("the trait");
+        let end = start + source[start..].find("\n}\n").expect("its end");
+        source[start..end]
+            .lines()
+            .filter_map(|line| line.trim_start().strip_prefix("fn "))
+            .map(|rest| {
+                let len = rest
+                    .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                    .unwrap_or(rest.len());
+                &rest[..len]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn no_ui_pop_method_is_shadowed_by_an_inherent_ui_method() {
+        let names = ui_pop_methods();
+        assert!(names.contains(&"strong_text") && names.contains(&"grid"));
+        let shadowed: Vec<_> = names
+            .iter()
+            .filter(|n| EGUI_UI_METHODS.contains(n) && !SHADOWED_DEPRECATED.contains(n))
+            .collect();
+        assert!(
+            shadowed.is_empty(),
+            "egui's `Ui` has inherent methods of these names, which `ui.name(..)` \
+             calls instead of `UiPop`'s: {shadowed:?}"
+        );
+        for name in SHADOWED_DEPRECATED {
+            assert!(names.contains(name), "`{name}` is no longer in the trait");
+        }
+    }
 
     fn pass(ctx: &egui::Context, add: impl FnMut(&mut Ui)) {
         let mut out = ctx.run_ui(egui::RawInput::default(), add);

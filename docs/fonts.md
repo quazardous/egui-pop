@@ -636,7 +636,8 @@ Applied through `wght` when the face has the axis; with a static face
 the nearest installed static weight family; otherwise ignored and
 reported once ("Hack has no weight axis, strong drawn regular").
 `RichText::strong()` keeps egui's colour meaning; egui-pop's own
-`strong` helper sets both the colour and `font.weight.strong`.
+`strong_text` helper (`ui.strong_text(..)`) sets both the colour and
+`font.weight.strong`.
 
 Sizes: today four `px` values. Proposed scale, in `rem` (the DTCG
 `dimension` reader already accepts `rem` at 16 px; egui-pop rem = the

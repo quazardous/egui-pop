@@ -36,13 +36,14 @@
 //!
 //! ```no_run
 //! # use egui_pop_api::{Ctx, zones::{self, Block}, frame};
+//! # use egui_pop_core::ui::UiPop;
 //! # use egui_pop_model::ids::BlockId;
 //! # fn connect(ctx: &mut Ctx<'_>) {
 //! ctx.block(
 //!     zones::CAPTION_START,
 //!     Block::replace(frame::BLOCK_MENU, BlockId::from_static("app.logo"), |ui, app| {
 //!         frame::menu_button(ui, app);
-//!         ui.strong("My app");
+//!         ui.strong_text("My app");
 //!     }),
 //! );
 //! # }

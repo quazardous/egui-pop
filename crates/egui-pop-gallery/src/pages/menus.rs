@@ -7,6 +7,7 @@ use egui_pop::api::app::MENU_VIEW;
 use egui_pop::api::menus::ListItem;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError, menus};
+use egui_pop::core::ui::UiPop;
 use egui_pop::model::commands::CommandSpec;
 use egui_pop::model::ids::{CommandId, MenuId, PluginId, StoryId};
 use egui_pop::model::menus::MenuItem;
@@ -156,7 +157,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         .inner_margin(t.space.l)
         .show(ui, |ui| {
             ui.set_min_size(egui::vec2(320.0, 120.0));
-            ui.strong("Right-click this card");
+            ui.strong_text("Right-click this card");
             ui.label(format!(
                 "Grid {}, snap {}, zoom {}%",
                 if cx.get("galleryGrid") == "true" {

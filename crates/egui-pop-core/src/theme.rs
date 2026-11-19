@@ -201,7 +201,7 @@ pub struct TextRoles {
     pub body: TextRoleStyle,
     /// Inline emphasis at the body's size (`text-role.strong`): not a
     /// [`TextRole`] variant, so drawn with [`crate::ui::strong_text`] and
-    /// `UiPop::strong`.
+    /// `UiPop::strong_text`.
     pub strong: TextRoleStyle,
     pub muted: TextRoleStyle,
     pub meta: TextRoleStyle,

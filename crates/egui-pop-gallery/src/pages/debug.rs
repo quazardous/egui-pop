@@ -134,7 +134,7 @@ fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
     );
     if let Some(f) = &s.feedback {
         ui.add_space(t.space.s);
-        ui.strong("Last call");
+        ui.strong_text("Last call");
         ui.label(
             RichText::new(serde_json::to_string(f).unwrap_or_default())
                 .monospace()
@@ -142,7 +142,7 @@ fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
         );
     }
     ui.add_space(t.space.m);
-    ui.strong("Key resolutions");
+    ui.strong_text("Key resolutions");
     let traces = app.key_traces();
     if traces.is_empty() {
         ui.weak("Press a key bound to a command (Alt+Down, Ctrl+Shift+P) and its resolution shows here.");
@@ -155,7 +155,7 @@ fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
         );
     }
     ui.add_space(t.space.m);
-    ui.strong("Focus chain");
+    ui.strong_text("Focus chain");
     let chain = focus::chain_names(ui.ctx());
     ui.monospace(if chain.is_empty() {
         "(nothing focused)".to_string()

@@ -24,6 +24,7 @@ use egui_pop::api::settings_window;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::binding;
+use egui_pop::core::ui::UiPop;
 use egui_pop::model::admin::ValueScope;
 use egui_pop::model::ids::{PluginId, SettingId, StoryId};
 use egui_pop::model::values::Descriptor;
@@ -237,7 +238,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     ui.add_space(t.space.s);
     settings::form(ui, app);
     ui.add_space(t.space.l);
-    ui.strong("Preview");
+    ui.strong_text("Preview");
     preview(ui, app);
 }
 

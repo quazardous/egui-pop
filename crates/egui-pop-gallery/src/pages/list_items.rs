@@ -3,6 +3,7 @@
 //! drag handles), the same rows in a tree, and a property panel like a
 //! viewer's selection panel, its names aligned.
 
+use egui_pop::core::ui::UiPop;
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::rc::Rc;
@@ -283,7 +284,7 @@ fn panel(ui: &mut Ui, p: &mut PageState) {
     };
     let e = ENTITIES[i];
     let t = Tokens::of(ui.ctx());
-    ui.strong(e.name);
+    ui.strong_text(e.name);
     widgets::checkbox(ui, &mut p.read_only, "Read-only");
     let read_only = p.read_only;
     let mut visible = !p.hidden.contains(&i);

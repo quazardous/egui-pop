@@ -1,0 +1,6 @@
+# egui methods that egui-pop answers by role. An inherent method of egui's
+# `Ui` wins over a trait method of the same name, so these calls would
+# never reach egui-pop's; Clippy warns on them (`disallowed_methods`).
+disallowed-methods = [
+    { path = "egui::Ui::strong", reason = "egui's bold-coloured label, not egui-pop's emphasis role: use `ui.strong_text(..)` (`UiPop`)" },
+]

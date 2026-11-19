@@ -470,6 +470,21 @@ the palette, detached panels, history), and
 takes pictures of a named widget, a panel or the window, headless or
 from a real window.
 
+## Lints
+
+An inherent method of egui's `Ui` always wins over a trait method of
+the same name, so a call to it never reaches egui-pop. The `UiPop`
+methods take names egui does not use (`ui.strong_text(..)`, not
+`ui.strong(..)`, which is egui's own bold-coloured label), and a
+`clippy.toml` beside the manifest (the templates have it) warns on the
+egui calls egui-pop answers by role:
+
+```toml
+disallowed-methods = [
+    { path = "egui::Ui::strong", reason = "use `ui.strong_text(..)` (`UiPop`)" },
+]
+```
+
 ## What next
 
 The template (`templates/app`) is these eight steps in one crate, with
