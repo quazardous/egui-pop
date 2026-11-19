@@ -1452,7 +1452,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop"
-version = "0.18.0"
+version = "0.18.1"
 dependencies = [
  "egui",
  "egui-pop-api",
@@ -1473,7 +1473,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-agent"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "egui",
  "egui-pop-agent",
@@ -1495,7 +1495,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-api"
-version = "0.16.0"
+version = "0.16.1"
 dependencies = [
  "bus-contract",
  "bus-contract-crossing",

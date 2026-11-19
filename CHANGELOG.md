@@ -8,6 +8,14 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.18.1 (2026-11-19)
+
+Published: egui-pop-api 0.16.1, egui-pop-agent 0.11.1, egui-pop 0.18.1.
+
+### Features
+
+- egui-pop, egui-pop-agent, egui-pop-api: Security: a private command's data no longer reaches an agent whose grant withholds private data (`Grant::private` off). Its arguments, result and error stayed in clear in the journal (`command.dispatched`, `command.done`, `command.failed`) and in the `commands` collector's run `history`, readable through `snapshot`, `journal.since` and `wait` whatever the grant. The journal now marks those events `"private": true` in their data and the run history marks those runs the same way, and the agent socket redacts them at read time, per reader: every `snapshot`, `call` and `wait` answer goes through `egui_pop_agent::grants::redacted_for`, which puts `"<private>"` in their place for such an agent (`egui_pop_api::host::redact_private`, `host::REDACTED`). An agent shown private data still reads them whole, so `egui-pop-agent-mcp` still answers a granted agent a queued private command's result. In process, the application's own reads are unchanged.
+
 ## 0.18.0 (2026-11-19)
 
 Published: egui-pop-hooks 0.4.0, egui-pop-model 0.12.0, egui-pop-core 0.15.0, egui-pop-api 0.16.0, egui-pop-test 0.17.0, egui-pop-viewport 0.15.0, egui-pop-i18n 0.16.0, egui-pop-agent 0.11.0, egui-pop-editors 0.16.0, egui-pop-platform 0.16.0, egui-pop-views 0.17.0, egui-pop-imaging 0.16.0, egui-pop 0.18.0.
