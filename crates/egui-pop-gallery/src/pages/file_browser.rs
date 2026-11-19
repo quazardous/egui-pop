@@ -88,6 +88,9 @@ type MarksMap = Arc<Mutex<HashMap<PathBuf, Marks>>>;
 /// The marks, made once per context.
 const MARKS: Slot<MarksMap> = Slot::new("gallery.file_browser.marks");
 
+/// What the library grid's last culling key asked, said under the browser.
+const LAST_MARK: Slot<Arc<Mutex<String>>> = Slot::new("gallery.file_browser.last_mark");
+
 /// The library grid's culling keys, said to the page.
 const SIGNALS: Slot<LibrarySignals> = Slot::new("gallery.file_browser.signals");
 
@@ -291,10 +294,11 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     // The library grid's culling keys: the page applies them.
     let marks = MARKS.get_or_insert_with(ui.ctx(), || Arc::new(Mutex::new(first_marks())));
     let signals = SIGNALS.get_or_insert_with(ui.ctx(), LibrarySignals::default);
+    let last_mark = LAST_MARK.get_or_insert_with(ui.ctx(), Arc::default);
     for signal in signals.drain() {
         let mut m = marks.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(said) = apply(&mut m, signal) {
-            *last_drop.lock().unwrap_or_else(|e| e.into_inner()) = said;
+            *last_mark.lock().unwrap_or_else(|e| e.into_inner()) = said;
         }
     }
     section(ui, "State");
@@ -314,6 +318,10 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     ));
     let last = last_drop.lock().unwrap_or_else(|e| e.into_inner()).clone();
     if !last.is_empty() {
-        ui.label(format!("Last: {last}."));
+        ui.label(format!("Last drop: {last}."));
+    }
+    let mark = last_mark.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    if !mark.is_empty() {
+        ui.label(format!("Last mark: {mark}."));
     }
 }
