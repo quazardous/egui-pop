@@ -10,6 +10,15 @@ publishes.
 
 ## 2026-11-19
 
+Published: egui-pop-core 0.13.3, egui-pop-api 0.14.1.
+
+### Fixes
+
+- egui-pop-api, egui-pop-core: Focusing a panel (`workbench.focus`, `<panel>.focus`, `AppHandle::focus_panel`) focuses the panel, no longer its first focusable widget: the panel's own stop holds the keyboard and Tab enters its widgets, as in classic applications. A slider first in a panel was focused that way, so the wheel over it stepped its value instead of scrolling the panel. A panel that wants a widget to take the keyboard names it with `focus::prefer` (a canvas under a toolbar, a search field a "go to the search" key lands in), as before. F6's regions still land on a region's first focusable widget.
+- egui-pop-core: A slider, a range slider, a knob or a scrub field keeps its drag when a widget appears before it mid-drag (a "modified" mark, a reset button shown once the value moves): it senses under an id keyed by its label in its `Ui`, no longer egui's automatic id, which changed with every widget added before it and made egui drop the drag after its first frame (the value moved once, then no end of the gesture, no undo step, and Escape restored nothing). Two such widgets with the same label in the same `Ui` take numbered ids.
+
+## 2026-11-19
+
 Published: egui-pop-core 0.13.2.
 
 ### Fixes
