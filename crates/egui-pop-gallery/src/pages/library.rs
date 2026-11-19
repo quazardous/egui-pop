@@ -421,7 +421,7 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
             new: Cell::new(false),
         });
     }
-    ui.label("Click an image, then 0 to 5 rate it, P picks, X rejects, U unflags, 6 to 9 toggle a label, S opens a stack, + and - zoom (per row: a count kept when the panel is resized; fixed size: a size kept, the columns follow the width). Drag across the cells to select with a band.");
+    ui.label("Click an image, then 0 to 5 rate it, P picks, X rejects, U unflags, 6 to 9 toggle a label, S opens a stack, + and - zoom (a count per row, kept when the panel is resized). Drag across the cells to select with a band.");
     ui.horizontal(|ui| {
         let out = SearchField::new(LIBRARY)
             .label("Search images")

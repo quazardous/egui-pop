@@ -6688,15 +6688,16 @@ fn the_library_grid_keeps_its_count_per_row_or_its_size_on_a_resize() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "library"));
     h.run();
     // Per row (the default): the count holds, the thumbnails grow.
-    h.get_by_label("Narrow").click();
+    // (Half: a narrow panel holds fewer than five of the smallest.)
+    h.get_by_label("Half").click();
     h.run();
-    let narrow = library_first_row(&h);
+    let half = library_first_row(&h);
     h.remove_cursor();
     h.run();
-    h.page_shot("library-per-row-narrow-pop-dark");
+    h.page_shot("library-per-row-half-pop-dark");
     h.get_by_label("Full").click();
     h.run();
-    assert_eq!(library_first_row(&h), narrow, "per row: the count is kept");
+    assert_eq!(library_first_row(&h), half, "per row: the count is kept");
     // Fixed size: the size holds, a wider panel gains columns.
     h.get_by_label("Fixed size").click();
     h.run();

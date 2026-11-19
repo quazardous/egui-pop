@@ -374,7 +374,7 @@ previewing a lower rating over the current one, [Rating stars](rating.md)).
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/text-log-pop-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/text-log-pop-high-contrast.png" width="200" alt="text-log-pop-high-contrast"></a><br>text-log-pop-high-contrast</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/text-log-filtered-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/text-log-filtered-pop-dark.png" width="200" alt="text-log-filtered-pop-dark"></a><br>text-log-filtered-pop-dark</td>
-    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-per-row-narrow-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-per-row-narrow-pop-dark.png" width="200" alt="library-per-row-narrow-pop-dark"></a><br>library-per-row-narrow-pop-dark</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-per-row-half-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-per-row-half-pop-dark.png" width="200" alt="library-per-row-half-pop-dark"></a><br>library-per-row-half-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/library-fixed-size-narrow-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/library-fixed-size-narrow-pop-dark.png" width="200" alt="library-fixed-size-narrow-pop-dark"></a><br>library-fixed-size-narrow-pop-dark</td>
   </tr>
   <tr>
