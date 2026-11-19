@@ -8,8 +8,13 @@ name: Semver checks
 # It runs (docs/testing.md, "CI jobs"):
 # - from CI (ci.yml), when a published crate's build input or a changeset
 #   changed since main;
-# - nightly on next, whatever changed: a failure turns this workflow's run
-#   red, as a CI failure would;
+# - nightly on next, when next moved since the last nightly run: a failure
+#   turns this workflow's run red, as a CI failure would. The `gate` job
+#   (seconds, no checkout, no toolchain) looks for the cache entry
+#   `semver-tested-<sha>` of next's head, which a nightly run saves once
+#   it has checked that commit, pass or fail. Found: the checks are
+#   skipped and the run is not red. Any doubt (API error, cache service
+#   down, entry evicted) runs them;
 # - by hand (workflow_dispatch), on the branch it is started from.
 # `cargo xtask publish` runs the checks again before uploading.
 on:
@@ -26,14 +31,62 @@ env:
   KNOPE_VERSION: "0.23.2"
 
 jobs:
+  # Nightly only: has next moved since the last nightly run? A run from
+  # ci.yml or by hand skips the gate and always checks.
+  gate:
+    name: Changed since last night
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+      sha: ${{ steps.next.outputs.sha }}
+    steps:
+      - name: next's head
+        id: next
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/next" --jq .sha) || sha=
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Was it checked?
+        id: checked
+        if: steps.next.outputs.sha != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: semver-tested-sha
+          key: semver-tested-${{ steps.next.outputs.sha }}
+          lookup-only: true
+      - name: Decide
+        id: decide
+        env:
+          SHA: ${{ steps.next.outputs.sha }}
+          HIT: ${{ steps.checked.outputs.cache-hit }}
+        run: |
+          if [ -n "$SHA" ] && [ "$HIT" = true ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "skipped: next unchanged since $SHA" >> "$GITHUB_STEP_SUMMARY"
+          elif [ -z "$SHA" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "run: next's head unknown (API error), checking anyway" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "run: next at $SHA not checked yet" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   semver:
     name: Semver checks
+    needs: gate
+    # Runs unless the gate said no: from ci.yml or by hand the gate is
+    # skipped, and a failed gate has no output, so it fails open.
+    if: ${{ !cancelled() && needs.gate.outputs.run != 'false' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
         with:
-          # A scheduled run starts from the default branch (main); it checks next.
-          ref: ${{ github.event_name == 'schedule' && 'next' || '' }}
+          # A scheduled run starts from the default branch (main); it checks
+          # next, at the commit the gate looked at.
+          ref: ${{ github.event_name == 'schedule' && (needs.gate.outputs.sha || 'next') || '' }}
       # It documents the features other than unstable ones: `views-video`, whose
       # bindings ask for GStreamer's development packages, and `views-webview`,
       # WebKitGTK's.
@@ -85,4 +138,17 @@ jobs:
             echo "$crate: $features"
             cargo semver-checks check-release --package "$crate" --default-features --features "$features"
           done
-
+      # A nightly run marks the commit it checked, pass or fail: the next
+      # night skips it unless next moved. A cache entry is the cheapest
+      # record the gate can read (a scheduled run's own `headSha` is
+      # main's, not the checked next's).
+      - name: Mark the commit as checked
+        if: ${{ !cancelled() && github.event_name == 'schedule' && needs.gate.outputs.sha != '' }}
+        env:
+          SHA: ${{ needs.gate.outputs.sha }}
+        run: echo "$SHA" > semver-tested-sha
+      - if: ${{ !cancelled() && github.event_name == 'schedule' && needs.gate.outputs.sha != '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: semver-tested-sha
+          key: semver-tested-${{ needs.gate.outputs.sha }}
