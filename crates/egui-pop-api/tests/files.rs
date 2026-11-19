@@ -2624,7 +2624,7 @@ impl FileSystem for Counted {
 }
 
 #[test]
-fn a_long_folder_reads_the_facts_it_shows_and_each_once() {
+fn a_long_folder_reads_each_fact_once_and_draws_only_the_rows_in_view() {
     let mut fs = MemoryFs::new().dir("/raws");
     for i in 0..2000 {
         fs = fs.file(format!("/raws/IMG_{i:05}.cr3"), vec![0; i % 7]);
@@ -2647,30 +2647,29 @@ fn a_long_folder_reads_the_facts_it_shows_and_each_once() {
         );
     h.run();
     let read = || reads.reads.load(Ordering::Relaxed);
-    // Only the rows in view are drawn, and only they read.
+    // Only the rows in view are drawn; the listing reads each file's facts
+    // once (off the interface thread on the system's file system).
     let (first, rows) = (read(), h.get_all_by_role(Role::Button).count());
     assert!(rows < 100, "{rows} widgets for 2000 rows");
     assert!(
-        first > 0 && first < 100,
-        "{first} reads for the rows in view"
+        (2000..2010).contains(&first),
+        "{first} reads for 2000 files"
     );
     assert!(h.query_by_label("IMG_00000.cr3").is_some());
     assert!(h.query_by_label("IMG_01999.cr3").is_none());
     // More frames read nothing more.
     h.run();
     assert_eq!(read(), first);
-    // Sorting by size reads the rest, once.
+    // Sorting by size, then turning it, reads nothing: the facts are known.
     let size = files::sort::SortColumn::Size;
     h.state_mut()
         .set_sort(files::sort::PickerSort::default().click(size));
     h.run();
-    let sorted = read();
-    assert!((2000..2000 + first).contains(&sorted), "{sorted} reads");
-    // Turning it reads nothing: the facts are known, the folder too.
+    assert_eq!(read(), first);
     let turned = h.state().sort.click(size);
     h.state_mut().set_sort(turned);
     h.run();
-    assert_eq!(read(), sorted);
+    assert_eq!(read(), first);
 }
 
 #[test]

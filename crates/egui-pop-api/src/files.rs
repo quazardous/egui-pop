@@ -179,7 +179,7 @@ pub mod sort;
 
 use browser::ThumbnailProvider as _;
 use browser::ViewMode as _;
-use fs::{Meta, SharedFs};
+use fs::SharedFs;
 use groups::{FileGroup, FileGrouping, Groupings};
 use places::{PlaceProvider, PlaceProviders, PlaceSection, SystemPlaces};
 use preview::Previews;
@@ -293,8 +293,6 @@ pub const GROUPED: &str = "settings/files.grouped";
 /// `[purpose, folder]` pairs, newest first). See [`FileRequest::purpose`].
 pub const LAST_FOLDERS: &str = "settings/files.last_folders";
 
-/// How many entries around those drawn have their facts read, at least.
-const FACTS_PAGE: usize = 64;
 /// How many folders the in-app picker goes back through.
 const HISTORY_KEPT: usize = 64;
 /// How many recent places are kept.
@@ -2924,20 +2922,10 @@ fn first_crumb(widths: &[f32], room: f32, collapsed: f32) -> usize {
     first
 }
 
-/// A folder as last read, and in which order its entries lie.
-#[derive(Clone, Debug)]
-struct Listing {
-    dir: PathBuf,
-    hidden: bool,
-    order: (PickerSort, bool),
-    entries: Arc<Vec<Entry>>,
-    /// Groups were looked for.
-    grouped: bool,
-    /// The folder's groups, by main file.
-    groups: Arc<HashMap<PathBuf, FileGroup>>,
-    /// The main file of each member.
-    members: Arc<HashMap<PathBuf, PathBuf>>,
-}
+/// The file browser the picker lists through, never drawn: made at the
+/// first listing, once the picker's groupings are known. Shared: the picker
+/// is copied every frame it is drawn.
+type Lister = Arc<Mutex<Option<browser::FileBrowser>>>;
 
 /// The picker's thumbnails, the browser's over the previews.
 #[derive(Clone)]
@@ -3090,13 +3078,15 @@ pub struct FilePicker {
     thumbnails: Option<PickerThumbnails>,
     /// The selection a rubber band adds to while it is drawn.
     band_base: Option<BTreeSet<PathBuf>>,
-    /// The entries last drawn, whose facts are read.
-    drawn: std::ops::Range<usize>,
-    /// The facts of the files the grid has shown, read once per listing:
-    /// the cells in view would read them every frame otherwise.
-    metas: Arc<Mutex<HashMap<PathBuf, Option<Meta>>>>,
-    /// Shared: the picker is copied every frame it is drawn.
-    listing: Option<Listing>,
+    /// Lists the folder, filters, orders, groups and ranks its entries.
+    lister: Lister,
+    /// The folder's groups as last listed, by main file.
+    groups: Arc<HashMap<PathBuf, FileGroup>>,
+    /// The listing or its groups were still under way at the last look.
+    loading: bool,
+    /// The entry to highlight and select once the listing has it (a column
+    /// reached, the folder come from).
+    reach_focus: Option<PathBuf>,
     fs: SharedFs,
     previews: Option<Previews>,
     groupings: Option<Groupings>,
@@ -3190,9 +3180,10 @@ impl FilePicker {
             asked_thumbnails: false,
             thumbnails: None,
             band_base: None,
-            drawn: 0..0,
-            metas: Arc::default(),
-            listing: None,
+            lister: Arc::default(),
+            groups: Arc::default(),
+            loading: false,
+            reach_focus: None,
             fs,
             previews: None,
             groupings: None,
@@ -3258,16 +3249,7 @@ impl FilePicker {
 
     /// The group a file heads, in the folder as last listed.
     pub fn group_of(&self, path: &Path) -> Option<&FileGroup> {
-        self.listing.as_ref()?.groups.get(path)
-    }
-
-    /// Whether a file is left out of the entries, for its group's: the filter
-    /// has to accept the main file, or the member stays an entry of its own.
-    fn absorbed(&self, listing: &Listing, path: &Path) -> bool {
-        listing
-            .members
-            .get(path)
-            .is_some_and(|main| self.accepts(main))
+        self.groups.get(path)
     }
 
     /// The entry the preview is of: the highlighted one.
@@ -3303,6 +3285,7 @@ impl FilePicker {
         self.error = None;
         self.selected.clear();
         self.anchor = None;
+        self.reach_focus = None;
         if self.kind != ChooseKind::Save {
             self.text.clear();
         }
@@ -3332,9 +3315,9 @@ impl FilePicker {
 
     /// Reads the folder again, and the facts of its files.
     pub fn reload(&mut self) {
-        self.listing = None;
-        // A file changed is previewed again: its time is in the cache's key.
-        lock(&self.metas).clear();
+        if let Some(b) = lock(&self.lister).as_mut() {
+            b.reload();
+        }
         lock(&self.column_cache).clear();
     }
 
@@ -3366,86 +3349,86 @@ impl FilePicker {
         self.filter().is_none_or(|f| f.accepts(path))
     }
 
-    /// The folder's entries in the picker's order, those the filter accepts
-    /// (folders whatever the filter; none but folders when choosing a folder);
-    /// hidden ones only when asked. The folder is read once, and sorting by
-    /// size or by date reads every entry's facts once, off that listing.
-    pub fn entries(&mut self) -> Vec<Entry> {
-        let order = (self.sort, self.folders_first);
-        let read = self.listing.as_ref().is_none_or(|l| {
-            l.dir != self.dir || l.hidden != self.show_hidden || l.grouped != self.grouping_on()
-        });
-        if read {
-            let all: Vec<Entry> = self
-                .fs
-                .read_dir(&self.dir)
-                .map(|r| {
-                    r.into_iter()
-                        .map(|e| Entry {
-                            path: self.dir.join(&e.name),
-                            name: e.name,
-                            is_dir: e.is_dir,
-                        })
-                        .filter(|e| self.show_hidden || !e.name.starts_with('.'))
-                        .filter(|e| e.is_dir || self.kind != ChooseKind::Folder)
-                        .collect()
-                })
-                .unwrap_or_default();
-            lock(&self.metas).clear();
-            let (groups, members) = self.groups_in(&all);
-            let all = sort::sort_entries(all, order.0, order.1, |e| self.meta_of(&e.path));
-            self.listing = Some(Listing {
-                dir: self.dir.clone(),
-                hidden: self.show_hidden,
-                order,
-                entries: Arc::new(all),
-                grouped: self.grouping_on(),
-                groups: Arc::new(groups),
-                members: Arc::new(members),
-            });
-        } else if let Some(l) = self.listing.as_ref().filter(|l| l.order != order) {
-            let all = sort::sort_entries(l.entries.to_vec(), order.0, order.1, |e| {
-                self.meta_of(&e.path)
-            });
-            if let Some(l) = &mut self.listing {
-                l.order = order;
-                l.entries = Arc::new(all);
-            }
+    /// What the browser shows of the folder: the filter's files and every
+    /// folder; none but folders when choosing a folder.
+    fn entry_filter(&self) -> browser::EntryFilter {
+        let f = self
+            .filter()
+            .map(browser::EntryFilter::from)
+            .unwrap_or_default();
+        if self.kind == ChooseKind::Folder {
+            f.with_kind(browser::EntryKind::Folder)
+        } else {
+            f
         }
-        self.listing
-            .as_ref()
-            .map(|l| {
-                l.entries
-                    .iter()
-                    .filter(|x| x.is_dir || self.accepts(&x.path))
-                    .filter(|x| !self.absorbed(l, &x.path))
-                    .cloned()
-                    .collect()
-            })
-            .unwrap_or_default()
     }
 
-    /// The groups among a folder's entries, by main file, and each member's main
-    /// file. A hidden file joins no group, shown or not.
-    #[allow(clippy::type_complexity)]
-    fn groups_in(&self, all: &[Entry]) -> (HashMap<PathBuf, FileGroup>, HashMap<PathBuf, PathBuf>) {
-        let Some(groupings) = self.groupings.as_ref().filter(|_| self.grouping_on()) else {
-            return Default::default();
+    /// The folder's entries in the picker's order, those the filter accepts
+    /// (folders whatever the filter; none but folders when choosing a folder),
+    /// hidden ones only when asked, those the field's text matches best first.
+    /// The folder is listed through a [`browser::FileBrowser`], off the
+    /// interface thread on the system's file system: its entries come in over
+    /// the next frames.
+    pub fn entries(&mut self) -> Vec<Entry> {
+        let filter = self.entry_filter();
+        let query = if self.ranks() {
+            self.text.trim().to_owned()
+        } else {
+            String::new()
         };
-        let names: Vec<&str> = all
-            .iter()
-            .filter(|e| !e.is_dir && !e.name.starts_with('.'))
-            .map(|e| e.name.as_str())
-            .collect();
-        let mut groups = HashMap::new();
-        let mut members = HashMap::new();
-        for group in groupings.in_folder(&self.dir, &names) {
-            for member in &group.members {
-                members.insert(member.clone(), group.main.clone());
+        let grouped = self.grouping_on();
+        let lister = Arc::clone(&self.lister);
+        let mut lister = lock(&lister);
+        let b = lister.get_or_insert_with(|| {
+            let source = Arc::new(browser::FsSource::new(self.fs.clone()));
+            let b = browser::FileBrowser::new("egui_pop.files.picker", source, self.dir.clone())
+                .with_modes(browser::ViewModes::empty());
+            match self.groupings.clone() {
+                Some(g) => b.with_grouping(g),
+                None => b,
             }
-            groups.insert(group.main.clone(), group);
+        });
+        if b.place() != self.dir {
+            b.open(self.dir.clone());
         }
-        (groups, members)
+        b.set_show_hidden(self.show_hidden);
+        b.set_grouped(grouped);
+        b.set_filter(filter);
+        b.set_sort(self.sort);
+        b.set_folders_first(self.folders_first);
+        b.set_query(&query);
+        b.pump();
+        self.groups = b.groups();
+        self.loading = b.loading() || b.groups_pending();
+        if self.loading
+            && let Some(ctx) = &self.ctx
+        {
+            ctx.request_repaint();
+        }
+        let entries: Vec<Entry> = (b.entries().iter())
+            .map(|e| Entry {
+                path: e.path.clone(),
+                name: e.name.clone(),
+                is_dir: e.is_dir(),
+            })
+            .collect();
+        drop(lister);
+        if let Some(focus) = self.reach_focus.take() {
+            if let Some(at) = entries.iter().position(|e| e.path == focus) {
+                self.highlight = at;
+                self.reveal_cell = true;
+                self.selected.clear();
+                self.selected.insert(focus);
+            } else if self.loading {
+                self.reach_focus = Some(focus);
+            }
+        }
+        entries
+    }
+
+    /// Whether the folder's listing, or its groups, are still under way.
+    pub fn loading(&self) -> bool {
+        self.loading
     }
 
     /// Groups files or leaves each its own entry: the highlight stays on its
@@ -3457,16 +3440,23 @@ impl FilePicker {
         }
         self.reorder(|p| p.grouped = on);
         self.entries();
-        let Some(listing) = self.listing.clone() else {
-            return;
-        };
         let taken: Vec<PathBuf> = (self.selected.iter())
-            .filter(|p| self.absorbed(&listing, p))
+            .filter(|p| self.main_of(p).is_some())
             .cloned()
             .collect();
         for path in taken {
             self.selected.remove(&path);
         }
+    }
+
+    /// The main file of a group's member shown as its group, in the folder as
+    /// last listed.
+    fn main_of(&self, path: &Path) -> Option<&PathBuf> {
+        self.groups
+            .values()
+            .find(|g| g.members.iter().any(|m| m == path))
+            .map(|g| &g.main)
+            .filter(|main| self.accepts(main))
     }
 
     /// Takes another order; the highlighted entry stays highlighted, wherever
@@ -3490,8 +3480,7 @@ impl FilePicker {
         change(self);
         if let Some(path) = at {
             let shown = self.visible();
-            let main = self.listing.as_ref().and_then(|l| l.members.get(&path));
-            let path = main.unwrap_or(&path);
+            let path = self.main_of(&path).cloned().unwrap_or(path);
             if let Some(n) = shown.iter().position(|e| e.path == *path) {
                 self.highlight = n;
             }
@@ -3590,25 +3579,10 @@ impl FilePicker {
         }
     }
 
-    /// The entries shown: all of them, or those the filter matches (best
-    /// first, equals in the picker's order); with a typed path, those of its folder its last part
-    /// starts.
+    /// The entries shown: [`entries`](Self::entries), the field's text ranking
+    /// them.
     pub fn visible(&mut self) -> Vec<Entry> {
-        let entries = self.entries();
-        if !self.ranks() {
-            return entries;
-        }
-        // The browser's ranking: a group answers to its members' names too.
-        browser::rank_by_names(&entries, self.text.trim(), |e| {
-            let mut names = vec![e.name.clone()];
-            if let Some(group) = self.group_of(&e.path) {
-                names.extend(group.member_names());
-            }
-            names
-        })
-        .into_iter()
-        .map(|n| entries[n].clone())
-        .collect()
+        self.entries()
     }
 
     /// What a typed path may complete to: the names in its folder its
@@ -5206,8 +5180,10 @@ impl FilePicker {
         }
         if let Some(dir) = chosen {
             // The folder shown, asked again: it is read again.
-            if dir == self.dir {
-                self.listing = None;
+            if dir == self.dir
+                && let Some(b) = lock(&self.lister).as_mut()
+            {
+                b.reload();
             }
             self.go(dir);
             self.refocus = true;
@@ -5261,14 +5237,8 @@ impl FilePicker {
     /// another column than the folder shown's.
     fn reach(&mut self, place: PathBuf, focus: Option<PathBuf>) {
         self.go(place);
-        let Some(focus) = focus else {
-            return;
-        };
-        if let Some(at) = self.visible().iter().position(|e| e.path == focus) {
-            self.highlight = at;
-            self.selected.clear();
-            self.selected.insert(focus);
-        }
+        self.reach_focus = focus;
+        self.entries();
     }
 
     /// The menu under a breadcrumb's `button`, listing what `read` gives as it
@@ -5465,16 +5435,11 @@ impl FilePicker {
         }
         let reveal = std::mem::take(&mut self.reveal_cell) && !shown.is_empty();
         let highlight = self.highlight.min(shown.len().saturating_sub(1));
-        // The facts of the entries about to be drawn, each read once: those
-        // last drawn, a page around them, and the highlight's.
-        let page = self.drawn.len().max(FACTS_PAGE);
-        let near = self.drawn.start.saturating_sub(page)..self.drawn.end + page;
-        let lit = highlight.saturating_sub(page)..highlight + page;
-        let entries: Vec<browser::SourceEntry> = shown
-            .iter()
-            .enumerate()
-            .map(|(n, e)| self.source_entry(e, near.contains(&n) || lit.contains(&n)))
-            .collect();
+        // The browser's entries, with their facts, in the order shown.
+        let (entries, groups, absorbed) = match lock(&self.lister).as_ref() {
+            Some(b) => (b.entries().to_vec(), b.groups(), b.absorbed().clone()),
+            None => Default::default(),
+        };
         // Where a selection exists apart from the highlight, a ring says
         // where the highlight is; otherwise the highlight is the selection.
         let apart = self.selects_apart();
@@ -5503,29 +5468,6 @@ impl FilePicker {
         self.row_ids.clear();
         // A group's entry carries its members' badges, and stands in with a
         // member's thumbnail.
-        let groups = self
-            .listing
-            .as_ref()
-            .map(|l| l.groups.clone())
-            .unwrap_or_default();
-        let absorbed: HashMap<PathBuf, browser::SourceEntry> = if grid {
-            groups
-                .values()
-                .flat_map(|g| g.members.iter())
-                .map(|m| {
-                    let e = Entry {
-                        path: m.clone(),
-                        name: m
-                            .file_name()
-                            .map_or_else(String::new, |n| n.to_string_lossy().into_owned()),
-                        is_dir: false,
-                    };
-                    (m.clone(), self.source_entry(&e, true))
-                })
-                .collect()
-        } else {
-            HashMap::new()
-        };
         let ctx = ui.ctx().clone();
         let marked = groups.clone();
         let marks = move |e: &browser::SourceEntry| browser::EntryMarks {
@@ -5636,7 +5578,6 @@ impl FilePicker {
         self.thumbs = thumbs;
         self.cols = cols;
         self.columns = out.columns;
-        self.drawn = out.visible.clone();
         if let Some(r) = out.reach {
             self.reach(r.place, r.focus);
             self.refocus = true;
@@ -5647,29 +5588,6 @@ impl FilePicker {
             self.apply_band(&band, &entries);
         }
         self.asked_thumbnails = grid;
-    }
-
-    /// An entry as the browser's drawer shows it, with its facts when
-    /// `facts` (read from the file system once per listing).
-    fn source_entry(&self, e: &Entry, facts: bool) -> browser::SourceEntry {
-        let meta = if e.is_dir || !facts {
-            None
-        } else {
-            self.meta_of(&e.path)
-        };
-        browser::SourceEntry {
-            path: e.path.clone(),
-            name: e.name.clone(),
-            kind: if e.is_dir {
-                browser::EntryKind::Folder
-            } else {
-                browser::EntryKind::File
-            },
-            size: meta.map(|m| m.len),
-            modified: meta.and_then(|m| m.modified),
-            taken: None,
-            app_id: None,
-        }
     }
 
     /// Selects the files a rubber band touches (choosing several): alone, or
@@ -5729,13 +5647,6 @@ impl FilePicker {
             r.scroll_to_me(None);
         }
         self.entry_clicks(r, n, shown, modifiers, pointer, answer);
-    }
-
-    /// A file's facts, read once per listing.
-    fn meta_of(&self, path: &Path) -> Option<Meta> {
-        *lock(&self.metas)
-            .entry(path.to_path_buf())
-            .or_insert_with(|| self.fs.metadata(path).ok())
     }
 
     /// What the cell just drawn does with the pointer and the keys.
@@ -6104,6 +6015,20 @@ mod tests {
     use super::browser::fit_columns;
     use super::*;
 
+    /// The names a picker shows once its folder is listed: the system's file
+    /// system lists off the thread, its entries coming in over the next looks.
+    fn listed(p: &mut FilePicker) -> Vec<String> {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            let names: Vec<String> = p.visible().into_iter().map(|e| e.name).collect();
+            if !p.loading() {
+                return names;
+            }
+            assert!(std::time::Instant::now() < deadline, "still listing");
+            std::thread::yield_now();
+        }
+    }
+
     fn tree(name: &str) -> PathBuf {
         let root =
             std::env::temp_dir().join(format!("egui-pop-files-unit-{name}-{}", std::process::id()));
@@ -6235,8 +6160,7 @@ mod tests {
                 .directory(&root)
                 .filter("Images", &["png", "jpg"]),
         );
-        let names =
-            |p: &mut FilePicker| p.visible().into_iter().map(|e| e.name).collect::<Vec<_>>();
+        let names = listed;
         assert_eq!(names(&mut p), vec!["notes", "photos"]);
         p.go(root.join("photos"));
         // Folders first, then the files the filter accepts.
@@ -6496,7 +6420,7 @@ mod tests {
     fn folders_saves_and_several_files() {
         let root = tree("kinds");
         let mut p = FilePicker::new(&FileRequest::folder("Folder").directory(&root));
-        assert!(p.visible().iter().all(|e| e.is_dir));
+        assert_eq!(listed(&mut p), ["notes", "photos"]);
         assert_eq!(p.accept(), Some(PickerAnswer::Chosen(vec![root.clone()])));
         let mut p = FilePicker::new(&FileRequest::save("Save", "new.png").directory(&root));
         assert_eq!(p.text, "new.png");
@@ -6505,6 +6429,7 @@ mod tests {
             Some(PickerAnswer::Chosen(vec![root.join("new.png")]))
         );
         let mut p = FilePicker::new(&FileRequest::open_many("Many").directory(root.join("photos")));
+        listed(&mut p);
         p.highlight = 2;
         p.toggle();
         p.highlight = 3;

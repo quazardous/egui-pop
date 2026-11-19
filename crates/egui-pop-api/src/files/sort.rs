@@ -14,8 +14,9 @@
 use std::cmp::Ordering;
 use std::time::SystemTime;
 
-use super::fs::Meta;
-use super::{Entry, extension_dot};
+use super::extension_dot;
+#[cfg(test)]
+use super::{Entry, fs::Meta};
 
 /// What the picker's and the file browser's entries are sorted by.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -182,11 +183,9 @@ pub(super) struct SortFacts<'a> {
     pub taken: Option<SystemTime>,
 }
 
-/// Puts entries in `sort`'s order. Folders stay first when `folders_first`,
-/// in the same direction among themselves. What has no value in the column (a
-/// folder's size and type, a time the file system does not say) goes last either
-/// way, and the name settles what ties: upwards, except in the name's own column.
-/// `facts` is asked only when the column needs them.
+/// Puts entries in `sort`'s order ([`sort_by`]), `facts` asked only when the
+/// column needs them: the tests' way to read the order.
+#[cfg(test)]
 pub(super) fn sort_entries(
     entries: Vec<Entry>,
     sort: PickerSort,
@@ -212,8 +211,10 @@ pub(super) fn sort_entries(
     keyed.into_iter().map(|(_, e)| e).collect()
 }
 
-/// Sorts `items` in `sort`'s order, as [`sort_entries`] says, reading each
-/// one's facts once.
+/// Sorts `items` in `sort`'s order. Folders stay first when `folders_first`,
+/// in the same direction among themselves. What has no value in the column (a
+/// folder's size and type, a time the file system does not say) goes last either
+/// way, and the name settles what ties: upwards, except in the name's own column.
 pub(super) fn sort_by<T>(
     items: &mut [T],
     sort: PickerSort,
