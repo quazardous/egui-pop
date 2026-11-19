@@ -450,8 +450,10 @@ The bridge has one caller identity: every command it runs is
   (`Collector::destructive`), waits for the user's confirmation when an
   agent calls it through the agent socket: a dialog names the agent,
   the command and its arguments, and a decline or a deadline refuses it
-  (`command.refused`, `by: "pop.agent.confirm"`). The user's own runs
-  are never asked ([The agent socket](agent-socket.md#destructive-calls-the-user-confirms)).
+  (`command.refused`, `by: "pop.agent.confirm"`) and cancels the
+  dialog. While it is open, agents' `ui` actions are refused, so an
+  agent cannot click its own confirmation. The user's own runs are
+  never asked ([The agent socket](agent-socket.md#destructive-calls-the-user-confirms)).
 - **Grants per agent.** Over the agent socket, each agent is held to a
   grant the application sets (commands, read-only, values, `ui`
   actions; presets read-only, editor, full): a client that does not say

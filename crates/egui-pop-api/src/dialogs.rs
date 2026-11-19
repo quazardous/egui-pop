@@ -1239,6 +1239,19 @@ impl Dialogs {
         Ok(())
     }
 
+    /// Cancels a dialog by its id, shown or waiting (applied on the next
+    /// frame, through the [`STEP_ANSWER`] step, as `origin`): what opened
+    /// it no longer wants an answer, its question expired. Returns
+    /// whether it was open.
+    pub fn cancel(&self, id: u64, origin: Origin) -> bool {
+        let mut s = lock(&self.0);
+        if !s.queue.iter().any(|o| o.id == id) {
+            return false;
+        }
+        s.given.push((id, Answer::Cancel, origin));
+        true
+    }
+
     /// The dialog shown in the current window group and how many wait
     /// behind it, as the bridge shows them.
     pub fn describe(&self) -> Json {

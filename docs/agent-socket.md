@@ -174,8 +174,8 @@ never says `hello` keeps working as before, as
   case, `[a-z0-9._-]`, 32 characters at most, a number added when the
   id is taken or reserved: `agent-socket`, `anonymous`, `user`,
   `debug-bridge`) and its `token`, given this once. Declined, it is
-  error `-32001`; unanswered at the deadline, `-32002` (the dialog stays
-  open, and accepting it then pairs nothing).
+  error `-32001`; unanswered at the deadline, `-32002`, and the dialog
+  is cancelled (an answer given late pairs nothing).
 - **The next times**, `hello { "name": "Claude Code", "token": "egp_…" }`
   is paired at once; an unknown token is error `-32001`, and the agent
   asks again without one.
@@ -236,6 +236,24 @@ each capability; for an action, without arguments).
 - **Never asked**: the user's own calls and runs, a call that is not
   destructive, and a call the bridge refuses anyway (its mode, the
   `agent` flags): that one is refused at once, as before.
+- **Expired.** Unanswered at its deadline (or when the socket stops),
+  the call is refused and its dialog cancelled; an answer given late
+  (`pop.agent.confirm` run after it) finds nothing waiting and runs
+  nothing.
+
+### Input locked while the user answers
+
+While a confirmation is open, a destructive call's or a pairing
+request's, agents do not act on the interface: a `ui` action (click,
+type, keys, scroll, hover) is error `-32001`, "input is locked while the
+user answers an agent's request", and the journal says
+`debug.call.refused` (`collector: "ui"`, the action, `by:
+"pop.agent.confirm"`) from the agent's origin. Otherwise an agent
+allowed to act through `ui` could click the confirmation's button,
+which answers as the user. Reading the tree (`ui` `tree`) still works,
+and the user's own mouse and keyboard are not touched. An action
+already on its way when the dialog opens is refused before its events
+go in. Once the dialog is answered or cancelled, agents act again.
 
 ```console
 $ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"call","params":{"collector":"commands","action":"run","args":{"id":"files.trash","args":{"path":"a.jpg"}},"deadline_ms":30000}}' \
@@ -384,10 +402,6 @@ application's own (`settled` stays reachable).
   removing it from `agent-pairings.json`. The MCP binary does not say
   `hello` yet, so it reads only unless the application allows unpaired
   writes.
-- **Confirmation through `ui`.** An agent allowed to act through `ui`
-  (the bridge on, its grant's `ui`) can click the confirmation's button, which answers as
-  the user; the input lock while a confirmation is open comes later.
-- **A confirmation left open.** Past its deadline the dialog stays
-  open; accepting it then runs nothing. Calls made in the application's
-  own process (`AppHandle::debug_call`) are not asked: only the
+- **In-process calls are not asked.** Calls made in the application's
+  own process (`AppHandle::debug_call`) are not confirmed: only the
   socket's are.

@@ -179,9 +179,11 @@ pub(crate) fn hold(app: &AppHandle, call: Call, deadline: Instant, reply: Reply)
 pub(crate) fn accept(app: &AppHandle, n: u64) -> Result<Json, String> {
     let st = state(app);
     let mut held = st.held.borrow_mut();
-    let h = held
-        .get_mut(&n)
-        .ok_or_else(|| format!("no agent's call waits for confirmation under {n}"))?;
+    let h = held.get_mut(&n).ok_or_else(|| {
+        format!(
+            "no agent's call waits for confirmation under {n}: it was answered, or its deadline passed and nothing runs"
+        )
+    })?;
     h.accepted = true;
     let what = h.call.what();
     drop(held);
@@ -261,12 +263,65 @@ pub(crate) fn pass(app: &AppHandle) {
     }
 }
 
-/// A held call refused: the agent hears why, the journal says it.
+/// A held call refused: the agent hears why, the journal says it, and
+/// its dialog, if still open, is cancelled.
 fn end(app: &AppHandle, n: u64, error: RpcError) {
     let Some(h) = state(app).held.borrow_mut().remove(&n) else {
         return;
     };
+    close(app, h.dialog, h.call.origin.clone());
     refuse(app, &h.call, h.reply, error);
+}
+
+/// Cancels dialog `dialog` when still open, as `origin` (the request's):
+/// nobody waits for its answer any more.
+pub(crate) fn close(app: &AppHandle, dialog: u64, origin: Origin) {
+    if let Some(d) = app.service(&DIALOGS)
+        && d.cancel(dialog, origin)
+    {
+        app.egui().request_repaint();
+    }
+}
+
+/// Whether agents' input is locked: a confirmation the user has not
+/// answered yet is open (a destructive call's, or a pairing request's).
+pub(crate) fn input_locked(app: &AppHandle) -> bool {
+    let Some(d) = app.service(&DIALOGS) else {
+        return false;
+    };
+    state(app)
+        .held
+        .borrow()
+        .values()
+        .any(|h| !h.answered && !h.accepted && d.is_open(h.dialog))
+        || crate::pairing::asking(app, &d)
+}
+
+/// Why an agent's `ui` action is refused while input is locked.
+pub(crate) fn locked_reason() -> String {
+    format!(
+        "input is locked while the user answers an agent's request (`{CMD_CONFIRM}`): an agent may not act on the interface until it is answered; reading the tree still works"
+    )
+}
+
+/// An agent's `ui` action refused while input is locked: the agent hears
+/// why, the journal says it (`debug.call.refused`, collector `ui`).
+pub(crate) fn refuse_ui(app: &AppHandle, origin: &Origin, params: &Json, reply: Reply) {
+    let source = origin.to_string();
+    let reason = locked_reason();
+    app.publish(
+        &source,
+        None,
+        "debug.call.refused",
+        json!({
+            "collector": "ui",
+            "action": params.get("action").cloned().unwrap_or(Json::Null),
+            "args": params,
+            "reason": reason,
+            "by": BY,
+        }),
+    );
+    let _ = reply.send(Err(RpcError::new(RpcError::REFUSED, reason)));
 }
 
 /// `call` refused with `error`, on the journal, from its origin.

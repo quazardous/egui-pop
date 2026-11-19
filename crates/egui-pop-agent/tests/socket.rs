@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable as _;
 use egui_pop_agent::{AgentGrants, AgentGrantsExt as _, AgentSocket, AgentSocketExt as _, Grant};
 use egui_pop_api::about::{AboutPlugin, AppInfo};
 use egui_pop_api::model::commands::CommandSpec;
@@ -979,4 +980,184 @@ fn a_paired_agent_is_held_to_its_grant_and_grants_change_live() {
             .unwrap()
             .is_ok()
     );
+}
+
+// Input lock and expiry: while the user answers an agent's request,
+// agents do not act on the interface; an unanswered request closes its
+// dialog.
+
+/// Steps frames until a confirmation of the agent socket shows; its id.
+fn confirmation_shown(h: &mut Harness<'static, App>) -> u64 {
+    use egui_pop_api::dialogs::{DIALOGS, Dialog};
+    let start = Instant::now();
+    loop {
+        h.step();
+        let d = h.state().handle().service(&DIALOGS).unwrap();
+        if let Some((id, Dialog::Confirm(c))) = d.current()
+            && c.command == egui_pop_agent::CMD_CONFIRM
+        {
+            return id;
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(20),
+            "no confirmation showed"
+        );
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
+/// The `debug.call.refused` events of `ui` actions by `by`.
+fn ui_refused(h: &Harness<'static, App>, by: &str) -> Vec<egui_pop_api::host::Event> {
+    events(h, "debug.call.refused")
+        .into_iter()
+        .filter(|e| e.data["collector"] == "ui" && e.data["by"] == by)
+        .collect()
+}
+
+#[test]
+fn an_agents_ui_click_on_an_open_confirmation_is_refused_and_the_users_click_runs_it() {
+    let (mut h, path) = writable("confirm-input-lock");
+    let p = path.clone();
+    let asking = std::thread::spawn(move || Client::connect(&p).request("call", purge(20_000)));
+    for _ in 0..5 {
+        h.step();
+    }
+    let dialog = confirmation_shown(&mut h);
+    for _ in 0..3 {
+        h.step();
+    }
+    // Another connection tries to click the confirmation's button, then
+    // to press Enter: both refused. Reading the tree still works.
+    let p = path.clone();
+    let (click, key, tree) = with_client(&mut h, move || {
+        let mut c = Client::connect(&p);
+        (
+            c.request("ui", json!({ "action": "click", "label": "Run" })),
+            c.request("ui", json!({ "action": "key", "key": "Enter" })),
+            c.request("ui", json!({ "action": "tree" })),
+        )
+    });
+    for r in [&click, &key] {
+        assert_eq!(r["error"]["code"], -32001, "{r}");
+        assert!(
+            r["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("input is locked"),
+            "{r}"
+        );
+    }
+    assert!(tree.get("error").is_none(), "{tree}");
+    for _ in 0..3 {
+        h.step();
+    }
+    assert!(purged(&h).is_empty(), "an agent's input ran the purge");
+    let d = h
+        .state()
+        .handle()
+        .service(&egui_pop_api::dialogs::DIALOGS)
+        .unwrap();
+    assert!(d.is_open(dialog), "the confirmation is still open");
+    let refused = ui_refused(&h, "pop.agent.confirm");
+    assert_eq!(refused.len(), 2, "{refused:?}");
+    assert_eq!(refused[0].source, "agent:agent-socket");
+    assert_eq!(refused[0].data["action"], "click");
+    // The user's own click runs it.
+    h.get_by_label("Run").click();
+    let r = finish(&mut h, asking);
+    assert_eq!(r["result"]["ok"], true, "{r}");
+    for _ in 0..3 {
+        h.step();
+    }
+    let ran = purged(&h);
+    assert_eq!(ran.len(), 1);
+    assert_eq!(ran[0].source, "agent:agent-socket");
+    // Answered: agents act again.
+    let p = path.clone();
+    let after = with_client(&mut h, move || {
+        Client::connect(&p).request("ui", json!({ "action": "key", "key": "Escape" }))
+    });
+    assert!(after.get("error").is_none(), "{after}");
+}
+
+#[test]
+fn an_agents_ui_action_is_refused_while_a_pairing_request_is_open() {
+    let (mut h, path) = writable("pair-input-lock");
+    let p = path.clone();
+    let asking = std::thread::spawn(move || {
+        Client::connect(&p).request("hello", json!({ "name": "bot", "deadline_ms": 20_000 }))
+    });
+    confirmation_shown(&mut h);
+    let p = path.clone();
+    let click = with_client(&mut h, move || {
+        Client::connect(&p).request("ui", json!({ "action": "click", "label": "Pair" }))
+    });
+    assert_eq!(click["error"]["code"], -32001, "{click}");
+    assert!(events(&h, "agent.paired").is_empty());
+    assert_eq!(ui_refused(&h, "pop.agent.confirm").len(), 1);
+    answer_pairing(&mut h, false, egui_pop_api::model::commands::Origin::User).unwrap();
+    let r = finish(&mut h, asking);
+    assert_eq!(r["error"]["code"], -32001, "{r}");
+}
+
+#[test]
+fn an_unconfirmed_call_closes_its_dialog_at_its_deadline_and_a_late_accept_runs_nothing() {
+    use egui_pop_api::dialogs::DIALOGS;
+    use egui_pop_api::model::commands::Origin;
+    let (mut h, path) = writable("confirm-expiry");
+    let p = path.clone();
+    let asking = std::thread::spawn(move || Client::connect(&p).request("call", purge(500)));
+    let dialog = confirmation_shown(&mut h);
+    let r = finish(&mut h, asking);
+    assert_eq!(r["error"]["code"], -32002, "{r}");
+    for _ in 0..5 {
+        h.step();
+    }
+    let d = h.state().handle().service(&DIALOGS).unwrap();
+    assert!(!d.is_open(dialog), "the expired confirmation closed");
+    assert!(d.current().is_none());
+    // The user's answer comes late, through the answer command: nothing
+    // waits under it, nothing runs.
+    let out = h
+        .state_mut()
+        .run(
+            &egui_pop_agent::CMD_CONFIRM,
+            json!({ "run": 1 }),
+            Origin::User,
+        )
+        .now()
+        .unwrap();
+    assert!(
+        out.as_ref().unwrap_err().contains("deadline passed"),
+        "{out:?}"
+    );
+    for _ in 0..3 {
+        h.step();
+    }
+    assert!(purged(&h).is_empty(), "a late accept ran the purge");
+    let refused = refused_runs(&h, "test.purge");
+    assert_eq!(refused.len(), 1, "{refused:?}");
+    // Its dialog's cancel was not one more refusal.
+    assert_eq!(refused[0].data["by"], "pop.agent.confirm");
+}
+
+#[test]
+fn an_unanswered_pairing_closes_its_dialog_at_its_deadline() {
+    use egui_pop_api::dialogs::DIALOGS;
+    let dir = private_dir("pair-expiry");
+    let path = dir.join("app.sock");
+    let mut h = app(App::builder(), &path);
+    let p = path.clone();
+    let asking = std::thread::spawn(move || {
+        Client::connect(&p).request("hello", json!({ "name": "bot", "deadline_ms": 500 }))
+    });
+    let dialog = confirmation_shown(&mut h);
+    let r = finish(&mut h, asking);
+    assert_eq!(r["error"]["code"], -32002, "{r}");
+    for _ in 0..5 {
+        h.step();
+    }
+    let d = h.state().handle().service(&DIALOGS).unwrap();
+    assert!(!d.is_open(dialog), "the expired pairing request closed");
+    assert!(events(&h, "agent.paired").is_empty());
 }
