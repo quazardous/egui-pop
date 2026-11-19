@@ -87,6 +87,7 @@ use egui_pop_model::values::Descriptor;
 use serde_json::{Value as Json, json};
 
 pub mod confirm;
+pub mod grants;
 mod limits;
 #[cfg(feature = "mcp")]
 pub mod mcp;
@@ -100,6 +101,7 @@ mod unix;
 mod windows;
 
 pub use confirm::{CONFIRM_DEADLINE, MAX_CONFIRM_DEADLINE};
+pub use grants::{AgentGrants, AgentGrantsExt, GRANTS, Grant};
 pub use limits::{MAX_CONNECTIONS, MAX_REQUEST_BYTES};
 pub use pairing::{CMD_CONFIRM, Pairing, pairings};
 pub use rpc::RpcError;
@@ -334,6 +336,7 @@ impl Plugin for AgentPlugin {
         }
         pairing::register(ctx)?;
         let app = ctx.app();
+        grants::listen(&app);
         let path = match self.socket.resolve(&app.app_id()) {
             Ok(p) => p,
             Err(e) => {
@@ -535,6 +538,8 @@ pub(crate) enum Job {
     Ui {
         params: Json,
         deadline: Instant,
+        /// Who asks: the connection's agent.
+        origin: Origin,
         reply: Reply,
     },
 }
@@ -681,6 +686,13 @@ impl UiSide {
                 deadline,
                 reply,
             } => {
+                // What the agent's grant does not allow is refused before
+                // anything runs or is asked.
+                if let Some(reason) = grants::call_refusal(app, &origin, &collector, &action, &args)
+                {
+                    grants::refuse_call(app, &origin, &collector, &action, &args, &reason, reply);
+                    return;
+                }
                 let call = confirm::Call {
                     collector,
                     action,
@@ -741,6 +753,7 @@ impl UiSide {
             Job::Ui {
                 params,
                 deadline,
+                origin,
                 reply,
             } => {
                 let request = match ui::Request::from_params(&params) {
@@ -762,6 +775,21 @@ impl UiSide {
                         RpcError::REFUSED,
                         "the debug bridge is read-only: `ui` may read the tree, not act",
                     )));
+                    return;
+                }
+                if request.writes()
+                    && let Some(reason) = grants::ui_refusal(app, &origin)
+                {
+                    let action = params.get("action").cloned().unwrap_or(Json::Null);
+                    grants::refuse_call(
+                        app,
+                        &origin,
+                        "ui",
+                        action.as_str().unwrap_or_default(),
+                        &params,
+                        &reason,
+                        reply,
+                    );
                     return;
                 }
                 let scope = match ui_scope(app, request.window.as_deref()) {

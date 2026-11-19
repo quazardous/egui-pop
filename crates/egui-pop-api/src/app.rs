@@ -1146,6 +1146,18 @@ impl AppHandle {
         self.0.bridge.borrow().destructive(collector, action, args)
     }
 
+    /// Whether this bridge call changes the application (its collector
+    /// says so for these arguments); `true` for an action the bridge
+    /// does not know, as a call treats it. The agent socket's grants
+    /// hold a read-only agent to the calls that do not.
+    pub fn debug_mutates(&self, collector: &str, action: &str, args: &Json) -> bool {
+        self.0
+            .bridge
+            .borrow()
+            .mutates(collector, action, args)
+            .unwrap_or(true)
+    }
+
     /// Why `origin` may not make this bridge call (its mode, the
     /// action's `agent` flag), `None` when it may or when there is no
     /// such action. The call itself is refused the same way; this asks

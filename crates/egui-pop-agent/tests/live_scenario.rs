@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use egui_kittest::Harness;
-use egui_pop_agent::{AgentSocket, AgentSocketExt as _};
+use egui_pop_agent::{AgentGrants, AgentGrantsExt as _, AgentSocket, AgentSocketExt as _};
 use egui_pop_api::about::{AboutPlugin, AppInfo};
 use egui_pop_api::core::debug::BridgeMode;
 use egui_pop_api::windows::WindowSpec;
@@ -164,8 +164,11 @@ impl Plugin for Widgets {
 fn ui_steps_click_type_and_press_keys_live() {
     let dir = private_dir("ui");
     let path = dir.join("app.sock");
+    // The live runner says no `hello`: its writes are allowed by the
+    // escape hatch.
     let builder = App::builder()
         .debug_bridge(BridgeMode::On)
+        .agent_grants(AgentGrants::new().allow_unpaired_writes())
         .plugin(Widgets::default());
     let mut h = app_with(builder, &path);
     let scenario = parse(
@@ -318,7 +321,10 @@ impl Plugin for TwoWindows {
 fn two_windows() -> (AppBuilder, Arc<Mutex<[u32; 2]>>) {
     let plugin = TwoWindows::default();
     let pressed = plugin.pressed.clone();
-    let builder = App::builder().debug_bridge(BridgeMode::On).plugin(plugin);
+    let builder = App::builder()
+        .debug_bridge(BridgeMode::On)
+        .agent_grants(AgentGrants::new().allow_unpaired_writes())
+        .plugin(plugin);
     (builder, pressed)
 }
 

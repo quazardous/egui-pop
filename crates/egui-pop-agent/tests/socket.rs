@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use egui_kittest::Harness;
-use egui_pop_agent::{AgentSocket, AgentSocketExt as _};
+use egui_pop_agent::{AgentGrants, AgentGrantsExt as _, AgentSocket, AgentSocketExt as _, Grant};
 use egui_pop_api::about::{AboutPlugin, AppInfo};
 use egui_pop_api::model::commands::CommandSpec;
 use egui_pop_api::model::ids::{CommandId, PluginId};
@@ -216,7 +216,10 @@ fn read_only_refuses_a_write() {
 fn an_application_may_offer_more() {
     let dir = private_dir("offer");
     let path = dir.join("app.sock");
-    let builder = App::builder().debug_bridge(egui_pop_api::core::debug::BridgeMode::On);
+    // The escape hatch: an unpaired client writes as before grants.
+    let builder = App::builder()
+        .debug_bridge(egui_pop_api::core::debug::BridgeMode::On)
+        .agent_grants(AgentGrants::new().allow_unpaired_writes());
     let mut h = app(builder, &path);
     let p = path.clone();
     let f = with_client(&mut h, move || {
@@ -618,7 +621,9 @@ fn writable(name: &str) -> (Harness<'static, App>, PathBuf) {
     let dir = private_dir(name);
     let path = dir.join("app.sock");
     let h = app(
-        App::builder().debug_bridge(egui_pop_api::core::debug::BridgeMode::On),
+        App::builder()
+            .debug_bridge(egui_pop_api::core::debug::BridgeMode::On)
+            .agent_grants(AgentGrants::new().allow_unpaired_writes()),
         &path,
     );
     (h, path)
@@ -762,4 +767,216 @@ fn a_call_that_is_not_destructive_is_not_held_nor_is_the_users_destructive_one()
     let ran = purged(&h);
     assert_eq!(ran.len(), 1);
     assert_eq!(ran[0].source, "user");
+}
+
+// Grants: what each agent may do.
+
+/// The `command.refused` events of `command`.
+fn refused_runs(h: &Harness<'static, App>, command: &str) -> Vec<egui_pop_api::host::Event> {
+    events(h, "command.refused")
+        .into_iter()
+        .filter(|e| e.data["command"] == command)
+        .collect()
+}
+
+/// The `command.done` events of `command`.
+fn done_runs(h: &Harness<'static, App>, command: &str) -> Vec<egui_pop_api::host::Event> {
+    events(h, "command.done")
+        .into_iter()
+        .filter(|e| e.data["command"] == command)
+        .collect()
+}
+
+fn run_call(id: &str, args: Json) -> Json {
+    json!({ "collector": "commands", "action": "run", "args": { "id": id, "args": args } })
+}
+
+#[test]
+fn an_unpaired_clients_write_is_refused_by_its_grant_and_journaled() {
+    use egui_pop_api::dialogs::DIALOGS;
+    let dir = private_dir("grants-unpaired");
+    let path = dir.join("app.sock");
+    // The bridge on, no escape hatch: unpaired clients read only.
+    let mut h = app(
+        App::builder().debug_bridge(egui_pop_api::core::debug::BridgeMode::On),
+        &path,
+    );
+    let p = path.clone();
+    let (write, purge, ui) = with_client(&mut h, move || {
+        let mut c = Client::connect(&p);
+        run_about_read(&mut c);
+        (
+            c.request("call", run_call("test.write", Json::Null)),
+            c.request("call", run_call("test.purge", Json::Null)),
+            c.request("ui", json!({ "action": "click", "label": "anything" })),
+        )
+    });
+    for r in [&write, &purge, &ui] {
+        assert_eq!(r["error"]["code"], -32001, "{r}");
+        assert!(
+            r["error"]["message"]
+                .as_str()
+                .unwrap()
+                .starts_with("refused by `pop.agent.grants`"),
+            "{r}"
+        );
+    }
+    h.step();
+    assert!(done_runs(&h, "test.write").is_empty(), "never ran");
+    // Refused before the user is asked to confirm a destructive one.
+    assert!(
+        h.state()
+            .handle()
+            .service(&DIALOGS)
+            .unwrap()
+            .current()
+            .is_none()
+    );
+    let refused = refused_runs(&h, "test.write");
+    assert_eq!(refused.len(), 1, "{refused:?}");
+    assert_eq!(refused[0].data["by"], "pop.agent.grants");
+    assert_eq!(refused[0].source, "agent:agent-socket");
+    assert_eq!(
+        refused_runs(&h, "test.purge")[0].data["by"],
+        "pop.agent.grants"
+    );
+    let ui_refused = events(&h, "debug.call.refused");
+    assert!(
+        ui_refused
+            .iter()
+            .any(|e| e.data["collector"] == "ui" && e.data["by"] == "pop.agent.grants"),
+        "{ui_refused:?}"
+    );
+    // Reading still works.
+    assert_eq!(about_read_origins(&h), ["agent:agent-socket"]);
+}
+
+#[test]
+fn the_grants_listener_runs_before_the_applications_and_holds_any_path() {
+    use egui_pop_api::bus::CommandRun;
+    use egui_pop_api::bus::bus_contract::{ListenOpts, Point as _};
+    use egui_pop_api::model::commands::Origin;
+    use std::sync::{Arc, Mutex};
+    let dir = private_dir("grants-order");
+    let path = dir.join("app.sock");
+    let mut h = app(
+        App::builder().debug_bridge(egui_pop_api::core::debug::BridgeMode::On),
+        &path,
+    );
+    // An application policy, registered as Helios's is (no order given).
+    let seen: Arc<Mutex<Vec<String>>> = Arc::default();
+    let mine = seen.clone();
+    h.state()
+        .handle()
+        .bus()
+        .listen::<CommandRun>(
+            "test.policy",
+            ListenOpts::new().owner("test"),
+            move |ask, _| {
+                mine.lock().unwrap().push(format!("{}", ask.origin));
+                Ok(())
+            },
+        )
+        .unwrap();
+    let order = egui_pop_api::bus::order_dump(&*h.state().handle().bus(), &[CommandRun::ID]);
+    let (g, p) = (
+        order.find("pop.agent.grants").expect("listed"),
+        order.find("test.policy").expect("listed"),
+    );
+    assert!(g < p, "{order}");
+    // A run that did not come through the socket's `call` (a queued
+    // command, a link): the listener refuses it, the policy never sees it.
+    let out = h
+        .state_mut()
+        .run(&WRITE, Json::Null, Origin::Agent("agent-socket".into()))
+        .now()
+        .unwrap();
+    assert_eq!(
+        out.unwrap_err(),
+        "refused by `pop.agent.grants`: the agent is read-only: `test.write` changes the application"
+    );
+    assert!(seen.lock().unwrap().is_empty(), "{seen:?}");
+    let refused = refused_runs(&h, "test.write");
+    assert_eq!(refused[0].data["by"], "pop.agent.grants");
+    // The user, and agents that are not the socket's, are not its to judge.
+    assert!(
+        h.state_mut()
+            .run(&WRITE, Json::Null, Origin::User)
+            .now()
+            .unwrap()
+            .is_ok()
+    );
+    assert!(
+        h.state_mut()
+            .run(&WRITE, Json::Null, Origin::Agent("debug-bridge".into()))
+            .now()
+            .unwrap()
+            .is_ok()
+    );
+    assert_eq!(*seen.lock().unwrap(), ["user", "agent:debug-bridge"]);
+}
+
+#[test]
+fn a_paired_agent_is_held_to_its_grant_and_grants_change_live() {
+    use egui_pop_api::model::commands::Origin;
+    let dir = private_dir("grants-paired");
+    let path = dir.join("app.sock");
+    let mut h = app(
+        App::builder().debug_bridge(egui_pop_api::core::debug::BridgeMode::On),
+        &path,
+    );
+    // Paired: the editor preset by default.
+    let p = path.clone();
+    let client = std::thread::spawn(move || {
+        let mut c = Client::connect(&p);
+        c.result("hello", json!({ "name": "bot", "deadline_ms": 20_000 }));
+        let write = c.result("call", run_call("test.write", Json::Null));
+        let value = c.request(
+            "call",
+            run_call("value.set", json!({ "path": "settings/x", "value": 1 })),
+        );
+        let ui = c.request("ui", json!({ "action": "key", "key": "Escape" }));
+        (write, value, ui)
+    });
+    answer_pairing(&mut h, true, Origin::User).unwrap();
+    let (write, value, ui) = finish(&mut h, client);
+    assert_eq!(write["ok"], true, "{write}");
+    assert_eq!(value["error"]["code"], -32001, "{value}");
+    assert!(
+        value["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("may not write the value `settings/x`"),
+        "{value}"
+    );
+    assert_eq!(ui["error"]["code"], -32001, "{ui}");
+
+    // Its own grant, set live: only `about.*`.
+    let app_handle = h.state().handle().clone();
+    egui_pop_agent::grants::set_grants(
+        &app_handle,
+        AgentGrants::new().agent("bot", Grant::editor().commands(["about.*"])),
+    );
+    assert_eq!(
+        egui_pop_agent::grants::grant_of(&app_handle, &Origin::Agent("bot".into())),
+        Some(Grant::editor().commands(["about.*"]))
+    );
+    let out = h
+        .state_mut()
+        .run(&WRITE, Json::Null, Origin::Agent("bot".into()))
+        .now()
+        .unwrap();
+    assert_eq!(
+        out.unwrap_err(),
+        "refused by `pop.agent.grants`: the agent may not run `test.write`"
+    );
+    // The full preset: everything the mode allows.
+    egui_pop_agent::grants::set_grants(&app_handle, AgentGrants::new().agent("bot", Grant::full()));
+    assert!(
+        h.state_mut()
+            .run(&WRITE, Json::Null, Origin::Agent("bot".into()))
+            .now()
+            .unwrap()
+            .is_ok()
+    );
 }
