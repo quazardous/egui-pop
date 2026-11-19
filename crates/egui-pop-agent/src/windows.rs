@@ -17,6 +17,7 @@ use interprocess::os::windows::local_socket::ListenerOptionsExt as _;
 use interprocess::os::windows::security_descriptor::SecurityDescriptor;
 
 use crate::limits::Connections;
+use crate::live::Live;
 use crate::rpc::{self, RpcError};
 use crate::{Job, Waker};
 
@@ -33,7 +34,7 @@ pub(crate) struct Listening {
 }
 
 impl Listening {
-    pub(crate) fn start(path: &Path, tx: Sender<Job>, wake: Waker) -> io::Result<Self> {
+    pub(crate) fn start(path: &Path, tx: Sender<Job>, wake: Waker, live: Live) -> io::Result<Self> {
         let name = path.to_owned().to_fs_name::<GenericFilePath>()?;
         let sddl = widestring::U16CString::from_str(PIPE_SDDL)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
@@ -60,12 +61,15 @@ impl Listening {
                     };
                     let tx = tx.clone();
                     let wake = wake.clone();
+                    let live = live.clone();
                     let _ = std::thread::Builder::new()
                         .name("egui-pop-agent-conn".into())
                         .spawn(move || {
                             let _slot = slot;
                             let (read, write) = stream.split();
-                            rpc::serve(BufReader::new(read), write, &tx, &wake);
+                            // No closer: a revoked pairing's connection
+                            // closes at its next request.
+                            rpc::serve(BufReader::new(read), write, &tx, &wake, &live, None);
                         });
                 }
             })?;

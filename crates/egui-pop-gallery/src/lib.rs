@@ -464,6 +464,13 @@ pub fn builder(options: &Options) -> AppBuilder {
     // The video page's widgets, read and driven by agents.
     #[cfg(feature = "video")]
     let builder = builder.plugin(egui_pop::views::video::VideoPlugin);
+    // The agent socket behind its setting (Settings › Developer, off by
+    // default), and the Agents page: the paired agents, their access,
+    // revoking a pairing.
+    #[cfg(not(target_arch = "wasm32"))]
+    let builder = builder.plugin(egui_pop_agent::AgentPlugin::on_setting(
+        egui_pop_agent::AgentSocket::new(),
+    ));
     pages::platform::add(builder, options.platform, take_instance())
 }
 

@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 
 use crate::limits::Connections;
+use crate::live::{Closer, Live};
 use crate::rpc::{self, RpcError};
 use crate::{Job, Waker};
 
@@ -22,7 +23,7 @@ pub(crate) struct Listening {
 }
 
 impl Listening {
-    pub(crate) fn start(path: &Path, tx: Sender<Job>, wake: Waker) -> io::Result<Self> {
+    pub(crate) fn start(path: &Path, tx: Sender<Job>, wake: Waker, live: Live) -> io::Result<Self> {
         let listener = bind_private(path)?;
         let stop = Arc::new(AtomicBool::new(false));
         let stopping = stop.clone();
@@ -55,12 +56,20 @@ impl Listening {
                     };
                     let tx = tx.clone();
                     let wake = wake.clone();
+                    let live = live.clone();
                     let _ = std::thread::Builder::new()
                         .name("egui-pop-agent-conn".into())
                         .spawn(move || {
                             let _slot = slot;
                             let Ok(read) = stream.try_clone() else { return };
-                            rpc::serve(BufReader::new(read), stream, &tx, &wake);
+                            // Revoking the pairing shuts the connection
+                            // down: its read ends at once.
+                            let close = stream.try_clone().ok().map(|s| -> Closer {
+                                Box::new(move || {
+                                    let _ = s.shutdown(std::net::Shutdown::Both);
+                                })
+                            });
+                            rpc::serve(BufReader::new(read), stream, &tx, &wake, &live, close);
                         });
                 }
             })?;

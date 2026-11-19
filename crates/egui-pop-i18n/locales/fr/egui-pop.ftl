@@ -855,6 +855,72 @@ egui-pop-agent-pair-title = Appairer l’agent « { $name } » ?
 
 egui-pop-agent-pair-verb = Appairer
 
+egui-pop-agent-agents-section = Agents
+
+egui-pop-agent-agents-about = Les programmes de cet ordinateur appairés pour piloter cette application, et ce que chacun peut faire. Les changements s’appliquent aussitôt.
+
+egui-pop-agent-agents-paired = Agents appairés
+
+egui-pop-agent-agents-defaults = Par défaut
+
+egui-pop-agent-agents-empty = Aucun agent n’est appairé. Un agent demande à être appairé quand il se connecte, et vous l’approuvez alors.
+
+egui-pop-agent-agents-col-name = Nom
+
+egui-pop-agent-agents-col-id = Identifiant
+
+egui-pop-agent-agents-col-paired = Appairé depuis
+
+egui-pop-agent-agents-col-seen = Vu pour la dernière fois
+
+egui-pop-agent-agents-col-connected = Connecté
+
+egui-pop-agent-agents-col-access = Accès
+
+egui-pop-agent-agents-col-details = Ce qu’il peut faire
+
+egui-pop-agent-agents-col-who = Qui
+
+egui-pop-agent-agents-access-help = Ce qu’il peut faire ; s’applique aussitôt.
+
+egui-pop-agent-agents-preset-read-only = Lecture seule
+
+egui-pop-agent-agents-preset-editor = Éditeur
+
+egui-pop-agent-agents-preset-full = Complet
+
+egui-pop-agent-agents-preset-custom = Fixé par l’application
+
+egui-pop-agent-agents-detail-read-only = Lit tout, ne change rien.
+
+egui-pop-agent-agents-detail-editor = Exécute les commandes offertes aux agents, les destructives une fois que vous confirmez ; n’écrit aucune valeur directement ; aucune saisie dans l’interface.
+
+egui-pop-agent-agents-detail-full = Tout ce que l’application permet aux agents, saisie dans l’interface comprise.
+
+egui-pop-agent-agents-detail-custom = Commandes : { $commands }. Valeurs : { $values }. Saisie dans l’interface : { $ui }.
+
+egui-pop-agent-agents-detail-custom-read = Lecture seule. Commandes : { $commands }.
+
+egui-pop-agent-agents-none = aucune
+
+egui-pop-agent-agents-yes = Oui
+
+egui-pop-agent-agents-no = Non
+
+egui-pop-agent-agents-connected-yes = Oui ({ $count })
+
+egui-pop-agent-agents-never = Jamais
+
+egui-pop-agent-agents-default-unpaired = Les clients non appairés
+
+egui-pop-agent-agents-default-paired = Les agents appairés sans accès propre
+
+egui-pop-agent-agents-revoke = Révoquer
+
+egui-pop-agent-agents-revoke-title = Révoquer l’appairage de cet agent ?
+
+egui-pop-agent-agents-revoke-text = Son jeton cesse de fonctionner et ses connexions ouvertes se ferment maintenant. Pour piloter de nouveau cette application, il devra être appairé de nouveau, avec votre accord.
+
 egui-pop-area-activity-bar = la barre d’activité
 
 egui-pop-area-bottom = le panneau du bas
@@ -3378,6 +3444,18 @@ command-view-zoom-out =
 command-pop-agent-confirm =
     .description = La réponse de l’utilisateur à la demande d’un agent : être appairé (`id`) ou exécuter un appel destructif (`run`).
     .title = Répondre à la demande d’un agent
+
+command-pop-agent-grant =
+    .description = Fixe l’accès d’un agent appairé (`agent`), ou celui d’un défaut (`default` : unpaired ou paired), à un préréglage (`preset` : read-only, editor ou full). Réservé à l’utilisateur.
+    .title = Fixer l’accès d’un agent
+
+command-pop-agent-list =
+    .description = Les agents appairés (connectés maintenant, vus pour la dernière fois) et les défauts, avec ce que chacun peut faire.
+    .title = Lister les agents appairés
+
+command-pop-agent-revoke =
+    .description = Révoque un appairage (`agent`) : son jeton n’appaire plus et ses connexions ouvertes se ferment. Réservé à l’utilisateur.
+    .title = Révoquer l’appairage d’un agent
 
 command-settings-export =
     .description = Écrit dans un fichier les réglages que vous avez modifiés ; les secrets sont laissés de côté.

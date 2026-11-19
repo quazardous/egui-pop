@@ -1561,6 +1561,31 @@ fn the_settings_app_shows_generated_pages_value_scopes_and_search() {
     results.add(h.try_window_shot("admin-search-pop-dark"));
 }
 
+/// The Agents page (Settings › Developer › Agents), declared by the agent
+/// socket's plugin: no agent paired yet, and the defaults with their
+/// access.
+#[test]
+fn the_agents_page_shows_the_paired_agents_and_the_defaults() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    let mut h = harness(options("pop-dark", Density::Comfortable, "settings"));
+    h.run();
+    h.state().app.handle().run(
+        egui_pop::model::ids::CommandId::from_static("admin.open"),
+        serde_json::json!({ "path": "developer/agents" }),
+    );
+    h.run();
+    h.run();
+    h.run();
+    h.get_by_label("Paired agents");
+    h.get_by_label(
+        "No agent is paired. An agent asks to be paired when it connects, and you approve it then.",
+    );
+    h.get_by_label("Clients that are not paired");
+    h.get_by_label("Reads everything, changes nothing.");
+    egui_pop_test::assert_all_named(&h);
+    results.add(h.try_window_shot("admin-agents-pop-dark"));
+}
+
 /// Settings import: the wizard's diff step lists each change with its
 /// value now and in the file, ticked, and what is left out with why.
 #[test]

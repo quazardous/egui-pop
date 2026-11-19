@@ -1543,6 +1543,7 @@ dependencies = [
  "eframe",
  "egui",
  "egui-pop",
+ "egui-pop-agent",
  "egui-pop-test",
  "egui_inspection",
  "egui_kittest",

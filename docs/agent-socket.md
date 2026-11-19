@@ -335,6 +335,42 @@ App::builder()
 `allow_unpaired_writes` gives unpaired clients `Grant::full()`, today's
 behaviour. Put it behind the same switch that turns the bridge `On`.
 
+## The Agents page: the user's view and say
+
+The socket's plugin declares a page in the Settings app, **Developer ›
+Agents** (`developer/agents`), as a manifest of the admin forms
+framework ([design/admin-forms.md](design/admin-forms.md)), not as
+widgets of its own:
+
+- **Paired agents**, a table: name, id, paired since, last seen (UTC),
+  connected now (and how many connections), the access and what it means
+  in words. Read from `pop.agent.list` (read-only), again after every
+  `agent.*` event.
+- **Access**, a row field: one of the presets (read only, editor, full),
+  applied at once through `grants::set_grants` (`pop.agent.grant` with
+  `{ "agent", "preset" }`). A grant the application set that is none of
+  the presets shows as "Set by the app" and stays until the user picks a
+  preset.
+- **Defaults**: the same choice for clients that are not paired and for
+  paired agents without an access of their own (`pop.agent.grant` with
+  `{ "default": "unpaired" | "paired", "preset" }`).
+- **Revoke**, a row action asking first: the pairing's stored token hash
+  is removed (its token no longer pairs), its own grant dropped, its open
+  connections closed, and the journal says `agent.revoked` (`agent`,
+  `name`, `closed`) from `user`. In code:
+  `egui_pop_agent::revoke(app, id)`. On Windows a revoked connection
+  closes at its next request.
+
+`pop.agent.grant` and `pop.agent.revoke` are the user's only: kept from
+agents (`no_agent`), and their handlers refuse any origin but the
+user's. `egui_pop_agent::pairing::connected(app, id)` says how many
+connections an agent has open; `Pairing::last_seen` when it last asked
+something, kept with the pairing when its connection closes.
+
+The page's texts are translated through `Admin::texts`: a component
+registers its `StrKey`s, and a declared text equal to a key's English
+shows in the interface's language.
+
 ## Argument schemas
 
 A command declares its arguments' JSON Schema with
@@ -443,11 +479,11 @@ application's own (`settled` stays reachable).
   `inspection` feature ([inspection.md](inspection.md)), a second
   connection.
 - **Windows** is compile-checked only.
-- **Grants are the application's.** The user cannot change them yet
-  (an Agents page comes later); a pairing cannot be revoked yet but by
-  removing it from `agent-pairings.json`. The MCP binary does not say
-  `hello` yet, so it reads only unless the application allows unpaired
-  writes.
+- **Access set on the Agents page lasts the session.** The user's
+  presets apply live but are not kept; at the next start the
+  application's grants hold again. Only presets are offered, not
+  patterns. The MCP binary does not say `hello` yet, so it reads only
+  unless the application allows unpaired writes.
 - **Collector actions' schemas are not enforced.** Only commands'
   are: an action's `FnCollector::schema` is listed and given to MCP,
   not checked.

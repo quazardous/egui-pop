@@ -234,6 +234,8 @@ pub struct Admin {
     quick: Mutex<BTreeMap<egui::ViewportId, quick::Open>>,
     /// The host's foci and the one the Settings edit ([`focus`]).
     foci: Mutex<focus::Foci>,
+    /// The strings a manifest's texts are ([`Admin::texts`]).
+    texts: Mutex<Vec<StrKey>>,
 }
 
 /// The answers of the `read_only` commands statuses and records read:
@@ -347,6 +349,29 @@ impl Admin {
     /// resolve is left out and reported).
     pub fn manifest(&self, manifest: Manifest) {
         lock(&self.manifests).push(manifest);
+    }
+
+    /// Registers the strings a manifest's texts are, so they show in the
+    /// interface's language: a declared text (a section's title, a
+    /// group's, a column's, an action's, a confirmation's, an empty
+    /// state's, a row field's and its choices') equal to a key's English
+    /// fallback is shown translated. A text with no key shows as
+    /// declared.
+    pub fn texts(&self, keys: &[StrKey]) {
+        let mut t = lock(&self.texts);
+        for k in keys {
+            if !t.contains(k) {
+                t.push(*k);
+            }
+        }
+    }
+
+    /// The registered string whose English is `text`.
+    pub(crate) fn text_key(&self, text: &str) -> Option<StrKey> {
+        lock(&self.texts)
+            .iter()
+            .find(|k| k.fallback == text)
+            .copied()
     }
 
     /// Registers a hook a manifest names; `false` when the name is taken.

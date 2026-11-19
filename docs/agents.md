@@ -471,6 +471,11 @@ The bridge has one caller identity: every command it runs is
   grant does not allow (`command.refused`, `by: "pop.agent.grants"`),
   before the application's own listeners
   ([The agent socket](agent-socket.md#grants-what-each-agent-may-do)).
+- **The user's say.** Settings › Developer › Agents lists the paired
+  agents (connected now, last seen), sets each one's access and the
+  defaults to a preset, live, and revokes a pairing: its token stops
+  pairing and its connections close. Agents cannot change any of it
+  ([The Agents page](agent-socket.md#the-agents-page-the-users-view-and-say)).
 - **Links.** A link an agent asks to open (`links.open`, `files.reveal`,
   `viewer.open_outside`) is always confirmed by the user, and the links
   plugin vetoes any answer to that confirmation but the user's: an agent

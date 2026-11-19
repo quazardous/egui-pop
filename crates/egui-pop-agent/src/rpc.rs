@@ -11,6 +11,7 @@ use serde_json::{Value as Json, json};
 
 use crate::confirm::{CONFIRM_DEADLINE, MAX_CONFIRM_DEADLINE};
 use crate::limits::MAX_REQUEST_BYTES;
+use crate::live::{Closer, Live};
 use crate::pairing::{HELLO_DEADLINE, MAX_NAME_CHARS};
 use crate::{AGENT, DEFAULT_DEADLINE, Job, MAX_DEADLINE, Waker};
 
@@ -114,6 +115,9 @@ impl RpcError {
 #[derive(Debug, Default)]
 pub(crate) struct Session {
     agent: Option<String>,
+    /// The open connections, and this one's number among them.
+    live: Live,
+    conn: u64,
 }
 
 impl Session {
@@ -127,9 +131,21 @@ impl Session {
 /// Serves one connection until it closes, or until it sends a request
 /// longer than [`MAX_REQUEST_BYTES`]; a paired agent's closing is told
 /// to the UI thread (`agent.disconnected`).
-pub(crate) fn serve(reader: impl BufRead, writer: impl Write, tx: &Sender<Job>, wake: &Waker) {
-    let mut session = Session::default();
+pub(crate) fn serve(
+    reader: impl BufRead,
+    writer: impl Write,
+    tx: &Sender<Job>,
+    wake: &Waker,
+    live: &Live,
+    close: Option<Closer>,
+) {
+    let mut session = Session {
+        agent: None,
+        live: live.clone(),
+        conn: live.open(close),
+    };
     serve_session(reader, writer, tx, wake, &mut session);
+    live.end(session.conn);
     if let Some(agent) = session.agent
         && tx.send(Job::Gone { agent }).is_ok()
     {
@@ -146,6 +162,10 @@ fn serve_session(
 ) {
     let mut buf = Vec::new();
     loop {
+        // A revoked pairing's connection serves nothing more.
+        if session.live.revoked(session.conn) {
+            return;
+        }
         buf.clear();
         // One byte more than the cap and its `\n`: a line that fills it
         // is too long.
@@ -153,6 +173,9 @@ fn serve_session(
         match (&mut reader).take(limit).read_until(b'\n', &mut buf) {
             Ok(0) | Err(_) => return,
             Ok(_) => {}
+        }
+        if session.live.revoked(session.conn) {
+            return;
         }
         if buf.last() == Some(&b'\n') {
             buf.pop();
@@ -365,6 +388,9 @@ fn dispatch(
         Ok(r) => {
             if hello && let Ok(result) = &r {
                 session.agent = result["agent"].as_str().map(String::from);
+                if let Some(agent) = &session.agent {
+                    session.live.named(session.conn, agent);
+                }
             }
             r
         }

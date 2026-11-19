@@ -89,8 +89,10 @@ use serde_json::{Value as Json, json};
 pub mod confirm;
 pub mod grants;
 mod limits;
+mod live;
 #[cfg(feature = "mcp")]
 pub mod mcp;
+mod page;
 pub mod pairing;
 mod rpc;
 pub mod strings;
@@ -103,7 +105,7 @@ mod windows;
 pub use confirm::{CONFIRM_DEADLINE, MAX_CONFIRM_DEADLINE};
 pub use grants::{AgentGrants, AgentGrantsExt, GRANTS, Grant};
 pub use limits::{MAX_CONNECTIONS, MAX_REQUEST_BYTES};
-pub use pairing::{CMD_CONFIRM, Pairing, pairings};
+pub use pairing::{CMD_CONFIRM, CMD_GRANT, CMD_LIST, CMD_REVOKE, Pairing, pairings, revoke};
 pub use rpc::RpcError;
 
 /// The environment variable that turns the socket on
@@ -337,6 +339,7 @@ impl Plugin for AgentPlugin {
         pairing::register(ctx)?;
         let app = ctx.app();
         grants::listen(&app);
+        page::declare(ctx)?;
         let path = match self.socket.resolve(&app.app_id()) {
             Ok(p) => p,
             Err(e) => {
@@ -409,7 +412,12 @@ impl Listen {
             return server.is_some();
         }
         self.tried = true;
-        match Server::start(&self.path, self.tx.clone(), self.wake.clone()) {
+        match Server::start(
+            &self.path,
+            self.tx.clone(),
+            self.wake.clone(),
+            live::of(app),
+        ) {
             Ok(s) => {
                 log::info!(target: "egui_pop_agent", "agent socket listening at {}", self.path.display());
                 *server = Some(s);
@@ -468,21 +476,31 @@ struct Server {
 
 impl Server {
     #[cfg(unix)]
-    fn start(path: &Path, tx: mpsc::Sender<Job>, wake: Waker) -> std::io::Result<Self> {
+    fn start(
+        path: &Path,
+        tx: mpsc::Sender<Job>,
+        wake: Waker,
+        live: live::Live,
+    ) -> std::io::Result<Self> {
         Ok(Self {
-            _listening: unix::Listening::start(path, tx, wake)?,
+            _listening: unix::Listening::start(path, tx, wake, live)?,
         })
     }
 
     #[cfg(windows)]
-    fn start(path: &Path, tx: mpsc::Sender<Job>, wake: Waker) -> std::io::Result<Self> {
+    fn start(
+        path: &Path,
+        tx: mpsc::Sender<Job>,
+        wake: Waker,
+        live: live::Live,
+    ) -> std::io::Result<Self> {
         Ok(Self {
-            _listening: windows::Listening::start(path, tx, wake)?,
+            _listening: windows::Listening::start(path, tx, wake, live)?,
         })
     }
 
     #[cfg(not(any(unix, windows)))]
-    fn start(_: &Path, _: mpsc::Sender<Job>, _: Waker) -> std::io::Result<Self> {
+    fn start(_: &Path, _: mpsc::Sender<Job>, _: Waker, _: live::Live) -> std::io::Result<Self> {
         Err(std::io::Error::new(
             std::io::ErrorKind::Unsupported,
             "no local socket on this platform",
@@ -639,6 +657,13 @@ impl UiSide {
     }
 
     fn start(&mut self, app: &AppHandle, job: Job) {
+        if let Job::Describe { origin, .. }
+        | Job::Call { origin, .. }
+        | Job::Wait { origin, .. }
+        | Job::Ui { origin, .. } = &job
+        {
+            pairing::seen(app, origin);
+        }
         match job {
             Job::Hello {
                 name,
