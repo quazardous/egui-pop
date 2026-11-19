@@ -3450,7 +3450,7 @@ command-pop-agent-confirm =
     .title = Répondre à la demande d’un agent
 
 command-pop-agent-grant =
-    .description = Fixe l’accès d’un agent appairé (`agent`), ou celui d’un défaut (`default` : unpaired ou paired), à un préréglage (`preset` : read-only, editor ou full). Réservé à l’utilisateur.
+    .description = Fixe l’accès d’un agent appairé (`agent`), ou celui d’un défaut (`default` : unpaired ou paired) : un préréglage (`preset` : read-only, editor ou full), les données privées montrées ou retenues (`private` : lieux, personnes, chemins de fichiers), ou les deux. Réservé à l’utilisateur.
     .title = Fixer l’accès d’un agent
 
 command-pop-agent-list =

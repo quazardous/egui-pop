@@ -618,7 +618,7 @@ command-pop-agent-confirm =
     .title = Answer an agent's request
 
 command-pop-agent-grant =
-    .description = Sets a paired agent's access (`agent`), or a default's (`default`: unpaired or paired), to a preset (`preset`: read-only, editor or full). The user's only.
+    .description = Sets a paired agent's access (`agent`), or a default's (`default`: unpaired or paired): a preset (`preset`: read-only, editor or full), private data shown or withheld (`private`: places, people, file paths), or both. The user's only.
     .title = Set an agent's access
 
 command-pop-agent-list =
