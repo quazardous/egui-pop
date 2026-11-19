@@ -92,6 +92,9 @@ pub const RATING: StrKey = StrKey::new("egui-pop-views-rating", "Rating");
 /// with `egui_pop_core::strings::RATING_SET` and `RATING_CLEAR`; kept
 /// for compatibility.
 pub const RATE_STARS: StrKey = StrKey::new("egui-pop-views-rate-stars", "Rate { $stars } of 5");
+/// A rated image's rating, said after its name in the library grid mode.
+pub const LIBRARY_RATED: StrKey =
+    StrKey::new("egui-pop-views-library-rated", "Rated { $stars } of 5");
 /// The colour labels' names.
 pub const RED: StrKey = StrKey::new("egui-pop-views-red", "Red");
 pub const YELLOW: StrKey = StrKey::new("egui-pop-views-yellow", "Yellow");
@@ -436,6 +439,7 @@ pub const ALL: &[StrKey] = &[
     COMPARE,
     RATING,
     RATE_STARS,
+    LIBRARY_RATED,
     RED,
     YELLOW,
     GREEN,

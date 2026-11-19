@@ -5631,6 +5631,9 @@ impl FileBrowser {
             let typing = !self.type_ahead.prefix.is_empty()
                 && ui.input(|i| i.time) - self.type_ahead.at <= Self::TYPE_AHEAD_RESET;
             let mut spaced = false;
+            // The text of a key the mode took (a culling key's digit) is
+            // not typed ahead.
+            let mut taken: Vec<String> = Vec::new();
             for ev in events {
                 match ev {
                     egui::Event::Key {
@@ -5643,6 +5646,7 @@ impl FileBrowser {
                         .own_key(key, mods, self.focus_index(), &mut self.settings) =>
                     {
                         self.reveal = true;
+                        taken.push(key.symbol_or_name().to_lowercase());
                     }
                     egui::Event::Key {
                         key, pressed: true, ..
@@ -5678,7 +5682,11 @@ impl FileBrowser {
                             spaced |= key == egui::Key::Space;
                         }
                     }
-                    egui::Event::Text(t) if !(modifiers.command || spaced && t == " ") => {
+                    egui::Event::Text(t)
+                        if !(modifiers.command
+                            || spaced && t == " "
+                            || taken.contains(&t.to_lowercase())) =>
+                    {
                         let now = ui.input(|i| i.time);
                         self.type_ahead(&t, now);
                     }

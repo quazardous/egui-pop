@@ -191,6 +191,46 @@ The boxes they sit on are the kit's (`docs/kit.md`): `thumb-cell`,
 `thumb-overlay-badge`, `pill` (badges by tone), `tag-chip`,
 `mark-toggle`, `search-field` and `compare-pane`.
 
+## The library grid in a file browser
+
+`LibraryGridMode` (in `library::mode`, with the `api` feature) is the
+grid as one of a `FileBrowser`'s view modes: a folder shown the way the
+Library shows photos. It lays the entries out as the browser's
+thumbnails mode does, so the zoom (a count per row), the rubber band,
+the arrows, Page Up and Page Down, Home and End, Enter and quick look
+behave the same. Over each file's cell it draws the overlays above: the
+flag, the labels, the stars and a rejected image dimmed. A screen reader
+hears the marks as the cell's description ("Rated 4 of 5, Pick, Red").
+
+```rust,ignore
+let signals = LibrarySignals::default();
+let modes = ViewModes::built_in();
+LibraryGridMode::new(move |entry| marks_of(&entry.path))
+    .keymap(CullKeymap::lightroom().auto_advance(true))
+    .signals(signals.clone())
+    .register(&modes)?;
+let browser = FileBrowser::new("photos", source, folder).with_modes(modes);
+// Each frame, after drawing the browser:
+for signal in signals.drain() { apply(signal) } // Rate, Flag, Label by path
+```
+
+The application owns the marks: `new` takes what gives each entry's
+`Marks`. The culling keys (0 to 5, P, X, U, 6 to 9) act on the
+selection, else on the focused entry, and the browser does not type
+them ahead. They do not change the marks. They give `Signal<PathBuf>`
+(`Rate`, `Flag`, `Label`) into the `LibrarySignals` queue, and the
+application applies them. With auto-advance, the focus then moves on to
+the next file.
+
+The mode draws over the browser's own cell, so the browser's badges,
+chips and groups stay. A grouping (`FileBrowser::with_grouping`) stands
+for stacks: a RAW with its JPEG is one entry with its members' chip.
+
+What it leaves to `ThumbGrid`: expanding a stack, clicking a cell's
+stars, the stack and zoom keys (S, + and -: the browser has its own
+zoom), and running the marks as `library.*` steps an application can
+veto. An application that needs those draws a `ThumbGrid`.
+
 ## Marks outside the grid
 
 `RatingStars`, `ColorLabels` and `FlagToggle` edit one image's marks

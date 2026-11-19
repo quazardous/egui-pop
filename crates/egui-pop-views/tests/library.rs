@@ -919,3 +919,175 @@ fn badges_are_indicators_in_the_bottom_right_corner_of_their_cell() {
         "{raw:?} in the bottom half of {cell:?}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// The library grid as a file browser's mode
+// ---------------------------------------------------------------------------
+
+mod library_grid_mode {
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+    use std::sync::{Arc, Mutex};
+
+    use egui::Key;
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::{NodeT as _, Queryable as _};
+    use egui_pop_api::files::browser::{FileBrowser, FsSource, ViewModes};
+    use egui_pop_api::files::fs::MemoryFs;
+    use egui_pop_views::library::grid::Signal;
+    use egui_pop_views::library::marks::{ColorLabel, CullKeymap, Flag, Marks};
+    use egui_pop_views::library::mode::{LibraryGridMode, LibrarySignals, MODE_LIBRARY};
+
+    type Shared = Arc<Mutex<HashMap<PathBuf, Marks>>>;
+
+    /// A folder of images, one named so that type-ahead on "3" would
+    /// jump to it, in a browser showing the library grid.
+    fn browser(
+        marks: &Shared,
+        keymap: CullKeymap,
+    ) -> (Harness<'static, FileBrowser>, LibrarySignals) {
+        let mut fs = MemoryFs::new().dir("/p");
+        for name in ["IMG_001.png", "IMG_002.png", "IMG_003.png", "3rd.png"] {
+            fs = fs.file(format!("/p/{name}"), vec![0; 8]);
+        }
+        let source = Arc::new(FsSource::new(Arc::new(fs)));
+        let modes = ViewModes::default();
+        let signals = LibrarySignals::default();
+        let shared = marks.clone();
+        LibraryGridMode::new(move |e| {
+            shared
+                .lock()
+                .unwrap()
+                .get(&e.path)
+                .copied()
+                .unwrap_or_default()
+        })
+        .keymap(keymap)
+        .signals(signals.clone())
+        .register(&modes)
+        .unwrap();
+        let mut b = FileBrowser::new("lib-mode", source, "/p").with_modes(modes);
+        b.set_mode(MODE_LIBRARY);
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(640.0, 480.0))
+            .build_ui_state(
+                |ui, b: &mut FileBrowser| {
+                    b.show(ui);
+                },
+                b,
+            );
+        egui_pop_core::icon::install(&h.ctx);
+        h.run();
+        h.run();
+        (h, signals)
+    }
+
+    fn p(name: &str) -> PathBuf {
+        Path::new("/p").join(name)
+    }
+
+    #[test]
+    fn it_is_a_mode_of_the_switcher() {
+        let (h, _) = browser(&Shared::default(), CullKeymap::lightroom());
+        assert_eq!(h.state().mode(), MODE_LIBRARY);
+        assert!(h.query_by_label_contains("Library grid").is_some());
+    }
+
+    #[test]
+    fn culling_keys_rate_flag_and_label_without_typing_ahead() {
+        let marks = Shared::default();
+        let (mut h, signals) = browser(&marks, CullKeymap::lightroom());
+        h.get_by_label("IMG_002.png").click();
+        h.run();
+        signals.drain();
+        h.key_press(Key::Num3);
+        h.event(egui::Event::Text("3".into()));
+        h.run();
+        assert_eq!(
+            signals.drain(),
+            [Signal::Rate {
+                keys: vec![p("IMG_002.png")],
+                rating: 3
+            }]
+        );
+        // The "3" did not jump to 3rd.png.
+        assert_eq!(h.state().focus(), Some(p("IMG_002.png").as_path()));
+        h.key_press(Key::P);
+        h.run();
+        assert_eq!(
+            signals.drain(),
+            [Signal::Flag {
+                keys: vec![p("IMG_002.png")],
+                flag: Flag::Pick
+            }]
+        );
+        // A label toggles from the focused file's marks.
+        marks.lock().unwrap().insert(
+            p("IMG_002.png"),
+            Marks {
+                labels: egui_pop_views::library::marks::Labels::default()
+                    .with(ColorLabel::Red, true),
+                ..Marks::default()
+            },
+        );
+        h.key_press(Key::Num6);
+        h.run();
+        assert_eq!(
+            signals.drain(),
+            [Signal::Label {
+                keys: vec![p("IMG_002.png")],
+                label: ColorLabel::Red,
+                on: false
+            }]
+        );
+        // The selection, every file, in the browser's order.
+        h.key_press_modifiers(egui::Modifiers::COMMAND, Key::A);
+        h.run();
+        h.key_press(Key::Num1);
+        h.run();
+        let Some(Signal::Rate { keys, rating: 1 }) = signals.drain().pop() else {
+            panic!("a rating of the selection");
+        };
+        assert_eq!(keys.len(), 4);
+    }
+
+    #[test]
+    fn auto_advance_moves_the_focus_to_the_next_file() {
+        let (mut h, signals) = browser(
+            &Shared::default(),
+            CullKeymap::lightroom().auto_advance(true),
+        );
+        h.get_by_label("IMG_001.png").click();
+        h.run();
+        h.key_press(Key::Num2);
+        h.run();
+        h.run();
+        assert_eq!(signals.len(), 1);
+        assert_eq!(h.state().focus(), Some(p("IMG_002.png").as_path()));
+        assert!(h.state().selection().contains(&p("IMG_002.png")));
+    }
+
+    #[test]
+    fn a_cell_says_its_marks() {
+        let marks = Shared::default();
+        marks.lock().unwrap().insert(
+            p("IMG_001.png"),
+            Marks {
+                rating: 4,
+                flag: Flag::Pick,
+                ..Marks::default()
+            },
+        );
+        let (h, _) = browser(&marks, CullKeymap::lightroom());
+        let said = h
+            .get_by_label("IMG_001.png")
+            .accesskit_node()
+            .description()
+            .unwrap_or_default();
+        assert_eq!(said, "Rated 4 of 5, Pick");
+        assert_eq!(
+            h.get_by_label("IMG_002.png").accesskit_node().description(),
+            None
+        );
+    }
+}

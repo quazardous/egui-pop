@@ -97,7 +97,7 @@ const POINTS_STEP: f32 = 1.25;
 /// How far the pointer moves before a drag draws a rubber band.
 const BAND_MIN: f32 = 4.0;
 /// Below this size a cell shows no overlays.
-const OVERLAY_MIN: f32 = 64.0;
+pub(super) const OVERLAY_MIN: f32 = 64.0;
 
 /// A grid's zoom: how many thumbnails fill a row.
 ///
@@ -1711,7 +1711,7 @@ fn cells_in(
 
 /// A cell's overlays: its flag, labels, rating and badges.
 #[allow(clippy::too_many_arguments)]
-fn overlay(
+pub(super) fn overlay(
     cx: &KitCx<'_>,
     kit: &Kit,
     lt: &LibraryTokens,
