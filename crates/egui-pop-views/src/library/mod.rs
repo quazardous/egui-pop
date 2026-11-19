@@ -9,6 +9,8 @@
 //!   widgets, and the culling keymap (Lightroom's keys, auto-advance);
 //! - [`compare`]: one to many images, a loupe or side by side, zoom and
 //!   pan synced, a "best" marker, images dragged in and out;
+//! - `thumbs` (with the `api` feature): the file browser's thumbnail
+//!   provider as a [`ThumbSource`], and a [`Badge`] as its chip;
 //! - [`tags`]: tag chips and a tag input with completion;
 //! - [`filter`]: a search field with filter chips, giving a structured
 //!   filter;
@@ -24,6 +26,8 @@ pub mod marks;
 mod paint;
 pub mod plugin;
 pub mod tags;
+#[cfg(feature = "api")]
+pub mod thumbs;
 
 #[cfg(feature = "api")]
 pub use grid::change;

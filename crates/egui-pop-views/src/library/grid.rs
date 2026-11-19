@@ -67,6 +67,7 @@ use egui::{
     ScrollArea, Sense, Stroke, StrokeKind, TextStyle, TextureId, Ui, Vec2, WidgetInfo, pos2, vec2,
 };
 use egui_pop_core::icon::Icon;
+use egui_pop_core::indicator::{Anchor, Indicator};
 use egui_pop_core::kit::{self, BoxStyle, Corners, Kit, KitCx, Part, Side, State};
 use egui_pop_core::placeholder::SkeletonTokens;
 use egui_pop_core::rating::RatingStars;
@@ -1102,11 +1103,10 @@ impl<'a> ThumbGrid<'a> {
                             &t,
                             image,
                             &marks,
-                            &items.badges(i),
                             hot || self.empty_stars == EmptyStars::Always,
                             star,
-                            &small,
                         );
+                        paint_badges(ui, &name, image.shrink(t.space.xs), &items.badges(i));
                         let stars = RatingStars::new(marks.rating)
                             .id(id.with(("stars", &key)))
                             .focusable(false)
@@ -1718,10 +1718,8 @@ fn overlay(
     t: &Tokens,
     image: Rect,
     marks: &Marks,
-    badges: &[Badge],
     stars_shown: bool,
     star: f32,
-    small: &egui::FontId,
 ) {
     let painter = cx.painter;
     let badge = |rect: Rect| {
@@ -1767,19 +1765,31 @@ fn overlay(
         );
         badge(back);
     }
-    let mut right = image.right() - pad;
+}
+
+/// A badge as an indicator: its text, of its tone, under an id agents
+/// read (`library.badge:<image>:<text>`), as the file browser draws its
+/// marks.
+fn badge_indicator(image: &str, badge: &Badge) -> Indicator {
+    Indicator::text(badge.text.as_str())
+        .tone(badge.tone)
+        .overhang(false)
+        .id(format!("library.badge:{image}:{}", badge.text))
+}
+
+/// A cell's badges from the bottom end of `host`, the last at the end,
+/// as many as fit. They take no click: the cell under them does.
+fn paint_badges(ui: &mut Ui, image: &str, host: Rect, badges: &[Badge]) {
+    let gap = Tokens::of(ui.ctx()).space.xs;
+    let mut host = host;
     for b in badges.iter().rev() {
-        let tone = b.tone;
-        let (r, _) = paint::pill(
-            painter,
-            &kit.pill,
-            tone,
-            pos2(right, image.bottom() - pad),
-            Align2::RIGHT_BOTTOM,
-            &b.text,
-            small.clone(),
-        );
-        right = r.left() - 3.0;
+        let mark = badge_indicator(image, b);
+        let width = mark.measure(ui).x;
+        if width > host.width() {
+            break;
+        }
+        mark.paint_at(ui, host, Anchor::BottomEnd);
+        host.set_right(host.right() - width - gap);
     }
 }
 

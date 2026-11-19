@@ -11,7 +11,7 @@ use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::PluginId;
 use egui_pop_views::library::filter::{SearchField, SearchState};
 use egui_pop_views::library::grid::{
-    LibraryItems, LibraryState, Signal, Stack, Thumb, ThumbGrid, ThumbSource,
+    Badge, LibraryItems, LibraryState, Signal, Stack, Thumb, ThumbGrid, ThumbSource,
 };
 use egui_pop_views::library::marks::{ColorLabel, CullKeymap, Flag, Marks};
 use egui_pop_views::library::plugin::{
@@ -44,6 +44,16 @@ impl LibraryItems<u32> for Shoot {
     }
     fn stack(&self, i: usize) -> Option<Stack<u32>> {
         (self.stacked && (3..=5).contains(&i)).then_some(Stack { top: 3, count: 3 })
+    }
+    fn badges(&self, i: usize) -> Vec<Badge> {
+        if i == 1 {
+            vec![
+                Badge::new("RAW"),
+                Badge::new("HDR").tone(egui_pop_core::kit::Tone::Info),
+            ]
+        } else {
+            Vec::new()
+        }
     }
 }
 
@@ -883,4 +893,29 @@ fn a_focused_grid_gets_its_arrows_before_a_global_binding() {
     // In the main window, where no widget reads Right, the global runs.
     press(&mut m, egui::ViewportId::ROOT, Key::ArrowRight);
     assert_eq!(take(), ["demo.next"]);
+}
+
+#[test]
+fn badges_are_indicators_in_the_bottom_right_corner_of_their_cell() {
+    let mut h = harness(12, false, false, CullKeymap::lightroom());
+    h.run();
+    let drawn: Vec<_> = egui_pop_core::indicator::drawn(&h.ctx)
+        .into_iter()
+        .filter(|r| r.id.starts_with("library.badge:"))
+        .collect();
+    let ids: Vec<&str> = drawn.iter().map(|r| r.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        ["library.badge:IMG_00001:HDR", "library.badge:IMG_00001:RAW"]
+    );
+    assert_eq!(drawn[0].tone, egui_pop_core::kit::Tone::Info);
+    let cell = cell(&h, 1).rect();
+    let (hdr, raw) = (drawn[0].rect, drawn[1].rect);
+    // Inside the cell, the last badge at its right end, the first before it.
+    assert!(hdr[0] + hdr[2] <= cell.right(), "{hdr:?} in {cell:?}");
+    assert!(raw[0] + raw[2] <= hdr[0] + 0.5, "{raw:?} before {hdr:?}");
+    assert!(
+        raw[1] > cell.center().y,
+        "{raw:?} in the bottom half of {cell:?}"
+    );
 }
