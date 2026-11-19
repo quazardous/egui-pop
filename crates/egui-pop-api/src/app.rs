@@ -1138,6 +1138,19 @@ impl AppHandle {
         }
     }
 
+    /// Why `args` may not run `command`: they do not match its JSON
+    /// Schema (`CommandSpec::schema`), as `refused by
+    /// `pop.command.args`: ...`. `None` when they match, when its
+    /// arguments are only described, or for a command that is not there.
+    /// Every run is checked so before its handler; this asks before (the
+    /// bridge's `commands.run`, to answer an agent at once).
+    pub fn command_args_refusal(&self, command: &CommandId, args: &Json) -> Option<String> {
+        let commands = self.commands();
+        let (spec, _) = commands.iter().find(|(s, _)| &s.id == command)?;
+        crate::bus::args_refusal(spec, args)
+            .map(|r| format!("refused by `{}`: {r}", crate::bus::ARGS_VALIDATOR))
+    }
+
     /// Whether this bridge call destroys or discards what cannot easily
     /// be had back: an action declared so, `commands.run` of a
     /// destructive command (`CommandSpec::destructive`). The agent
@@ -5302,7 +5315,26 @@ impl App {
                         }
                         Some(_) => {}
                     }
-                    app.run_as(id, args.get("args").cloned().unwrap_or(Json::Null), origin.clone());
+                    let run_args = args.get("args").cloned().unwrap_or(Json::Null);
+                    // Arguments its schema refuses are refused now, on
+                    // the journal as the run itself would be, rather than
+                    // queued to fail later.
+                    if let Some(msg) = app.command_args_refusal(&id, &run_args) {
+                        app.publish(
+                            &source_of(origin),
+                            None,
+                            "command.refused",
+                            json!({
+                                "command": id,
+                                "origin": source_of(origin),
+                                "reason": msg,
+                                "by": crate::bus::ARGS_VALIDATOR,
+                                "failed": false,
+                            }),
+                        );
+                        return Err(msg);
+                    }
+                    app.run_as(id, run_args, origin.clone());
                     Ok(json!({ "queued": true }))
                 })
                 // The command's own `agent` flag is checked.
@@ -5319,9 +5351,15 @@ impl App {
                 .destructive_when(move |args| {
                     let Ok(app) = up(&w4) else { return false };
                     let Some(id) = args.get("id").and_then(Json::as_str) else { return false };
-                    app.commands()
-                        .iter()
-                        .any(|(s, _)| s.id.as_str() == id && s.destructive && s.agent)
+                    // A run its schema refuses is refused at once, not
+                    // asked about.
+                    let run_args = args.get("args").cloned().unwrap_or(Json::Null);
+                    app.commands().iter().any(|(s, _)| {
+                        s.id.as_str() == id
+                            && s.destructive
+                            && s.agent
+                            && crate::bus::args_refusal(s, &run_args).is_none()
+                    })
                 })
                 .args(json!({ "id": "app.palette", "args": null })),
         )
@@ -7063,6 +7101,32 @@ impl App {
                 return Reply::Done(Err(msg));
             }
         };
+        // Arguments that do not match the command's JSON Schema are
+        // refused before anything else hears of the run, whoever asks it
+        // (`pop.command.args`). A command whose arguments are only
+        // described (an example, a text) is not checked.
+        if let Some(reason) = self
+            .reg
+            .commands
+            .spec(command)
+            .and_then(|s| crate::bus::args_refusal(s, &args))
+        {
+            let msg = format!("refused by `{}`: {reason}", crate::bus::ARGS_VALIDATOR);
+            self.handle.publish(
+                &source_of(&origin),
+                None,
+                "command.refused",
+                json!({
+                    "command": command,
+                    "origin": source_of(&origin),
+                    "reason": msg,
+                    "by": crate::bus::ARGS_VALIDATOR,
+                    "failed": false,
+                }),
+            );
+            self.record(command, &args, &origin, Err(msg.clone()));
+            return Reply::Done(Err(msg));
+        }
         // Its listeners on the bus (`pop.command.run`), in their order, before
         // the handler: one may refuse it, and a failing one refuses it
         // (fail-closed). Nobody listening, it goes on as before.

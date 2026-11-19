@@ -107,8 +107,8 @@ answers it:
 The `commands` collector's snapshot lists every command with what an
 agent needs to run it: `id`, `title`, `category`, `description`, `when`
 (where it applies), `keys`, `agent` (offered to agents or not), `args`
-(a description of its arguments: free JSON, a schema or an example,
-`null` when it takes none), `running`, `owner` and its icons; beside
+(its arguments: a JSON Schema, enforced, or a free description such as
+an example, `null` when it takes none), `running`, `owner` and its icons; beside
 them, the `context` (the context keys in force) and `history` (the last
 runs). In the gallery:
 
@@ -294,8 +294,9 @@ agent's call; an action's without arguments), `args` (a JSON Schema
 when the author gives one, else `null`), `example` (example arguments), `result` (a JSON
 Schema of the result, or `null`) and `call` (how to call it). A
 collector gives its schemas with `FnCollector::schema` and
-`FnCollector::result_schema`; a command whose `args` is a JSON Schema is
-listed with it. The protocol number changes only when a field changes
+`FnCollector::result_schema`; a command whose `args` is a JSON Schema
+(`CommandSpec::schema`) is listed with it, and its runs are checked
+against it. The protocol number changes only when a field changes
 meaning: a client calls only names the list gives, so adding
 capabilities breaks none.
 
@@ -454,6 +455,14 @@ The bridge has one caller identity: every command it runs is
   dialog. While it is open, agents' `ui` actions are refused, so an
   agent cannot click its own confirmation. The user's own runs are
   never asked ([The agent socket](agent-socket.md#destructive-calls-the-user-confirms)).
+- **Argument schemas.** A command whose `args` is a JSON Schema
+  (`CommandSpec::schema`) is held to it: a run whose arguments do not
+  match is refused before its handler, whoever asks it, the user
+  included (`command.refused`, `by: "pop.command.args"`, the reason
+  naming where and why: `/factor: expected a number, got a string`). A
+  destructive command's run refused so is never asked about. A command
+  whose arguments are only described (an example, a text) checks
+  nothing ([The agent socket](agent-socket.md#argument-schemas)).
 - **Grants per agent.** Over the agent socket, each agent is held to a
   grant the application sets (commands, read-only, values, `ui`
   actions; presets read-only, editor, full): a client that does not say

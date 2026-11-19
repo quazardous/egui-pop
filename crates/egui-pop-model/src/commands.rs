@@ -156,8 +156,13 @@ pub struct CommandSpec {
     /// never asked.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub destructive: bool,
-    /// A description of its arguments (free JSON, a schema or an
-    /// example); `null` when it takes none.
+    /// Its arguments: a JSON Schema ([`CommandSpec::schema`]), or a free
+    /// description (an example, a text); `null` when it takes none. A
+    /// schema (an object of schema keywords naming a `type`, see
+    /// `egui_pop_core::debug::is_schema`) is enforced: a run whose
+    /// arguments do not match is refused before its handler, whoever
+    /// asks it (`command.refused`, `by: "pop.command.args"`). A free
+    /// description checks nothing.
     pub args: Json,
     /// Its icon's name (`save`, `phosphor:export`, `my-plugin:crop`):
     /// every surface running the command shows it. Checked against the
@@ -307,10 +312,22 @@ impl CommandSpec {
         self
     }
 
-    /// Describes the arguments.
+    /// Describes the arguments ([`CommandSpec::args`]): a JSON Schema is
+    /// enforced, a free description (an example) only shown.
     pub fn args(mut self, args: Json) -> Self {
         self.args = args;
         self
+    }
+
+    /// Its arguments' JSON Schema, enforced before every run: arguments
+    /// that do not match are refused before the handler runs
+    /// (`command.refused`, `by: "pop.command.args"`). The checked subset
+    /// is `egui_pop_core::schema`'s (types, `required`, `enum`, ranges,
+    /// lengths, `items`, `additionalProperties`, combinators). `null`
+    /// arguments are checked as `{}` when the schema is an object's. The
+    /// same as [`CommandSpec::args`], said for what it is.
+    pub fn schema(self, schema: Json) -> Self {
+        self.args(schema)
     }
 }
 

@@ -211,7 +211,9 @@ assert!(report.failures.is_empty());
   agent) is asked on it before its handler; a refusal stops the run,
   which never reaches the host, and is journaled as `command.refused`
   with `by` (the listener), `reason` and `failed`. With nobody listening,
-  commands run as before.
+  commands run as before. A run whose arguments do not match its
+  command's JSON Schema is refused before the point is asked
+  (`by: "pop.command.args"`, `bus::ARGS_VALIDATOR`).
 
 ## Accessibility
 

@@ -12,7 +12,9 @@
 //! goes on as before, to the host's dispatch and its handler, said as
 //! `command.dispatched` then `command.done` or `command.failed`. A
 //! command not offered to agents, unknown or disabled is refused before
-//! the point is asked, as before.
+//! the point is asked, as before; so is a run whose arguments do not
+//! match its command's JSON Schema (`by: "pop.command.args"`,
+//! [`ARGS_VALIDATOR`]).
 
 use bus_contract::{Point, PointKind, Refusal};
 use egui_pop_model::commands::Origin;
@@ -66,6 +68,33 @@ impl Point for CommandRun {
     const ID: &'static str = "pop.command.run";
     type Input = CommandAsk;
     type Value = Vec<String>;
+}
+
+/// Who refuses a run whose arguments do not match its command's JSON
+/// Schema (`CommandSpec::schema`): the `by` of its `command.refused`. The
+/// check is not a listener: it runs before `pop.command.run` is asked,
+/// for every origin.
+pub const ARGS_VALIDATOR: &str = "pop.command.args";
+
+/// Why `args` do not match `spec`'s JSON Schema, `None` when they do or
+/// when its arguments are only described (an example, a text). `null`
+/// arguments are checked as `{}` against an object's schema.
+pub(crate) fn args_refusal(
+    spec: &egui_pop_model::commands::CommandSpec,
+    args: &Json,
+) -> Option<String> {
+    if !egui_pop_core::debug::is_schema(&spec.args) {
+        return None;
+    }
+    let empty = Json::Object(Default::default());
+    let args = if args.is_null() && spec.args.get("type").and_then(Json::as_str) == Some("object") {
+        &empty
+    } else {
+        args
+    };
+    egui_pop_core::schema::check(&spec.args, args)
+        .err()
+        .map(|e| format!("its arguments do not match its schema: {e}"))
 }
 
 /// The command points, in the order [`super::order_dump`] prints them.

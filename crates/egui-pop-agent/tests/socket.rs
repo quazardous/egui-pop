@@ -24,6 +24,22 @@ struct Writes;
 const WRITE: CommandId = CommandId::from_static("test.write");
 /// A destructive command offered to agents: what the user confirms.
 const PURGE: CommandId = CommandId::from_static("test.purge");
+/// A command whose arguments are a JSON Schema: what the validator
+/// checks.
+const ZOOM: CommandId = CommandId::from_static("test.zoom");
+/// A destructive command with a schema: refused at once when its
+/// arguments do not match, never asked about.
+const WIPE: CommandId = CommandId::from_static("test.wipe");
+
+/// The schema `test.zoom` and `test.wipe` declare.
+fn factor_schema() -> Json {
+    json!({
+        "type": "object",
+        "required": ["factor"],
+        "additionalProperties": false,
+        "properties": { "factor": { "type": "number", "minimum": 0.1, "maximum": 8 } }
+    })
+}
 
 impl Plugin for Writes {
     fn id(&self) -> PluginId {
@@ -41,6 +57,19 @@ impl Plugin for Writes {
                 .description("Discards what cannot be had back (a test's).")
                 .destructive(),
             |_| Ok(json!("purged")),
+        )?;
+        ctx.command(
+            CommandSpec::new(ZOOM, "Zoom", "Test")
+                .description("Zooms by a factor (a test's).")
+                .schema(factor_schema()),
+            |c| Ok(c.args["factor"].clone()),
+        )?;
+        ctx.command(
+            CommandSpec::new(WIPE, "Wipe", "Test")
+                .description("Discards by a factor (a test's).")
+                .destructive()
+                .schema(factor_schema()),
+            |_| Ok(json!("wiped")),
         )?;
         Ok(())
     }
@@ -1160,4 +1189,139 @@ fn an_unanswered_pairing_closes_its_dialog_at_its_deadline() {
     let d = h.state().handle().service(&DIALOGS).unwrap();
     assert!(!d.is_open(dialog), "the expired pairing request closed");
     assert!(events(&h, "agent.paired").is_empty());
+}
+
+// Argument schemas: a command's JSON Schema enforced before its handler.
+
+#[test]
+fn arguments_a_commands_schema_refuses_never_reach_its_handler_and_are_journaled() {
+    use egui_pop_api::dialogs::DIALOGS;
+    let (mut h, path) = writable("schema-agent");
+    let p = path.clone();
+    let (described, bad, wipe, good, free, done) = with_client(&mut h, move || {
+        let mut c = Client::connect(&p);
+        let described = c.result("describe", json!({}));
+        let since = c.result("wait", json!({ "settled": true, "deadline_ms": 10_000 }))["last"]
+            .as_u64()
+            .unwrap();
+        let bad = c.result("call", run_call("test.zoom", json!({ "factor": "big" })));
+        // Destructive, but refused at once: the user is not asked.
+        let wipe = c.result("call", run_call("test.wipe", json!({ "factor": 99 })));
+        let good = c.result("call", run_call("test.zoom", json!({ "factor": 2 })));
+        // A command without a schema takes anything, as before.
+        let free = c.result(
+            "call",
+            run_call("test.write", json!({ "anything": [1, 2] })),
+        );
+        let done = c.result(
+            "wait",
+            json!({ "event": "command.done", "since": since, "deadline_ms": 10_000 }),
+        );
+        (described, bad, wipe, good, free, done)
+    });
+    for _ in 0..3 {
+        h.step();
+    }
+    // `describe` publishes the schema as the command's `args`.
+    let cap = described["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "test.zoom")
+        .cloned()
+        .unwrap();
+    assert_eq!(cap["args"], factor_schema(), "{cap}");
+    // Refused with where and why, before the handler.
+    assert_eq!(bad["ok"], false, "{bad}");
+    let message = bad["message"].as_str().unwrap();
+    assert!(message.contains("refused by `pop.command.args`"), "{bad}");
+    assert!(
+        message.contains("/factor: expected a number, got a string"),
+        "{bad}"
+    );
+    assert_eq!(wipe["ok"], false, "{wipe}");
+    assert!(
+        wipe["message"]
+            .as_str()
+            .unwrap()
+            .contains("above the maximum"),
+        "{wipe}"
+    );
+    assert!(
+        h.state()
+            .handle()
+            .service(&DIALOGS)
+            .unwrap()
+            .current()
+            .is_none(),
+        "nothing was asked"
+    );
+    assert!(done_runs(&h, "test.wipe").is_empty(), "never ran");
+    // Journaled, naming the validator, from the agent.
+    let refused = refused_runs(&h, "test.zoom");
+    assert_eq!(refused.len(), 1, "{refused:?}");
+    assert_eq!(refused[0].data["by"], "pop.command.args");
+    assert_eq!(refused[0].source, "agent:agent-socket");
+    assert_eq!(
+        refused_runs(&h, "test.wipe")[0].data["by"],
+        "pop.command.args"
+    );
+    // The matching run ran, once; the free one too.
+    assert_eq!(good["ok"], true, "{good}");
+    assert_eq!(done["met"], true, "{done}");
+    assert_eq!(done_runs(&h, "test.zoom").len(), 1);
+    assert_eq!(free["ok"], true, "{free}");
+    assert_eq!(done_runs(&h, "test.write").len(), 1);
+    assert!(refused_runs(&h, "test.write").is_empty());
+}
+
+#[test]
+fn a_commands_schema_holds_every_origin_the_users_runs_included() {
+    use egui_pop_api::model::commands::Origin;
+    let (mut h, _path) = writable("schema-user");
+    // The user's run (a key, a menu, the palette) with arguments its
+    // schema refuses: refused before the handler, on the journal.
+    let r = h
+        .state_mut()
+        .run(&ZOOM, json!({ "factor": 0 }), Origin::User)
+        .now()
+        .expect("answered at once");
+    let e = r.unwrap_err();
+    assert!(e.starts_with("refused by `pop.command.args`"), "{e}");
+    assert!(e.contains("below the minimum"), "{e}");
+    // No arguments are checked as `{}`: `factor` is required.
+    let r = h
+        .state_mut()
+        .run(&ZOOM, Json::Null, Origin::User)
+        .now()
+        .expect("answered at once");
+    assert!(r.unwrap_err().contains("`factor` is required"));
+    let r = h
+        .state_mut()
+        .run(&ZOOM, json!({ "factor": 0.5 }), Origin::User)
+        .now()
+        .expect("answered at once");
+    assert_eq!(r, Ok(json!(0.5)));
+    h.step();
+    let refused = refused_runs(&h, "test.zoom");
+    assert_eq!(refused.len(), 2, "{refused:?}");
+    assert!(
+        refused
+            .iter()
+            .all(|e| e.data["by"] == "pop.command.args" && e.source == "user")
+    );
+    assert_eq!(done_runs(&h, "test.zoom").len(), 1);
+    // In-process, the check answers before a run.
+    assert!(
+        h.state()
+            .handle()
+            .command_args_refusal(&ZOOM, &json!({ "factor": "x" }))
+            .is_some()
+    );
+    assert!(
+        h.state()
+            .handle()
+            .command_args_refusal(&WRITE, &json!(42))
+            .is_none()
+    );
 }
