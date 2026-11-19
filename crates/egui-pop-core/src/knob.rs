@@ -313,7 +313,8 @@ impl<'a> Knob<'a> {
         };
         let row = ui.spacing().interact_size.y;
         let wanted = size.unwrap_or(vec2(row * 2.0 * 3.0, row * 2.0));
-        let (id, rect) = ui.allocate_space(vec2(wanted.x.max(row), wanted.y.max(row)));
+        let (_, rect) = ui.allocate_space(vec2(wanted.x.max(row), wanted.y.max(row)));
+        let id = crate::slider::stable_id(ui, "egui_pop.knob", &spec.label);
         let layout = Layout::of(rect);
         let mut response = ui.interact(rect, id, Sense::click_and_drag());
         let before = *value;

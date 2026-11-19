@@ -89,7 +89,8 @@ impl<'a> RangeSlider<'a> {
         }
         let height = ui.spacing().interact_size.y;
         let width = ui.available_width().max(super::MIN_WIDTH);
-        let (id, bar) = ui.allocate_space(vec2(width, height));
+        let (_, bar) = ui.allocate_space(vec2(width, height));
+        let id = super::stable_id(ui, "egui_pop.range_slider", &spec.label);
         let (low_rect, high_rect) = halves(bar, &spec, *low, *high);
         let mut lo_r = ui.interact(low_rect, id.with("low"), Sense::click_and_drag());
         let mut hi_r = ui.interact(high_rect, id.with("high"), Sense::click_and_drag());
