@@ -375,6 +375,20 @@ which swaps the first two (`SetFolder`).
   as sections (`files.places`, `files.devices`, `files.recent`,
   `files.bookmarks`, then the application's). The gallery's file browser page
   shows one beside the browser.
+- **An import window's sources column**, each part opt-in (a panel without
+  them looks as before): a section folds under its band
+  (`PlaceSection::foldable`; `PlaceSection::open` when the application keeps
+  the state, the user's clicks in `PlacesOutput::folded`), says what it lacks
+  when empty (`PlaceSection::empty`, "No cards") or stays for the
+  application's content (`PlaceSection::keep`). An item shows a line under
+  its name, said as its description (`PlaceItem::line`: why in a word, never
+  in a tip only), a badge in a tone (`PlaceItem::badge_tone`, a warning ▲),
+  and a toggle at its end (`PlaceToggle`, a pin), reported in
+  `PlacesOutput::toggled`: the application flips its state.
+  `PlacesPanel::under_item` and `PlacesPanel::under_section` hand the
+  application the room under an item (an account's albums) or a section's
+  items (a history's past imports with "Import again"); their widgets join
+  the panel's keyboard order. The gallery's places page shows them all.
 - **Kept** in the host's store with the settings: `settings/files.recent`,
   `settings/files.bookmarks`, and the names given in
   `settings/files.bookmark_names`.

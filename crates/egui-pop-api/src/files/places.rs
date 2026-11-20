@@ -20,6 +20,16 @@
 //! of it: an item without a path (an account of a service) is the
 //! application's to act on.
 //!
+//! A panel goes further than the picker's list, each part opt-in: a section
+//! that folds ([`PlaceSection::foldable`]) or says what it lacks
+//! ([`PlaceSection::empty`]); an item with a line shown under its name
+//! ([`PlaceItem::line`]), a badge in a tone ([`PlaceItem::badge_tone`]) and
+//! a toggle of the application's (a pin, [`PlaceToggle`]); and room under
+//! an item or a section for the application's own content
+//! ([`PlacesPanel::under_item`], [`PlacesPanel::under_section`]). What the
+//! user did comes back in [`PlacesOutput`]: the application keeps the
+//! state and acts.
+//!
 //! [`Files::set_system_places`]: super::Files::set_system_places
 //! [`Files::place_providers`]: super::Files::place_providers
 //! [`FilesPlugin::places`]: super::FilesPlugin::places
@@ -30,9 +40,13 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use egui::Ui;
+use egui_pop_core::fold::Fold;
+use egui_pop_core::icon::{Size, Tone as IconTone};
+use egui_pop_core::kit::{Kit, KitCx, Part, State, Tone};
 use egui_pop_core::lock;
 use egui_pop_core::strings::StrKey;
 use egui_pop_core::theme::Tokens;
+use egui_pop_core::ui::{UiPop as _, tone_color};
 use egui_pop_core::{a11y, widgets};
 
 use crate::strings as txt;
@@ -167,6 +181,41 @@ pub struct PlaceItem {
     pub detail: Option<String>,
     /// A short mark after its name (a count, "new"), said with it.
     pub badge: Option<String>,
+    /// The badge's tone (a warning ▲ on an account to reconnect); plain
+    /// small text when none.
+    pub badge_tone: Option<Tone>,
+    /// A line shown under its name, always visible (a path, a card's free
+    /// space, "needs reconnecting"): why in a word, on the item itself.
+    /// Said as the item's description.
+    pub line: Option<String>,
+    /// A toggle of the application's at the item's end (a pin):
+    /// [`PlacesOutput::toggled`] says it was clicked.
+    pub toggle: Option<PlaceToggle>,
+}
+
+/// A toggle at the end of a [`PlaceItem`] (a pin for the favourites): an
+/// icon on or off, named for assistive technology. The application owns
+/// its state: a click is reported ([`PlacesOutput::toggled`]), and the
+/// application gives the item again with the new state.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PlaceToggle {
+    /// An icon of the icon registry (`phosphor:push-pin`).
+    pub icon: String,
+    /// Whether it is on: drawn in the accent, said as pressed.
+    pub on: bool,
+    /// Its name, said and in its tip ("Add to favourites").
+    pub name: String,
+}
+
+impl PlaceToggle {
+    pub fn new(icon: impl Into<String>, on: bool, name: impl Into<String>) -> Self {
+        Self {
+            icon: icon.into(),
+            on,
+            name: name.into(),
+        }
+    }
 }
 
 impl PlaceItem {
@@ -179,6 +228,9 @@ impl PlaceItem {
             icon: None,
             detail: None,
             badge: None,
+            badge_tone: None,
+            line: None,
+            toggle: None,
         }
     }
 
@@ -215,6 +267,27 @@ impl PlaceItem {
         self
     }
 
+    /// The badge's tone (see [`PlaceItem::badge_tone`]).
+    #[must_use]
+    pub fn badge_tone(mut self, tone: Tone) -> Self {
+        self.badge_tone = Some(tone);
+        self
+    }
+
+    /// A line under its name, always shown (see [`PlaceItem::line`]).
+    #[must_use]
+    pub fn line(mut self, line: impl Into<String>) -> Self {
+        self.line = Some(line.into());
+        self
+    }
+
+    /// A toggle at its end (see [`PlaceToggle`]).
+    #[must_use]
+    pub fn toggle(mut self, toggle: PlaceToggle) -> Self {
+        self.toggle = Some(toggle);
+        self
+    }
+
     /// What a screen reader says of it: its name, then its badge.
     pub fn said(&self) -> String {
         match &self.badge {
@@ -233,6 +306,19 @@ pub struct PlaceSection {
     pub id: String,
     pub title: String,
     pub items: Vec<PlaceItem>,
+    /// Whether it folds, and whether it is open the first time it is
+    /// shown; a fixed heading when none.
+    pub fold: Option<bool>,
+    /// Whether it is open, when the application keeps the state: the
+    /// panel follows it ([`PlacesOutput::folded`] says the user asked to
+    /// change it). Kept in egui's memory when none.
+    pub open: Option<bool>,
+    /// The line it shows when it has no items ("No cards"): a section
+    /// with one is shown empty, one without is left out.
+    pub empty: Option<String>,
+    /// Shown even without items or an empty line: its content comes from
+    /// [`PlacesPanel::under_section`].
+    pub keep: bool,
 }
 
 impl PlaceSection {
@@ -241,7 +327,49 @@ impl PlaceSection {
             id: id.into(),
             title: title.into(),
             items: Vec::new(),
+            fold: None,
+            open: None,
+            empty: None,
+            keep: false,
         }
+    }
+
+    /// Folds under its band (egui-pop's [`Fold`]), open at first when
+    /// `open_at_first`; its state kept in egui's memory, unless the
+    /// application keeps it ([`PlaceSection::open`]).
+    #[must_use]
+    pub fn foldable(mut self, open_at_first: bool) -> Self {
+        self.fold = Some(open_at_first);
+        self
+    }
+
+    /// Folds, open or not as the application keeps it: the user's clicks
+    /// come back in [`PlacesOutput::folded`].
+    #[must_use]
+    pub fn open(mut self, open: bool) -> Self {
+        self.fold.get_or_insert(open);
+        self.open = Some(open);
+        self
+    }
+
+    /// The line shown when it has no items; it is then shown empty.
+    #[must_use]
+    pub fn empty(mut self, line: impl Into<String>) -> Self {
+        self.empty = Some(line.into());
+        self
+    }
+
+    /// Shown even without items or an empty line (its content drawn by
+    /// [`PlacesPanel::under_section`]).
+    #[must_use]
+    pub fn keep(mut self) -> Self {
+        self.keep = true;
+        self
+    }
+
+    /// Whether a panel shows it: it has items, an empty line or is kept.
+    pub fn shown(&self) -> bool {
+        !self.items.is_empty() || self.empty.is_some() || self.keep
     }
 
     /// Adds an item, after those it has.
@@ -299,13 +427,14 @@ impl PlaceProviders {
     }
 
     /// Every provider's sections, in order; a section without items is
-    /// left out. A provider that panics gives none, and the log says so.
+    /// left out, unless it has an empty line or is kept
+    /// ([`PlaceSection::shown`]). A provider that panics gives none, and the log says so.
     pub fn sections(&self) -> Vec<PlaceSection> {
         let list = lock(&self.0).clone();
         let mut out = Vec::new();
         for provider in list {
             match catch_unwind(AssertUnwindSafe(|| provider.sections())) {
-                Ok(sections) => out.extend(sections.into_iter().filter(|s| !s.items.is_empty())),
+                Ok(sections) => out.extend(sections.into_iter().filter(PlaceSection::shown)),
                 Err(_) => {
                     log::warn!(target: "egui_pop", "files: the place provider {} panicked", provider.id());
                 }
@@ -377,17 +506,35 @@ pub struct PlacesOutput {
     /// The item chosen: a click, or Enter or Space on it; its section's id
     /// with it.
     pub chosen: Option<(String, PlaceItem)>,
+    /// The item whose toggle was clicked ([`PlaceItem::toggle`]), its
+    /// section's id with it: the application flips its state.
+    pub toggled: Option<(String, PlaceItem)>,
+    /// The foldable section the user folded or opened, by id, and whether
+    /// it is open now.
+    pub folded: Option<(String, bool)>,
 }
 
-/// What draws an item's context menu ([`PlacesPanel::menu`]).
+/// What draws an item's context menu ([`PlacesPanel::menu`]), or the
+/// application's content under an item ([`PlacesPanel::under_item`]).
 type PlaceMenu<'a> = Box<dyn FnMut(&mut Ui, &PlaceSection, &PlaceItem) + 'a>;
+
+/// What draws the application's content under a section's items
+/// ([`PlacesPanel::under_section`]).
+type SectionSlot<'a> = Box<dyn FnMut(&mut Ui, &PlaceSection) + 'a>;
 
 /// A side panel of places: sections, each a heading over its items, as the
 /// in-app picker lists them (an import window's sources column). One stop
-/// for Tab; Up and Down go from item to item across the sections, Enter or
-/// Space chooses. Each item is a button named by its name and badge,
-/// selected or not; each title a heading. What a chosen
-/// item does is the caller's: [`PlacesOutput::chosen`].
+/// for Tab; Up and Down go from item to item across the sections (through
+/// an item's toggle, a fold's band and the application's content, in the
+/// order drawn), Enter or Space chooses. Each item is a button named by its
+/// name and badge, described by its line, selected or not; each title a
+/// heading, or a fold's band when the section folds. What a chosen item
+/// does is the caller's: [`PlacesOutput::chosen`].
+///
+/// Opt-in parts (see the module): folding sections, an empty section's
+/// line, an item's visible line, toned badge and toggle, and the
+/// application's content under an item or a section. A panel using none
+/// of them looks as it always did.
 ///
 /// ```
 /// use egui_pop_api::files::places::{PlaceItem, PlaceSection, PlacesPanel};
@@ -411,6 +558,8 @@ pub struct PlacesPanel<'a> {
     sections: &'a [PlaceSection],
     selected: Option<&'a str>,
     menu: Option<PlaceMenu<'a>>,
+    under_item: Option<PlaceMenu<'a>>,
+    under_section: Option<SectionSlot<'a>>,
 }
 
 impl fmt::Debug for PlacesPanel<'_> {
@@ -432,6 +581,8 @@ impl<'a> PlacesPanel<'a> {
             sections,
             selected: None,
             menu: None,
+            under_item: None,
+            under_section: None,
         }
     }
 
@@ -449,32 +600,56 @@ impl<'a> PlacesPanel<'a> {
         self
     }
 
+    /// The application's content under each item, drawn by `add` in the
+    /// room below it (an account's albums under the account): `add` draws
+    /// nothing for an item without any. Its widgets join the panel's
+    /// keyboard order after the item.
+    #[must_use]
+    pub fn under_item(mut self, add: impl FnMut(&mut Ui, &PlaceSection, &PlaceItem) + 'a) -> Self {
+        self.under_item = Some(Box::new(add));
+        self
+    }
+
+    /// The application's content under each section's items, drawn by
+    /// `add` (a history's past imports, each with "Import again"), inside
+    /// the section's fold when it folds. Its widgets join the panel's
+    /// keyboard order after the section's items.
+    #[must_use]
+    pub fn under_section(mut self, add: impl FnMut(&mut Ui, &PlaceSection) + 'a) -> Self {
+        self.under_section = Some(Box::new(add));
+        self
+    }
+
     pub fn show(mut self, ui: &mut Ui) -> PlacesOutput {
         let mut out = PlacesOutput::default();
         let t = Tokens::of(ui.ctx());
         let sections = self.sections;
         let selected = self.selected;
-        let menu = &mut self.menu;
-        egui_pop_core::tab::roving(ui, &self.name, egui_pop_core::tab::Axis::Vertical, |ui| {
+        let name = self.name.clone();
+        egui_pop_core::tab::roving(ui, &name, egui_pop_core::tab::Axis::Vertical, |ui| {
             ui.vertical(|ui| {
-                for (n, section) in sections.iter().filter(|s| !s.items.is_empty()).enumerate() {
+                for (n, section) in sections.iter().filter(|s| s.shown()).enumerate() {
                     if n > 0 {
                         ui.add_space(t.space.s);
                     }
-                    section_title(ui, &section.title);
-                    for item in &section.items {
-                        let on = selected == Some(item.id.as_str());
-                        let r = ui
-                            .push_id((&section.id, &item.id), |ui| place_row(ui, item, on))
-                            .inner;
-                        // Enter and Space click the item that has the keyboard.
-                        if r.clicked() {
-                            out.chosen = Some((section.id.clone(), item.clone()));
+                    match section.fold {
+                        None => {
+                            section_title(ui, &section.title);
+                            self.section_body(ui, section, selected, &mut out);
                         }
-                        if let Some(menu) = menu.as_mut() {
-                            egui_pop_core::pointer::claim::context_menu(&r, |ui| {
-                                menu(ui, section, item);
-                            });
+                        Some(at_first) => {
+                            let open_wanted = section.open;
+                            let fold = Fold::new((&name, &section.id), section.title.as_str())
+                                .default_open(open_wanted.unwrap_or(at_first))
+                                .show(ui, |ui| self.section_body(ui, section, selected, &mut out));
+                            if fold.toggled {
+                                out.folded = Some((section.id.clone(), fold.open));
+                            } else if let Some(want) = open_wanted
+                                && want != fold.open
+                            {
+                                // The application keeps the state: follow it.
+                                egui_pop_core::fold::set_open(ui.ctx(), fold.id, want);
+                            }
                         }
                     }
                 }
@@ -482,6 +657,223 @@ impl<'a> PlacesPanel<'a> {
         });
         out
     }
+
+    /// A section's items, its empty line, and the application's content.
+    fn section_body(
+        &mut self,
+        ui: &mut Ui,
+        section: &PlaceSection,
+        selected: Option<&str>,
+        out: &mut PlacesOutput,
+    ) {
+        if section.items.is_empty()
+            && let Some(empty) = &section.empty
+        {
+            ui.meta(empty.as_str());
+        }
+        for item in &section.items {
+            let on = selected == Some(item.id.as_str());
+            ui.push_id((&section.id, &item.id), |ui| {
+                let (r, toggled) = item_row(ui, item, on);
+                // Enter and Space click the item that has the keyboard.
+                if r.clicked() {
+                    out.chosen = Some((section.id.clone(), item.clone()));
+                }
+                if toggled {
+                    out.toggled = Some((section.id.clone(), item.clone()));
+                }
+                if let Some(menu) = self.menu.as_mut() {
+                    egui_pop_core::pointer::claim::context_menu(&r, |ui| {
+                        menu(ui, section, item);
+                    });
+                }
+                if let Some(add) = self.under_item.as_mut() {
+                    add(ui, section, item);
+                }
+            });
+        }
+        if let Some(add) = self.under_section.as_mut() {
+            ui.push_id(("under", &section.id), |ui| add(ui, section));
+        }
+    }
+}
+
+/// An item of a panel: the picker's row ([`place_row`]) when it has no
+/// line and no toggle, as panels always drew it; else a row of one fixed
+/// height with its line under its name and its toggle at its end. Says
+/// whether its toggle was clicked.
+fn item_row(ui: &mut Ui, item: &PlaceItem, selected: bool) -> (egui::Response, bool) {
+    if item.line.is_none() && item.toggle.is_none() {
+        return (place_row(ui, item, selected), false);
+    }
+    let ctx = ui.ctx().clone();
+    let t = Tokens::of(&ctx);
+    let kit = Kit::of(&ctx);
+    let component = &kit.selectable_row;
+    let body = egui::TextStyle::Body.resolve(ui.style());
+    let small = egui::FontId::proportional(t.text_role.meta.size.max(4.0));
+    let room = component.border_room(ctx.pixels_per_point());
+    let pad = ui.spacing().button_padding.max(egui::Vec2::splat(room));
+    let gap = ui.spacing().item_spacing.x;
+    let line_h = if item.line.is_some() {
+        ui.fonts_mut(|f| f.row_height(&small))
+    } else {
+        0.0
+    };
+    let height = (ui.fonts_mut(|f| f.row_height(&body)) + line_h + 2.0 * pad.y)
+        .max(ui.spacing().interact_size.y);
+    let toggle_side = Size::Inline.points(&t) + 2.0 * room;
+    let width = ui.available_width().max(toggle_side * 3.0);
+    let (rect, r) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
+    let enabled = ui.is_enabled();
+    let said = item.said();
+    r.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, enabled, selected, &said));
+    if let Some(line) = &item.line {
+        ctx.accesskit_node_builder(r.id, |node| node.set_description(line.clone()));
+    }
+    if let Some(cursor) = ui.visuals().interact_cursor
+        && r.hovered()
+    {
+        ctx.set_cursor_icon(cursor);
+    }
+    // The toggle's room at the end, outside the row's own click; a little
+    // below the row's middle, so that the keyboard, which goes by place,
+    // reaches it after its item.
+    let icon_side = Size::Inline.points(&t);
+    let toggle_rect = item.toggle.as_ref().map(|_| {
+        egui::Rect::from_center_size(
+            egui::pos2(
+                rect.right() - pad.x - toggle_side / 2.0,
+                rect.center().y + (pad.y / 2.0).max(1.0),
+            ),
+            egui::Vec2::splat(icon_side),
+        )
+    });
+    if ui.is_rect_visible(rect) {
+        // The chosen row is never `hover`: the choice stays under the
+        // pointer, as a selectable row's.
+        let state = State::from_response(&r)
+            .with(State::SELECTED, selected)
+            .with(State::DISABLED, !enabled);
+        let state = if selected {
+            state.with(State::HOVER, false)
+        } else {
+            state
+        };
+        let cx = KitCx {
+            painter: ui.painter(),
+            ppp: ctx.pixels_per_point(),
+        };
+        component.paint(
+            &cx,
+            &Part {
+                rect,
+                room: rect,
+                state,
+                label: None,
+            },
+        );
+        let text = ui
+            .visuals()
+            .override_text_color
+            .unwrap_or(component.style(state).text);
+        let painter = ui.painter_at(rect);
+        let mut left = rect.left() + pad.x;
+        let right = toggle_rect.map_or(rect.right() - pad.x, |_| {
+            rect.right() - pad.x - toggle_side - gap
+        });
+        if let Some(name) = &item.icon {
+            let side = ui.spacing().interact_size.y;
+            let at = egui::Rect::from_min_size(
+                egui::pos2(left, rect.center().y - side / 2.0),
+                egui::Vec2::splat(side),
+            );
+            egui_pop_core::icon::registry::resolve(name, "files.places")
+                .unwrap_or(egui_pop_core::icon::PLACEHOLDER)
+                .paint(&painter, at.shrink(side * 0.2), text);
+            left = at.right() + gap;
+        }
+        let one_line = |s: &str, font: egui::FontId, colour: egui::Color32, max: f32| {
+            let mut job = egui::text::LayoutJob::simple_singleline(s.to_owned(), font, colour);
+            job.wrap = egui::text::TextWrapping::truncate_at_width(max.max(0.0));
+            ui.fonts_mut(|f| f.layout_job(job))
+        };
+        let top = rect.top() + pad.y;
+        let name = one_line(&item.name, body.clone(), text, right - left);
+        let name_h = name.size().y;
+        let name_w = name.size().x;
+        painter.galley(egui::pos2(left, top), name, text);
+        let badge_colour = |tone: Option<Tone>| match tone {
+            Some(tone) => tone_color(&t, tone),
+            None if selected => text,
+            None => t.text_role.meta.color,
+        };
+        let line_colour = if selected {
+            text
+        } else {
+            t.text_role.meta.color
+        };
+        match &item.line {
+            // The badge leads the line, as a state mark.
+            Some(line) => {
+                let y = top + name_h;
+                let mut x = left;
+                if let Some(badge) = &item.badge {
+                    let g = one_line(
+                        badge,
+                        small.clone(),
+                        badge_colour(item.badge_tone),
+                        right - x,
+                    );
+                    let w = g.size().x;
+                    painter.galley(egui::pos2(x, y), g, text);
+                    x += w + gap;
+                }
+                let g = one_line(line, small.clone(), line_colour, right - x);
+                painter.galley(egui::pos2(x, y), g, text);
+            }
+            None => {
+                if let Some(badge) = &item.badge {
+                    let x = left + name_w + gap;
+                    let g = one_line(
+                        badge,
+                        small.clone(),
+                        badge_colour(item.badge_tone),
+                        right - x,
+                    );
+                    let y = top + (name_h - g.size().y) / 2.0;
+                    painter.galley(egui::pos2(x, y), g, text);
+                }
+            }
+        }
+    }
+    let r = match item
+        .detail
+        .clone()
+        .or_else(|| item.path.as_ref().map(|p| p.display().to_string()))
+    {
+        Some(tip) => r.on_hover_text(tip),
+        None => r,
+    };
+    let mut toggled = false;
+    if let (Some(toggle), Some(at)) = (&item.toggle, toggle_rect) {
+        let icon = egui_pop_core::icon::registry::resolve(&toggle.icon, "files.places")
+            .unwrap_or(egui_pop_core::icon::PLACEHOLDER);
+        let tone = if toggle.on {
+            IconTone::Accent
+        } else {
+            IconTone::Muted
+        };
+        let b = ui.put(
+            at,
+            icon.size(Size::Inline)
+                .tone(tone)
+                .label(&toggle.name)
+                .selected(toggle.on),
+        );
+        toggled = b.clicked();
+    }
+    (r, toggled)
 }
 
 /// The folders `user-dirs.dirs` names (`XDG_PICTURES_DIR="$HOME/Pictures"`),

@@ -46,6 +46,7 @@ pub mod node_graph;
 pub mod overview;
 pub mod palettes;
 pub mod placeholders;
+pub mod places;
 pub mod platform;
 pub mod plot;
 pub mod plot_time;

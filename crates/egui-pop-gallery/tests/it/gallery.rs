@@ -9280,3 +9280,89 @@ fn the_file_browser_page_lights_the_folder_a_drag_is_over_and_takes_the_drop() {
             .is_some()
     );
 }
+
+#[test]
+fn the_places_page_in_every_pop_theme() {
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in POP_THEMES {
+        let mut h = harness(options(theme, Density::Comfortable, "places"));
+        h.run();
+        results.add(h.try_page_shot(format!("places-{theme}")));
+    }
+}
+
+#[test]
+fn the_places_page_pins_folds_and_gives_the_app_its_room() {
+    use egui::accesskit::{Role, Toggled};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "places"));
+    h.run();
+    // Why in a word, on the item: its line is its description, its state
+    // mark said with its name.
+    let studio = h.get_by_label("Studio, !");
+    assert_eq!(studio.accesskit_node().role(), Role::Button);
+    assert_eq!(
+        studio.accesskit_node().data().description(),
+        Some("needs reconnecting")
+    );
+    // The keyboard reaches an item's pin after the item.
+    h.get_by_label("Studio, !").focus();
+    h.run();
+    h.key_press(egui::Key::ArrowDown);
+    h.run();
+    assert!(
+        h.get_all_by_label("Add to favourites")
+            .last()
+            .expect("Studio's pin")
+            .is_focused()
+    );
+    // An empty section says what it lacks.
+    assert!(h.query_by_label("No cards").is_some());
+    // The chosen account's albums sit under it.
+    assert!(h.query_by_label("Summer").is_some());
+    h.get_by_label("Family").click();
+    h.run();
+    assert!(h.query_by_label("Last: chose the album Family").is_some());
+    // A pin adds the account to Favourites.
+    let pins = h.query_all_by_label("Add to favourites").count();
+    h.get_all_by_label("Add to favourites")
+        .last()
+        .expect("Studio's pin")
+        .click();
+    h.run();
+    assert!(h.query_by_label("Last: pinned Studio").is_some());
+    assert_eq!(h.query_all_by_label("Add to favourites").count(), pins - 1);
+    assert!(
+        h.get_all_by_label("Remove from favourites")
+            .all(|n| n.accesskit_node().toggled() == Some(Toggled::True))
+    );
+    // History's fold is the page's: Left folds it while its band has the
+    // keyboard, and its past imports go.
+    h.get_all_by_label("Import again")
+        .next()
+        .expect("an import")
+        .click();
+    h.run();
+    assert!(
+        h.query_by_label("Last: import again: 12 November, 214 photos")
+            .is_some()
+    );
+    // The band, not the gallery's History page in its list.
+    let band = |h: &Harness<'_, Gallery>| {
+        h.get_all_by_label("History")
+            .find(|n| n.accesskit_node().data().is_expanded().is_some())
+            .expect("History's band")
+            .accesskit_node()
+            .data()
+            .is_expanded()
+    };
+    h.get_all_by_label("History")
+        .find(|n| n.accesskit_node().data().is_expanded().is_some())
+        .expect("History's band")
+        .focus();
+    h.run();
+    h.key_press(egui::Key::ArrowLeft);
+    h.run();
+    assert_eq!(band(&h), Some(false));
+    assert_eq!(h.query_all_by_label("Import again").count(), 0);
+    assert!(h.query_by_label("Last: folded history").is_some());
+}
