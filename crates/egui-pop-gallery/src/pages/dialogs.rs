@@ -1,4 +1,5 @@
-//! The dialogs page: a confirmation, a dangerous one, a form with a path
+//! The dialogs page: a confirmation, a dangerous one, a three-button
+//! question (save, don't save, cancel), a form with a path
 //! field, a choice, a notice, a confirmation with a close button, a
 //! movable form keeping its place, a movable preview over a clear
 //! backdrop and an error with technical details, each opened by a
@@ -6,7 +7,7 @@
 
 use egui::Ui;
 use egui_pop::api::dialogs::{
-    Backdrop, Choose, Confirm, DIALOGS, DetailsMode, DialogSpec, Form, Info,
+    Backdrop, Choose, Confirm, DIALOGS, DetailsMode, DialogSpec, Form, Info, Secondary,
 };
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
@@ -80,6 +81,20 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                     .detail("They go to the trash; undo brings them back.")
                     .danger()
                     .args(json!({ "what": "delete" })),
+            );
+        }
+        if ui.button("Close with unsaved changes").clicked() {
+            // The classic three buttons, in the platform's order: Enter
+            // saves, Escape cancels, "Don't save" in the danger tone.
+            d.open(
+                Confirm::new("Save the changes to notes.txt?", "Save", CMD_DONE)
+                    .detail("Your changes are lost if you don't save them.")
+                    .args(json!({ "what": "save" }))
+                    .secondary(
+                        Secondary::new("Don't save", CMD_DONE)
+                            .danger()
+                            .args(json!({ "what": "discard" })),
+                    ),
             );
         }
         if ui.button("Export settings").clicked() {

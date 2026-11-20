@@ -1,7 +1,7 @@
 //! Dialogs: confirmations (verbs, danger), forms from descriptors with
 //! the in-app path picker, choices, answers from an agent, the close
 //! button, movable dialogs (drag, clamp, recentre, keyboard move, kept
-//! places) and their backdrops.
+//! places) and their backdrops; the three-button confirmation.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -10,8 +10,8 @@ use egui::accesskit::Role;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use egui_pop_api::dialogs::{
-    self, Backdrop, Choose, ChooseOption, Confirm, DialogSpec, Form, Info, SETTING_CLOSABLE,
-    SETTING_MOVABLE, STEP_ANSWER, STEP_MOVE,
+    self, Backdrop, ButtonOrder, Choose, ChooseOption, Confirm, DialogSpec, Form, Info,
+    SETTING_CLOSABLE, SETTING_MOVABLE, STEP_ANSWER, STEP_MOVE, Secondary,
 };
 use egui_pop_api::steps::Before;
 use egui_pop_api::{App, Ctx, DefaultPlugins, Plugin, PluginError};
@@ -955,4 +955,97 @@ fn an_agent_may_not_accept_what_runs_a_command_kept_from_agents() {
     h.run();
     h.run();
     assert_eq!(runs.borrow()[1].1, Origin::Agent("debug-bridge".into()));
+}
+
+/// The quit question with unsaved edits: Save, Don't save (destructive),
+/// Cancel.
+fn three(order: ButtonOrder) -> Confirm {
+    Confirm::new("Save the changes?", "Save", GO)
+        .args(json!({ "do": "save" }))
+        .secondary(
+            Secondary::new("Don't save", GO)
+                .danger()
+                .args(json!({ "do": "discard" })),
+        )
+        .order(order)
+}
+
+/// The left edges of the Save, Don't save and Cancel buttons.
+fn lefts(h: &Harness<'_, App>) -> [f32; 3] {
+    ["Save", "Don't save", "Cancel"]
+        .map(|name| h.get_by_role_and_label(Role::Button, name).rect().min.x)
+}
+
+#[test]
+fn a_three_button_confirmation_defaults_to_its_primary_and_never_to_the_destructive_one() {
+    let (mut h, runs, d) = harness();
+    d.open(three(ButtonOrder::PrimaryLast));
+    h.run();
+    // A dialog (the modal overlay's), its three buttons named by their
+    // verbs.
+    assert_eq!(h.query_all_by_role(Role::Dialog).count(), 1);
+    let [save, discard, cancel] = lefts(&h);
+    assert!(
+        discard < cancel && cancel < save,
+        "{discard} {cancel} {save}"
+    );
+    // Enter takes the primary button, which has the focus.
+    assert!(h.get_by_label("Save").is_focused());
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert_eq!(runs.borrow().len(), 1);
+    assert_eq!(runs.borrow()[0].0, json!({ "do": "save" }));
+    assert!(d.is_empty());
+    // Escape cancels: nothing runs.
+    d.open(three(ButtonOrder::PrimaryLast));
+    h.run();
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(d.is_empty());
+    assert_eq!(runs.borrow().len(), 1);
+    assert_eq!(d.answered().last().unwrap().1, dialogs::Answer::Cancel);
+    // The destructive action runs its own command, through the answer step.
+    d.open(three(ButtonOrder::PrimaryFirst));
+    h.run();
+    let [save, discard, cancel] = lefts(&h);
+    assert!(
+        save < discard && discard < cancel,
+        "{save} {discard} {cancel}"
+    );
+    h.get_by_label("Don't save").click();
+    h.run();
+    assert_eq!(runs.borrow().len(), 2);
+    assert_eq!(runs.borrow()[1].0, json!({ "do": "discard" }));
+    assert_eq!(
+        d.answered().last().unwrap().1,
+        dialogs::Answer::Choose { index: 1 }
+    );
+    // An agent answers it as a person would: the choice of index 1.
+    d.open(three(ButtonOrder::PrimaryLast));
+    h.run();
+    d.answer(dialogs::Answer::Choose { index: 1 }, Origin::User)
+        .unwrap();
+    h.run();
+    assert_eq!(runs.borrow().len(), 3);
+    assert_eq!(runs.borrow()[2].0, json!({ "do": "discard" }));
+}
+
+#[test]
+fn the_button_order_follows_the_platform() {
+    assert_eq!(
+        ButtonOrder::for_platform(true, ""),
+        ButtonOrder::PrimaryFirst
+    );
+    assert_eq!(
+        ButtonOrder::for_platform(false, "KDE"),
+        ButtonOrder::PrimaryFirst
+    );
+    assert_eq!(
+        ButtonOrder::for_platform(false, "ubuntu:GNOME"),
+        ButtonOrder::PrimaryLast
+    );
+    assert_eq!(
+        ButtonOrder::for_platform(false, ""),
+        ButtonOrder::PrimaryLast
+    );
 }
