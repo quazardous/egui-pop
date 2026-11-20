@@ -562,6 +562,23 @@ impl<'a> Ctx<'a> {
         self
     }
 
+    /// Declares which of the owner's histories a focus surface (or a
+    /// panel, by its id) works on: under
+    /// [`Routing::Focus`](crate::history::Routing::Focus), Ctrl+Z and
+    /// Ctrl+Shift+Z go there while the focus is in it, whatever step is
+    /// newest elsewhere. The surface-side twin of a scope's focus targets
+    /// (`ScopeInfo::focus`), which also make the scope active: this does
+    /// not, so an always-active history can claim surfaces too. One
+    /// history per surface: a second replaces the first. It goes with the
+    /// plugin.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn history_target(&mut self, surface: &str, scope: crate::history::ScopeId) -> &mut Self {
+        crate::history::declare_target(&self.app(), &self.owner, surface, scope);
+        self
+    }
+
     /// Calls `f` at a moment of the application's life.
     pub fn on(
         &mut self,

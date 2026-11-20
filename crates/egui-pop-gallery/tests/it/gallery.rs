@@ -1421,6 +1421,53 @@ fn the_history_page_lists_the_steps_and_jumps_to_one() {
 }
 
 #[test]
+fn the_history_page_s_ctrl_z_follows_the_focus() {
+    use egui_pop::api::history::{self, APP};
+    use egui_pop::model::commands::Origin;
+    use egui_pop::model::values::{Change, Set, Value};
+    use egui_pop_gallery::pages::history::{EXPOSURE, SKETCH, SKETCH_SIZE};
+    let mut h = harness(options("pop-dark", Density::Comfortable, "history"));
+    h.run();
+    let app = h.state().app.handle().clone();
+    // The focus goes into the sketch.
+    h.get_all_by_label("Sketch size").next().unwrap().click();
+    h.run();
+    assert_eq!(history::focused_scope(&app), Some(SKETCH));
+    let store = app.store();
+    {
+        let mut s = egui_pop::core::lock(&store);
+        s.set(Set::new(SKETCH_SIZE, Change::To(Value::Int(20)), Origin::User).history(&SKETCH))
+            .unwrap();
+        s.seal();
+        s.set(Set::new(
+            EXPOSURE,
+            Change::To(Value::Float(0.7)),
+            Origin::User,
+        ))
+        .unwrap();
+        s.seal();
+    }
+    h.run();
+    // The exposure is newer, the sketch has the focus: its step goes.
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+    h.run();
+    {
+        let s = egui_pop::core::lock(&store);
+        assert_ne!(s.get(SKETCH_SIZE).unwrap().value, Value::Int(20));
+        assert_eq!(s.get(EXPOSURE).unwrap().value, Value::Float(0.7));
+    }
+    assert_eq!(history::line(&app, &APP).unwrap().redo.len(), 0);
+    // Redo goes to the sketch too.
+    h.key_press_modifiers(
+        egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+        egui::Key::Z,
+    );
+    h.run();
+    let s = egui_pop::core::lock(&store);
+    assert_eq!(s.get(SKETCH_SIZE).unwrap().value, Value::Int(20));
+}
+
+#[test]
 fn the_history_page_undoes_one_step_out_of_order() {
     use egui_pop::api::history::{self, APP};
     use egui_pop::model::commands::Origin;

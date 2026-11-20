@@ -20,7 +20,8 @@
 //!   same origin, the focus unchanged.
 //! - **Routing** ([`newest`]): Ctrl+Z, outside a text field and a
 //!   focused local scope, undoes the newest step among the scopes active
-//!   in the window.
+//!   in the window, unless the application routes by focus (the API
+//!   crate's `history::Routing`).
 //! - A **jump** ([`plan_jump`]) is a run of undos or redos to a step.
 //! - Beyond them, as an owner supports them ([`Features`]): a
 //!   [`Snapshot`] (a named state pinned in a scope), a [`Preview`] of a

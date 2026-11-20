@@ -5290,6 +5290,13 @@ impl App {
         )?;
         ctx.step(
             StepSpec::new(
+                crate::history::STEP_TARGET,
+                "Picks the history Ctrl+Z and Ctrl+Shift+Z go to (`scope`, `redo`, `rule`: focus, last_focused or newest); a before-hook names another scope, or null for none. Run quietly whenever the target is read.",
+            )
+            .args(json!({ "scope": "app", "redo": false, "rule": "newest" })),
+        )?;
+        ctx.step(
+            StepSpec::new(
                 crate::history::STEP_JUMP,
                 "Brings a history to one of its steps (`to`, 0: the start) by undos or redos, all or nothing.",
             )
