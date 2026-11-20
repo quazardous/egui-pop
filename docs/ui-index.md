@@ -125,13 +125,14 @@ To add an entry, give the item a doc line
 |---|---|---|
 | a command palette | `Palette`<br>`egui_pop::api::palette::Palette` | The palettes' state, one per window group (`AppHandle::window_group`): open or not, the query. |
 | a command row with its shortcut in a menu drawn by hand | `menus::command_row(..)`<br>`egui_pop::api::menus::command_row` | A command row in a menu drawn by hand (a popup or context menu built in a closure), drawn as the declared menus' command rows: the kit's `menu-item`, its label at the start, `shortcut` (the keys' text, such as `Ctrl+C`) muted at the end in the menu's key font. |
-| a confirmation dialog | `Confirm`<br>`egui_pop::api::dialogs::Confirm` | A question before an action. |
+| a confirmation dialog | `Confirm`<br>`egui_pop::api::dialogs::Confirm` | A question before an action: a primary button and Cancel, or, with a `Secondary`, the classic three buttons ("Save", "Don't save", "Cancel") in the platform's order (`ButtonOrder`). |
 | a file or folder picker | `FileBrowser`<br>`egui_pop::api::files::browser::FileBrowser` | The file browser: entries from a `FileSource`, shown by a `ViewMode` chosen in its toolbar (or with `Ctrl+1` to `Ctrl+9`), kept per dialog in the host's store when drawn with `FileBrowser::show_in`. |
 | a popover's surface in an area the application places itself | `ui.popover(..)`<br>`egui_pop::core::ui::UiPop::popover` | `add` on the kit's popover surface (its `popover` component, with egui's popup shadow): the look of egui-pop's own popovers, for an area the application places itself (a first-run notice, a hint by a control), outside the overlay stack. |
 | a settings or admin page declared as a manifest | `Admin`<br>`egui_pop::api::admin::Admin` | The administration app's state, manifests, hooks, widget kinds and value layers. |
 | a side panel of places, with sections of an application's | `PlacesPanel`<br>`egui_pop::api::files::places::PlacesPanel` | A side panel of places: sections, each a heading over its items, as the in-app picker lists them (an import window's sources column). |
 | a submenu in a context menu drawn by hand | `menus::submenu(..)`<br>`egui_pop::api::menus::submenu` | A submenu item in a menu drawn by hand (a context menu built in a closure, `egui_pop_core::pointer::claim::context_menu`), drawn as the declared menus' submenu items: the kit's `menu-item` with the submenu arrow, `selected` while its submenu is open. |
-| ask before a destructive action | `Confirm`<br>`egui_pop::api::dialogs::Confirm` | A question before an action. |
+| a three-button question (Save, Don't save, Cancel) | `Confirm`<br>`egui_pop::api::dialogs::Confirm` | A question before an action: a primary button and Cancel, or, with a `Secondary`, the classic three buttons ("Save", "Don't save", "Cancel") in the platform's order (`ButtonOrder`). |
+| ask before a destructive action | `Confirm`<br>`egui_pop::api::dialogs::Confirm` | A question before an action: a primary button and Cancel, or, with a `Secondary`, the classic three buttons ("Save", "Don't save", "Cancel") in the platform's order (`ButtonOrder`). |
 
 ## Lists, trees and tables
 

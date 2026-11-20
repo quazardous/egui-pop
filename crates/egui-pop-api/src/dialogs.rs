@@ -222,10 +222,23 @@ const DRAG_DIM: f32 = 0.35;
 /// How many arrow steps one Shift+arrow press moves.
 const BIG_STEP: f32 = 8.0;
 
-/// A question before an action.
+/// A question before an action: a primary button and Cancel, or, with a
+/// [`Secondary`], the classic three buttons ("Save", "Don't save",
+/// "Cancel") in the platform's order ([`ButtonOrder`]).
+///
+/// ```
+/// use egui_pop_api::dialogs::{Confirm, Secondary};
+/// use egui_pop_model::ids::CommandId;
+///
+/// let ask = Confirm::new("Quit with unsaved edits?", "Retry saving", CommandId::from_static("doc.save"))
+///     .secondary(Secondary::new("Quit without saving", CommandId::from_static("app.quit")).danger())
+///     .cancel("Keep editing");
+/// assert!(ask.secondary.as_ref().is_some_and(|s| s.danger));
+/// ```
 ///
 /// Need (dialog): a confirmation dialog.
 /// Need (dialog): ask before a destructive action.
+/// Need (dialog): a three-button question (Save, Don't save, Cancel).
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Confirm {
     pub title: String,
@@ -243,6 +256,87 @@ pub struct Confirm {
     /// Technical lines for a bug report (none by default).
     #[serde(skip_serializing_if = "Details::is_empty")]
     pub details: Details,
+    /// A second action beside the primary one (none by default):
+    /// answered as the choice of index 1 (`{"answer": "choose", "index":
+    /// 1}`), the primary one being index 0 or an accept.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secondary: Option<Secondary>,
+    /// The Cancel button's text: "Cancel", translated, when empty.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub cancel: String,
+    /// The buttons' order: the platform's ([`ButtonOrder::platform`])
+    /// unless given.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<ButtonOrder>,
+}
+
+/// A confirmation's second action ([`Confirm::secondary`]): often the
+/// destructive one ("Don't save", "Quit without saving"), in the danger
+/// tone, which is never the default: Enter takes the primary button.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Secondary {
+    /// Its button: what it does.
+    pub verb: String,
+    pub command: CommandId,
+    pub args: Json,
+    /// Destructive: the danger tone.
+    pub danger: bool,
+}
+
+impl Secondary {
+    pub fn new(verb: &str, command: CommandId) -> Self {
+        Self {
+            verb: verb.into(),
+            command,
+            args: Json::Null,
+            danger: false,
+        }
+    }
+
+    /// Destructive: drawn in the danger tone.
+    pub fn danger(mut self) -> Self {
+        self.danger = true;
+        self
+    }
+
+    pub fn args(mut self, args: Json) -> Self {
+        self.args = args;
+        self
+    }
+}
+
+/// The order of a dialog's buttons along its footer, as the platform
+/// has it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ButtonOrder {
+    /// The primary button at the end, Cancel before it, a secondary
+    /// action apart at the start: "Don't save … Cancel Save" (macOS,
+    /// GNOME).
+    PrimaryLast,
+    /// The primary button first, then the secondary, then Cancel: "Save
+    /// Don't save Cancel" (Windows, KDE Plasma).
+    PrimaryFirst,
+}
+
+impl ButtonOrder {
+    /// The order of this platform: Windows' and Plasma's
+    /// ([`ButtonOrder::PrimaryFirst`]), else macOS's and GNOME's.
+    pub fn platform() -> Self {
+        let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
+        Self::for_platform(cfg!(windows), &desktop)
+    }
+
+    /// The order on Windows (`windows`) or on a desktop
+    /// (`XDG_CURRENT_DESKTOP`, as `KDE` or `GNOME:Ubuntu`).
+    pub fn for_platform(windows: bool, desktop: &str) -> Self {
+        let kde = desktop.split(':').any(|d| d.eq_ignore_ascii_case("KDE"));
+        if windows || kde {
+            Self::PrimaryFirst
+        } else {
+            Self::PrimaryLast
+        }
+    }
 }
 
 impl Confirm {
@@ -256,7 +350,28 @@ impl Confirm {
             args: Json::Null,
             copy: true,
             details: Details::default(),
+            secondary: None,
+            cancel: String::new(),
+            order: None,
         }
+    }
+
+    /// A second action beside the primary one: three buttons.
+    pub fn secondary(mut self, secondary: Secondary) -> Self {
+        self.secondary = Some(secondary);
+        self
+    }
+
+    /// The Cancel button's own text ("Keep editing").
+    pub fn cancel(mut self, label: &str) -> Self {
+        self.cancel = label.into();
+        self
+    }
+
+    /// The buttons in this order rather than the platform's.
+    pub fn order(mut self, order: ButtonOrder) -> Self {
+        self.order = Some(order);
+        self
     }
 
     /// With or without the Copy button.
@@ -1457,7 +1572,16 @@ const ANSWERED: usize = 16;
 fn target(open: &Open, answer: &Answer) -> Result<Option<(CommandId, Json)>, String> {
     Ok(match (&open.dialog, &answer) {
         (_, Answer::Cancel) => None,
-        (Dialog::Confirm(c), Answer::Accept { .. }) => Some((c.command.clone(), c.args.clone())),
+        (Dialog::Confirm(c), Answer::Accept { .. } | Answer::Choose { index: 0 }) => {
+            Some((c.command.clone(), c.args.clone()))
+        }
+        (Dialog::Confirm(c), Answer::Choose { index: 1 }) => {
+            let s = c
+                .secondary
+                .as_ref()
+                .ok_or_else(|| format!("{} has no second action", c.title))?;
+            Some((s.command.clone(), s.args.clone()))
+        }
         (Dialog::Info(_), Answer::Accept { .. }) => None,
         (Dialog::Custom(c), Answer::Accept { values }) => {
             if !open.ready {
@@ -2132,7 +2256,7 @@ fn custom_body(
                 values: values.clone(),
             });
         }
-    } else if let Some(a) = footer(ui, &c.verb, c.danger, focus_button, None) {
+    } else if let Some(a) = footer(ui, Buttons::two(&c.verb, c.danger), focus_button, None) {
         answer = Some(match a {
             Answer::Accept { .. } => Answer::Accept {
                 values: values.clone(),
@@ -2206,8 +2330,15 @@ fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open, header: Header<'_>) -> Optio
                 details_section(ui, o.id, &c.details);
             }
             let (verb, danger) = (c.verb.clone(), c.danger);
+            let buttons = Buttons {
+                verb: &verb,
+                danger,
+                secondary: c.secondary.as_ref().map(|s| (s.verb.as_str(), s.danger)),
+                cancel: &c.cancel,
+                order: c.order.unwrap_or_else(ButtonOrder::platform),
+            };
             let copy = c.copy.then(|| (c.copy_text(), &mut o.copied_at));
-            if let Some(a) = footer(ui, &verb, danger, first, copy) {
+            if let Some(a) = footer(ui, buttons, first, copy) {
                 answer = Some(a);
             } else if enter && !danger && !copied_now(ui, o.copied_at) {
                 answer = Some(Answer::Accept { values: Map::new() });
@@ -2366,7 +2497,7 @@ fn body(ui: &mut Ui, app: &AppHandle, o: &mut Open, header: Header<'_>) -> Optio
                 files.show_inline(ui, app, id);
             }
             let verb = f.verb.clone();
-            if let Some(a) = footer(ui, &verb, false, false, None) {
+            if let Some(a) = footer(ui, Buttons::two(&verb, false), false, None) {
                 answer = Some(match a {
                     Answer::Accept { .. } => Answer::Accept {
                         values: values_of(&f.fields),
@@ -2694,27 +2825,86 @@ fn close_button(ui: &mut Ui, side: f32) -> Response {
 
 /// Cancel and the primary button, right-aligned; the Copy button in the
 /// other corner, given its text and when it last copied.
+/// A confirmation's buttons: its primary verb, a second action (its verb
+/// and whether it is destructive), Cancel's text (the default when
+/// empty), and their order.
+struct Buttons<'a> {
+    verb: &'a str,
+    danger: bool,
+    secondary: Option<(&'a str, bool)>,
+    cancel: &'a str,
+    order: ButtonOrder,
+}
+
+impl<'a> Buttons<'a> {
+    /// The primary button and Cancel, in the platform's order.
+    fn two(verb: &'a str, danger: bool) -> Self {
+        Self {
+            verb,
+            danger,
+            secondary: None,
+            cancel: "",
+            order: ButtonOrder::platform(),
+        }
+    }
+}
+
+/// A button in the danger tone when `danger`: the verb and the outline
+/// in the danger colour, on the button's own background (no new
+/// contrast pair).
+fn toned_button(ui: &mut Ui, verb: &str, danger: bool) -> egui::Response {
+    let t = Tokens::of(ui.ctx());
+    let button = if danger {
+        egui::Button::new(egui::RichText::new(verb).color(t.status.danger))
+            .stroke(egui::Stroke::new(1.0, t.status.danger))
+    } else {
+        egui::Button::new(verb)
+    };
+    ui.add(button)
+}
+
 fn footer(
     ui: &mut Ui,
-    verb: &str,
-    danger: bool,
+    buttons: Buttons<'_>,
     first: bool,
     copy: Option<(String, &mut Option<f64>)>,
 ) -> Option<Answer> {
     let t = Tokens::of(ui.ctx());
     ui.add_space(t.space.m);
     let mut answer = None;
+    let Buttons {
+        verb,
+        danger,
+        secondary,
+        cancel,
+        order,
+    } = buttons;
+    let cancel_text = if cancel.is_empty() {
+        strings::tr(ui.ctx(), &CANCEL)
+    } else {
+        cancel.to_string()
+    };
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        // Danger: the verb and the outline in the danger colour, on the
-        // button's own background (no new contrast pair).
-        let primary = if danger {
-            egui::Button::new(egui::RichText::new(verb).color(t.status.danger))
-                .stroke(egui::Stroke::new(1.0, t.status.danger))
-        } else {
-            egui::Button::new(verb)
+        // Laid from the end: the platform's order read backwards.
+        let (p, second, cancel) = match order {
+            ButtonOrder::PrimaryLast => {
+                let p = toned_button(ui, verb, danger);
+                let cancel = ui.button(&cancel_text);
+                let second = secondary.map(|(v, d)| {
+                    ui.add_space(t.space.l);
+                    toned_button(ui, v, d)
+                });
+                (p, second, cancel)
+            }
+            ButtonOrder::PrimaryFirst => {
+                let cancel = ui.button(&cancel_text);
+                let second = secondary.map(|(v, d)| toned_button(ui, v, d));
+                let p = toned_button(ui, verb, danger);
+                (p, second, cancel)
+            }
         };
-        let p = ui.add(primary);
-        let cancel = ui.button(strings::tr(ui.ctx(), &CANCEL));
+        // The focus starts on the default: the primary button, or Cancel
+        // when the primary one is destructive; never the second action.
         if first {
             if danger {
                 cancel.request_focus();
@@ -2724,6 +2914,9 @@ fn footer(
         }
         if p.clicked() {
             answer = Some(Answer::Accept { values: Map::new() });
+        }
+        if second.as_ref().is_some_and(egui::Response::clicked) {
+            answer = Some(Answer::Choose { index: 1 });
         }
         if cancel.clicked() {
             answer = Some(Answer::Cancel);
