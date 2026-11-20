@@ -9346,6 +9346,10 @@ fn the_places_page_shows_a_focused_chosen_item_filled_and_outlined() {
         h.run();
         h.get_by_label("Studio, !").focus();
         h.run();
+        // The pointer on it again (the focus moved nothing): its hover
+        // must not cover the choice.
+        h.get_by_label("Studio, !").hover();
+        h.run();
         let studio = h.get_by_label("Studio, !");
         assert!(studio.is_focused());
         assert_eq!(
@@ -9368,6 +9372,31 @@ fn the_places_page_shows_a_focused_chosen_item_filled_and_outlined() {
         assert!(
             ratio >= 3.0,
             "{theme}: the focus outline over the selected fill is {ratio:.2}:1"
+        );
+        // Painted so, the pointer still on the row: the theme's hover has
+        // a fill of its own, which must not cover the selected one. Read
+        // inside the row's end, mid-height (clear of its border, text and
+        // pin).
+        let hover = under.blend(kit.selectable_row.style(State::HOVER).fill);
+        assert_ne!(
+            hover, fill,
+            "{theme}: a hover fill told from the selected one"
+        );
+        let row = h.get_by_label("Studio, !").rect();
+        assert!(row.contains(h.ctx.input(|i| i.pointer.hover_pos()).unwrap()));
+        let image = h.render().expect("render");
+        let ppp = h.ctx.pixels_per_point();
+        let at = |x: f32, y: f32| image.get_pixel((x * ppp) as u32, (y * ppp) as u32).0;
+        let px = at(row.right() - 2.5, row.center().y);
+        let near = |c: egui::Color32| {
+            px.iter()
+                .zip(c.to_array())
+                .take(3)
+                .all(|(a, b)| a.abs_diff(b) <= 6)
+        };
+        assert!(
+            near(fill),
+            "{theme}: the selected fill under the pointer, got {px:?}, fill {fill:?}, hover {hover:?}"
         );
     }
 }

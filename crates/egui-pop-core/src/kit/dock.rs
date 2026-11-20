@@ -392,7 +392,11 @@ impl LayoutPainter for Kit {
         } else {
             Side::Left
         };
-        let state = state(strip.grip_state).with(State::SELECTED, strip.shown == Shown::Over);
+        let grip = state(strip.grip_state);
+        let state = grip.with(
+            State::SELECTED,
+            grip.contains(State::SELECTED) || strip.shown == Shown::Over,
+        );
         self.paint_area_strip(painter, strip.rect, state, inner);
     }
 
@@ -474,7 +478,10 @@ impl DockPainter for Kit {
             &Part {
                 rect: line,
                 room: line,
-                state: state(flags).with(State::ACTIVE, flags.contains(PartState::DRAGGED)),
+                state: state(flags).with(
+                    State::ACTIVE,
+                    flags.contains(PartState::PRESSED) || flags.contains(PartState::DRAGGED),
+                ),
                 label: None,
             },
         );
