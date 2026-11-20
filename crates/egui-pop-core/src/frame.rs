@@ -1099,7 +1099,10 @@ fn window_button(ui: &mut Ui, rect: Rect, which: Button, look: Look, group: bool
     // On Windows the system, not egui, may see the pointer over the
     // button (its hit test answers for it): drawn as hovered then.
     let state = State::from_response(&response)
-        .with(State::HOVER, group || native_hover(ui.ctx()) == Some(which))
+        .with(
+            State::HOVER,
+            response.hovered() || group || native_hover(ui.ctx()) == Some(which),
+        )
         .toned(match which {
             Button::Minimize => Tone::Warning,
             Button::Maximize => Tone::Success,

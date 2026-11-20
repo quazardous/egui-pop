@@ -111,10 +111,22 @@ impl State {
             .with(State::DISABLED, !r.enabled())
     }
 
-    /// `self` with `other` added when `on`.
+    /// `self` with `other` set when `on`, cleared when not: the flag says
+    /// `on`, whatever `self` had. To add a flag only, pass what `self`
+    /// has too (`s.with(F, s.contains(F) || on)`).
     #[must_use]
     pub fn with(self, other: State, on: bool) -> State {
-        if on { State(self.0 | other.0) } else { self }
+        if on {
+            State(self.0 | other.0)
+        } else {
+            self.without(other)
+        }
+    }
+
+    /// `self` with `other` cleared.
+    #[must_use]
+    pub fn without(self, other: State) -> State {
+        State(self.0 & !other.0)
     }
 }
 
@@ -1343,6 +1355,17 @@ mod tests {
         let mut themes = Themes::default();
         themes.add_text("kit-test", json).expect("test theme reads");
         Tokens::new(themes.resolve(&ThemeSpec::new("kit-test")))
+    }
+
+    #[test]
+    fn with_sets_a_flag_when_on_and_clears_it_when_not() {
+        let s = State::SELECTED | State::HOVER | State::FOCUS;
+        let off = s.with(State::HOVER, false);
+        assert!(!off.contains(State::HOVER), "cleared");
+        assert!(off.contains(State::SELECTED) && off.contains(State::FOCUS));
+        assert_eq!(off, s.without(State::HOVER));
+        assert_eq!(off.with(State::HOVER, true), s, "set again");
+        assert_eq!(State::REST.with(State::DISABLED, false), State::REST);
     }
 
     #[test]

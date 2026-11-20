@@ -756,7 +756,7 @@ fn item_row(ui: &mut Ui, item: &PlaceItem, selected: bool) -> (egui::Response, b
             .with(State::SELECTED, selected)
             .with(State::DISABLED, !enabled);
         let state = if selected {
-            state.with(State::HOVER, false)
+            state.without(State::HOVER)
         } else {
             state
         };
