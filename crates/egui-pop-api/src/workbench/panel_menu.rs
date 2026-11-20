@@ -447,7 +447,7 @@ fn open_entries(app: &AppHandle, group: &PanelId, closed: bool) -> Vec<ListItem>
             (title, item)
         })
         .collect();
-    out.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+    out.sort_by_key(|(title, _)| title.to_lowercase());
     out.into_iter().map(|(_, item)| item).collect()
 }
 
