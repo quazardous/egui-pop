@@ -1156,7 +1156,7 @@ fn status_context(ui: &mut Ui, app: &AppHandle) {
             Seg::Crumb(i) => {
                 let name =
                     strings::tr_args(ui.ctx(), &txt::CONTEXT_GO_TO, &[("place", &crumbs[*i])]);
-                let r = ui.add(egui::Button::new(RichText::new(&crumbs[*i]).small()).frame(false));
+                let r = egui_pop_core::widgets::bar_text_button(ui, crumbs[*i].as_str());
                 a11y::name(&r, Role::Button, &name);
                 if r.on_hover_text(name).clicked() {
                     jump_to = Some(*i);
@@ -1623,7 +1623,7 @@ fn item(
                         }
                         r.response
                     }
-                    None => ui.add(egui::Button::new(label).frame(false)),
+                    None => egui_pop_core::widgets::bar_text_button(ui, label),
                 };
                 if let Some(p) = state.progress {
                     // The button carries the text; the line is drawn
