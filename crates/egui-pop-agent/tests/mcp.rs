@@ -28,6 +28,30 @@ fn names_are_sanitised() {
 }
 
 #[test]
+fn a_command_destructive_by_its_arguments_keeps_the_hint_and_names_its_rules() {
+    let describe = json!({
+        "protocol": 1,
+        "capabilities": [{
+            "kind": "command", "name": "library.export", "title": "Export",
+            "description": "Exports photos.", "mutates": true, "agent": true,
+            "destructive": false,
+            "destructive_if": [{ "arg": "clash", "equals": "overwrite" }],
+            "args": null, "example": null, "result": null,
+            "call": { "collector": "commands", "action": "run", "id": "library.export" },
+        }],
+    });
+    let generated = tools(&describe);
+    let export = generated
+        .iter()
+        .find(|t| t.tool.name == "library_export")
+        .unwrap();
+    let a = export.tool.annotations.as_ref().unwrap();
+    assert_eq!(a.destructive_hint, Some(true));
+    let d = export.tool.description.as_deref().unwrap();
+    assert!(d.contains("`clash` = \"overwrite\""), "{d}");
+}
+
+#[test]
 fn tools_from_a_describe_fixture() {
     let describe = json!({
         "protocol": 1,

@@ -8,7 +8,7 @@ use serde_json::{Value as Json, json};
 
 use super::LiveRunner;
 
-const USAGE: &str = "usage: egui-pop-scenario --socket PATH [--out DIR] [--var NAME=VALUE]... [--shot CAPABILITY ARGS_JSON] [--deadline-ms N] [--connect-ms N] FILE_OR_DIR...";
+const USAGE: &str = "usage: egui-pop-scenario --socket PATH [--out DIR] [--var NAME=VALUE]... [--shot CAPABILITY ARGS_JSON] [--deadline-ms N] [--connect-ms N] [--token TOKEN | --token-file PATH] FILE_OR_DIR...\n(without --token or --token-file: EGUI_POP_AGENT_TOKEN, else EGUI_POP_AGENT_TOKEN_FILE, when set)";
 
 fn parse(args: &[String]) -> Result<(LiveRunner, Option<PathBuf>, Vec<PathBuf>), String> {
     let mut socket = None;
@@ -17,6 +17,8 @@ fn parse(args: &[String]) -> Result<(LiveRunner, Option<PathBuf>, Vec<PathBuf>),
     let mut shot = None;
     let mut deadline = None;
     let mut connect = None;
+    let mut token = None;
+    let mut token_file = None;
     let mut files = Vec::new();
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -49,6 +51,8 @@ fn parse(args: &[String]) -> Result<(LiveRunner, Option<PathBuf>, Vec<PathBuf>),
                         .map_err(|e| e.to_string())?,
                 );
             }
+            "--token" => token = Some(value("--token")?),
+            "--token-file" => token_file = Some(PathBuf::from(value("--token-file")?)),
             "-h" | "--help" => return Err(USAGE.into()),
             f if f.starts_with("--") => return Err(format!("unknown option {f}\n{USAGE}")),
             f => files.push(PathBuf::from(f)),
@@ -74,6 +78,12 @@ fn parse(args: &[String]) -> Result<(LiveRunner, Option<PathBuf>, Vec<PathBuf>),
     if let Some(ms) = connect {
         runner = runner.connect_within(Duration::from_millis(ms));
     }
+    runner = match (token, token_file) {
+        (Some(_), Some(_)) => return Err(format!("--token or --token-file, not both\n{USAGE}")),
+        (Some(t), None) => runner.token(t),
+        (None, Some(f)) => runner.token_file(f),
+        (None, None) => runner.token_from_env(),
+    };
     Ok((runner, out, files))
 }
 
@@ -174,5 +184,19 @@ mod tests {
         assert!(parse(&args(&["--socket", "s"])).is_err(), "no file");
         assert!(parse(&args(&["--socket", "s", "--var", "x", "a.ron"])).is_err());
         assert!(parse(&args(&["--socket", "s", "--nope", "a.ron"])).is_err());
+        assert!(
+            parse(&args(&[
+                "--socket",
+                "s",
+                "--token",
+                "t",
+                "--token-file",
+                "f",
+                "a.ron"
+            ]))
+            .is_err(),
+            "one token only"
+        );
+        assert!(parse(&args(&["--socket", "s", "--token-file", "f", "a.ron"])).is_ok());
     }
 }

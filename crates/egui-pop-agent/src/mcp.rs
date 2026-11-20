@@ -353,6 +353,20 @@ pub fn tools(describe: &Json) -> Vec<GeneratedTool> {
         if destructive {
             description.push_str(" Destructive: the user confirms each run.");
         }
+        // Destructive by its arguments: the user confirms those runs only;
+        // the hint stays (some calls destroy).
+        let rules = cap["destructive_if"].as_array().filter(|r| !r.is_empty());
+        let destructive = destructive || (mutates && rules.is_some());
+        if let Some(rules) = rules.filter(|_| mutates && cap["destructive"] != true) {
+            let said: Vec<String> = rules
+                .iter()
+                .map(|r| format!("`{}` = {}", r["arg"].as_str().unwrap_or("?"), r["equals"]))
+                .collect();
+            description.push_str(&format!(
+                " Destructive with {}: the user confirms those runs.",
+                said.join(" or ")
+            ));
+        }
         // Only said when declared: an undeclared command is not known to
         // be harmless, and MCP's default (destructive) stays.
         // Private: its result carries places, people or file paths; an

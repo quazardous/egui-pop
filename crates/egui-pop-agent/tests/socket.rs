@@ -31,6 +31,10 @@ const ZOOM: CommandId = CommandId::from_static("test.zoom");
 /// arguments do not match, never asked about.
 const WIPE: CommandId = CommandId::from_static("test.wipe");
 
+/// A command destructive by its arguments only: an export that
+/// overwrites with `clash: "overwrite"`.
+const EXPORT: CommandId = CommandId::from_static("test.export");
+
 /// A read whose result is private data (places): refused to an agent
 /// whose grant withholds it.
 const PLACES: CommandId = CommandId::from_static("test.places");
@@ -70,6 +74,14 @@ impl Plugin for Writes {
                 .description("Discards what cannot be had back (a test's).")
                 .destructive(),
             |_| Ok(json!("purged")),
+        )?;
+        ctx.command(
+            CommandSpec::new(EXPORT, "Export", "Test")
+                .description(
+                    "Writes files; overwrites existing ones with `clash: overwrite` (a test's).",
+                )
+                .destructive_if("clash", json!("overwrite")),
+            |c| Ok(c.args["clash"].clone()),
         )?;
         ctx.command(
             CommandSpec::new(ZOOM, "Zoom", "Test")
@@ -849,6 +861,86 @@ fn a_call_that_is_not_destructive_is_not_held_nor_is_the_users_destructive_one()
     let ran = purged(&h);
     assert_eq!(ran.len(), 1);
     assert_eq!(ran[0].source, "user");
+}
+
+/// A `test.export` call, with `clash`.
+fn export(clash: &str) -> Json {
+    json!({
+        "collector": "commands",
+        "action": "run",
+        "args": { "id": "test.export", "args": { "clash": clash } },
+        "deadline_ms": 20_000,
+    })
+}
+
+#[test]
+fn a_call_destructive_by_its_arguments_alone_waits_for_the_user() {
+    use egui_pop_api::dialogs::DIALOGS;
+    let (mut h, path) = writable("destructive-by-args");
+    // Without overwriting, the export runs at once: nothing is asked.
+    let p = path.clone();
+    let (described, f) = with_client(&mut h, move || {
+        let mut c = Client::connect(&p);
+        (
+            c.result("describe", json!({})),
+            c.result("call", export("rename")),
+        )
+    });
+    assert_eq!(f["ok"], true, "{f}");
+    for _ in 0..3 {
+        h.step();
+    }
+    let dialogs = h.state().handle().service(&DIALOGS).unwrap();
+    assert!(dialogs.current().is_none(), "nothing was asked");
+    let ran = done_runs(&h, "test.export");
+    assert_eq!(ran.len(), 1, "{ran:?}");
+    let cap = described["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "test.export")
+        .cloned()
+        .unwrap();
+    assert_eq!(cap["destructive"], false, "{cap}");
+    assert_eq!(
+        cap["destructive_if"],
+        json!([{ "arg": "clash", "equals": "overwrite" }]),
+        "{cap}"
+    );
+
+    // Overwriting, it waits for the user's confirmation.
+    let p = path.clone();
+    let client =
+        std::thread::spawn(move || Client::connect(&p).result("call", export("overwrite")));
+    answer_pairing(&mut h, true, egui_pop_api::model::commands::Origin::User).unwrap();
+    assert_eq!(
+        done_runs(&h, "test.export").len(),
+        1,
+        "it ran before the user answered"
+    );
+    let f = finish(&mut h, client);
+    assert_eq!(f["ok"], true, "{f}");
+    for _ in 0..3 {
+        h.step();
+    }
+    let ran = done_runs(&h, "test.export");
+    assert_eq!(ran.len(), 2, "{ran:?}");
+    assert_eq!(ran[1].source, "agent:agent-socket");
+
+    // Declined, the overwriting export is refused and nothing runs.
+    let p = path.clone();
+    let client =
+        std::thread::spawn(move || Client::connect(&p).request("call", export("overwrite")));
+    answer_pairing(&mut h, false, egui_pop_api::model::commands::Origin::User).unwrap();
+    let r = finish(&mut h, client);
+    assert_eq!(r["error"]["code"], -32001, "{r}");
+    for _ in 0..3 {
+        h.step();
+    }
+    assert_eq!(done_runs(&h, "test.export").len(), 2);
+    let refused = refused_runs(&h, "test.export");
+    assert_eq!(refused.len(), 1, "{refused:?}");
+    assert_eq!(refused[0].data["by"], "pop.agent.confirm");
 }
 
 // Grants: what each agent may do.

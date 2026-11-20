@@ -1077,6 +1077,9 @@ impl AppHandle {
                 "mutates": !s.read_only,
                 "agent": s.agent,
                 "destructive": s.destructive,
+                // The calls destructive by their arguments, when the
+                // command is not destructive whole.
+                "destructive_if": s.destructive_if,
                 "private": s.private,
                 "args": args,
                 "example": example,
@@ -1181,7 +1184,8 @@ impl AppHandle {
 
     /// Whether this bridge call destroys or discards what cannot easily
     /// be had back: an action declared so, `commands.run` of a
-    /// destructive command (`CommandSpec::destructive`). The agent
+    /// destructive command (`CommandSpec::destructive`) or of a call its
+    /// arguments make destructive (`CommandSpec::destructive_if`). The agent
     /// socket asks the user before it runs such a call for an agent.
     pub fn debug_destructive(&self, collector: &str, action: &str, args: &Json) -> bool {
         self.0.bridge.borrow().destructive(collector, action, args)
@@ -5353,6 +5357,7 @@ impl App {
                             "agent": s.agent,
                             "read_only": s.read_only,
                             "destructive": s.destructive,
+                            "destructive_if": s.destructive_if,
                             "private": s.private,
                             "args": s.args,
                             "running": app.running(&s.id),
@@ -5418,7 +5423,8 @@ impl App {
                     let Some(id) = args.get("id").and_then(Json::as_str) else { return true };
                     !app.commands().iter().any(|(s, _)| s.id.as_str() == id && s.read_only)
                 })
-                // Destructive when its command is: an agent's run waits
+                // Destructive when its command is, whole or by these
+                // arguments (`CommandSpec::destructive_if`): an agent's run waits
                 // for the user's confirmation. A command kept from agents
                 // is refused to them without asking.
                 .destructive_when(move |args| {
@@ -5429,7 +5435,7 @@ impl App {
                     let run_args = args.get("args").cloned().unwrap_or(Json::Null);
                     app.commands().iter().any(|(s, _)| {
                         s.id.as_str() == id
-                            && s.destructive
+                            && s.is_destructive(&run_args)
                             && s.agent
                             && crate::bus::args_refusal(s, &run_args).is_none()
                     })

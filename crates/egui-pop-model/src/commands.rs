@@ -121,6 +121,30 @@ pub struct KeySpec {
     pub options: BindOptions,
 }
 
+/// A rule on a call's arguments: the argument `arg` equals `equals`
+/// ([`CommandSpec::destructive_if`]).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[non_exhaustive]
+pub struct ArgMatch {
+    /// A top-level argument's name (`clash`), or a JSON Pointer into the
+    /// arguments (`/options/clash`).
+    pub arg: String,
+    /// The value it must equal.
+    pub equals: Json,
+}
+
+impl ArgMatch {
+    /// Whether `args` hold `equals` at `arg`.
+    pub fn matches(&self, args: &Json) -> bool {
+        let found = if self.arg.starts_with('/') {
+            args.pointer(&self.arg)
+        } else {
+            args.get(&self.arg)
+        };
+        found == Some(&self.equals)
+    }
+}
+
 /// What a command declares.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[non_exhaustive]
@@ -156,6 +180,13 @@ pub struct CommandSpec {
     /// never asked.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub destructive: bool,
+    /// The calls that are destructive by their arguments, when the
+    /// command is not destructive whole: a run whose arguments match one
+    /// of these ([`CommandSpec::destructive_if`]) is asked about as a
+    /// destructive command's is; the others run at once. An export that
+    /// only overwrites with `clash: "overwrite"` says so here.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub destructive_if: Vec<ArgMatch>,
     /// Its result carries the user's private data: places (GPS), people
     /// (faces, names), absolute file paths. An agent whose grant
     /// withholds private data is refused it (the agent socket's
@@ -204,6 +235,7 @@ impl CommandSpec {
             agent: true,
             read_only: false,
             destructive: false,
+            destructive_if: Vec::new(),
             private: false,
             args: Json::Null,
             icon: None,
@@ -317,6 +349,27 @@ impl CommandSpec {
     pub fn destructive(mut self) -> Self {
         self.destructive = true;
         self
+    }
+
+    /// A call whose argument `arg` equals `value` is destructive
+    /// ([`CommandSpec::destructive_if`]): an agent's run with it waits
+    /// for the user's confirmation, other runs do not. `arg` is a
+    /// top-level argument's name, or a JSON Pointer (`/options/clash`).
+    /// Several rules: any one matching makes the call destructive.
+    /// [`CommandSpec::destructive`] still makes every call destructive.
+    pub fn destructive_if(mut self, arg: &str, value: Json) -> Self {
+        self.destructive_if.push(ArgMatch {
+            arg: arg.into(),
+            equals: value,
+        });
+        self
+    }
+
+    /// Whether a call with `args` is destructive: the command is
+    /// ([`CommandSpec::destructive`]), or its arguments match one of
+    /// [`CommandSpec::destructive_if`].
+    pub fn is_destructive(&self, args: &Json) -> bool {
+        self.destructive || self.destructive_if.iter().any(|m| m.matches(args))
     }
 
     /// Its result carries private data ([`CommandSpec::private`]): an
@@ -618,5 +671,38 @@ impl Commands<FnHandler> {
             result: result.clone(),
         });
         result
+    }
+}
+
+#[cfg(test)]
+mod destructive_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn a_call_is_destructive_whole_or_by_its_arguments() {
+        let id = CommandId::from_static("library.export");
+        let plain = CommandSpec::new(id.clone(), "Export", "Library");
+        assert!(!plain.is_destructive(&json!({ "clash": "overwrite" })));
+
+        let whole = plain.clone().destructive();
+        assert!(whole.is_destructive(&Json::Null));
+        assert!(whole.destructive_if.is_empty());
+
+        let by_args = plain
+            .destructive_if("clash", json!("overwrite"))
+            .destructive_if("/options/purge", json!(true));
+        assert!(!by_args.destructive);
+        assert!(!by_args.is_destructive(&Json::Null));
+        assert!(!by_args.is_destructive(&json!({ "clash": "rename" })));
+        assert!(by_args.is_destructive(&json!({ "clash": "overwrite" })));
+        assert!(!by_args.is_destructive(&json!({ "options": { "purge": false } })));
+        assert!(by_args.is_destructive(&json!({ "options": { "purge": true } })));
+        let shown = serde_json::to_value(&by_args).unwrap();
+        assert_eq!(
+            shown["destructive_if"][0],
+            json!({ "arg": "clash", "equals": "overwrite" })
+        );
+        assert!(shown.get("destructive").is_none());
     }
 }

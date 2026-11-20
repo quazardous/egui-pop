@@ -11,8 +11,9 @@
 //!
 //! - a connection that said no `hello` (`Origin::Agent("agent-socket")`)
 //!   gets [`AgentGrants::unpaired`], read-only by default;
-//! - a paired agent gets its own ([`AgentGrants::agent`]), or
-//!   [`AgentGrants::paired`], the editor preset by default;
+//! - a paired agent gets its own ([`AgentGrants::agent`]), else, when
+//!   it was paired in advance with one (`pairing::PreIssue::grant`),
+//!   that one, else [`AgentGrants::paired`], the editor preset by default;
 //! - any other origin (the user, an in-process caller, a script) is not
 //!   the socket's, and grants say nothing about it.
 //!
@@ -34,8 +35,11 @@
 //! `debug.call.refused` (another action, `ui` too) with `by`
 //! `pop.agent.grants`.
 //!
-//! **Escape hatch.** Until scenario runners and the MCP binary say
-//! `hello`, an application that lets unpaired clients write as before
+//! **Scenario runners** are paired in advance (`pairing::PreIssue`): the
+//! application issues a token at start, the runner
+//! (`egui_pop_test::scenario::live`) says `hello` with it, and the grant
+//! reaches that client only. **Escape hatch.** For clients that cannot
+//! say `hello`, an application that lets unpaired clients write as before
 //! says so: [`AgentGrants::allow_unpaired_writes`].
 
 use std::cell::RefCell;
@@ -286,6 +290,9 @@ pub fn grant_of(app: &AppHandle, origin: &Origin) -> Option<Grant> {
     }
     if let Some(own) = g.agents.get(id) {
         return Some(own.clone());
+    }
+    if let Some(own) = crate::pairing::pre_issued_grant(app, id) {
+        return Some(own);
     }
     crate::pairing::pairings(app)
         .iter()

@@ -115,7 +115,9 @@ fn list(app: &AppHandle) -> Json {
     let agents: Vec<Json> = pairing::pairings(app)
         .into_iter()
         .map(|p| {
-            let grant = g.agents.get(&p.id).unwrap_or(&g.paired);
+            let grant = grants::grant_of(app, &Origin::Agent(p.id.clone()))
+                .unwrap_or_else(|| g.paired.clone());
+            let grant = &grant;
             let preset = preset_of(grant);
             let open = pairing::connected(app, &p.id);
             json!({
@@ -136,7 +138,8 @@ fn list(app: &AppHandle) -> Json {
                 "state": if open == 0 { "info" } else { "success" },
                 "preset": preset,
                 "private": grant.private,
-                "own": g.agents.contains_key(&p.id),
+                "own": g.agents.contains_key(&p.id)
+                    || pairing::pre_issued_grant(app, &p.id).is_some(),
                 "custom": custom_choice(&ctx, preset),
                 "details": details(&ctx, grant),
             })
@@ -207,8 +210,8 @@ fn grant(app: &AppHandle, args: &Json) -> Result<Json, String> {
         if !pairing::pairings(app).iter().any(|p| p.id == id) {
             return Err(format!("no agent is paired as `{id}`"));
         }
-        let paired = g.paired.clone();
-        g.agents.entry(id.into()).or_insert(paired)
+        let now = grants::grant_of(app, &Origin::Agent(id.into())).unwrap_or(g.paired.clone());
+        g.agents.entry(id.into()).or_insert(now)
     } else {
         match args["default"].as_str() {
             Some("unpaired") => &mut g.unpaired,

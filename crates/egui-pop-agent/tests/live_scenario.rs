@@ -9,7 +9,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use egui_kittest::Harness;
-use egui_pop_agent::{AgentGrants, AgentGrantsExt as _, AgentSocket, AgentSocketExt as _};
+use egui_pop_agent::{
+    AgentGrants, AgentGrantsExt as _, AgentSocket, AgentSocketExt as _, Grant, PreIssue,
+    PreIssueExt as _,
+};
 use egui_pop_api::about::{AboutPlugin, AppInfo};
 use egui_pop_api::core::debug::BridgeMode;
 use egui_pop_api::windows::WindowSpec;
@@ -212,6 +215,76 @@ fn ui_steps_click_type_and_press_keys_live() {
     .expect_err("no such node");
     assert_eq!(f.broken, "ui", "{f}");
     assert!(f.message.contains("no \"No such\""), "{f}");
+}
+
+#[test]
+fn a_runner_paired_in_advance_writes_and_an_unpaired_one_does_not() {
+    let dir = private_dir("paired");
+    let path = dir.join("app.sock");
+    let token = dir.join("token");
+    // Unpaired clients keep the default grant (read-only); the runner
+    // paired in advance gets the full one.
+    let builder = App::builder()
+        .debug_bridge(BridgeMode::On)
+        .pre_issued_pairing(PreIssue::file("scenario", &token).grant(Grant::full()))
+        .plugin(Widgets::default());
+    let mut h = app_with(builder, &path);
+    let mode = std::fs::metadata(&token).unwrap().permissions().mode();
+    assert_eq!(mode & 0o777, 0o600, "the token is the user's only");
+    let pairing = egui_pop_agent::pairings(&h.state().handle())
+        .into_iter()
+        .find(|p| p.id == "scenario")
+        .expect("paired in advance");
+    assert!(pairing.pre_issued);
+    // Too short a token, or a reserved id, is refused.
+    let handle = h.state().handle();
+    assert!(egui_pop_agent::pairing::pre_issue(&handle, "x", "short", None).is_err());
+    assert!(
+        egui_pop_agent::pairing::pre_issue(&handle, "agent-socket", &"t".repeat(40), None).is_err()
+    );
+    let click = parse(
+        r#"Scenario(
+            name: "paired-click",
+            steps: [
+                Wait(Settled),
+                Ui(Click(role: "Button", label: "Press me")),
+                Wait(Settled),
+                Expect(Tree(has: (label: "pressed 1"))),
+            ],
+        )"#,
+    )
+    .unwrap();
+
+    let (p, t, s) = (path.clone(), token.clone(), click.clone());
+    let (unpaired, paired, wrong) = with_client(&mut h, move || {
+        let unpaired = LiveRunner::new(&p)
+            .connect_within(Duration::from_secs(10))
+            .run(&s);
+        let paired = LiveRunner::new(&p)
+            .token_file(&t)
+            .connect_within(Duration::from_secs(10))
+            .run(&s);
+        let wrong = LiveRunner::new(&p)
+            .token("egp_not-the-token-not-the-token-not-the-token")
+            .connect_within(Duration::from_secs(10))
+            .run(&s);
+        (unpaired, paired, wrong)
+    });
+    let unpaired = unpaired.expect_err("an unpaired client may not click");
+    assert_eq!(unpaired.broken, "ui", "{unpaired}");
+    paired.unwrap_or_else(|f| panic!("{f}"));
+    let wrong = wrong.expect_err("an unknown token pairs nothing");
+    assert_eq!(wrong.broken, "connect", "{wrong}");
+    assert!(wrong.message.contains("unknown pairing token"), "{wrong}");
+    let connected: Vec<_> = h
+        .state()
+        .handle()
+        .events_since(0)
+        .into_iter()
+        .filter(|e| e.name == "agent.connected")
+        .collect();
+    assert_eq!(connected.len(), 1, "{connected:?}");
+    assert_eq!(connected[0].source, "agent:scenario");
 }
 
 #[test]

@@ -171,6 +171,13 @@ $ egui-pop-scenario --socket "$XDG_RUNTIME_DIR/egui-pop-agent-my-app.sock" \
   step named; a `Ui` step ends once its input went in, so follow it
   with a `Wait`. `$name` variables fill labels
   and typed text too.
+- **Pairing.** Without a token the runner is an unpaired client,
+  read-only by default. With the token the application issued in
+  advance (`--token`, `--token-file`, else `EGUI_POP_AGENT_TOKEN` or
+  `EGUI_POP_AGENT_TOKEN_FILE`; `LiveRunner::token`, `token_file`,
+  `token_from_env`), it says `hello` with it and runs as that agent,
+  held to its grant ([Paired in
+  advance](agent-socket.md#paired-in-advance-scenario-runners)).
 - **Variables.** `--var name=value` (`LiveRunner::var`) replaces `$name`
   in every string argument of the steps and fixtures: a folder the run
   made, a file.

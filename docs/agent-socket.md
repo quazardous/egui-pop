@@ -206,6 +206,51 @@ $ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"hello","params":{"name":"my s
 {"id":1,"jsonrpc":"2.0","result":{"agent":"my-script","name":"my script","origin":"agent:my-script","paired":true,"token":"egp_…"}}
 ```
 
+### Paired in advance: scenario runners
+
+A scenario runner cannot answer a dialog, and nobody sits at the
+screen to approve it. The application pairs it in advance instead: it
+issues a token at start, the runner says `hello` with it, and only that
+connection gets the grant meant for runs; every unpaired client keeps
+its own (read-only by default).
+
+```rust
+use egui_pop_agent::{Grant, PreIssue, PreIssueExt as _};
+
+let mut builder = App::builder()
+    .debug_bridge(BridgeMode::On)
+    .agent_socket(AgentSocket::new());
+// EGUI_POP_AGENT_TOKEN: a token the launcher gives both sides;
+// EGUI_POP_AGENT_TOKEN_FILE: a file the application writes a new one to.
+if let Some(p) = PreIssue::from_env("scenario") {
+    builder = builder.pre_issued_pairing(p.grant(Grant::full()));
+}
+```
+
+- **The token.** `PreIssue::token(id, token)` takes one the launcher
+  made (at least 32 characters; `EGUI_POP_AGENT_TOKEN` through
+  `PreIssue::from_env`). `PreIssue::file(id, path)` makes a new random
+  one and writes it to `path`, mode 0600, replacing a file there without
+  following a link (`EGUI_POP_AGENT_TOKEN_FILE`); put it in a directory
+  only the user may write to, such as the runtime directory. Without a
+  builder: `pairing::pre_issue(app, id, token, grant)` and
+  `pairing::pre_issue_file(app, id, path, grant)`.
+- **The pairing** is `id` exactly (`[a-z0-9._-]`, 32 characters at most,
+  not a reserved id nor a saved pairing's), lasts as long as the
+  application runs, and is never saved; `Pairing::pre_issued` says so,
+  and the Agents page lists it, where the user may revoke it. Issuing
+  the same id again replaces its token.
+- **The grant.** `PreIssue::grant` is that agent's; without it, the
+  grants' own for the id (`AgentGrants::agent`), or their paired
+  default. An `AgentGrants::agent` grant for the id wins over it.
+- **The runner.** `egui_pop_test::scenario::live::LiveRunner::token`
+  (or `token_file`, which waits for the file as long as the runner
+  tries to connect, or `token_from_env`) says `hello` with the token on
+  each connection, as `egui-pop-scenario`; the `egui-pop-scenario`
+  command line takes `--token` or `--token-file`, else reads the two
+  variables. An unknown token fails the run at `connect`. Without a
+  token the runner says no `hello` and is an unpaired client.
+
 ## Destructive calls: the user confirms
 
 A call that destroys or discards what cannot easily be had back waits
@@ -214,6 +259,24 @@ for the user: `commands.run` of a command declared
 (`Collector::destructive(action, args)`; `FnCollector::destructive`,
 `FnCollector::destructive_when`). `describe` says it (`destructive` on
 each capability; for an action, without arguments).
+
+**By its arguments.** A command that destroys only with some arguments
+says which, and only those calls are asked about; the others run at
+once:
+
+```rust
+CommandSpec::new(EXPORT, "Export", "Library")
+    // Only an export that overwrites existing files asks the user.
+    .destructive_if("clash", json!("overwrite"))
+```
+
+`destructive_if(arg, value)` matches when the argument `arg` (a
+top-level name, or a JSON Pointer such as `/options/clash`) equals
+`value`; several rules, any one matching. `CommandSpec::is_destructive(args)`
+answers for a call. `describe` lists the rules as `destructive_if`
+(`[{ "arg", "equals" }]`, beside `destructive: false`), and the MCP tool
+keeps `destructiveHint`, its description naming the rules.
+`CommandSpec::destructive()` still makes every call destructive.
 
 - **Held.** The agent's `call` opens a confirmation dialog, in the
   danger style: "Let “claude-code” run “files.trash”?", with the call's
@@ -362,9 +425,11 @@ included, unless the user or the application withholds it:
   agents, or offers it through a private command.
 
 **The escape hatch.** Before grants, an unpaired client wrote whatever
-the mode allowed. A client that does not say `hello` yet (the MCP
-binary, `egui_pop_test::scenario::live`, a script) and must write, for a
-scenario run on a throwaway profile, needs the application to say so:
+the mode allowed. A scenario runner is
+[paired in advance](#paired-in-advance-scenario-runners) instead. A
+client that cannot say `hello` (the MCP binary, a script) and must
+write, for a run on a throwaway profile, needs the application to say
+so:
 
 ```rust
 App::builder()
