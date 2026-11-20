@@ -132,16 +132,22 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let store = app.store();
     ui.label("Each change below is a step of the application's history: Ctrl+Z undoes it, Ctrl+Shift+Z redoes it, and a click on a row of the list goes back or forward to that step. Hovering a row previews the values there; a right-click on a step undoes that one step, unless a later step changed the same value. A snapshot pins the values; a click on it restores them as a new step. A change made after an undo replaces the steps undone: \"Show replaced steps\" lists them, and a click goes back to one. The same list is the History panel (View > History), and agents read and drive it with the history.* commands.");
     section(ui, "Values (a drag is one step)");
-    egui_pop::core::focus::scope(ui, VALUES_SURFACE, &[], |ui| {
-        for (path, d) in descriptors() {
-            param::param(ui, &d, Mode::Bound(&store, path));
-        }
+    // A surface takes all the room it is given: each gets only its rows'
+    // (a zero height grows to them), so what is drawn below stays out.
+    bounded(ui, |ui| {
+        egui_pop::core::focus::scope(ui, VALUES_SURFACE, &[], |ui| {
+            for (path, d) in descriptors() {
+                param::param(ui, &d, Mode::Bound(&store, path));
+            }
+        });
     });
     section(ui, "A sketch: Ctrl+Z follows the focus");
     ui.label("The sketch keeps its own history. Ctrl+Z undoes in the history of what has the focus, the sketch's or the values', even when the other has a newer step; with the focus elsewhere, in the one focused last. Ctrl+Shift+Z redoes in the same one.");
-    egui_pop::core::focus::scope(ui, SKETCH_SURFACE, &[], |ui| {
-        let _in_sketch = values::enter_history(&SKETCH);
-        param::param(ui, &sketch_size(), Mode::Bound(&store, SKETCH_SIZE));
+    bounded(ui, |ui| {
+        egui_pop::core::focus::scope(ui, SKETCH_SURFACE, &[], |ui| {
+            let _in_sketch = values::enter_history(&SKETCH);
+            param::param(ui, &sketch_size(), Mode::Bound(&store, SKETCH_SIZE));
+        });
     });
     let goes = history::target(app, false).map(|t| t.scope());
     ui.label(match goes {
@@ -161,4 +167,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     });
     section(ui, "The history");
     history_view::show(ui, app);
+}
+
+/// `add` in a box as wide as the room and only as tall as what it draws.
+fn bounded(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
+    ui.allocate_ui(egui::vec2(ui.available_width(), 0.0), add);
 }
