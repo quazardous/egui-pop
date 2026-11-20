@@ -561,7 +561,7 @@ let _ = ctx.instance_panel(
   area), an instance's id opens that one. A panel declared once refuses
   `"new"`. The `workbench.panel.open` command passes `instance` on, and
   says the new id in its result, for agents.
-- **Menus.** A tab group's Open panel ▸ and its "+" list "New <panel>"
+- **Menus.** A tab group's Open panel ▸ and its "+" list "New `<panel>`"
   first, for each panel declared with several that the group's place
   allows. The View menu has the same entries, opening in the panel's
   area; an application's own Window menu adds them with

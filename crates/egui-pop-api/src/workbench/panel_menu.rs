@@ -32,7 +32,7 @@
 //!   ([`DockControls::add_buttons`](super::DockControls::add_buttons)):
 //!   the closed panels its place allows ([`MENU_GROUP_ADD`]).
 //!
-//! Both list first "New <panel>" for each panel declared with several
+//! Both list first "New `<panel>`" for each panel declared with several
 //! instances its place allows (`pop.panel.open` with `instance: "new"`).
 //! The same entries, opening where the panel's area is, are the list
 //! [`LIST_NEW_INSTANCES`], in the View menu and for an application's own
@@ -99,7 +99,7 @@ const LIST_GROUPS: &str = "workbench.panel.groups";
 const LIST_CLOSE: &str = "workbench.panel.close";
 const LIST_OPEN_HERE: &str = "workbench.group.open";
 const LIST_ADD_HERE: &str = "workbench.group.add";
-/// "New <panel>" for each panel declared with several instances, opening
+/// "New `<panel>`" for each panel declared with several instances, opening
 /// a new one in the panel's area: in the View menu, and for an
 /// application's Window menu.
 pub const LIST_NEW_INSTANCES: &str = "workbench.panel.new";
@@ -482,7 +482,7 @@ fn open_entries(app: &AppHandle, group: &PanelId, closed: bool) -> Vec<ListItem>
     entries
 }
 
-/// "New <panel>" for each panel declared with several instances, by
+/// "New `<panel>`" for each panel declared with several instances, by
 /// title: in the tab group holding `group` (those its place allows), else
 /// in the panel's own area.
 fn new_entries(app: &AppHandle, group: Option<&PanelId>) -> Vec<ListItem> {

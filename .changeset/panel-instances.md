@@ -25,7 +25,7 @@ saved with it and handed back on restore; layouts saved before load as
 ones with none. `pop.panel.open` takes `instance`: `"new"` opens a new
 instance at the place asked, an instance's id opens that one; the
 `workbench.panel.open` command passes it on and returns the new id. A tab
-group's Open panel ▸ and "+" list "New <panel>", and so does the View
+group's Open panel ▸ and "+" list "New `<panel>`", and so does the View
 menu (`panel_menu::LIST_NEW_INSTANCES`, for an application's Window
 menu). Closing an instance drops it with its payload; the journal says
 `panel.instance.opened` and `panel.instance.closed`. Breaking:

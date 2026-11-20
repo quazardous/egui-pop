@@ -1,6 +1,6 @@
 //! Panel instances: a panel declared with several
 //! ([`PanelSpec::instances`](egui_pop_model::panels::PanelSpec::instances),
-//! [`Instances::Multiple`](egui_pop_model::panels::Instances::Multiple))
+//! [`Instances::Multiple`])
 //! opens as many times as asked.
 //!
 //! <div class="warning">Experimental: may change in any release
