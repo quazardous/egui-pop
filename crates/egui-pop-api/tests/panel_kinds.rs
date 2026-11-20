@@ -215,3 +215,22 @@ fn the_panel_describe_point_is_declared_with_its_listener() {
         "pop.panel.describe"
     );
 }
+
+/// The edits mark is chrome: it draws on the panel's first frame, whatever
+/// the panel draws, kit widgets or none (its bodies here are plain egui
+/// labels), never once some kit widget has run first.
+#[test]
+fn the_edits_mark_draws_on_the_first_frame_without_any_kit_widget() {
+    let app = App::builder()
+        .plugin(Demo)
+        .build(&egui::Context::default())
+        .unwrap();
+    app.handle().set_panel_visible(&PARAMS, true);
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 500.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    let _clock = motion::freeze(&h.ctx, 0.0);
+    h.step();
+    let mark = slot(&h, &PARAMS).expect("the edits mark on the first frame");
+    assert_eq!(mark.state, "edit");
+}
