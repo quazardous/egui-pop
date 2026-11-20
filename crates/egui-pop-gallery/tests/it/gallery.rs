@@ -9319,6 +9319,59 @@ fn the_places_page_in_every_pop_theme() {
     }
 }
 
+/// A chosen item that has the keyboard shows both: the selected fill,
+/// and the focus outline over it, the outline standing out from the fill
+/// (3:1, as WCAG asks of a focus indicator).
+#[test]
+fn the_places_page_shows_a_focused_chosen_item_filled_and_outlined() {
+    use egui_pop::core::kit::{Kit, State};
+    fn luminance(c: egui::Color32) -> f32 {
+        let lin = |v: u8| {
+            let v = f32::from(v) / 255.0;
+            if v <= 0.040_45 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * lin(c.r()) + 0.7152 * lin(c.g()) + 0.0722 * lin(c.b())
+    }
+    let mut results = egui_kittest::SnapshotResults::new();
+    for theme in ["pop-dark", "pop-light"] {
+        let mut h = harness(options(theme, Density::Comfortable, "places"));
+        h.run();
+        // Studio, chosen by a click (the pointer stays on it), then given
+        // the keyboard.
+        h.get_by_label("Studio, !").click();
+        h.run();
+        h.get_by_label("Studio, !").focus();
+        h.run();
+        let studio = h.get_by_label("Studio, !");
+        assert!(studio.is_focused());
+        assert_eq!(
+            studio.accesskit_node().toggled(),
+            Some(egui::accesskit::Toggled::True)
+        );
+        let rect = studio.rect().expand(4.0);
+        results.add(h.try_shot_of(format!("places-focused-chosen-{theme}"), rect));
+        // The outline over the fill (laid on the panel's background).
+        let kit = Kit::of(&h.ctx);
+        let b = kit
+            .selectable_row
+            .style(State::SELECTED.with(State::FOCUS, true));
+        assert!(b.ring_width > 0.0, "{theme}: a focus outline");
+        let under = h.ctx.global_style().visuals.panel_fill;
+        let fill = under.blend(b.fill);
+        let ring = fill.blend(b.ring_color);
+        let (a, z) = (luminance(ring), luminance(fill));
+        let ratio = (a.max(z) + 0.05) / (a.min(z) + 0.05);
+        assert!(
+            ratio >= 3.0,
+            "{theme}: the focus outline over the selected fill is {ratio:.2}:1"
+        );
+    }
+}
+
 #[test]
 fn the_places_page_pins_folds_and_gives_the_app_its_room() {
     use egui::accesskit::{Role, Toggled};
