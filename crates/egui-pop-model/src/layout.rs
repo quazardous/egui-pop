@@ -896,6 +896,11 @@ pub struct Layout {
     /// kept so that floating one of them out again gives the group back.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub docked_groups: Vec<FloatingGroup>,
+    /// The place each closed panel had when it closed ([`Layout::hide`]),
+    /// where opening it puts it back ([`Layout::last_place`]); kept only
+    /// for panels in `hidden`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub closed: BTreeMap<PanelId, DormantPlace>,
 }
 
 /// A layout as saved: the layout, and the places of panels no longer
@@ -1019,6 +1024,7 @@ impl Layout {
             flyouts: BTreeMap::new(),
             floating,
             docked_groups: Vec::new(),
+            closed: BTreeMap::new(),
         }
     }
 
@@ -1490,8 +1496,64 @@ impl Layout {
         Ok(())
     }
 
-    /// Closes a panel: out of its area or window, and kept closed.
+    /// Where a panel is: docked (its area, the tabs beside it and its
+    /// index, [`Layout::docked_place`]), detached (its window's screen and
+    /// rectangle) or floating (its group's corner); `None` when it is not
+    /// placed.
+    ///
+    /// ```
+    /// use egui_pop_model::ids::PanelId;
+    /// use egui_pop_model::layout::{DormantPlace, Layout};
+    ///
+    /// let tools = PanelId::from_static("app.tools");
+    /// let mut layout = Layout::default();
+    /// layout.float(&tools, [16.0, 24.0]);
+    /// assert_eq!(layout.place_of(&tools), Some(DormantPlace::Floating { pos: [16.0, 24.0] }));
+    /// ```
+    pub fn place_of(&self, panel: &PanelId) -> Option<DormantPlace> {
+        if let Some(place) = self.docked_place(panel) {
+            return Some(place);
+        }
+        if let Some(a) = self.window_of(panel) {
+            return Some(DormantPlace::Window {
+                screen: a.screen.clone(),
+                rect: a.rect,
+            });
+        }
+        self.floating_of(panel)
+            .map(|g| DormantPlace::Floating { pos: g.pos })
+    }
+
+    /// The place a closed panel had when it closed ([`Layout::hide`]):
+    /// `None` when it is open, or closed with no place known.
+    ///
+    /// ```
+    /// use egui_pop_model::ids::PanelId;
+    /// use egui_pop_model::layout::{DormantPlace, Layout, Node};
+    /// use egui_pop_model::panels::Area;
+    ///
+    /// let [a, b] = [PanelId::from_static("app.a"), PanelId::from_static("app.b")];
+    /// let mut layout = Layout::default();
+    /// layout.areas.push((Area::Bottom, Node::Tabs { panels: vec![a.clone(), b.clone()], active: 1 }));
+    /// layout.hide(&b);
+    /// let place = layout.last_place(&b).cloned().unwrap();
+    /// assert_eq!(place, DormantPlace::Docked { area: Area::Bottom, beside: vec![a.clone()], index: 1 });
+    /// layout.dock_at(&b, &place);
+    /// assert_eq!(layout.group_of(&b), Some((vec![a, b], 1)));
+    /// ```
+    pub fn last_place(&self, panel: &PanelId) -> Option<&DormantPlace> {
+        self.hidden
+            .contains(panel)
+            .then(|| self.closed.get(panel))
+            .flatten()
+    }
+
+    /// Closes a panel: out of its area or window, and kept closed, its
+    /// place kept for when it opens again ([`Layout::last_place`]).
     pub fn hide(&mut self, panel: &PanelId) {
+        if let Some(place) = self.place_of(panel) {
+            self.closed.insert(panel.clone(), place);
+        }
         self.remove(panel);
         for g in &mut self.docked_groups {
             g.take(panel);
@@ -1706,6 +1768,12 @@ impl Layout {
                 .collect(),
             floating,
             docked_groups,
+            // The places of panels still closed and declared.
+            closed: self
+                .closed
+                .into_iter()
+                .filter(|(p, _)| hidden.contains(p))
+                .collect(),
         };
         let placed: Vec<PanelId> = layout.placed().into_iter().cloned().collect();
         for p in panels.all() {

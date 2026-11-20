@@ -788,6 +788,11 @@ pub const WORKBENCH_MOVE_GROUP: StrKey = StrKey::new("egui-pop-workbench-move-gr
 /// own (`DockControls::eject_group`).
 pub const WORKBENCH_EJECT_GROUP: StrKey =
     StrKey::new("egui-pop-workbench-eject-group", "Eject group");
+/// The menu under a tab bar's "+" when no closed panel may open there.
+pub const WORKBENCH_NOTHING_TO_OPEN: StrKey = StrKey::new(
+    "egui-pop-workbench-nothing-to-open",
+    "No closed panel can open here",
+);
 /// A floating window's move handle, which moves the window.
 pub const WORKBENCH_MOVE_WINDOW: StrKey =
     StrKey::new("egui-pop-workbench-move-window", "Move window");
@@ -1942,6 +1947,7 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_NEW_WINDOW,
     WORKBENCH_MOVE_GROUP,
     WORKBENCH_EJECT_GROUP,
+    WORKBENCH_NOTHING_TO_OPEN,
     WORKBENCH_MOVE_WINDOW,
     WORKBENCH_STAYS_DOCKED,
     WORKBENCH_FLOAT,

@@ -412,7 +412,17 @@ impl<'a> Ctx<'a> {
                 .description(&fill(&txt::PANEL_TOGGLE_DESCRIPTION)),
             move |call| {
                 let shown = call.app.panel_visible(&toggle);
-                call.app.set_panel_visible(&toggle, !shown);
+                if shown {
+                    call.app.set_panel_visible(&toggle, false);
+                } else {
+                    // Opened where it was, through `pop.panel.open`.
+                    let ask = crate::bus::PanelOpenAsk::new(
+                        toggle.as_str(),
+                        crate::bus::OpenPlace::Last,
+                        crate::bus::OWNER,
+                    );
+                    call.app.open_panel(ask)?;
+                }
                 Ok(serde_json::json!({ "shown": !shown }))
             },
         )?;

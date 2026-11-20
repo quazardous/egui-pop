@@ -100,10 +100,14 @@ fn messages() -> Messages {
         ))
         .build(&ctx)
         .expect("egui-pop's plugins build");
-    // The panel menu's submenus: it opens on a panel, not from the main menu.
+    // The panel menu's and the tab group menu's submenus: they open on a
+    // panel or a tab bar, not from the main menu.
     let mut found = extract::declarations(
         app.handle(),
-        &[egui_pop_api::workbench::panel_menu::MENU_PANEL],
+        &[
+            egui_pop_api::workbench::panel_menu::MENU_PANEL,
+            egui_pop_api::workbench::panel_menu::MENU_GROUP,
+        ],
     );
     // The language setting's choices are each language's own name,
     // generated at connect: not catalogue text.

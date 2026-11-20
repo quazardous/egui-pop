@@ -501,6 +501,21 @@ failed (`pop.panel.state`), that mark shows instead, and the edits mark comes
 back once it is ready. It is the same indicator id as the state's
 (`bus::mark_id(panel, true)`), its state `edit`.
 
+`pop.panel.open` (`bus::PanelOpen`, `AppHandle::open_panel`) opens a
+panel, whoever asks: its `<panel>.toggle` command, the
+`workbench.panel.open` command (agents, menus), a tab group's menu (Open
+panel ▸, a right click on its bar's empty part) and the "+" on each tab
+bar (`DockControls::add_buttons`, off by default: the closed panels that
+may open in that group). Its `place` is `last` (the default), `here` or
+an area's name. A closed panel's place is kept when it closes
+(`Layout::last_place`): `last` puts it back among the same tabs at its
+index, floating at its corner or in its window; that place gone, it
+joins the focused panel's tab group when its areas allow it, else its
+declared area. `here` opens it in the tab group holding `group` (any
+panel of it, docked, floating or detached), else in the focused panel's.
+The workbench answers through the `workbench.show` step, so a plugin may
+veto it.
+
 `pop.panel.describe` (`bus::PanelDescribe`, `AppHandle::describe_panel`)
 describes a declared panel on the bus: its title, whether it is a
 palette, and its kind (`bus::PanelDescription`), for agents and tests

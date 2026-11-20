@@ -21,6 +21,16 @@
 //!
 //! A floating panel's menu opens through [`crate::menus::context_menu`],
 //! so it is a `pop.popup.open` on the bus like every context menu.
+//!
+//! A tab group has two more ways to open a panel in it, both asking
+//! `pop.panel.open` with `here` (the `workbench.panel.open` command):
+//!
+//! - the group menu ([`MENU_GROUP`], a right click on the empty part of
+//!   its tab bar): Open panel ▸, every panel its place allows that is not
+//!   one of its tabs, an open one moving there;
+//! - the "+" at the end of its tab bar
+//!   ([`DockControls::add_buttons`](super::DockControls::add_buttons)):
+//!   the closed panels its place allows ([`MENU_GROUP_ADD`]).
 
 use egui::Response;
 use egui_pop_core::strings;
@@ -47,6 +57,18 @@ pub const MENU_PANEL_GROUP_WINDOWS: MenuId = MenuId::from_static("workbench.pane
 /// Its submenu listing the docked tab groups the panel may join.
 pub const MENU_PANEL_GROUPS: MenuId = MenuId::from_static("workbench.panel.groups");
 
+/// A tab group's menu (`args.group`: a panel of the group): Open panel ▸.
+pub const MENU_GROUP: MenuId = MenuId::from_static("workbench.group");
+/// Its submenu listing the panels that may open in the group.
+pub const MENU_GROUP_OPEN: MenuId = MenuId::from_static("workbench.group.open");
+/// The menu under a tab bar's "+" (`args.group`): the closed panels that
+/// may open in the group.
+pub const MENU_GROUP_ADD: MenuId = MenuId::from_static("workbench.group.add");
+
+/// Opens a panel through `pop.panel.open` (`panel`; `place`: `last`, the
+/// default, `here` or an area's name; `group`: a panel of the tab group
+/// `here` means, else the focused panel's).
+pub const CMD_PANEL_OPEN: CommandId = CommandId::from_static("workbench.panel.open");
 /// Docks a panel in an area (`panel`, `area`).
 pub const CMD_PANEL_MOVE: CommandId = CommandId::from_static("workbench.panel.move");
 /// Floats a docked panel, where its area is (`panel`).
@@ -69,11 +91,39 @@ const LIST_WINDOWS: &str = "workbench.panel.windows";
 const LIST_GROUP_WINDOWS: &str = "workbench.panel.group_windows";
 const LIST_GROUPS: &str = "workbench.panel.groups";
 const LIST_CLOSE: &str = "workbench.panel.close";
+const LIST_OPEN_HERE: &str = "workbench.group.open";
+const LIST_ADD_HERE: &str = "workbench.group.add";
 
 /// Declares the panel menu: its commands, its items and their lists.
 pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
     let example = json!({ "panel": "app.inspector" });
     ctx.command(
+        CommandSpec::new(CMD_PANEL_OPEN, "Open panel", "View")
+            .description("Opens `panel` through `pop.panel.open`: where it was when it closed (`place`: `last`, the default; that place gone, in the focused panel's tab group when its areas allow it, else its own area), `here` (the tab group holding `group`, else the focused panel's) or in an area (`center`, `start_side`, `end_side`, `bottom`).")
+            .when("!modalOpen")
+            .hidden()
+            .args(json!({ "panel": "app.outline", "place": "here", "group": "app.inspector" })),
+        |call| {
+            let panel = call
+                .args
+                .get("panel")
+                .and_then(Json::as_str)
+                .ok_or("`panel` is missing")?;
+            let place = match call.args.get("place").and_then(Json::as_str) {
+                Some(name) => crate::bus::OpenPlace::parse(name).ok_or_else(|| {
+                    format!("no place `{name}` (`last`, `here` or an area's name)")
+                })?,
+                None => crate::bus::OpenPlace::Last,
+            };
+            let mut ask = crate::bus::PanelOpenAsk::new(panel, place, CMD_PANEL_OPEN.as_str());
+            if let Some(g) = call.args.get("group").and_then(Json::as_str) {
+                ask = ask.group(g);
+            }
+            let did = call.app.open_panel(ask)?;
+            Ok(json!({ "panel": panel, "place": place.as_str(), "did": did }))
+        },
+    )?
+    .command(
         CommandSpec::new(CMD_PANEL_MOVE, "Move panel to area", "View")
             .description("Docks the focused panel, or `panel`, in an area (`area`: `center`, `start_side`, `end_side` or `bottom`).")
             .when("!modalOpen")
@@ -213,7 +263,13 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
             0,
             LIST_GROUP_WINDOWS,
         ))?
-        .menu_item(MenuItem::list(MENU_PANEL_GROUPS, "1", 0, LIST_GROUPS))?;
+        .menu_item(MenuItem::list(MENU_PANEL_GROUPS, "1", 0, LIST_GROUPS))?
+        .menu_item(
+            MenuItem::submenu(MENU_GROUP, "1_open", 0, MENU_GROUP_OPEN, "Open panel")
+                .when("args.can_open", false),
+        )?
+        .menu_item(MenuItem::list(MENU_GROUP_OPEN, "1", 0, LIST_OPEN_HERE))?
+        .menu_item(MenuItem::list(MENU_GROUP_ADD, "1", 0, LIST_ADD_HERE))?;
     ctx.list_provider(LIST_PLACE, |app, cx| with_panel(app, cx, place_entries))
         .list_provider(LIST_DETACH, |app, cx| with_panel(app, cx, detach_entries))
         .list_provider(LIST_WINDOWS, |app, cx| {
@@ -223,6 +279,26 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
             with_panel(app, cx, |app, panel| window_entries(app, panel, true))
         })
         .list_provider(LIST_GROUPS, |app, cx| with_panel(app, cx, group_entries))
+        .list_provider(LIST_OPEN_HERE, |app, cx| {
+            with_group(app, cx, |app, group| open_entries(app, group, false))
+        })
+        .list_provider(LIST_ADD_HERE, |app, cx| {
+            with_group(app, cx, |app, group| {
+                let entries = open_entries(app, group, true);
+                if !entries.is_empty() {
+                    return entries;
+                }
+                // Said, rather than an empty menu.
+                vec![
+                    ListItem::new(
+                        &strings::tr(&app.egui(), &txt::WORKBENCH_NOTHING_TO_OPEN),
+                        CMD_PANEL_OPEN,
+                        Json::Null,
+                    )
+                    .disabled(),
+                ]
+            })
+        })
         .list_provider(LIST_CLOSE, |app, cx| {
             with_panel(app, cx, |app, panel| {
                 let ctx = app.egui();
@@ -257,6 +333,17 @@ pub fn context_menu(response: &Response, app: &AppHandle, panel: &PanelId) {
 /// `egui_stack` opens.
 pub(crate) fn show(ui: &mut egui::Ui, app: &AppHandle, panel: &PanelId) {
     menus::show_args(ui, app, &MENU_PANEL, &menu_args(app, panel));
+}
+
+/// Draws a tab group's menu items (Open panel ▸) in an open menu, the
+/// group named by one of its panels: the group menu `egui_stack` opens on
+/// its bar.
+pub(crate) fn show_group(ui: &mut egui::Ui, app: &AppHandle, group: &PanelId) {
+    let args = json!({
+        "group": group,
+        "can_open": !open_entries(app, group, false).is_empty(),
+    });
+    menus::show_args(ui, app, &MENU_GROUP, &args);
 }
 
 /// The menu's arguments for a panel: the panel, and which submenus have
@@ -300,6 +387,68 @@ fn with_panel(
         Ok(panel) => f(app, &panel),
         Err(_) => Vec::new(),
     }
+}
+
+/// A list's entries for the menu's tab group (`args.group`, one of its
+/// panels), none without one.
+fn with_group(
+    app: &AppHandle,
+    cx: &WhenContext,
+    f: impl FnOnce(&AppHandle, &PanelId) -> Vec<ListItem>,
+) -> Vec<ListItem> {
+    match PanelId::new(cx.get("args.group")) {
+        Ok(group) => f(app, &group),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// The panels that may open in the tab group holding `group`, by title:
+/// those its place (an area, a float, a window) allows that are not
+/// among its tabs; `closed`: only the closed ones (the "+"). Each opens
+/// there through `pop.panel.open` with `here`.
+fn open_entries(app: &AppHandle, group: &PanelId, closed: bool) -> Vec<ListItem> {
+    let ctx = app.egui();
+    let panels: Vec<PanelId> = {
+        let wb = app.workbench_mut();
+        let place = if let Some(area) = wb.layout.area_of(group) {
+            Place::Area(area)
+        } else if wb.layout.window_of(group).is_some() {
+            Place::Window
+        } else if wb.layout.floating_of(group).is_some() {
+            Place::Floating
+        } else {
+            return Vec::new();
+        };
+        let host = crate::mounts::panel_host(place);
+        let mates: Vec<PanelId> = match wb.layout.floating_of(group) {
+            Some(g) => g.panels().cloned().collect(),
+            None => wb
+                .layout
+                .group_of(group)
+                .map(|(panels, _)| panels)
+                .unwrap_or_default(),
+        };
+        wb.specs
+            .iter()
+            .filter(|s| !s.bare && !mates.contains(&s.id) && s.refuses(&host).is_none())
+            .filter(|s| !closed || !wb.layout.shows(&s.id))
+            .map(|s| s.id.clone())
+            .collect()
+    };
+    let mut out: Vec<(String, ListItem)> = panels
+        .into_iter()
+        .map(|p| {
+            let title = app.panel_title(&ctx, &p);
+            let item = ListItem::new(
+                &title,
+                CMD_PANEL_OPEN,
+                json!({ "panel": p, "place": "here", "group": group }),
+            );
+            (title, item)
+        })
+        .collect();
+    out.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+    out.into_iter().map(|(_, item)| item).collect()
 }
 
 /// Docked: Move to each area (greyed where its rules keep it out), and
