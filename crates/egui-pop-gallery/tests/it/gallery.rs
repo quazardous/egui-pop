@@ -9346,6 +9346,10 @@ fn the_places_page_shows_a_focused_chosen_item_filled_and_outlined() {
         h.run();
         h.get_by_label("Studio, !").focus();
         h.run();
+        // The pointer on it again (the focus moved nothing): its hover
+        // must not cover the choice.
+        h.get_by_label("Studio, !").hover();
+        h.run();
         let studio = h.get_by_label("Studio, !");
         assert!(studio.is_focused());
         assert_eq!(
