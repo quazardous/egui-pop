@@ -508,6 +508,10 @@ ctx.admin(
 - **Versioned**: `Manifest::new(1)`, the format's version; a manifest of a
   newer version than the framework is refused and reported (ADR 0003),
   one of an older version is read through a migration (ADR 0008's way).
+- **Tolerant of new bricks**: an item whose `node` this version does not
+  know reads as `Item::Unknown` (kept as written); `Manifest::check`
+  reports it (`admin-unknown-node`) and leaves it out, so the rest of the
+  page still shows. A known node that does not read is still an error.
 - **Owned** (ADR 0004): a plugin's nodes leave with it; a node placed
   under a path that does not exist lands in the plugin's own section of
   the Plugins scope, with a diagnostic.
