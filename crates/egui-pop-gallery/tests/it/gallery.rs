@@ -9447,3 +9447,32 @@ fn the_places_page_pins_folds_and_gives_the_app_its_room() {
     assert_eq!(h.query_all_by_label("Import again").count(), 0);
     assert!(h.query_by_label("Last: folded history").is_some());
 }
+
+/// The debug page's notice, placed by the application on the kit's
+/// popover surface (`ui.popover`): its own area, outside the overlay
+/// stack, so Escape and a click outside leave it alone.
+#[test]
+fn the_debug_page_shows_a_notice_the_app_places_on_the_popover_surface() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "debug"));
+    h.run();
+    assert!(
+        h.query_by_label("A notice the app placed itself.")
+            .is_none()
+    );
+    h.get_by_label("Show a notice placed by the app").click();
+    h.run();
+    assert!(
+        h.query_by_label("A notice the app placed itself.")
+            .is_some()
+    );
+    assert!(
+        egui_pop::core::overlay::stack(&h.ctx).is_empty(),
+        "no overlay of egui-pop's opened"
+    );
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(
+        h.query_by_label("A notice the app placed itself.")
+            .is_some()
+    );
+}

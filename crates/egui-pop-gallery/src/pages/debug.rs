@@ -26,6 +26,7 @@ pub const DEBUG: PluginId = PluginId::from_static("gallery.debug");
 struct State {
     collector: String,
     popover: bool,
+    notice: bool,
     panic: bool,
     feedback: Option<Json>,
 }
@@ -35,6 +36,7 @@ impl Default for State {
         Self {
             collector: "keys".into(),
             popover: false,
+            notice: false,
             panic: false,
             feedback: None,
         }
@@ -164,6 +166,11 @@ fn show(ui: &mut Ui, app: &AppHandle, s: &mut State) {
     });
 }
 
+/// The room between a control and a notice placed under it.
+fn t_gap(ui: &Ui) -> f32 {
+    Tokens::of(ui.ctx()).space.s
+}
+
 fn playground(ui: &mut Ui, app: &AppHandle, s: &mut State) {
     ui.label("Things the collectors see:");
     let r = ui.button("Open a popover");
@@ -184,6 +191,19 @@ fn playground(ui: &mut Ui, app: &AppHandle, s: &mut State) {
             let _ = ui.button("A button inside");
         },
     );
+    // A notice the application places itself, on the popover's surface
+    // (`ui.popover`): its own area, not an overlay of egui-pop's.
+    let r = widgets::checkbox(ui, &mut s.notice, "Show a notice placed by the app");
+    if s.notice {
+        egui::Area::new(egui::Id::unique("gallery.debug.notice"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(r.rect.left_bottom() + egui::vec2(0.0, t_gap(ui)))
+            .show(ui.ctx(), |ui| {
+                ui.popover(|ui| {
+                    ui.label("A notice the app placed itself.");
+                });
+            });
+    }
     if ui.button("Announce \"Saved\"").clicked() {
         a11y::announce(ui.ctx(), "Saved", Politeness::Polite);
     }
