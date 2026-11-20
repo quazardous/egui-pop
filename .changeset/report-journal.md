@@ -14,7 +14,8 @@ private command's data reads `<private>`, the home folder is written
 and the environment's secrets are blanked (`about::journal::Redactor`).
 `AboutPlugin::context` adds the application's own context (its
 library's shape, its layout, its settings; `about::changed_settings`
-gives the settings that differ from their defaults). `help.report` then shows
+gives the settings that differ from their defaults); `AboutPlugin::alias`
+replaces ids that are fingerprints by aliases (`photo-1`, `photo-2`…). `help.report` then shows
 the report in a dialog before anything leaves the machine: its button
 copies it and opens the issue, to paste it there. Agents read it with
 `help.report.bundle`.

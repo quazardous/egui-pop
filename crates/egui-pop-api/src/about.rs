@@ -329,6 +329,7 @@ pub struct AboutPlugin {
     idea_form: Option<String>,
     journal: Option<journal::RecorderConfig>,
     context: Vec<(String, Rc<ContextFn>)>,
+    alias: Option<(String, Rc<journal::AliasFn>)>,
 }
 
 impl fmt::Debug for AboutPlugin {
@@ -338,6 +339,7 @@ impl fmt::Debug for AboutPlugin {
             .field("page", &self.page.is_some())
             .field("idea_form", &self.idea_form)
             .field("journal", &self.journal)
+            .field("alias", &self.alias.as_ref().map(|(p, _)| p))
             .field(
                 "context",
                 &self.context.iter().map(|(n, _)| n).collect::<Vec<_>>(),
@@ -354,7 +356,18 @@ impl AboutPlugin {
             idea_form: None,
             journal: None,
             context: Vec::new(),
+            alias: None,
         }
+    }
+
+    /// Ids a report replaces by aliases (`photo-1`, `photo-2`…, numbered
+    /// in order of appearance across the report): every token (a run of
+    /// letters and digits) of its journal and context for which
+    /// `matches` says yes. For ids that are fingerprints, such as a
+    /// file's content hash.
+    pub fn alias(mut self, prefix: &str, matches: impl Fn(&str) -> bool + 'static) -> Self {
+        self.alias = Some((prefix.into(), Rc::new(matches)));
+        self
     }
 
     /// Records the journal for reports: the last minutes of it (5 by
@@ -400,6 +413,7 @@ struct Shared {
     recorder: std::cell::RefCell<Option<journal::Recorder>>,
     redactor: std::cell::RefCell<journal::Redactor>,
     context: std::cell::RefCell<Vec<(String, Rc<ContextFn>)>>,
+    alias: std::cell::RefCell<Option<(String, Rc<journal::AliasFn>)>>,
     /// The report the dialog shows, as its button copies it.
     shown: std::cell::RefCell<Option<String>>,
 }
@@ -443,6 +457,7 @@ impl Plugin for AboutPlugin {
             *shared.recorder.borrow_mut() = Some(journal::Recorder::new(config.clone()));
             *shared.redactor.borrow_mut() = journal::Redactor::current();
             *shared.context.borrow_mut() = self.context.clone();
+            *shared.alias.borrow_mut() = self.alias.clone();
             ctx.on(On::Pass, |app, _| record(app));
             ctx.command(
                 CommandSpec::new(CMD_REPORT_BUNDLE, "Read the problem report", CAT)
@@ -678,6 +693,16 @@ pub fn report_bundle(app: &AppHandle) -> Result<journal::Bundle, String> {
         context.insert(name.clone(), v);
     }
     let (missed, capped) = recorder.lost();
+    let mut entries = recorder.window(now);
+    if let Some((prefix, matches)) = shared.alias.borrow().as_ref() {
+        let mut aliases = journal::Aliases::new(prefix, &**matches);
+        for e in &mut entries {
+            aliases.json(&mut e.data);
+        }
+        for v in context.values_mut() {
+            aliases.json(v);
+        }
+    }
     Ok(journal::Bundle {
         version: report.version,
         platform: report.platform,
@@ -685,7 +710,7 @@ pub fn report_bundle(app: &AppHandle) -> Result<journal::Bundle, String> {
         window_s: recorder.config().window.as_secs(),
         missed,
         capped,
-        journal: recorder.window(now),
+        journal: entries,
         context,
         bus: journal::bus_description(&*app.bus()),
     })

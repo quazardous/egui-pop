@@ -472,6 +472,93 @@ fn scrub_paths(text: &str) -> String {
     out
 }
 
+/// Says whether a token (a run of letters and digits) is an id to alias.
+pub type AliasFn = dyn Fn(&str) -> bool;
+
+/// Ids replaced by aliases numbered in order of appearance (`photo-1`,
+/// `photo-2`…): the same id gets the same alias across a report, so
+/// entries still tie together, and an id that is a fingerprint (a
+/// content hash, an account id) never leaves the machine.
+pub struct Aliases<'a> {
+    prefix: &'a str,
+    matches: &'a AliasFn,
+    seen: std::collections::HashMap<String, usize>,
+}
+
+impl std::fmt::Debug for Aliases<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Aliases")
+            .field("prefix", &self.prefix)
+            .field("seen", &self.seen.len())
+            .finish_non_exhaustive()
+    }
+}
+
+impl<'a> Aliases<'a> {
+    pub fn new(prefix: &'a str, matches: &'a AliasFn) -> Self {
+        Self {
+            prefix,
+            matches,
+            seen: std::collections::HashMap::new(),
+        }
+    }
+
+    /// How many ids were aliased.
+    pub fn len(&self) -> usize {
+        self.seen.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.seen.is_empty()
+    }
+
+    /// `text` with each matching token replaced by its alias.
+    pub fn text(&mut self, text: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        let mut token = String::new();
+        let flush = |token: &mut String, out: &mut String, me: &mut Self| {
+            if token.is_empty() {
+                return;
+            }
+            if (me.matches)(token) {
+                let n = me.seen.len() + 1;
+                let n = *me.seen.entry(std::mem::take(token)).or_insert(n);
+                out.push_str(&format!("{}-{n}", me.prefix));
+            } else {
+                out.push_str(token);
+                token.clear();
+            }
+        };
+        for c in text.chars() {
+            if c.is_ascii_alphanumeric() {
+                token.push(c);
+            } else {
+                flush(&mut token, &mut out, self);
+                out.push(c);
+            }
+        }
+        flush(&mut token, &mut out, self);
+        out
+    }
+
+    /// Every string of `v`, keys included, aliased.
+    pub fn json(&mut self, v: &mut Json) {
+        match v {
+            Json::String(s) => *s = self.text(s),
+            Json::Array(items) => items.iter_mut().for_each(|x| self.json(x)),
+            Json::Object(o) => {
+                let taken = std::mem::take(o);
+                for (k, mut x) in taken {
+                    let k = self.text(&k);
+                    self.json(&mut x);
+                    o.insert(k, x);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 /// What a problem report attaches: shown to the user before anything
 /// leaves the machine ([`Bundle::text`]).
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -629,6 +716,23 @@ mod tests {
         // Past the window.
         rec.prune(t0 + Duration::from_secs(61));
         assert!(rec.window(t0 + Duration::from_secs(61)).is_empty());
+    }
+
+    #[test]
+    fn ids_get_one_alias_each_in_order_of_appearance() {
+        let hex = |t: &str| t.len() == 8 && t.chars().all(|c| c.is_ascii_hexdigit());
+        let mut a = Aliases::new("photo", &hex);
+        let mut v = json!([
+            { "image": "deadbeef" },
+            { "image": "0badf00d", "text": "after deadbeef, cafe" },
+            { "deadbeef": 1 },
+        ]);
+        a.json(&mut v);
+        assert_eq!(v[0]["image"], "photo-1");
+        assert_eq!(v[1]["image"], "photo-2");
+        assert_eq!(v[1]["text"], "after photo-1, cafe");
+        assert_eq!(v[2]["photo-1"], 1);
+        assert_eq!(a.len(), 2);
     }
 
     #[test]
