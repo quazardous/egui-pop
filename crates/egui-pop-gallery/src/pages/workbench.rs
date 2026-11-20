@@ -240,19 +240,14 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     {
         workbench::set_dock_controls(app, controls.group_menus(menus));
     }
-    let mut add = controls.add_buttons;
-    if widgets::checkbox(
-        ui,
-        &mut add,
-        "Add buttons (a \"+\" on each tab bar opens a closed panel there)",
-    )
-    .changed()
-    {
-        workbench::set_dock_controls(app, controls.add_buttons(add));
-    }
-    // Every way of opening a panel asks `pop.panel.open`: closed, a panel
-    // comes back where it was.
+    // A "+" on each tab bar, and opening a panel through `pop.panel.open`:
+    // closed, a panel comes back where it was. One row, so the strip
+    // controls below stay in view.
     ui.horizontal_wrapped(|ui| {
+        let mut add = controls.add_buttons;
+        if widgets::checkbox(ui, &mut add, "Add buttons (\"+\")").changed() {
+            workbench::set_dock_controls(app, controls.add_buttons(add));
+        }
         if ui.button("Close Console").clicked() {
             app.set_panel_visible(&CONSOLE, false);
         }
@@ -266,7 +261,6 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             let _ = app.open_panel(ask);
         }
     });
-    ui.weak("Closed, a panel reopens where it was: among the same tabs, floating or in its window. A right click on a tab bar's empty part offers Open panel, a panel opened in that group.");
     ui.weak("Drag a tab onto another area: it goes there when its rules allow it; the drop hint says why not.");
     ui.weak("Detached, the notes' window takes their key (Ctrl+Shift+Delete) and shows their dialog over itself; every other window waits for the answer.");
     ui.weak("Drop a tab on the notes' window, or pick Move to window in its tab menu: it joins the window's tabs.");

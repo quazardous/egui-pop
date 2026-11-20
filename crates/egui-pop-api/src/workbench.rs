@@ -1833,17 +1833,20 @@ impl Workbench {
 
     /// Puts a closed panel back where it was when it closed
     /// ([`Layout::last_place`]). That place gone, it joins the current
-    /// group (the focused panel's tabs) when its areas allow it; else a
-    /// palette floats (cascaded), any other panel docks in its area.
+    /// group (the focused panel's tabs) when its areas allow it; else, or
+    /// with no place known, a palette floats (cascaded), any other panel
+    /// docks in its area.
     fn reopen(&mut self, spec: &PanelSpec) {
-        if let Some(place) = self.layout.closed.remove(&spec.id)
-            && self.layout.hidden.contains(&spec.id)
-            && self.restore(spec, &place)
-        {
+        let last = self.layout.closed.remove(&spec.id);
+        let had_place = last.is_some() && self.layout.hidden.contains(&spec.id);
+        if had_place && last.is_some_and(|place| self.restore(spec, &place)) {
             return;
         }
-        // A palette floats rather than join a docked group.
-        if !spec.palette
+        // Its place gone, the current group; a panel that never had one
+        // (closed when declared) goes to its area. A palette floats
+        // rather than join a docked group.
+        if had_place
+            && !spec.palette
             && let Some(group) = self.current_group(spec)
             && self.layout.join_tabs(&spec.id, &group).is_ok()
         {
