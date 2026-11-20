@@ -1120,7 +1120,7 @@ command-workbench-panel-move-to-group =
     .title = Move panel to group
 
 command-workbench-panel-open =
-    .description = Opens `panel` through `pop.panel.open`: where it was when it closed (`place`: `last`, the default; that place gone, in the focused panel's tab group when its areas allow it, else its own area), `here` (the tab group holding `group`, else the focused panel's) or in an area (`center`, `start_side`, `end_side`, `bottom`).
+    .description = Opens `panel` through `pop.panel.open`: where it was when it closed (`place`: `last`, the default; that place gone, in the focused panel's tab group when its areas allow it, else its own area), `here` (the tab group holding `group`, else the focused panel's) or in an area (`center`, `start_side`, `end_side`, `bottom`). For a panel declared with several, `instance`: `new` opens a new instance (its id in `instance`), an instance's id opens that one.
     .title = Open panel
 
 command-workbench-previous-region =
@@ -3078,6 +3078,8 @@ egui-pop-workbench-move-group = Move group
 egui-pop-workbench-move-to = Move to { $area }
 
 egui-pop-workbench-move-window = Move window
+
+egui-pop-workbench-new-instance = New { $panel }
 
 egui-pop-workbench-new-window = New window
 

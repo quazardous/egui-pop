@@ -358,8 +358,46 @@ impl<'a> Ctx<'a> {
             .panels
             .declare(&self.owner, spec)
             .map_err(CtxError::Panel)?;
-        self.app
-            .add_panel_view(&self.owner, id.clone(), Box::new(draw));
+        self.app.add_panel_view(
+            &self.owner,
+            id.clone(),
+            crate::app::PanelDraw::Plain(Box::new(draw)),
+        );
+        self.panel_commands(id, title)
+    }
+
+    /// Declares a panel that opens as many times as asked
+    /// ([`Instances::Multiple`](egui_pop_model::panels::Instances::Multiple)),
+    /// and the one function drawing each instance, told which it draws
+    /// ([`Instance`](crate::workbench::instances::Instance)): the panel
+    /// declared is instance 1, `pop.panel.open` with `instance: "new"`
+    /// opens `<id>#<n>`. Each instance's payload is the application's
+    /// ([`AppHandle::instance_payload`]), kept in the layout.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn instance_panel(
+        &mut self,
+        spec: PanelSpec,
+        draw: impl FnMut(&mut Ui, &AppHandle, &crate::workbench::instances::Instance) + 'static,
+    ) -> Result<&mut Self, CtxError> {
+        let spec = spec.instances(egui_pop_model::panels::Instances::Multiple);
+        let id: PanelId = spec.id.clone();
+        let title = spec.title.clone();
+        self.reg
+            .panels
+            .declare(&self.owner, spec)
+            .map_err(CtxError::Panel)?;
+        self.app.add_panel_view(
+            &self.owner,
+            id.clone(),
+            crate::app::PanelDraw::Instance(Box::new(draw)),
+        );
+        self.panel_commands(id, title)
+    }
+
+    /// A panel's commands, `<id>.focus` and `<id>.toggle`.
+    fn panel_commands(&mut self, id: PanelId, title: String) -> Result<&mut Self, CtxError> {
         let command = |suffix: &str| {
             CommandId::new(format!("{id}.{suffix}")).map_err(|e| CtxError::Panel(e.to_string()))
         };
@@ -449,9 +487,9 @@ impl<'a> Ctx<'a> {
         self.app.add_panel_view(
             &self.owner,
             id,
-            Box::new(move |ui, app| {
+            crate::app::PanelDraw::Plain(Box::new(move |ui, app| {
                 egui_pop_core::focus::scope(ui, scope, &[], |ui| app.show_zone(ui, &zone));
-            }),
+            })),
         );
         Ok(self)
     }

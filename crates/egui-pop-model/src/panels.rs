@@ -72,6 +72,24 @@ impl PanelKind {
     }
 }
 
+/// How many of a panel may be open at once ([`PanelSpec::instances`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Instances {
+    /// One: the panel declared (Settings, an import window).
+    #[default]
+    Single,
+    /// As many as asked: the panel declared is instance 1, each new one
+    /// `<id>#<n>` (a second gallery, another quick collection), drawn by
+    /// the panel's one draw function, with a payload of its own kept in
+    /// the layout (`Layout::instances`).
+    Multiple,
+}
+
+/// A panel as declared: its id, title, areas, sizes, and whether it opens
+/// once or as many times as asked ([`PanelSpec::instances`]).
+///
+/// Need (layout): a panel opened several times at once, each instance with its own state.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct PanelSpec {
     pub id: PanelId,
@@ -109,6 +127,8 @@ pub struct PanelSpec {
     /// What it does to what the application edits ([`PanelKind`]):
     /// a view unless declared.
     pub kind: PanelKind,
+    /// Whether it opens once or as many times as asked ([`Instances`]).
+    pub instances: Instances,
 }
 
 /// Where a panel is put: one of the shell's areas, floating over the
@@ -147,7 +167,30 @@ impl PanelSpec {
             floatable: false,
             content: None,
             kind: PanelKind::View,
+            instances: Instances::Single,
         }
+    }
+
+    /// Whether it opens once (the default) or as many times as asked: a
+    /// new instance is `<id>#<n>`, made by `pop.panel.open` with
+    /// `instance: "new"`.
+    pub fn instances(mut self, instances: Instances) -> Self {
+        self.instances = instances;
+        self
+    }
+
+    /// The spec of its instance `id` (`<id>#<n>`): the same panel, under
+    /// that id, titled `title` (else its own title and `n`: "Gallery 2"),
+    /// open where it is placed.
+    pub fn instance_spec(&self, id: &PanelId, title: Option<&str>) -> PanelSpec {
+        let mut spec = self.clone();
+        spec.title = match title {
+            Some(t) => t.to_string(),
+            None => format!("{} {}", self.title, id.instance_number()),
+        };
+        spec.id = id.clone();
+        spec.open = true;
+        spec
     }
 
     /// What it does to what the application edits: a control or mixed

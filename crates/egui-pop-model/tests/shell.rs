@@ -625,6 +625,7 @@ fn a_panel_found_where_it_may_not_be_goes_back_to_its_default_area() {
         floating: vec![],
         docked_groups: vec![],
         closed: Default::default(),
+        instances: vec![],
     };
     let (fixed, notes) = saved.repair(&p, &[]);
     assert_eq!(

@@ -901,6 +901,63 @@ pub struct Layout {
     /// for panels in `hidden`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub closed: BTreeMap<PanelId, DormantPlace>,
+    /// The instances of panels declared with several
+    /// (`PanelSpec::instances`): each `<kind>#<n>` open, its title when
+    /// renamed and the application's payload for it; the panel declared
+    /// (instance 1) only when it holds a payload. A layout saved without
+    /// them reads as one with none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub instances: Vec<PanelInstance>,
+}
+
+/// An instance of a panel declared with several ([`Layout::instances`]).
+///
+/// ```
+/// use egui_pop_model::ids::PanelId;
+/// use egui_pop_model::layout::{Layout, PanelInstance};
+///
+/// let kind = PanelId::new("app.gallery").unwrap();
+/// let mut layout = Layout::default();
+/// let second = layout.next_instance(&kind);
+/// assert_eq!(second.as_str(), "app.gallery#2");
+/// layout.instances.push(PanelInstance::new(second.clone()).payload(serde_json::json!({ "filter": "red" })));
+/// assert_eq!(layout.next_instance(&kind).as_str(), "app.gallery#3");
+/// assert_eq!(layout.instance(&second).unwrap().payload["filter"], "red");
+/// ```
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct PanelInstance {
+    /// Its id, `<kind>#<n>` (the kind alone for instance 1).
+    pub id: PanelId,
+    /// Its title when renamed; its kind's title and number otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// What the application keeps for it (opaque here): handed back as
+    /// it was saved.
+    #[serde(default, skip_serializing_if = "Json::is_null")]
+    pub payload: Json,
+}
+
+impl PanelInstance {
+    pub fn new(id: PanelId) -> Self {
+        Self {
+            id,
+            title: None,
+            payload: Json::Null,
+        }
+    }
+
+    /// With a payload.
+    pub fn payload(mut self, payload: Json) -> Self {
+        self.payload = payload;
+        self
+    }
+
+    /// With a title of its own.
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
 }
 
 /// A layout as saved: the layout, and the places of panels no longer
@@ -1025,6 +1082,7 @@ impl Layout {
             floating,
             docked_groups: Vec::new(),
             closed: BTreeMap::new(),
+            instances: Vec::new(),
         }
     }
 
@@ -1548,6 +1606,75 @@ impl Layout {
             .flatten()
     }
 
+    /// An instance's record ([`Layout::instances`]).
+    pub fn instance(&self, id: &PanelId) -> Option<&PanelInstance> {
+        self.instances.iter().find(|i| i.id == *id)
+    }
+
+    /// An instance's record, made (without payload) when it has none.
+    pub fn instance_mut(&mut self, id: &PanelId) -> &mut PanelInstance {
+        let at = match self.instances.iter().position(|i| i.id == *id) {
+            Some(at) => at,
+            None => {
+                self.instances.push(PanelInstance::new(id.clone()));
+                self.instances.len() - 1
+            }
+        };
+        &mut self.instances[at]
+    }
+
+    /// The instances of `kind` this layout knows (open, closed or kept
+    /// for a panel no longer declared), the panel declared included when
+    /// placed or closed, in number order.
+    pub fn instances_of(&self, kind: &PanelId) -> Vec<PanelId> {
+        let kind = kind.kind();
+        let mut out: Vec<PanelId> = self
+            .instances
+            .iter()
+            .map(|i| &i.id)
+            .chain(self.placed())
+            .chain(self.hidden.iter())
+            .filter(|p| p.kind() == kind)
+            .cloned()
+            .collect();
+        out.sort_by_key(PanelId::instance_number);
+        out.dedup();
+        out
+    }
+
+    /// The id a new instance of `kind` takes: the number after the
+    /// highest this layout knows, from 2.
+    pub fn next_instance(&self, kind: &PanelId) -> PanelId {
+        let n = self
+            .instances_of(kind)
+            .iter()
+            .map(PanelId::instance_number)
+            .max()
+            .unwrap_or(1)
+            .max(1)
+            + 1;
+        // A kind's id leaves room for `#<n>`: the shared syntax holds.
+        kind.instance(n).unwrap_or_else(|_| kind.kind())
+    }
+
+    /// Drops an instance (`<kind>#<n>`): out of where it is, its record
+    /// and payload gone, not kept closed (closing the panel declared
+    /// keeps its place, [`Layout::hide`]). Whether it was known.
+    pub fn drop_instance(&mut self, id: &PanelId) -> bool {
+        let placed = self.remove(id);
+        for g in &mut self.docked_groups {
+            g.take(id);
+        }
+        self.docked_groups.retain(|g| g.panels().count() > 1);
+        let hidden = self.hidden.contains(id);
+        self.hidden.retain(|h| h != id);
+        self.closed.remove(id);
+        self.flyouts.remove(id);
+        let before = self.instances.len();
+        self.instances.retain(|i| i.id != *id);
+        placed || hidden || before != self.instances.len()
+    }
+
     /// Closes a panel: out of its area or window, and kept closed, its
     /// place kept for when it opens again ([`Layout::last_place`]).
     pub fn hide(&mut self, panel: &PanelId) {
@@ -1773,6 +1900,14 @@ impl Layout {
                 .closed
                 .into_iter()
                 .filter(|(p, _)| hidden.contains(p))
+                .collect(),
+            // An instance stays while it is declared, and while its kind
+            // is not (its place kept with the dormant ones); a kind
+            // declared again with one instance drops the others.
+            instances: self
+                .instances
+                .into_iter()
+                .filter(|i| known(&i.id) || !known(&i.id.kind()))
                 .collect(),
         };
         let placed: Vec<PanelId> = layout.placed().into_iter().cloned().collect();

@@ -16,8 +16,10 @@
 //!
 //! The workbench's listener ([`PANEL_OPEN`]) runs the `workbench.show`
 //! step, so a plugin may veto it, and the layout's change is said as
-//! `pop.layout.changed`. The ask's fields are open to more: a later one
-//! names which instance of a panel opens.
+//! `pop.layout.changed`. For a panel declared with several
+//! (`PanelSpec::instances`), `instance` names which opens: `"new"` makes
+//! the next instance (`<panel>#<n>`) and opens it at `place`, an
+//! instance's id opens that one.
 
 use bus_contract::{Bus, ListenOpts, Point, PointId, PointKind};
 use egui_pop_model::ids::PanelId;
@@ -106,6 +108,11 @@ pub struct PanelOpenAsk {
     /// focused panel's group when not given.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
+    /// For a panel declared with several: `"new"` opens a new instance,
+    /// an instance's id (`<panel>#<n>`) that one; the panel itself when
+    /// not given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instance: Option<String>,
     /// Who asks: a plugin's id, a menu's, an agent's.
     pub owner: String,
 }
@@ -116,8 +123,15 @@ impl PanelOpenAsk {
             panel: panel.into(),
             place,
             group: None,
+            instance: None,
             owner: owner.into(),
         }
+    }
+
+    /// Which instance opens: `"new"`, or an instance's id.
+    pub fn instance(mut self, instance: impl Into<String>) -> Self {
+        self.instance = Some(instance.into());
+        self
     }
 
     /// The tab group it joins, by one of its panels ([`OpenPlace::Here`]).
@@ -158,13 +172,29 @@ pub(super) fn install(kernel: &dyn Bus) {
                 Some(g) => Some(PanelId::new(g).map_err(|e| e.to_string())?),
                 None => None,
             };
-            let change = match (ask.place, group) {
-                (OpenPlace::Last, _) => Change::Show(panel.clone()),
-                (place, group) => Change::Open(panel.clone(), place, group),
+            // An instance named opens as the panel it is.
+            let panel = match ask.instance.as_deref() {
+                None | Some("new") => panel,
+                Some(id) => {
+                    let id = PanelId::new(id).map_err(|e| e.to_string())?;
+                    if id.kind() != panel.kind() {
+                        return Err(format!("`{id}` is no instance of `{panel}`").into());
+                    }
+                    id
+                }
+            };
+            let change = match (ask.instance.as_deref(), ask.place, group) {
+                (Some("new"), place, group) => Change::NewInstance(panel.clone(), place, group),
+                (_, OpenPlace::Last, _) => Change::Show(panel.clone()),
+                (_, place, group) => Change::Open(panel.clone(), place, group),
             };
             match app.change_workbench(change) {
-                Some(Outcome::Done(Ok(_))) => {
-                    did.push(format!("{PANEL_OPEN}: `{panel}` opened"));
+                Some(Outcome::Done(Ok(out))) => {
+                    let opened = out
+                        .get("instance")
+                        .and_then(serde_json::Value::as_str)
+                        .map_or_else(|| panel.to_string(), str::to_string);
+                    did.push(format!("{PANEL_OPEN}: `{opened}` opened"));
                     Ok(())
                 }
                 Some(Outcome::Done(Err(e))) => Err(e.into()),
