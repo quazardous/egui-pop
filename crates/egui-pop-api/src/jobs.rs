@@ -649,7 +649,7 @@ fn status_item(ui: &mut Ui, app: &AppHandle) {
                 },
             );
         }
-        let response = ui.add(egui::Button::new(label).frame(false));
+        let response = egui_pop_core::widgets::bar_text_button(ui, label);
         crate::jobs_centre::popover(ui, app, &response);
     });
 }

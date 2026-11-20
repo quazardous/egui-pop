@@ -51,6 +51,7 @@ To add an entry, give the item a doc line
 | a button by tone (primary, danger, quiet) | `ui.button_tone(..)`<br>`egui_pop::core::ui::UiPop::button_tone` | egui's button in a tone of the kit's `button` (`button.tone.*`): a `Stock::Button` scope (`UiPop::scoped`), so the button keeps its layout, icon and shortcut text. |
 | a button with a menu of alternatives (split button) | `input::split_button(..)`<br>`egui_pop::core::input::split_button` | A split button on its own: an action (`text`) and a chevron opening a menu of `items`. |
 | a small (compact) button in a dense list row | `RowButton`<br>`egui_pop::core::compact::RowButton` | A button small enough for a list's row (see the module). |
+| a small frameless text button in a bar (a breadcrumb, a name in a title bar) | `widgets::bar_text_button(..)`<br>`egui_pop::core::widgets::bar_text_button` | A frameless text button sized for a bar: small text, no box, as wide as its text, egui's hover look (its text brightens under the pointer) and the focus ring when it has the keyboard. |
 | an icon button | `IconWidget`<br>`egui_pop::core::icon::IconWidget` | An icon as a widget. |
 
 ## Fields and choices

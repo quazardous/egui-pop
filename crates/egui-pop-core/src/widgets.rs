@@ -708,6 +708,20 @@ fn row_ui(
     r
 }
 
+/// A frameless text button sized for a bar: small text, no box, as wide
+/// as its text, egui's hover look (its text brightens under the pointer)
+/// and the focus ring when it has the keyboard. A breadcrumb's step, a
+/// profile's name in a title bar, a job's line in a status bar: a click
+/// target that must not look like a button among the bar's text.
+///
+/// The text takes egui's `Small` style; a `LayoutJob` (several colours
+/// in one line) keeps its own fonts.
+///
+/// Need (action): a small frameless text button in a bar (a breadcrumb, a name in a title bar).
+pub fn bar_text_button(ui: &mut Ui, text: impl Into<WidgetText>) -> Response {
+    ui.add(egui::Button::new(text.into().small()).frame(false))
+}
+
 /// A selectable row ([`SelectableRow`]): `ui.selectable_label`, drawn
 /// through the kit.
 pub fn selectable_label<'a>(ui: &mut Ui, selected: bool, atoms: impl IntoAtoms<'a>) -> Response {
