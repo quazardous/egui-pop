@@ -551,6 +551,18 @@ pub trait UiPop: sealed::Sealed {
     /// Need (layout): a card, a framed group.
     fn card<R>(&mut self, tone: Tone, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R>;
 
+    /// `add` on the kit's popover surface (its `popover` component, with
+    /// egui's popup shadow): the look of egui-pop's own popovers, for an
+    /// area the application places itself (a first-run notice, a hint by
+    /// a control), outside the overlay stack. The area keeps its own kind
+    /// and order; this draws only its surface.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    ///
+    /// Need (dialog): a popover's surface in an area the application places itself.
+    fn popover<R>(&mut self, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R>;
+
     /// egui's button in a tone of the kit's `button` (`button.tone.*`):
     /// a [`Stock::Button`] scope ([`UiPop::scoped`]), so the button keeps
     /// its layout, icon and shortcut text. [`Tone::Neutral`] is the plain
@@ -780,6 +792,12 @@ impl UiPop for Ui {
             .show(self, State::REST.toned(tone), Shadow::NONE, add)
     }
 
+    fn popover<R>(&mut self, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
+        let kit = Kit::of(self.ctx());
+        let shadow = self.visuals().popup_shadow;
+        kit.popover.show(self, State::REST, shadow, add)
+    }
+
     fn button_tone(&mut self, tone: Tone, text: impl Into<WidgetText>) -> Response {
         if tone == Tone::Neutral {
             return self.button(text);
@@ -958,6 +976,57 @@ mod tests {
     fn pass(ctx: &egui::Context, add: impl FnMut(&mut Ui)) {
         let mut out = ctx.run_ui(egui::RawInput::default(), add);
         out.textures_delta.clear();
+    }
+
+    #[test]
+    fn a_popover_surface_in_an_app_placed_area_is_the_kits_popover() {
+        let ctx = egui::Context::default();
+        theme::install(&ctx, &ThemeSpec::new("pop-dark"));
+        let kit = Kit::of(&ctx);
+        let fill = kit.popover.style(State::REST).fill;
+        assert_ne!(fill, egui::Color32::TRANSPARENT);
+        let area = egui::Id::unique("test.notice");
+        let mut shown = None;
+        let mut frame = |ctx: &egui::Context, time: f64| {
+            let input = egui::RawInput {
+                time: Some(time),
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                egui::Area::new(area)
+                    .order(egui::Order::Foreground)
+                    .fixed_pos(egui::pos2(40.0, 40.0))
+                    .show(ui.ctx(), |ui| {
+                        shown = Some(ui.popover(|ui| ui.label("A notice")).response.rect);
+                    });
+            });
+            out.textures_delta.clear();
+            out
+        };
+        // An area's first pass only sizes it, then it fades in.
+        frame(&ctx, 0.0);
+        frame(&ctx, 1.0);
+        let out = frame(&ctx, 2.0);
+        let rect = shown.expect("drawn");
+        // Its box, in the popover's fill, where the app placed its area.
+        assert_eq!(rect.min, egui::pos2(40.0, 40.0));
+        // egui's frame paints its shadow and its box as one list.
+        fn rects(shape: &egui::Shape, into: &mut Vec<(Rect, egui::Color32)>) {
+            match shape {
+                egui::Shape::Rect(r) => into.push((r.rect, r.fill)),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| rects(s, into)),
+                _ => {}
+            }
+        }
+        let mut all = Vec::new();
+        out.shapes.iter().for_each(|c| rects(&c.shape, &mut all));
+        let boxed = all.iter().any(|(r, f)| {
+            *f == fill && rect.expand(1.0).contains_rect(*r) && r.contains_rect(rect.shrink(2.0))
+        });
+        assert!(
+            boxed,
+            "the popover's box ({fill:?}) under the notice at {rect:?}: {all:?}"
+        );
     }
 
     #[test]
