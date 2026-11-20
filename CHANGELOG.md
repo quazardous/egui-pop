@@ -8,6 +8,88 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.19.0 (2026-11-20)
+
+Published: egui-pop-core 0.16.0, egui-pop-api 0.17.0, egui-pop-test 0.18.0, egui-pop-viewport 0.16.0, egui-pop-i18n 0.17.0, egui-pop-agent 0.12.0, egui-pop-editors 0.17.0, egui-pop-platform 0.17.0, egui-pop-views 0.18.0, egui-pop-imaging 0.17.0, egui-pop 0.19.0.
+
+### Breaking changes
+
+- egui-pop, egui-pop-agent, egui-pop-api, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-platform, egui-pop-test, egui-pop-views: A confirmation takes a second action, for the classic three-button
+  question ("Save", "Don't save", "Cancel"):
+  `Confirm::secondary(Secondary::new(verb, command))`, `.danger()` for a
+  destructive one, drawn in the danger tone and never the default: Enter
+  takes the primary button, Escape cancels. Its command runs through the
+  same `dialog.answer` step, answered as the choice of index 1. The
+  buttons follow the platform's order (`ButtonOrder`: the primary button
+  last on macOS and GNOME, first on Windows and KDE Plasma), or the one
+  given with `Confirm::order`; `Confirm::cancel` renames Cancel.
+  Breaking: `Confirm` has three new public fields (`secondary`, `cancel`,
+  `order`).
+- egui-pop, egui-pop-agent, egui-pop-api, egui-pop-core, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-platform, egui-pop-test, egui-pop-viewport, egui-pop-views: egui_stack 0.31. A right click on the empty part of a docked tab bar opens
+  the group's menu ("Move group"), as egui_stack does by default.
+  `AppBuilder::dock_controls` sets the docks' controls beyond their tabs
+  (`workbench::DockControls`): an "Eject group" button on the docked tab
+  bars, which moves a whole tab group into a window of its own (the
+  `workbench.detach` step with `group`), off by default; the group menus,
+  on by default; and where else than its move handle a drag moves a
+  floating window (`MoveFrom`, its bar by default).
+  `workbench::set_dock_controls` changes them while running. Breaking:
+  egui_stack's re-exported types (`FloatMove`, `GroupHandles`, the
+  `sections` types, and now `MoveFrom`) are 0.31's.
+
+### Features
+
+- egui-pop, egui-pop-api, egui-pop-core: `widgets::bar_text_button` draws a frameless text button sized for a
+  bar: small text, no box, egui's hover look and the focus ring, named by
+  its text for assistive technology. For a breadcrumb's step, a name in a
+  title bar or a job's line in a status bar. egui-pop's own breadcrumbs,
+  status bar items and job rows now draw with it.
+- egui-pop, egui-pop-api, egui-pop-i18n: `FramePlugin::logo` puts the application's logo in its own title bar,
+  between the system menu button and its name, a toolbar icon's size and
+  named for screen readers ("Helios logo"): the frame's menu block draws
+  it, so an application no longer replaces that block to show its logo.
+  The gallery's title bar shows one.
+- egui-pop, egui-pop-api: `menus::command_row` draws a command row in a menu drawn by hand (a popup
+  or context menu built in a closure), as the declared menus draw theirs:
+  the kit's `menu-item`, its label, its shortcut text muted at the end, and
+  greyed with the reason in its tooltip while it does not apply. Assistive
+  technology reads a menu item with its keyboard shortcut. The gallery's
+  menus page shows it in the hand-drawn context menu.
+- egui-pop, egui-pop-core: `ui.popover(..)` (`UiPop`) draws content on the kit's popover surface
+  (its `popover` component, with egui's popup shadow) in an area the
+  application places itself, such as a first-run notice: the look of
+  egui-pop's own popovers, outside the overlay stack, the area keeping its
+  own kind and order. The gallery's debug page shows a notice placed this
+  way.
+- egui-pop, egui-pop-api, egui-pop-i18n: Report a problem can attach what the application just did.
+  `AboutPlugin::journal` records the last minutes of the journal (5 by
+  default) in a time window of its own, so a rare entry is not pushed out
+  by frequent ones; kinds that come at every pass are skipped
+  (`RecorderConfig::skip`). Each entry is redacted as it is kept: a
+  private command's data reads `<private>`, the home folder is written
+  `~`, every other absolute path keeps only its root and its extension,
+  and the environment's secrets are blanked (`about::journal::Redactor`).
+  `AboutPlugin::context` adds the application's own context (its
+  library's shape, its layout, its settings; `about::changed_settings`
+  gives the settings that differ from their defaults); `AboutPlugin::alias`
+  replaces ids that are fingerprints by aliases (`photo-1`, `photo-2`…). `help.report` then shows
+  the report in a dialog before anything leaves the machine: its button
+  copies it and opens the issue, to paste it there. Agents read it with
+  `help.report.bundle`.
+
+### Fixes
+
+- egui-pop, egui-pop-api: The inspect dialog's Report… button closes the inspect dialog (the pick
+  stays in the report), so the report's own dialog shows at once instead of
+  waiting behind it.
+- egui-pop, egui-pop-api, egui-pop-core: `kit::State::with(flag, false)` now clears the flag, as its callers read
+  it; it used to leave a flag already set, so a selected places item under
+  the pointer kept `hover` and a theme's hover fill covered its selected
+  fill. `State::without(flag)` clears a flag. The places panel's selected
+  item keeps its selected fill under the pointer, the focus outline over
+  it; a window button hovered by egui and a dock grip pressed keep their
+  look.
+
 ## 0.18.3 (2026-11-20)
 
 Published: egui-pop-core 0.15.1, egui-pop-viewport 0.15.1, egui-pop 0.18.3.
