@@ -8,6 +8,32 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.18.2 (2026-11-20)
+
+Published: egui-pop-model 0.12.1, egui-pop-api 0.16.2, egui-pop-test 0.17.1, egui-pop-agent 0.11.2, egui-pop 0.18.2.
+
+### Features
+
+- egui-pop-agent, egui-pop-api, egui-pop-model, egui-pop-test: The agent socket pairs scenario runners in advance, and asks the user only for the calls that destroy.
+
+  - **Pre-issued pairing.** An application issues a token at start (`egui_pop_agent::PreIssue`: from `EGUI_POP_AGENT_TOKEN`, or a new token written to the file `EGUI_POP_AGENT_TOKEN_FILE` names, mode 0600) with `AppBuilder::pre_issued_pairing`, or `pairing::pre_issue` and `pairing::pre_issue_file`. A client saying `hello` with it is paired at once as that id, for this run (never saved, `Pairing::pre_issued`), held to `PreIssue::grant`; unpaired clients keep theirs (read-only by default).
+  - **The live runner says `hello`.** `egui_pop_test::scenario::live::LiveRunner::token`, `token_file` and `token_from_env`, and the `egui-pop-scenario` command line's `--token` and `--token-file`, pair the runner with that token; without one it stays an unpaired client, as before.
+  - **Destructive by its arguments.** `CommandSpec::destructive_if(arg, value)` makes only the calls whose argument `arg` (a name, or a JSON Pointer) equals `value` destructive: an agent's run of those waits for the user's confirmation, the others run at once (an export asks only with `clash: "overwrite"`). `CommandSpec::is_destructive(args)` answers for a call; `describe` and the `commands` collector list the rules as `destructive_if`, and the MCP tools keep `destructiveHint` for such commands. `CommandSpec::destructive()` is unchanged.
+- egui-pop, egui-pop-api: A `PlacesPanel` can hold an import window's sources column, each part
+  opt-in and the panel unchanged without them: a section folds
+  (`PlaceSection::foldable`, or `PlaceSection::open` when the application
+  keeps the state, reported in `PlacesOutput::folded`), says what it lacks
+  when empty (`PlaceSection::empty`) or stays shown for the application's
+  content (`PlaceSection::keep`); an item shows a line under its name
+  (`PlaceItem::line`, said as its description), a badge in a tone
+  (`PlaceItem::badge_tone`) and a toggle of the application's at its end
+  (`PlaceToggle`, a pin, reported in `PlacesOutput::toggled`); and
+  `PlacesPanel::under_item` and `PlacesPanel::under_section` give the
+  application the room under an item or a section's items (an account's
+  albums, a history's past imports), in the panel's keyboard order.
+  `PlaceProviders::sections` and `Places::sections` keep a section with an
+  empty line or kept.
+
 ## 0.18.1 (2026-11-19)
 
 Published: egui-pop-api 0.16.1, egui-pop-agent 0.11.1, egui-pop 0.18.1.
