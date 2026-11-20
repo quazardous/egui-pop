@@ -293,3 +293,145 @@ fn the_browser_and_its_system_are_read_from_the_user_agent() {
         assert_eq!(describe_user_agent(ua), said, "{ua}");
     }
 }
+
+mod journal {
+    //! With a journal recorder, the report attaches the last minutes of
+    //! the journal, redacted, and shows it before the issue opens.
+
+    use super::*;
+    use egui_pop_api::about::journal::RecorderConfig;
+    use egui_pop_api::about::{CMD_REPORT_BUNDLE, CMD_REPORT_SEND};
+    use egui_pop_api::dialogs::{DIALOGS, Dialog, DialogsPlugin};
+    use egui_pop_api::host::REDACTED;
+    use egui_pop_api::{Ctx, Plugin, PluginError};
+    use egui_pop_model::commands::CommandSpec;
+    use egui_pop_model::ids::{CommandId, PluginId};
+    use serde_json::json;
+
+    const OPEN: CommandId = CommandId::from_static("demo.open");
+    const SIGN_IN: CommandId = CommandId::from_static("demo.sign_in");
+
+    /// Two commands: one opening a path, one private.
+    struct Demo;
+    impl Plugin for Demo {
+        fn id(&self) -> PluginId {
+            PluginId::from_static("demo")
+        }
+        fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+            ctx.command(CommandSpec::new(OPEN, "Open", "Demo"), |call| {
+                Ok(call.args.clone())
+            })?
+            .command(
+                CommandSpec::new(SIGN_IN, "Sign in", "Demo").private(),
+                |_| Ok(json!("ann@example.org")),
+            )?;
+            Ok(())
+        }
+    }
+
+    fn app(rec: &RecordingOpener) -> App {
+        App::builder()
+            .name("Darkroom")
+            .plugin(DialogsPlugin)
+            .plugin(Demo)
+            .plugin(
+                AboutPlugin::new(AppInfo::new("", "1.2.0").issues(ISSUES))
+                    .journal(RecorderConfig::default().skip("demo.frame"))
+                    .context(
+                        "library",
+                        |_| json!({ "photos": 3, "folder": "/mnt/card/DCIM/100" }),
+                    ),
+            )
+            .plugin(LinksPlugin::default().opener(Arc::new(rec.clone())))
+            .build(&egui::Context::default())
+            .unwrap()
+    }
+
+    #[test]
+    fn the_bundle_holds_the_journal_redacted_and_the_context() {
+        let rec = RecordingOpener::default();
+        let mut app = app(&rec);
+        app.run(
+            &OPEN,
+            json!({ "path": "/srv/photos/Jane wedding.raw" }),
+            Origin::User,
+        );
+        app.run(&SIGN_IN, Json::Null, Origin::User);
+        app.handle().publish("demo", None, "demo.frame", json!(1));
+        app.handle()
+            .publish("demo", None, "demo.refused", json!({ "by": "lock" }));
+        // Read between passes, as the recorder reads once a pass (a
+        // command reads what the passes before it read).
+        let b = serde_json::to_value(about::report_bundle(app.handle()).unwrap()).unwrap();
+        let out = app.run(&CMD_REPORT_BUNDLE, Json::Null, Origin::User);
+        let by_command = out.now().unwrap().unwrap();
+        let seqs = |b: &Json| -> Vec<Json> {
+            b["journal"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|e| e["seq"].clone())
+                .collect()
+        };
+        // The command's own dispatch comes after: what came before is the same.
+        assert_eq!(seqs(&by_command)[..seqs(&b).len()], seqs(&b)[..]);
+        let text = b.to_string();
+        assert!(!text.contains("Jane") && !text.contains("/srv/"), "{text}");
+        assert!(!text.contains("ann@example.org"), "{text}");
+        assert!(!text.contains("/mnt/"), "{text}");
+        let names: Vec<&str> = b["journal"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["name"].as_str().unwrap())
+            .collect();
+        // The skipped kind is not there; the rare one is.
+        assert!(!names.contains(&"demo.frame"), "{names:?}");
+        assert!(names.contains(&"demo.refused"), "{names:?}");
+        let opened = b["journal"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["name"] == "command.dispatched" && e["data"]["command"] == "demo.open")
+            .unwrap();
+        assert_eq!(opened["data"]["args"]["path"], "/….raw");
+        let signed = b["journal"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["name"] == "command.done" && e["data"]["command"] == "demo.sign_in")
+            .unwrap();
+        assert_eq!(signed["data"]["result"], REDACTED);
+        assert_eq!(b["context"]["library"]["photos"], 3);
+        assert_eq!(b["context"]["library"]["folder"], "/…");
+        assert_eq!(b["window_s"], 300);
+        assert!(b["version"].as_str().unwrap().starts_with("Darkroom 1.2.0"));
+        assert!(b["bus"].as_object().is_some_and(|o| !o.is_empty()));
+    }
+
+    #[test]
+    fn the_report_is_shown_before_anything_opens() {
+        let rec = RecordingOpener::default();
+        let mut app = app(&rec);
+        app.run(&OPEN, json!({ "path": "/srv/x.tif" }), Origin::User);
+        let out = app.run(&CMD_REPORT, Json::Null, Origin::User);
+        let v = out.now().unwrap().unwrap();
+        // A dialog, no browser yet.
+        assert!(v["dialog"].as_u64().is_some(), "{v}");
+        assert!(rec.records().is_empty());
+        let dialogs = app.handle().service(&DIALOGS).unwrap();
+        let (_, dialog) = dialogs.current().expect("the report dialog");
+        match dialog {
+            Dialog::Custom(c) => assert_eq!(c.command, Some(CMD_REPORT_SEND)),
+            other => panic!("not the report: {other:?}"),
+        }
+        // Its button: the issue opens, the report was copied.
+        let out = app.run(&CMD_REPORT_SEND, Json::Null, Origin::User);
+        let v = out.now().unwrap().unwrap();
+        assert!(v["copied"].as_u64().unwrap() > 0, "{v}");
+        assert_eq!(rec.records().len(), 1);
+        // Copied once: a second send has nothing to copy.
+        let again = app.run(&CMD_REPORT_SEND, Json::Null, Origin::User);
+        assert!(again.now().unwrap().is_err());
+    }
+}

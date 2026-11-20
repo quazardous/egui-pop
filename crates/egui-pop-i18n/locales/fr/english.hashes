@@ -233,7 +233,9 @@ command-gesture-value-step.description 28dd8dd569518e78
 command-gesture-value-step.title 547562cb851b7b85
 command-gesture-workbench-dock.description 4f4c800a1bdf4b47
 command-gesture-workbench-dock.title 5fc6e4d2ca023c9c
-command-help-report.description 5efdd9aa299ac6f8
+command-help-report-send.description 9d6501e68ba06ff8
+command-help-report-send.title ebea87391c3cca98
+command-help-report.description 8a442a2a603f0abb
 command-help-report.title 0f49e08b86c19aef
 command-help-suggest.description 5f9e3fbf9f1f5ab3
 command-help-suggest.title 8f9bfc2277067f87
@@ -905,6 +907,7 @@ egui-pop-fonts-picker-hint a27ceda349dea860
 egui-pop-fonts-preview 48c847eda5526dbf
 egui-pop-fonts-themes c5083f5028cb4b73
 egui-pop-frame-exit-fullscreen c66409904cfa39c0
+egui-pop-frame-logo 3427e9951e147794
 egui-pop-frame-maximize ec3ab8180de082b7
 egui-pop-frame-minimize e6356bcffe84c79d
 egui-pop-frame-restore eb78406341b90759
@@ -1060,6 +1063,8 @@ egui-pop-rating 36690a4e79cfa166
 egui-pop-rating-clear f97ddab985b51fcf
 egui-pop-rating-set 463f865a3146a90c
 egui-pop-rating-value df2cadf36e533a28
+egui-pop-report-intro 2ae6d869900cb09f
+egui-pop-report-send da689a0687a97a3b
 egui-pop-reset 9213e68cebd60946
 egui-pop-retry 1da925989c6c1be1
 egui-pop-scrollable-content 04fd4cc3732ba481
@@ -1517,6 +1522,7 @@ egui-pop-workbench-dock-back 908d7f6794dcc75d
 egui-pop-workbench-dock-in 6f9fb7702cb4a7ec
 egui-pop-workbench-dock-title 4a631eac61b5404a
 egui-pop-workbench-drop-here ddcc0be031326169
+egui-pop-workbench-eject-group 577cb6edcb4b9a15
 egui-pop-workbench-float eb7e945b1415bcc5
 egui-pop-workbench-flyout-pin 4ebe2494b850fd48
 egui-pop-workbench-fold 873472b4101d195d

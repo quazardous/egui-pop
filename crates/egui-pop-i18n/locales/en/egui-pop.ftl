@@ -482,8 +482,12 @@ command-gesture-workbench-dock =
     .title = Palettes: dock while dragging
 
 command-help-report =
-    .description = Opens a new issue in the browser, prefilled with the version info, the platform, the page shown and the last element inspected.
+    .description = Opens a new issue in the browser, prefilled with the version info, the platform, the page shown and the last element inspected; with a journal recorded, shows what the report attaches first.
     .title = Report a problem
+
+command-help-report-send =
+    .description = Copies the report shown by Report a problem and opens the new issue in the browser, to paste it there.
+    .title = Copy the report and open the issue
 
 command-help-suggest =
     .description = Opens a new issue for an idea in the browser, prefilled with the page shown.
@@ -2139,6 +2143,10 @@ egui-pop-rating-set = Set { $stars } of 5
 
 egui-pop-rating-value = { $stars } of 5
 
+egui-pop-report-intro = Nothing has been sent. This report holds what the application did in the last { $minutes } minutes, with paths and private values hidden. Read it: the button copies it and opens the issue page, where you paste it.
+
+egui-pop-report-send = Copy and open the issue
+
 egui-pop-reset = Reset
 
 egui-pop-retry = Retry
@@ -3053,6 +3061,8 @@ egui-pop-workbench-dock-title = { $area } ({ $panels })
 
 egui-pop-workbench-drop-here = Drop a panel here
 
+egui-pop-workbench-eject-group = Eject group
+
 egui-pop-workbench-float = Float
 
 egui-pop-workbench-flyout-pin = Pin { $panel }
@@ -3060,8 +3070,6 @@ egui-pop-workbench-flyout-pin = Pin { $panel }
 egui-pop-workbench-fold = Fold { $area }
 
 egui-pop-workbench-move-group = Move group
-
-egui-pop-workbench-eject-group = Eject group
 
 egui-pop-workbench-move-to = Move to { $area }
 

@@ -362,7 +362,11 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(
             egui_pop::api::about::AboutPlugin::new(pages::about::info())
                 .page(shell::report_page)
-                .idea_form("feature.yml"),
+                .idea_form("feature.yml")
+                // Report a problem attaches the last 5 minutes of the
+                // journal, redacted, and shows it first.
+                .journal(egui_pop::api::about::journal::RecorderConfig::default())
+                .context("settings", egui_pop::api::about::changed_settings),
         )
         .plugin(pages::about::AboutPage)
         .plugin(PagePlugin {

@@ -1376,6 +1376,11 @@ pub const ABOUT_DOCS: StrKey = StrKey::new("egui-pop-about-docs", "Documentation
 pub const ABOUT_ISSUES: StrKey = StrKey::new("egui-pop-about-issues", "Report a problem");
 pub const ABOUT_COPY: StrKey = StrKey::new("egui-pop-about-copy", "Copy version info");
 pub const ABOUT_COPIED: StrKey = StrKey::new("egui-pop-about-copied", "Copied.");
+pub const REPORT_INTRO: StrKey = StrKey::new(
+    "egui-pop-report-intro",
+    "Nothing has been sent. This report holds what the application did in the last { $minutes } minutes, with paths and private values hidden. Read it: the button copies it and opens the issue page, where you paste it.",
+);
+pub const REPORT_SEND: StrKey = StrKey::new("egui-pop-report-send", "Copy and open the issue");
 
 // The context stack.
 
@@ -2148,6 +2153,8 @@ pub const ALL: &[StrKey] = &[
     ABOUT_ISSUES,
     ABOUT_COPY,
     ABOUT_COPIED,
+    REPORT_INTRO,
+    REPORT_SEND,
     CONTEXT_ROOT,
     CONTEXT_LEAVE_MODE,
     CONTEXT_NO_MODE,
