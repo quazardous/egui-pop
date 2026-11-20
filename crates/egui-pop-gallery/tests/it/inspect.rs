@@ -130,6 +130,15 @@ fn a_click_names_the_button_without_pressing_it_and_copy_holds_it() {
     h.get_by_role_and_label(Role::Button, "Report…").click();
     h.run();
     h.run();
+    // The gallery records its journal: the report is shown first, the
+    // inspect dialog gone so it is not queued behind it, and nothing
+    // opens until its button is pressed.
+    assert!(rec.records().is_empty(), "{:?}", rec.records());
+    assert!(h.query_by_label("Inspected element").is_none());
+    h.get_by_role_and_label(Role::Button, "Copy and open the issue")
+        .click();
+    h.run();
+    h.run();
     let records = rec.records();
     assert_eq!(records.len(), 1, "{records:?}");
     let url = &records[0].target;
@@ -149,13 +158,8 @@ fn a_click_names_the_button_without_pressing_it_and_copy_holds_it() {
         ),
         "{url}"
     );
-    // Pick another: the dialog goes, the mode is back.
-    h.get_by_role_and_label(Role::Button, "Pick another")
-        .click();
-    h.run();
-    h.run();
-    assert!(inspect::active(&app));
-    assert!(h.query_by_label("Inspected element").is_none());
+    // The report holds the pick: the inspect dialog closing kept it.
+    assert!(inspect::last(&app).is_some());
 }
 
 #[test]
@@ -200,11 +204,14 @@ fn the_keyboard_moves_between_widgets_and_enter_picks() {
     assert!(!inspect::active(&app));
     let second = inspect::last(&app).expect("picked");
     assert_eq!(second.element.how, "keyboard");
-    // One Tab less is another widget.
+    // One Tab less is another widget. Pick another: the dialog goes, the
+    // mode is back.
     h.get_by_role_and_label(Role::Button, "Pick another")
         .click();
     h.run();
     h.run();
+    assert!(inspect::active(&app));
+    assert!(h.query_by_label("Inspected element").is_none());
     h.key_press(egui::Key::Tab);
     h.run();
     h.key_press(egui::Key::Enter);

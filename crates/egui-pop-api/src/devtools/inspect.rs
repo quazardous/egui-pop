@@ -487,13 +487,16 @@ fn body(ui: &mut Ui, app: &AppHandle, pass: &mut crate::dialogs::CustomPass) {
             );
         }
         // Report: a new issue with this pick, when the application says
-        // where issues go (`help.report`).
+        // where issues go (`help.report`). This dialog closes first (the
+        // pick stays): dialogs show one at a time, and the report's own
+        // dialog, when it shows what it attaches, would wait behind it.
         if app.command(&crate::about::CMD_REPORT).is_some()
             && ui
                 .button(strings::tr(&ctx, &txt::INSPECT_REPORT))
                 .on_hover_text(strings::tr(&ctx, &txt::INSPECT_REPORT_HOVER))
                 .clicked()
         {
+            pass.cancel();
             app.run(crate::about::CMD_REPORT, Json::Null);
         }
         if ui
