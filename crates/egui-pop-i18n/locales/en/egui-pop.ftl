@@ -1827,6 +1827,8 @@ egui-pop-fonts-themes = The theme's
 
 egui-pop-frame-exit-fullscreen = Exit full screen
 
+egui-pop-frame-logo = { $application } logo
+
 egui-pop-frame-maximize = Maximize
 
 egui-pop-frame-minimize = Minimize

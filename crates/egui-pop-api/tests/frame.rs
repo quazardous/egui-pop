@@ -1,6 +1,7 @@
 //! The window's own frame: the title bar in the title zone, its regions
 //! published in physical pixels, its buttons running steps a plugin may
-//! veto, the system menu, and the system's frame back from the setting.
+//! veto, the system menu, and the system's frame back from the setting;
+//! the application's logo drawn by the frame's own block.
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
@@ -203,6 +204,38 @@ fn the_start_of_the_bar_is_a_zone_an_application_replaces() {
     h.run();
     assert!(h.query_by_label("Logo").is_none());
     assert!(frame::regions(&h.ctx).is_none());
+}
+
+#[test]
+fn the_frame_draws_the_applications_logo_between_its_menu_button_and_its_name() {
+    let app = App::builder()
+        .plugins(DefaultPlugins)
+        .plugin(FramePlugin::own().name("Demo").logo(|_| {
+            egui::ImageSource::Texture(egui::load::SizedTexture::new(
+                egui::TextureId::default(),
+                [16.0, 16.0],
+            ))
+        }))
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(800.0, 600.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    // An image named for screen readers, in the default block: no
+    // replacement needed, the menu button and the name kept.
+    let logo = h
+        .get_by_role_and_label(egui::accesskit::Role::Image, "Demo logo")
+        .rect();
+    let menu = h.get_by_label("Window menu").rect();
+    let name = h.get_by_label("Demo").rect();
+    assert!(menu.max.x <= logo.min.x, "{menu:?} {logo:?}");
+    assert!(logo.max.x <= name.min.x, "{logo:?} {name:?}");
+    let side = egui_pop_core::theme::Tokens::of(&h.ctx).size.icon_toolbar;
+    assert!((logo.width() - side).abs() < 0.5, "{logo:?} {side}");
+    // Without a logo, none.
+    let h = harness(1.0);
+    assert!(h.query_by_label("Demo logo").is_none());
 }
 
 fn full_screen(h: &mut Harness<'static, App>, on: bool) {

@@ -7,7 +7,8 @@
 //! The bar holds, from the start edge, the blocks of the
 //! [`zones::CAPTION_START`] zone (by default [`BLOCK_MENU`]: a button
 //! opening the system menu, also `Alt+Space` and a right click on the
-//! caption, and the application's name), the window's title, the blocks
+//! caption, then the application's logo when it gave one
+//! ([`FramePlugin::logo`]) and its name), the window's title, the blocks
 //! of the [`zones::CAPTION`] zone (the application's buttons) and the
 //! minimize, maximize and close buttons. Its hit regions are published
 //! per window ([`egui_pop_core::frame::HitTable`]) and shown by the debug
@@ -147,14 +148,30 @@ pub const BLOCK_TITLE: BlockId = BlockId::from_static("egui_pop.frame");
 /// system menu button and the application's name.
 pub const BLOCK_MENU: BlockId = BlockId::from_static("egui_pop.frame.menu");
 
+/// The application's logo in the title bar: its image, asked each frame
+/// ([`FramePlugin::logo`]).
+pub type Logo = std::sync::Arc<dyn Fn(&Context) -> egui::ImageSource<'static> + Send + Sync>;
+
 /// The plugin: `FramePlugin::own()` draws the frame by default,
 /// `FramePlugin::system()` leaves it to the system until the setting
 /// says otherwise.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct FramePlugin {
     own: bool,
     name: String,
     layout_controls: bool,
+    logo: Option<Logo>,
+}
+
+impl std::fmt::Debug for FramePlugin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FramePlugin")
+            .field("own", &self.own)
+            .field("name", &self.name)
+            .field("layout_controls", &self.layout_controls)
+            .field("logo", &self.logo.is_some())
+            .finish()
+    }
 }
 
 impl FramePlugin {
@@ -162,8 +179,7 @@ impl FramePlugin {
     pub fn own() -> Self {
         Self {
             own: true,
-            name: String::new(),
-            layout_controls: false,
+            ..Self::default()
         }
     }
 
@@ -179,6 +195,29 @@ impl FramePlugin {
         self
     }
 
+    /// The application's logo, drawn after the system menu button and
+    /// before its name, a toolbar icon's size (`size.icon.toolbar`), so the
+    /// application keeps the frame's menu block instead of replacing it.
+    /// `image` gives the logo's image each frame: a texture the
+    /// application loaded once (`ImageSource::Texture`), or a source egui's
+    /// image loaders read (`egui::include_image!`).
+    ///
+    /// ```
+    /// use egui_pop_api::frame::FramePlugin;
+    ///
+    /// let frame = FramePlugin::own().logo(|_| egui::ImageSource::Uri("file://logo.png".into()));
+    /// # let _ = frame;
+    /// ```
+    ///
+    /// Need (image): an application's logo in its own title bar, beside its name.
+    pub fn logo(
+        mut self,
+        image: impl Fn(&Context) -> egui::ImageSource<'static> + Send + Sync + 'static,
+    ) -> Self {
+        self.logo = Some(std::sync::Arc::new(image));
+        self
+    }
+
     /// Draws VS Code's layout controls at the end of the title bar
     /// (off by default): the "Customize layout" button and the area
     /// toggles ([`crate::layout_controls::show`], the
@@ -188,6 +227,18 @@ impl FramePlugin {
         self.layout_controls = on;
         self
     }
+}
+
+/// The application's logo, a toolbar icon's size, an image named for
+/// screen readers ("Helios logo").
+fn logo_image(ui: &mut Ui, logo: &Logo, name: &str) {
+    let side = egui_pop_core::theme::Tokens::of(ui.ctx()).size.icon_toolbar;
+    let image = egui::Image::new(logo(ui.ctx()))
+        .fit_to_exact_size(egui::vec2(side, side))
+        .sense(egui::Sense::hover());
+    let response = ui.add(image);
+    let label = strings::tr_args(ui.ctx(), &txt::FRAME_LOGO, &[("application", name)]);
+    egui_pop_core::a11y::name(&response, egui::Role::Image, &label);
 }
 
 /// Whether the application draws the window's frame now.
@@ -397,6 +448,7 @@ impl Plugin for FramePlugin {
             },
         )?;
         let name = self.name.clone();
+        let logo = self.logo.clone();
         ctx.block(zones::TITLE, Block::add(BLOCK_TITLE, 0, title_block));
         if self.layout_controls {
             // Nearest the window's buttons: drawn first from the end.
@@ -418,6 +470,9 @@ impl Plugin for FramePlugin {
                 } else {
                     name.clone()
                 };
+                if let Some(logo) = &logo {
+                    logo_image(ui, logo, &name);
+                }
                 if !name.is_empty() {
                     ui.add(
                         egui::Label::new(egui::RichText::new(&name).strong())

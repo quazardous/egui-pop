@@ -1334,6 +1334,8 @@ egui-pop-fonts-themes = Celle du thème
 
 egui-pop-frame-exit-fullscreen = Quitter le plein écran
 
+egui-pop-frame-logo = Logo de { $application }
+
 egui-pop-frame-maximize = Agrandir
 
 egui-pop-frame-minimize = Réduire

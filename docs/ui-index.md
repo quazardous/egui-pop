@@ -154,5 +154,6 @@ To add an entry, give the item a doc line
 | a grid of thumbnails | `ThumbnailGrid`<br>`egui_pop::core::thumbnail::ThumbnailGrid` | `thumbnail_grid` with its options: where it keeps its scrolling, how high it gets, and a cell to bring into view, drawn or not. |
 | a histogram | `Histogram`<br>`egui_pop::viewport::histogram::Histogram` | The histogram widget. |
 | a zoom control | `ZoomControl`<br>`egui_pop::viewport::navigator::ZoomControl` | The zoom control: zoom out, the zoom, zoom in, fit, 100 %. |
+| an application's logo in its own title bar, beside its name | `.logo(..)`<br>`egui_pop::api::frame::FramePlugin::logo` | The application's logo, drawn after the system menu button and before its name, a toolbar icon's size (`size.icon.toolbar`), so the application keeps the frame's menu block instead of replacing it. |
 | an image navigator (overview with the visible area) | `Navigator`<br>`egui_pop::viewport::navigator::Navigator` | The navigator: the whole image and the part in view. |
 | an image viewport (pan, zoom, tiles) | `Viewport`<br>`egui_pop::viewport::widget::Viewport` | The viewport widget, built per frame. |

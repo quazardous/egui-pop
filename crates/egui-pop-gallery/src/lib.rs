@@ -118,6 +118,37 @@ pub const PAGES: [&str; 75] = [
     "roles",
 ];
 
+/// The gallery's logo in its title bar: a small disc in two tones, made
+/// once into a texture.
+fn logo(ctx: &egui::Context) -> egui::ImageSource<'static> {
+    let id = egui::Id::unique("gallery.logo");
+    let texture = match ctx.data(|d| d.get_temp::<egui::TextureHandle>(id)) {
+        Some(t) => t,
+        None => {
+            const SIDE: usize = 32;
+            let mut image = egui::ColorImage::filled([SIDE, SIDE], egui::Color32::TRANSPARENT);
+            let c = (SIDE as f32 - 1.0) / 2.0;
+            for y in 0..SIDE {
+                for x in 0..SIDE {
+                    let d = ((x as f32 - c).powi(2) + (y as f32 - c).powi(2)).sqrt();
+                    let colour = if d <= c * 0.45 {
+                        egui::Color32::from_rgb(0xF5, 0xF5, 0xF5)
+                    } else if d <= c {
+                        egui::Color32::from_rgb(0x3D, 0x7E, 0xD8)
+                    } else {
+                        continue;
+                    };
+                    image.pixels[y * SIDE + x] = colour;
+                }
+            }
+            let t = ctx.load_texture("gallery.logo", image, egui::TextureOptions::LINEAR);
+            ctx.data_mut(|d| d.insert_temp(id, t.clone()));
+            t
+        }
+    };
+    egui::ImageSource::Texture(egui::load::SizedTexture::from_handle(&texture))
+}
+
 /// The gallery's plugins.
 pub fn builder(options: &Options) -> AppBuilder {
     let mut spec = ThemeSpec::new(options.theme.clone())
@@ -154,7 +185,9 @@ pub fn builder(options: &Options) -> AppBuilder {
             } else {
                 egui_pop::api::frame::FramePlugin::system()
             }
-            .layout_controls(true),
+            .layout_controls(true)
+            // Its logo before its name, drawn by the frame's own block.
+            .logo(logo),
         )
         .plugin(shell::Shell {
             first: StoryId::new(options.page.as_str()).unwrap_or(StoryId::from_static("overview")),

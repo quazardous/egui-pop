@@ -741,6 +741,8 @@ pub const TOAST_ACTION_GONE: StrKey = StrKey::new(
 // The window and its frame.
 
 pub const FRAME_WINDOW_MENU: StrKey = StrKey::new("egui-pop-frame-window-menu", "Window menu");
+/// The application's logo in its title bar, for screen readers.
+pub const FRAME_LOGO: StrKey = StrKey::new("egui-pop-frame-logo", "{ $application } logo");
 pub const WINDOW_EXIT_FULLSCREEN: StrKey =
     StrKey::new("egui-pop-window-exit-fullscreen", "Exit full screen (F11)");
 pub const WINDOW_PLACED_BY_SYSTEM: StrKey = StrKey::new(
@@ -1912,6 +1914,7 @@ pub const ALL: &[StrKey] = &[
     JOB_REFUSED,
     JOB_NO_LOG,
     FRAME_WINDOW_MENU,
+    FRAME_LOGO,
     WINDOW_EXIT_FULLSCREEN,
     WINDOW_PLACED_BY_SYSTEM,
     AREA_CENTER,
