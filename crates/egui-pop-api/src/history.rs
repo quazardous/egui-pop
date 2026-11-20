@@ -18,9 +18,23 @@
 //!   surface ([`Ctx::local_scope`](crate::Ctx::local_scope)).
 //! - **Focus picks the history** ([`target`]). Ctrl+Z, outside a text
 //!   field (which keeps its own undo), undoes in the innermost focused
-//!   surface that has a local scope; otherwise the newest step among the
-//!   owner's scopes active in the window (a scope's focus targets drawn;
-//!   none: always active). Redo goes back to the scope last undone.
+//!   surface that has a local scope; nothing while a modal is open;
+//!   otherwise, by the [`Routing`] the application sets:
+//!   - [`Routing::Newest`] (the default): the newest step among the
+//!     owner's scopes active in the window (a scope's focus targets
+//!     drawn; none: always active). Redo goes back to the scope last
+//!     undone.
+//!   - [`Routing::Focus`]: the scope of the innermost focused surface
+//!     that names one: the surface declared it
+//!     ([`Ctx::history_target`](crate::Ctx::history_target)), or one of
+//!     the owner's scopes lists it among its focus targets
+//!     ([`ScopeInfo::focus`]); when no focused surface names one (the
+//!     menu bar, nothing clicked), the scope focused last, while it is
+//!     still active; then the newest. Redo goes to the same scope.
+//!
+//!   Either way, the scope picked goes through the `pop.history.target`
+//!   step ([`STEP_TARGET`]) before Ctrl+Z, the Edit menu and the agents
+//!   use it: a before-hook may name another scope (or `null`: none).
 //! - **Undo, redo and jump are steps** (ADR 0011): `edit.undo`,
 //!   `edit.redo` and `edit.jump` ([`STEP_JUMP`]), their arguments naming
 //!   the scope, so a before-hook vetoes one or redirects it. A gesture in
@@ -95,6 +109,29 @@ pub const STEP_RESTORE: StepId = StepId::from_static("edit.restore");
 /// One step undone out of order (`{ "scope", "step", "origin" }`, the
 /// history panel's "Undo this step"): vetoable like an undo.
 pub const STEP_UNDO_STEP: StepId = StepId::from_static("edit.undo_step");
+
+/// Where Ctrl+Z or Ctrl+Shift+Z goes (`{ "scope", "redo", "rule" }`,
+/// `rule` one of `focus`, `last_focused`, `newest`): a before-hook may
+/// redirect it by naming another `scope` (`null`: none). Run quietly,
+/// whenever the target is read (the keys, the Edit menu, an agent's
+/// undo without a scope): neither published nor traced.
+pub const STEP_TARGET: StepId = StepId::from_static("pop.history.target");
+
+/// How Ctrl+Z picks among the owner's scopes, outside a focused local
+/// scope and a modal ([`set_routing`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Routing {
+    /// The newest step among the active scopes; redo goes back to the
+    /// scope last undone. What a document-less application wants.
+    #[default]
+    Newest,
+    /// The scope the focus is in (its focus targets name the innermost
+    /// focused surface), else the one focused last, else the newest; redo
+    /// goes to the same scope. What an application with several documents
+    /// or editors on screen wants: the newest step may be another one's.
+    Focus,
+}
 
 /// What the owner answers a request.
 #[derive(Debug)]
@@ -738,6 +775,11 @@ pub(crate) struct Kept {
     focused: Cell<Option<egui::Id>>,
     clock: RefCell<Option<ManualClock>>,
     previewing: RefCell<Option<Previewing>>,
+    routing: Cell<Routing>,
+    /// The histories surfaces declared they work on (`Ctx::history_target`).
+    targets: RefCell<Vec<(OwnerId, String, ScopeId)>>,
+    /// The owner's scope whose surface had the focus last.
+    last_focused: RefCell<Option<ScopeId>>,
 }
 
 /// The point the history panel previews: the owner's answer, the last
@@ -758,12 +800,21 @@ pub(crate) fn register(app: &AppHandle, owner: &OwnerId, surface: &str, scope: R
     locals.push((owner.clone(), surface.into(), scope));
 }
 
-/// A plugin is gone: its local scopes go.
+/// Declares the owner's history a surface works on
+/// (`Ctx::history_target`).
+pub(crate) fn declare_target(app: &AppHandle, owner: &OwnerId, surface: &str, scope: ScopeId) {
+    let kept = app.local::<Kept>();
+    let mut targets = kept.targets.borrow_mut();
+    targets.retain(|(_, s, _)| s != surface);
+    targets.push((owner.clone(), surface.into(), scope));
+}
+
+/// A plugin is gone: its local scopes and the histories its surfaces
+/// declared go.
 pub(crate) fn remove_owner(app: &AppHandle, owner: &OwnerId) {
-    app.local::<Kept>()
-        .locals
-        .borrow_mut()
-        .retain(|(o, _, _)| o != owner);
+    let kept = app.local::<Kept>();
+    kept.locals.borrow_mut().retain(|(o, _, _)| o != owner);
+    kept.targets.borrow_mut().retain(|(o, _, _)| o != owner);
 }
 
 /// Runs `f` on the owner: the host's, else a [`StoreHistory`] over the
@@ -825,6 +876,53 @@ fn focused_local(app: &AppHandle) -> Option<Rc<dyn LocalScope>> {
             .find(|(_, s, _)| s == name)
             .map(|(_, _, l)| l.clone())
     })
+}
+
+/// Sets how Ctrl+Z picks among the owner's scopes ([`Routing`]).
+pub fn set_routing(app: &AppHandle, routing: Routing) {
+    let kept = app.local::<Kept>();
+    if kept.routing.replace(routing) != routing {
+        kept.last_focused.borrow_mut().take();
+    }
+}
+
+/// How Ctrl+Z picks among the owner's scopes now.
+pub fn routing(app: &AppHandle) -> Routing {
+    app.local::<Kept>().routing.get()
+}
+
+/// The owner's scope of the innermost focused surface that names one:
+/// the history the surface declared (`Ctx::history_target`), else a
+/// scope listing it among its focus targets. Where [`Routing::Focus`]
+/// sends Ctrl+Z.
+pub fn focused_scope(app: &AppHandle) -> Option<ScopeId> {
+    let chain = focus::chain_names(&app.egui());
+    if chain.is_empty() {
+        return None;
+    }
+    let scopes = with_owner(app, |h| h.scopes()).unwrap_or_default();
+    let kept = app.local::<Kept>();
+    let targets = kept.targets.borrow();
+    let names = |f: &str, name: &str| f == name || crate::app::scope_name(f) == name;
+    chain.iter().rev().find_map(|name| {
+        targets
+            .iter()
+            .find(|(_, s, id)| names(s, name) && scopes.iter().any(|i| i.id == *id))
+            .map(|(_, _, id)| id.clone())
+            .or_else(|| {
+                scopes
+                    .iter()
+                    .filter(|s| !s.local)
+                    .find(|s| s.focus.iter().any(|f| names(f, name)))
+                    .map(|s| s.id.clone())
+            })
+    })
+}
+
+/// The owner's scope whose surface had the focus last (under
+/// [`Routing::Focus`]), if any.
+pub fn last_focused(app: &AppHandle) -> Option<ScopeId> {
+    app.local::<Kept>().last_focused.borrow().clone()
 }
 
 /// The names of the surfaces drawn in the last pass.
@@ -967,11 +1065,65 @@ pub fn target(app: &AppHandle, redo: bool) -> Option<Target> {
         return None;
     }
     let lines = active_lines(app);
+    let (picked, rule) = match routing(app) {
+        Routing::Newest => (by_newest(app, &lines, redo), "newest"),
+        Routing::Focus => by_focus(app, &lines, redo),
+    };
+    hooked(app, picked, redo, rule)
+}
+
+/// [`Routing::Focus`]: the focused surface's scope, else the one focused
+/// last while it is active, else the newest.
+fn by_focus(app: &AppHandle, lines: &[Line], redo: bool) -> (Option<ScopeId>, &'static str) {
+    if let Some(s) = focused_scope(app) {
+        *app.local::<Kept>().last_focused.borrow_mut() = Some(s.clone());
+        return (Some(s), "focus");
+    }
+    let shown = shown(app);
+    let sticky = last_focused(app).filter(|s| {
+        with_owner(app, |h| {
+            h.scopes()
+                .iter()
+                .any(|i| i.id == *s && is_active(i, &shown))
+        })
+        .unwrap_or(false)
+    });
+    match sticky {
+        Some(s) => (Some(s), "last_focused"),
+        None => (by_newest(app, lines, redo), "newest"),
+    }
+}
+
+/// The scope picked, through the [`STEP_TARGET`] step: a before-hook may
+/// name another one, or none.
+fn hooked(
+    app: &AppHandle,
+    picked: Option<ScopeId>,
+    redo: bool,
+    rule: &'static str,
+) -> Option<Target> {
+    let args = json!({ "scope": picked, "redo": redo, "rule": rule });
+    let out = app.step_with(&STEP_TARGET, args, true, |_, args| Ok(args.clone()));
+    let scope = match out {
+        Outcome::Done(Ok(v)) => v
+            .get("scope")
+            .and_then(Json::as_str)
+            .and_then(|s| ScopeId::new(s).ok()),
+        // A veto: nowhere.
+        Outcome::Vetoed { .. } => None,
+        Outcome::Done(Err(_)) => picked,
+    }?;
+    Some(scope_target(app, &scope).unwrap_or(Target::Owner(scope)))
+}
+
+/// [`Routing::Newest`]: the newest head among the active scopes; for a
+/// redo, the scope last undone that can still redo, else the first
+/// active one that can.
+fn by_newest(app: &AppHandle, lines: &[Line], redo: bool) -> Option<ScopeId> {
     if !redo {
-        return newest(&lines)
+        return newest(lines)
             .cloned()
-            .or_else(|| lines.first().and_then(scope_of))
-            .map(Target::Owner);
+            .or_else(|| lines.first().and_then(scope_of));
     }
     let undone = app.local::<Kept>().undone.borrow().clone();
     let can = |s: &ScopeId| {
@@ -986,7 +1138,6 @@ pub fn target(app: &AppHandle, redo: bool) -> Option<Target> {
         .cloned()
         .or_else(|| lines.iter().find_map(|l| l.next().map(|n| n.scope.clone())))
         .or_else(|| lines.first().and_then(scope_of))
-        .map(Target::Owner)
 }
 
 fn scope_of(line: &Line) -> Option<ScopeId> {
@@ -1559,6 +1710,13 @@ pub(crate) fn pass(app: &AppHandle) {
             s.seal();
         }
     }
+    // The scope focused last, kept while the focus goes where no scope is
+    // named (the menu bar): Ctrl+Z there still goes to it.
+    if kept.routing.get() == Routing::Focus
+        && let Some(s) = focused_scope(app)
+    {
+        *kept.last_focused.borrow_mut() = Some(s);
+    }
     // Values a group cancelled since left with an outside change.
     let mut skipped: BTreeMap<ScopeId, Vec<String>> = BTreeMap::new();
     for s in lock(&store).take_skipped() {
@@ -1632,6 +1790,8 @@ pub(crate) fn snapshot(app: &AppHandle) -> Json {
         "can_redo": can_redo(app),
         "redo": redo_label(app),
         "redo_scope": target(app, true).map(|t| t.scope()),
+        "routing": routing(app),
+        "last_focused": last_focused(app),
         "scopes": scopes,
     })
 }

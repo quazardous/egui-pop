@@ -4,7 +4,10 @@
 //! that one step); a button makes a change as an agent, so its row names
 //! who made it, another pins a snapshot as an agent. Snapshots, the
 //! preview, "Undo this step" and the replaced steps are the default
-//! owner's (the value store's).
+//! owner's (the value store's). Ctrl+Z follows the focus
+//! (`history::Routing::Focus`): the values work on the application's
+//! history, a sketch beside them on a history of its own, and Ctrl+Z
+//! undoes in the one the focus is in, whichever step is newest.
 
 use egui::Ui;
 use egui_pop::api::history;
@@ -14,8 +17,9 @@ use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::lock;
 use egui_pop::core::param::{self, Mode};
 use egui_pop::model::commands::Origin;
+use egui_pop::model::history::{APP, ScopeId};
 use egui_pop::model::ids::{PluginId, StoryId};
-use egui_pop::model::values::{Change, Descriptor, Set, Value};
+use egui_pop::model::values::{self, Change, Descriptor, Set, Value};
 
 use super::section;
 use crate::shell::SHELL;
@@ -25,6 +29,19 @@ pub const HISTORY: PluginId = PluginId::from_static("gallery.history");
 /// The values the page edits.
 pub const EXPOSURE: &str = "gallery/history/exposure";
 pub const RADIUS: &str = "gallery/history/radius";
+/// The sketch's value, in its own history.
+pub const SKETCH_SIZE: &str = "gallery/history/sketch_size";
+
+/// The sketch's history.
+pub const SKETCH: ScopeId = ScopeId::from_static("gallery.sketch");
+/// The focus surface of the sketch: Ctrl+Z there undoes in [`SKETCH`].
+pub const SKETCH_SURFACE: &str = "gallery.history.sketch";
+/// The focus surface of the values: Ctrl+Z there undoes in [`APP`].
+pub const VALUES_SURFACE: &str = "gallery.history.values";
+
+fn sketch_size() -> Descriptor {
+    Descriptor::int("Sketch size", 1, 64, 8).unit("px")
+}
 
 fn descriptors() -> Vec<(&'static str, Descriptor)> {
     vec![
@@ -66,14 +83,20 @@ impl Plugin for HistoryPage {
         {
             let store = ctx.app().store();
             let mut s = lock(&store);
-            for (path, d) in descriptors() {
+            for (path, d) in descriptors()
+                .into_iter()
+                .chain([(SKETCH_SIZE, sketch_size())])
+            {
                 s.declare(&owner, path, d)
                     .map_err(|e| PluginError::Failed(e.to_string()))?;
             }
         }
+        // Ctrl+Z goes to the history of the surface in focus.
+        history::set_routing(&ctx.app(), history::Routing::Focus);
+        ctx.history_target(VALUES_SURFACE, APP);
         ctx.story(
             Story::new(StoryId::from_static("history"), "History", show)
-                .description("The application's history: each change a step, Ctrl+Z and Ctrl+Shift+Z, the history panel's list (a click jumps to a step, a hover previews it, a right-click undoes that one step), snapshots, the replaced steps behind a toggle, an agent's change named with its origin.")
+                .description("The application's history: each change a step, Ctrl+Z and Ctrl+Shift+Z, the history panel's list (a click jumps to a step, a hover previews it, a right-click undoes that one step), snapshots, the replaced steps behind a toggle, an agent's change named with its origin; a sketch with a history of its own, Ctrl+Z following the focus.")
                 .group("Components", 46),
         )?;
         Ok(())
@@ -109,9 +132,22 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     let store = app.store();
     ui.label("Each change below is a step of the application's history: Ctrl+Z undoes it, Ctrl+Shift+Z redoes it, and a click on a row of the list goes back or forward to that step. Hovering a row previews the values there; a right-click on a step undoes that one step, unless a later step changed the same value. A snapshot pins the values; a click on it restores them as a new step. A change made after an undo replaces the steps undone: \"Show replaced steps\" lists them, and a click goes back to one. The same list is the History panel (View > History), and agents read and drive it with the history.* commands.");
     section(ui, "Values (a drag is one step)");
-    for (path, d) in descriptors() {
-        param::param(ui, &d, Mode::Bound(&store, path));
-    }
+    egui_pop::core::focus::scope(ui, VALUES_SURFACE, &[], |ui| {
+        for (path, d) in descriptors() {
+            param::param(ui, &d, Mode::Bound(&store, path));
+        }
+    });
+    section(ui, "A sketch: Ctrl+Z follows the focus");
+    ui.label("The sketch keeps its own history. Ctrl+Z undoes in the history of what has the focus, the sketch's or the values', even when the other has a newer step; with the focus elsewhere, in the one focused last. Ctrl+Shift+Z redoes in the same one.");
+    egui_pop::core::focus::scope(ui, SKETCH_SURFACE, &[], |ui| {
+        let _in_sketch = values::enter_history(&SKETCH);
+        param::param(ui, &sketch_size(), Mode::Bound(&store, SKETCH_SIZE));
+    });
+    let goes = history::target(app, false).map(|t| t.scope());
+    ui.label(match goes {
+        Some(s) => format!("Ctrl+Z goes to: {s}"),
+        None => "Ctrl+Z goes nowhere".into(),
+    });
     ui.horizontal(|ui| {
         if ui.button("Double the radius as an agent").clicked() {
             agent_change(app);

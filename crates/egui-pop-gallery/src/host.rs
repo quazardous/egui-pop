@@ -1,9 +1,12 @@
 //! The gallery's host: egui-pop's local host, except for the commands
 //! named `gallery.slow.*`, which it answers later, when the progress
-//! page says so, as a remote kernel would.
+//! page says so, as a remote kernel would. Its history owner has the
+//! application's history and the history page's sketch
+//! ([`crate::pages::history::SKETCH`]).
 
 use std::sync::{Arc, Mutex, PoisonError};
 
+use egui_pop::api::history::{APP, History, ScopeInfo, StoreHistory};
 use egui_pop::api::host::{
     self, Dispatch, Event, Host, Journal, LocalHost, Reply, Resolver, Seq, Waker,
 };
@@ -42,13 +45,23 @@ impl Waiting {
 pub struct GalleryHost {
     local: LocalHost,
     waiting: Waiting,
+    history: StoreHistory,
 }
 
 impl GalleryHost {
     pub fn new(waiting: Waiting) -> Self {
+        let local = LocalHost::default();
+        let mut sketch = ScopeInfo::new(crate::pages::history::SKETCH, "Sketch");
+        // Active while the history page's sketch is drawn.
+        sketch.focus = vec![crate::pages::history::SKETCH_SURFACE.into()];
+        let history = StoreHistory::with_scopes(
+            local.store(),
+            vec![ScopeInfo::new(APP, "Application"), sketch],
+        );
         Self {
-            local: LocalHost::default(),
+            local,
             waiting,
+            history,
         }
     }
 }
@@ -89,5 +102,9 @@ impl Host for GalleryHost {
 
     fn layout_document(&self) -> Option<String> {
         self.local.layout_document()
+    }
+
+    fn history(&mut self) -> Option<&mut dyn History> {
+        Some(&mut self.history)
     }
 }
