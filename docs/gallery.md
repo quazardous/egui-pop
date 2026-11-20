@@ -323,13 +323,17 @@ Egui's built-ins in egui-pop's style, and restyled by a kit in a scope, values, 
   </tr>
 </table>
 
-The places panel, as an import window's sources column:
+The places panel, as an import window's sources column (and a focused, chosen item, its fill under the focus outline):
 
 <table>
   <tr>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/places-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/places-pop-dark.png" width="200" alt="places-pop-dark"></a><br>places-pop-dark</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/places-pop-high-contrast.png"><img src="../crates/egui-pop-gallery/tests/snapshots/places-pop-high-contrast.png" width="200" alt="places-pop-high-contrast"></a><br>places-pop-high-contrast</td>
     <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/places-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/places-pop-light.png" width="200" alt="places-pop-light"></a><br>places-pop-light</td>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/places-focused-chosen-pop-dark.png"><img src="../crates/egui-pop-gallery/tests/snapshots/places-focused-chosen-pop-dark.png" width="200" alt="places-focused-chosen-pop-dark"></a><br>places-focused-chosen-pop-dark</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="../crates/egui-pop-gallery/tests/snapshots/places-focused-chosen-pop-light.png"><img src="../crates/egui-pop-gallery/tests/snapshots/places-focused-chosen-pop-light.png" width="200" alt="places-focused-chosen-pop-light"></a><br>places-focused-chosen-pop-light</td>
   </tr>
 </table>
 
