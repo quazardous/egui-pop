@@ -28,8 +28,11 @@
 //!   selection (one [`Edit::Move`] at its end, snapped to the grid with
 //!   [`snap`](GraphEditor::snap); Escape puts it back), the chevron or a
 //!   double click on the title collapses, a slot in the title bar is the
-//!   application's ([`header`](GraphEditor::header)). A drag on the
-//!   canvas draws a rubber band.
+//!   application's ([`header`](GraphEditor::header)), and so is a status
+//!   drawn there ([`status`](GraphEditor::status): a short word in a tone,
+//!   a colour or a theme token's colour, its detail as a tooltip, read
+//!   aloud as part of the node's description). A drag on the canvas draws
+//!   a rubber band.
 //! - **Wires**: a drag from a port draws a wire, checked against the
 //!   ports' types while it is drawn; dropped on a port that accepts it,
 //!   it connects (replacing an input's wire); a drag off a connected
@@ -103,6 +106,7 @@ mod export;
 mod minimap;
 mod model;
 mod state;
+mod status;
 mod wires;
 #[cfg(feature = "graph-yaml")]
 pub mod yaml;
@@ -135,6 +139,7 @@ pub use model::{
     PortRef, PortType, Refusal, Request, Side, TYPE_TOKENS, check,
 };
 pub use state::GraphState;
+pub use status::{NodeStatus, StatusColor};
 pub use wires::WireStyle;
 
 use crate::change::{Cause, Verdict};
@@ -298,6 +303,7 @@ pub fn set_keys(ctx: &egui::Context, keys: GraphKeys) {
 
 type HookFn<'a> = dyn FnMut(&Edit, Cause) -> Verdict<Edit> + 'a;
 type HeaderFn<'a> = dyn FnMut(&mut Ui, &Node) + 'a;
+type StatusFn<'a> = dyn FnMut(&Node) -> Option<NodeStatus> + 'a;
 
 /// How Tab goes through a graph, set with [`GraphEditor::tab_stops`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -333,6 +339,7 @@ pub struct GraphEditor<'a> {
     detail_from: f32,
     zoom_range: Rangef,
     header: Option<Box<HeaderFn<'a>>>,
+    status: Option<Box<StatusFn<'a>>>,
     hook: Option<Box<HookFn<'a>>>,
     requests: Vec<Request>,
     describe: bool,
@@ -394,6 +401,7 @@ impl<'a> GraphEditor<'a> {
             // upstream: text blurs in a Scene zoomed past 100 % (docs/upstream.md).
             zoom_range: Rangef::new(0.05, 1.5),
             header: None,
+            status: None,
             hook: None,
             requests: Vec::new(),
             describe: false,
@@ -485,6 +493,16 @@ impl<'a> GraphEditor<'a> {
     /// status, a toggle), in the ports and detail views.
     pub fn header(mut self, header: impl FnMut(&mut Ui, &Node) + 'a) -> Self {
         self.header = Some(Box::new(header));
+        self
+    }
+
+    /// Each node's status, drawn small at its title bar's right end (left
+    /// of the [`header`](GraphEditor::header) slot), in the ports and
+    /// detail views: its text in its colour, its detail as a tooltip.
+    /// `None` draws none. The status (text and detail) is part of the
+    /// node's accessible description at every level.
+    pub fn status(mut self, status: impl FnMut(&Node) -> Option<NodeStatus> + 'a) -> Self {
+        self.status = Some(Box::new(status));
         self
     }
 
@@ -793,6 +811,13 @@ impl<'a> GraphEditor<'a> {
             TabStops::Each => false,
             TabStops::Auto => nodes.len() >= ONE_STOP_FROM,
         };
+        let statuses: HashMap<String, NodeStatus> = match self.status.as_mut() {
+            Some(f) => nodes
+                .iter()
+                .filter_map(|n| f(n).map(|s| (n.id.clone(), s)))
+                .collect(),
+            None => HashMap::new(),
+        };
         let shown = self.state.view;
         let mut view = shown;
         let overview_rect = self.state.overview_rect;
@@ -811,6 +836,7 @@ impl<'a> GraphEditor<'a> {
             state: &mut *self.state,
             hook: &mut self.hook,
             header: &mut self.header,
+            statuses: &statuses,
             edits: &mut edits,
             events: &mut events,
             lay: Layout::default(),
@@ -1235,6 +1261,8 @@ struct Cx<'a, 'g, 'h> {
     state: &'a mut GraphState,
     hook: &'a mut Option<Box<HookFn<'h>>>,
     header: &'a mut Option<Box<HeaderFn<'h>>>,
+    /// Each node's status, by id ([`GraphEditor::status`]).
+    statuses: &'g HashMap<String, NodeStatus>,
     edits: &'a mut Vec<Edit>,
     events: &'a mut Vec<GraphEvent>,
     lay: Layout,
@@ -1957,10 +1985,14 @@ impl Cx<'_, '_, '_> {
             info
         });
         let role = tr(&self.ctx, &s::GRAPH_ROLE_NODE);
+        let status = self.statuses.get(&n.id).map(NodeStatus::description);
         self.ctx.accesskit_node_builder(nid, |node| {
             node.set_role(Role::Group);
             node.set_role_description(role);
             node.set_selected(selected);
+            if let Some(status) = status {
+                node.set_description(status);
+            }
         });
         self.bounds(nid, r);
         if resp.has_focus() {
@@ -2064,9 +2096,15 @@ impl Cx<'_, '_, '_> {
         } else {
             0.0
         };
+        let mut title_right = header.right() - PAD - slot_w;
+        if self.level != Level::Overview
+            && let Some(status) = self.statuses.get(&n.id)
+        {
+            title_right = self.status_ui(ui, painter, nid, status, text_left, title_right, header);
+        }
         let title_r = Rect::from_min_max(
             pos2(text_left, header.top()),
-            pos2(header.right() - PAD - slot_w, header.bottom()),
+            pos2(title_right, header.bottom()),
         );
         self.title(painter, title_r, &n.title, self.title_size(), self.t.text);
         if slot_w > 0.0
@@ -2092,6 +2130,64 @@ impl Cx<'_, '_, '_> {
         if self.level == Level::Detail {
             self.params_ui(ui, i, r);
         }
+    }
+
+    /// A node's status at the right end of its title bar, up to
+    /// `right`, never past half the room from `left`: its text small in
+    /// its colour, elided, its detail (or its whole text when elided) as
+    /// a tooltip. Gives where the title ends.
+    #[allow(clippy::too_many_arguments)]
+    fn status_ui(
+        &self,
+        ui: &mut Ui,
+        painter: &egui::Painter,
+        nid: Id,
+        status: &NodeStatus,
+        left: f32,
+        right: f32,
+        header: Rect,
+    ) -> f32 {
+        let tokens = Tokens::of(&self.ctx);
+        let color = status.color.resolve(&tokens);
+        let room = ((right - left) / 2.0).max(0.0);
+        let mut job = LayoutJob::simple_singleline(
+            status.text.clone(),
+            FontId::proportional(tokens.font.small),
+            color,
+        );
+        job.wrap = TextWrapping {
+            max_width: room.max(1.0),
+            max_rows: 1,
+            break_anywhere: true,
+            overflow_character: Some('…'),
+        };
+        let galley = painter.layout_job(job);
+        let w = galley.size().x;
+        let rect = Rect::from_min_max(pos2(right - w, header.top()), pos2(right, header.bottom()));
+        painter.galley(
+            pos2(rect.left(), header.center().y - galley.size().y / 2.0),
+            galley.clone(),
+            color,
+        );
+        let elided = galley.rows.iter().any(|r| r.ends_with_newline) || {
+            let full = painter.layout_no_wrap(
+                status.text.clone(),
+                FontId::proportional(tokens.font.small),
+                color,
+            );
+            full.size().x > w + 0.5
+        };
+        let tip = match (&status.detail, elided) {
+            (Some(d), true) => Some(format!("{}: {d}", status.text)),
+            (Some(d), false) => Some(d.clone()),
+            (None, true) => Some(status.text.clone()),
+            (None, false) => None,
+        };
+        if let Some(tip) = tip {
+            let r = ui.interact(rect, nid.with("status"), Sense::hover());
+            r.on_hover_text(tip);
+        }
+        rect.left() - PAD
     }
 
     fn click_select(&mut self, ui: &Ui, node: &str) {
