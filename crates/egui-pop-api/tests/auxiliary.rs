@@ -1,7 +1,7 @@
 //! Auxiliary windows: a panel detached into a window of its own, docked
 //! back, its window's closing a step a plugin may veto; panels that may
 //! not leave say so; other panels joining a window as tabs, by a drag,
-//! the tab menu or a command.
+//! the tab menu or a command; a whole group ejected by its bar's button.
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
@@ -339,4 +339,36 @@ fn an_agent_moves_a_panel_into_a_window_by_command() {
     let layout = app.layout();
     assert_eq!(layout.area_of(&LOG), Some(Area::Bottom));
     assert_eq!(layout.auxiliary[0].panel, TREE, "the window goes on");
+}
+
+#[test]
+fn a_group_ejects_into_a_window_by_its_bar_button_when_the_application_shows_it() {
+    // Off by default, as in egui_stack.
+    let h = harness();
+    assert!(h.query_by_label("Eject group").is_none());
+    drop(h);
+    let app = App::builder()
+        .plugin(Demo)
+        .dock_controls(workbench::DockControls::default().eject_group(true))
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 600.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    // One per docked tab bar, a named button: the bottom one holds the log.
+    h.get_all_by_label("Eject group")
+        .max_by(|a, b| a.rect().center().y.total_cmp(&b.rect().center().y))
+        .expect("an Eject group button")
+        .click();
+    h.run();
+    let layout = h.state().handle().layout();
+    assert_eq!(layout.area_of(&LOG), None);
+    assert_eq!(layout.auxiliary.len(), 1);
+    assert_eq!(layout.auxiliary[0].panel, LOG);
+    // Turned off while running, the buttons go.
+    let app = h.state().handle().clone();
+    workbench::set_dock_controls(&app, workbench::DockControls::default());
+    h.run();
+    assert!(h.query_by_label("Eject group").is_none());
 }

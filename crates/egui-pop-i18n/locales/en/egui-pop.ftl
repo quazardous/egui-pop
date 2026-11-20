@@ -3059,6 +3059,8 @@ egui-pop-workbench-fold = Fold { $area }
 
 egui-pop-workbench-move-group = Move group
 
+egui-pop-workbench-eject-group = Eject group
+
 egui-pop-workbench-move-to = Move to { $area }
 
 egui-pop-workbench-move-window = Move window

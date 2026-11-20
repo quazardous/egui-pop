@@ -782,6 +782,10 @@ pub const WORKBENCH_NEW_WINDOW: StrKey = StrKey::new("egui-pop-workbench-new-win
 /// The grip at the end of a tab bar, which moves the whole tab group,
 /// and the tab menu's submenu of where the group can go.
 pub const WORKBENCH_MOVE_GROUP: StrKey = StrKey::new("egui-pop-workbench-move-group", "Move group");
+/// A tab bar's button moving the whole tab group into a window of its
+/// own (`DockControls::eject_group`).
+pub const WORKBENCH_EJECT_GROUP: StrKey =
+    StrKey::new("egui-pop-workbench-eject-group", "Eject group");
 /// A floating window's move handle, which moves the window.
 pub const WORKBENCH_MOVE_WINDOW: StrKey =
     StrKey::new("egui-pop-workbench-move-window", "Move window");
@@ -1929,6 +1933,7 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_CLOSE_PANEL,
     WORKBENCH_NEW_WINDOW,
     WORKBENCH_MOVE_GROUP,
+    WORKBENCH_EJECT_GROUP,
     WORKBENCH_MOVE_WINDOW,
     WORKBENCH_STAYS_DOCKED,
     WORKBENCH_FLOAT,
