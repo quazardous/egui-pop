@@ -15,7 +15,9 @@
 //!   toggle folds and opens the rows below it (a click, Space or Enter,
 //!   Left and Right while it has the keyboard); a leaf's row takes the
 //!   same room, so that branches and leaves line up. Rows below a branch
-//!   are indented by one level.
+//!   are indented by one level. A flat tree's row says its own depth
+//!   ([`TreeRow::depth`]): indented by that many levels, and read aloud
+//!   at its level.
 //! - What is open is kept by id in egui's persisted memory, with the
 //!   window's layout, as egui's own collapsing regions keep it: a fold
 //!   has the id an egui `CollapsingHeader` given the same `id_salt` has,
@@ -116,6 +118,12 @@ fn expanded_node(ctx: &Context, id: Id, open: bool) {
             accesskit::Action::Expand
         });
     });
+}
+
+/// Says a tree row's node is at level `depth + 1` (accesskit counts
+/// levels from 1).
+fn level_node(ctx: &Context, id: Id, depth: usize) {
+    ctx.accesskit_node_builder(id, |node| node.set_level(depth + 1));
 }
 
 /// What a fold did this pass.
@@ -299,6 +307,7 @@ pub struct TreeRow {
     toggle_name: Option<String>,
     leaf: bool,
     default_open: bool,
+    depth: Option<usize>,
 }
 
 /// A shown tree row: its toggle, its row, and the rows below it.
@@ -329,7 +338,23 @@ impl TreeRow {
             toggle_name: None,
             leaf: false,
             default_open: false,
+            depth: None,
         }
+    }
+
+    /// A row of a flat tree drawn at `depth` (0 at the top): indented by
+    /// `depth` times the theme's `spacing.indent` before its toggle (or a
+    /// leaf's room for one), and said to be at level `depth + 1` to
+    /// assistive technology (its toggle and its row both carry the
+    /// level). For a tree kept as a flat list, whose rows are not nested
+    /// in their parents' [`TreeRowResponse::body`] (a folder list that
+    /// leaves out the folders between): what the caller draws in the row
+    /// (a selectable label, a drag source) is unchanged. Without it, a
+    /// row is indented only by the bodies it is shown in, and says no
+    /// level.
+    pub fn depth(mut self, depth: usize) -> Self {
+        self.depth = Some(depth);
+        self
     }
 
     /// The toggle's whole accessible name, in place of "Show or hide"
@@ -363,6 +388,10 @@ impl TreeRow {
             let spacing = ui.spacing().item_spacing;
             // The toggle takes the whole indent, as egui's does.
             ui.spacing_mut().item_spacing.x = 0.0;
+            if let Some(depth) = self.depth {
+                level_node(&ctx, ui.unique_id(), depth);
+                ui.add_space(ui.spacing().indent * depth as f32);
+            }
             let size = egui::vec2(ui.spacing().indent, ui.spacing().icon_width);
             match state.as_mut() {
                 None => {
@@ -384,6 +413,9 @@ impl TreeRow {
                         WidgetInfo::labeled(egui::Role::DisclosureTriangle, enabled, &name)
                     });
                     expanded_node(&ctx, self.id, open);
+                    if let Some(depth) = self.depth {
+                        level_node(&ctx, self.id, depth);
+                    }
                     if ui.is_rect_visible(rect) {
                         paint_toggle(ui, &r, open);
                     }
