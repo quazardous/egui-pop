@@ -2,15 +2,16 @@
 //! Folders, Albums and Imports), each a band that folds and opens its
 //! body, Folders with its count and an action at its right end, and a
 //! hand-built folder tree in it, branches with their toggles and leaves
-//! lined up with them. The playground counts the action's clicks and
-//! opens or folds everything.
+//! lined up with them, and a flat tree (Import folders: only the folders
+//! that hold photos, each row drawn at its depth and selectable). The
+//! playground counts the action's clicks and opens or folds everything.
 
 use egui::{Id, Ui, vec2};
 use egui_pop::core::fold::{self, Fold, TreeRow};
 use egui_pop::core::ui::{Space, UiPop};
 
 /// The pretend panel's size.
-const PANEL: egui::Vec2 = vec2(220.0, 420.0);
+const PANEL: egui::Vec2 = vec2(220.0, 540.0);
 
 /// A folder and the names of the folders in it.
 type Folder = (&'static str, &'static [&'static str]);
@@ -28,6 +29,15 @@ const TREE: &[(&str, &[Folder])] = &[
     ("Downloads", &[]),
 ];
 
+/// The flat tree: a folder's path and its depth, the folders between
+/// left out (they hold no photos), as an import's folder list keeps them.
+pub const FLAT: &[(&str, usize)] = &[
+    ("Card", 0),
+    ("Card/DCIM/100CANON", 2),
+    ("Card/DCIM/100CANON/Burst", 3),
+    ("Card/Misc", 1),
+];
+
 /// The page's state.
 #[derive(Debug, Default)]
 pub struct State {
@@ -35,6 +45,8 @@ pub struct State {
     pub rescans: u32,
     /// What the user last did.
     pub last: Option<String>,
+    /// The flat tree's selected folder.
+    pub flat_selected: Option<&'static str>,
     /// The folds' ids, as last shown.
     ids: Vec<Id>,
 }
@@ -113,11 +125,35 @@ pub fn show(ui: &mut Ui, state: &mut State) {
             ui.label("Portraits");
         });
     state.ids.push(albums.id);
+    let flat = Fold::new("gallery.folds.flat", "Import folders")
+        .count(FLAT.len() as u64)
+        .default_open(true)
+        .show(&mut panel, |ui| {
+            for &(path, depth) in FLAT {
+                let name = path.rsplit('/').next().unwrap_or(path);
+                let r = TreeRow::new(row_id(ui, path), name)
+                    .leaf(true)
+                    .depth(depth)
+                    .show(ui, |ui| {
+                        ui.selectable_label(state.flat_selected == Some(path), name)
+                    });
+                if r.row.inner.clicked() {
+                    state.flat_selected = Some(path);
+                    state.last = Some(format!("Selected {path}"));
+                }
+            }
+        });
+    state.ids.push(flat.id);
     let imports = Fold::new("gallery.folds.imports", "Imports").show(&mut panel, |ui| {
         ui.muted("No import yet");
     });
     state.ids.push(imports.id);
-    for r in [&folders.toggled, &albums.toggled, &imports.toggled] {
+    for r in [
+        &folders.toggled,
+        &albums.toggled,
+        &flat.toggled,
+        &imports.toggled,
+    ] {
         if *r {
             state.last = Some("Folded or opened".into());
         }

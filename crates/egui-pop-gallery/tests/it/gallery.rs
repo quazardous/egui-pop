@@ -5527,6 +5527,34 @@ fn the_folds_page_tree_rows_toggle_and_keep_their_state_by_id() {
 }
 
 #[test]
+fn the_folds_page_flat_tree_rows_sit_at_their_depth_and_select() {
+    use egui_pop_gallery::pages::folds::FLAT;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "folds"));
+    h.run();
+    let indent = h.ctx.global_style().spacing.indent;
+    let left = |h: &Harness<'_, Gallery>, name: &str| h.get_by_label(name).rect().left();
+    let names: Vec<&str> = FLAT
+        .iter()
+        .map(|(path, _)| path.rsplit('/').next().unwrap())
+        .collect();
+    let top = left(&h, names[0]);
+    for (name, &(_, depth)) in names.iter().zip(FLAT) {
+        let shift = left(&h, name) - top;
+        assert!(
+            (shift - indent * depth as f32).abs() < 0.5,
+            "{name} at depth {depth}: shifted {shift}"
+        );
+    }
+    // A row is the caller's selectable label: a click selects it.
+    h.get_by_label("Burst").click();
+    h.run();
+    assert!(
+        h.query_by_label("Selected Card/DCIM/100CANON/Burst")
+            .is_some()
+    );
+}
+
+#[test]
 fn the_sections_page_folds_opens_and_resizes_its_sections() {
     use egui::accesskit::Role;
     use egui_pop::core::sections::laid_out;
