@@ -199,8 +199,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
 /// or `"new"`.
 const AUTO: &str = "galleryAuto";
 
-/// A source row whose context menu is drawn in a closure, its "Import
-/// automatically" submenu a radio group ([`menus::submenu`]).
+/// A source row whose context menu is drawn in a closure: command rows
+/// with their shortcut, one greyed with why ([`menus::command_row`]), and
+/// an "Import automatically" submenu, a radio group ([`menus::submenu`]).
 fn hand_drawn(ui: &mut Ui, app: &AppHandle) {
     let cx = app.context();
     let auto = match cx.get(AUTO) {
@@ -212,7 +213,10 @@ fn hand_drawn(ui: &mut Ui, app: &AppHandle) {
             .sense(egui::Sense::click()),
     );
     egui_pop::core::pointer::claim::context_menu(&row, |ui| {
-        if ui.button("Import now").clicked() {
+        if menus::command_row(ui, "Import now", Some("Ctrl+I"), None).clicked() {
+            ui.close();
+        }
+        if menus::command_row(ui, "Eject", Some("Ctrl+E"), Some("No card inserted")).clicked() {
             ui.close();
         }
         menus::submenu(ui, "Import automatically", |ui| {
@@ -227,7 +231,7 @@ fn hand_drawn(ui: &mut Ui, app: &AppHandle) {
                 }
             }
         });
-        if ui.button("Forget this source").clicked() {
+        if menus::command_row(ui, "Forget this source", None, None).clicked() {
             ui.close();
         }
     });

@@ -122,6 +122,7 @@ To add an entry, give the item a doc line
 | Need | Use | What it is |
 |---|---|---|
 | a command palette | `Palette`<br>`egui_pop::api::palette::Palette` | The palettes' state, one per window group (`AppHandle::window_group`): open or not, the query. |
+| a command row with its shortcut in a menu drawn by hand | `menus::command_row(..)`<br>`egui_pop::api::menus::command_row` | A command row in a menu drawn by hand (a popup or context menu built in a closure), drawn as the declared menus' command rows: the kit's `menu-item`, its label at the start, `shortcut` (the keys' text, such as `Ctrl+C`) muted at the end in the menu's key font. |
 | a confirmation dialog | `Confirm`<br>`egui_pop::api::dialogs::Confirm` | A question before an action. |
 | a file or folder picker | `FileBrowser`<br>`egui_pop::api::files::browser::FileBrowser` | The file browser: entries from a `FileSource`, shown by a `ViewMode` chosen in its toolbar (or with `Ctrl+1` to `Ctrl+9`), kept per dialog in the host's store when drawn with `FileBrowser::show_in`. |
 | a settings or admin page declared as a manifest | `Admin`<br>`egui_pop::api::admin::Admin` | The administration app's state, manifests, hooks, widget kinds and value layers. |
