@@ -40,7 +40,7 @@ use pages::story::PagePlugin;
 pub const TITLE: &str = "egui-pop gallery";
 
 /// The pages, as named on the command line.
-pub const PAGES: [&str; 74] = [
+pub const PAGES: [&str; 75] = [
     "overview",
     "tokens",
     "builtins",
@@ -65,6 +65,7 @@ pub const PAGES: [&str; 74] = [
     "dialogs",
     "files",
     "file-browser",
+    "places",
     "toasts",
     "tips",
     "about",
@@ -308,6 +309,16 @@ pub fn builder(options: &Options) -> AppBuilder {
         .plugin(pages::dialogs::DialogsPage)
         .plugin(pages::files::FilesPage)
         .plugin(pages::file_browser::FileBrowserPage)
+        .plugin(PagePlugin {
+            plugin: PluginId::from_static("gallery.places"),
+            story: StoryId::from_static("places"),
+            title: "Places panel",
+            description: "A panel of places as an import window's sources column: sections that fold (one kept by the page), an empty section's line, a line under each item's name, a state mark in a tone, a pin toggle at each item's end, the chosen account's albums under it and History's past imports with Import again; driven by the keyboard (Up, Down, Enter, Left and Right on a band).",
+            group: "Components",
+            weight: 54,
+            show: pages::places::show,
+            playground: Some(pages::places::playground),
+        })
         .plugin(pages::toasts::ToastsPage)
         .plugin(egui_pop::api::theme_editor::ThemeEditorPlugin)
         .plugin(pages::theme_editor::ThemeEditorPage)

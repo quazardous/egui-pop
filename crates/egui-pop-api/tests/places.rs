@@ -104,3 +104,144 @@ fn the_arrows_go_from_item_to_item_across_sections_and_enter_chooses() {
     h.run();
     assert!(h.get_by_label("SD_CARD").is_focused());
 }
+
+/// What the rich panel reported, frame by frame.
+#[derive(Default)]
+struct Rich {
+    pinned: bool,
+    open: bool,
+    toggled: Vec<String>,
+    folded: Vec<(String, bool)>,
+    again: u32,
+}
+
+fn rich_sections(r: &Rich) -> Vec<PlaceSection> {
+    use egui_pop_api::files::places::PlaceToggle;
+    use egui_pop_core::kit::Tone;
+    let name = if r.pinned {
+        "Remove from favourites"
+    } else {
+        "Add to favourites"
+    };
+    vec![
+        PlaceSection::new("cards", "Cards")
+            .foldable(true)
+            .empty("No cards"),
+        PlaceSection::new("services", "Services")
+            .foldable(true)
+            .item(
+                PlaceItem::new("studio", "Studio")
+                    .badge("!")
+                    .badge_tone(Tone::Warning)
+                    .line("needs reconnecting")
+                    .toggle(PlaceToggle::new("phosphor:push-pin", r.pinned, name)),
+            ),
+        PlaceSection::new("history", "History").open(r.open).keep(),
+    ]
+}
+
+fn rich() -> Harness<'static, Rich> {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(260.0, 360.0))
+        .build_ui_state(
+            |ui, r: &mut Rich| {
+                let sections = rich_sections(r);
+                let mut again = false;
+                let out = PlacesPanel::new("test.rich", &sections)
+                    .under_item(|ui, _, item| {
+                        if item.id == "studio" {
+                            ui.label("Studio's albums");
+                        }
+                    })
+                    .under_section(|ui, section| {
+                        if section.id == "history" {
+                            again = ui.button("Import again").clicked();
+                        }
+                    })
+                    .show(ui);
+                if again {
+                    r.again += 1;
+                }
+                if let Some((_, item)) = out.toggled {
+                    r.pinned = !r.pinned;
+                    r.toggled.push(item.id);
+                }
+                if let Some((id, open)) = out.folded {
+                    if id == "history" {
+                        r.open = open;
+                    }
+                    r.folded.push((id, open));
+                }
+            },
+            Rich {
+                open: true,
+                ..Rich::default()
+            },
+        );
+    h.run();
+    h
+}
+
+#[test]
+fn an_empty_section_says_what_it_lacks_and_a_kept_one_shows_the_apps_content() {
+    let mut h = rich();
+    assert!(h.query_by_label("No cards").is_some());
+    assert!(h.query_by_label("Studio's albums").is_some());
+    h.get_by_label("Import again").click();
+    h.run();
+    assert_eq!(h.state().again, 1);
+}
+
+#[test]
+fn an_item_shows_its_line_said_as_its_description_and_its_badge_with_its_name() {
+    let h = rich();
+    let item = h.get_by_label("Studio, !");
+    assert_eq!(item.accesskit_node().role(), Role::Button);
+    assert_eq!(
+        item.accesskit_node().data().description(),
+        Some("needs reconnecting")
+    );
+}
+
+#[test]
+fn an_items_toggle_is_named_pressed_or_not_and_reported() {
+    let mut h = rich();
+    let pin = h.get_by_label("Add to favourites");
+    assert_eq!(pin.accesskit_node().role(), Role::Button);
+    assert_eq!(pin.accesskit_node().toggled(), Some(Toggled::False));
+    pin.click();
+    h.run();
+    h.run();
+    assert_eq!(h.state().toggled, ["studio"]);
+    assert_eq!(
+        h.get_by_label("Remove from favourites")
+            .accesskit_node()
+            .toggled(),
+        Some(Toggled::True)
+    );
+}
+
+#[test]
+fn sections_fold_by_their_band_and_the_apps_state_is_followed() {
+    let mut h = rich();
+    let expanded = |h: &Harness<'_, Rich>, label: &str| {
+        h.get_by_label(label).accesskit_node().data().is_expanded()
+    };
+    assert_eq!(expanded(&h, "Cards"), Some(true));
+    h.get_by_label("Cards").click();
+    h.run();
+    assert_eq!(expanded(&h, "Cards"), Some(false));
+    assert!(h.query_by_label("No cards").is_none());
+    assert_eq!(h.state().folded, [("cards".into(), false)]);
+    // History's state is the application's: folded by a click through
+    // the panel, then opened by the application alone.
+    h.get_by_label("History").click();
+    h.run();
+    assert!(!h.state().open);
+    assert!(h.query_by_label("Import again").is_none());
+    h.state_mut().open = true;
+    h.run();
+    h.run();
+    assert_eq!(expanded(&h, "History"), Some(true));
+    assert!(h.query_by_label("Import again").is_some());
+}

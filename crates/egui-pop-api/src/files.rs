@@ -2741,7 +2741,9 @@ impl Places {
     /// Every place as sections, the way the picker lists them: home and
     /// the system's folders (`files.places`), the devices (`files.devices`),
     /// recent places (`files.recent`), bookmarks (`files.bookmarks`), then
-    /// the application's; empty ones left out. For a [`places::PlacesPanel`].
+    /// the application's; empty ones left out, but an application's with
+    /// an empty line or kept ([`PlaceSection::shown`]). For a
+    /// [`places::PlacesPanel`].
     pub fn sections(&self, ctx: &egui::Context) -> Vec<PlaceSection> {
         use places::PlaceItem;
         let mut own = Vec::new();
@@ -2765,7 +2767,7 @@ impl Places {
             ),
         ];
         out.extend(self.app_sections.iter().cloned());
-        out.retain(|s| !s.items.is_empty());
+        out.retain(PlaceSection::shown);
         out
     }
 
