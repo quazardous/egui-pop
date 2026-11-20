@@ -97,8 +97,12 @@ command-about-read =
     .title = Lire les informations sur l’application
 
 command-help-report =
-    .description = Ouvre un nouveau ticket dans le navigateur, prérempli avec les informations de version, la plateforme, la page affichée et le dernier élément inspecté.
+    .description = Ouvre un nouveau ticket dans le navigateur, prérempli avec les informations de version, la plateforme, la page affichée et le dernier élément inspecté ; si le journal est enregistré, montre d'abord ce que le signalement joint.
     .title = Signaler un problème
+
+command-help-report-send =
+    .description = Copie le signalement affiché par Signaler un problème et ouvre le nouveau ticket dans le navigateur, pour l'y coller.
+    .title = Copier le signalement et ouvrir le ticket
 
 command-help-suggest =
     .description = Ouvre un nouveau ticket pour une idée dans le navigateur, prérempli avec la page affichée.
@@ -826,6 +830,8 @@ egui-pop-admin-show-item-name = Montrer { $item } dans sa page
 egui-pop-about-authors = Auteurs
 
 egui-pop-about-copied = Copié.
+egui-pop-report-intro = Rien n'a été envoyé. Ce signalement contient ce que l'application a fait ces { $minutes } dernières minutes, chemins et valeurs privées masqués. Relisez-le : le bouton le copie et ouvre la page du ticket, où vous le collez.
+egui-pop-report-send = Copier et ouvrir le ticket
 
 egui-pop-about-copy = Copier les informations de version
 

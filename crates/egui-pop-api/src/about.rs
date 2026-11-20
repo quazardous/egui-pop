@@ -29,6 +29,14 @@
 //! go ([`AppInfo::issues`]): a library cannot know where an
 //! application's bugs belong, and a command leading nowhere is noise.
 //!
+//! With a journal recorder ([`AboutPlugin::journal`], [`journal`]),
+//! `help.report` first shows what the report attaches, in a dialog: the
+//! last minutes of the journal, redacted, the versions, the bus's points
+//! and the application's own context ([`AboutPlugin::context`]). Nothing
+//! leaves the machine on its own: its button copies the text and opens
+//! the issue, where the user pastes it (`help.report.send`). Agents read
+//! the same with `help.report.bundle`.
+//!
 //! ```
 //! use egui_pop_api::about::{ABOUT, AboutPlugin, AppInfo};
 //! use egui_pop_api::App;
@@ -60,11 +68,13 @@ use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, PluginId};
 use serde_json::{Value as Json, json};
 
+pub mod journal;
 pub mod report;
 
 use crate::app::{AppHandle, MENU_HELP};
 use crate::clipboard::{self, ClipSource, CopyRequest};
 use crate::dialogs::{Custom, DIALOGS};
+use crate::hooks::On;
 use crate::services::ServiceToken;
 use crate::steps::Outcome;
 use crate::strings as txt;
@@ -84,6 +94,11 @@ pub const CMD_ABOUT_READ: CommandId = CommandId::from_static("about.read");
 pub const CMD_REPORT: CommandId = CommandId::from_static("help.report");
 /// Help > Suggest an idea: a new issue for an idea, in the browser.
 pub const CMD_SUGGEST: CommandId = CommandId::from_static("help.suggest");
+/// The report dialog's button: copies the report and opens the issue.
+pub const CMD_REPORT_SEND: CommandId = CommandId::from_static("help.report.send");
+/// The report's attachment as JSON (the journal window, redacted), for
+/// agents.
+pub const CMD_REPORT_BUNDLE: CommandId = CommandId::from_static("help.report.bundle");
 
 /// The clipboard endpoint "Copy version info" copies from.
 pub const VERSION_ENDPOINT: &str = "about.version";
@@ -300,6 +315,11 @@ impl About {
 /// Says which page or view is shown, for a report (`None`: it cannot).
 pub type PageFn = dyn Fn(&AppHandle) -> Option<String>;
 
+/// A part of the application's context a report attaches (the shape of
+/// its library, its layout, its settings that differ from the defaults),
+/// as JSON; redacted like the journal.
+pub type ContextFn = dyn Fn(&AppHandle) -> Json;
+
 /// Help > About *application*, `about.read` for agents, and
 /// `help.report` and `help.suggest` when the info says where issues go.
 #[derive(Default)]
@@ -307,6 +327,8 @@ pub struct AboutPlugin {
     info: AppInfo,
     page: Option<Rc<PageFn>>,
     idea_form: Option<String>,
+    journal: Option<journal::RecorderConfig>,
+    context: Vec<(String, Rc<ContextFn>)>,
 }
 
 impl fmt::Debug for AboutPlugin {
@@ -315,6 +337,11 @@ impl fmt::Debug for AboutPlugin {
             .field("info", &self.info)
             .field("page", &self.page.is_some())
             .field("idea_form", &self.idea_form)
+            .field("journal", &self.journal)
+            .field(
+                "context",
+                &self.context.iter().map(|(n, _)| n).collect::<Vec<_>>(),
+            )
             .finish()
     }
 }
@@ -325,7 +352,26 @@ impl AboutPlugin {
             info,
             page: None,
             idea_form: None,
+            journal: None,
+            context: Vec::new(),
         }
+    }
+
+    /// Records the journal for reports: the last minutes of it (5 by
+    /// default), redacted, kinds the configuration skips left out;
+    /// `help.report` then shows it before the issue opens.
+    pub fn journal(mut self, config: journal::RecorderConfig) -> Self {
+        self.journal = Some(config);
+        self
+    }
+
+    /// A part of the application's context a report attaches, under
+    /// `name` (`library`, `layout`, `settings`), read when the report is
+    /// made; redacted like the journal. The application keeps names,
+    /// paths and ids out of it: the redaction is a safety net.
+    pub fn context(mut self, name: &str, f: impl Fn(&AppHandle) -> Json + 'static) -> Self {
+        self.context.push((name.into(), Rc::new(f)));
+        self
     }
 
     /// The repository's issue form for ideas `help.suggest` fills
@@ -345,11 +391,17 @@ impl AboutPlugin {
     }
 }
 
-/// The page function, for [`report_of`], and the idea form.
+/// The page function, for [`report_of`], the idea form, the journal
+/// recorder and the report shown in its dialog.
 #[derive(Default)]
 struct Shared {
     page: std::cell::RefCell<Option<Rc<PageFn>>>,
     idea_form: std::cell::RefCell<Option<String>>,
+    recorder: std::cell::RefCell<Option<journal::Recorder>>,
+    redactor: std::cell::RefCell<journal::Redactor>,
+    context: std::cell::RefCell<Vec<(String, Rc<ContextFn>)>>,
+    /// The report the dialog shows, as its button copies it.
+    shown: std::cell::RefCell<Option<String>>,
 }
 
 /// The version info, as the `about.version` endpoint copies it.
@@ -386,15 +438,55 @@ impl Plugin for AboutPlugin {
         ctx.clip_endpoint(VERSION_ENDPOINT, Some(Rc::new(VersionSource)), None);
         *ctx.app().local::<Shared>().page.borrow_mut() = self.page.clone();
         *ctx.app().local::<Shared>().idea_form.borrow_mut() = self.idea_form.clone();
+        if let Some(config) = &self.journal {
+            let shared = ctx.app().local::<Shared>();
+            *shared.recorder.borrow_mut() = Some(journal::Recorder::new(config.clone()));
+            *shared.redactor.borrow_mut() = journal::Redactor::current();
+            *shared.context.borrow_mut() = self.context.clone();
+            ctx.on(On::Pass, |app, _| record(app));
+            ctx.command(
+                CommandSpec::new(CMD_REPORT_BUNDLE, "Read the problem report", CAT)
+                    .description("What Report a problem attaches, as JSON: the last minutes of the journal, redacted, the versions, the bus's points and the application's context.")
+                    .hidden()
+                    .read_only()
+                    .private(),
+                |call| {
+                    let bundle = report_bundle(call.app)?;
+                    serde_json::to_value(&bundle).map_err(|e| e.to_string())
+                },
+            )?;
+        }
         if self.info.issues.is_some() {
             ctx.command(
                 CommandSpec::new(CMD_REPORT, "Report a problem", CAT)
-                    .description("Opens a new issue in the browser, prefilled with the version info, the platform, the page shown and the last element inspected.")
+                    .description("Opens a new issue in the browser, prefilled with the version info, the platform, the page shown and the last element inspected; with a journal recorded, shows what the report attaches first.")
                     .menu(MENU_HELP, "8_report", 0),
                 |call| {
                     let url = report_url(call.app)?;
+                    if recording(call.app) && call.app.service(&DIALOGS).is_some() {
+                        let dialog = open_bundle(call.app)?;
+                        return Ok(json!({ "url": url.url, "trimmed": url.trimmed, "dialog": dialog }));
+                    }
                     open_report(call.app, &url.url)?;
                     Ok(json!({ "url": url.url, "trimmed": url.trimmed }))
+                },
+            )?
+            .command(
+                CommandSpec::new(CMD_REPORT_SEND, "Copy the report and open the issue", CAT)
+                    .description("Copies the report shown by Report a problem and opens the new issue in the browser, to paste it there.")
+                    .hidden(),
+                |call| {
+                    let text = call
+                        .app
+                        .local::<Shared>()
+                        .shown
+                        .borrow_mut()
+                        .take()
+                        .ok_or("no report is shown")?;
+                    call.app.egui().copy_text(text.clone());
+                    let url = report_url(call.app)?;
+                    open_report(call.app, &url.url)?;
+                    Ok(json!({ "url": url.url, "copied": text.len() }))
                 },
             )?
             .command(
@@ -545,6 +637,113 @@ pub fn idea_url(app: &AppHandle) -> Result<report::IssueUrl, String> {
     };
     let form = app.local::<Shared>().idea_form.borrow().clone();
     Ok(report.idea_url(issues, form.as_deref()))
+}
+
+/// Whether the journal is recorded for reports.
+pub fn recording(app: &AppHandle) -> bool {
+    app.local::<Shared>().recorder.borrow().is_some()
+}
+
+/// Reads the journal's new entries into the recorder.
+fn record(app: &AppHandle) {
+    let shared = app.local::<Shared>();
+    let last = match shared.recorder.borrow().as_ref() {
+        Some(r) => r.last(),
+        None => return,
+    };
+    let events = app.events_since(last);
+    let redactor = shared.redactor.borrow();
+    if let Some(r) = shared.recorder.borrow_mut().as_mut() {
+        r.record(web_time::Instant::now(), &events, &redactor);
+    }
+}
+
+/// What a report attaches (it needs [`AboutPlugin::journal`]): the
+/// journal's window, redacted, the versions, the page shown, the bus's
+/// points and the application's context.
+pub fn report_bundle(app: &AppHandle) -> Result<journal::Bundle, String> {
+    record(app);
+    let shared = app.local::<Shared>();
+    let report = report_of(app)?;
+    let now = web_time::Instant::now();
+    let recorder = shared.recorder.borrow();
+    let recorder = recorder
+        .as_ref()
+        .ok_or("the journal is not recorded (AboutPlugin::journal)")?;
+    let redactor = shared.redactor.borrow();
+    let mut context = std::collections::BTreeMap::new();
+    for (name, f) in shared.context.borrow().iter() {
+        let mut v = f(app);
+        redactor.json(&mut v);
+        context.insert(name.clone(), v);
+    }
+    let (missed, capped) = recorder.lost();
+    Ok(journal::Bundle {
+        version: report.version,
+        platform: report.platform,
+        page: report.page.map(|p| redactor.text(&p)),
+        window_s: recorder.config().window.as_secs(),
+        missed,
+        capped,
+        journal: recorder.window(now),
+        context,
+        bus: journal::bus_description(&*app.bus()),
+    })
+}
+
+/// The settings that differ from their defaults, by id, for a report's
+/// context ([`AboutPlugin::context`]): numbers, switches and choices as
+/// they are; a free text only as `"<text>"`, since it may name a person,
+/// a place or a path.
+pub fn changed_settings(app: &AppHandle) -> Json {
+    use egui_pop_model::values::Value;
+    let store = app.store();
+    let store = lock(&store);
+    let mut out = serde_json::Map::new();
+    for s in app.settings() {
+        let Some(entry) = store.get(&s.path) else {
+            continue;
+        };
+        if entry.value == s.descriptor.default {
+            continue;
+        }
+        let v = match &entry.value {
+            Value::Text(_) => Json::from("<text>"),
+            other => serde_json::to_value(other).unwrap_or(Json::Null),
+        };
+        out.insert(s.id.to_string(), v);
+    }
+    Json::Object(out)
+}
+
+/// Opens the dialog showing what a report attaches; its button copies
+/// it and opens the issue (`help.report.send`).
+fn open_bundle(app: &AppHandle) -> Result<u64, String> {
+    let dialogs = app
+        .service(&DIALOGS)
+        .ok_or("the dialogs plugin is not connected")?;
+    let bundle = report_bundle(app)?;
+    let text = bundle.text();
+    *app.local::<Shared>().shown.borrow_mut() = Some(text.clone());
+    let ctx = app.egui();
+    let minutes = bundle.window_s.div_ceil(60).to_string();
+    let intro = strings::tr_args(&ctx, &txt::REPORT_INTRO, &[("minutes", &minutes)]);
+    let spec = Custom::new(
+        &strings::tr(&ctx, &txt::ABOUT_ISSUES),
+        &strings::tr(&ctx, &txt::REPORT_SEND),
+        CMD_REPORT_SEND,
+    )
+    .size(640.0, 420.0);
+    let entries = bundle.journal.len();
+    let bytes = text.len();
+    dialogs.open_custom(app, spec, move |ui, _app, pass| {
+        pass.describe(json!({ "entries": entries, "bytes": bytes }));
+        ui.label(&intro);
+        ui.add_space(6.0);
+        ui.scroll_area(egui::ScrollArea::both().auto_shrink([false, false]), |ui| {
+            ui.add(egui::Label::new(egui::RichText::new(&text).monospace()).selectable(true));
+        });
+    })
 }
 
 /// Opens the URL: through the links service when its plugin is
