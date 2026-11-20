@@ -8,6 +8,26 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.18.3 (2026-11-20)
+
+Published: egui-pop-core 0.15.1, egui-pop-viewport 0.15.1, egui-pop 0.18.3.
+
+### Features
+
+- egui-pop, egui-pop-viewport: The node graph draws a node's status in its title bar:
+  `GraphEditor::status` gives each node an optional `NodeStatus`, a short
+  text drawn small at the title bar's right end (left of the `header`
+  slot), in a kit tone, an application's colour or a theme token's colour
+  (`StatusColor`), its detail shown as a tooltip. The text and the detail
+  are part of the node's accessible description. The gallery's node graph
+  page shows one.
+- egui-pop, egui-pop-core: A flat tree's row at its depth: `TreeRow::depth(n)` indents a row by `n`
+  times the theme's `spacing.indent` before its toggle (or a leaf's room
+  for one), and says it is at level `n + 1` to assistive technology, on its
+  toggle and on its row. For a tree kept as a flat list, whose rows are not
+  nested in their parents' bodies; what the caller draws in the row is
+  unchanged. The gallery's folds page shows one.
+
 ## 0.18.2 (2026-11-20)
 
 Published: egui-pop-model 0.12.1, egui-pop-api 0.16.2, egui-pop-test 0.17.1, egui-pop-agent 0.11.2, egui-pop 0.18.2.
