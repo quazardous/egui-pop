@@ -231,16 +231,16 @@ fn a_runner_paired_in_advance_writes_and_an_unpaired_one_does_not() {
     let mut h = app_with(builder, &path);
     let mode = std::fs::metadata(&token).unwrap().permissions().mode();
     assert_eq!(mode & 0o777, 0o600, "the token is the user's only");
-    let pairing = egui_pop_agent::pairings(&h.state().handle())
+    let pairing = egui_pop_agent::pairings(h.state().handle())
         .into_iter()
         .find(|p| p.id == "scenario")
         .expect("paired in advance");
     assert!(pairing.pre_issued);
     // Too short a token, or a reserved id, is refused.
     let handle = h.state().handle();
-    assert!(egui_pop_agent::pairing::pre_issue(&handle, "x", "short", None).is_err());
+    assert!(egui_pop_agent::pairing::pre_issue(handle, "x", "short", None).is_err());
     assert!(
-        egui_pop_agent::pairing::pre_issue(&handle, "agent-socket", &"t".repeat(40), None).is_err()
+        egui_pop_agent::pairing::pre_issue(handle, "agent-socket", &"t".repeat(40), None).is_err()
     );
     let click = parse(
         r#"Scenario(
