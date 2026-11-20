@@ -137,6 +137,10 @@
 //! the workbench's chrome shows it ([`PANEL_CHROME`]), never the panel.
 //! What a declared panel is, its kind (whether it edits) included, is
 //! `pop.panel.describe` ([`PanelDescribe`], answered by [`PANEL_DESCRIBE`]).
+//! Opening a panel, wherever it is asked from (a menu, a tab bar's "+",
+//! a group's menu, its toggle command, an agent), is `pop.panel.open`
+//! ([`PanelOpen`], a [`PanelOpenAsk`] naming the panel and where it opens:
+//! where it was, here or an area; answered by [`PANEL_OPEN`]).
 //! The interactive areas each window's last pass registered, what each
 //! writes (display, navigate, edit) and whether an edit area is inert,
 //! are `pop.ui.areas` ([`UiAreas`], answered by [`AREA_REGISTRY`]).
@@ -189,6 +193,8 @@ mod owners;
 pub use owners::OWNER_GONE;
 pub(crate) mod panel_describe;
 pub use panel_describe::{PANEL_DESCRIBE, PANEL_DESCRIBE_POINTS, PanelDescribe, PanelDescription};
+pub(crate) mod panel_open;
+pub use panel_open::{OpenPlace, PANEL_OPEN, PANEL_OPEN_POINTS, PanelOpen, PanelOpenAsk};
 pub(crate) mod panel_state;
 pub use panel_state::{
     PANEL_CHROME, PANEL_STATE_POINTS, PanelState, PanelStateAsk, PanelStateSet, TabMark, mark_id,
@@ -642,8 +648,8 @@ pub const PLUGIN_POINTS: [&str; 2] = [PluginConnect::ID.as_str(), PluginDisconne
 
 /// Every point egui-pop declares: the window, job, plugin, files,
 /// settings, drag, screen, panel state, layout, panel description and
-/// command and area points.
-pub const POINTS: [&str; 24] = [
+/// command, area and panel opening points.
+pub const POINTS: [&str; 25] = [
     WindowOpen::ID.as_str(),
     WindowClose::ID.as_str(),
     WindowReparent::ID.as_str(),
@@ -668,6 +674,7 @@ pub const POINTS: [&str; 24] = [
     PanelDescribe::ID.as_str(),
     CommandRun::ID.as_str(),
     UiAreas::ID.as_str(),
+    PanelOpen::ID.as_str(),
 ];
 
 /// egui-pop's contract table (ADR 0030): every point it declares on the
@@ -730,6 +737,9 @@ pub const CONTRACT: &[PointDecl] = &[
         "A command is about to run, whatever asked it (a key, the palette, a menu, a toolbar, an agent): a listener may refuse it with a reason, and the handler does not run; fail-closed, so a listener that fails refuses it too. `command.refused` names who refused and why.",
     )
     .fail_closed(),
+    PointDecl::of::<PanelOpen>(
+        "A panel is asked open, whoever asks (a menu, a tab bar's \"+\", a group's menu, its toggle command, an agent): `last` puts it back where it was when it closed (that place gone, in the focused panel's tab group when its areas allow it, else its declared area), `here` in the tab group holding `group` (else the focused panel's), an area's name docks it there; the workbench runs the `workbench.show` step, which a plugin may veto; asked on the interface's thread.",
+    ),
     PointDecl::of::<UiAreas>(
         "The interactive areas are listed, each window's last pass: each one's kind (display, navigate or edit), for an edit area the control it writes, its value and path, its panel, its grips, and whether it is inert (its panel's state not current); asked on the interface's thread.",
     ),
@@ -965,6 +975,7 @@ impl Bus {
         let panel_states = panel_state::States::default();
         panel_state::install(&*kernel, &panel_states, wake.clone());
         panel_describe::install(&*kernel);
+        panel_open::install(&*kernel);
         areas::install(&*kernel, wake.clone());
         let over_budget = budget::install(&*kernel);
         let jobs = JobPublisher {
@@ -1535,6 +1546,25 @@ impl AppHandle {
     /// (docs/stability.md).</div>
     pub fn describe_panel(&self, panel: &str) -> Option<PanelDescription> {
         emit_with::<PanelDescribe>(self, panel.to_string(), None)
+    }
+
+    /// Opens a panel (`pop.panel.open`): its listeners run now (the
+    /// workbench's runs the `workbench.show` step, or queues it while the
+    /// areas are drawn); what they did, one line each, or why it did not
+    /// open.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn open_panel(&self, ask: PanelOpenAsk) -> Result<Vec<String>, String> {
+        ASKING.with_borrow_mut(|a| a.push(self.downgrade()));
+        let _asking = Asking;
+        let out = self.0.bus.kernel.alter::<PanelOpen>(ask, Vec::new());
+        if out.failures.is_empty() {
+            Ok(out.value)
+        } else {
+            let why: Vec<String> = out.failures.iter().map(ToString::to_string).collect();
+            Err(why.join("; "))
+        }
     }
 
     /// The interactive areas of each window's last pass (`pop.ui.areas`):

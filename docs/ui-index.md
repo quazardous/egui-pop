@@ -43,6 +43,7 @@ To add an entry, give the item a doc line
 | content in a box of a fixed size (allocate_ui_with_layout) | `ui.sized_ui(..)`<br>`egui_pop::core::ui::UiPop::sized_ui` | `add` in a box of exactly `size` at the layout's cursor, laid out by `layout` (`Layout::centered_and_justified` to fill it): a cell of a set width in a row. |
 | content placed in a given rectangle, clipped to it (put) | `ui.rect_ui(..)`<br>`egui_pop::core::ui::UiPop::rect_ui` | `add` in `rect`, laid out by `layout` and clipped to it, for what places its parts by rectangles (a card laid out by a layout engine, a slot): nothing it draws goes past `rect`. |
 | one of egui's own widgets, styled by the kit | `ui.scoped(..)`<br>`egui_pop::core::ui::UiPop::scoped` | `add` in a scope where egui's own widgets of a `Stock` kind (buttons, combo boxes, text fields, buttons shown on or off) are drawn from the kit's component, in a tone: its states become egui's widget visuals, so egui keeps drawing the widget (`Kit::scope`). |
+| open a closed panel again where it was, or in a given tab group | `PanelOpenAsk`<br>`egui_pop::api::bus::PanelOpenAsk` | A panel asked open: which panel, where, and who asks. |
 | space between blocks, by intent (never a number of points) | `ui.space_role(..)`<br>`egui_pop::core::ui::UiPop::space_role` | Space by intent along the layout's direction (`Space`); egui's own `add_space` takes points. |
 
 ## Buttons and actions

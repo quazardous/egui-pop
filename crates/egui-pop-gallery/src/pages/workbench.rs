@@ -240,6 +240,27 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     {
         workbench::set_dock_controls(app, controls.group_menus(menus));
     }
+    // A "+" on each tab bar, and opening a panel through `pop.panel.open`:
+    // closed, a panel comes back where it was. One row, so the strip
+    // controls below stay in view.
+    ui.horizontal_wrapped(|ui| {
+        let mut add = controls.add_buttons;
+        if widgets::checkbox(ui, &mut add, "Add buttons (\"+\")").changed() {
+            workbench::set_dock_controls(app, controls.add_buttons(add));
+        }
+        if ui.button("Close Console").clicked() {
+            app.set_panel_visible(&CONSOLE, false);
+        }
+        if ui.button("Open Console where it was").clicked() {
+            let ask = egui_pop::api::bus::PanelOpenAsk::new(
+                CONSOLE.as_str(),
+                egui_pop::api::bus::OpenPlace::Last,
+                "gallery",
+            );
+            // The console may open anywhere: nothing refuses it.
+            let _ = app.open_panel(ask);
+        }
+    });
     ui.weak("Drag a tab onto another area: it goes there when its rules allow it; the drop hint says why not.");
     ui.weak("Detached, the notes' window takes their key (Ctrl+Shift+Delete) and shows their dialog over itself; every other window waits for the answer.");
     ui.weak("Drop a tab on the notes' window, or pick Move to window in its tab menu: it joins the window's tabs.");

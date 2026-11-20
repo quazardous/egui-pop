@@ -166,6 +166,7 @@ use egui_stack::{
 use serde_json::{Value as Json, json};
 
 use crate::app::AppHandle;
+use crate::bus::OpenPlace;
 use crate::steps::Outcome;
 use crate::strings as txt;
 use crate::window::WindowState;
@@ -374,6 +375,10 @@ pub struct DockControls {
     /// (egui_stack's `FloatsArea::move_from`): [`MoveFrom::BAR`] by
     /// default.
     pub float_move_from: MoveFrom,
+    /// A "+" at the end of each tab bar, docked or floating: it lists the
+    /// closed panels that may open in that group and opens the one chosen
+    /// there (`pop.panel.open` with `here`). Off by default.
+    pub add_buttons: bool,
 }
 
 impl Default for DockControls {
@@ -382,6 +387,7 @@ impl Default for DockControls {
             eject_group: false,
             group_menus: true,
             float_move_from: MoveFrom::BAR,
+            add_buttons: false,
         }
     }
 }
@@ -397,6 +403,13 @@ impl DockControls {
     /// not.
     pub fn group_menus(mut self, on: bool) -> Self {
         self.group_menus = on;
+        self
+    }
+
+    /// Shows a "+" at the end of each tab bar, opening a closed panel
+    /// there, or not.
+    pub fn add_buttons(mut self, on: bool) -> Self {
+        self.add_buttons = on;
         self
     }
 
@@ -732,9 +745,9 @@ pub(crate) fn steps() -> Vec<crate::steps::StepSpec> {
             .args(json!({ "panel": "app.inspector", "area": "start_side" })),
         StepSpec::new(
             STEP_SHOW,
-            "A panel is shown, docked back in its area if it was closed (`panel`).",
+            "A panel is shown (`panel`). Closed, it goes back where it was (`place`: `last`, the default); that place gone, into the focused panel's tab group when its areas allow it, else its declared area. `place`: `here` opens it in the tab group holding `group` (else the focused panel's), an area's name docks it there.",
         )
-        .args(json!({ "panel": "app.inspector" })),
+        .args(json!({ "panel": "app.inspector", "place": "last" })),
         StepSpec::new(STEP_HIDE, "A panel is closed (`panel`).")
             .args(json!({ "panel": "app.inspector" })),
         StepSpec::new(
@@ -960,7 +973,13 @@ impl DropHint {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Change {
     Move(PanelId, Area),
+    /// A panel is shown: closed, back where it was (`pop.panel.open`'s
+    /// `last`).
     Show(PanelId),
+    /// A panel opens here (in the tab group holding the panel given, else
+    /// the focused panel's) or in an area, moved there when open
+    /// elsewhere (`pop.panel.open`); [`OpenPlace::Last`] is [`Change::Show`].
+    Open(PanelId, OpenPlace, Option<PanelId>),
     Hide(PanelId),
     Focus(PanelId),
     /// An area folded to its strip (`true`) or unfolded.
@@ -1122,6 +1141,13 @@ impl Change {
         match self {
             Change::Move(p, a) => (STEP_MOVE, json!({ "panel": p, "area": area_name(*a) })),
             Change::Show(p) => (STEP_SHOW, json!({ "panel": p })),
+            Change::Open(p, place, group) => {
+                let mut args = json!({ "panel": p, "place": place.as_str() });
+                if let Some(g) = group {
+                    args["group"] = json!(g);
+                }
+                (STEP_SHOW, args)
+            }
             Change::Hide(p) => (STEP_HIDE, json!({ "panel": p })),
             Change::Focus(p) => (STEP_FOCUS, json!({ "panel": p })),
             Change::Fold(a, f) => (STEP_FOLD, json!({ "area": area_name(*a), "folded": f })),
@@ -1317,7 +1343,22 @@ impl Change {
                     Change::Move(panel, area)
                 }
             }
-            "workbench.show" => Change::Show(panel),
+            "workbench.show" => {
+                let place = match args.get("place").and_then(Json::as_str) {
+                    Some(name) => OpenPlace::parse(name).ok_or_else(|| {
+                        format!("no place `{name}` (`last`, `here` or an area's name)")
+                    })?,
+                    None => OpenPlace::Last,
+                };
+                let group = match args.get("group").and_then(Json::as_str) {
+                    Some(g) => Some(PanelId::new(g).map_err(|e| e.to_string())?),
+                    None => None,
+                };
+                match place {
+                    OpenPlace::Last => Change::Show(panel),
+                    place => Change::Open(panel, place, group),
+                }
+            }
             "workbench.detach" if flag_off("group") => Change::DetachGroup(panel),
             "workbench.detach" => Change::Detach(panel),
             "workbench.attach" => Change::Attach(panel),
@@ -1790,15 +1831,168 @@ impl Workbench {
         self.layout.shows(panel)
     }
 
-    /// Puts a closed panel back: a palette floating (cascaded), any other
-    /// in its area.
+    /// Puts a closed panel back where it was when it closed
+    /// ([`Layout::last_place`]). That place gone, it joins the current
+    /// group (the focused panel's tabs) when its areas allow it; else, or
+    /// with no place known, a palette floats (cascaded), any other panel
+    /// docks in its area.
     fn reopen(&mut self, spec: &PanelSpec) {
+        let last = self.layout.closed.remove(&spec.id);
+        let had_place = last.is_some() && self.layout.hidden.contains(&spec.id);
+        if had_place && last.is_some_and(|place| self.restore(spec, &place)) {
+            return;
+        }
+        // Its place gone, the current group; a panel that never had one
+        // (closed when declared) goes to its area. A palette floats
+        // rather than join a docked group.
+        if had_place
+            && !spec.palette
+            && let Some(group) = self.current_group(spec)
+            && self.layout.join_tabs(&spec.id, &group).is_ok()
+        {
+            return;
+        }
         if spec.palette {
             let n = self.layout.floating.len();
             self.layout.float(&spec.id, FloatingGroup::cascade(n));
         } else {
             self.layout.place(&spec.id, spec.area);
         }
+    }
+
+    /// Puts a closed panel at the place it had; `false` when that place is
+    /// gone (the tabs it sat with left its area, its window's screen is
+    /// unplugged) or its rules keep it out of it now.
+    fn restore(&mut self, spec: &PanelSpec, place: &egui_pop_model::layout::DormantPlace) -> bool {
+        use egui_pop_model::layout::DormantPlace;
+        let host = |p: Place| crate::mounts::panel_host(p);
+        match place {
+            DormantPlace::Docked { area, beside, .. } => {
+                if spec.refuses(&host(Place::Area(*area))).is_some() {
+                    return false;
+                }
+                // Alone in its area, the area is its place; else one of the
+                // tabs it sat with must still be there.
+                let there = beside.is_empty()
+                    || beside.iter().any(|b| self.layout.area_of(b) == Some(*area));
+                there && self.layout.dock_at(&spec.id, place)
+            }
+            DormantPlace::Floating { pos } => {
+                if spec.refuses(&host(Place::Floating)).is_some() {
+                    return false;
+                }
+                self.layout.float(&spec.id, *pos);
+                true
+            }
+            DormantPlace::Window { screen, rect } => {
+                // Unnamed, or no screen told: kept on the screen there is.
+                let screens = crate::window::screen_list();
+                let plugged = screen == crate::window::UNNAMED_SCREEN
+                    || screens.is_empty()
+                    || screens
+                        .iter()
+                        .any(|s| s.name.as_deref() == Some(screen.as_str()));
+                if !plugged || spec.refuses(&host(Place::Window)).is_some() {
+                    return false;
+                }
+                self.layout.remove(&spec.id);
+                self.layout.hidden.retain(|h| *h != spec.id);
+                self.layout
+                    .auxiliary
+                    .push(egui_pop_model::layout::Auxiliary::window(
+                        spec.id.clone(),
+                        screen,
+                        *rect,
+                    ));
+                true
+            }
+            DormantPlace::Hidden => false,
+        }
+    }
+
+    /// The current group a panel may open into: the focused panel, when
+    /// it is docked in an area the panel's rules allow (and is not the
+    /// panel itself).
+    fn current_group(&self, spec: &PanelSpec) -> Option<PanelId> {
+        let focused = self.focused.clone().filter(|f| *f != spec.id)?;
+        let area = self.layout.area_of(&focused)?;
+        spec.refuses(&crate::mounts::panel_host(Place::Area(area)))
+            .is_none()
+            .then_some(focused)
+    }
+
+    /// Opens a panel here (the tab group holding `group`, else the
+    /// focused panel's: docked, floating or detached) or in an area,
+    /// taken out of where it is when open elsewhere.
+    fn open_at(
+        &mut self,
+        spec: &PanelSpec,
+        place: OpenPlace,
+        group: Option<&PanelId>,
+    ) -> Result<Json, String> {
+        let p = &spec.id;
+        let host = |pl: Place| crate::mounts::panel_host(pl);
+        let area = match place {
+            OpenPlace::Last => {
+                if !self.layout.shows(p) {
+                    self.reopen(spec);
+                }
+                self.layout.activate(p);
+                return Ok(json!({ "panel": p, "shown": true, "place": "last" }));
+            }
+            OpenPlace::Area(area) => area,
+            OpenPlace::Here => {
+                let group = group
+                    .cloned()
+                    .or_else(|| self.focused.clone())
+                    .ok_or("no tab group to open it in: name one (`group`)")?;
+                if group == *p {
+                    self.layout.activate(p);
+                    return Ok(json!({ "panel": p, "shown": true, "place": "here" }));
+                }
+                if let Some(area) = self.layout.area_of(&group) {
+                    if let Some(why) = spec.refuses(&host(Place::Area(area))) {
+                        return Err(why);
+                    }
+                    if self.layout.window_of(p).is_some() {
+                        self.keep_closed_window(p);
+                    }
+                    self.layout.join_tabs(p, &group)?;
+                } else if self.layout.window_of(&group).is_some() {
+                    if let Some(why) = spec.refuses(&host(Place::Window)) {
+                        return Err(why);
+                    }
+                    self.layout.join_window(p, &group)?;
+                } else if let Some(g) = self.layout.floating_of(&group) {
+                    if let Some(why) = spec.refuses(&host(Place::Floating)) {
+                        return Err(why);
+                    }
+                    let pos = g.pos;
+                    if self.layout.floating_of(p).is_none() {
+                        self.layout.float(p, pos);
+                    }
+                    self.layout
+                        .group(std::slice::from_ref(p), &group, Join::Tab)?;
+                    if let Some(g) = self.layout.floating_mut(p) {
+                        g.show(p);
+                    }
+                } else {
+                    return Err(format!("`{group}` is not open"));
+                }
+                return Ok(json!({ "panel": p, "shown": true, "place": "here", "group": group }));
+            }
+        };
+        if let Some(why) = spec.refuses(&host(Place::Area(area))) {
+            return Err(why);
+        }
+        if self.layout.area_of(p) != Some(area) {
+            if self.layout.window_of(p).is_some() {
+                self.keep_closed_window(p);
+            }
+            self.layout.place(p, area);
+        }
+        self.layout.activate(p);
+        Ok(json!({ "panel": p, "shown": true, "area": area_name(area) }))
     }
 
     /// Applies a change; refused when the panel's rules do not allow it.
@@ -1968,6 +2162,10 @@ impl Workbench {
                 self.layout.activate(p);
                 json!({ "panel": p, "shown": true })
             }
+            Change::Open(p, place, group) => {
+                let spec = spec_of(p)?;
+                self.open_at(&spec, *place, group.as_ref())?
+            }
             Change::Hide(p) => {
                 spec_of(p)?;
                 self.layout.hide(p);
@@ -2103,7 +2301,10 @@ impl Workbench {
             Change::OpenPalette(p) => {
                 let spec = spec_of(p)?;
                 if !self.layout.shows(p) {
-                    if spec.floatable {
+                    if self.layout.last_place(p).is_some() {
+                        // Back where it was, floating or not.
+                        self.reopen(&spec);
+                    } else if spec.floatable {
                         let n = self.layout.floating.len();
                         self.layout.float(p, FloatingGroup::cascade(n));
                     } else {
@@ -2655,6 +2856,8 @@ pub(crate) fn windows(
         prepared: &cache.tabs,
         eject: false,
         ejected: None,
+        groups: groups_of(space.state()),
+        added: None,
     };
     space.state_mut().translations = dock_translations(ctx);
     // A backend without windows of its own (kittest, the web) draws them
@@ -2672,13 +2875,14 @@ pub(crate) fn windows(
         .group_drag_modifiers(group_drag_modifier(app).modifiers())
         .float_move(float_move(app))
         .move_from(dock_controls(app).float_move_from)
+        .show_add_buttons(dock_controls(app).add_buttons)
         .configure(|_, area| {
             let area = area
                 .labels(labels.clone())
                 .group_context_menus(dock_controls(app).group_menus)
                 .allowed_splits(egui_stack::AllowedSplits::None)
                 .show_close_buttons(false)
-                .show_add_buttons(false)
+                .show_add_buttons(dock_controls(app).add_buttons)
                 .show_leaf_close_all_buttons(false)
                 .show_leaf_collapse_buttons(false);
             if embedded { area.id(space_id()) } else { area }
@@ -2736,6 +2940,7 @@ pub(crate) fn windows(
             window_drag(ui.ctx(), area_id, &window, &docks);
         })
         .show(ctx, &mut viewer);
+    let added = viewer.added.take();
     // egui_stack's own record of the floats' life: egui-pop's steps and
     // the bus already say it.
     let _ = space.take_float_events();
@@ -2752,6 +2957,7 @@ pub(crate) fn windows(
     wb.put_space(space);
     drop(wb);
     settle_drop(app, ctx);
+    open_add_menu(app, ctx, added);
 }
 
 /// The floats showing the detached windows drawn: one per window, keyed
@@ -4163,6 +4369,9 @@ fn drop_targets(app: &AppHandle, ui: &mut Ui, zen: bool) {
             prepared: &prepared,
             eject: false,
             ejected: None,
+            // An empty drop target: no group to open a panel in.
+            groups: Vec::new(),
+            added: None,
         };
         space.state_mut().translations = dock_translations(&ctx);
         let area = DockArea::dock(&mut space, dock)
@@ -5419,6 +5628,8 @@ fn draw_dock(app: &AppHandle, ui: &mut Ui, area: Area) {
         prepared: &cache.tabs,
         eject: false,
         ejected: None,
+        groups: groups_of(space.state()),
+        added: None,
     };
     let seen = Mutex::new(None);
     let painter = AreaPainter::new(&kit, frameless, &seen);
@@ -5433,11 +5644,12 @@ fn draw_dock(app: &AppHandle, ui: &mut Ui, area: Area) {
     viewer.eject = dock_controls(app).eject_group;
     group_gestures(dock, app, &ctx)
         .show_close_buttons(false)
-        .show_add_buttons(false)
+        .show_add_buttons(dock_controls(app).add_buttons)
         .show_leaf_close_all_buttons(false)
         .show_leaf_collapse_buttons(false)
         .show_inside(ui, &mut viewer);
     let ejected = viewer.ejected.take();
+    let added = viewer.added.take();
     let bar = space
         .dock(area_name(area))
         .and_then(|tree| first_bar(tree, &kit, &cache.tabs));
@@ -5462,6 +5674,7 @@ fn draw_dock(app: &AppHandle, ui: &mut Ui, area: Area) {
     {
         app.workbench_refused(&format!("detach {panel}"), e);
     }
+    open_add_menu(app, &ctx, added);
 }
 
 /// The tab bar of an area's first tabs (where `Layout::place` adds a
@@ -5685,6 +5898,42 @@ struct Viewer<'a> {
     eject: bool,
     /// The group whose "Eject group" button was clicked this pass.
     ejected: Option<egui_stack::NodePath>,
+    /// Each tab group drawn, by its path, with one of its panels: the
+    /// group its menu and its "+" open a panel in.
+    groups: Vec<(egui_stack::NodePath, PanelId)>,
+    /// The group whose "+" was clicked this pass, by one of its panels.
+    added: Option<PanelId>,
+}
+
+impl Viewer<'_> {
+    /// A panel of the group at `path`.
+    fn group_at(&self, path: egui_stack::NodePath) -> Option<&PanelId> {
+        self.groups.iter().find(|(p, _)| *p == path).map(|(_, g)| g)
+    }
+}
+
+/// Opens the menu of the closed panels a tab group may take, at the
+/// pointer: its "+" was clicked (or its menu's "Add tab").
+fn open_add_menu(app: &AppHandle, ctx: &egui::Context, group: Option<PanelId>) {
+    let Some(group) = group else { return };
+    let at = ctx.input(|i| i.pointer.interact_pos()).unwrap_or_default();
+    crate::menus::popup_at_with(
+        app,
+        &panel_menu::MENU_GROUP_ADD,
+        at,
+        json!({ "group": group }),
+    );
+}
+
+/// Each tab group of a dock state, by its path, with its shown panel.
+fn groups_of(state: &egui_stack::DockState<PanelId>) -> Vec<(egui_stack::NodePath, PanelId)> {
+    state
+        .iter_leaves()
+        .filter_map(|(path, leaf)| {
+            let p = leaf.tabs.get(leaf.active.0).or(leaf.tabs.first())?;
+            Some((path, p.clone()))
+        })
+        .collect()
 }
 
 /// A tab or a group dragged from another window over this one: the drop
@@ -5872,6 +6121,19 @@ impl TabViewer for Viewer<'_> {
     fn context_menu(&mut self, ui: &mut Ui, tab: &mut PanelId, _path: egui_stack::TabPath) {
         // The panel menu, the one a floating panel's title opens too.
         panel_menu::show(ui, self.app, tab);
+    }
+
+    fn group_context_menu(&mut self, ui: &mut Ui, path: egui_stack::NodePath) {
+        // Open panel ▸: a panel opened in this group (`pop.panel.open`).
+        if let Some(group) = self.group_at(path).cloned() {
+            panel_menu::show_group(ui, self.app, &group);
+        }
+    }
+
+    fn on_add(&mut self, path: egui_stack::NodePath) {
+        // The "+", or the group menu's "Add tab": the menu of the closed
+        // panels this group may take opens once the dock is drawn.
+        self.added = self.group_at(path).cloned();
     }
 
     fn group_bar_buttons(&mut self, _path: egui_stack::NodePath) -> Vec<String> {
