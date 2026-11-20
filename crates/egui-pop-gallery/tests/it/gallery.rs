@@ -9346,17 +9346,23 @@ fn the_places_page_pins_folds_and_gives_the_app_its_room() {
         h.query_by_label("Last: import again: 12 November, 214 photos")
             .is_some()
     );
-    h.get_by_label("History").focus();
+    // The band, not the gallery's History page in its list.
+    let band = |h: &Harness<'_, Gallery>| {
+        h.get_all_by_label("History")
+            .find(|n| n.accesskit_node().data().is_expanded().is_some())
+            .expect("History's band")
+            .accesskit_node()
+            .data()
+            .is_expanded()
+    };
+    h.get_all_by_label("History")
+        .find(|n| n.accesskit_node().data().is_expanded().is_some())
+        .expect("History's band")
+        .focus();
     h.run();
     h.key_press(egui::Key::ArrowLeft);
     h.run();
-    assert_eq!(
-        h.get_by_label("History")
-            .accesskit_node()
-            .data()
-            .is_expanded(),
-        Some(false)
-    );
+    assert_eq!(band(&h), Some(false));
     assert_eq!(h.query_all_by_label("Import again").count(), 0);
     assert!(h.query_by_label("Last: folded history").is_some());
 }
