@@ -16,6 +16,7 @@ use egui_pop::api::host::Pending;
 use egui_pop::api::steps::Before;
 use egui_pop::api::stories::Story;
 use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError, menus};
+use egui_pop::core::kit::Tone;
 use egui_pop::core::widgets;
 use egui_pop::imaging::{self, graph::STEP_GRAPH_DELETE};
 use egui_pop::model::commands::CommandSpec;
@@ -23,7 +24,7 @@ use egui_pop::model::ids::{CommandId, MenuId, PluginId, StoryId};
 use egui_pop::theme::Tokens;
 use egui_pop::viewport::graph::{
     Edge, Edit, ExportOptions, GraphEditor, GraphExport, GraphMinimap, GraphModel, GraphState,
-    Group, Kind, Level, Node, Param, Port, PortRef, PortType, Request, WireStyle,
+    Group, Kind, Level, Node, NodeStatus, Param, Port, PortRef, PortType, Request, WireStyle,
 };
 use egui_pop::viewport::navigation::CanvasZoom;
 use serde_json::json;
@@ -563,6 +564,21 @@ fn show(ui: &mut Ui, app: &AppHandle, s: &mut State, asked: &Cell<Option<(bool, 
             // The application's slot: a status light.
             let (r, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
             ui.painter().circle_filled(r.center(), 3.5, success);
+        })
+        // Each node's status in its title bar: in a tone, or in a theme
+        // token's colour, its detail as a tooltip.
+        .status(|node| match node.kind.as_str() {
+            "output" => Some(
+                NodeStatus::new("stale")
+                    .tone(Tone::Warning)
+                    .detail("Its inputs changed since the last render"),
+            ),
+            "load" => Some(
+                NodeStatus::new("cached")
+                    .token("success")
+                    .detail("Read from the cache"),
+            ),
+            _ => None,
         });
     let out = imaging::show_graph(app, GRAPH, editor, ui);
     for e in &out.edits {
