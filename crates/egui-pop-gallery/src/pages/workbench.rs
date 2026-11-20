@@ -7,7 +7,9 @@
 //! headings) shows on its icon while the outline is not shown.
 //! A tab dragged over a group shows the region it would take, bordered
 //! and tinted; the bottom area's groups are arranged as a grid, a row or
-//! a column by the workbench's commands.
+//! a column by the workbench's commands. The scratch pad opens as many
+//! times as asked (a panel declared with several instances), each with a
+//! count of its own kept in the layout.
 
 use egui::Ui;
 use egui_pop::api::dialogs::{Confirm, DIALOGS};
@@ -32,6 +34,8 @@ pub const OUTLINE: PanelId = PanelId::from_static("gallery.outline");
 pub const PROPERTIES: PanelId = PanelId::from_static("gallery.properties");
 pub const CONSOLE: PanelId = PanelId::from_static("gallery.console");
 pub const NOTES: PanelId = PanelId::from_static("gallery.notes");
+/// The "multi" demo: a scratch pad declared with several instances.
+pub const SCRATCH: PanelId = PanelId::from_static("gallery.scratch");
 
 /// The context key the move veto reads.
 const VETO: &str = "galleryVetoMoves";
@@ -104,6 +108,12 @@ impl Plugin for WorkbenchPage {
                 .icon("edit")
                 .closed(),
             notes,
+        )?
+        .instance_panel(
+            PanelSpec::new(SCRATCH, "Scratch", Area::Bottom)
+                .icon("edit")
+                .closed(),
+            scratch,
         )?;
         ctx.command(
             CommandSpec::new(CMD_ASK_CLEAR, "Clear the notes…", "Gallery")
@@ -169,6 +179,23 @@ fn notes(ui: &mut Ui, app: &AppHandle) {
     }
     if ui.button("Clear the notes…").clicked() {
         ask_clear(app);
+    }
+}
+
+/// A scratch pad instance: its own count, kept in its payload (saved
+/// with the layout, dropped when the instance closes).
+fn scratch(ui: &mut Ui, app: &AppHandle, instance: &workbench::instances::Instance) {
+    let count = app
+        .instance_payload(&instance.id)
+        .get("count")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
+    ui.label(format!(
+        "{} (instance {}): {count}",
+        instance.title, instance.number
+    ));
+    if ui.button("Count").clicked() {
+        let _ = app.set_instance_payload(&instance.id, serde_json::json!({ "count": count + 1 }));
     }
 }
 
@@ -258,6 +285,16 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                 "gallery",
             );
             // The console may open anywhere: nothing refuses it.
+            let _ = app.open_panel(ask);
+        }
+        // A panel opened several times: each new one `gallery.scratch#<n>`.
+        if ui.button("New Scratch").clicked() {
+            let ask = egui_pop::api::bus::PanelOpenAsk::new(
+                SCRATCH.as_str(),
+                egui_pop::api::bus::OpenPlace::Last,
+                "gallery",
+            )
+            .instance("new");
             let _ = app.open_panel(ask);
         }
     });

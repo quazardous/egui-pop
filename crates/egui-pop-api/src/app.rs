@@ -727,7 +727,13 @@ pub enum Request {
 
 struct PanelView {
     owner: OwnerId,
-    draw: Option<DrawFn>,
+    draw: Option<PanelDraw>,
+}
+
+/// How a panel is drawn: plainly, or told which instance it draws.
+pub(crate) enum PanelDraw {
+    Plain(DrawFn),
+    Instance(crate::workbench::instances::InstanceDrawFn),
 }
 
 struct StoryEntry {
@@ -1673,6 +1679,22 @@ impl AppHandle {
     }
 
     pub(crate) fn panel_title(&self, ctx: &Context, id: &PanelId) -> String {
+        // An instance not renamed: its kind's title (translated) and its
+        // number.
+        if id.is_instance() {
+            let renamed = self
+                .workbench_mut()
+                .layout
+                .instance(id)
+                .and_then(|i| i.title.clone());
+            if let Some(t) = renamed {
+                return t;
+            }
+            if self.workbench_mut().spec(id).is_some() {
+                let kind = self.panel_title(ctx, &id.kind());
+                return format!("{kind} {}", id.instance_number());
+            }
+        }
         let title = self.workbench_mut().spec(id).map(|s| s.title.clone());
         match title {
             Some(t) => strings::panel_title(ctx, id.as_str(), &t),
@@ -2620,7 +2642,7 @@ impl AppHandle {
         self.0.services.borrow_mut()
     }
 
-    pub(crate) fn add_panel_view(&self, owner: &OwnerId, id: PanelId, draw: DrawFn) {
+    pub(crate) fn add_panel_view(&self, owner: &OwnerId, id: PanelId, draw: PanelDraw) {
         self.0.panels.borrow_mut().insert(
             id,
             PanelView {
@@ -2791,15 +2813,22 @@ impl AppHandle {
     pub(crate) fn show_panel(&self, ui: &mut Ui, id: &PanelId) {
         let title = self.panel_title(ui.ctx(), id);
         let title = title.as_str();
+        // An instance (`<kind>#<n>`) is drawn by its kind's function.
+        let key = if id.is_instance() && !self.0.panels.borrow().contains_key(id) {
+            id.kind()
+        } else {
+            id.clone()
+        };
         let taken = self
             .0
             .panels
             .borrow_mut()
-            .get_mut(id)
+            .get_mut(&key)
             .and_then(|p| Some((p.draw.take()?, p.owner.clone())));
         let Some((mut draw, owner)) = taken else {
             return;
         };
+        let instance = crate::workbench::instances::Instance::of(id, title);
         let scope = scope_name(id.as_str());
         let region = ui.max_rect().intersect(ui.clip_rect());
         ui.push_id(("egui_pop_panel", id.as_str()), |ui| {
@@ -2824,7 +2853,16 @@ impl AppHandle {
                 // current (`pop.panel.state` stale, updating or failed).
                 let inert = self.panel_state(id.as_str()) != crate::bus::PanelState::Ready;
                 egui_pop_core::areas::scope(ui, id.as_str(), inert, |ui| {
-                    fault::boundary_reporting(ui, "panel", title, |ui| draw(ui, self), failed);
+                    fault::boundary_reporting(
+                        ui,
+                        "panel",
+                        title,
+                        |ui| match &mut draw {
+                            PanelDraw::Plain(f) => f(ui, self),
+                            PanelDraw::Instance(f) => f(ui, self, &instance),
+                        },
+                        failed,
+                    );
                 });
                 // Its state (`pop.panel.state`), drawn by the chrome over what
                 // the panel drew.
@@ -2841,7 +2879,7 @@ impl AppHandle {
                 }
             });
         });
-        if let Some(p) = self.0.panels.borrow_mut().get_mut(id) {
+        if let Some(p) = self.0.panels.borrow_mut().get_mut(&key) {
             p.draw = Some(draw);
         }
     }
@@ -3130,8 +3168,10 @@ impl AppHandle {
         let before = self.workbench_mut().layout.auxiliary.clone();
         let names = self.layout_screens();
         let screens: Vec<&str> = names.iter().map(String::as_str).collect();
+        let instances = crate::workbench::instances::open_ids(self);
         let notes = self.workbench_mut().set_layout(layout, &screens);
         self.sync_panel_windows(&before);
+        crate::workbench::instances::say(self, &instances);
         self.note_layout("layout.set");
         notes
     }
@@ -3203,6 +3243,7 @@ impl AppHandle {
         let (step, args) = change.step();
         let id = step.clone();
         let focused = self.focused_panel();
+        let instances = crate::workbench::instances::open_ids(self);
         let out = self.step(&step, args, move |app, args| {
             let c = crate::workbench::Change::from_args(&id, args)?;
             // A detached panel's window opened, docked back or closed is
@@ -3220,6 +3261,7 @@ impl AppHandle {
         if self.focused_panel() != focused {
             self.publish_focused();
         }
+        crate::workbench::instances::say(self, &instances);
         // Said on the bus once its gesture ended (`pop.layout.changed`).
         if matches!(out, Outcome::Done(Ok(_))) {
             self.note_layout(step.as_str());

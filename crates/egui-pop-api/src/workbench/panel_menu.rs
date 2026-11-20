@@ -31,6 +31,12 @@
 //! - the "+" at the end of its tab bar
 //!   ([`DockControls::add_buttons`](super::DockControls::add_buttons)):
 //!   the closed panels its place allows ([`MENU_GROUP_ADD`]).
+//!
+//! Both list first "New `<panel>`" for each panel declared with several
+//! instances its place allows (`pop.panel.open` with `instance: "new"`).
+//! The same entries, opening where the panel's area is, are the list
+//! [`LIST_NEW_INSTANCES`], in the View menu and for an application's own
+//! Window menu (`MenuItem::list`).
 
 use egui::Response;
 use egui_pop_core::strings;
@@ -93,13 +99,17 @@ const LIST_GROUPS: &str = "workbench.panel.groups";
 const LIST_CLOSE: &str = "workbench.panel.close";
 const LIST_OPEN_HERE: &str = "workbench.group.open";
 const LIST_ADD_HERE: &str = "workbench.group.add";
+/// "New `<panel>`" for each panel declared with several instances, opening
+/// a new one in the panel's area: in the View menu, and for an
+/// application's Window menu.
+pub const LIST_NEW_INSTANCES: &str = "workbench.panel.new";
 
 /// Declares the panel menu: its commands, its items and their lists.
 pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
     let example = json!({ "panel": "app.inspector" });
     ctx.command(
         CommandSpec::new(CMD_PANEL_OPEN, "Open panel", "View")
-            .description("Opens `panel` through `pop.panel.open`: where it was when it closed (`place`: `last`, the default; that place gone, in the focused panel's tab group when its areas allow it, else its own area), `here` (the tab group holding `group`, else the focused panel's) or in an area (`center`, `start_side`, `end_side`, `bottom`).")
+            .description("Opens `panel` through `pop.panel.open`: where it was when it closed (`place`: `last`, the default; that place gone, in the focused panel's tab group when its areas allow it, else its own area), `here` (the tab group holding `group`, else the focused panel's) or in an area (`center`, `start_side`, `end_side`, `bottom`). For a panel declared with several, `instance`: `new` opens a new instance (its id in `instance`), an instance's id opens that one.")
             .when("!modalOpen")
             .hidden()
             .args(json!({ "panel": "app.outline", "place": "here", "group": "app.inspector" })),
@@ -119,8 +129,20 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
             if let Some(g) = call.args.get("group").and_then(Json::as_str) {
                 ask = ask.group(g);
             }
+            let instance = call.args.get("instance").and_then(Json::as_str);
+            if let Some(i) = instance {
+                ask = ask.instance(i);
+            }
             let did = call.app.open_panel(ask)?;
-            Ok(json!({ "panel": panel, "place": place.as_str(), "did": did }))
+            let mut out = json!({ "panel": panel, "place": place.as_str(), "did": did });
+            // The new instance, by its id (the last one of its kind).
+            if instance == Some("new") {
+                let kind = PanelId::new(panel).map_err(|e| e.to_string())?;
+                if let Some(id) = call.app.panel_instances(&kind).last() {
+                    out["instance"] = json!(id);
+                }
+            }
+            Ok(out)
         },
     )?
     .command(
@@ -269,7 +291,13 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
                 .when("args.can_open", false),
         )?
         .menu_item(MenuItem::list(MENU_GROUP_OPEN, "1", 0, LIST_OPEN_HERE))?
-        .menu_item(MenuItem::list(MENU_GROUP_ADD, "1", 0, LIST_ADD_HERE))?;
+        .menu_item(MenuItem::list(MENU_GROUP_ADD, "1", 0, LIST_ADD_HERE))?
+        .menu_item(MenuItem::list(
+            crate::app::MENU_VIEW,
+            "4_new",
+            0,
+            LIST_NEW_INSTANCES,
+        ))?;
     ctx.list_provider(LIST_PLACE, |app, cx| with_panel(app, cx, place_entries))
         .list_provider(LIST_DETACH, |app, cx| with_panel(app, cx, detach_entries))
         .list_provider(LIST_WINDOWS, |app, cx| {
@@ -299,6 +327,7 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
                 ]
             })
         })
+        .list_provider(LIST_NEW_INSTANCES, |app, _| new_entries(app, None))
         .list_provider(LIST_CLOSE, |app, cx| {
             with_panel(app, cx, |app, panel| {
                 let ctx = app.egui();
@@ -445,6 +474,57 @@ fn open_entries(app: &AppHandle, group: &PanelId, closed: bool) -> Vec<ListItem>
                 json!({ "panel": p, "place": "here", "group": group }),
             );
             (title, item)
+        })
+        .collect();
+    out.sort_by_key(|(title, _)| title.to_lowercase());
+    let mut entries = new_entries(app, Some(group));
+    entries.extend(out.into_iter().map(|(_, item)| item));
+    entries
+}
+
+/// "New `<panel>`" for each panel declared with several instances, by
+/// title: in the tab group holding `group` (those its place allows), else
+/// in the panel's own area.
+fn new_entries(app: &AppHandle, group: Option<&PanelId>) -> Vec<ListItem> {
+    let ctx = app.egui();
+    let kinds: Vec<PanelId> = {
+        let wb = app.workbench_mut();
+        let host = match group {
+            None => None,
+            Some(g) => {
+                let place = if let Some(area) = wb.layout.area_of(g) {
+                    Place::Area(area)
+                } else if wb.layout.window_of(g).is_some() {
+                    Place::Window
+                } else if wb.layout.floating_of(g).is_some() {
+                    Place::Floating
+                } else {
+                    return Vec::new();
+                };
+                Some(crate::mounts::panel_host(place))
+            }
+        };
+        wb.specs
+            .iter()
+            .filter(|s| {
+                !s.id.is_instance()
+                    && !s.bare
+                    && s.instances == egui_pop_model::panels::Instances::Multiple
+            })
+            .filter(|s| host.as_ref().is_none_or(|h| s.refuses(h).is_none()))
+            .map(|s| s.id.clone())
+            .collect()
+    };
+    let mut out: Vec<(String, ListItem)> = kinds
+        .into_iter()
+        .map(|kind| {
+            let title = app.panel_title(&ctx, &kind);
+            let args = match group {
+                Some(g) => json!({ "panel": kind, "instance": "new", "place": "here", "group": g }),
+                None => json!({ "panel": kind, "instance": "new" }),
+            };
+            let label = strings::tr_args(&ctx, &txt::WORKBENCH_NEW_INSTANCE, &[("panel", &title)]);
+            (title, ListItem::new(&label, CMD_PANEL_OPEN, args))
         })
         .collect();
     out.sort_by_key(|(title, _)| title.to_lowercase());

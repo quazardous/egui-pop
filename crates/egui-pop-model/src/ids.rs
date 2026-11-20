@@ -64,8 +64,61 @@ pub const fn check(text: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
+/// Checks a panel id: the shared syntax ([`check`]), and an instance's
+/// `#<n>` after it (`app.gallery#2`, ADR 0002's panel instances), `n` a
+/// number from 2 without leading zeros (the panel declared is instance 1).
+pub const fn check_panel(text: &str) -> Result<(), &'static str> {
+    let b = text.as_bytes();
+    let mut hash = b.len();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'#' {
+            hash = i;
+            break;
+        }
+        i += 1;
+    }
+    if hash == b.len() {
+        return check(text);
+    }
+    if b.len() > MAX_ID_LEN {
+        return Err("it is longer than 128 bytes");
+    }
+    if hash == 0 {
+        return Err("an instance's `#<n>` follows a panel's id");
+    }
+    let digits = b.len() - hash - 1;
+    if digits == 0 || digits > 9 || b[hash + 1] == b'0' {
+        return Err("an instance's `#<n>` is a number from 2, without leading zeros");
+    }
+    let mut j = hash + 1;
+    while j < b.len() {
+        if !b[j].is_ascii_digit() {
+            return Err("an instance's `#<n>` is a number from 2, without leading zeros");
+        }
+        j += 1;
+    }
+    if digits == 1 && b[hash + 1] == b'1' {
+        return Err("instance 1 is the panel itself: its id has no `#1`");
+    }
+    // The kind before `#`: the shared syntax.
+    let mut k = 0;
+    while k < hash {
+        let c = b[k];
+        let ok = c.is_ascii_alphanumeric() || matches!(c, b'.' | b'_' | b'-' | b'/' | b':');
+        if !ok {
+            return Err("only ASCII letters, digits and `. _ - / :` are allowed");
+        }
+        k += 1;
+    }
+    Ok(())
+}
+
 macro_rules! typed_id {
     ($(#[$doc:meta])* $name:ident) => {
+        typed_id!($(#[$doc])* $name, check);
+    };
+    ($(#[$doc:meta])* $name:ident, $check:ident) => {
         $(#[$doc])*
         #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $name(Cow<'static, str>);
@@ -74,7 +127,7 @@ macro_rules! typed_id {
             /// From a literal, checked at compile time when used in a
             /// constant (and panicking otherwise).
             pub const fn from_static(text: &'static str) -> Self {
-                match check(text) {
+                match $check(text) {
                     Ok(()) => $name(Cow::Borrowed(text)),
                     Err(_) => panic!(concat!("invalid ", stringify!($name), " literal")),
                 }
@@ -83,7 +136,7 @@ macro_rules! typed_id {
             /// From any text, checked.
             pub fn new(text: impl Into<String>) -> Result<Self, IdError> {
                 let text = text.into();
-                match check(&text) {
+                match $check(&text) {
                     Ok(()) => Ok($name(Cow::Owned(text))),
                     Err(reason) => Err(IdError {
                         kind: stringify!($name),
@@ -170,9 +223,57 @@ typed_id!(
     MenuId
 );
 typed_id!(
-    /// A panel: `app.log`.
-    PanelId
+    /// A panel: `app.log`; an instance of a panel declared with several
+    /// (`PanelSpec::instances`) adds `#<n>`: `app.gallery#2`.
+    PanelId,
+    check_panel
 );
+
+impl PanelId {
+    /// The panel declared this id is an instance of: itself for the
+    /// panel declared (instance 1), `app.gallery` for `app.gallery#2`.
+    ///
+    /// ```
+    /// use egui_pop_model::ids::PanelId;
+    /// let second = PanelId::new("app.gallery#2").unwrap();
+    /// assert_eq!(second.kind().as_str(), "app.gallery");
+    /// assert_eq!(second.instance_number(), 2);
+    /// assert_eq!(second.kind().instance_number(), 1);
+    /// assert_eq!(second.kind().instance(2).unwrap(), second);
+    /// assert!(PanelId::new("app.gallery#1").is_err());
+    /// assert!(PanelId::new("app.gallery#02").is_err());
+    /// ```
+    pub fn kind(&self) -> PanelId {
+        match self.0.split_once('#') {
+            Some((kind, _)) => PanelId(Cow::Owned(kind.to_string())),
+            None => self.clone(),
+        }
+    }
+
+    /// Its instance's number: 1 for the panel declared.
+    pub fn instance_number(&self) -> u32 {
+        self.0
+            .split_once('#')
+            .and_then(|(_, n)| n.parse().ok())
+            .unwrap_or(1)
+    }
+
+    /// Whether it names an instance other than the panel declared
+    /// (`#<n>`).
+    pub fn is_instance(&self) -> bool {
+        self.0.contains('#')
+    }
+
+    /// The id of this panel's instance `n` (its kind's): the kind itself
+    /// for 1.
+    pub fn instance(&self, n: u32) -> Result<PanelId, IdError> {
+        let kind = self.kind();
+        if n <= 1 {
+            return Ok(kind);
+        }
+        PanelId::new(format!("{kind}#{n}"))
+    }
+}
 typed_id!(
     /// A zone where blocks are drawn: `app.sidebar`.
     ZoneId

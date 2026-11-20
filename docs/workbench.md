@@ -521,6 +521,62 @@ describes a declared panel on the bus: its title, whether it is a
 palette, and its kind (`bus::PanelDescription`), for agents and tests
 without a screenshot.
 
+## Panel instances
+
+A panel is declared once, and most open once (Settings, an import
+window). A panel declared with several (`PanelSpec::instances` with
+`Instances::Multiple`, or `Ctx::instance_panel`) opens as many times as
+asked: a second gallery, another quick collection.
+
+```rust
+# use egui_pop::api::Ctx;
+# use egui_pop::model::ids::PanelId;
+# use egui_pop::model::panels::{Area, PanelSpec};
+# fn connect(ctx: &mut Ctx<'_>) {
+const GALLERY: PanelId = PanelId::from_static("app.gallery");
+let _ = ctx.instance_panel(
+    PanelSpec::new(GALLERY, "Gallery", Area::Center),
+    |ui, app, instance| {
+        // One function draws every instance, told which it draws; what
+        // each shows is its payload, the application's.
+        let payload = app.instance_payload(&instance.id);
+        ui.label(format!("{}: {payload}", instance.title));
+    },
+);
+# }
+```
+
+- **Ids.** The panel declared is instance 1. Each new one is
+  `<kind>#<n>` (`app.gallery#2`), still a `PanelId`: the dock, the
+  focus, the fault boundary, the panel menu and the steps treat it as any
+  panel. `PanelId::kind` and `PanelId::instance_number` read it back. Its
+  title is the kind's with its number ("Gallery 2").
+- **Payload.** Each instance holds a payload the application owns,
+  opaque JSON (`AppHandle::set_instance_payload`,
+  `AppHandle::instance_payload`). It is kept in the layout
+  (`Layout::instances`), saved with it and handed back on restore. A
+  layout saved before instances existed loads as one with none.
+- **Opening.** `pop.panel.open` takes `instance`: `"new"` makes the next
+  instance and opens it at `place` (`last`: its kind's area; `here`, an
+  area), an instance's id opens that one. A panel declared once refuses
+  `"new"`. The `workbench.panel.open` command passes `instance` on, and
+  says the new id in its result, for agents.
+- **Menus.** A tab group's Open panel ▸ and its "+" list "New `<panel>`"
+  first, for each panel declared with several that the group's place
+  allows. The View menu has the same entries, opening in the panel's
+  area; an application's own Window menu adds them with
+  `MenuItem::list` and `panel_menu::LIST_NEW_INSTANCES`.
+- **Closing.** Closing an instance drops it with its payload: it is not
+  kept closed, and its number may come back later. Closing the panel
+  declared keeps its place, as any panel's.
+- **Facts.** The journal says `panel.instance.opened` and
+  `panel.instance.closed` (`{ "panel": <id>, "kind": <kind> }`), so the
+  application can drop what it kept for a closed instance. Restoring a
+  layout says the instances it opens.
+- **Plugins.** An instance whose kind's plugin is off keeps its place
+  and payload, as a dormant panel does (ADR 0028); declared again with
+  one instance, the kind's other instances are dropped.
+
 ## Interactive areas
 
 Inside a panel, each interactive area says what it writes, to the area

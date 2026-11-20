@@ -154,7 +154,7 @@ use egui_pop_core::state::Slot;
 use egui_pop_core::strings;
 use egui_pop_model::ids::{PanelId, StepId, ZoneId};
 use egui_pop_model::layout::{Auxiliary, FloatingGroup, Join, Layout, Node, Placement};
-use egui_pop_model::panels::{Area, PanelSpec, Panels, Place};
+use egui_pop_model::panels::{Area, Instances, PanelSpec, Panels, Place};
 use egui_stack::layout::{
     Content, Dir, Dismiss, Drops, Flyout, FlyoutPaint, Fold, Layout as ZoneLayout, LayoutArea,
     LayoutEvent, LayoutPainter, LayoutStyle, SashPaint, Shown, Size, SnapGuidePaint, StripPaint,
@@ -172,6 +172,7 @@ use crate::strings as txt;
 use crate::window::WindowState;
 
 mod drag_session;
+pub mod instances;
 pub mod panel_menu;
 mod window_host;
 use crate::bus::drag::{self, End};
@@ -745,7 +746,7 @@ pub(crate) fn steps() -> Vec<crate::steps::StepSpec> {
             .args(json!({ "panel": "app.inspector", "area": "start_side" })),
         StepSpec::new(
             STEP_SHOW,
-            "A panel is shown (`panel`). Closed, it goes back where it was (`place`: `last`, the default); that place gone, into the focused panel's tab group when its areas allow it, else its declared area. `place`: `here` opens it in the tab group holding `group` (else the focused panel's), an area's name docks it there.",
+            "A panel is shown (`panel`; `instance`: `new` opens a new instance of a panel declared with several). Closed, it goes back where it was (`place`: `last`, the default); that place gone, into the focused panel's tab group when its areas allow it, else its declared area. `place`: `here` opens it in the tab group holding `group` (else the focused panel's), an area's name docks it there.",
         )
         .args(json!({ "panel": "app.inspector", "place": "last" })),
         StepSpec::new(STEP_HIDE, "A panel is closed (`panel`).")
@@ -980,6 +981,12 @@ pub enum Change {
     /// the focused panel's) or in an area, moved there when open
     /// elsewhere (`pop.panel.open`); [`OpenPlace::Last`] is [`Change::Show`].
     Open(PanelId, OpenPlace, Option<PanelId>),
+    /// A new instance of a panel declared with several opens (its kind,
+    /// then where, as [`Change::Open`]): `pop.panel.open` with
+    /// `instance: "new"`.
+    NewInstance(PanelId, OpenPlace, Option<PanelId>),
+    /// A panel is closed: an instance (`<kind>#<n>`) is dropped with its
+    /// payload, any other keeps its place for when it opens again.
     Hide(PanelId),
     Focus(PanelId),
     /// An area folded to its strip (`true`) or unfolded.
@@ -1143,6 +1150,13 @@ impl Change {
             Change::Show(p) => (STEP_SHOW, json!({ "panel": p })),
             Change::Open(p, place, group) => {
                 let mut args = json!({ "panel": p, "place": place.as_str() });
+                if let Some(g) = group {
+                    args["group"] = json!(g);
+                }
+                (STEP_SHOW, args)
+            }
+            Change::NewInstance(p, place, group) => {
+                let mut args = json!({ "panel": p, "instance": "new", "place": place.as_str() });
                 if let Some(g) = group {
                     args["group"] = json!(g);
                 }
@@ -1354,9 +1368,10 @@ impl Change {
                     Some(g) => Some(PanelId::new(g).map_err(|e| e.to_string())?),
                     None => None,
                 };
-                match place {
-                    OpenPlace::Last => Change::Show(panel),
-                    place => Change::Open(panel, place, group),
+                match (args.get("instance").and_then(Json::as_str), place) {
+                    (Some("new"), place) => Change::NewInstance(panel, place, group),
+                    (_, OpenPlace::Last) => Change::Show(panel),
+                    (_, place) => Change::Open(panel, place, group),
                 }
             }
             "workbench.detach" if flag_off("group") => Change::DetachGroup(panel),
@@ -1476,8 +1491,12 @@ struct Cross {
 
 /// The workbench's state, held by the application.
 pub(crate) struct Workbench {
-    /// The declared panels, in declaration order (refreshed at rebuild).
+    /// The declared panels, in declaration order (refreshed at rebuild),
+    /// then the instances of those declared with several
+    /// (`PanelSpec::instances`), one spec each (`Layout::instances`).
     pub specs: Vec<PanelSpec>,
+    /// The declared panels alone (`specs` without the instances).
+    declared: Vec<PanelSpec>,
     /// Panels showing a zone.
     pub zone_of: BTreeMap<PanelId, ZoneId>,
     pub layout: Layout,
@@ -1599,6 +1618,7 @@ impl Default for Workbench {
     fn default() -> Self {
         Self {
             specs: Vec::new(),
+            declared: Vec::new(),
             zone_of: BTreeMap::new(),
             layout: Layout::default(),
             dormant: Vec::new(),
@@ -1741,29 +1761,116 @@ impl Workbench {
         p
     }
 
+    /// The declared panels, then a spec for each instance `layout` holds
+    /// of a panel declared with several.
+    fn with_instances(declared: &[PanelSpec], layout: &Layout) -> Vec<PanelSpec> {
+        let mut specs = declared.to_vec();
+        for i in layout.instances.iter().filter(|i| i.id.is_instance()) {
+            let kind = i.id.kind();
+            if let Some(spec) = declared
+                .iter()
+                .find(|s| s.id == kind && s.instances == Instances::Multiple)
+            {
+                specs.push(spec.instance_spec(&i.id, i.title.as_deref()));
+            }
+        }
+        specs
+    }
+
+    /// The specs again, after the layout's instances changed.
+    fn follow_instances(&mut self) {
+        self.specs = Self::with_instances(&self.declared, &self.layout);
+    }
+
     /// The declared panels changed (or a layout was loaded): the layout
     /// is repaired against them; says what it changed.
     pub fn refresh(&mut self, specs: Vec<PanelSpec>, screens: &[&str]) -> Vec<String> {
         self.read_back();
-        self.specs = specs;
+        self.declared = specs;
+        self.follow_instances();
         let panels = self.panels();
         let dormant = std::mem::take(&mut self.dormant);
         let (saved, notes) =
             std::mem::take(&mut self.layout).repair_dormant(dormant, &panels, screens);
         self.layout = saved.layout;
         self.dormant = saved.dormant;
+        self.follow_instances();
         self.stale = true;
         notes
     }
 
-    /// Puts in a layout (loaded, or an arrangement), repaired.
+    /// Puts in a layout (loaded, or an arrangement), repaired; the
+    /// instances it holds come with it.
     pub fn set_layout(&mut self, layout: Layout, screens: &[&str]) -> Vec<String> {
         let dormant = std::mem::take(&mut self.dormant);
+        self.specs = Self::with_instances(&self.declared, &layout);
         let (saved, notes) = layout.repair_dormant(dormant, &self.panels(), screens);
         self.layout = saved.layout;
         self.dormant = saved.dormant;
+        self.follow_instances();
         self.stale = true;
         notes
+    }
+
+    /// Makes a new instance of `kind` (declared with several) and opens
+    /// it at `place`; its id.
+    fn new_instance(
+        &mut self,
+        kind: &PanelId,
+        place: OpenPlace,
+        group: Option<&PanelId>,
+    ) -> Result<Json, String> {
+        let spec = self
+            .declared
+            .iter()
+            .find(|s| s.id == *kind)
+            .ok_or_else(|| format!("no panel `{kind}`"))?;
+        if spec.instances != Instances::Multiple {
+            return Err(format!("`{kind}` opens once: it has no new instance"));
+        }
+        let id = self.layout.next_instance(kind);
+        if !id.is_instance() {
+            return Err(format!("`{kind}` leaves no room for an instance number"));
+        }
+        self.layout
+            .instances
+            .push(egui_pop_model::layout::PanelInstance::new(id.clone()));
+        self.follow_instances();
+        let spec = self.spec(&id).cloned().ok_or("the instance has no spec")?;
+        let opened = match place {
+            // A new one has no place yet: its area (a palette floats).
+            OpenPlace::Last => {
+                self.reopen(&spec);
+                self.layout.activate(&id);
+                Ok(json!({ "panel": id, "shown": true, "place": "last" }))
+            }
+            place => self.open_at(&spec, place, group),
+        };
+        match opened {
+            Ok(mut out) => {
+                out["kind"] = json!(kind);
+                out["instance"] = json!(id);
+                self.stale = true;
+                Ok(out)
+            }
+            Err(e) => {
+                self.layout.drop_instance(&id);
+                self.follow_instances();
+                Err(e)
+            }
+        }
+    }
+
+    /// Closes a panel: an instance (`<kind>#<n>`) is dropped, its payload
+    /// with it; any other panel is hidden, its place kept.
+    fn close(&mut self, p: &PanelId) {
+        if p.is_instance() {
+            self.layout.drop_instance(p);
+            self.follow_instances();
+        } else {
+            self.layout.hide(p);
+        }
+        self.forget_focus(p);
     }
 
     /// Keeps the place of the detached window `panel` leaves, for when
@@ -2166,10 +2273,12 @@ impl Workbench {
                 let spec = spec_of(p)?;
                 self.open_at(&spec, *place, group.as_ref())?
             }
+            Change::NewInstance(kind, place, group) => {
+                self.new_instance(kind, *place, group.as_ref())?
+            }
             Change::Hide(p) => {
                 spec_of(p)?;
-                self.layout.hide(p);
-                self.forget_focus(p);
+                self.close(p);
                 json!({ "panel": p, "shown": false })
             }
             Change::Focus(p) => {
@@ -2412,8 +2521,7 @@ impl Workbench {
                     .cloned()
                     .collect();
                 for q in &panels {
-                    self.layout.hide(q);
-                    self.forget_focus(q);
+                    self.close(q);
                 }
                 json!({ "panel": p, "panels": panels })
             }
