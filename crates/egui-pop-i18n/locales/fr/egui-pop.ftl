@@ -1159,6 +1159,7 @@ egui-pop-files-pictures = Images
 egui-pop-files-music = Musique
 egui-pop-files-videos = Vidéos
 egui-pop-files-devices = Périphériques
+egui-pop-files-place-dimmed = Indisponible
 egui-pop-files-places = Emplacements
 egui-pop-files-rename-bookmark = Renommer…
 egui-pop-files-move-up = Monter

@@ -389,6 +389,19 @@ which swaps the first two (`SetFolder`).
   application the room under an item (an account's albums) or a section's
   items (a history's past imports with "Import again"); their widgets join
   the panel's keyboard order. The gallery's places page shows them all.
+- **A library's sources**, each part opt-in too: an item's children
+  (`PlaceItem::children`) make its section a tree, rows indented by depth
+  under a toggle named after the item ("Show or hide Animals"), open at
+  first (`PlaceItem::open_at_first`) or kept by the application
+  (`PlaceItem::open`, the user's clicks and arrows in
+  `PlacesOutput::expanded`); Right opens and Left folds a branch from its
+  row, each row is said at its level. A dimmed item (`PlaceItem::dimmed`, a
+  folder of an offline volume) is drawn muted and said unavailable, still
+  choosable. `PlacesPanel::on_row` hands the application each row's
+  `Response` (a drop target or a drag source through `bus::drag`, a menu of
+  its own), and `PlacesPanel::selected_set` selects one item in each of
+  several sections (a folder, an album and a keyword together). The
+  gallery's places page shows a Library's sources beside the import column.
 - **Kept** in the host's store with the settings: `settings/files.recent`,
   `settings/files.bookmarks`, and the names given in
   `settings/files.bookmark_names`.

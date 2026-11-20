@@ -512,6 +512,9 @@ pub const FILES_VIDEOS: StrKey = StrKey::new("egui-pop-files-videos", "Videos");
 pub const FILES_DEVICES: StrKey = StrKey::new("egui-pop-files-devices", "Devices");
 /// The section of home and the system's folders, in a panel of places.
 pub const FILES_PLACES: StrKey = StrKey::new("egui-pop-files-places", "Places");
+/// What a dimmed place is said to be (`PlaceItem::dimmed`): an offline
+/// volume's folder, still choosable.
+pub const FILES_PLACE_DIMMED: StrKey = StrKey::new("egui-pop-files-place-dimmed", "Unavailable");
 /// A bookmark's menu.
 pub const FILES_RENAME_BOOKMARK: StrKey = StrKey::new("egui-pop-files-rename-bookmark", "Rename…");
 pub const FILES_MOVE_UP: StrKey = StrKey::new("egui-pop-files-move-up", "Move up");
@@ -1802,6 +1805,7 @@ pub const ALL: &[StrKey] = &[
     FILES_VIDEOS,
     FILES_DEVICES,
     FILES_PLACES,
+    FILES_PLACE_DIMMED,
     FILES_RENAME_BOOKMARK,
     FILES_MOVE_UP,
     FILES_MOVE_DOWN,
