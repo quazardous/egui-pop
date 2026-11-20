@@ -155,7 +155,7 @@ image = { version = "0.25", default-features = false }
 # `bus` feature (`stack.*` points on the application's bus); 0.28.6
 # `TabViewer::dock_title`, the areas' titles in the Move group menu; 0.29
 # the auto-folded strips that open over on a click (`ZoneViewer::on_strip`).
-egui_stack = { version = "0.30.0", default-features = false }
+egui_stack = { version = "0.31.0", default-features = false }
 egui-pop = { version = "0.18.3", path = "crates/egui-pop" }
 
 [workspace.lints.rust]

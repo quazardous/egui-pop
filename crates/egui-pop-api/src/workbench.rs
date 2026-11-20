@@ -339,7 +339,86 @@ pub fn panel_alignment(app: &AppHandle) -> PanelAlignment {
         .unwrap_or_default()
 }
 
-pub use egui_stack::{FloatMove, GroupHandles};
+pub use egui_stack::{FloatMove, GroupHandles, MoveFrom};
+
+/// The controls the workbench's docks show beyond the tabs, as the
+/// application sets them ([`AppBuilder::dock_controls`](crate::AppBuilder::dock_controls)).
+/// Each follows egui_stack's default: what is off there is off here.
+///
+/// ```
+/// use egui_pop_api::workbench::{DockControls, MoveFrom};
+///
+/// let controls = DockControls::default()
+///     .eject_group(true)
+///     .float_move_from(MoveFrom::BAR | MoveFrom::EMPTY_SPACE);
+/// assert!(controls.eject_group);
+/// assert!(controls.group_menus);
+/// ```
+///
+/// Need (layout): a tab bar button that moves a whole tab group into a window of its own.
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct DockControls {
+    /// An "Eject group" button on each docked tab bar: clicked, the
+    /// whole group, its tabs in order, moves into a window of its own
+    /// (the `workbench.detach` step with `group`). Off by default.
+    pub eject_group: bool,
+    /// A right click on the empty part of a tab bar opens the group's
+    /// menu (egui_stack's group context menu: "Move group", and the
+    /// items its bar's buttons offer). On by default.
+    pub group_menus: bool,
+    /// Where else than its move handle a drag moves a floating window
+    /// (egui_stack's `FloatsArea::move_from`): [`MoveFrom::BAR`] by
+    /// default.
+    pub float_move_from: MoveFrom,
+}
+
+impl Default for DockControls {
+    fn default() -> Self {
+        Self {
+            eject_group: false,
+            group_menus: true,
+            float_move_from: MoveFrom::BAR,
+        }
+    }
+}
+
+impl DockControls {
+    /// Shows the "Eject group" button on docked tab bars, or not.
+    pub fn eject_group(mut self, on: bool) -> Self {
+        self.eject_group = on;
+        self
+    }
+
+    /// Opens a group's menu on a right click of its bar's empty part, or
+    /// not.
+    pub fn group_menus(mut self, on: bool) -> Self {
+        self.group_menus = on;
+        self
+    }
+
+    /// Where else than its move handle a drag moves a floating window.
+    pub fn float_move_from(mut self, from: MoveFrom) -> Self {
+        self.float_move_from = from;
+        self
+    }
+}
+
+/// The dock controls in force ([`DockControls`]): the application's,
+/// or the last [`set_dock_controls`].
+pub fn dock_controls(app: &AppHandle) -> DockControls {
+    app.0.dock_controls.get()
+}
+
+/// Changes the dock controls while running, from the next pass: a
+/// settings page or a demonstration turning the "Eject group" buttons on.
+pub fn set_dock_controls(app: &AppHandle, controls: DockControls) {
+    app.0.dock_controls.set(controls);
+    app.egui().request_repaint();
+}
 
 /// The setting: the key held while dragging a tab to carry its whole
 /// group (Shift, Ctrl or Alt; see [`GroupModifier`]).
@@ -2574,6 +2653,8 @@ pub(crate) fn windows(
     let mut viewer = Viewer {
         app,
         prepared: &cache.tabs,
+        eject: false,
+        ejected: None,
     };
     space.state_mut().translations = dock_translations(ctx);
     // A backend without windows of its own (kittest, the web) draws them
@@ -2590,9 +2671,11 @@ pub(crate) fn windows(
         .group_handles(group_handles(app))
         .group_drag_modifiers(group_drag_modifier(app).modifiers())
         .float_move(float_move(app))
+        .move_from(dock_controls(app).float_move_from)
         .configure(|_, area| {
             let area = area
                 .labels(labels.clone())
+                .group_context_menus(dock_controls(app).group_menus)
                 .allowed_splits(egui_stack::AllowedSplits::None)
                 .show_close_buttons(false)
                 .show_add_buttons(false)
@@ -4078,6 +4161,8 @@ fn drop_targets(app: &AppHandle, ui: &mut Ui, zen: bool) {
         let mut viewer = Viewer {
             app,
             prepared: &prepared,
+            eject: false,
+            ejected: None,
         };
         space.state_mut().translations = dock_translations(&ctx);
         let area = DockArea::dock(&mut space, dock)
@@ -5332,6 +5417,8 @@ fn draw_dock(app: &AppHandle, ui: &mut Ui, area: Area) {
     let mut viewer = Viewer {
         app,
         prepared: &cache.tabs,
+        eject: false,
+        ejected: None,
     };
     let seen = Mutex::new(None);
     let painter = AreaPainter::new(&kit, frameless, &seen);
@@ -5343,22 +5430,38 @@ fn draw_dock(app: &AppHandle, ui: &mut Ui, area: Area) {
     let dock = DockArea::dock(&mut space, area_name(area))
         .style(style)
         .painter(&painter);
+    viewer.eject = dock_controls(app).eject_group;
     group_gestures(dock, app, &ctx)
         .show_close_buttons(false)
         .show_add_buttons(false)
         .show_leaf_close_all_buttons(false)
         .show_leaf_collapse_buttons(false)
         .show_inside(ui, &mut viewer);
+    let ejected = viewer.ejected.take();
     let bar = space
         .dock(area_name(area))
         .and_then(|tree| first_bar(tree, &kit, &cache.tabs));
+    // The group whose "Eject group" was clicked: its shown tab leads it
+    // into a window of its own.
+    let eject = ejected.and_then(|path| {
+        let leaf = space.state().leaf(path).ok()?;
+        leaf.tabs.get(leaf.active.0).or(leaf.tabs.first()).cloned()
+    });
     cache_id.set(&ctx, cache);
-    let mut wb = app.workbench_mut();
-    if let Some(bar) = bar {
-        wb.bars.insert(area, bar);
+    {
+        let mut wb = app.workbench_mut();
+        if let Some(bar) = bar {
+            wb.bars.insert(area, bar);
+        }
+        wb.put_space(space);
+        wb.note_landing(seen, ctx.cumulative_pass_nr());
     }
-    wb.put_space(space);
-    wb.note_landing(seen, ctx.cumulative_pass_nr());
+    if let Some(panel) = eject
+        && let Some(Outcome::Done(Err(e))) =
+            &app.change_workbench(Change::DetachGroup(panel.clone()))
+    {
+        app.workbench_refused(&format!("detach {panel}"), e);
+    }
 }
 
 /// The tab bar of an area's first tabs (where `Layout::place` adds a
@@ -5407,6 +5510,7 @@ fn group_gestures<'a>(
 ) -> DockArea<'a, PanelId> {
     area.group_handles(group_handles(app))
         .group_drag_modifiers(group_drag_modifier(app).modifiers())
+        .group_context_menus(dock_controls(app).group_menus)
         .labels(group_labels(ctx))
 }
 
@@ -5576,6 +5680,11 @@ impl egui_stack::DockPainter for AreaPainter<'_> {
 struct Viewer<'a> {
     app: &'a AppHandle,
     prepared: &'a HashMap<PanelId, PreparedTab>,
+    /// Whether the docked tab bars show the "Eject group" button
+    /// ([`DockControls::eject_group`]).
+    eject: bool,
+    /// The group whose "Eject group" button was clicked this pass.
+    ejected: Option<egui_stack::NodePath>,
 }
 
 /// A tab or a group dragged from another window over this one: the drop
@@ -5763,6 +5872,33 @@ impl TabViewer for Viewer<'_> {
     fn context_menu(&mut self, ui: &mut Ui, tab: &mut PanelId, _path: egui_stack::TabPath) {
         // The panel menu, the one a floating panel's title opens too.
         panel_menu::show(ui, self.app, tab);
+    }
+
+    fn group_bar_buttons(&mut self, _path: egui_stack::NodePath) -> Vec<String> {
+        if self.eject {
+            vec![strings::tr(&self.app.egui(), &txt::WORKBENCH_EJECT_GROUP)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_group_bar_button(
+        &mut self,
+        ui: &mut Ui,
+        path: egui_stack::NodePath,
+        _index: usize,
+        response: &egui::Response,
+    ) {
+        // The one button: "Eject group", two overlapping windows.
+        let color = ui.style().interact(response).fg_stroke.color;
+        let side = egui_pop_core::theme::Tokens::of(ui.ctx()).size.icon_inline;
+        let rect = Rect::from_center_size(response.rect.center(), egui::vec2(side, side));
+        egui_pop_core::icon::Icon::WindowRestore.paint(ui.painter(), rect, color);
+        let tip = strings::tr(&response.ctx, &txt::WORKBENCH_EJECT_GROUP);
+        response.clone().on_hover_text(tip);
+        if response.clicked() {
+            self.ejected = Some(path);
+        }
     }
 
     fn dock_title(&mut self, dock: &str) -> Option<egui::WidgetText> {

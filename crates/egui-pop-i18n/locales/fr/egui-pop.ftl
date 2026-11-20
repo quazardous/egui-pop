@@ -2353,6 +2353,8 @@ egui-pop-workbench-move-to = Déplacer vers { $area }
 
 egui-pop-workbench-move-group = Déplacer le groupe
 
+egui-pop-workbench-eject-group = Éjecter le groupe
+
 egui-pop-workbench-move-window = Déplacer la fenêtre
 
 egui-pop-workbench-new-window = Nouvelle fenêtre

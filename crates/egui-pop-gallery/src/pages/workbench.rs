@@ -217,6 +217,29 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     {
         app.set_context(VETO, if veto { "true" } else { "false" });
     }
+    // egui_stack's tab bar controls the application turns on
+    // (`AppBuilder::dock_controls`): off here by default, as there.
+    let controls = workbench::dock_controls(app);
+    let mut eject = controls.eject_group;
+    if widgets::checkbox(
+        ui,
+        &mut eject,
+        "Eject group buttons (a whole tab group into a window)",
+    )
+    .changed()
+    {
+        workbench::set_dock_controls(app, controls.eject_group(eject));
+    }
+    let mut menus = controls.group_menus;
+    if widgets::checkbox(
+        ui,
+        &mut menus,
+        "Group menus (a right click on a tab bar's empty part)",
+    )
+    .changed()
+    {
+        workbench::set_dock_controls(app, controls.group_menus(menus));
+    }
     ui.weak("Drag a tab onto another area: it goes there when its rules allow it; the drop hint says why not.");
     ui.weak("Detached, the notes' window takes their key (Ctrl+Shift+Delete) and shows their dialog over itself; every other window waits for the answer.");
     ui.weak("Drop a tab on the notes' window, or pick Move to window in its tab menu: it joins the window's tabs.");
