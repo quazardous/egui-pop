@@ -1,6 +1,8 @@
 //! Destructive calls: an agent's call that destroys or discards what
 //! cannot easily be had back (`commands.run` of a command declared
-//! `CommandSpec::destructive`, an action whose collector says so) waits
+//! `CommandSpec::destructive`, or of a call its arguments make
+//! destructive, `CommandSpec::destructive_if`; an action whose collector
+//! says so) waits
 //! for the user to confirm it.
 //!
 //! - The call is held, as a `hello` is, and a `dialogs::Confirm` names

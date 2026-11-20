@@ -50,13 +50,17 @@
 //! `Origin::Agent("<id>")`, its paired id ([`pairing`]): a `hello`
 //! without a token asks the user, through a dialog, to pair the agent
 //! (held until the user answers), and hands it a token for the next
-//! times; a `hello` with a known token is paired at once. Either way the
+//! times; a `hello` with a known token is paired at once, a token the
+//! application issued in advance ([`PreIssue`], for scenario runners)
+//! too. Either way the
 //! bridge's mode, the `agent` flags and the `debug.call` step apply as to
 //! any agent.
 //!
 //! **Destructive calls.** A `call` that destroys or discards what
 //! cannot easily be had back (`commands.run` of a command declared
-//! `CommandSpec::destructive`, an action its collector says is) waits
+//! `CommandSpec::destructive`, or of a call its arguments make
+//! destructive, `CommandSpec::destructive_if`; an action its collector
+//! says is) waits
 //! for the user ([`confirm`]): a dialog names the agent, what it asks
 //! and its arguments, and the call is held until the user answers
 //! (`deadline_ms`, [`CONFIRM_DEADLINE`] by default, at most
@@ -105,7 +109,10 @@ mod windows;
 pub use confirm::{CONFIRM_DEADLINE, MAX_CONFIRM_DEADLINE};
 pub use grants::{AgentGrants, AgentGrantsExt, GRANTS, Grant};
 pub use limits::{MAX_CONNECTIONS, MAX_REQUEST_BYTES};
-pub use pairing::{CMD_CONFIRM, CMD_GRANT, CMD_LIST, CMD_REVOKE, Pairing, pairings, revoke};
+pub use pairing::{
+    CMD_CONFIRM, CMD_GRANT, CMD_LIST, CMD_REVOKE, Pairing, PreIssue, PreIssueExt, TOKEN_ENV,
+    TOKEN_FILE_ENV, pairings, revoke,
+};
 pub use rpc::RpcError;
 
 /// The environment variable that turns the socket on

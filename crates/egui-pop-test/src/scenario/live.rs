@@ -21,6 +21,13 @@
 //! `<scenario>-<name>.png` and waits for the file: an application names
 //! its own screenshot command.
 //!
+//! **Pairing.** Without a token the runner says no `hello`: its calls
+//! are an unpaired client's, read-only by default. Given the token the
+//! application issued in advance (`egui_pop_agent::PreIssue`),
+//! through [`LiveRunner::token`] or [`LiveRunner::token_file`], it says
+//! `hello` with it on each connection, and runs as that paired agent,
+//! held to its grant.
+//!
 //! ```no_run
 //! use egui_pop_test::scenario::live::LiveRunner;
 //!
@@ -180,7 +187,24 @@ pub struct LiveRunner {
     shot: Option<(String, Json)>,
     deadline: Duration,
     connect: Duration,
+    token: Option<Token>,
 }
+
+/// Where the runner's pairing token comes from.
+#[derive(Debug, Clone)]
+enum Token {
+    Given(String),
+    File(PathBuf),
+}
+
+/// The environment variable a launcher gives the token in, as the
+/// application reads it (`egui_pop_agent::TOKEN_ENV`).
+pub const TOKEN_ENV: &str = "EGUI_POP_AGENT_TOKEN";
+/// The environment variable naming the file the application writes the
+/// token to (`egui_pop_agent::TOKEN_FILE_ENV`).
+pub const TOKEN_FILE_ENV: &str = "EGUI_POP_AGENT_TOKEN_FILE";
+/// The name the runner gives in its `hello`.
+pub const RUNNER_NAME: &str = "egui-pop-scenario";
 
 type StepError = (String, String);
 
@@ -201,6 +225,59 @@ impl LiveRunner {
             shot: None,
             deadline: Duration::from_secs(10),
             connect: Duration::from_secs(60),
+            token: None,
+        }
+    }
+
+    /// Says `hello` with `token` on each connection: the scenario runs as
+    /// the agent the application paired in advance with it.
+    #[must_use]
+    pub fn token(mut self, token: impl Into<String>) -> Self {
+        self.token = Some(Token::Given(token.into()));
+        self
+    }
+
+    /// As [`LiveRunner::token`], the token read from `path` (the file the
+    /// application writes at start), waiting for it as long as the runner
+    /// tries to connect.
+    #[must_use]
+    pub fn token_file(mut self, path: impl Into<PathBuf>) -> Self {
+        self.token = Some(Token::File(path.into()));
+        self
+    }
+
+    /// [`LiveRunner::token`] from [`TOKEN_ENV`], else
+    /// [`LiveRunner::token_file`] from [`TOKEN_FILE_ENV`]; unchanged when
+    /// neither is set.
+    #[must_use]
+    pub fn token_from_env(self) -> Self {
+        let set = |v: &str| std::env::var(v).ok().filter(|s| !s.is_empty());
+        if let Some(t) = set(TOKEN_ENV) {
+            self.token(t)
+        } else if let Some(f) = set(TOKEN_FILE_ENV) {
+            self.token_file(f)
+        } else {
+            self
+        }
+    }
+
+    /// The token, read from its file when it is one.
+    fn read_token(&self, until: Instant) -> Result<Option<String>, String> {
+        match &self.token {
+            None => Ok(None),
+            Some(Token::Given(t)) => Ok(Some(t.clone())),
+            Some(Token::File(p)) => loop {
+                match std::fs::read_to_string(p) {
+                    Ok(t) if !t.trim().is_empty() => return Ok(Some(t.trim().to_string())),
+                    Ok(_) | Err(_) if Instant::now() < until => {
+                        std::thread::sleep(Duration::from_millis(100));
+                    }
+                    Ok(_) => return Err(format!("the token file {} is empty", p.display())),
+                    Err(e) => {
+                        return Err(format!("no token file at {}: {e}", p.display()));
+                    }
+                }
+            },
         }
     }
 
@@ -284,8 +361,14 @@ impl LiveRunner {
                 snapshot: None,
             })
         };
-        let client = Client::connect_within(&self.socket, self.connect)
+        let until = Instant::now() + self.connect;
+        let mut client = Client::connect_within(&self.socket, self.connect)
             .map_err(|m| failure("connect", m))?;
+        if let Some(token) = self.read_token(until).map_err(|m| failure("connect", m))? {
+            client
+                .request("hello", json!({ "name": RUNNER_NAME, "token": token }))
+                .map_err(|e| failure("connect", format!("`hello` with the token: {e}")))?;
+        }
         let mut run = LiveRun {
             runner: self,
             scenario,

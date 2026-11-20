@@ -10,7 +10,15 @@
 //! - A `hello` with a `token` is paired at once when the token is
 //!   known, refused otherwise.
 //! - A connection that sends no `hello` stays
-//!   `Origin::Agent("agent-socket")`, with the same rights.
+//!   `Origin::Agent("agent-socket")`, held to the unpaired grant.
+//! - A token issued in advance ([`pre_issue`], [`pre_issue_file`], or
+//!   [`PreIssue`] from the builder) pairs a scenario runner without
+//!   asking: the application issues it at start, hands it over through
+//!   an environment variable ([`TOKEN_ENV`]) or a file only the user may
+//!   read ([`TOKEN_FILE_ENV`]), and the runner says `hello` with it. Such
+//!   a pairing lasts as long as the application runs (it is never
+//!   saved), and its grant ([`PreIssue::grant`]) reaches that client
+//!   only: unpaired clients keep theirs.
 //!
 //! Only the user answers the dialog: its answer command
 //! ([`CMD_CONFIRM`]) is kept from agents, and an agent's accept through
@@ -22,20 +30,22 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use egui_pop_api::dialogs::{self, Confirm, DIALOGS};
 use egui_pop_api::steps::Before;
-use egui_pop_api::{AppHandle, Ctx, PluginError};
+use egui_pop_api::{AppBuilder, AppHandle, Ctx, Plugin, PluginError};
 use egui_pop_core::debug::BridgeMode;
 use egui_pop_core::strings;
 use egui_pop_model::commands::{CommandSpec, Origin};
-use egui_pop_model::ids::CommandId;
+use egui_pop_model::ids::{CommandId, PluginId};
 use serde_json::{Value as Json, json};
 use sha2::{Digest as _, Sha256};
 
 use crate::Reply;
+use crate::grants::Grant;
 use crate::rpc::RpcError;
 use crate::strings as txt;
 
@@ -76,6 +86,19 @@ pub const MAX_NAME_CHARS: usize = 64;
 /// `deadline_ms`, and the longest it may wait.
 pub const HELLO_DEADLINE: Duration = Duration::from_secs(120);
 
+/// The environment variable a pre-issued token is read from
+/// ([`PreIssue::from_env`]): a launcher sets it for both the application
+/// and its scenario runner.
+pub const TOKEN_ENV: &str = "EGUI_POP_AGENT_TOKEN";
+/// The environment variable naming the file a pre-issued token is
+/// written to ([`PreIssue::from_env`]): the application writes a new
+/// token there at start (mode 0600), the runner reads it.
+pub const TOKEN_FILE_ENV: &str = "EGUI_POP_AGENT_TOKEN_FILE";
+/// The shortest token [`pre_issue`] accepts, in characters.
+pub const MIN_TOKEN_CHARS: usize = 32;
+/// The plugin [`PreIssueExt::pre_issued_pairing`] adds.
+pub const PRE_ISSUE_PLUGIN: PluginId = PluginId::from_static("egui_pop.agent_pre_issue");
+
 /// The ids an agent may not take: the socket's own, and words that
 /// would read as someone else.
 const RESERVED: &[&str] = &[crate::AGENT, "anonymous", "user", "debug-bridge"];
@@ -93,6 +116,9 @@ pub struct Pairing {
     /// When it last asked something, in seconds since the Unix epoch;
     /// 0 when never since it was paired.
     pub last_seen: u64,
+    /// Issued in advance by the application ([`pre_issue`]): it lasts as
+    /// long as the application runs and is never saved.
+    pub pre_issued: bool,
 }
 
 /// A pairing as kept: its token's SHA-256, never the token.
@@ -100,6 +126,8 @@ pub struct Pairing {
 struct Kept {
     pairing: Pairing,
     token_sha256: String,
+    /// A pre-issued pairing's own grant ([`PreIssue::grant`]).
+    grant: Option<Grant>,
 }
 
 /// A `hello` waiting for the user's answer.
@@ -154,7 +182,13 @@ fn load(app: &AppHandle) {
         }
     };
     match parse(&text) {
-        Ok(kept) => *st.kept.borrow_mut() = kept,
+        Ok(kept) => {
+            // Pre-issued pairings are the running application's, never
+            // read back: they stay.
+            let mut all = st.kept.borrow_mut();
+            all.retain(|k| k.pairing.pre_issued);
+            all.extend(kept);
+        }
         Err(e) => {
             log::error!(target: "egui_pop_agent", "agent pairings not read from {}: {e}", path.display());
         }
@@ -178,8 +212,10 @@ fn parse(text: &str) -> Result<Vec<Kept>, String> {
                     name: s("name")?,
                     paired_at: p["paired_at"].as_u64().unwrap_or(0),
                     last_seen: p["last_seen"].as_u64().unwrap_or(0),
+                    pre_issued: false,
                 },
                 token_sha256: s("token_sha256")?,
+                grant: None,
             })
         })
         .collect()
@@ -189,6 +225,7 @@ fn parse(text: &str) -> Result<Vec<Kept>, String> {
 fn render(kept: &[Kept]) -> String {
     let list: Vec<Json> = kept
         .iter()
+        .filter(|k| !k.pairing.pre_issued)
         .map(|k| {
             json!({
                 "id": k.pairing.id,
@@ -388,10 +425,12 @@ fn confirm(app: &AppHandle, args: &Json, origin: &Origin) -> Result<Json, String
         name: asking.name,
         paired_at: now,
         last_seen: now,
+        pre_issued: false,
     };
     st.kept.borrow_mut().push(Kept {
         pairing: pairing.clone(),
         token_sha256: sha256(&token),
+        grant: None,
     });
     save(app);
     let data = json!({ "agent": pairing.id, "name": pairing.name });
@@ -542,6 +581,240 @@ pub fn revoke(app: &AppHandle, id: &str) -> Result<usize, String> {
     Ok(closed)
 }
 
+/// Why `id` cannot be a pre-issued agent's id; `None` when it can.
+fn bad_id(id: &str) -> Option<String> {
+    let tidy = !id.is_empty()
+        && id.len() <= 32
+        && id
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '-' | '_'));
+    if !tidy {
+        return Some(format!(
+            "`{id}` is not an agent id: 1 to 32 lower case letters, digits, `.`, `-` or `_`"
+        ));
+    }
+    RESERVED
+        .contains(&id)
+        .then(|| format!("`{id}` is reserved and may not be an agent's id"))
+}
+
+/// Pairs the agent `id` in advance, for this run of the application: a
+/// connection saying `hello` with `token` is paired as `id` at once, no
+/// user asked; `grant`, when given, is what it may do (else the grants'
+/// own for `id`, or their paired default). The token is kept hashed, and
+/// the pairing never saved. Issuing `id` again replaces its token. A
+/// token shorter than [`MIN_TOKEN_CHARS`], or an `id` a saved pairing
+/// holds, is refused.
+pub fn pre_issue(
+    app: &AppHandle,
+    id: &str,
+    token: &str,
+    grant: Option<Grant>,
+) -> Result<Pairing, String> {
+    if let Some(e) = bad_id(id) {
+        return Err(e);
+    }
+    if token.chars().count() < MIN_TOKEN_CHARS {
+        return Err(format!(
+            "a pre-issued token has at least {MIN_TOKEN_CHARS} characters"
+        ));
+    }
+    load(app);
+    let st = state(app);
+    let mut kept = st.kept.borrow_mut();
+    if kept
+        .iter()
+        .any(|k| k.pairing.id == id && !k.pairing.pre_issued)
+    {
+        return Err(format!("`{id}` is a saved pairing's id: pre-issue another"));
+    }
+    let hash = sha256(token);
+    if kept
+        .iter()
+        .any(|k| k.token_sha256 == hash && k.pairing.id != id)
+    {
+        return Err("this token already pairs another agent".into());
+    }
+    kept.retain(|k| k.pairing.id != id);
+    let pairing = Pairing {
+        id: id.into(),
+        name: id.into(),
+        paired_at: now_secs(),
+        last_seen: 0,
+        pre_issued: true,
+    };
+    kept.push(Kept {
+        pairing: pairing.clone(),
+        token_sha256: hash,
+        grant,
+    });
+    log::info!(target: "egui_pop_agent", "agent `{id}` paired in advance, for this run");
+    Ok(pairing)
+}
+
+/// As [`pre_issue`], with a new random token written to `path`, which
+/// only the user may read (mode 0600 on Unix; a file already there is
+/// replaced, never followed if it is a link). The runner reads it there.
+/// Put it in a directory only the user may write to (the runtime
+/// directory).
+pub fn pre_issue_file(
+    app: &AppHandle,
+    id: &str,
+    path: &Path,
+    grant: Option<Grant>,
+) -> Result<Pairing, String> {
+    if let Some(e) = bad_id(id) {
+        return Err(e);
+    }
+    let token = new_token()?;
+    write_private(path, &token)
+        .map_err(|e| format!("the token was not written to {}: {e}", path.display()))?;
+    pre_issue(app, id, &token, grant)
+}
+
+/// Writes `text` to a new file only the user may read.
+fn write_private(path: &Path, text: &str) -> std::io::Result<()> {
+    use std::io::Write as _;
+    match std::fs::remove_file(path) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e),
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.mode(0o600);
+    }
+    let mut f = options.open(path)?;
+    f.write_all(text.as_bytes())?;
+    f.sync_all()
+}
+
+/// A pre-issued pairing's own grant, when it has one.
+pub(crate) fn pre_issued_grant(app: &AppHandle, id: &str) -> Option<Grant> {
+    state(app)
+        .kept
+        .borrow()
+        .iter()
+        .find(|k| k.pairing.id == id && k.pairing.pre_issued)
+        .and_then(|k| k.grant.clone())
+}
+
+/// Where a pre-issued token comes from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum TokenSource {
+    /// Given (an environment variable's value).
+    Token(String),
+    /// A new one, written to this file.
+    File(PathBuf),
+}
+
+/// A pairing issued in advance when the application starts
+/// ([`PreIssueExt::pre_issued_pairing`]): for a scenario runner, which
+/// says `hello` with its token and is paired as [`PreIssue`]'s id at
+/// once, held to its grant; unpaired clients keep theirs.
+///
+/// ```no_run
+/// use egui_pop_agent::pairing::{PreIssue, PreIssueExt as _};
+/// use egui_pop_agent::Grant;
+/// # let builder = egui_pop_api::App::builder();
+/// let builder = match PreIssue::from_env("scenario") {
+///     Some(p) => builder.pre_issued_pairing(p.grant(Grant::full())),
+///     None => builder,
+/// };
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PreIssue {
+    id: String,
+    source: TokenSource,
+    grant: Option<Grant>,
+}
+
+impl PreIssue {
+    /// The agent `id` paired by `token` (at least [`MIN_TOKEN_CHARS`]
+    /// characters), given to both the application and the runner.
+    pub fn token(id: impl Into<String>, token: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            source: TokenSource::Token(token.into()),
+            grant: None,
+        }
+    }
+
+    /// The agent `id` paired by a new token the application writes to
+    /// `path` at start, readable by the user only ([`pre_issue_file`]).
+    pub fn file(id: impl Into<String>, path: impl Into<PathBuf>) -> Self {
+        Self {
+            id: id.into(),
+            source: TokenSource::File(path.into()),
+            grant: None,
+        }
+    }
+
+    /// From the environment: the token [`TOKEN_ENV`] gives, else a new
+    /// one written to the file [`TOKEN_FILE_ENV`] names; `None` when
+    /// neither is set.
+    pub fn from_env(id: impl Into<String>) -> Option<Self> {
+        let set = |v: &str| std::env::var(v).ok().filter(|s| !s.is_empty());
+        if let Some(t) = set(TOKEN_ENV) {
+            return Some(Self::token(id, t));
+        }
+        set(TOKEN_FILE_ENV).map(|f| Self::file(id, f))
+    }
+
+    /// What the paired runner may do; without, the grants' own for its
+    /// id ([`crate::AgentGrants::agent`]) or their paired default.
+    #[must_use]
+    pub fn grant(mut self, grant: Grant) -> Self {
+        self.grant = Some(grant);
+        self
+    }
+
+    /// Issues it now.
+    pub fn issue(&self, app: &AppHandle) -> Result<Pairing, String> {
+        match &self.source {
+            TokenSource::Token(t) => pre_issue(app, &self.id, t, self.grant.clone()),
+            TokenSource::File(p) => pre_issue_file(app, &self.id, p, self.grant.clone()),
+        }
+    }
+}
+
+/// Issuing a pairing in advance from the application's builder.
+pub trait PreIssueExt: Sized {
+    /// Issues `pairing` when the application connects its plugins; a
+    /// failure (a bad id, a short token, a file not written) is logged
+    /// and leaves nothing paired.
+    fn pre_issued_pairing(self, pairing: PreIssue) -> Self;
+}
+
+impl PreIssueExt for AppBuilder {
+    fn pre_issued_pairing(self, pairing: PreIssue) -> Self {
+        self.plugin(PreIssuePlugin(pairing))
+    }
+}
+
+#[derive(Debug)]
+struct PreIssuePlugin(PreIssue);
+
+impl Plugin for PreIssuePlugin {
+    fn id(&self) -> PluginId {
+        PRE_ISSUE_PLUGIN
+    }
+
+    fn title(&self) -> String {
+        "Agent pre-issued pairing".into()
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        if let Err(e) = self.0.issue(&ctx.app()) {
+            log::error!(target: "egui_pop_agent", "no pre-issued pairing for `{}`: {e}", self.0.id);
+        }
+        Ok(())
+    }
+}
+
 /// The answer command, and the dialog's answers held to the user (the
 /// pairing requests' and the destructive calls').
 pub(crate) fn register(ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
@@ -605,8 +878,10 @@ mod tests {
                 name: id.into(),
                 paired_at: 0,
                 last_seen: 0,
+                pre_issued: false,
             },
             token_sha256: String::new(),
+            grant: None,
         }
     }
 
@@ -630,6 +905,12 @@ mod tests {
         k.token_sha256 = sha256(&a);
         let text = render(&[k]);
         assert!(!text.contains(&a), "the token is never written");
+        let mut early = kept("runner");
+        early.pairing.pre_issued = true;
+        assert!(
+            !render(&[early]).contains("runner"),
+            "a pre-issued pairing is never saved"
+        );
         let back = parse(&text).unwrap();
         assert_eq!(back[0].pairing.id, "bot");
         assert_eq!(back[0].token_sha256, sha256(&a));
