@@ -116,3 +116,29 @@ fn a_hand_drawn_submenu_item_reads_as_a_menu_item_with_a_menu() {
     assert_eq!(node.data().is_expanded(), Some(false));
     egui_pop_test::assert_all_named(&h);
 }
+
+#[test]
+fn a_hand_drawn_command_row_shows_its_shortcut_and_a_disabled_one_says_why() {
+    let mut h = menu_open();
+    let import = h.get_by_label("Import now");
+    assert_eq!(import.accesskit_node().role(), Role::MenuItem);
+    assert_eq!(
+        import.accesskit_node().data().keyboard_shortcut(),
+        Some("Ctrl+I")
+    );
+    assert!(
+        h.query_by_label("Ctrl+I").is_none(),
+        "the shortcut is no name of its own"
+    );
+    // A row that does not apply is greyed, why in its tooltip.
+    let eject = h.get_by_label("Eject");
+    assert!(eject.accesskit_node().is_disabled());
+    eject.hover();
+    h.run();
+    h.run();
+    assert!(h.query_by_label_contains("No card inserted").is_some());
+    // A click on a row closes the menu.
+    h.get_by_label("Forget this source").click();
+    h.run();
+    assert!(h.query_by_label("Import now").is_none(), "the menu closed");
+}

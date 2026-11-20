@@ -1097,7 +1097,7 @@ pub(crate) fn rows(
                         checkable,
                         radio,
                     };
-                    if command_row(ui, app, cx, &columns, row) {
+                    if app_command_row(ui, app, cx, &columns, row) {
                         app.request_run_in(id.clone(), merge(&own, args), cx.clone());
                         ui.close();
                     }
@@ -1133,7 +1133,7 @@ pub(crate) fn rows(
                             checkable: entry.checked,
                             radio: false,
                         };
-                        if command_row(ui, app, cx, &columns, row) {
+                        if app_command_row(ui, app, cx, &columns, row) {
                             app.request_run_in(
                                 entry.command.clone(),
                                 merge(&entry.args, args),
@@ -1374,8 +1374,8 @@ struct Row<'a> {
     radio: bool,
 }
 
-/// Draws a command row; whether it was clicked.
-fn command_row(
+/// Draws a declared command's row; whether it was clicked.
+fn app_command_row(
     ui: &mut Ui,
     app: &AppHandle,
     cx: &WhenContext,
@@ -1692,6 +1692,81 @@ fn title_of(ctx: &Context, spec: &Option<CommandSpec>, id: &CommandId) -> String
                 .to_string()
         },
     )
+}
+
+/// A command row in a menu drawn by hand (a popup or context menu built
+/// in a closure), drawn as the declared menus' command rows: the kit's
+/// `menu-item`, its label at the start, `shortcut` (the keys' text, such
+/// as `Ctrl+C`) muted at the end in the menu's key font. Greyed and not
+/// clickable while `disabled` gives why, the reason in its tooltip.
+/// Assistive technology reads a menu item named by `label`, its
+/// shortcut as its keyboard shortcut.
+///
+/// The caller acts on a click and closes the menu (`ui.close()`), as in
+/// any egui menu.
+///
+/// Need (dialog): a command row with its shortcut in a menu drawn by hand.
+///
+/// ```
+/// use egui_pop_api::menus;
+///
+/// fn row_menu(ui: &mut egui::Ui, can_paste: bool) {
+///     if menus::command_row(ui, "Copy", Some("Ctrl+C"), None).clicked() {
+///         ui.close();
+///     }
+///     let why = (!can_paste).then_some("Nothing to paste");
+///     if menus::command_row(ui, "Paste", Some("Ctrl+V"), why).clicked() {
+///         ui.close();
+///     }
+/// }
+/// ```
+pub fn command_row(
+    ui: &mut Ui,
+    label: &str,
+    shortcut: Option<&str>,
+    disabled: Option<&str>,
+) -> Response {
+    let ctx = ui.ctx().clone();
+    let kit = Kit::of(&ctx);
+    let item = &kit.menu_item;
+    let key_size = key_font_size(&ctx);
+    let my_id = ui.next_auto_id();
+    let text_id = my_id.with("label");
+    let slot = ui.painter().add(Shape::Noop);
+    let (r, state) = ui
+        .add_enabled_ui(disabled.is_none(), |ui| {
+            let state = item_state(ui, ui.next_auto_id());
+            let mut atoms: Vec<Atom<'_>> = Vec::with_capacity(3);
+            atoms.push(item_text(ui, item, state, label).atom_id(egui::IdSalt::new(text_id)));
+            if let Some(keys) = shortcut {
+                let muted = item.style_toned(Tone::Muted, state).text;
+                let text = RichText::new(keys).color(muted);
+                let text = match key_size {
+                    Some(size) => text.size(size),
+                    None => text,
+                };
+                atoms.push(Atom::grow());
+                atoms.push(text.into());
+            }
+            let button = Button::new(egui::Atoms::from(atoms))
+                .fill(Color32::TRANSPARENT)
+                .stroke(Stroke::NONE);
+            (button.atom_ui(ui), state)
+        })
+        .inner;
+    paint_item(ui, item, slot, r.response.rect, state);
+    let response = r.response;
+    ctx.accesskit_node_builder(response.id, |node| {
+        node.set_role(egui::accesskit::Role::MenuItem);
+        node.set_label(label);
+        if let Some(keys) = shortcut {
+            node.set_keyboard_shortcut(keys);
+        }
+    });
+    match disabled {
+        Some(why) => response.on_disabled_hover_text(why),
+        None => response,
+    }
 }
 
 /// A submenu button with a painted arrow in the menu's last column,
