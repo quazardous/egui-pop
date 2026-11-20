@@ -8,6 +8,66 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.20.0 (2026-11-20)
+
+Published: egui-pop-model 0.13.0, egui-pop-core 0.17.0, egui-pop-api 0.18.0, egui-pop-test 0.19.0, egui-pop-viewport 0.17.0, egui-pop-i18n 0.18.0, egui-pop-agent 0.13.0, egui-pop-editors 0.18.0, egui-pop-platform 0.18.0, egui-pop-views 0.19.0, egui-pop-imaging 0.18.0, egui-pop 0.20.0.
+
+### Breaking changes
+
+- egui-pop, egui-pop-agent, egui-pop-api, egui-pop-core, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-model, egui-pop-platform, egui-pop-test, egui-pop-viewport, egui-pop-views: A panel can open several times at once. A panel declared with several
+  (`PanelSpec::instances(Instances::Multiple)`, or `Ctx::instance_panel`)
+  opens as many instances as asked: the panel declared is instance 1, each
+  new one `<kind>#<n>` (`app.gallery#2`), still a `PanelId`
+  (`PanelId::kind`, `PanelId::instance_number`), drawn by the kind's one
+  draw function, told which `Instance` it draws. Each instance holds a
+  payload the application owns (`AppHandle::set_instance_payload`,
+  `AppHandle::instance_payload`), kept in the layout (`Layout::instances`),
+  saved with it and handed back on restore; layouts saved before load as
+  ones with none. `pop.panel.open` takes `instance`: `"new"` opens a new
+  instance at the place asked, an instance's id opens that one; the
+  `workbench.panel.open` command passes it on and returns the new id. A tab
+  group's Open panel ▸ and "+" list "New `<panel>`", and so does the View
+  menu (`panel_menu::LIST_NEW_INSTANCES`, for an application's Window
+  menu). Closing an instance drops it with its payload; the journal says
+  `panel.instance.opened` and `panel.instance.closed`. Breaking:
+  `PanelSpec` and `Layout` have a new public field each (`instances`), and
+  `workbench::Change` a new variant, `NewInstance`.
+- egui-pop, egui-pop-agent, egui-pop-api, egui-pop-core, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-model, egui-pop-platform, egui-pop-test, egui-pop-viewport, egui-pop-views: A closed panel opens again where it was. `Layout::hide` keeps the place it
+  had (`Layout::closed`, read by `Layout::last_place`; `Layout::place_of`
+  gives any panel's): among the same tabs at its index, floating at its
+  corner, or in its window. Opening it puts it back there; that place gone,
+  it joins the focused panel's tab group when its areas allow it, else its
+  declared area. The `<panel>.toggle` command now does what it said ("opens
+  where it was").
+
+  Opening a panel is a point on the bus, `pop.panel.open`
+  (`bus::PanelOpen`, a `PanelOpenAsk` with the panel, `place`: `last`, `here`
+  or an area, and `group` for `here`; `AppHandle::open_panel`), answered by
+  the workbench through the `workbench.show` step, which takes the same
+  `place` and `group`. The `workbench.panel.open` command asks it for agents
+  and menus. A tab group's menu (a right click on its bar's empty part) has
+  Open panel ▸, every panel its place allows; `DockControls::add_buttons`
+  shows a "+" on each tab bar, off by default, listing the closed panels
+  that may open there. Breaking: `Layout` has a new public field, `closed`,
+  and `workbench::Change` a new variant, `Open`.
+
+### Features
+
+- egui-pop, egui-pop-api, egui-pop-model: Ctrl+Z can follow the focus instead of the newest step.
+  `history::set_routing(app, Routing::Focus)` sends Ctrl+Z and
+  Ctrl+Shift+Z to the history of the innermost focused surface that one of
+  the owner's scopes names among its focus targets (`ScopeInfo::focus`),
+  even when another history has a newer step; a surface can also declare
+  the history it works on (`Ctx::history_target`), without making that
+  history active or not. With no such surface focused
+  (the menu bar, nothing clicked yet), they go to the history focused last
+  while it is still shown, then to the newest. Redo goes to the same
+  history as undo. `Routing::Newest` stays the default. The history picked
+  goes through the new `pop.history.target` step, so a before-hook can
+  name another history or none. `history::focused_scope` and
+  `history::last_focused` say where the focus routes, and the `history`
+  collector shows the routing.
+
 ## 0.19.0 (2026-11-20)
 
 Published: egui-pop-core 0.16.0, egui-pop-api 0.17.0, egui-pop-test 0.18.0, egui-pop-viewport 0.16.0, egui-pop-i18n 0.17.0, egui-pop-agent 0.12.0, egui-pop-editors 0.17.0, egui-pop-platform 0.17.0, egui-pop-views 0.18.0, egui-pop-imaging 0.17.0, egui-pop 0.19.0.
