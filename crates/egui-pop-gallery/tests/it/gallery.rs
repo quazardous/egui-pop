@@ -2841,7 +2841,8 @@ fn the_workbench_page_names_a_scratch_instances_title() {
         .unwrap();
     h.run();
     h.run();
-    assert!(h.query_by_label("Shopping list").is_some());
+    // Its tab (and the region the tab names) read the new title.
+    assert!(h.query_all_by_label("Shopping list").next().is_some());
     assert!(h.query_by_label("Shopping list (instance 2): 0").is_some());
     assert_eq!(
         app.layout().instance(&second).unwrap().title.as_deref(),
@@ -2851,7 +2852,7 @@ fn the_workbench_page_names_a_scratch_instances_title() {
     app.set_instance_title(&second, None).unwrap();
     h.run();
     h.run();
-    assert!(h.query_by_label("Shopping list").is_none());
+    assert!(h.query_all_by_label("Shopping list").next().is_none());
     assert!(h.query_by_label("Scratch 2 (instance 2): 0").is_some());
 }
 
