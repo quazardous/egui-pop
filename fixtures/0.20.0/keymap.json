@@ -1,0 +1,15 @@
+{
+  "bindings": [
+    {
+      "command": "-gallery.notes.ask_clear",
+      "keys": ""
+    },
+    {
+      "command": "gallery.notes.ask_clear",
+      "keys": "Ctrl+Alt+N",
+      "when": "window == 'gallery.notes'"
+    }
+  ],
+  "kind": "keymap",
+  "version": 3
+}

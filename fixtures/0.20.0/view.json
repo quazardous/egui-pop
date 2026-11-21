@@ -1,0 +1,11 @@
+{
+  "kind": "view",
+  "layouts": {},
+  "places": {
+    "root": {
+      "fixtures.note": "kept"
+    }
+  },
+  "version": 1,
+  "views": {}
+}
