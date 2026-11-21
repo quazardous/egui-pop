@@ -141,6 +141,9 @@
 //! a group's menu, its toggle command, an agent), is `pop.panel.open`
 //! ([`PanelOpen`], a [`PanelOpenAsk`] naming the panel and where it opens:
 //! where it was, here or an area; answered by [`PANEL_OPEN`]).
+//! Naming an open panel instance's tab title, or giving it its generated
+//! title back, is `pop.panel.retitle` ([`PanelRetitle`], a
+//! [`PanelRetitleAsk`]; answered by [`PANEL_RETITLE`]).
 //! The interactive areas each window's last pass registered, what each
 //! writes (display, navigate, edit) and whether an edit area is inert,
 //! are `pop.ui.areas` ([`UiAreas`], answered by [`AREA_REGISTRY`]).
@@ -195,6 +198,8 @@ pub(crate) mod panel_describe;
 pub use panel_describe::{PANEL_DESCRIBE, PANEL_DESCRIBE_POINTS, PanelDescribe, PanelDescription};
 pub(crate) mod panel_open;
 pub use panel_open::{OpenPlace, PANEL_OPEN, PANEL_OPEN_POINTS, PanelOpen, PanelOpenAsk};
+pub(crate) mod panel_retitle;
+pub use panel_retitle::{PANEL_RETITLE, PANEL_RETITLE_POINTS, PanelRetitle, PanelRetitleAsk};
 pub(crate) mod panel_state;
 pub use panel_state::{
     PANEL_CHROME, PANEL_STATE_POINTS, PanelState, PanelStateAsk, PanelStateSet, TabMark, mark_id,
@@ -648,8 +653,8 @@ pub const PLUGIN_POINTS: [&str; 2] = [PluginConnect::ID.as_str(), PluginDisconne
 
 /// Every point egui-pop declares: the window, job, plugin, files,
 /// settings, drag, screen, panel state, layout, panel description and
-/// command, area and panel opening points.
-pub const POINTS: [&str; 25] = [
+/// command, area, panel opening and panel retitling points.
+pub const POINTS: [&str; 26] = [
     WindowOpen::ID.as_str(),
     WindowClose::ID.as_str(),
     WindowReparent::ID.as_str(),
@@ -675,6 +680,7 @@ pub const POINTS: [&str; 25] = [
     CommandRun::ID.as_str(),
     UiAreas::ID.as_str(),
     PanelOpen::ID.as_str(),
+    PanelRetitle::ID.as_str(),
 ];
 
 /// egui-pop's contract table (ADR 0030): every point it declares on the
@@ -739,6 +745,9 @@ pub const CONTRACT: &[PointDecl] = &[
     .fail_closed(),
     PointDecl::of::<PanelOpen>(
         "A panel is asked open, whoever asks (a menu, a tab bar's \"+\", a group's menu, its toggle command, an agent): `last` puts it back where it was when it closed (that place gone, in the focused panel's tab group when its areas allow it, else its declared area), `here` in the tab group holding `group` (else the focused panel's), an area's name docks it there; the workbench runs the `workbench.show` step, which a plugin may veto; asked on the interface's thread.",
+    ),
+    PointDecl::of::<PanelRetitle>(
+        "An open instance `<kind>#<n>` of a panel declared with several is asked retitled: its title is kept in the layout's instance entry (saved and restored with it) and read by its tab, the panel menu, the View menu and accessibility; `title: null` gives the generated title back; the panel declared, a panel declared once or an instance not open is refused with the reason; `panel.instance.retitled` follows a change; asked on the interface's thread.",
     ),
     PointDecl::of::<UiAreas>(
         "The interactive areas are listed, each window's last pass: each one's kind (display, navigate or edit), for an edit area the control it writes, its value and path, its panel, its grips, and whether it is inert (its panel's state not current); asked on the interface's thread.",
@@ -976,6 +985,7 @@ impl Bus {
         panel_state::install(&*kernel, &panel_states, wake.clone());
         panel_describe::install(&*kernel);
         panel_open::install(&*kernel);
+        panel_retitle::install(&*kernel);
         areas::install(&*kernel, wake.clone());
         let over_budget = budget::install(&*kernel);
         let jobs = JobPublisher {
@@ -1559,6 +1569,25 @@ impl AppHandle {
         ASKING.with_borrow_mut(|a| a.push(self.downgrade()));
         let _asking = Asking;
         let out = self.0.bus.kernel.alter::<PanelOpen>(ask, Vec::new());
+        if out.failures.is_empty() {
+            Ok(out.value)
+        } else {
+            let why: Vec<String> = out.failures.iter().map(ToString::to_string).collect();
+            Err(why.join("; "))
+        }
+    }
+
+    /// Retitles an open panel instance (`pop.panel.retitle`): its
+    /// listeners run now (the workbench's keeps the title in the layout's
+    /// instance entry); what they did, one line each, or why it was
+    /// refused. [`AppHandle::set_instance_title`] asks it from code.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn retitle_panel(&self, ask: PanelRetitleAsk) -> Result<Vec<String>, String> {
+        ASKING.with_borrow_mut(|a| a.push(self.downgrade()));
+        let _asking = Asking;
+        let out = self.0.bus.kernel.alter::<PanelRetitle>(ask, Vec::new());
         if out.failures.is_empty() {
             Ok(out.value)
         } else {
