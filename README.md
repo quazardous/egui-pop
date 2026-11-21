@@ -67,6 +67,31 @@ change) or experimental (may change in any release).
 | Text and code editors, terminal | `egui-pop-editors` (`editors`) | experimental |
 | Platform services | `egui-pop-platform` (`platform`) | experimental |
 
+## What features cost
+
+Measured by the `egui-pop-cost` bench job
+([What a build costs](https://github.com/quazardous/egui-pop/blob/main/docs/quality.md#what-a-build-costs)) on a
+one-panel probe application, release builds with the compile cache
+off, the binary stripped. Measured 2026-11-21 on egui-pop `next`
+(0.21), Rust 1.95, Linux, five threads of a shared bench box
+that ran other jobs at the same time: read the times as an order of
+size, not to the second. The minimal build took 281 s in one run and
+270 s in the other.
+
+| Features | Dependencies | Release build | Binary |
+|---|---:|---:|---:|
+| minimal (`--no-default-features`) | 120 | 281 s, clean | 20.9 MiB |
+| default | 294 | 423 s, clean | 36.4 MiB |
+| full (every feature but three, below) | 385 | 812 s: 270 s minimal, then 542 s | 38.7 MiB |
+
+Most of what the defaults add is eframe (winit, wgpu and the windowing
+stack); a host running its own event loop leaves the `eframe` feature
+out. An optional feature the application never calls costs dependencies
+and build time, not binary size: the linker drops what is not reached,
+so the full set adds 2.3 MiB to the defaults. "Full" leaves out
+`views-video` and `views-webview` (they need GStreamer and WebKitGTK
+installed) and `native-dialogs` (a fallback kept off).
+
 ## Quickstart
 
 ```sh
