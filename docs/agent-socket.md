@@ -99,6 +99,7 @@ agent.
 | `ui` | `{ "action": "tree", "label"?, "role"?, "window"? }` | `{ "count", "nodes" }`: the accessibility tree's nodes (`id`, `parent`, `role`, `label`, `value`, `rect` in points, `disabled`), every one or those matching |
 | `ui` | `{ "action": "click" \| "hover" \| "secondary_click" \| "type" \| "scroll", "label"?, "role"?, "nth"?, "text"?, "up"?, "window"? }` | `{ "node" }`, once the input went in |
 | `ui` | `{ "action": "key", "key": "Ctrl+K", "window"? }` | `{ "key" }` |
+| `inspect` | `{ "request" }`: an `egui_inspection` request (`"GetTree"`, `{ "GetScreenshot": { "pixels_per_point": 1.0 } }`, `{ "ApplyEvents": { "events": [..] } }`, `{ "Resize": { "width", "height" } }`, `{ "Settle": { "max_steps" } }`, `"GetInfo"`) | `{ "response" }`: its response, see [Inspect](#inspect-eguis-inspection-protocol) |
 
 **The interface.** `ui` reads the AccessKit tree of the frame just
 drawn (AccessKit is turned on at the first `ui` request) and acts on it
@@ -133,6 +134,48 @@ not open is error `-32602`, naming the open ones. An action that closes
 its window (`Escape`, a close button) is answered once the window is
 gone, with `"window_closed": true`; the events left for it are dropped,
 and the application keeps running.
+
+### Inspect: egui's inspection protocol
+
+`inspect` carries egui's own inspection protocol,
+[`egui_inspection`](https://crates.io/crates/egui_inspection) (by Lucas
+Meurer and Emil Ernerfeldt, [emilk/egui](https://github.com/emilk/egui)),
+to an `InspectionPlugin` in the application's process, the plugin
+eframe's `inspection` feature serves on TCP ([inspection.md](inspection.md)).
+Here no port is opened: the request travels on the socket, the plugin
+serves it through `InspectionPlugin::submit`, and the reply comes back
+as `{ "response" }`. Tunnelling it, rather than opening the plugin's
+port, is the idea of Rerun's `egui_mcp` and `egui_inspection_tools` (the
+same authors, [rerun-io/egui_crates](https://github.com/rerun-io/egui_crates)),
+whose `Transport` takes one request and gives one response.
+
+It gives what `ui` does not: the full AccessKit tree
+(`{ "Tree": { "step", "pixels_per_point", "accesskit" } }`), a
+screenshot of the main window (`{ "Screenshot": { "size": [w, h],
+"png_base64" } }`, taken even while the window is hidden), any egui
+event (a drag, a scroll by a delta, a click at a position, a click
+count), a resize, and a wait until the frame settles (`{ "Settled": {
+"settled", "steps" } }`). Events and a resize are answered `"Done"` once
+a frame processed them. Requests and responses are the protocol's types
+in serde's JSON form; in Rust, `egui_pop_agent::inspect::request_to_json`
+and `response_from_json` convert them. The protocol follows egui's
+version: a client built on another egui may not read its tree.
+
+It is held more tightly than `ui`, since a screenshot or the tree shows
+whatever the window shows and its events act anywhere:
+
+- the bridge **on**: read-only and off refuse every request, the tree
+  included (`ui` `tree` still reads under read-only);
+- the agent's grant allows **`ui` and private data** (`Grant::ui`,
+  `Grant::private`), else `-32001` and `debug.call.refused` (collector
+  `inspect`, the request's name as the action, `by:
+  "pop.agent.grants"`);
+- the **input lock**: while the user answers an agent's request, every
+  `inspect` request is refused (below), checked again just before it is
+  handed to egui.
+
+It reads and acts on the main window. For the application's other
+windows, use `ui` with `window`.
 
 `commands.run` through `call` is queued for the next frame, as
 `AppHandle::debug_call` does: its result comes on the journal. Wait for
@@ -313,7 +356,9 @@ user answers an agent's request", and the journal says
 `debug.call.refused` (`collector: "ui"`, the action, `by:
 "pop.agent.confirm"`) from the agent's origin. Otherwise an agent
 allowed to act through `ui` could click the confirmation's button,
-which answers as the user. Reading the tree (`ui` `tree`) still works,
+which answers as the user. Every `inspect` request is refused the same
+way (`collector: "inspect"`), a screenshot included. Reading the tree
+(`ui` `tree`) still works,
 and the user's own mouse and keyboard are not touched. An action
 already on its way when the dialog opens is refused before its events
 go in. Once the dialog is answered or cancelled, agents act again.
@@ -334,7 +379,7 @@ The application says what each of the socket's agents may do, with an
 | `commands` | the commands it may run: `*`, a prefix (`files.*`) or an id |
 | `read_only` | only read-only commands and calls that change nothing |
 | `values` | the value paths `value.set` and `value.reset` may write: `*`, a prefix (`settings/*`) or a path |
-| `ui` | `ui` may act for it (click, type, keys, scroll); reading the tree is always allowed |
+| `ui` | `ui` may act for it (click, type, keys, scroll); reading the tree is always allowed. `inspect` needs it, and `private` too |
 | `private` | it reads private data: places (GPS), people (faces, names), absolute file paths ([Private data](#private-data)) |
 
 Three presets: `Grant::read_only()` (every command that reads, nothing
@@ -587,15 +632,17 @@ application's own (`settled` stays reachable).
 ## Known gaps
 
 - **No recording** of a session as a scenario yet.
-- **No screenshots, no drag, no wait on the tree.** The `ui` method
-  reads the tree and clicks, hovers, types, scrolls and presses keys;
-  pixels, drags and a wait for a widget to appear go through eframe's
-  `inspection` feature ([inspection.md](inspection.md)), a second
-  connection that is an unauthenticated TCP port on loopback. It bypasses egui-pop's bridge
-  mode, the agent socket's grants and its input lock: an agent behind it
-  acts as the user, and can click a destructive call's confirmation or a
-  pairing dialog itself. It is for development builds only, never for an
-  application you ship.
+- **No MCP tools for `inspect` yet.** The socket serves screenshots,
+  drags and the full tree through [`inspect`](#inspect-eguis-inspection-protocol);
+  `egui-pop-agent-mcp` does not offer them as tools yet. They are to come
+  from Rerun's `egui_inspection_tools` once it is published on crates.io.
+  Meanwhile eframe's `inspection` feature with `egui-mcp`
+  ([inspection.md](inspection.md)) is a second connection that is an
+  unauthenticated TCP port on loopback: it bypasses the bridge's mode,
+  the grants and the input lock, so it is for development builds only.
+- **No wait for a widget to appear.** `wait` waits on the journal or
+  for the frame to settle; a client polls `ui` `tree` (or `inspect`
+  `GetTree`) for a widget.
 - **Windows** is compile-checked only.
 - **Access set on the Agents page lasts the session.** The user's
   presets apply live but are not kept; at the next start the

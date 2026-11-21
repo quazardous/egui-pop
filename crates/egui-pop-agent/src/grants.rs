@@ -359,6 +359,22 @@ pub(crate) fn ui_refusal(app: &AppHandle, origin: &Origin) -> Option<String> {
     (!grant.ui).then(|| "the agent may not act through `ui` (click, type, keys)".into())
 }
 
+/// Why `origin`'s `inspect` request is refused by its grant, if it is:
+/// `inspect` reads the screen and drives the interface, so it needs the
+/// `ui` grant, and private data, which a screenshot or the tree may show.
+pub(crate) fn inspect_refusal(app: &AppHandle, origin: &Origin) -> Option<String> {
+    let grant = grant_of(app, origin)?;
+    if !grant.ui {
+        return Some(
+            "the agent may not use `inspect` (the screen, the tree and input): its grant has no `ui`"
+                .into(),
+        );
+    }
+    (!grant.private).then(|| {
+        "the agent may not use `inspect`: a screenshot or the tree may show private data, which its grant withholds".into()
+    })
+}
+
 /// A refusal's message, as `pop.command.run` words its own.
 fn worded(reason: &str) -> String {
     format!("refused by `{GRANTS}`: {reason}")

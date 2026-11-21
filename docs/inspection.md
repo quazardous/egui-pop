@@ -21,8 +21,9 @@ eframe's `inspection` itself.
 > pairing dialog itself. It is for development builds only, never for an
 > application you ship.
 > To let an agent read and drive the interface of a shipped
-> application, use the [agent socket](agent-socket.md)'s `ui` method,
-> which the mode, the grants and the input lock hold.
+> application, use the [agent socket](agent-socket.md): its `ui`
+> method, or `inspect`, which carries this same protocol to the same
+> plugin with no port, held by the mode, the grants and the input lock.
 
 - **Off unless asked twice.** The feature is off by default, so no
   build has it unless it says `--features inspection`, release builds
@@ -162,7 +163,7 @@ Two ways in, for different things:
 | From another process | yes, TCP on loopback, unauthenticated | yes, through the opt-in [agent socket](agent-socket.md): a private local socket, the bridge's mode, each agent's grants |
 | The interface (tree, input) | yes, as the user: the mode, the grants and the input lock do not apply | the agent socket's `ui` method, under the mode, the `ui` grant and the input lock |
 | Wait | `wait_for` on the tree or frames | the agent socket's `wait` (a journal event, `settled`), or polling in the process (`journal.since`) |
-| Screenshots | yes | no (wbox, kittest) |
+| Screenshots | yes | the agent socket's `inspect`, this protocol without the port |
 | Built in | the gallery with `--features inspection` only; development builds only | every `App`; the socket where the application turns it on |
 
 `egui_inspection` cannot carry the bridge's calls: its protocol has a

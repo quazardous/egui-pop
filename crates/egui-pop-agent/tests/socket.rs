@@ -1899,3 +1899,267 @@ fn a_private_commands_args_result_and_error_are_redacted_for_an_agent_without_pr
         .unwrap();
     assert_eq!(spec["private"], true);
 }
+
+// `inspect`: egui's inspection protocol over the socket, held by the
+// bridge's mode, the `ui` and private grants and the input lock.
+
+/// As [`app`], drawn on the process's wgpu device, so a screenshot has
+/// pixels.
+fn rendered(builder: AppBuilder, socket: &Path) -> Harness<'static, App> {
+    use egui_pop_test::SharedGpu as _;
+    egui_pop_api::files::refuse_system_chooser();
+    let app = builder
+        .plugins(DefaultPlugins)
+        .plugin(AboutPlugin::new(AppInfo::new("Agent test", "1.0.0")))
+        .plugin(Writes)
+        .app_id("org.example.AgentTest")
+        .agent_socket(AgentSocket::at(socket))
+        .build(&egui::Context::default())
+        .expect("the application builds");
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(800.0, 600.0))
+        .shared_wgpu()
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.step();
+    h
+}
+
+/// `inspect`'s params for `request`.
+fn inspect(request: &egui_pop_agent::inspect::Request) -> Json {
+    egui_pop_agent::inspect::request_to_json(request)
+}
+
+/// The `debug.call.refused` events of `inspect` requests by `by`.
+fn inspect_refused(h: &Harness<'static, App>, by: &str) -> Vec<egui_pop_api::host::Event> {
+    events(h, "debug.call.refused")
+        .into_iter()
+        .filter(|e| e.data["collector"] == "inspect" && e.data["by"] == by)
+        .collect()
+}
+
+#[test]
+fn inspect_reads_the_tree_takes_a_screenshot_and_sends_events_under_the_ui_grant() {
+    use egui_pop_agent::inspect::{Request, Response, response_from_json};
+    let dir = private_dir("inspect");
+    let path = dir.join("app.sock");
+    let builder = App::builder()
+        .debug_bridge(egui_pop_api::core::debug::BridgeMode::On)
+        .agent_grants(AgentGrants::new().unpaired(Grant::full()));
+    let mut h = rendered(builder, &path);
+    let p = path.clone();
+    let (labels, tree, shot, events_done, info) = with_client(&mut h, move || {
+        let mut c = Client::connect(&p);
+        // The buttons `ui` sees, to find them in `inspect`'s tree.
+        let labels: Vec<String> =
+            c.result("ui", json!({ "action": "tree", "role": "Button" }))["nodes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|n| n["label"].as_str().map(String::from))
+                .collect();
+        let tree = c.result("inspect", inspect(&Request::GetTree));
+        let shot = c.result(
+            "inspect",
+            inspect(&Request::GetScreenshot {
+                pixels_per_point: Some(1.0),
+            }),
+        );
+        let events_done = c.result(
+            "inspect",
+            inspect(&Request::ApplyEvents {
+                events: vec![egui::Event::PointerMoved(egui::pos2(5.0, 5.0))],
+            }),
+        );
+        let info = c.result("inspect", json!({ "request": "GetInfo" }));
+        (labels, tree, shot, events_done, info)
+    });
+    match response_from_json(&tree) {
+        Ok(Response::Tree {
+            accesskit: Some(update),
+            ..
+        }) => {
+            assert!(!update.nodes.is_empty(), "an empty tree");
+            let text = tree.to_string();
+            let label = labels.first().expect("`ui` sees a button");
+            assert!(text.contains(label.as_str()), "`{label}` not in {text}");
+        }
+        other => panic!("not a tree: {other:?}"),
+    }
+    match response_from_json(&shot) {
+        Ok(Response::Screenshot(png)) => {
+            assert_eq!(png.size, [800, 600], "the window at 1 pixel per point");
+            assert_eq!(&png.bytes[1..4], b"PNG", "a PNG");
+        }
+        other => panic!("not a screenshot: {other:?}"),
+    }
+    assert!(
+        matches!(response_from_json(&events_done), Ok(Response::Done)),
+        "{events_done}"
+    );
+    assert!(
+        matches!(response_from_json(&info), Ok(Response::Info { .. })),
+        "{info}"
+    );
+    // Nothing refused on the journal.
+    assert!(inspect_refused(&h, "pop.agent.grants").is_empty());
+}
+
+#[test]
+fn inspect_is_refused_read_only_and_without_the_ui_or_private_grant() {
+    use egui_pop_agent::inspect::Request;
+    use egui_pop_api::core::debug::BridgeMode;
+    let ask = |name: &str, builder: AppBuilder| {
+        let dir = private_dir(name);
+        let path = dir.join("app.sock");
+        let mut h = app(builder, &path);
+        let p = path.clone();
+        let r = with_client(&mut h, move || {
+            let mut c = Client::connect(&p);
+            (
+                c.request("inspect", inspect(&Request::GetTree)),
+                c.request(
+                    "inspect",
+                    inspect(&Request::GetScreenshot {
+                        pixels_per_point: None,
+                    }),
+                ),
+            )
+        });
+        (h, r)
+    };
+    // Read-only: the tree and pixels show what the window shows.
+    let (_, (tree, shot)) = ask(
+        "inspect-readonly",
+        App::builder()
+            .debug_bridge(BridgeMode::ReadOnly)
+            .agent_grants(AgentGrants::new().unpaired(Grant::full())),
+    );
+    for r in [&tree, &shot] {
+        assert_eq!(r["error"]["code"], -32001, "{r}");
+        assert!(
+            r["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("read-only"),
+            "{r}"
+        );
+    }
+    // Without the `ui` grant, then without private data: refused by the
+    // grants, on the journal.
+    for (name, grant, says) in [
+        ("inspect-no-ui", Grant::full().ui(false), "no `ui`"),
+        (
+            "inspect-no-private",
+            Grant::full().private(false),
+            "private",
+        ),
+    ] {
+        let (h, (tree, shot)) = ask(
+            name,
+            App::builder()
+                .debug_bridge(BridgeMode::On)
+                .agent_grants(AgentGrants::new().unpaired(grant)),
+        );
+        for r in [&tree, &shot] {
+            assert_eq!(r["error"]["code"], -32001, "{r}");
+            assert!(
+                r["error"]["message"].as_str().unwrap().contains(says),
+                "{r}"
+            );
+        }
+        let refused = inspect_refused(&h, "pop.agent.grants");
+        assert_eq!(refused.len(), 2, "{refused:?}");
+        assert_eq!(refused[0].data["action"], "GetTree");
+        assert_eq!(refused[1].data["action"], "GetScreenshot");
+        assert_eq!(refused[0].source, "agent:agent-socket");
+    }
+    // An unknown request is bad params.
+    let (_, (bad, _)) = {
+        let dir = private_dir("inspect-bad");
+        let path = dir.join("app.sock");
+        let mut h = app(App::builder(), &path);
+        let p = path.clone();
+        let r = with_client(&mut h, move || {
+            let mut c = Client::connect(&p);
+            (
+                c.request("inspect", json!({ "request": "Nope" })),
+                Json::Null,
+            )
+        });
+        (h, r)
+    };
+    assert_eq!(bad["error"]["code"], -32602, "{bad}");
+}
+
+#[test]
+fn inspect_is_refused_while_the_user_answers_a_confirmation() {
+    use egui_pop_agent::inspect::Request;
+    let (mut h, path) = writable("inspect-input-lock");
+    let p = path.clone();
+    let asking = std::thread::spawn(move || Client::connect(&p).request("call", purge(20_000)));
+    let dialog = confirmation_shown(&mut h);
+    // Another connection tries to read the screen and to press Enter on
+    // the confirmation: both refused; `ui` still reads the tree.
+    let p = path.clone();
+    let (shot, enter, tree) = with_client(&mut h, move || {
+        let mut c = Client::connect(&p);
+        (
+            c.request(
+                "inspect",
+                inspect(&Request::GetScreenshot {
+                    pixels_per_point: None,
+                }),
+            ),
+            c.request(
+                "inspect",
+                inspect(&Request::ApplyEvents {
+                    events: vec![egui::Event::Key {
+                        key: egui::Key::Enter,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: egui::Modifiers::NONE,
+                    }],
+                }),
+            ),
+            c.request("ui", json!({ "action": "tree" })),
+        )
+    });
+    for r in [&shot, &enter] {
+        assert_eq!(r["error"]["code"], -32001, "{r}");
+        assert!(
+            r["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("input is locked"),
+            "{r}"
+        );
+    }
+    assert!(tree.get("error").is_none(), "{tree}");
+    for _ in 0..3 {
+        h.step();
+    }
+    assert!(purged(&h).is_empty(), "an agent's input ran the purge");
+    let d = h
+        .state()
+        .handle()
+        .service(&egui_pop_api::dialogs::DIALOGS)
+        .unwrap();
+    assert!(d.is_open(dialog), "the confirmation is still open");
+    let refused = inspect_refused(&h, "pop.agent.confirm");
+    assert_eq!(refused.len(), 2, "{refused:?}");
+    assert_eq!(refused[1].data["action"], "ApplyEvents");
+    // The user declines; the purge is refused, and agents inspect again.
+    d.answer(
+        egui_pop_api::dialogs::Answer::Cancel,
+        egui_pop_api::model::commands::Origin::User,
+    )
+    .unwrap();
+    let r = finish(&mut h, asking);
+    assert_eq!(r["error"]["code"], -32001, "{r}");
+    let p = path.clone();
+    let after = with_client(&mut h, move || {
+        Client::connect(&p).request("inspect", inspect(&Request::GetTree))
+    });
+    assert!(after.get("error").is_none(), "{after}");
+}

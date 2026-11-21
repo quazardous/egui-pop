@@ -1,7 +1,8 @@
 # egui-pop-agent
 
 Serves [egui-pop](https://github.com/quazardous/egui-pop)'s debug bridge
-out of the process: JSON-RPC 2.0 (`describe`, `snapshot`, `call`, `wait`)
+out of the process: JSON-RPC 2.0 (`describe`, `snapshot`, `call`, `wait`,
+`ui`, and `inspect`, egui's inspection protocol without its TCP port)
 over a Unix socket in the user's runtime directory (mode 0600), or a
 named pipe on Windows. Off unless the application turns it on; read-only
 unless the application offers more.
