@@ -15,6 +15,15 @@ eframe's `inspection` itself.
 
 ## What it opens, and the risk
 
+> **Development builds only.** The endpoint is an unauthenticated TCP port on loopback. It bypasses egui-pop's bridge
+> mode, the agent socket's grants and its input lock: an agent behind it
+> acts as the user, and can click a destructive call's confirmation or a
+> pairing dialog itself. It is for development builds only, never for an
+> application you ship.
+> To let an agent read and drive the interface of a shipped
+> application, use the [agent socket](agent-socket.md)'s `ui` method,
+> which the mode, the grants and the input lock hold.
+
 - **Off unless asked twice.** The feature is off by default, so no
   build has it unless it says `--features inspection`, release builds
   included. A build with it opens nothing until `EGUI_INSPECTION` is set
@@ -149,11 +158,12 @@ Two ways in, for different things:
 | | `egui_inspection` / `egui-mcp` | egui-pop's debug bridge |
 |---|---|---|
 | Reaches | egui: the AccessKit tree, raw input events, the framebuffer | the `App`: collectors, commands, steps, the journal ([Agents](agents.md)) |
-| Acts as | a person at the keyboard and mouse | the agent (`debug-bridge` origin), held by `agent` flags, `when` clauses and hooks |
-| From another process | yes, TCP on loopback | no, Rust calls only; the transport is the application's |
-| Wait | `wait_for` on the tree or frames | polling (`journal.since`, a collector's `idle`) |
+| Acts as | a person at the keyboard and mouse | the agent (`debug-bridge` origin, or its paired id), held by `agent` flags, `when` clauses and hooks |
+| From another process | yes, TCP on loopback, unauthenticated | yes, through the opt-in [agent socket](agent-socket.md): a private local socket, the bridge's mode, each agent's grants |
+| The interface (tree, input) | yes, as the user: the mode, the grants and the input lock do not apply | the agent socket's `ui` method, under the mode, the `ui` grant and the input lock |
+| Wait | `wait_for` on the tree or frames | the agent socket's `wait` (a journal event, `settled`), or polling in the process (`journal.since`) |
 | Screenshots | yes | no (wbox, kittest) |
-| Built in | the gallery with `--features inspection` only | every `App` |
+| Built in | the gallery with `--features inspection` only; development builds only | every `App`; the socket where the application turns it on |
 
 `egui_inspection` cannot carry the bridge's calls: its protocol has a
 fixed set of requests (the tree, input events, a screenshot, a resize,

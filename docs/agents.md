@@ -64,10 +64,15 @@ every collector action goes through; a plugin may veto either, and a
 veto of `debug.call` covers the panel and agents alike. See
 [Debugging](debugging.md).
 
-**Reaching it from another process** takes a transport the application
-writes (a socket, stdin, an MCP server...) that turns requests into
-`debug_call`s on the UI thread. egui-pop provides none. The ways out of
-the process that do exist are not the bridge:
+**Reaching it from another process** takes a transport that turns
+requests into `debug_call`s on the UI thread. egui-pop's is the opt-in
+[agent socket](agent-socket.md) (`egui-pop-agent`): the bridge as
+JSON-RPC over a private local socket, held by the bridge's mode, each
+agent's grants and the input lock, with an MCP server on top
+(`egui-pop-agent-mcp`), and its `ui` method for the accessibility tree
+and input. An application may write its own transport (stdin, another
+protocol) over the same calls. The other ways out of the process are
+not the bridge:
 
 - the gallery's `--dump-debug` prints the bridge's snapshot as one JSON
   line on stdout when it quits by `--quit-after` (read only, the gallery
@@ -78,7 +83,12 @@ the process that do exist are not the bridge:
   `egui_inspection` protocol on loopback, without authentication, for
   Rerun's `egui-mcp`: the accessibility tree, clicks and keys by role or
   label, screenshots and a wait, as a person would, not the bridge
-  ([Driving the gallery with egui-mcp](inspection.md));
+  ([Driving the gallery with egui-mcp](inspection.md)). **Development
+  builds only**: the endpoint is an unauthenticated TCP port on loopback. It bypasses egui-pop's bridge
+  mode, the agent socket's grants and its input lock: an agent behind it
+  acts as the user, and can click a destructive call's confirmation or a
+  pairing dialog itself. It is for development builds only, never for an
+  application you ship.
 - the single-instance plugin of `egui-pop-platform`
   ([instance.md](instance.md)) listens on a local socket for later
   launches of the same application; what they hand over (arguments,
@@ -303,13 +313,20 @@ capabilities breaks none.
 
 ### Screenshots and the accessibility tree
 
-Not through the bridge. In tests, egui_kittest renders frames and
-`egui_pop_test::a11y_tree` prints the accessibility tree
+Not through the bridge's calls. Out of the process, the agent socket's
+`ui` method reads the accessibility tree and acts on it, under the
+bridge's mode, the `ui` grant and the input lock
+([The agent socket](agent-socket.md)). In tests, egui_kittest renders
+frames and `egui_pop_test::a11y_tree` prints the accessibility tree
 ([Testing](testing.md)); for a real window, wbox takes screenshots, and
 the gallery built with `--features inspection` gives both to `egui-mcp`
-([inspection.md](inspection.md)). The bridge gives the same information
-as data: the `fields`, `focus`,
-`indicators` and `announcements` collectors.
+([inspection.md](inspection.md)), in development builds only (it opens
+an unauthenticated port that bypasses the grants). The bridge gives the
+same information as data: the `fields`, `focus`, `indicators` and
+`announcements` collectors.
+
+**Watched.** `kittest_inspector` (Rerun), a GUI to step a kittest test
+frame by frame: watched; revisit when egui_kittest ships an inspector.
 
 ## An example, end to end
 

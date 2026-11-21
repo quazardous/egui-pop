@@ -35,11 +35,12 @@ bridge](../agents.md)).
 | Running as the agent | yes: `Origin::Agent`, the `agent` flags, the bridge modes (on, read-only, off), the `debug.call` step and its vetoes | ADR 0018 to 0024 |
 | Reading state | yes: about 50 collectors' snapshots | `debug_snapshot` |
 | The journal | yes: `journal.since`, `command.done` and `command.failed` with their cause | `journal` collector |
-| Tree, screenshots, input in a live window | yes, outside the bridge: eframe's `inspection` feature and `egui_mcp` | [inspection.md](../inspection.md), the gallery only |
+| Tree, screenshots, input in a live window | tree and input: the agent socket's `ui` method; screenshots: outside the bridge, eframe's `inspection` feature and `egui_mcp` (unauthenticated, development builds only) | [agent-socket.md](../agent-socket.md), [inspection.md](../inspection.md) (the gallery only) |
 | Tree, screenshots, input in tests | yes: egui_kittest, `egui_pop_test::a11y_tree` | [Testing](../testing.md) |
 | A headless real window | yes: wbox | `tools/wbox` |
 
-**Missing:**
+**Missing** (when this note was written; most is built since, see the
+status above):
 - a transport that carries the bridge out of the process;
 - schemas for the arguments (today an example, free JSON or a schema);
 - a blocking wait;

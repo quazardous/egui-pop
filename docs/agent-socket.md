@@ -587,9 +587,15 @@ application's own (`settled` stays reachable).
 ## Known gaps
 
 - **No recording** of a session as a scenario yet.
-- **No `ui.*`.** Tree, screenshots and input go through eframe's
+- **No screenshots, no drag, no wait on the tree.** The `ui` method
+  reads the tree and clicks, hovers, types, scrolls and presses keys;
+  pixels, drags and a wait for a widget to appear go through eframe's
   `inspection` feature ([inspection.md](inspection.md)), a second
-  connection.
+  connection that is an unauthenticated TCP port on loopback. It bypasses egui-pop's bridge
+  mode, the agent socket's grants and its input lock: an agent behind it
+  acts as the user, and can click a destructive call's confirmation or a
+  pairing dialog itself. It is for development builds only, never for an
+  application you ship.
 - **Windows** is compile-checked only.
 - **Access set on the Agents page lasts the session.** The user's
   presets apply live but are not kept; at the next start the
