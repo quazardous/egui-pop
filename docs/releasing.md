@@ -135,6 +135,23 @@ Publishing is the owner's call, and stays a manual step.
    crates it publishes and groups the entries under "Breaking changes",
    "Features" and "Fixes", each entry naming its crates.
 
+   Then write the release's **fixtures**, on the same branch:
+
+   ```sh
+   cargo xtask fixtures <the facade's version>   # e.g. 0.22.0
+   git add fixtures/ && git commit -s -m "test: fixtures of <version>"
+   ```
+
+   The gallery runs headless through a fixed scenario (a setting
+   changed, a key rebound, a panel moved, an arrangement saved, a
+   place's value kept, a theme saved from the editor) and
+   `fixtures/<version>/` keeps every document it wrote, the theme file
+   and `expected.json`, the values the scenario set. The gallery's
+   `release_fixtures` test loads every folder with today's code: no
+   error, every value back, each migration reported (ADR 0008). A
+   released folder is never rewritten; a format change that cannot read
+   one is a break.
+
 2. **Review**: push the branch, open a pull request titled like the
    commit, read the changelog and the versions. Merge it: on `next`,
    CI's semver job checks the new versions against crates.io (the
