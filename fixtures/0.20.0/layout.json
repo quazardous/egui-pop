@@ -1,0 +1,54 @@
+{
+  "areas": [
+    [
+      "center",
+      {
+        "active": 0,
+        "kind": "tabs",
+        "panels": [
+          "app.main"
+        ]
+      }
+    ],
+    [
+      "start_side",
+      {
+        "active": 1,
+        "kind": "tabs",
+        "panels": [
+          "app.side-bar",
+          "gallery.properties"
+        ]
+      }
+    ],
+    [
+      "end_side",
+      {
+        "active": 0,
+        "kind": "tabs",
+        "panels": [
+          "app.inspector"
+        ]
+      }
+    ]
+  ],
+  "auxiliary": [],
+  "hidden": [
+    "egui_pop.devtools",
+    "egui_pop.history",
+    "egui_pop.jobs",
+    "gallery.ratings",
+    "gallery.second",
+    "gallery.linked.preview",
+    "gallery.toolbox",
+    "gallery.swatches",
+    "gallery.navigator",
+    "gallery.outline",
+    "gallery.console",
+    "gallery.notes",
+    "gallery.scratch",
+    "egui_pop.viewer"
+  ],
+  "kind": "layout",
+  "version": 2
+}

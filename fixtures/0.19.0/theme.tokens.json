@@ -1,0 +1,31 @@
+{
+  "$description": "Edited from pop-dark",
+  "$extends": "pop-dark",
+  "$extensions": {
+    "org.egui-pop.counterpart": {
+      "file": {
+        "$description": "Edited from pop-light",
+        "$extends": "pop-light",
+        "$extensions": {
+          "org.egui-pop.format": {
+            "contract": 1,
+            "version": 1
+          },
+          "org.egui-pop.variant-of": "theme"
+        }
+      },
+      "name": "theme-light"
+    },
+    "org.egui-pop.format": {
+      "contract": 1,
+      "version": 1
+    },
+    "org.egui-pop.variant-of": "theme-light"
+  },
+  "accent": {
+    "default": {
+      "$type": "color",
+      "$value": "#2060c0"
+    }
+  }
+}
