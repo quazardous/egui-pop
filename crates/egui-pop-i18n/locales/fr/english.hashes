@@ -919,6 +919,8 @@ egui-pop-history-by 7ba70f1ff11b8552
 egui-pop-history-delete-snapshot ea948a0671ebcf8f
 egui-pop-history-jump 3c25cffdcaf94845
 egui-pop-history-none 9f2a43038c4c659c
+egui-pop-history-nothing-focused bbb1d1b26f85ce93
+egui-pop-history-nothing-focused-redo 18f2761008194bd9
 egui-pop-history-preview-change b7013b2944caf171
 egui-pop-history-replaced 3f0291895d56f69c
 egui-pop-history-restore eb78406341b90759

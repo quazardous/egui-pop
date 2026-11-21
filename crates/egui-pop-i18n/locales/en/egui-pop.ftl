@@ -1855,6 +1855,10 @@ egui-pop-history-jump = Go back or forward to this step
 
 egui-pop-history-none = No history
 
+egui-pop-history-nothing-focused = Nothing to undo here: click a view first
+
+egui-pop-history-nothing-focused-redo = Nothing to redo here: click a view first
+
 egui-pop-history-preview-change = { $what }: { $then } (now { $now })
 
 egui-pop-history-replaced = { $label } (replaced)

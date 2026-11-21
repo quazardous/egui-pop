@@ -43,9 +43,31 @@ Innermost first:
 
 1. a focused text field keeps its own undo;
 2. a focused surface with a local scope undoes there;
-3. otherwise the newest step among the owner's scopes **active** in the
-   window (those whose focus targets are drawn; a scope without any is
-   always active). Redo goes back to the scope last undone.
+3. otherwise, by the routing the application sets
+   (`history::set_routing`):
+   - `Routing::Newest` (the default): the newest step among the owner's
+     scopes **active** in the window (those whose focus targets are
+     drawn; a scope without any is always active). Redo goes back to the
+     scope last undone. For an application with one document.
+   - `Routing::Focus`: the scope of the focused view (a surface or panel
+     a scope lists among its focus targets, or one that declared its
+     history with `Ctx::history_target`). With no view focused (the menu
+     bar, an empty spot, a panel naming no history), the scope of the
+     view focused **last in that window**, shown or not, as long as the
+     owner still has it. With no view focused yet (at start-up), Ctrl+Z
+     does **nothing**: a toast and the screen reader say "Nothing to
+     undo here: click a view first", and `history.refused` is published
+     with the kind `nothing_focused`. It never falls back to the newest
+     step of another scope: that step may be on another plane (the
+     layout, a plugin's values) than the one the user has in mind.
+     Redo goes to the same scope.
+
+The scope picked goes through the `pop.history.target` step
+(`{ "scope", "redo", "rule" }`, `rule` one of `focus`, `last_focused`,
+`none` or `newest`): a before-hook may name another scope, for
+instance a default for `none`. The History panel's rows and an agent
+naming a scope (`edit.undo` with `scope`) undo there, whatever the
+focus.
 
 A focus target (`ScopeInfo::focus`) is a surface's name or a panel's id.
 A panel kind declared with several instances names each of them too: a

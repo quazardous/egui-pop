@@ -94,6 +94,10 @@ impl Plugin for HistoryPage {
         // Ctrl+Z goes to the history of the surface in focus.
         history::set_routing(&ctx.app(), history::Routing::Focus);
         ctx.history_target(VALUES_SURFACE, APP);
+        // Every page works on the application's history: a click into the
+        // page makes it Ctrl+Z's target (the sketch, inside, names its
+        // own). Before any click, Ctrl+Z does nothing and says why.
+        ctx.history_target(egui_pop::api::workbench::PANEL_MAIN.as_str(), APP);
         ctx.story(
             Story::new(StoryId::from_static("history"), "History", show)
                 .description("The application's history: each change a step, Ctrl+Z and Ctrl+Shift+Z, the history panel's list (a click jumps to a step, a hover previews it, a right-click undoes that one step), snapshots, the replaced steps behind a toggle, an agent's change named with its origin; a sketch with a history of its own, Ctrl+Z following the focus.")

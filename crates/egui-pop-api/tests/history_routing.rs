@@ -1,8 +1,11 @@
 //! Focus routing (ADR 0014): under `Routing::Focus`, Ctrl+Z and
 //! Ctrl+Shift+Z go to the history of the focused surface, never to the
 //! newest step of another; with no such surface focused, to the history
-//! focused last; the `pop.history.target` step lets the application
-//! redirect it. `Routing::Newest` stays the default.
+//! focused last in the window, shown or not; with none focused yet,
+//! nowhere, and a message says why; the `pop.history.target` step lets
+//! the application redirect it. `Routing::Newest` stays the default.
+
+use std::cell::Cell;
 
 use egui::{Key, Modifiers};
 use egui_kittest::Harness;
@@ -25,6 +28,11 @@ const GRAPH: ScopeId = ScopeId::from_static("graph");
 const IMAGE: ScopeId = ScopeId::from_static("image");
 const NODE: &str = "graph/node";
 const EXPOSURE: &str = "image/exposure";
+
+thread_local! {
+    /// The graph's surface is not drawn (its panel closed or hidden).
+    static GRAPH_HIDDEN: Cell<bool> = const { Cell::new(false) };
+}
 
 /// A kernel whose history owner has two scopes over its store: the
 /// graph's (focus target: the graph surface) and the image's.
@@ -102,6 +110,9 @@ fn sheets() -> P {
                         ("sheet.graph", "In the graph"),
                         ("sheet.image", "In the image"),
                     ] {
+                        if surface == "sheet.graph" && GRAPH_HIDDEN.get() {
+                            continue;
+                        }
                         ui.allocate_ui(egui::vec2(300.0, 80.0), |ui| {
                             egui_pop_core::focus::scope(ui, surface, &[], |ui| {
                                 ui.add_space(10.0);
@@ -303,4 +314,140 @@ fn a_surface_declares_the_history_it_works_on() {
     undo(&mut h);
     assert_eq!(get(&a, NODE), Value::Int(0));
     assert_eq!(get(&a, EXPOSURE), Value::Int(5));
+}
+
+/// A click where no widget is.
+fn click_empty(h: &mut Harness<'static, App>, at: egui::Pos2) {
+    h.input_mut().events.push(egui::Event::PointerMoved(at));
+    h.step();
+    for pressed in [true, false] {
+        h.input_mut().events.push(egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        });
+        h.step();
+    }
+    h.run();
+}
+
+const NOTHING_FOCUSED: &str = "Nothing to undo here: click a view first";
+
+#[test]
+fn focus_left_for_an_empty_spot_or_a_panel_without_history_keeps_the_last_view_s_scope() {
+    let (app, a) = app(Some(Routing::Focus), None);
+    let mut h = harness(app);
+    click(&mut h, "In the graph");
+    set(&a, &GRAPH, NODE, 1);
+    set(&a, &GRAPH, NODE, 2);
+    set(&a, &IMAGE, EXPOSURE, 5);
+    // A click on an empty spot of the window: no view has the focus.
+    click_empty(&mut h, egui::pos2(700.0, 560.0));
+    assert_eq!(history::focused_scope(&a), None);
+    undo(&mut h);
+    assert_eq!(get(&a, NODE), Value::Int(1), "the graph's step goes");
+    assert_eq!(get(&a, EXPOSURE), Value::Int(5), "not the newer exposure");
+    // A panel naming no history, and the graph's surface no longer
+    // drawn: its scope is still the target, never the newest step.
+    click(&mut h, "Outside");
+    GRAPH_HIDDEN.set(true);
+    h.run();
+    assert!(!history::active(&a).contains(&GRAPH));
+    assert_eq!(history::target(&a, false).unwrap().scope(), GRAPH);
+    undo(&mut h);
+    GRAPH_HIDDEN.set(false);
+    assert_eq!(get(&a, NODE), Value::Int(0));
+    assert_eq!(get(&a, EXPOSURE), Value::Int(5));
+    assert!(h.query_by_label(NOTHING_FOCUSED).is_none());
+}
+
+#[test]
+fn at_start_up_with_no_view_focused_ctrl_z_does_nothing_and_says_why() {
+    let (app, a) = app(Some(Routing::Focus), None);
+    set(&a, &GRAPH, NODE, 1);
+    set(&a, &IMAGE, EXPOSURE, 5);
+    let mut h = harness(app);
+    assert_eq!(history::last_focused(&a), None);
+    assert!(history::target(&a, false).is_none());
+    assert_eq!(a.undo_label(), None, "the Edit menu names no step");
+    assert_eq!(a.when_context().get("undoNeedsView"), "true");
+    undo(&mut h);
+    assert_eq!(get(&a, NODE), Value::Int(1));
+    assert_eq!(get(&a, EXPOSURE), Value::Int(5));
+    assert!(
+        h.query_by_label(NOTHING_FOCUSED).is_some(),
+        "the message says why"
+    );
+    // A click on a button naming no view changes nothing.
+    click(&mut h, "Outside");
+    undo(&mut h);
+    assert_eq!(get(&a, EXPOSURE), Value::Int(5));
+    // Undo naming a scope (the History panel, an agent) still works.
+    assert!(history::undo_in(&a, &IMAGE, &Origin::User).ok());
+    assert_eq!(get(&a, EXPOSURE), Value::Int(0));
+    // Ctrl+Shift+Z goes nowhere either, and says so.
+    redo(&mut h);
+    assert_eq!(get(&a, EXPOSURE), Value::Int(0));
+    assert!(
+        h.query_by_label("Nothing to redo here: click a view first")
+            .is_some()
+    );
+}
+
+#[test]
+fn a_before_hook_sees_rule_none_and_may_name_a_scope() {
+    let hook = P(
+        "fallback",
+        Box::new(|ctx| {
+            ctx.before(STEP_TARGET, |_, args| {
+                if args["rule"] != history::NOTHING_FOCUSED {
+                    return Before::Go;
+                }
+                assert!(args["scope"].is_null());
+                let mut a = args.clone();
+                a["scope"] = json!("image");
+                Before::Redirect(a)
+            });
+            Ok(())
+        }),
+    );
+    let (app, a) = app(Some(Routing::Focus), Some(hook));
+    set(&a, &IMAGE, EXPOSURE, 5);
+    set(&a, &GRAPH, NODE, 1);
+    let mut h = harness(app);
+    undo(&mut h);
+    assert_eq!(get(&a, EXPOSURE), Value::Int(0), "the hook's choice");
+    assert_eq!(get(&a, NODE), Value::Int(1));
+    assert!(h.query_by_label(NOTHING_FOCUSED).is_none());
+}
+
+#[test]
+fn focusing_another_view_moves_the_target() {
+    let (app, a) = app(Some(Routing::Focus), None);
+    let mut h = harness(app);
+    set(&a, &GRAPH, NODE, 1);
+    set(&a, &IMAGE, EXPOSURE, 5);
+    set(&a, &GRAPH, NODE, 2);
+    click(&mut h, "In the graph");
+    click(&mut h, "Outside");
+    assert_eq!(history::last_focused(&a), Some(GRAPH));
+    click(&mut h, "In the image");
+    click(&mut h, "Outside");
+    assert_eq!(history::last_focused(&a), Some(IMAGE));
+    undo(&mut h);
+    assert_eq!(get(&a, EXPOSURE), Value::Int(0));
+    assert_eq!(get(&a, NODE), Value::Int(2), "the newer graph step stays");
+}
+
+#[test]
+fn newest_routing_still_undoes_the_newest_with_no_view_focused() {
+    let (app, a) = app(None, None);
+    set(&a, &GRAPH, NODE, 1);
+    set(&a, &IMAGE, EXPOSURE, 5);
+    let mut h = harness(app);
+    undo(&mut h);
+    assert_eq!(get(&a, EXPOSURE), Value::Int(0));
+    assert_eq!(get(&a, NODE), Value::Int(1));
+    assert!(h.query_by_label(NOTHING_FOCUSED).is_none());
 }

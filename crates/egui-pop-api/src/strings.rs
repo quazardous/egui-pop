@@ -1417,6 +1417,17 @@ pub const CONTEXT_REDONE_IN: StrKey =
 pub const CONTEXT_GO_THERE: StrKey = StrKey::new("egui-pop-context-go-there", "Go there");
 /// The history panel without any history.
 pub const HISTORY_NONE: StrKey = StrKey::new("egui-pop-history-none", "No history");
+/// Ctrl+Z under focus routing before any view was focused: it does
+/// nothing, and says why.
+pub const HISTORY_NOTHING_FOCUSED: StrKey = StrKey::new(
+    "egui-pop-history-nothing-focused",
+    "Nothing to undo here: click a view first",
+);
+/// Ctrl+Shift+Z under focus routing before any view was focused.
+pub const HISTORY_NOTHING_FOCUSED_REDO: StrKey = StrKey::new(
+    "egui-pop-history-nothing-focused-redo",
+    "Nothing to redo here: click a view first",
+);
 /// The history panel's first row: before the first step.
 pub const HISTORY_START: StrKey = StrKey::new("egui-pop-history-start", "Start");
 /// A step of the history panel made by an agent, a script or another
@@ -2179,6 +2190,8 @@ pub const ALL: &[StrKey] = &[
     CONTEXT_REDONE_IN,
     CONTEXT_GO_THERE,
     HISTORY_NONE,
+    HISTORY_NOTHING_FOCUSED,
+    HISTORY_NOTHING_FOCUSED_REDO,
     HISTORY_START,
     HISTORY_BY,
     HISTORY_JUMP,
