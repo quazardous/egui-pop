@@ -37,7 +37,9 @@ trace = ["dep:tracing", "dep:profiling", "profiling/profile-with-tracing"]
 ## eframe's `inspection`: with `EGUI_INSPECTION=1` in the environment, the
 ## gallery opens an `egui_inspection` endpoint that `egui-mcp` drives
 ## (docs/inspection.md). Off by default: the endpoint has no
-## authentication. Native only: on the web it compiles and opens nothing.
+## authentication and bypasses the bridge's mode, the agent socket's grants
+## and its input lock, so development builds only, never a shipped app.
+## Native only: on the web it compiles and opens nothing.
 inspection = ["eframe/inspection", "dep:egui_inspection"]
 
 [[example]]

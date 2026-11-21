@@ -36,6 +36,10 @@ pkg-config files of GStreamer's installers.
 `egui_inspection` endpoint Rerun's `egui-mcp` attaches to, on loopback and
 without authentication: the accessibility tree, clicks by label,
 screenshots and waits ([Driving the gallery with egui-mcp](inspection.md)).
+It bypasses the bridge's mode, the agent socket's grants and its input
+lock, so an agent behind it acts as the user and can click a
+confirmation or a pairing dialog: development builds only, never an
+application you ship.
 
 Options: `--theme`, `--density` (`comfortable` or `compact`),
 `--accent`, `--reduced-motion`, `--page` (the page shown first),
