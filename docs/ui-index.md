@@ -56,6 +56,7 @@ To add an entry, give the item a doc line
 | a small (compact) button in a dense list row | `RowButton`<br>`egui_pop::core::compact::RowButton` | A button small enough for a list's row (see the module). |
 | a small frameless text button in a bar (a breadcrumb, a name in a title bar) | `widgets::bar_text_button(..)`<br>`egui_pop::core::widgets::bar_text_button` | A frameless text button sized for a bar: small text, no box, as wide as its text, egui's hover look (its text brightens under the pointer) and the focus ring when it has the keyboard. |
 | an icon button | `IconWidget`<br>`egui_pop::core::icon::IconWidget` | An icon as a widget. |
+| keys that work in every instance of a panel | `CONTEXT_FOCUSED_PANEL_KIND`<br>`egui_pop::api::app::CONTEXT_FOCUSED_PANEL_KIND` | The context key holding the kind of the focused panel (`PanelId::kind`): the panel's own id, or `app.gallery` while its instance `app.gallery#2` has the focus, so one clause reaches every instance: `when: "focusedPanelKind == 'app.gallery'"`. |
 
 ## Fields and choices
 
