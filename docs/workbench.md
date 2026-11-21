@@ -582,6 +582,21 @@ let _ = ctx.instance_panel(
   `panel.instance.closed` (`{ "panel": <id>, "kind": <kind> }`), so the
   application can drop what it kept for a closed instance. Restoring a
   layout says the instances it opens.
+- **Titles.** An instance's tab title is generated until the
+  application names it: `pop.panel.retitle` (`bus::PanelRetitle`, a
+  `bus::PanelRetitleAsk` `{ "panel", "title" }`), or
+  `AppHandle::set_instance_title` from code. A library view opened on a
+  collection reads "Picks", not "Gallery 3", and follows the collection
+  when it is renamed. The title is kept in the instance's layout entry
+  (`PanelInstance::title`, next to its payload), saved and restored with
+  the layout; a layout saved without titles loads unchanged. The tab,
+  the panel menu's list of instances, the View menu, accessibility and
+  the `Instance::title` handed to the draw function all read it; `title:
+  null` gives the generated one back. Only an open instance `<kind>#<n>`
+  takes a title: the panel declared, a panel declared once, an instance
+  not open and a blank title are refused with the reason. The journal
+  says `panel.instance.retitled` (`{ "panel", "kind", "title" }`, `title`
+  `null` when the generated one is back).
 - **Plugins.** An instance whose kind's plugin is off keeps its place
   and payload, as a dormant panel does (ADR 0028); declared again with
   one instance, the kind's other instances are dropped.

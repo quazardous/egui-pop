@@ -3,11 +3,15 @@
 //! drawn by the kind's one function with a payload of its own, kept in the
 //! layout and handed back on restore. Closing an instance drops it with
 //! its payload; the journal says `panel.instance.opened` and `closed`.
+//! The application names an instance's title (`pop.panel.retitle`), kept
+//! with the layout; `null` gives the generated one back.
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
-use egui_pop_api::bus::{OpenPlace, PanelOpenAsk};
-use egui_pop_api::workbench::instances::{EVENT_CLOSED, EVENT_OPENED};
+use egui_pop_api::bus::{
+    OpenPlace, PANEL_RETITLE, PANEL_RETITLE_POINTS, PanelOpenAsk, PanelRetitleAsk,
+};
+use egui_pop_api::workbench::instances::{EVENT_CLOSED, EVENT_OPENED, EVENT_RETITLED};
 use egui_pop_api::workbench::{Change, DockControls};
 use egui_pop_api::{App, AppHandle, Ctx, Plugin, PluginError};
 use egui_pop_model::commands::Origin;
@@ -277,4 +281,108 @@ fn an_agent_opens_a_new_instance_through_the_point() {
     )
     .unwrap();
     assert!(app.panel_instances(&GAL) == vec![GAL]);
+}
+
+#[test]
+fn the_app_names_an_instances_title_and_the_layout_keeps_it() {
+    let mut h = harness(DockControls::default());
+    let app = h.state().handle().clone();
+    let second = new_in(&mut h, Area::Bottom);
+    let third = new_in(&mut h, Area::EndSide);
+    // Through the point, as an agent or another part would ask it.
+    let did = app
+        .retitle_panel(PanelRetitleAsk::new(second.as_str(), Some("Picks".into())))
+        .unwrap();
+    assert!(did.iter().any(|l| l.contains("retitled")), "{did:?}");
+    h.run();
+    h.run();
+    // The tab, read through accessibility, and the instance drawn.
+    assert!(h.query_by_label("Picks").is_some());
+    assert!(h.query_by_label("Picks #2 shows -").is_some());
+    assert!(h.query_by_label("Gallery 2 #2 shows -").is_none());
+    // The other keeps its generated title.
+    assert!(h.query_by_label("Gallery 3").is_some());
+    assert!(h.query_by_label("Gallery 3 #3 shows -").is_some());
+    assert_eq!(app.describe_panel(second.as_str()).unwrap().title, "Picks");
+    let said = events(&app, EVENT_RETITLED);
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert_eq!(
+        said[0],
+        json!({ "panel": "demo.gallery#2", "kind": "demo.gallery", "title": "Picks" })
+    );
+    // The same title again changes nothing, and says nothing.
+    app.set_instance_title(&second, Some("Picks".into()))
+        .unwrap();
+    assert_eq!(events(&app, EVENT_RETITLED).len(), 1);
+
+    // Saved and restored with the layout.
+    let saved = serde_json::to_string(&app.saved_layout()).unwrap();
+    let mut again = harness(DockControls::default());
+    let restored = again.state().handle().clone();
+    let loaded: SavedLayout = serde_json::from_str(&saved).unwrap();
+    restored.set_layout(loaded.layout);
+    again.run();
+    again.run();
+    assert_eq!(
+        restored
+            .layout()
+            .instance(&second)
+            .unwrap()
+            .title
+            .as_deref(),
+        Some("Picks")
+    );
+    assert!(again.query_by_label("Picks").is_some());
+    assert!(again.query_by_label("Picks #2 shows -").is_some());
+    assert!(again.query_by_label("Gallery 3 #3 shows -").is_some());
+
+    // `null` gives the generated title back.
+    restored.set_instance_title(&second, None).unwrap();
+    again.run();
+    again.run();
+    assert!(again.query_by_label("Picks").is_none());
+    assert!(again.query_by_label("Gallery 2 #2 shows -").is_some());
+    assert_eq!(restored.layout().instance(&second).unwrap().title, None);
+    let said = events(&restored, EVENT_RETITLED);
+    assert_eq!(said.last().unwrap()["title"], Json::Null);
+    // An instance without a title saves none: old layouts read the same.
+    let saved: Json = serde_json::to_value(restored.saved_layout()).unwrap();
+    let instances = saved["instances"].as_array().cloned().unwrap_or_default();
+    assert!(
+        instances.iter().all(|i| i.get("title").is_none()),
+        "{saved}"
+    );
+    assert!(again.query_by_label("Gallery 3").is_some());
+    assert_eq!(restored.layout().area_of(&third), Some(Area::EndSide));
+}
+
+#[test]
+fn retitling_anything_but_an_open_instance_is_refused() {
+    let mut h = harness(DockControls::default());
+    let app = h.state().handle().clone();
+    let second = new_in(&mut h, Area::Bottom);
+    let refused = |id: &str, title: Option<&str>| {
+        app.retitle_panel(PanelRetitleAsk::new(id, title.map(str::to_string)))
+            .unwrap_err()
+    };
+    // A panel declared once.
+    assert!(refused("demo.log", Some("x")).contains("no instance"));
+    // The panel declared, instance 1.
+    assert!(refused("demo.gallery", Some("x")).contains("panel declared"));
+    // An instance not open.
+    assert!(refused("demo.gallery#7", Some("x")).contains("no open instance"));
+    // Not a panel at all.
+    assert!(!refused("nobody.here", Some("x")).is_empty());
+    // A blank title.
+    assert!(refused(second.as_str(), Some("  ")).contains("blank"));
+    // Refused from code too, and nothing said.
+    assert!(app.set_instance_title(&LOG, Some("x".into())).is_err());
+    assert!(events(&app, EVENT_RETITLED).is_empty());
+    // The point is declared, with its listener.
+    let dump = app.bus_order_of(&PANEL_RETITLE_POINTS);
+    assert!(dump.contains(PANEL_RETITLE), "{dump}");
+    for p in PANEL_RETITLE_POINTS {
+        assert!(egui_pop_api::bus::POINTS.contains(&p));
+        assert!(egui_pop_api::bus::CONTRACT.iter().any(|d| d.id == p));
+    }
 }
