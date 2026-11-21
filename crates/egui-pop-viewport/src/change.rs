@@ -210,7 +210,7 @@ pub(crate) fn gesture(ui: &egui::Ui, response: &egui::Response) -> Gesture {
     if response.drag_stopped() {
         // egui ends a drag on the cancel key.
         let cancel = egui_pop_core::slider::gestures(ui.ctx()).cancel;
-        return if ui.input(|i| i.key_pressed(cancel)) {
+        return if egui_pop_core::focus::cancel_pressed(ui.ctx(), cancel) {
             Gesture::Cancelled
         } else {
             Gesture::Ended

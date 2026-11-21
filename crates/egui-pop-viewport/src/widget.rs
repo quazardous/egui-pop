@@ -1145,7 +1145,7 @@ fn handle_pan(ui: &Ui, response: &Response, g: &Gestures, pan_key: bool, f: &mut
         f.signal(Phase::Begin, Cause::Pan);
     }
     let Some(pan) = f.state.pan else { return };
-    if ui.input(|i| i.key_pressed(g.cancel)) {
+    if egui_pop_core::focus::cancel_pressed(ui.ctx(), g.cancel) {
         f.state.pan = None;
         f.change(pan.start, Cause::Pan, Phase::Cancel);
         return;
@@ -1714,7 +1714,7 @@ fn handle_overlays(
             from: d.handle.at,
             at,
         };
-        if ui.input(|i| i.key_pressed(g.cancel)) {
+        if egui_pop_core::focus::cancel_pressed(ui.ctx(), g.cancel) {
             f.signals.push(signal(Phase::Cancel, d.handle.at));
             f.state.drag = None;
             return captured;

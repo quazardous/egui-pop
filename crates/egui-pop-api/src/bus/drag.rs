@@ -604,7 +604,7 @@ pub(crate) fn begin_pass(ctx: &Context, window: &str) {
         d.passes += 1;
         d.passes < 2
     });
-    let escape = ctx.input(|i| i.key_pressed(egui::Key::Escape));
+    let escape = egui_pop_core::focus::cancel_pressed(ctx, egui::Key::Escape);
     let (latest, released, down) = ctx.input(|i| {
         (
             i.pointer.latest_pos(),

@@ -1281,7 +1281,7 @@ pub(crate) fn drag_along(
         let start = start.get(ui.ctx()).unwrap_or(value);
         // egui ends a drag on the cancel key.
         let cancel = gestures(ui.ctx()).cancel;
-        return if ui.input(|i| i.key_pressed(cancel)) {
+        return if crate::focus::cancel_pressed(ui.ctx(), cancel) {
             Drag::Cancelled(start)
         } else {
             Drag::Ended(start)

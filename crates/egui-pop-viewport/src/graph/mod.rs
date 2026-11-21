@@ -1722,7 +1722,7 @@ impl Cx<'_, '_, '_> {
             m.offset += r.drag_delta();
         }
         if r.drag_stopped() {
-            let cancelled = ui.input(|i| i.key_pressed(self.keys.cancel));
+            let cancelled = egui_pop_core::focus::cancel_pressed(ui.ctx(), self.keys.cancel);
             if let Some(m) = self.state.moving.take()
                 && !cancelled
                 && m.offset != Vec2::ZERO
@@ -2747,7 +2747,7 @@ impl Cx<'_, '_, '_> {
         let Some(w) = self.state.wire.clone() else {
             return;
         };
-        if ui.input(|i| i.key_pressed(self.keys.cancel)) {
+        if egui_pop_core::focus::cancel_pressed(ui.ctx(), self.keys.cancel) {
             self.state.wire = None;
             return;
         }
