@@ -1359,6 +1359,10 @@ egui-pop-history-jump = Revenir ou avancer jusqu’à cette étape
 
 egui-pop-history-none = Aucun historique
 
+egui-pop-history-nothing-focused = Rien à annuler ici : cliquez d’abord sur une vue
+
+egui-pop-history-nothing-focused-redo = Rien à rétablir ici : cliquez d’abord sur une vue
+
 egui-pop-history-preview-change = { $what } : { $then } (maintenant { $now })
 
 egui-pop-history-replaced = { $label } (remplacée)

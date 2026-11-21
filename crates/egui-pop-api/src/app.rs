@@ -111,6 +111,14 @@ pub const CONTEXT_WINDOW: &str = "window";
 ///
 /// Need (action): keys that work in every instance of a panel.
 pub const CONTEXT_FOCUSED_PANEL_KIND: &str = "focusedPanelKind";
+/// The context key true when, under focus routing
+/// ([`Routing::Focus`](crate::history::Routing::Focus)), Ctrl+Z goes
+/// nowhere only because no view was focused yet while a step waits
+/// somewhere ([`needs_view`](crate::history::needs_view)): Edit › Undo
+/// stays live to say why.
+pub const CONTEXT_UNDO_NEEDS_VIEW: &str = "undoNeedsView";
+/// [`CONTEXT_UNDO_NEEDS_VIEW`]'s twin for Ctrl+Shift+Z.
+pub const CONTEXT_REDO_NEEDS_VIEW: &str = "redoNeedsView";
 
 pub const MENU_MAIN: MenuId = MenuId::from_static("app.main");
 pub const MENU_FILE: MenuId = MenuId::from_static("app.menu.file");
@@ -2197,6 +2205,14 @@ impl AppHandle {
         base.set("modalOpen", flag(overlay::modal_open_in(ctx, group)));
         base.set("canUndo", flag(self.can_undo()));
         base.set("canRedo", flag(self.can_redo()));
+        base.set(
+            CONTEXT_UNDO_NEEDS_VIEW,
+            flag(crate::history::needs_view(self, false)),
+        );
+        base.set(
+            CONTEXT_REDO_NEEDS_VIEW,
+            flag(crate::history::needs_view(self, true)),
+        );
         // Each window's own: the workbench's for the main window's group
         // (its detached panels' windows share it), an application window's
         // own for it ("" while none of its panels was focused), so a
@@ -5401,7 +5417,7 @@ impl App {
                 .icon("undo")
                 .description("Undo the last change.")
                 .key_with("Ctrl+Z", BindOptions::global().through_modal())
-                .when("!textInputFocus && canUndo")
+                .when("!textInputFocus && (canUndo || undoNeedsView)")
                 .menu(MENU_EDIT, "0_undo", 0),
             |call| outcome_result(call.app.undo(call.origin)),
         )?;
@@ -5411,7 +5427,7 @@ impl App {
                 .description("Redo the last undone change.")
                 .key_with("Ctrl+Shift+Z", BindOptions::global().through_modal())
                 .key_with("Ctrl+Y", BindOptions::global().through_modal())
-                .when("!textInputFocus && canRedo")
+                .when("!textInputFocus && (canRedo || redoNeedsView)")
                 .menu(MENU_EDIT, "0_undo", 1),
             |call| outcome_result(call.app.redo(call.origin)),
         )?;

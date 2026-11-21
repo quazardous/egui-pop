@@ -29,8 +29,11 @@
 //!     ([`Ctx::history_target`](crate::Ctx::history_target)), or one of
 //!     the owner's scopes lists it among its focus targets
 //!     ([`ScopeInfo::focus`]); when no focused surface names one (the
-//!     menu bar, nothing clicked), the scope focused last, while it is
-//!     still active; then the newest. Redo goes to the same scope.
+//!     menu bar, an empty spot, a panel without a history), the scope
+//!     focused last in that window, while the owner still has it. Never
+//!     the newest step of another scope: with no scope focused yet (at
+//!     start-up), Ctrl+Z does nothing and says why ([`NOTHING_FOCUSED`]).
+//!     Redo goes to the same scope.
 //!
 //!   Either way, the scope picked goes through the `pop.history.target`
 //!   step ([`STEP_TARGET`]) before Ctrl+Z, the Edit menu and the agents
@@ -111,11 +114,18 @@ pub const STEP_RESTORE: StepId = StepId::from_static("edit.restore");
 pub const STEP_UNDO_STEP: StepId = StepId::from_static("edit.undo_step");
 
 /// Where Ctrl+Z or Ctrl+Shift+Z goes (`{ "scope", "redo", "rule" }`,
-/// `rule` one of `focus`, `last_focused`, `newest`): a before-hook may
-/// redirect it by naming another `scope` (`null`: none). Run quietly,
-/// whenever the target is read (the keys, the Edit menu, an agent's
+/// `rule` one of `focus`, `last_focused`, `none` under
+/// [`Routing::Focus`], `newest` under [`Routing::Newest`]): a
+/// before-hook may redirect it by naming another `scope` (`null`:
+/// none). With `none`, `scope` is `null`: no view was focused yet.
+/// Run quietly, whenever the target is read (the keys, the Edit menu, an agent's
 /// undo without a scope): neither published nor traced.
 pub const STEP_TARGET: StepId = StepId::from_static("pop.history.target");
+
+/// The rule [`STEP_TARGET`] names when, under [`Routing::Focus`], no
+/// view was focused yet in the window: Ctrl+Z goes nowhere, and says so
+/// (`egui-pop-history-nothing-focused`).
+pub const NOTHING_FOCUSED: &str = "none";
 
 /// How Ctrl+Z picks among the owner's scopes, outside a focused local
 /// scope and a modal ([`set_routing`]).
@@ -127,9 +137,10 @@ pub enum Routing {
     #[default]
     Newest,
     /// The scope the focus is in (its focus targets name the innermost
-    /// focused surface), else the one focused last, else the newest; redo
-    /// goes to the same scope. What an application with several documents
-    /// or editors on screen wants: the newest step may be another one's.
+    /// focused surface), else the one focused last in the window, else
+    /// none (never the newest of another scope); redo goes to the same
+    /// scope. What an application with several documents or editors on
+    /// screen wants: the newest step may be another one's.
     Focus,
 }
 
@@ -778,8 +789,11 @@ pub(crate) struct Kept {
     routing: Cell<Routing>,
     /// The histories surfaces declared they work on (`Ctx::history_target`).
     targets: RefCell<Vec<(OwnerId, String, ScopeId)>>,
-    /// The owner's scope whose surface had the focus last.
-    last_focused: RefCell<Option<ScopeId>>,
+    /// The owner's scope whose surface had the focus last, per window.
+    last_focused: RefCell<Vec<(egui::ViewportId, ScopeId)>>,
+    /// The rule [`target`] picked by last (`focus`, `last_focused`,
+    /// `none`, `newest`).
+    rule: Cell<&'static str>,
 }
 
 /// The point the history panel previews: the owner's answer, the last
@@ -882,7 +896,7 @@ fn focused_local(app: &AppHandle) -> Option<Rc<dyn LocalScope>> {
 pub fn set_routing(app: &AppHandle, routing: Routing) {
     let kept = app.local::<Kept>();
     if kept.routing.replace(routing) != routing {
-        kept.last_focused.borrow_mut().take();
+        kept.last_focused.borrow_mut().clear();
     }
 }
 
@@ -919,10 +933,30 @@ pub fn focused_scope(app: &AppHandle) -> Option<ScopeId> {
     })
 }
 
-/// The owner's scope whose surface had the focus last (under
-/// [`Routing::Focus`]), if any.
+/// The owner's scope whose surface had the focus last in the window the
+/// user works in (under [`Routing::Focus`]), if any.
 pub fn last_focused(app: &AppHandle) -> Option<ScopeId> {
-    app.local::<Kept>().last_focused.borrow().clone()
+    let window = window_of(app);
+    app.local::<Kept>()
+        .last_focused
+        .borrow()
+        .iter()
+        .find(|(w, _)| *w == window)
+        .map(|(_, s)| s.clone())
+}
+
+/// The window a pass is drawing, else the one the user worked in last.
+fn window_of(app: &AppHandle) -> egui::ViewportId {
+    crate::app::pass_in_progress(&app.egui()).map_or_else(|| app.active_window(), |(v, _)| v)
+}
+
+/// Keeps `scope` as the window's scope focused last.
+fn keep_focused(app: &AppHandle, scope: ScopeId) {
+    let window = window_of(app);
+    let kept = app.local::<Kept>();
+    let mut last = kept.last_focused.borrow_mut();
+    last.retain(|(w, _)| *w != window);
+    last.push((window, scope));
 }
 
 /// The names of the surfaces drawn in the last pass.
@@ -1064,34 +1098,84 @@ pub fn target(app: &AppHandle, redo: bool) -> Option<Target> {
     if egui_pop_core::overlay::modal_open(&app.egui()) {
         return None;
     }
-    let lines = active_lines(app);
     let (picked, rule) = match routing(app) {
-        Routing::Newest => (by_newest(app, &lines, redo), "newest"),
-        Routing::Focus => by_focus(app, &lines, redo),
+        Routing::Newest => (by_newest(app, &active_lines(app), redo), "newest"),
+        Routing::Focus => by_focus(app),
     };
+    app.local::<Kept>().rule.set(rule);
     hooked(app, picked, redo, rule)
 }
 
 /// [`Routing::Focus`]: the focused surface's scope, else the one focused
-/// last while it is active, else the newest.
-fn by_focus(app: &AppHandle, lines: &[Line], redo: bool) -> (Option<ScopeId>, &'static str) {
+/// last in the window while the owner still has it (shown or not), else
+/// none: never the newest step of another scope, which may be on an
+/// orthogonal plane (the layout, a plugin's values).
+fn by_focus(app: &AppHandle) -> (Option<ScopeId>, &'static str) {
     if let Some(s) = focused_scope(app) {
-        *app.local::<Kept>().last_focused.borrow_mut() = Some(s.clone());
+        keep_focused(app, s.clone());
         return (Some(s), "focus");
     }
-    let shown = shown(app);
-    let sticky = last_focused(app).filter(|s| {
-        with_owner(app, |h| {
-            h.scopes()
-                .iter()
-                .any(|i| i.id == *s && is_active(i, &shown))
-        })
-        .unwrap_or(false)
-    });
+    let sticky = last_focused(app)
+        .filter(|s| with_owner(app, |h| h.scopes().iter().any(|i| i.id == *s)).unwrap_or(false));
     match sticky {
         Some(s) => (Some(s), "last_focused"),
-        None => (by_newest(app, lines, redo), "newest"),
+        None => (None, NOTHING_FOCUSED),
     }
+}
+
+/// Whether, under [`Routing::Focus`], Ctrl+Z (`redo` false) or
+/// Ctrl+Shift+Z goes nowhere only because no view was focused yet in the
+/// window, while some scope of the owner has a step to undo (or redo):
+/// the keys and the Edit menu stay live to say why
+/// (`undoNeedsView`, `redoNeedsView`).
+pub fn needs_view(app: &AppHandle, redo: bool) -> bool {
+    if routing(app) != Routing::Focus
+        || focused_local(app).is_some()
+        || egui_pop_core::overlay::modal_open(&app.egui())
+        || by_focus(app).1 != NOTHING_FOCUSED
+    {
+        return false;
+    }
+    with_owner(app, |h| {
+        h.scopes().iter().any(|s| {
+            h.tips(&s.id).is_some_and(|l| {
+                if redo {
+                    l.next().is_some()
+                } else {
+                    l.head().is_some()
+                }
+            })
+        })
+    })
+    .unwrap_or(false)
+}
+
+/// Ctrl+Z or Ctrl+Shift+Z found no target because no view was focused
+/// yet ([`NOTHING_FOCUSED`]): says why on the journal (`history.refused`,
+/// kind `nothing_focused`), and to a person in a toast and to the screen
+/// reader.
+fn say_nothing_focused(app: &AppHandle, redo: bool, origin: &Origin) {
+    let ctx = app.egui();
+    let key = if redo {
+        &crate::strings::HISTORY_NOTHING_FOCUSED_REDO
+    } else {
+        &crate::strings::HISTORY_NOTHING_FOCUSED
+    };
+    let text = strings::tr(&ctx, key);
+    // A person pressed the keys (or a controller's button): told on
+    // screen. An agent reads the journal.
+    if matches!(origin, Origin::User | Origin::Device(_)) {
+        if let Some(t) = app.service(&crate::toasts::TOASTS) {
+            t.notify(crate::toasts::Toast::info(&text));
+        }
+        egui_pop_core::a11y::announce(&ctx, text.clone(), egui_pop_core::a11y::Politeness::Polite);
+    }
+    app.publish(
+        &source_of(origin),
+        None,
+        "history.refused",
+        json!({ "scope": Json::Null, "kind": "nothing_focused", "reason": text, "redo": redo }),
+    );
 }
 
 /// The scope picked, through the [`STEP_TARGET`] step: a before-hook may
@@ -1317,12 +1401,18 @@ fn walk(
 /// Undoes where Ctrl+Z goes ([`target`]), through the `edit.undo` step.
 pub fn undo(app: &AppHandle, origin: &Origin) -> Outcome {
     let t = target(app, false);
+    if t.is_none() && app.local::<Kept>().rule.get() == NOTHING_FOCUSED {
+        say_nothing_focused(app, false, origin);
+    }
     run(app, t, Walk::Undo, None, origin)
 }
 
 /// Redoes where Ctrl+Shift+Z goes, through the `edit.redo` step.
 pub fn redo(app: &AppHandle, origin: &Origin) -> Outcome {
     let t = target(app, true);
+    if t.is_none() && app.local::<Kept>().rule.get() == NOTHING_FOCUSED {
+        say_nothing_focused(app, true, origin);
+    }
     run(app, t, Walk::Redo, None, origin)
 }
 
@@ -1710,12 +1800,13 @@ pub(crate) fn pass(app: &AppHandle) {
             s.seal();
         }
     }
-    // The scope focused last, kept while the focus goes where no scope is
-    // named (the menu bar): Ctrl+Z there still goes to it.
+    // The scope focused last, kept per window while the focus goes where
+    // no scope is named (the menu bar, an empty spot): Ctrl+Z there still
+    // goes to it.
     if kept.routing.get() == Routing::Focus
         && let Some(s) = focused_scope(app)
     {
-        *kept.last_focused.borrow_mut() = Some(s);
+        keep_focused(app, s);
     }
     // Values a group cancelled since left with an outside change.
     let mut skipped: BTreeMap<ScopeId, Vec<String>> = BTreeMap::new();
