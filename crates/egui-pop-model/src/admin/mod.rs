@@ -116,7 +116,12 @@ pub struct Group {
 }
 
 /// A row of a group: every field, action, status and callout is one.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+///
+/// A brick this version does not know (a newer manifest's `node`) reads
+/// as [`Item::Unknown`] instead of failing the whole manifest;
+/// [`Manifest::check`] reports it (`admin-unknown-node`) and leaves it
+/// out, so the rest of the page still shows.
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "node", rename_all = "snake_case")]
 pub enum Item {
     Field(Field),
@@ -129,9 +134,17 @@ pub enum Item {
     List(Records),
     /// Records as a table: a column per key.
     Table(Records),
+    /// A brick this version does not know, kept as it was read.
+    #[serde(untagged)]
+    Unknown(Unknown),
 }
 
 impl Item {
+    /// The `node` names this version reads.
+    pub const NODES: [&'static str; 7] = [
+        "field", "action", "status", "callout", "widget", "list", "table",
+    ];
+
     pub fn meta(&self) -> &Meta {
         match self {
             Item::Field(f) => &f.meta,
@@ -140,8 +153,90 @@ impl Item {
             Item::Callout(c) => &c.meta,
             Item::Widget(w) => &w.meta,
             Item::List(r) | Item::Table(r) => &r.meta,
+            Item::Unknown(u) => &u.meta,
         }
     }
+}
+
+/// The nodes this version knows, read as they are declared (an error
+/// in one of them is still an error: only an unknown `node` degrades).
+#[derive(Deserialize)]
+#[serde(tag = "node", rename_all = "snake_case")]
+enum KnownItem {
+    Field(Field),
+    Action(Action),
+    Status(Status),
+    Callout(Callout),
+    Widget(Widget),
+    List(Records),
+    Table(Records),
+}
+
+impl From<KnownItem> for Item {
+    fn from(k: KnownItem) -> Item {
+        match k {
+            KnownItem::Field(f) => Item::Field(f),
+            KnownItem::Action(a) => Item::Action(a),
+            KnownItem::Status(s) => Item::Status(s),
+            KnownItem::Callout(c) => Item::Callout(c),
+            KnownItem::Widget(w) => Item::Widget(w),
+            KnownItem::List(r) => Item::List(r),
+            KnownItem::Table(r) => Item::Table(r),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Item {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Item, D::Error> {
+        use serde::de::Error;
+        let raw = Json::deserialize(d)?;
+        let node = raw
+            .get("node")
+            .and_then(Json::as_str)
+            .ok_or_else(|| D::Error::missing_field("node"))?
+            .to_owned();
+        if Item::NODES.contains(&node.as_str()) {
+            return KnownItem::deserialize(raw)
+                .map(Item::from)
+                .map_err(D::Error::custom);
+        }
+        let meta = Meta::deserialize(&raw).unwrap_or_default();
+        Ok(Item::Unknown(Unknown { node, meta, raw }))
+    }
+}
+
+/// A brick a newer manifest declares and this version does not know: its
+/// `node`, the [`Meta`] read from it (for the diagnostic), and the node as
+/// it was read, written back unchanged.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Unknown {
+    pub node: String,
+    pub meta: Meta,
+    pub raw: Json,
+}
+
+impl Serialize for Unknown {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.raw.serialize(s)
+    }
+}
+
+/// Reports an unknown brick (`admin-unknown-node`) at `at`; true when the
+/// item is one (the caller leaves it out).
+pub(crate) fn unknown_node(d: &mut Diagnostics, at: &str, item: &Item) -> bool {
+    let Item::Unknown(u) = item else {
+        return false;
+    };
+    d.warn(
+        "admin-unknown-node",
+        None,
+        at,
+        format!(
+            "unknown node `{}` (`{}`), from a newer format: left out",
+            u.node, u.meta.id
+        ),
+    );
+    true
 }
 
 /// The `when` and `enabled` clauses, for every node's builder.
@@ -1434,6 +1529,9 @@ impl Manifest {
                 bad_clauses(&mut d, &at, &mut g.meta);
                 let mut ids: Vec<String> = Vec::new();
                 g.items.retain(|item| {
+                    if unknown_node(&mut d, &format!("{}/{}", s.scope, s.meta.id), item) {
+                        return false;
+                    }
                     let id = item.meta().id.clone();
                     if ids.contains(&id) {
                         d.warn(
@@ -1879,5 +1977,60 @@ mod tests {
             })
             .collect();
         assert!(names.contains(&"long-text".to_string()));
+    }
+
+    #[test]
+    fn an_unknown_brick_degrades_with_a_diagnostic() {
+        let json = json!({
+            "version": FORMAT,
+            "scopes": [{"id": "s", "title": "S"}],
+            "sections": [{"id": "v", "title": "V", "scope": "s", "groups": [{
+                "id": "g", "title": "G",
+                "items": [
+                    {"node": "callout", "id": "c", "tone": "info", "text": "Hello"},
+                    {"node": "gauge", "id": "future", "title": "Later", "needle": 3},
+                    {"node": "callout", "id": "d", "tone": "info", "text": "Still here"},
+                ],
+            }]}],
+            "wizards": [{"id": "w", "title": "W", "finish": {"command": "x.go"}, "steps": [{"id": "one", "title": "One",
+                "groups": [{"id": "g", "title": "G", "items": [
+                    {"node": "slider3d", "id": "z"},
+                ]}]}]}],
+        });
+        let mut m = Manifest::from_json(&json).expect("an unknown node does not fail the page");
+        let items = &m.sections[0].groups[0].items;
+        let Item::Unknown(u) = &items[1] else {
+            panic!("read as unknown: {items:?}");
+        };
+        assert_eq!((u.node.as_str(), u.meta.id.as_str()), ("gauge", "future"));
+        // Written back as it was read.
+        assert_eq!(
+            serde_json::to_value(&items[1]).unwrap(),
+            json["sections"][0]["groups"][0]["items"][1]
+        );
+        let d = m.check(&[], &|_| true);
+        assert_eq!(d.codes(), vec!["admin-unknown-node", "admin-unknown-node"]);
+        let ids: Vec<&str> = m.sections[0].groups[0]
+            .items
+            .iter()
+            .map(|i| i.meta().id.as_str())
+            .collect();
+        assert_eq!(ids, ["c", "d"], "the rest of the page still shows");
+        assert!(m.wizards[0].steps[0].groups[0].items.is_empty());
+    }
+
+    #[test]
+    fn a_known_brick_that_does_not_read_is_still_an_error() {
+        let json = json!({
+            "version": FORMAT,
+            "sections": [{"id": "v", "title": "V", "scope": "s", "groups": [{
+                "id": "g", "title": "G",
+                "items": [{"node": "callout", "id": "c", "tone": 42, "text": "x"}],
+            }]}],
+        });
+        assert!(matches!(
+            Manifest::from_json(&json),
+            Err(ManifestError::Parse(_))
+        ));
     }
 }

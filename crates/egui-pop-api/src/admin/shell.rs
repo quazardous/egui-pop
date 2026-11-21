@@ -1014,6 +1014,9 @@ pub(super) fn item_row(
                 );
             });
         }
+        // A brick a newer manifest declares: `Manifest::check` left it
+        // out with its diagnostic; one that slipped past draws nothing.
+        Item::Unknown(_) => {}
         Item::Callout(c) => {
             ui.horizontal_wrapped(|ui| {
                 ui.add(Indicator::text(builtin_text(&ctx, app, &c.text)).tone(kit_tone(c.tone)));

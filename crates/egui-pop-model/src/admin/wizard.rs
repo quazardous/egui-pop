@@ -28,7 +28,7 @@ use serde_json::{Map, Value as Json};
 use super::hooks::{Hooks, Problem, Values};
 use super::{
     Confirmation, Field, Group, Item, Meta, Section, SectionBuilder, Tone, bad_clauses,
-    form_context, holds, template,
+    form_context, holds, template, unknown_node,
 };
 use crate::diagnostics::Diagnostics;
 use crate::when::{When, WhenContext};
@@ -275,6 +275,9 @@ impl Wizard {
             for g in &mut s.groups {
                 bad_clauses(d, &at, &mut g.meta);
                 g.items.retain(|item| {
+                    if unknown_node(d, &format!("{at}/{}", s.meta.id), item) {
+                        return false;
+                    }
                     for clause in [&item.meta().when, &item.meta().enabled]
                         .into_iter()
                         .flatten()
