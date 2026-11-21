@@ -455,6 +455,13 @@ upstream's pending update; egui-pop moves back to egui-phosphor once
 upstream releases
 ([#146](https://github.com/quazardous/egui-pop/issues/146)).
 
+Rerun's `egui_inspection_tools`, which `egui-pop-agent`'s `widget_*`
+MCP tools serve, is not on crates.io yet, so `egui-pop-agent` depends
+on `egui-pop-inspection-tools`, its temporary, unchanged fork published
+under its own name; egui-pop moves back to `egui_inspection_tools` once
+Rerun publishes it, and the fork is yanked
+([#660](https://github.com/quazardous/egui-pop/issues/660)).
+
 ## Accessibility: what is verified
 
 Every interactive widget is meant to have a name and a role that

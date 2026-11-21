@@ -1480,6 +1480,7 @@ dependencies = [
  "egui-pop-agent",
  "egui-pop-api",
  "egui-pop-core",
+ "egui-pop-inspection-tools",
  "egui-pop-model",
  "egui-pop-test",
  "egui_inspection",
@@ -1655,6 +1656,21 @@ dependencies = [
  "egui-pop-api",
  "egui-pop-model",
  "egui-pop-viewport",
+ "serde_json",
+]
+
+[[package]]
+name = "egui-pop-inspection-tools"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c1502d8de4183f7d5bd93e47683ae497ab7e92c7c73165b442e15d7ef3a08bc"
+dependencies = [
+ "accesskit",
+ "accesskit_consumer",
+ "egui",
+ "egui_inspection",
+ "schemars",
+ "serde",
  "serde_json",
 ]
 

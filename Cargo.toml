@@ -129,6 +129,13 @@ eframe = { version = "0.37", default-features = false }
 # plugin behind eframe's `inspection`, which `egui-mcp` drives; the
 # gallery's `inspection` feature and its smoke test only.
 egui_inspection = { version = "0.37", default-features = false }
+# MIT OR Apache-2.0: Rerun's egui_inspection_tools (Lucas Meurer, Emil
+# Ernerfeldt; rerun-io/egui_crates), the agent tools over egui_inspection
+# that egui-pop-agent's `widget_*` MCP tools serve. Upstream is not on
+# crates.io yet: `egui-pop-inspection-tools` is its temporary, unchanged
+# fork, published under its own name until Rerun publishes it; its
+# library is still `egui_inspection_tools`.
+egui_inspection_tools = { package = "egui-pop-inspection-tools", version = "0.1" }
 # MIT; the system's file chooser (xdg portal on Linux).
 rfd = "0.17"
 # MIT OR Apache-2.0: PNG and JPEG decoded for the file picker's previews
