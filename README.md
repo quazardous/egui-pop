@@ -31,6 +31,19 @@ starts from where it ends.
 
 [![The egui-pop gallery in pop-dark: the theme overview](https://github.com/quazardous/egui-pop/raw/main/docs/screenshots/overview-pop-dark.png)](https://quazardous.github.io/egui-pop/gallery/)
 
+## Five words before any code
+
+- **Plugin**: what the application can do. Everything comes in as a
+  plugin, egui-pop's own parts included.
+- **Block**: where it shows. A plugin puts blocks (and panels) in the
+  zones of the window.
+- **Command**: what can be triggered. Declared once, it gets its key,
+  menu entry, palette entry and agent surface.
+- **Bus**: how the parts talk without knowing each other. Requests can
+  be vetoed, events are announced, answers are collected.
+- **Kit**: how it looks. Themes and visual kits are data (design
+  tokens), not code.
+
 ## What is stable, what is extra
 
 The core is always built; the rest comes with Cargo features of the
@@ -60,6 +73,13 @@ change) or experimental (may change in any release).
 cargo add egui-pop
 ```
 
+Depend on `egui-pop` only: the sub-crates come with it, at versions
+that fit together, and its features turn the optional ones on (use
+`egui_pop::egui` rather than adding egui yourself). Name a sub-crate
+directly only when you want it without the rest: `egui-pop-tokens`
+alone for the design tokens with no egui, or `egui-pop-test` as a
+dev-dependency for the test kit.
+
 ```rust no_run
 use egui_pop::eframe;
 use egui_pop::prelude::*;
@@ -86,9 +106,18 @@ fn main() -> eframe::Result {
 ```
 
 `DefaultPlugins` brings the command palette, dialogs, toasts, the
-settings window, the window's place and saved layouts. For a fuller
-start, step by step, see
-[Your first application](https://github.com/quazardous/egui-pop/blob/main/docs/first-app.md).
+settings window, the window's place and saved layouts. From there,
+[Your first application](https://github.com/quazardous/egui-pop/blob/main/docs/first-app.md)
+adds one thing per step, each a running program:
+
+1. [a window](https://github.com/quazardous/egui-pop/blob/main/docs/first-app.md#1-a-window),
+2. [a command](https://github.com/quazardous/egui-pop/blob/main/docs/first-app.md#2-a-command-its-key-and-its-menu-entry), with its key and menu entry,
+3. [panels](https://github.com/quazardous/egui-pop/blob/main/docs/first-app.md#3-panels-in-the-workbench) in the workbench,
+4. [a setting](https://github.com/quazardous/egui-pop/blob/main/docs/first-app.md#4-a-setting),
+5. [a theme](https://github.com/quazardous/egui-pop/blob/main/docs/first-app.md#5-a-theme-then-a-kit-of-your-own), then a kit of your own,
+6. [undo](https://github.com/quazardous/egui-pop/blob/main/docs/first-app.md#6-undo),
+
+then the agent bridge and tests.
 
 ## A command with a shortcut
 
@@ -116,6 +145,25 @@ let mut app = App::builder().plugin(Greeter).build(&egui::Context::default()).un
 let out = app.run(&CommandId::from_static("greeter.greet"), serde_json::Value::Null, Origin::User);
 assert_eq!(out.now(), Some(Ok(serde_json::json!("hello"))));
 ```
+
+### Agent guard-rails
+
+What an agent may do through the debug bridge, in short (the details
+and the known gaps are in
+[Agents and the debug bridge](https://github.com/quazardous/egui-pop/blob/main/docs/agents.md)):
+
+- **Nothing listens by default**: no port, no socket, no pipe. The
+  bridge is a Rust API in the process; the opt-in `egui-pop-agent`
+  crate serves it over a private local socket (a Unix socket only its
+  user can open, a named pipe on Windows), never TCP.
+- **One description to discover**: `bridge.describe` lists every
+  command and action, under protocol 1.
+- **Arguments are checked**: a command declared with a JSON Schema has
+  every run checked against it.
+- **`mutates`** marks what changes state; the bridge can be set
+  read-only (only calls that change nothing) or off.
+- **`destructive`**: the user confirms an agent's call first.
+- **`private`**: a result holding private data an agent may be refused.
 
 ## A theme
 
@@ -205,6 +253,30 @@ kernel implements the public [`bus-contract`](https://github.com/quazardous/bus-
 crate, and the application supplies the bus (`AppBuilder::bus`, or
 egui-pop makes its own), shared with its other libraries
 ([ADR 0030](https://github.com/quazardous/egui-pop/blob/main/docs/adr/0030-the-bus-is-a-contract.md)).
+
+```text
+  plugin A        plugin B        the application
+     |  ^            |  ^               |  ^
+ emit|  |listen  emit|  |listen     emit|  |listen
+     v  |            v  |               v  |
+ +------------------------------------------------+
+ |  the bus (egui-pop's kernel, or the app's own) |
+ |  points:  event    announced, every listener   |
+ |           request  a listener may veto it      |
+ |           collect  each listener answers       |
+ +------------------------------------------------+
+         |                          |
+         v                          v
+   the journal                bus-bridge (relay)
+   events numbered,           the same points
+   read again from one        in another process
+```
+
+Nobody calls a neighbour: each part emits on a point or listens to one,
+and the kernel runs the listeners in their declared order. The journal
+and the crossing to another process come from the host;
+[bus-bridge](https://github.com/quazardous/bus-bridge) is a transport
+for that crossing.
 
 - **Points** are requests, which a listener may veto, or events, each
   declared in a library's contract table (`egui_pop::api::bus::CONTRACT`).
@@ -341,22 +413,40 @@ and list it in the [registry of extensions](https://github.com/quazardous/egui-p
 
 ## Versions
 
-egui-pop has its own 0.x version; one egui-pop minor per egui minor,
-released within days of it. The sub-crates have their own versions,
-which move only when their code does.
+egui-pop has its own 0.x version. A new egui minor brings a new
+egui-pop minor, released within days of it; egui-pop's own breaking
+changes bring one too, so several egui-pop minors share one egui. The
+sub-crates have their own versions, which move only when their code
+does; depending on `egui-pop` alone picks the right ones.
 
 | egui-pop | egui | Rust |
 |---|---|---|
-| 0.1.x | 0.36 | 1.95 |
-| 0.2.x | 0.36 | 1.95 |
-| 0.3.x | 0.36 | 1.95 |
-| 0.4.x | 0.37 | 1.95 |
+| 0.1.x to 0.3.x | 0.36 | 1.95 |
+| 0.4.x to 0.21.x | 0.37 | 1.95 |
 
 egui-phosphor has no release on egui 0.37 yet, so egui-pop depends on
 `egui-pop-phosphor`, a fork published under its own name that carries
 upstream's pending update; egui-pop moves back to egui-phosphor once
 upstream releases
 ([#146](https://github.com/quazardous/egui-pop/issues/146)).
+
+## Accessibility: what is verified
+
+Every interactive widget is meant to have a name and a role that
+assistive technologies read, through egui's AccessKit tree. What backs
+that today
+([Accessibility](https://github.com/quazardous/egui-pop/blob/main/docs/accessibility.md)):
+
+| | Verified | How |
+|---|---|---|
+| Every interactive node has a name | yes, in tests | the test kit fails a test on an unnamed node (`egui_pop_test::assert_all_named`) |
+| The accessibility tree, for review | yes, in tests | `egui_pop_test::a11y_tree` prints it as text |
+| Every gallery page reachable by keys alone | yes, in tests | a keyboard walk over the gallery |
+| A real screen reader (Orca on Linux, or any other) | **no** | not run yet; it is planned |
+
+The accessibility helpers (`egui_pop_core::a11y`: names for custom
+widgets, the announcer) and the test kit's checks are in the
+supported tier.
 
 ## How quality is held
 
