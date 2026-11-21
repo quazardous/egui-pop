@@ -252,7 +252,11 @@ an application window keeps its own (empty while none of its panels was
 focused), so the keys of a panel bound in the `panel:<id>` scope, or with a
 `when` testing `focusedPanel`, never fire from another window ([key
 scopes](adr/0007-key-resolution.md#addendum-2026-11-18-scopes-per-window)).
-`when` clauses reading `focusedPanel` follow the keyboard.
+`when` clauses reading `focusedPanel` follow the keyboard. Beside it,
+`focusedPanelKind` is that panel's kind (`PanelId::kind`): its own id, or
+`app.gallery` while the instance `app.gallery#2` has the focus, so a
+clause `focusedPanelKind == 'app.gallery'` reaches every instance (see
+[Panel instances](#panel-instances)).
 
 | What happens | `focusedPanel` | The widget focus |
 |---|---|---|
@@ -551,6 +555,11 @@ let _ = ctx.instance_panel(
   focus, the fault boundary, the panel menu and the steps treat it as any
   panel. `PanelId::kind` and `PanelId::instance_number` read it back. Its
   title is the kind's with its number ("Gallery 2").
+- **Keys and undo.** An instance has its kind's: a binding with `when:
+  "focusedPanelKind == 'app.gallery'"` fires in each instance (a clause
+  on `focusedPanel` names one panel), and a history scope whose focus
+  target is the kind (`ScopeInfo::focus`) is active and takes Ctrl+Z in
+  each instance ([history](history.md#which-history-ctrlz-undoes)).
 - **Payload.** Each instance holds a payload the application owns,
   opaque JSON (`AppHandle::set_instance_payload`,
   `AppHandle::instance_payload`). It is kept in the layout

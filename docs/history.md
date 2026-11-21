@@ -47,6 +47,13 @@ Innermost first:
    window (those whose focus targets are drawn; a scope without any is
    always active). Redo goes back to the scope last undone.
 
+A focus target (`ScopeInfo::focus`) is a surface's name or a panel's id.
+A panel kind declared with several instances names each of them too: a
+scope focused on `app.gallery` is active while `app.gallery#2` is drawn,
+and Ctrl+Z goes to it while that instance has the focus (under
+`Routing::Focus`). A target naming one instance (`app.gallery#2`) names
+that one only.
+
 Undo, redo and jump are steps (`edit.undo`, `edit.redo`, `edit.jump`):
 a before-hook may veto one or name another scope, and a gesture still
 going in the scope refuses them. Each answer is published on the

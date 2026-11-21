@@ -903,7 +903,7 @@ pub fn focused_scope(app: &AppHandle) -> Option<ScopeId> {
     let scopes = with_owner(app, |h| h.scopes()).unwrap_or_default();
     let kept = app.local::<Kept>();
     let targets = kept.targets.borrow();
-    let names = |f: &str, name: &str| f == name || crate::app::scope_name(f) == name;
+    let names = crate::app::names_surface;
     chain.iter().rev().find_map(|name| {
         targets
             .iter()
@@ -934,13 +934,13 @@ fn shown(app: &AppHandle) -> Vec<String> {
 }
 
 /// Whether a scope's focus targets are drawn (a panel's id stands for
-/// its surface).
+/// its surface, a panel kind's for its instances' too).
 fn is_active(info: &ScopeInfo, shown: &[String]) -> bool {
     info.focus.is_empty()
-        || info.focus.iter().any(|f| {
-            let surface = crate::app::scope_name(f);
-            shown.iter().any(|s| *s == *f || *s == surface)
-        })
+        || info
+            .focus
+            .iter()
+            .any(|f| shown.iter().any(|s| crate::app::names_surface(f, s)))
 }
 
 /// The owner's scopes active in the window, with their heads and next

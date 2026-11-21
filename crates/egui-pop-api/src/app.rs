@@ -104,6 +104,13 @@ pub const STEP_LOAD_KEYMAP: StepId = StepId::from_static("keys.load");
 /// The context key holding the detached panel whose window is drawn
 /// (empty in the main window): `when: "window == 'app.log'"`.
 pub const CONTEXT_WINDOW: &str = "window";
+/// The context key holding the kind of the focused panel
+/// (`PanelId::kind`): the panel's own id, or `app.gallery` while its
+/// instance `app.gallery#2` has the focus, so one clause reaches every
+/// instance: `when: "focusedPanelKind == 'app.gallery'"`.
+///
+/// Need (action): keys that work in every instance of a panel.
+pub const CONTEXT_FOCUSED_PANEL_KIND: &str = "focusedPanelKind";
 
 pub const MENU_MAIN: MenuId = MenuId::from_static("app.main");
 pub const MENU_FILE: MenuId = MenuId::from_static("app.menu.file");
@@ -2160,6 +2167,8 @@ impl AppHandle {
     /// `focusedPanel` is the window group's own: the workbench's focused
     /// panel in the main window and its detached panels, an application
     /// window's last focused panel in it (empty when none);
+    /// `focusedPanelKind`, that panel's kind (`PanelId::kind`: the
+    /// panel's own id, or `app.gallery` for its instance `app.gallery#2`);
     /// `modalOpen` says whether a modal is open in the window's group
     /// (an application window's own, or the main window's with its
     /// detached panels: a modal in one application window does not make
@@ -2192,13 +2201,20 @@ impl AppHandle {
         // (its detached panels' windows share it), an application window's
         // own for it ("" while none of its panels was focused), so a
         // panel's keys never fire from another window.
-        if self.window_group(view) != egui::ViewportId::ROOT {
-            let panel = self.window_focused_panel(view);
+        // `focusedPanelKind` beside it: the kind of an instance
+        // (`app.gallery` for `app.gallery#2`), so a kind's keys reach
+        // every instance.
+        let focused = if self.window_group(view) != egui::ViewportId::ROOT {
+            Some(self.window_focused_panel(view))
+        } else {
+            self.try_workbench().map(|wb| wb.focused.clone())
+        };
+        if let Some(panel) = focused {
             base.set("focusedPanel", panel.as_ref().map_or("", PanelId::as_str));
-        } else if let Some(wb) = self.try_workbench() {
+            let kind = panel.as_ref().map(PanelId::kind);
             base.set(
-                "focusedPanel",
-                wb.focused.as_ref().map_or("", PanelId::as_str),
+                CONTEXT_FOCUSED_PANEL_KIND,
+                kind.as_ref().map_or("", PanelId::as_str),
             );
         }
         if let Some(panel) = self.window_panel(view) {
@@ -3459,6 +3475,27 @@ fn settle_panel_focus(ui: &mut Ui) {
     if let Some(preferred) = focus::preferred(ui.ctx()) {
         ui.memory_mut(|m| m.request_focus(preferred));
     }
+}
+
+/// Whether a focus target (a surface's name, a panel's id, or a panel
+/// kind's) names the focus surface `surface`: the surface itself, the
+/// panel's surface (its id as a scope name), or, for a kind, the surface
+/// of each of its instances (`app.gallery` names `app.gallery#2`'s,
+/// `app.gallery_2`). A target naming an instance (`app.gallery#2`) names
+/// that instance only.
+pub(crate) fn names_surface(target: &str, surface: &str) -> bool {
+    if target == surface {
+        return true;
+    }
+    let own = scope_name(target);
+    if own == surface {
+        return true;
+    }
+    !target.contains('#')
+        && surface
+            .strip_prefix(own.as_str())
+            .and_then(|rest| rest.strip_prefix('_'))
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// A focus scope name from an id: letters, digits, `_` and `.` only.
@@ -8232,5 +8269,30 @@ mod make_tests {
             }
             Ok(Box::new(app))
         })
+    }
+}
+
+#[cfg(test)]
+mod names_surface_tests {
+    use super::names_surface;
+
+    #[test]
+    fn a_kind_names_its_instances_surfaces_an_exact_id_only_its_own() {
+        // A surface's name, a panel's id.
+        assert!(names_surface("sheet.graph", "sheet.graph"));
+        assert!(names_surface("app.log", "app.log"));
+        // A kind: its panel declared and its instances.
+        assert!(names_surface("app.gallery", "app.gallery_2"));
+        assert!(names_surface("app.gallery", "app.gallery_12"));
+        assert!(!names_surface("app.gallery", "app.gallery_x"));
+        assert!(!names_surface("app.gallery", "app.gallery_"));
+        assert!(!names_surface("app.gallery", "app.gallery2"));
+        assert!(!names_surface("app.gallery", "app.galleryx_2"));
+        // An instance's id: that instance only.
+        assert!(names_surface("app.gallery#2", "app.gallery_2"));
+        assert!(!names_surface("app.gallery#2", "app.gallery"));
+        assert!(!names_surface("app.gallery#2", "app.gallery_3"));
+        // Another panel never.
+        assert!(!names_surface("app.log", "app.gallery_2"));
     }
 }
