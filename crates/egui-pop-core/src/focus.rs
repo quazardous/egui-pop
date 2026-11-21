@@ -39,7 +39,14 @@
 //!    else sees that press (unless the input lets Escape through, see
 //!    [`escape_passes`]); an input that cancels on Escape (a slider's
 //!    typed entry) learns of that press through [`escape_left`];
-//! 2. egui aborts a **drag** in progress;
+//! 2. a **gesture** in progress: egui aborts a drag, and the press is
+//!    the drag's alone (a slider's, a knob's, a scrub's, a viewport's):
+//!    the plugin takes it out of the input, so no host around the
+//!    gesture (a dialog, the Settings window, a popover) dismisses on
+//!    it; the widget puts its value back, reading the press through
+//!    [`escape_cancelled`] or [`cancel_pressed`], and a value store
+//!    gesture is rolled back ([`binding`](crate::binding)). Only the
+//!    next Escape reaches the host;
 //! 3. the **top overlay** closes, if it closes on Escape (popovers,
 //!    menus, dialogs: "Escape dismisses"), see `overlay::begin_pass`;
 //! 4. the **key bindings** of Escape, the innermost focused surface's
@@ -113,6 +120,8 @@ struct State {
     claims: Vec<(Id, u64)>,
     /// The text input Escape took the focus from, and in which pass.
     escaped: Option<(Id, u64)>,
+    /// The widget whose drag Escape cancelled, and in which pass.
+    gesture_escaped: Option<(Id, u64)>,
     /// `building` and `last`'s other half.
     drawn: Vec<Drawn>,
     drawn_last: Vec<Drawn>,
@@ -797,6 +806,7 @@ impl egui::plugin::Plugin for FocusPlugin {
 
     fn on_begin_pass(&mut self, ui: &mut Ui) {
         leave_text_input(ui.ctx());
+        escape_gesture(ui.ctx());
         crate::stay::begin_pass(ui.ctx());
         crate::reveal::begin_pass(ui.ctx());
         crate::place::begin_pass(ui.ctx());
@@ -917,6 +927,47 @@ fn leave_text_input(ctx: &Context) {
     ctx.memory_mut(|m| m.surrender_focus(id));
     s.escaped = Some((id, pass(ctx)));
     log::debug!(target: "egui_pop", "Escape: left the text input {id:?}");
+}
+
+/// Step 2 of the Escape order: egui stopped a drag on this press (it
+/// aborts a drag on Escape as the pass begins), so the press is the
+/// gesture's. It is taken out of the pass's input, so that no host around
+/// the gesture (a dialog, the Settings window, a popover, a key binding)
+/// dismisses on it; the widget learns of it through [`escape_cancelled`].
+fn escape_gesture(ctx: &Context) {
+    let Some(id) = ctx.drag_stopped_id() else {
+        return;
+    };
+    if !ctx.input(|i| i.events.iter().any(is_escape)) {
+        return;
+    }
+    ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+    lock(&state(ctx)).gesture_escaped = Some((id, pass(ctx)));
+    log::debug!(target: "egui_pop", "Escape: cancelled the drag of {id:?}");
+}
+
+/// The widget whose drag Escape cancelled in this pass, if any. With the
+/// focus plugin [`install`]ed, a press of Escape during a drag is the
+/// drag's, before any host's (see [the order](self#escape-in-order)): the
+/// plugin takes the press out of the input, so a gesture reads it here
+/// (or through [`cancel_pressed`]) and not from the keys. Asked as often
+/// as needed in the pass.
+pub fn escape_cancelled(ctx: &Context) -> Option<Id> {
+    let now = pass(ctx);
+    let st = state(ctx);
+    let s = lock(&st);
+    s.gesture_escaped
+        .filter(|(_, p)| *p == now)
+        .map(|(id, _)| id)
+}
+
+/// Whether a gesture's cancel key was pressed in this pass: the key
+/// itself, or, for Escape, the press the focus plugin took for the drag
+/// it cancelled ([`escape_cancelled`]). A drag that ends (`drag_stopped`)
+/// asks this to know whether it was cancelled.
+pub fn cancel_pressed(ctx: &Context, key: egui::Key) -> bool {
+    ctx.input(|i| i.key_pressed(key))
+        || (key == egui::Key::Escape && escape_cancelled(ctx).is_some())
 }
 
 /// Notes what the pass leaves with the focus, for the next pass's input hook.

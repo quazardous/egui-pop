@@ -47,6 +47,20 @@ The rules (each one a test of `OverlayStack`):
 
 - **Escape** dismisses the top overlay only, if it allows it
   (`OverlaySpec::keep_on_escape` refuses).
+- **A gesture takes Escape before any host.** With the focus plugin
+  installed (an `App` installs it), Escape pressed during a drag (a
+  slider's, a knob's, a scrub, a viewport's) is the drag's alone: egui
+  aborts the drag, the plugin takes the press out of the pass's input,
+  and no host around it (a dialog, the Settings window, a popover, a
+  host's own Escape) sees it. The widget puts its value back, reading
+  the press through `egui_pop_core::focus::escape_cancelled` or
+  `egui_pop_core::focus::cancel_pressed` (not from the keys), and a
+  value store gesture opened by `egui_pop_core::binding::edit` is rolled
+  back. The next Escape reaches the host. A host closed while a gesture
+  is still open (its Close button, a command) does not leave it open: a
+  bound widget not drawn in a pass with its gesture open has the gesture
+  cancelled and its drag stopped. The whole order is in
+  `egui_pop_core::focus` ("Escape, in order").
 - **A click outside** dismisses the dismissable overlays above the one
   clicked, or all of them, and stops at a modal: nothing below a modal
   gets the click. A press on the overlay's anchor, or on an egui popup

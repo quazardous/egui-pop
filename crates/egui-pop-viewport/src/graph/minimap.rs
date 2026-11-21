@@ -185,7 +185,7 @@ fn gestures(ui: &Ui, response: &Response, state: &mut GraphState, map: &Map) -> 
         state.pan(response.drag_delta() / map.scale);
     }
     if response.drag_stopped()
-        && ui.input(|i| i.key_pressed(Key::Escape))
+        && egui_pop_core::focus::cancel_pressed(ui.ctx(), Key::Escape)
         && let Some(start) = id.get(ui.ctx())
     {
         state.view = start;

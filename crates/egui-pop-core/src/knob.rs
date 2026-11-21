@@ -606,7 +606,7 @@ fn turn(
         let start = slot.get(ui.ctx()).map_or(value, |t| t.start);
         slot.remove(ui.ctx());
         let cancel = gestures(ui.ctx()).cancel;
-        return if ui.input(|i| i.key_pressed(cancel)) {
+        return if crate::focus::cancel_pressed(ui.ctx(), cancel) {
             Drag::Cancelled(start)
         } else {
             Drag::Ended(start)
