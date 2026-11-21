@@ -346,7 +346,7 @@ pub fn builder(options: &Options) -> AppBuilder {
             plugin: PluginId::from_static("gallery.places"),
             story: StoryId::from_static("places"),
             title: "Places panel",
-            description: "A panel of places as an import window's sources column: sections that fold (one kept by the page), an empty section's line, a line under each item's name, a state mark in a tone, a pin toggle at each item's end, the chosen account's albums under it and History's past imports with Import again; driven by the keyboard (Up, Down, Enter, Left and Right on a band).",
+            description: "A panel of places as an import window's sources column (sections that fold, an empty line, a line under each item, a mark in a tone, pins, the app's room under items and sections) and, beside it, a Library's sources (nested items, a dimmed offline disk, one choice per scope, albums taking a dragged photo through a row hook); driven by the keyboard.",
             group: "Components",
             weight: 54,
             show: pages::places::show,

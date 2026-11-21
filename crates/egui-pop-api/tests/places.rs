@@ -245,3 +245,212 @@ fn sections_fold_by_their_band_and_the_apps_state_is_followed() {
     assert_eq!(expanded(&h, "History"), Some(true));
     assert!(h.query_by_label("Import again").is_some());
 }
+
+/// What the Library's panel reported, frame by frame.
+#[derive(Default)]
+struct Library {
+    /// The app-kept state of "Animals".
+    animals_open: bool,
+    expanded: Vec<(String, bool)>,
+    chosen: Vec<String>,
+    /// Every row the hook saw last frame: its id and rect.
+    rows: Vec<(String, egui::Rect)>,
+    /// The ids drawn selected through the set.
+    set: Vec<&'static str>,
+}
+
+fn library_sections(l: &Library) -> Vec<PlaceSection> {
+    vec![
+        PlaceSection::new("folders", "Folders")
+            .item(
+                PlaceItem::new("disk", "Photos disk")
+                    .open_at_first(true)
+                    .children([PlaceItem::new("2026", "2026")
+                        .children([PlaceItem::new("2026/summer", "Summer trip")])]),
+            )
+            .item(
+                PlaceItem::new("backup", "Backup disk")
+                    .line("offline, last seen 3 days ago")
+                    .dimmed(true)
+                    .children([PlaceItem::new("backup/old", "Old scans").dimmed(true)]),
+            ),
+        PlaceSection::new("albums", "Albums")
+            .item(PlaceItem::new("album/family", "Family"))
+            .item(PlaceItem::new("album/travel", "Travel")),
+        PlaceSection::new("keywords", "Keywords").item(
+            PlaceItem::new("Animals", "Animals")
+                .open(l.animals_open)
+                .children([PlaceItem::new("Animals|Dog", "Dog")]),
+        ),
+    ]
+}
+
+fn library(set: Vec<&'static str>) -> Harness<'static, Library> {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(260.0, 480.0))
+        .build_ui_state(
+            |ui, l: &mut Library| {
+                let sections = library_sections(l);
+                let set = l.set.clone();
+                let mut rows = Vec::new();
+                let out = PlacesPanel::new("test.library", &sections)
+                    .selected_set(&set)
+                    .on_row(|_, _, item, r| rows.push((item.id.clone(), r.rect)))
+                    .show(ui);
+                l.rows = rows;
+                if let Some((id, open)) = out.expanded {
+                    if id == "Animals" {
+                        l.animals_open = open;
+                    }
+                    l.expanded.push((id, open));
+                }
+                if let Some((_, item)) = out.chosen {
+                    l.chosen.push(item.id);
+                }
+            },
+            Library {
+                set,
+                ..Library::default()
+            },
+        );
+    h.run();
+    h
+}
+
+#[test]
+fn nested_items_fold_by_keyboard_named_at_their_level() {
+    let mut h = library(Vec::new());
+    let expanded = |h: &Harness<'_, Library>, label: &str| {
+        h.get_by_label(label).accesskit_node().data().is_expanded()
+    };
+    let level = |h: &Harness<'_, Library>, label: &str| {
+        h.get_by_label(label).accesskit_node().data().level()
+    };
+    // Open at first: the disk shows its year, the year is folded.
+    assert_eq!(expanded(&h, "Photos disk"), Some(true));
+    assert_eq!(level(&h, "Photos disk"), Some(1));
+    assert_eq!(level(&h, "2026"), Some(2));
+    assert_eq!(expanded(&h, "2026"), Some(false));
+    assert!(h.query_by_label("Summer trip").is_none());
+    // The toggles are named after their rows.
+    assert_eq!(
+        h.get_by_label("Show or hide 2026").accesskit_node().role(),
+        Role::DisclosureTriangle
+    );
+    // Right opens the row that has the keyboard, Left folds it.
+    h.get_by_label("2026").focus();
+    h.run();
+    h.key_press(Key::ArrowRight);
+    h.run();
+    h.run();
+    assert_eq!(expanded(&h, "2026"), Some(true));
+    assert_eq!(level(&h, "Summer trip"), Some(3));
+    assert_eq!(h.state().expanded, [("2026".into(), true)]);
+    // Down goes through the rows shown, into the nested one.
+    h.key_press(Key::ArrowDown);
+    h.run();
+    let focused = |h: &Harness<'_, Library>, label: &str| h.get_by_label(label).is_focused();
+    // The keyboard reaches the child, through its parent's toggle at most.
+    if !focused(&h, "Summer trip") {
+        h.key_press(Key::ArrowDown);
+        h.run();
+    }
+    assert!(focused(&h, "Summer trip"));
+    h.key_press(Key::Enter);
+    h.run();
+    assert_eq!(h.state().chosen, ["2026/summer"]);
+    h.get_by_label("2026").focus();
+    h.run();
+    h.key_press(Key::ArrowLeft);
+    h.run();
+    h.run();
+    assert_eq!(expanded(&h, "2026"), Some(false));
+    assert!(h.query_by_label("Summer trip").is_none());
+    // An app-kept branch follows the application.
+    assert_eq!(expanded(&h, "Animals"), Some(false));
+    h.state_mut().animals_open = true;
+    h.run();
+    h.run();
+    assert_eq!(expanded(&h, "Animals"), Some(true));
+    assert!(h.query_by_label("Dog").is_some());
+    h.get_by_label("Show or hide Animals").click();
+    h.run();
+    h.run();
+    assert!(!h.state().animals_open);
+    assert!(h.query_by_label("Dog").is_none());
+}
+
+#[test]
+fn a_dimmed_item_is_muted_said_unavailable_and_still_chosen() {
+    let mut h = library(Vec::new());
+    let backup = h.get_by_label("Backup disk");
+    assert_eq!(
+        backup.accesskit_node().data().description(),
+        Some("Unavailable, offline, last seen 3 days ago")
+    );
+    // Its name is painted in the muted text role, a plain one's not.
+    let muted = egui_pop_core::theme::Tokens::of(&h.ctx)
+        .text_role
+        .muted
+        .color;
+    let colour_of = |h: &Harness<'_, Library>, text: &str| {
+        h.output()
+            .shapes
+            .iter()
+            .find_map(|s| match &s.shape {
+                egui::Shape::Text(t) if t.galley.text() == text => {
+                    Some(t.galley.job.sections[0].format.color)
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{text} painted"))
+    };
+    assert_eq!(colour_of(&h, "Backup disk"), muted);
+    h.get_by_label("Family").click();
+    h.run();
+    assert_ne!(colour_of(&h, "Family"), muted);
+    h.get_by_label("Backup disk").click();
+    h.run();
+    assert_eq!(h.state().chosen, ["album/family", "backup"]);
+}
+
+#[test]
+fn the_row_hook_sees_every_row_shown_with_its_rect() {
+    let h = library(Vec::new());
+    let ids: Vec<&str> = h.state().rows.iter().map(|(id, _)| id.as_str()).collect();
+    assert_eq!(
+        ids,
+        [
+            "disk",
+            "2026",
+            "backup",
+            "album/family",
+            "album/travel",
+            "Animals"
+        ]
+    );
+    for (id, rect) in &h.state().rows {
+        let label = match id.as_str() {
+            "disk" => "Photos disk",
+            "backup" => "Backup disk",
+            "album/family" => "Family",
+            "album/travel" => "Travel",
+            other => other,
+        };
+        let node = h.get_by_label(label).rect();
+        assert!(
+            rect.contains_rect(node) || node.contains_rect(*rect),
+            "{id}: {rect:?} against {node:?}"
+        );
+    }
+}
+
+#[test]
+fn a_selected_set_selects_one_item_in_each_of_several_sections() {
+    let h = library(vec!["2026", "album/travel"]);
+    let toggled = |label: &str| h.get_by_label(label).accesskit_node().toggled();
+    assert_eq!(toggled("2026"), Some(Toggled::True));
+    assert_eq!(toggled("Travel"), Some(Toggled::True));
+    assert_eq!(toggled("Family"), Some(Toggled::False));
+    assert_eq!(toggled("Photos disk"), Some(Toggled::False));
+}

@@ -40,7 +40,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use egui::Ui;
-use egui_pop_core::fold::Fold;
+use egui_pop_core::fold::{Fold, TreeRow};
 use egui_pop_core::icon::{Size, Tone as IconTone};
 use egui_pop_core::kit::{Kit, KitCx, Part, State, Tone};
 use egui_pop_core::lock;
@@ -191,6 +191,21 @@ pub struct PlaceItem {
     /// A toggle of the application's at the item's end (a pin):
     /// [`PlacesOutput::toggled`] says it was clicked.
     pub toggle: Option<PlaceToggle>,
+    /// The items nested under it (a folder's subfolders, a keyword's
+    /// narrower ones), shown indented under it while it is open: a panel
+    /// then draws its section as a tree ([`PlaceItem::children`]).
+    pub children: Vec<PlaceItem>,
+    /// Whether it is open the first time it is shown, when it has
+    /// children (no by default).
+    pub open_at_first: bool,
+    /// Whether it is open, when the application keeps the state: the
+    /// panel follows it ([`PlacesOutput::expanded`] says the user asked to
+    /// change it). Kept in egui's memory when none.
+    pub open: Option<bool>,
+    /// Drawn muted (a folder of an offline volume): its name, line, badge
+    /// and icon in the muted text role, said to be unavailable. It stays
+    /// choosable, its detail still in its tip.
+    pub dimmed: bool,
 }
 
 /// A toggle at the end of a [`PlaceItem`] (a pin for the favourites): an
@@ -231,6 +246,10 @@ impl PlaceItem {
             badge_tone: None,
             line: None,
             toggle: None,
+            children: Vec::new(),
+            open_at_first: false,
+            open: None,
+            dimmed: false,
         }
     }
 
@@ -285,6 +304,46 @@ impl PlaceItem {
     #[must_use]
     pub fn toggle(mut self, toggle: PlaceToggle) -> Self {
         self.toggle = Some(toggle);
+        self
+    }
+
+    /// Items nested under it, after those it has: a branch of a tree
+    /// (volume, folder, subfolders; `Animals`, `Dog`). A panel indents
+    /// them by depth under a disclosure toggle named after the item ("Show
+    /// or hide Animals"); Right opens it and Left folds it while the item
+    /// has the keyboard, and Up and Down go through the rows shown. Each
+    /// item is said at its level, a branch as expanded or not.
+    ///
+    /// Need (data): a tree of places in a side panel (folders and their subfolders, nested keywords).
+    #[must_use]
+    pub fn children(mut self, children: impl IntoIterator<Item = PlaceItem>) -> Self {
+        self.children.extend(children);
+        self
+    }
+
+    /// Whether a branch is open the first time it is shown; its state is
+    /// then kept in egui's memory (see [`PlaceItem::open`]).
+    #[must_use]
+    pub fn open_at_first(mut self, open: bool) -> Self {
+        self.open_at_first = open;
+        self
+    }
+
+    /// A branch open or not as the application keeps it: the user's clicks
+    /// and arrows come back in [`PlacesOutput::expanded`].
+    #[must_use]
+    pub fn open(mut self, open: bool) -> Self {
+        self.open = Some(open);
+        self
+    }
+
+    /// Drawn muted and said to be unavailable (see [`PlaceItem::dimmed`]):
+    /// an offline volume's folders, still choosable.
+    ///
+    /// Need (state): a place shown out of reach but still choosable (a folder of an offline volume).
+    #[must_use]
+    pub fn dimmed(mut self, dimmed: bool) -> Self {
+        self.dimmed = dimmed;
         self
     }
 
@@ -512,6 +571,9 @@ pub struct PlacesOutput {
     /// The foldable section the user folded or opened, by id, and whether
     /// it is open now.
     pub folded: Option<(String, bool)>,
+    /// The nested item ([`PlaceItem::children`]) the user opened or
+    /// folded, by id, and whether it is open now.
+    pub expanded: Option<(String, bool)>,
 }
 
 /// What draws an item's context menu ([`PlacesPanel::menu`]), or the
@@ -521,6 +583,9 @@ type PlaceMenu<'a> = Box<dyn FnMut(&mut Ui, &PlaceSection, &PlaceItem) + 'a>;
 /// What draws the application's content under a section's items
 /// ([`PlacesPanel::under_section`]).
 type SectionSlot<'a> = Box<dyn FnMut(&mut Ui, &PlaceSection) + 'a>;
+
+/// What sees each item's row ([`PlacesPanel::on_row`]).
+type RowHook<'a> = Box<dyn FnMut(&mut Ui, &PlaceSection, &PlaceItem, &egui::Response) + 'a>;
 
 /// A side panel of places: sections, each a heading over its items, as the
 /// in-app picker lists them (an import window's sources column). One stop
@@ -532,9 +597,12 @@ type SectionSlot<'a> = Box<dyn FnMut(&mut Ui, &PlaceSection) + 'a>;
 /// does is the caller's: [`PlacesOutput::chosen`].
 ///
 /// Opt-in parts (see the module): folding sections, an empty section's
-/// line, an item's visible line, toned badge and toggle, and the
-/// application's content under an item or a section. A panel using none
-/// of them looks as it always did.
+/// line, an item's visible line, toned badge and toggle, the
+/// application's content under an item or a section, nested items
+/// ([`PlaceItem::children`]), dimmed items ([`PlaceItem::dimmed`]), a hook
+/// on each row ([`PlacesPanel::on_row`]) and a selection in several
+/// sections ([`PlacesPanel::selected_set`]). A panel using none of them
+/// looks as it always did.
 ///
 /// ```
 /// use egui_pop_api::files::places::{PlaceItem, PlaceSection, PlacesPanel};
@@ -557,9 +625,11 @@ pub struct PlacesPanel<'a> {
     name: String,
     sections: &'a [PlaceSection],
     selected: Option<&'a str>,
+    selected_set: &'a [&'a str],
     menu: Option<PlaceMenu<'a>>,
     under_item: Option<PlaceMenu<'a>>,
     under_section: Option<SectionSlot<'a>>,
+    on_row: Option<RowHook<'a>>,
 }
 
 impl fmt::Debug for PlacesPanel<'_> {
@@ -568,6 +638,7 @@ impl fmt::Debug for PlacesPanel<'_> {
             .field("name", &self.name)
             .field("sections", &self.sections.len())
             .field("selected", &self.selected)
+            .field("selected_set", &self.selected_set)
             .finish_non_exhaustive()
     }
 }
@@ -580,9 +651,11 @@ impl<'a> PlacesPanel<'a> {
             name: name.into(),
             sections,
             selected: None,
+            selected_set: &[],
             menu: None,
             under_item: None,
             under_section: None,
+            on_row: None,
         }
     }
 
@@ -590,6 +663,33 @@ impl<'a> PlacesPanel<'a> {
     #[must_use]
     pub fn selected(mut self, id: Option<&'a str>) -> Self {
         self.selected = id;
+        self
+    }
+
+    /// The items shown selected, by id, beside [`PlacesPanel::selected`]:
+    /// one in each section where the application's scopes add up (a
+    /// folder, an album and a keyword chosen together).
+    ///
+    /// Need (data): a side panel of places with one selection in each section (scopes chosen together).
+    #[must_use]
+    pub fn selected_set(mut self, ids: &'a [&'a str]) -> Self {
+        self.selected_set = ids;
+        self
+    }
+
+    /// A hook called with each item's row and its response, after the
+    /// panel's own handling: the application attaches what the panel
+    /// knows nothing of (a drop target or a drag source through the drag
+    /// session, `bus::drag`; its own context menu; a tip). Called for
+    /// nested items too.
+    ///
+    /// Need (dialog): a side panel of places whose rows are drop targets or drag sources.
+    #[must_use]
+    pub fn on_row(
+        mut self,
+        hook: impl FnMut(&mut Ui, &PlaceSection, &PlaceItem, &egui::Response) + 'a,
+    ) -> Self {
+        self.on_row = Some(Box::new(hook));
         self
     }
 
@@ -624,7 +724,6 @@ impl<'a> PlacesPanel<'a> {
         let mut out = PlacesOutput::default();
         let t = Tokens::of(ui.ctx());
         let sections = self.sections;
-        let selected = self.selected;
         let name = self.name.clone();
         egui_pop_core::tab::roving(ui, &name, egui_pop_core::tab::Axis::Vertical, |ui| {
             ui.vertical(|ui| {
@@ -635,13 +734,13 @@ impl<'a> PlacesPanel<'a> {
                     match section.fold {
                         None => {
                             section_title(ui, &section.title);
-                            self.section_body(ui, section, selected, &mut out);
+                            self.section_body(ui, section, &mut out);
                         }
                         Some(at_first) => {
                             let open_wanted = section.open;
                             let fold = Fold::new((&name, &section.id), section.title.as_str())
                                 .default_open(open_wanted.unwrap_or(at_first))
-                                .show(ui, |ui| self.section_body(ui, section, selected, &mut out));
+                                .show(ui, |ui| self.section_body(ui, section, &mut out));
                             if fold.toggled {
                                 out.folded = Some((section.id.clone(), fold.open));
                             } else if let Some(want) = open_wanted
@@ -659,42 +758,124 @@ impl<'a> PlacesPanel<'a> {
     }
 
     /// A section's items, its empty line, and the application's content.
-    fn section_body(
-        &mut self,
-        ui: &mut Ui,
-        section: &PlaceSection,
-        selected: Option<&str>,
-        out: &mut PlacesOutput,
-    ) {
+    fn section_body(&mut self, ui: &mut Ui, section: &PlaceSection, out: &mut PlacesOutput) {
         if section.items.is_empty()
             && let Some(empty) = &section.empty
         {
             ui.meta(empty.as_str());
         }
+        // A section with nested items is drawn as a tree, every row at its
+        // depth; one without is drawn as it always was.
+        let tree = section.items.iter().any(|i| !i.children.is_empty());
         for item in &section.items {
-            let on = selected == Some(item.id.as_str());
-            ui.push_id((&section.id, &item.id), |ui| {
-                let (r, toggled) = item_row(ui, item, on);
-                // Enter and Space click the item that has the keyboard.
-                if r.clicked() {
-                    out.chosen = Some((section.id.clone(), item.clone()));
-                }
-                if toggled {
-                    out.toggled = Some((section.id.clone(), item.clone()));
-                }
-                if let Some(menu) = self.menu.as_mut() {
-                    egui_pop_core::pointer::claim::context_menu(&r, |ui| {
-                        menu(ui, section, item);
-                    });
-                }
-                if let Some(add) = self.under_item.as_mut() {
-                    add(ui, section, item);
-                }
-            });
+            self.item(ui, section, item, tree.then_some(0), out);
         }
         if let Some(add) = self.under_section.as_mut() {
             ui.push_id(("under", &section.id), |ui| add(ui, section));
         }
+    }
+
+    /// Whether an item is drawn selected.
+    fn is_selected(&self, id: &str) -> bool {
+        self.selected == Some(id) || self.selected_set.contains(&id)
+    }
+
+    /// An item's row, at `depth` in a tree section (`None` in a flat
+    /// one), its menu, hook and content, then its children while open.
+    fn item(
+        &mut self,
+        ui: &mut Ui,
+        section: &PlaceSection,
+        item: &PlaceItem,
+        depth: Option<usize>,
+        out: &mut PlacesOutput,
+    ) {
+        let on = self.is_selected(&item.id);
+        let ctx = ui.ctx().clone();
+        let open_id = ui.make_persistent_id(("place.open", &section.id, &item.id));
+        ui.push_id((&section.id, &item.id), |ui| {
+            let (r, toggled, open) = match depth {
+                None => {
+                    let (r, toggled) = item_row(ui, item, on);
+                    (r, toggled, false)
+                }
+                Some(depth) => {
+                    let branch = !item.children.is_empty();
+                    if let Some(want) = item.open
+                        && branch
+                        && egui_pop_core::fold::is_open(&ctx, open_id) != Some(want)
+                    {
+                        // The application keeps the state: follow it.
+                        egui_pop_core::fold::set_open(&ctx, open_id, want);
+                    }
+                    let shown = TreeRow::new(open_id, item.name.clone())
+                        .depth(depth)
+                        .leaf(!branch)
+                        .default_open(item.open.unwrap_or(item.open_at_first))
+                        .show(ui, |ui| item_row(ui, item, on));
+                    let (r, toggled) = shown.row.inner.clone();
+                    let mut open = shown.open;
+                    let mut expanded = shown.toggled;
+                    shown.keep(&ctx);
+                    // Right opens and Left folds a branch from its row too,
+                    // as a tree's arrows do.
+                    if branch && r.has_focus() {
+                        ui.memory_mut(|m| {
+                            m.set_focus_lock_filter(
+                                r.id,
+                                egui::EventFilter {
+                                    horizontal_arrows: true,
+                                    ..Default::default()
+                                },
+                            );
+                        });
+                        let key = if open {
+                            egui::Key::ArrowLeft
+                        } else {
+                            egui::Key::ArrowRight
+                        };
+                        if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, key)) {
+                            open = !open;
+                            expanded = true;
+                            egui_pop_core::fold::set_open(&ctx, open_id, open);
+                        }
+                    }
+                    ctx.accesskit_node_builder(r.id, |node| {
+                        node.set_level(depth + 1);
+                        if branch {
+                            node.set_expanded(open);
+                        }
+                    });
+                    if expanded {
+                        out.expanded = Some((item.id.clone(), open));
+                    }
+                    (r, toggled, open)
+                }
+            };
+            // Enter and Space click the item that has the keyboard.
+            if r.clicked() {
+                out.chosen = Some((section.id.clone(), item.clone()));
+            }
+            if toggled {
+                out.toggled = Some((section.id.clone(), item.clone()));
+            }
+            if let Some(menu) = self.menu.as_mut() {
+                egui_pop_core::pointer::claim::context_menu(&r, |ui| {
+                    menu(ui, section, item);
+                });
+            }
+            if let Some(hook) = self.on_row.as_mut() {
+                hook(ui, section, item, &r);
+            }
+            if let Some(add) = self.under_item.as_mut() {
+                add(ui, section, item);
+            }
+            if open && let Some(depth) = depth {
+                for child in &item.children {
+                    self.item(ui, section, child, Some(depth + 1), out);
+                }
+            }
+        });
     }
 }
 
@@ -703,7 +884,7 @@ impl<'a> PlacesPanel<'a> {
 /// height with its line under its name and its toggle at its end. Says
 /// whether its toggle was clicked.
 fn item_row(ui: &mut Ui, item: &PlaceItem, selected: bool) -> (egui::Response, bool) {
-    if item.line.is_none() && item.toggle.is_none() {
+    if item.line.is_none() && item.toggle.is_none() && !item.dimmed {
         return (place_row(ui, item, selected), false);
     }
     let ctx = ui.ctx().clone();
@@ -728,8 +909,19 @@ fn item_row(ui: &mut Ui, item: &PlaceItem, selected: bool) -> (egui::Response, b
     let enabled = ui.is_enabled();
     let said = item.said();
     r.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, enabled, selected, &said));
-    if let Some(line) = &item.line {
-        ctx.accesskit_node_builder(r.id, |node| node.set_description(line.clone()));
+    let description = match (&item.line, item.dimmed) {
+        (Some(line), false) => Some(line.clone()),
+        (line, true) => {
+            let word = egui_pop_core::strings::tr(&ctx, &txt::FILES_PLACE_DIMMED);
+            Some(match line {
+                Some(line) => format!("{word}, {line}"),
+                None => word,
+            })
+        }
+        (None, false) => None,
+    };
+    if let Some(description) = description {
+        ctx.accesskit_node_builder(r.id, |node| node.set_description(description));
     }
     if let Some(cursor) = ui.visuals().interact_cursor
         && r.hovered()
@@ -773,10 +965,14 @@ fn item_row(ui: &mut Ui, item: &PlaceItem, selected: bool) -> (egui::Response, b
                 label: None,
             },
         );
-        let text = ui
-            .visuals()
-            .override_text_color
-            .unwrap_or(component.style(state).text);
+        let muted = item.dimmed && !selected;
+        let text = if muted {
+            t.text_role.muted.color
+        } else {
+            ui.visuals()
+                .override_text_color
+                .unwrap_or(component.style(state).text)
+        };
         let painter = ui.painter_at(rect);
         let mut left = rect.left() + pad.x;
         let right = toggle_rect.map_or(rect.right() - pad.x, |_| {
@@ -804,11 +1000,12 @@ fn item_row(ui: &mut Ui, item: &PlaceItem, selected: bool) -> (egui::Response, b
         let name_w = name.size().x;
         painter.galley(egui::pos2(left, top), name, text);
         let badge_colour = |tone: Option<Tone>| match tone {
+            _ if muted => text,
             Some(tone) => tone_color(&t, tone),
             None if selected => text,
             None => t.text_role.meta.color,
         };
-        let line_colour = if selected {
+        let line_colour = if selected || muted {
             text
         } else {
             t.text_role.meta.color
