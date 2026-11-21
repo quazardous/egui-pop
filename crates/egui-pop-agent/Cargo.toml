@@ -26,6 +26,12 @@ serde_json.workspace = true
 getrandom = { version = "0.4", default-features = false }
 # MIT OR Apache-2.0: pairing tokens are kept as their SHA-256.
 sha2 = { version = "0.10", default-features = false }
+# MIT OR Apache-2.0: egui's inspection protocol (Lucas Meurer and Emil
+# Ernerfeldt, emilk/egui), served in the process for the `inspect` method;
+# its TCP listener is never started.
+egui_inspection = { workspace = true, features = ["plugin"] }
+# MIT OR Apache-2.0: `inspect`'s screenshots travel as base64 in JSON.
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
 
 # Apache-2.0: the official MCP SDK, for the `mcp` feature.
 rmcp = { version = "3.9", optional = true, default-features = false, features = ["server", "transport-io"] }
@@ -56,7 +62,7 @@ widestring = "1"
 [dev-dependencies]
 egui = { workspace = true, features = ["default_fonts"] }
 egui-pop-api = { workspace = true, features = ["bundled-fonts"] }
-egui-pop-test.workspace = true
+egui-pop-test = { workspace = true, features = ["wgpu"] }
 egui_kittest.workspace = true
 # The crate itself with `mcp`, so the workspace's tests run the MCP tests.
 egui-pop-agent = { path = ".", features = ["mcp"] }

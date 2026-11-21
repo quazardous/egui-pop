@@ -371,10 +371,15 @@ fn dispatch(
             deadline: Instant::now() + ANSWER_WITHIN - Duration::from_secs(5),
             reply,
         },
+        "inspect" => Job::Inspect {
+            params,
+            origin,
+            reply,
+        },
         other => {
             return Err(RpcError::new(
                 RpcError::NO_METHOD,
-                format!("no method `{other}`: hello, describe, snapshot, call, wait, ui"),
+                format!("no method `{other}`: hello, describe, snapshot, call, wait, ui, inspect"),
             ));
         }
     };

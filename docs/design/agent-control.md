@@ -35,7 +35,7 @@ bridge](../agents.md)).
 | Running as the agent | yes: `Origin::Agent`, the `agent` flags, the bridge modes (on, read-only, off), the `debug.call` step and its vetoes | ADR 0018 to 0024 |
 | Reading state | yes: about 50 collectors' snapshots | `debug_snapshot` |
 | The journal | yes: `journal.since`, `command.done` and `command.failed` with their cause | `journal` collector |
-| Tree, screenshots, input in a live window | tree and input: the agent socket's `ui` method; screenshots: outside the bridge, eframe's `inspection` feature and `egui_mcp` (unauthenticated, development builds only) | [agent-socket.md](../agent-socket.md), [inspection.md](../inspection.md) (the gallery only) |
+| Tree, screenshots, input in a live window | the agent socket's `ui` and `inspect` methods; outside the bridge, eframe's `inspection` feature and `egui_mcp` (unauthenticated, development builds only) | [agent-socket.md](../agent-socket.md), [inspection.md](../inspection.md) (the gallery only) |
 | Tree, screenshots, input in tests | yes: egui_kittest, `egui_pop_test::a11y_tree` | [Testing](../testing.md) |
 | A headless real window | yes: wbox | `tools/wbox` |
 
@@ -98,7 +98,7 @@ A transport only carries requests to the UI thread and replies back.
 | Local socket | JSON-RPC 2.0: `describe`, `snapshot`, `call`, `wait` | `egui-pop-agent` (new, opt-in) | built |
 | MCP | the same, as MCP tools generated from `describe`: a new capability becomes a tool with no code | `egui-pop-agent`, feature `mcp`, on an MCP SDK (below) | built: `egui-pop-agent-mcp` |
 | UI: tree, input | the socket's `ui` method: the AccessKit tree, and raw egui events queued by an egui plugin's `input_hook` | `egui-pop-agent` | built (2026-11-08) |
-| UI: screenshot | egui's `egui_inspection` protocol, or the application's own screenshot command | eframe's `inspection` feature, as the gallery does | exists |
+| UI: screenshot | egui's `egui_inspection` protocol, or the application's own screenshot command | the socket's `inspect` method, to an in-process `InspectionPlugin` (no port); eframe's `inspection` feature in development builds, as the gallery does | built (2026-11-21) |
 
 The UI side stays egui's protocol, with `egui_mcp` or our own client. An
 agent holds two connections: the bridge for meaning, `inspection` for

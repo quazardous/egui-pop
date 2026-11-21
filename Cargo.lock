@@ -1475,12 +1475,14 @@ dependencies = [
 name = "egui-pop-agent"
 version = "0.14.0"
 dependencies = [
+ "base64 0.22.1",
  "egui",
  "egui-pop-agent",
  "egui-pop-api",
  "egui-pop-core",
  "egui-pop-model",
  "egui-pop-test",
+ "egui_inspection",
  "egui_kittest",
  "getrandom 0.4.3",
  "interprocess",

@@ -28,6 +28,7 @@
 //! | `call` | `{ "collector", "action", "args"?, "window"?, "deadline_ms"? }` | the bridge's feedback block (`ok`, `message`, `data`...) |
 //! | `wait` | `bridge.wait`'s arguments and `deadline_ms` | `{ "met", "by", "event", "last", "orphaned" }` |
 //! | `ui` | `{ "action", "label"?, "role"?, "nth"?, "text"?, "key"?, "up"?, "window"? }` | the accessibility tree, or the node acted on |
+//! | `inspect` | `{ "request" }`, an `egui_inspection` request | `{ "response" }`: the tree, a screenshot, `Done` once events or a resize went in ([`inspect`]) |
 //!
 //! `ui` reads the interface as a person sees it and drives it: `tree`
 //! lists the AccessKit nodes of the frame just drawn; `click`, `hover`,
@@ -38,6 +39,14 @@
 //! read-only, acting needs it on. With `window`, it reads and acts in
 //! that application window (its own OS window, or, where egui embeds it
 //! in the main one, its embedded window); without, in the main window.
+//!
+//! `inspect` carries egui's own inspection protocol (`egui_inspection`,
+//! by Lucas Meurer and Emil Ernerfeldt) to an in-process plugin: the full
+//! AccessKit tree, screenshots, any egui event (drags, scroll deltas,
+//! clicks at a position), a resize and a wait for the frame to settle, on
+//! the main window. It needs the bridge on and the agent's `ui` and
+//! private grants, and is refused while the input is locked; no TCP port
+//! is opened ([`inspect`]).
 //!
 //! `window` names an application window (its id, `main` for the main
 //! window; ADR 0025), the active window without one: a command runs in
@@ -92,6 +101,7 @@ use serde_json::{Value as Json, json};
 
 pub mod confirm;
 pub mod grants;
+pub mod inspect;
 mod limits;
 mod live;
 #[cfg(feature = "mcp")]
@@ -369,6 +379,7 @@ impl Plugin for AgentPlugin {
             rx,
             waits: Vec::new(),
             ui_jobs: Vec::new(),
+            inspect_jobs: Vec::new(),
             wake,
         };
         ctx.on(On::Pass, move |app, _| {
@@ -570,6 +581,22 @@ pub(crate) enum Job {
         origin: Origin,
         reply: Reply,
     },
+    Inspect {
+        params: Json,
+        /// Who asks: the connection's agent.
+        origin: Origin,
+        reply: Reply,
+    },
+}
+
+/// An `inspect` request allowed by the mode and the grants, handed to
+/// egui at the end of the pass, once the input lock is checked again.
+struct InspectJob {
+    request: egui_inspection::protocol::Request,
+    origin: Origin,
+    /// As it was asked, for the journal.
+    params: Json,
+    reply: Reply,
 }
 
 /// A `ui` request in progress.
@@ -604,6 +631,7 @@ struct UiSide {
     rx: Receiver<Job>,
     waits: Vec<Held>,
     ui_jobs: Vec<UiJob>,
+    inspect_jobs: Vec<InspectJob>,
     wake: Waker,
 }
 
@@ -624,9 +652,13 @@ impl UiSide {
                 | Job::Snapshot { reply, .. }
                 | Job::Call { reply, .. }
                 | Job::Wait { reply, .. }
-                | Job::Ui { reply, .. } => reply,
+                | Job::Ui { reply, .. }
+                | Job::Inspect { reply, .. } => reply,
             };
             let _ = reply.send(Err(RpcError::stopped()));
+        }
+        for j in self.inspect_jobs.drain(..) {
+            let _ = j.reply.send(Err(RpcError::stopped()));
         }
         for w in self.waits.drain(..) {
             let _ = w.reply.send(Err(RpcError::stopped()));
@@ -662,6 +694,7 @@ impl UiSide {
         });
         pairing::pass(app);
         confirm::pass(app);
+        self.inspect_pass(app, &ctx);
         self.ui_pass(app, &ctx, now);
         // After the checks: a repaint asked for now is not one the
         // application asked for.
@@ -674,7 +707,8 @@ impl UiSide {
         if let Job::Describe { origin, .. }
         | Job::Call { origin, .. }
         | Job::Wait { origin, .. }
-        | Job::Ui { origin, .. } = &job
+        | Job::Ui { origin, .. }
+        | Job::Inspect { origin, .. } = &job
         {
             pairing::seen(app, origin);
         }
@@ -809,6 +843,11 @@ impl UiSide {
                     reply,
                 });
             }
+            Job::Inspect {
+                params,
+                origin,
+                reply,
+            } => self.start_inspect(app, params, origin, reply),
             Job::Ui {
                 params,
                 deadline,
@@ -881,6 +920,73 @@ impl UiSide {
                     reply,
                 });
             }
+        }
+    }
+
+    /// Starts an `inspect` request: what the mode and the grants refuse
+    /// is answered at once; the rest waits for the end of the pass.
+    fn start_inspect(&mut self, app: &AppHandle, params: Json, origin: Origin, reply: Reply) {
+        let request = match inspect::request_from_params(&params) {
+            Ok(r) => r,
+            Err(e) => {
+                let _ = reply.send(Err(RpcError::params(e)));
+                return;
+            }
+        };
+        // The bridge on: the tree and a screenshot show whatever the
+        // window shows, so read-only refuses them too.
+        match app.debug_bridge_mode() {
+            BridgeMode::Off => {
+                let _ = reply.send(Err(RpcError::off()));
+                return;
+            }
+            BridgeMode::ReadOnly => {
+                let _ = reply.send(Err(RpcError::new(
+                    RpcError::REFUSED,
+                    "the debug bridge is read-only: `inspect` needs it on (`ui` may read the tree)",
+                )));
+                return;
+            }
+            BridgeMode::On => {}
+        }
+        if let Some(reason) = grants::inspect_refusal(app, &origin) {
+            grants::refuse_call(
+                app,
+                &origin,
+                "inspect",
+                inspect::name(&request),
+                &params,
+                &reason,
+                reply,
+            );
+            return;
+        }
+        self.inspect_jobs.push(InspectJob {
+            request,
+            origin,
+            params,
+            reply,
+        });
+    }
+
+    /// Hands the `inspect` requests to egui, after the pass's other
+    /// requests and confirmations: one that arrives as a confirmation
+    /// opens is refused, never let in.
+    fn inspect_pass(&mut self, app: &AppHandle, ctx: &egui::Context) {
+        for j in self.inspect_jobs.drain(..) {
+            if confirm::input_locked(app) {
+                confirm::refuse_locked(
+                    app,
+                    &j.origin,
+                    "inspect",
+                    json!(inspect::name(&j.request)),
+                    &j.params,
+                    confirm::locked_reason_inspect(),
+                    j.reply,
+                );
+                continue;
+            }
+            inspect::submit(ctx, j.request, j.reply);
         }
     }
 

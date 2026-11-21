@@ -69,8 +69,9 @@ requests into `debug_call`s on the UI thread. egui-pop's is the opt-in
 [agent socket](agent-socket.md) (`egui-pop-agent`): the bridge as
 JSON-RPC over a private local socket, held by the bridge's mode, each
 agent's grants and the input lock, with an MCP server on top
-(`egui-pop-agent-mcp`), and its `ui` method for the accessibility tree
-and input. An application may write its own transport (stdin, another
+(`egui-pop-agent-mcp`), its `ui` method for the accessibility tree
+and input, and `inspect`, egui's inspection protocol (screenshots,
+drags) without its TCP port. An application may write its own transport (stdin, another
 protocol) over the same calls. The other ways out of the process are
 not the bridge:
 
@@ -314,7 +315,8 @@ capabilities breaks none.
 ### Screenshots and the accessibility tree
 
 Not through the bridge's calls. Out of the process, the agent socket's
-`ui` method reads the accessibility tree and acts on it, under the
+`ui` method reads the accessibility tree and acts on it, and its
+`inspect` method takes screenshots and sends any egui event, under the
 bridge's mode, the `ui` grant and the input lock
 ([The agent socket](agent-socket.md)). In tests, egui_kittest renders
 frames and `egui_pop_test::a11y_tree` prints the accessibility tree

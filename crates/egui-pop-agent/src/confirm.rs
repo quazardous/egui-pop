@@ -307,18 +307,40 @@ pub(crate) fn locked_reason() -> String {
     )
 }
 
+/// Why an agent's `inspect` request is refused while input is locked.
+pub(crate) fn locked_reason_inspect() -> String {
+    format!(
+        "input is locked while the user answers an agent's request (`{CMD_CONFIRM}`): `inspect` is refused until it is answered; `ui` may still read the tree"
+    )
+}
+
 /// An agent's `ui` action refused while input is locked: the agent hears
 /// why, the journal says it (`debug.call.refused`, collector `ui`).
 pub(crate) fn refuse_ui(app: &AppHandle, origin: &Origin, params: &Json, reply: Reply) {
+    let action = params.get("action").cloned().unwrap_or(Json::Null);
+    refuse_locked(app, origin, "ui", action, params, locked_reason(), reply);
+}
+
+/// An agent's request on the interface (`collector` `ui` or `inspect`)
+/// refused while input is locked, on the journal as
+/// `debug.call.refused`.
+pub(crate) fn refuse_locked(
+    app: &AppHandle,
+    origin: &Origin,
+    collector: &str,
+    action: Json,
+    params: &Json,
+    reason: String,
+    reply: Reply,
+) {
     let source = origin.to_string();
-    let reason = locked_reason();
     app.publish(
         &source,
         None,
         "debug.call.refused",
         json!({
-            "collector": "ui",
-            "action": params.get("action").cloned().unwrap_or(Json::Null),
+            "collector": collector,
+            "action": action,
             "args": params,
             "reason": reason,
             "by": BY,
