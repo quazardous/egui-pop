@@ -71,7 +71,9 @@ JSON-RPC over a private local socket, held by the bridge's mode, each
 agent's grants and the input lock, with an MCP server on top
 (`egui-pop-agent-mcp`), its `ui` method for the accessibility tree
 and input, and `inspect`, egui's inspection protocol (screenshots,
-drags) without its TCP port. An application may write its own transport (stdin, another
+drags) without its TCP port, which the MCP server's `widget_*` tools
+(Rerun's `egui_inspection_tools`) drive for testing by pointer and
+pixels. An application may write its own transport (stdin, another
 protocol) over the same calls. The other ways out of the process are
 not the bridge:
 
@@ -318,7 +320,13 @@ Not through the bridge's calls. Out of the process, the agent socket's
 `ui` method reads the accessibility tree and acts on it, and its
 `inspect` method takes screenshots and sends any egui event, under the
 bridge's mode, the `ui` grant and the input lock
-([The agent socket](agent-socket.md)). In tests, egui_kittest renders
+([The agent socket](agent-socket.md)). Over MCP, the `widget_*` tools
+(`widget_screenshot`, `widget_click`, `widget_drag`, `widget_type_text`,
+`widget_press_key`, `widget_scroll`, `widget_batch`, `widget_wait_for`,
+`widget_resize`, `widget_tree`) are Rerun's `egui_inspection_tools`
+served over `inspect`, under the same mode, grants and lock: for testing
+by pointer and pixels, not the way an agent acts on the application
+(its commands are). In tests, egui_kittest renders
 frames and `egui_pop_test::a11y_tree` prints the accessibility tree
 ([Testing](testing.md)); for a real window, wbox takes screenshots, and
 the gallery built with `--features inspection` gives both to `egui-mcp`

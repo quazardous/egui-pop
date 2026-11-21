@@ -4,6 +4,13 @@
 //! socket (`call`, `snapshot`, `wait`); the bridge's mode and the `agent`
 //! flags apply there, as to any agent.
 //!
+//! The `widget_*` tools drive the interface by pointer and pixels: Rerun's
+//! agent tools (`egui_inspection_tools`, by Lucas Meurer and Emil
+//! Ernerfeldt, [rerun-io/egui_crates](https://github.com/rerun-io/egui_crates)),
+//! served over the socket's `inspect` method, so they are held like it (the
+//! bridge on, the `ui` and private grants, the input lock). See
+//! [`widget_tools`].
+//!
 //! [`McpBridge`] implements rmcp's [`ServerHandler`] over a [`Backend`]:
 //! [`SocketClient`] for a running application (the
 //! `egui-pop-agent-mcp <socket>` binary serves it over stdio), or any
@@ -15,6 +22,9 @@ use std::io::{BufRead as _, BufReader, Write as _};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
+use egui_inspection_tools::{BoxFuture, Content, Effect, ToolDef, ToolOutput, Transport};
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
     JsonObject, ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
@@ -25,6 +35,7 @@ use rmcp::{ErrorData, RoleServer, ServerHandler};
 use serde_json::{Value as Json, json};
 
 use crate::RpcError;
+use crate::inspect::{Request, Response, request_to_json, response_from_json};
 
 /// How long a command's tool waits for the command to be done: a command
 /// is queued for the next frame and its result comes on the journal.
@@ -300,6 +311,12 @@ fn builtins() -> Vec<GeneratedTool> {
 pub fn tools(describe: &Json) -> Vec<GeneratedTool> {
     let mut out = builtins();
     let mut taken: HashSet<String> = out.iter().map(|t| t.tool.name.to_string()).collect();
+    // The `widget_*` tools' names are taken too.
+    taken.extend(
+        egui_inspection_tools::tools()
+            .iter()
+            .map(|t| widget_tool_name(t.name)),
+    );
     let caps = describe["capabilities"]
         .as_array()
         .cloned()
@@ -396,6 +413,123 @@ pub fn tools(describe: &Json) -> Vec<GeneratedTool> {
     out
 }
 
+/// The `widget_*` tools' name for one of `egui_inspection_tools`' tools:
+/// `widget_` before it (`click` is `widget_click`), `widget_tree` as it
+/// is.
+pub fn widget_tool_name(name: &str) -> String {
+    if name.starts_with("widget_") {
+        name.to_string()
+    } else {
+        format!("widget_{name}")
+    }
+}
+
+/// The `egui_inspection_tools` tool a `widget_*` tool serves.
+fn widget_tool(name: &str) -> Option<&'static ToolDef> {
+    egui_inspection_tools::tools()
+        .iter()
+        .find(|t| widget_tool_name(t.name) == name)
+}
+
+/// What every `widget_*` tool's description ends with.
+const WIDGET_NOTE: &str = "\nServed by egui-pop over the agent socket's `inspect` (the main \
+    window): needs the bridge on and the agent's `ui` and private grants, and is refused while \
+    the user answers a confirmation or a pairing. For testing by pointer and pixels; the \
+    application's own tools (its commands) are the way to act on it. Tools named here without \
+    `widget_` (`click`, `get_widget`) are this server's `widget_*` ones; `batch` steps take \
+    either name.";
+
+/// The `widget_*` tools: Rerun's agent tools (`egui_inspection_tools`, by
+/// Lucas Meurer and Emil Ernerfeldt,
+/// [rerun-io/egui_crates](https://github.com/rerun-io/egui_crates)) over
+/// the socket's `inspect`: `widget_tree`, `widget_get_widget`,
+/// `widget_screenshot`, `widget_wait_for`, `widget_click`,
+/// `widget_hover`, `widget_scroll`, `widget_drag`, `widget_type_text`,
+/// `widget_press_key`, `widget_resize` and `widget_batch`. They act on the
+/// accessibility tree, the pointer and the keyboard, as a person would.
+pub fn widget_tools() -> Vec<Tool> {
+    egui_inspection_tools::tools()
+        .iter()
+        .map(|def| {
+            let annotations = ToolAnnotations::new()
+                .read_only(def.effect.is_read_only())
+                .destructive(def.effect == Effect::Destructive)
+                .idempotent(matches!(def.effect, Effect::ReadOnly | Effect::Idempotent))
+                .open_world(false);
+            let mut tool = Tool::new(
+                widget_tool_name(def.name),
+                format!("{}{WIDGET_NOTE}", def.description),
+                Arc::new(def.input_schema.clone()),
+            )
+            .with_title(def.title)
+            .with_annotations(annotations);
+            if let Some(out) = &def.output_schema {
+                tool = tool.with_raw_output_schema(Arc::new(out.clone()));
+            }
+            tool
+        })
+        .collect()
+}
+
+/// `egui_inspection_tools`' [`Transport`] over the socket's `inspect`:
+/// one request, one connection, on a blocking thread.
+struct Inspect<B: Backend>(Arc<B>);
+
+impl<B: Backend> Transport for Inspect<B> {
+    fn request(&self, request: Request) -> BoxFuture<'_, Result<Response, String>> {
+        let backend = self.0.clone();
+        Box::pin(async move {
+            let params = request_to_json(&request);
+            let result = tokio::task::spawn_blocking(move || backend.request("inspect", params))
+                .await
+                .map_err(|e| e.to_string())?
+                .map_err(|e| format!("{} ({})", e.message, e.code))?;
+            response_from_json(&result)
+        })
+    }
+}
+
+/// The timer `widget_wait_for` polls with.
+fn sleep(duration: std::time::Duration) -> BoxFuture<'static, ()> {
+    Box::pin(tokio::time::sleep(duration))
+}
+
+/// A `batch`'s steps named as `widget_*` tools, by the names
+/// `egui_inspection_tools` knows them by.
+fn batch_names(arguments: &mut JsonObject) {
+    let Some(Json::Array(actions)) = arguments.get_mut("actions") else {
+        return;
+    };
+    for action in actions {
+        if let Some(name) = action.get("name").and_then(Json::as_str)
+            && let Some(def) = widget_tool(name)
+        {
+            action["name"] = json!(def.name);
+        }
+    }
+}
+
+/// A `widget_*` tool's output as an MCP result: its text, its images
+/// (base64), its structured value.
+fn widget_result(output: ToolOutput) -> CallToolResult {
+    let content = output
+        .content
+        .into_iter()
+        .map(|c| match c {
+            Content::Text(text) => ContentBlock::text(text),
+            Content::Image { bytes, mime_type } => {
+                ContentBlock::image(BASE64.encode(bytes), mime_type)
+            }
+        })
+        .collect();
+    if output.is_error {
+        return CallToolResult::error(content);
+    }
+    let mut result = CallToolResult::success(content);
+    result.structured_content = output.structured;
+    result
+}
+
 /// The MCP server: tools from the application's `describe`, calls to its
 /// socket.
 pub struct McpBridge<B: Backend> {
@@ -460,6 +594,15 @@ impl<B: Backend> McpBridge<B> {
     /// Runs a tool: the socket's answer as the tool's result, a refusal
     /// or an error as an error result the model reads.
     pub async fn run(&self, name: &str, arguments: JsonObject) -> CallToolResult {
+        if let Some(def) = widget_tool(name) {
+            let mut arguments = arguments;
+            if def.name == "batch" {
+                batch_names(&mut arguments);
+            }
+            let transport = Inspect(self.backend.clone());
+            let output = egui_inspection_tools::call(&transport, &sleep, def.name, arguments).await;
+            return widget_result(output);
+        }
         let Some(t) = self.find(name).await else {
             return error_result(format!("no tool `{name}`"), None);
         };
@@ -585,7 +728,9 @@ impl<B: Backend> ServerHandler for McpBridge<B> {
                 "Drives a running egui-pop application through its agent socket. The tools are \
                  its capabilities; `snapshot` reads its state, `wait` waits for an event or for \
                  it to settle, `ui` reads the interface's tree and clicks, hovers, right-clicks, types and scrolls. Calls that change the application are refused unless it offers \
-                 them.",
+                 them. The `widget_*` tools drive the main window by pointer and pixels \
+                 (screenshots, drags, key presses, batches, waits), for testing it as a person \
+                 would.",
             )
     }
 
@@ -596,7 +741,11 @@ impl<B: Backend> ServerHandler for McpBridge<B> {
     ) -> Result<ListToolsResult, ErrorData> {
         let tools = self.refresh().await;
         Ok(ListToolsResult::with_all_items(
-            tools.into_iter().map(|t| t.tool).collect(),
+            tools
+                .into_iter()
+                .map(|t| t.tool)
+                .chain(widget_tools())
+                .collect(),
         ))
     }
 

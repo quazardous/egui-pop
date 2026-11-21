@@ -607,13 +607,36 @@ $ claude mcp add my-app -- egui-pop-agent-mcp $XDG_RUNTIME_DIR/egui-pop-agent-or
   socket's `wait`, its params and its answer as structured content) and
   `ui` (the socket's `ui`: the tree, click, type, key, scroll).
   `bridge.wait`, which does not block, is not offered as a tool.
+- **Widget tools.** `widget_tree`, `widget_get_widget`,
+  `widget_screenshot`, `widget_wait_for`, `widget_click`,
+  `widget_hover`, `widget_scroll`, `widget_drag`, `widget_type_text`,
+  `widget_press_key`, `widget_resize` and `widget_batch` drive the main
+  window by pointer and pixels: they read the AccessKit tree, find a
+  widget by id, role or text, and send real input, take a screenshot
+  (an image item, PNG), wait until widgets show or frames pass, and run
+  several of these in one call (`widget_batch`, whose steps take either
+  name, `widget_click` or `click`). They are Rerun's agent tools,
+  [`egui_inspection_tools`](https://github.com/rerun-io/egui_crates/tree/main/crates/egui_inspection_tools)
+  (by Lucas Meurer and Emil Ernerfeldt, MIT OR Apache-2.0), served over
+  [`inspect`](#inspect-eguis-inspection-protocol) through its one-method
+  `Transport`, so each request is held like `inspect`: the bridge on,
+  the agent's `ui` and private grants, and the input lock (refused while
+  the user answers a confirmation or a pairing, a batch's steps
+  included). Their annotations follow the tool: `readOnlyHint` for the
+  tree, a screenshot and a wait, `destructiveHint` for a click, a drag,
+  typed text and a key. They are for testing by pointer and pixels; an
+  agent acts on the application through its commands. Until Rerun
+  publishes the crate, egui-pop depends on its temporary, unchanged fork
+  [`egui-pop-inspection-tools`](https://crates.io/crates/egui-pop-inspection-tools)
+  ([#660](https://github.com/quazardous/egui-pop/issues/660)).
 - **Off.** When `describe` is refused (the bridge is off) or the
-  application does not answer, `tools/list` offers `snapshot` and
-  `wait`, which are refused too.
+  application does not answer, `tools/list` offers `snapshot`, `wait`,
+  `ui` and the widget tools, which are refused too.
 
 In Rust, `egui_pop_agent::mcp::McpBridge` implements rmcp's
-`ServerHandler` over a `Backend` (`SocketClient` for a socket), and
-`mcp::tools` makes the tools from a `describe` reply.
+`ServerHandler` over a `Backend` (`SocketClient` for a socket),
+`mcp::tools` makes the tools from a `describe` reply, and
+`mcp::widget_tools` lists the widget tools.
 
 ## Threading
 
@@ -632,17 +655,12 @@ application's own (`settled` stays reachable).
 ## Known gaps
 
 - **No recording** of a session as a scenario yet.
-- **No MCP tools for `inspect` yet.** The socket serves screenshots,
-  drags and the full tree through [`inspect`](#inspect-eguis-inspection-protocol);
-  `egui-pop-agent-mcp` does not offer them as tools yet. They are to come
-  from Rerun's `egui_inspection_tools` once it is published on crates.io.
-  Meanwhile eframe's `inspection` feature with `egui-mcp`
-  ([inspection.md](inspection.md)) is a second connection that is an
-  unauthenticated TCP port on loopback: it bypasses the bridge's mode,
-  the grants and the input lock, so it is for development builds only.
-- **No wait for a widget to appear.** `wait` waits on the journal or
-  for the frame to settle; a client polls `ui` `tree` (or `inspect`
-  `GetTree`) for a widget.
+- **No wait for a widget to appear on the socket.** `wait` waits on the
+  journal or for the frame to settle; a client polls `ui` `tree` (or
+  `inspect` `GetTree`) for a widget. Over MCP, `widget_wait_for` does
+  the polling.
+- **The widget tools see the main window only**, as `inspect` does;
+  `ui` (with `window`) reaches the others.
 - **Windows** is compile-checked only.
 - **Access set on the Agents page lasts the session.** The user's
   presets apply live but are not kept; at the next start the

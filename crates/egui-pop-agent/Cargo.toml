@@ -35,12 +35,16 @@ base64 = { version = "0.22", default-features = false, features = ["alloc"] }
 
 # Apache-2.0: the official MCP SDK, for the `mcp` feature.
 rmcp = { version = "3.9", optional = true, default-features = false, features = ["server", "transport-io"] }
-tokio = { version = "1", optional = true, default-features = false, features = ["rt", "io-std"] }
+tokio = { version = "1", optional = true, default-features = false, features = ["rt", "io-std", "time"] }
+# MIT OR Apache-2.0: Rerun's agent tools over egui_inspection (Lucas
+# Meurer, Emil Ernerfeldt; rerun-io/egui_crates), served as the `widget_*`
+# MCP tools over `inspect`; a temporary fork until upstream publishes it.
+egui_inspection_tools = { workspace = true, optional = true }
 
 [features]
 # MCP over the socket: `egui_pop_agent::mcp` and the `egui-pop-agent-mcp`
 # binary, tools generated from the application's `describe`.
-mcp = ["dep:rmcp", "dep:tokio"]
+mcp = ["dep:rmcp", "dep:tokio", "dep:egui_inspection_tools"]
 
 [[bin]]
 name = "egui-pop-agent-mcp"
