@@ -8,6 +8,42 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.21.0 (2026-11-21)
+
+Published: egui-pop-model 0.14.0, egui-pop-core 0.18.0, egui-pop-api 0.19.0, egui-pop-test 0.20.0, egui-pop-viewport 0.18.0, egui-pop-i18n 0.19.0, egui-pop-agent 0.14.0, egui-pop-editors 0.19.0, egui-pop-platform 0.19.0, egui-pop-views 0.20.0, egui-pop-imaging 0.19.0, egui-pop 0.21.0.
+
+### Breaking changes
+
+- egui-pop, egui-pop-agent, egui-pop-api, egui-pop-core, egui-pop-editors, egui-pop-i18n, egui-pop-imaging, egui-pop-model, egui-pop-platform, egui-pop-test, egui-pop-viewport, egui-pop-views: An admin manifest item whose `node` this version does not know (a newer
+  manifest's brick) no longer fails the whole manifest: it reads as the new
+  `Item::Unknown` (kept as written, written back unchanged), and
+  `Manifest::check` reports it as `admin-unknown-node` and leaves it out, so
+  the rest of the page still shows. A known node that does not read is still
+  an error. To move: a `match` over `admin::Item` needs an `Item::Unknown(_)`
+  arm.
+
+### Features
+
+- egui-pop, egui-pop-api, egui-pop-i18n: `PlacesPanel` draws a library's sources, each part opt-in so that a panel
+  using none looks as before:
+
+  - **Nested items.** `PlaceItem::children` makes a section a tree: rows
+    indented by depth under a disclosure toggle named after the item ("Show
+    or hide Animals"), open at first with `PlaceItem::open_at_first` or kept
+    by the application with `PlaceItem::open`. Right opens and Left folds a
+    branch from its row, Up and Down go through the rows shown, each row is
+    said at its level and a branch as expanded or not;
+    `PlacesOutput::expanded` reports what the user opened or folded.
+  - **A hook on each row.** `PlacesPanel::on_row` is called with each row's
+    `Response`, nested ones included: the application attaches a drop
+    target or a drag source through the drag session, or a menu of its own.
+  - **Dimmed items.** `PlaceItem::dimmed` draws an item muted (a folder of
+    an offline volume) and says it is unavailable; it stays choosable, its
+    detail still in its tip.
+  - **A selection in several sections.** `PlacesPanel::selected_set` draws
+    every id it is given selected, beside `selected`: a folder, an album and
+    a keyword chosen together.
+
 ## 0.20.0 (2026-11-20)
 
 Published: egui-pop-model 0.13.0, egui-pop-core 0.17.0, egui-pop-api 0.18.0, egui-pop-test 0.19.0, egui-pop-viewport 0.17.0, egui-pop-i18n 0.18.0, egui-pop-agent 0.13.0, egui-pop-editors 0.18.0, egui-pop-platform 0.18.0, egui-pop-views 0.19.0, egui-pop-imaging 0.18.0, egui-pop 0.20.0.
