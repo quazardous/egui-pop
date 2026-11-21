@@ -78,7 +78,10 @@ jobs:
       - name: Window smoke run
         id: smoke
         continue-on-error: true
-        run: python tools/window-smoke.py target/debug/egui-pop-gallery
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/window-smoke.py target/debug/egui-pop-gallery | tee window-smoke.txt
       # The job is continue-on-error, so the run stays green when it
       # fails: the failure is said in the summary's title and as an error
       # annotation on the run's page, with the failed tests' names.
@@ -105,6 +108,8 @@ jobs:
             echo "- tests: $tests"
             [ -n "$failed" ] && echo "- failed tests: \`$failed\`"
             echo "- window smoke run: $smoke"
+            # One line per check: detach, focus, keys, scale, resize, quit.
+            grep -E '^check ' window-smoke.txt 2> /dev/null | sed 's/^/  - /' || true
           } >> "$GITHUB_STEP_SUMMARY"
           [ "$status" = passed ]
       - name: Upload the test report

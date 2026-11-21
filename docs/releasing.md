@@ -152,6 +152,15 @@ Publishing is the owner's call, and stays a manual step.
    released folder is never rewritten; a format change that cannot read
    one is a break.
 
+   Then run the **real windows** check on Linux, which CI does not
+   run: the bench box's `egui-pop-window-smoke` job (Helios's
+   `tools/bench/Benchfile`, `egui_pop=<the release branch>`) runs the
+   window smoke run (`tools/window-smoke.py`, [testing](testing.md),
+   "Other platforms") in a headless labwc, under Wayland and under X11:
+   a detached window focused, keys typed into it, each window's scale.
+   Every `check` line of both sessions must say `PASS`; Windows and
+   macOS get the same checks from the platforms workflow on `next`.
+
 2. **Review**: push the branch, open a pull request titled like the
    commit, read the changelog and the versions. Merge it: on `next`,
    CI's semver job checks the new versions against crates.io (the

@@ -48,10 +48,21 @@ Options:
                          halfway through the run (a scripted resize)
   --dump-debug           with --quit-after: print the debug bridge's
                          snapshot (event \"debug\") before quitting
+  --focus-detached       with --detach and --quit-after: a quarter of
+                         the way through, ask the system to focus the
+                         detached window and give its field the keys;
+                         say when the window has the focus (event
+                         \"focus\")
+  --type <text>          with --focus-detached: once the detached window
+                         has the focus (or three quarters of the way
+                         through), type this into its field (event
+                         \"type\")
   --help                 this text
 
-At start-up one JSON line is printed on stdout (event \"ready\"), and one
-more when quitting by --quit-after (event \"quit\").";
+At start-up one JSON line is printed on stdout (event \"ready\"). When
+quitting by --quit-after, one line on each window (event \"windows\": its
+focus, pixels per point and the detached field's text), then event
+\"quit\".";
 
 /// The window's inner size when `--size` is not given, in points.
 pub const DEFAULT_SIZE: [f32; 2] = [1100.0, 720.0];
@@ -81,6 +92,12 @@ pub struct Options {
     pub announce: bool,
     /// Print the debug bridge's snapshot when quitting.
     pub dump_debug: bool,
+    /// `--focus-detached`: focus the detached panel's window and its
+    /// field during the run.
+    pub focus_detached: bool,
+    /// `--type`: the text typed into the detached window's field once it
+    /// has the focus.
+    pub type_text: Option<String>,
     /// The desktop's own platform services instead of simulated ones.
     pub platform: bool,
     /// A transparent window, image surfaces installed and BT.2020 with a
@@ -113,6 +130,8 @@ impl Default for Options {
             no_persistence: false,
             announce: false,
             dump_debug: false,
+            focus_detached: false,
+            type_text: None,
             platform: false,
             wide_gamut: false,
             system_file_chooser: false,
@@ -156,6 +175,8 @@ impl Options {
                 "--size" => o.size = parse_size(&value("--size")?)?,
                 "--resize-to" => o.resize_to = Some(parse_size(&value("--resize-to")?)?),
                 "--dump-debug" => o.dump_debug = true,
+                "--focus-detached" => o.focus_detached = true,
+                "--type" => o.type_text = Some(value("--type")?),
                 "--detach" => o.detach = Some(value("--detach")?),
                 "--platform" => o.platform = true,
                 "--wide-gamut" => o.wide_gamut = true,
@@ -173,6 +194,12 @@ impl Options {
                 "--help" | "-h" => o.help = true,
                 other => return Err(format!("unknown option `{other}` (see --help)")),
             }
+        }
+        if o.type_text.is_some() && !o.focus_detached {
+            return Err("--type needs --focus-detached".into());
+        }
+        if o.focus_detached && (o.detach.is_none() || o.quit_after.is_none()) {
+            return Err("--focus-detached needs --detach and --quit-after".into());
         }
         Ok(o)
     }
@@ -221,8 +248,13 @@ mod tests {
             "--no-persistence",
             "--resize-to",
             "640x480",
+            "--focus-detached",
+            "--type",
+            "typed text",
         ])
         .unwrap();
+        assert!(o.focus_detached);
+        assert_eq!(o.type_text.as_deref(), Some("typed text"));
         assert_eq!(o.resize_to, Some([640.0, 480.0]));
         assert!(o.no_persistence && !o.persists());
         assert_eq!(o.theme, "pop-light");
@@ -264,6 +296,17 @@ mod tests {
             assert!(Options::parse(["--size", size]).unwrap_err().contains(size));
         }
         assert!(Options::parse(["--bogus"]).unwrap_err().contains("--bogus"));
+        // A scripted focus needs a detached window and a run's end.
+        assert!(
+            Options::parse(["--focus-detached", "--quit-after", "9"])
+                .unwrap_err()
+                .contains("--detach")
+        );
+        assert!(
+            Options::parse(["--type", "x", "--detach", "gallery.notes"])
+                .unwrap_err()
+                .contains("--focus-detached")
+        );
         assert!(
             Options::parse(["--page", "nope"])
                 .unwrap_err()
