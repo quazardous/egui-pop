@@ -38,6 +38,7 @@ mod inspection;
 mod keyboard_walk;
 mod mounts;
 mod preview;
+mod release_fixtures;
 mod rerun_like;
 mod scenarios;
 mod shot;

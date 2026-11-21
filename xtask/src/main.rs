@@ -3,6 +3,10 @@
 //! `hosts` writes `docs/hosts.md` from the mount declarations (ADR
 //! 0013), through the page's own test.
 //!
+//! `fixtures <version>` writes `fixtures/<version>/`, the documents the
+//! gallery persists after a fixed scenario, which the gallery's
+//! `release_fixtures` test loads with every later release (ADR 0008).
+//!
 //! `ui-index` writes `docs/ui-index.md`, the "use these" index mapping a
 //! need to the call that makes it, from the `/// Need (group): ...` doc
 //! lines of the crates; its test fails when it is stale (`ui_index.rs`).
@@ -78,6 +82,11 @@ Tasks:
   screenshots [filter]   refresh the documentation's images, headless
                          through wbox; with a filter, only the shots whose
                          name contains it (`--list` prints the names)
+  fixtures VERSION [--force]
+                         write fixtures/VERSION/: the documents the gallery
+                         persists after a fixed scenario, and the values it
+                         set, which a test loads with every later release
+                         (ADR 0008; run by the release pull request)
   hosts                  write docs/hosts.md from the mount declarations
                          (ADR 0013); a test fails when it is stale
   ui-index [--check]     write docs/ui-index.md, need -> widget, from the
@@ -368,6 +377,7 @@ fn main() -> ExitCode {
     let result = match args.first().map(String::as_str) {
         Some("screenshots") => screenshots(&args[1..]),
         Some("hosts") => hosts(),
+        Some("fixtures") => fixtures(&args[1..]),
         Some("ui-index") => ui_index::ui_index(&args[1..]),
         Some("families") => families::families(&args[1..]),
         Some("bus") => bus::bus(&args[1..]),
@@ -399,6 +409,72 @@ fn root() -> PathBuf {
         .parent()
         .expect("xtask sits in the workspace")
         .to_path_buf()
+}
+
+/// Writes `fixtures/<version>/`: the gallery, headless, runs a fixed
+/// scenario (a setting, a key, a panel, an arrangement, a place's value,
+/// a theme file) and writes its documents there with `expected.json`,
+/// the values set. The release pull request commits the folder; the
+/// gallery's `release_fixtures` test loads every folder with today's
+/// code.
+fn fixtures(args: &[String]) -> Result<(), String> {
+    let mut version = None;
+    let mut force = false;
+    for a in args {
+        match a.as_str() {
+            "--force" => force = true,
+            v if version.is_none() && !v.starts_with('-') => version = Some(v.to_string()),
+            _ => return Err(format!("fixtures: unexpected `{a}`\n\n{USAGE}")),
+        }
+    }
+    let version = version.ok_or_else(|| format!("fixtures: which version?\n\n{USAGE}"))?;
+    let parts: Vec<&str> = version.split('.').collect();
+    if parts.len() != 3
+        || parts
+            .iter()
+            .any(|p| p.is_empty() || !p.bytes().all(|b| b.is_ascii_digit()))
+    {
+        return Err(format!("fixtures: `{version}` is not a version (X.Y.Z)"));
+    }
+    let out = root().join("fixtures").join(&version);
+    if out.exists() {
+        if !force {
+            return Err(format!(
+                "{} exists: a released version's fixtures are not rewritten (--force to replace them)",
+                out.display()
+            ));
+        }
+        fs::remove_dir_all(&out).map_err(|e| format!("{}: {e}", out.display()))?;
+    }
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+    let status = Command::new(cargo)
+        .args([
+            "test",
+            "-p",
+            "egui-pop-gallery",
+            "--test",
+            "it",
+            "release_fixtures::write_fixtures",
+            "--",
+            "--ignored",
+            "--exact",
+        ])
+        .env("EGUI_POP_FIXTURES_OUT", &out)
+        .env("EGUI_POP_FIXTURES_VERSION", &version)
+        .current_dir(root())
+        .status()
+        .map_err(|e| format!("cargo: {e}"))?;
+    if !status.success() {
+        return Err(format!("the scenario failed ({status})"));
+    }
+    let mut files: Vec<String> = fs::read_dir(&out)
+        .map_err(|e| format!("{}: {e}", out.display()))?
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+    files.sort();
+    println!("fixtures/{version}/: {}", files.join(", "));
+    Ok(())
 }
 
 /// Writes `docs/hosts.md` from the declarations: the page's staleness

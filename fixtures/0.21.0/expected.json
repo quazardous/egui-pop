@@ -1,0 +1,26 @@
+{
+  "arrangements": [
+    "Fixture"
+  ],
+  "keys": {
+    "gallery.notes.ask_clear": "Ctrl+Alt+N"
+  },
+  "panels": {
+    "gallery.properties": "StartSide"
+  },
+  "place_values": {
+    "fixtures.note": "kept"
+  },
+  "settings": {
+    "settings/dialogs.movable": {
+      "bool": true
+    }
+  },
+  "theme": {
+    "file": "theme.tokens.json",
+    "tokens": {
+      "accent.default": "#2060c0"
+    }
+  },
+  "version": "0.21.0"
+}
