@@ -1215,6 +1215,48 @@ impl Layout {
         Ok(())
     }
 
+    /// Floats the docked tab group holding `panel` ([`Layout::group_of`])
+    /// over the interface at `pos`, whole: one floating group of tabs, in
+    /// order, its shown tab shown. The panels floated.
+    ///
+    /// ```
+    /// use egui_pop_model::ids::PanelId;
+    /// use egui_pop_model::layout::{Arrangement, Layout, Node};
+    /// use egui_pop_model::panels::Area;
+    ///
+    /// let [a, b] = [PanelId::from_static("app.a"), PanelId::from_static("app.b")];
+    /// let mut layout = Layout::default();
+    /// layout.areas.push((Area::Bottom, Node::Tabs { panels: vec![a.clone(), b.clone()], active: 1 }));
+    /// assert_eq!(layout.float_tabs(&a, [8.0, 8.0]).unwrap(), [a.clone(), b.clone()]);
+    /// let g = layout.floating_of(&a).unwrap();
+    /// assert_eq!(g.arrangement, Arrangement::Tabs);
+    /// assert_eq!(g.shown(), &b);
+    /// assert_eq!(layout.area_of(&a), None);
+    /// ```
+    pub fn float_tabs(&mut self, panel: &PanelId, pos: [f32; 2]) -> Result<Vec<PanelId>, String> {
+        if self.area_of(panel).is_none() {
+            return Err(format!("`{panel}` is not docked"));
+        }
+        let (panels, shown) = self
+            .group_of(panel)
+            .ok_or_else(|| format!("`{panel}` is in no tab group"))?;
+        for p in &panels {
+            self.remove(p);
+            self.hidden.retain(|h| h != p);
+        }
+        self.docked_groups
+            .retain(|g| !panels.iter().any(|p| g.holds(p)));
+        let mut group = FloatingGroup::lone(panels[0].clone(), pos);
+        group.members = panels.iter().cloned().map(Member::palette).collect();
+        if panels.len() > 1 {
+            group.arrangement = Arrangement::Tabs;
+        }
+        group.active = shown;
+        group.tidy();
+        self.floating.push(group);
+        Ok(panels)
+    }
+
     /// The group a floating panel floats in, if it floats.
     pub fn floating_of(&self, panel: &PanelId) -> Option<&FloatingGroup> {
         self.floating.iter().find(|g| g.holds(panel))

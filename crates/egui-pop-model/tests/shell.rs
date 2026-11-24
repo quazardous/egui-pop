@@ -905,8 +905,15 @@ fn a_palette_floats_from_the_start_and_is_kept_floating() {
 
 #[test]
 fn a_floating_panel_that_may_no_longer_float_is_docked_back() {
+    // Panels float unless their spec opts out: the log opts out since
+    // the layout was saved, the output still may float.
     let mut p = Panels::new();
-    p.declare(&FW, PanelSpec::new(pid("app.log"), "Log", Area::Bottom))
+    p.declare(
+        &FW,
+        PanelSpec::new(pid("app.log"), "Log", Area::Bottom).floatable(false),
+    )
+    .unwrap();
+    p.declare(&FW, PanelSpec::new(pid("app.out"), "Output", Area::Bottom))
         .unwrap();
     let saved = Layout {
         floating: vec![
@@ -914,13 +921,19 @@ fn a_floating_panel_that_may_no_longer_float_is_docked_back() {
                 pinned: true,
                 ..FloatingGroup::lone(pid("app.log"), [40.0, 40.0])
             },
+            FloatingGroup::lone(pid("app.out"), [80.0, 80.0]),
             FloatingGroup::lone(pid("app.gone"), [0.0, 0.0]),
         ],
         ..Layout::default()
     };
     let (fixed, notes) = saved.repair(&p, &[]);
-    assert!(fixed.floating.is_empty());
+    assert!(fixed.floating_of(&pid("app.log")).is_none());
     assert_eq!(fixed.area_of(&pid("app.log")), Some(Area::Bottom));
+    assert_eq!(
+        fixed.floating_of(&pid("app.out")).unwrap().pos,
+        [80.0, 80.0]
+    );
+    assert_eq!(fixed.floating.len(), 1);
     assert_eq!(notes.len(), 2, "{notes:?}");
 }
 

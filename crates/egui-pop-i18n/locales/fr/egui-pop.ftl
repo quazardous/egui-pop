@@ -2351,6 +2351,9 @@ egui-pop-workbench-zen-panel = Mode zen sur ce panneau
 egui-pop-workbench-detach = Détacher dans une fenêtre
 
 egui-pop-workbench-float = Faire flotter
+egui-pop-workbench-float-refused = Faire flotter ({ $panel } ne peut pas flotter)
+egui-pop-workbench-float-palettes-only = Faire flotter (seules les palettes flottent)
+egui-pop-workbench-float-group = Faire flotter le groupe
 egui-pop-workbench-dock-back = Réancrer
 
 egui-pop-workbench-dock-in = Ancrer dans { $area }
@@ -2738,6 +2741,14 @@ setting-workbench-float-move =
 setting-workbench-float-move-choice-dock = ancrer
 
 setting-workbench-float-move-choice-move = déplacer
+
+setting-workbench-float-panels =
+    .description = Quels panneaux peuvent flotter au-dessus de l’interface : tout panneau qui le permet (tous), ou seulement les palettes, les panneaux qui s’ouvrent flottants (palettes).
+    .label = Panneaux flottants
+
+setting-workbench-float-panels-choice-any = tous
+
+setting-workbench-float-panels-choice-palettes = palettes
 
 setting-workbench-group-drag-modifier =
     .description = La touche maintenue en faisant glisser un onglet pour déplacer tout son groupe d’onglets : shift, ctrl (cmd sur macOS) ou alt.
@@ -3518,7 +3529,7 @@ command-workbench-panel-move =
     .description = Ancre le panneau actif, ou `panel`, dans une zone (`area` : `center`, `start_side`, `end_side` ou `bottom`).
     .title = Déplacer le panneau vers une zone
 command-workbench-panel-float =
-    .description = Fait flotter le panneau actif, ou `panel`, au-dessus de l’interface, là où est sa zone.
+    .description = Fait flotter le panneau actif, ou `panel`, au-dessus de l’interface, là où est sa zone ; avec `group`, tout son groupe d’onglets ancré, en un seul groupe d’onglets flottant (Réancrer le remet en place).
     .title = Faire flotter le panneau
 command-workbench-panel-detach =
     .description = Déplace le panneau actif, ou `panel`, dans une fenêtre à lui ; avec `group`, son groupe d’onglets entier.

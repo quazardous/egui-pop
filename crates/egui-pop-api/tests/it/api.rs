@@ -705,10 +705,10 @@ fn settings_persist_and_come_back_with_their_plugin() {
     // mode, the interface zoom, the text size and fonts, the toasts'
     // corner, the pointer gestures, the panel's alignment, the side bars'
     // position, the palettes', the menu icons, the dock drag modifier, the
-    // group gestures and the float move) come first.
+    // group gestures, the float move and which panels float) come first.
     let settings = app.handle().settings();
     let ids: Vec<_> = settings.iter().map(|s| s.id.clone()).collect();
-    assert_eq!(settings.len(), 28, "{ids:?}");
+    assert_eq!(settings.len(), 29, "{ids:?}");
     for id in [
         egui_pop_api::SETTING_THEME_PREFERENCE,
         egui_pop_api::SETTING_ACCENT_COLOR,
@@ -722,6 +722,7 @@ fn settings_persist_and_come_back_with_their_plugin() {
         egui_pop_api::workbench::SETTING_GROUP_MENU,
         egui_pop_api::workbench::SETTING_GROUP_MOVE_WINDOW,
         egui_pop_api::workbench::SETTING_FLOAT_MOVE,
+        egui_pop_api::workbench::SETTING_FLOAT_PANELS,
         egui_pop_api::layout_controls::SETTING_SIDE_BAR_POSITION,
         egui_pop_api::palettes::SETTING_FADE,
         egui_pop_api::palettes::SETTING_IDLE_OPACITY,

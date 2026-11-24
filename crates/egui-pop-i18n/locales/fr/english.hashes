@@ -545,7 +545,7 @@ command-workbench-panel-detach.description 0f0707e5a4791ac7
 command-workbench-panel-detach.title 38be3b2072b6494b
 command-workbench-panel-dock-back.description d233097e56dce525
 command-workbench-panel-dock-back.title c2030f77e12b60b7
-command-workbench-panel-float.description 9b95c492528fdfdf
+command-workbench-panel-float.description 1dc4309438ec7e5f
 command-workbench-panel-float.title a61536b054e169bf
 command-workbench-panel-move-to-group.description 4134c94ff1638e57
 command-workbench-panel-move-to-group.title 0a6dd08c8ab4e0e6
@@ -1532,6 +1532,9 @@ egui-pop-workbench-dock-title 4a631eac61b5404a
 egui-pop-workbench-drop-here ddcc0be031326169
 egui-pop-workbench-eject-group 577cb6edcb4b9a15
 egui-pop-workbench-float eb7e945b1415bcc5
+egui-pop-workbench-float-group 9bbd26987ae148dc
+egui-pop-workbench-float-palettes-only f2742c535ceaa4f0
+egui-pop-workbench-float-refused 5d83ff6aea5130cb
 egui-pop-workbench-flyout-pin 4ebe2494b850fd48
 egui-pop-workbench-fold 873472b4101d195d
 egui-pop-workbench-move-group d00b55a2baca3ba7
@@ -1744,6 +1747,10 @@ setting-workbench-float-move-choice-dock e564cffbcd352828
 setting-workbench-float-move-choice-move 9690d109eab0a7b2
 setting-workbench-float-move.description f5a5babbc0e06f53
 setting-workbench-float-move.label b13f368a9769f26e
+setting-workbench-float-panels-choice-any 19e401a3808dea0d
+setting-workbench-float-panels-choice-palettes a413758968905e41
+setting-workbench-float-panels.description fad743e2af29058f
+setting-workbench-float-panels.label 77566b9a9f52f6ec
 setting-workbench-group-drag-modifier-choice-alt 07dceda37624e53a
 setting-workbench-group-drag-modifier-choice-ctrl 8e9b12a800b5be72
 setting-workbench-group-drag-modifier-choice-shift 0e75a56da8f0f9bf

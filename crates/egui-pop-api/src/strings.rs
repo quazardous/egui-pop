@@ -819,6 +819,21 @@ pub const WORKBENCH_STAYS_DOCKED: StrKey = StrKey::new(
     "{ $panel } cannot go into a window",
 );
 pub const WORKBENCH_FLOAT: StrKey = StrKey::new("egui-pop-workbench-float", "Float");
+/// The panel menu's Float greyed: the panel opts out of floating (or
+/// its content does not fit a floating host).
+pub const WORKBENCH_FLOAT_REFUSED: StrKey = StrKey::new(
+    "egui-pop-workbench-float-refused",
+    "Float ({ $panel } cannot float)",
+);
+/// The panel menu's Float greyed: the user's setting lets only palettes
+/// float.
+pub const WORKBENCH_FLOAT_PALETTES_ONLY: StrKey = StrKey::new(
+    "egui-pop-workbench-float-palettes-only",
+    "Float (only palettes float)",
+);
+/// The tab and group menus' entry floating the whole tab group.
+pub const WORKBENCH_FLOAT_GROUP: StrKey =
+    StrKey::new("egui-pop-workbench-float-group", "Float group");
 /// The panel menu's entry docking a floating or detached panel back
 /// where it floated from.
 pub const WORKBENCH_DOCK_BACK: StrKey = StrKey::new("egui-pop-workbench-dock-back", "Dock back");
@@ -1985,6 +2000,9 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_MOVE_WINDOW,
     WORKBENCH_STAYS_DOCKED,
     WORKBENCH_FLOAT,
+    WORKBENCH_FLOAT_REFUSED,
+    WORKBENCH_FLOAT_PALETTES_ONLY,
+    WORKBENCH_FLOAT_GROUP,
     WORKBENCH_DOCK_BACK,
     PANEL_STATE_UPDATING,
     PANEL_STATE_FAILED,
