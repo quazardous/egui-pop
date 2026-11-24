@@ -334,7 +334,13 @@ impl SearchState {
         self.last = filter;
     }
 
-    fn effective(&self) -> Filter {
+    fn effective(&self, whole_text: bool) -> Filter {
+        if whole_text {
+            return self.chips.merged(&Filter {
+                text: self.text.trim().to_string(),
+                ..Filter::default()
+            });
+        }
         self.chips.merged(&Filter::parse(&self.text))
     }
 }
@@ -358,6 +364,7 @@ pub struct SearchField<'a> {
     app: Option<&'a AppHandle>,
     width: Option<f32>,
     label: Option<String>,
+    whole_text: bool,
 }
 
 impl<'a> SearchField<'a> {
@@ -369,7 +376,18 @@ impl<'a> SearchField<'a> {
             app: None,
             width: None,
             label: None,
+            whole_text: false,
         }
+    }
+
+    /// The application reads the text typed with its own grammar: the
+    /// text is never split into this field's criteria ([`Filter::parse`]),
+    /// Enter makes no chip of it, and the filter's `text` is the text as
+    /// typed (trimmed). The chips are only those picked from the "+" menu
+    /// or set by the application. Off by default.
+    pub fn whole_text(mut self, whole: bool) -> Self {
+        self.whole_text = whole;
+        self
     }
 
     /// Runs its changes as steps of this application, and takes the
@@ -418,7 +436,7 @@ impl<'a> SearchField<'a> {
                     state.text.is_empty() && i.consume_key(Modifiers::NONE, EKey::Backspace),
                 )
             });
-            if enter {
+            if enter && !self.whole_text {
                 // Typed criteria become chips.
                 let typed = Filter::parse(&state.text);
                 state.text = typed.text.clone();
@@ -484,7 +502,7 @@ impl<'a> SearchField<'a> {
                 .inner
             });
         let response = inner.inner;
-        let now = proposed.unwrap_or_else(|| state.effective());
+        let now = proposed.unwrap_or_else(|| state.effective(self.whole_text));
         let mut changed = None;
         let mut vetoed = None;
         if now != state.last {

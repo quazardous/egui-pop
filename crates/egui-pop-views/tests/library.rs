@@ -568,6 +568,35 @@ fn the_search_field_turns_criteria_into_removable_chips() {
 }
 
 #[test]
+fn a_search_field_with_whole_text_leaves_the_typing_to_the_application() {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(700.0, 200.0))
+        .build_ui_state(
+            |ui, (state, last): &mut (SearchState, Vec<serde_json::Value>)| {
+                let field = SearchField::new("shoot").whole_text(true);
+                if let Some(f) = field.show(ui, state).changed {
+                    last.push(serde_json::to_value(f).unwrap());
+                }
+            },
+            (SearchState::new(), Vec::new()),
+        );
+    h.run();
+    h.get_by_role_and_label(Role::TextInput, "Search").click();
+    h.run();
+    h.event(egui::Event::Text("(label:red OR #beach) rating>=3".into()));
+    h.run();
+    assert_eq!(
+        h.state().1.last().unwrap(),
+        &json!({ "text": "(label:red OR #beach) rating>=3" }),
+        "the text as typed, no criterion taken out"
+    );
+    h.key_press(Key::Enter);
+    h.run();
+    assert!(h.query_by_label("Rating ≥ 3").is_none(), "no chip");
+    assert_eq!(h.state().0.text(), "(label:red OR #beach) rating>=3");
+}
+
+#[test]
 fn the_tag_input_completes_adds_and_removes() {
     let known: Vec<String> = ["beach", "bench", "sea", "sunset"]
         .iter()
