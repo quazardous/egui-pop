@@ -392,12 +392,18 @@ fn open_panel_lists_every_panel_in_the_palette_and_opens_the_chosen_one_where_it
     assert_eq!(tabs, vec![OUT, LOG, CON, DOCK]);
     // Clicked: the other one opens back in its area.
     run(&mut h, "workbench.panel.pick", Json::Null).unwrap();
-    assert!(p.is_open_in(egui::ViewportId::ROOT), "the pick is open again");
+    assert!(
+        p.is_open_in(egui::ViewportId::ROOT),
+        "the pick is open again"
+    );
     h.get_by_label("Tree").click_accesskit();
     for _ in 0..4 {
         h.run();
     }
-    assert!(!p.is_open_in(egui::ViewportId::ROOT), "the click closed the pick");
+    assert!(
+        !p.is_open_in(egui::ViewportId::ROOT),
+        "the click closed the pick"
+    );
     assert!(app.layout().shows(&TREE), "{:?}", app.history().last());
     assert_eq!(app.layout().area_of(&TREE), Some(Area::EndSide));
 }
