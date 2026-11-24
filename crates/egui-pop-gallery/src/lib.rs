@@ -819,7 +819,11 @@ impl Gallery {
         // field, the text typed and its scale are read from its passes.
         ctx.request_repaint_of(focus.window);
         if frames == ask_at {
-            ctx.send_viewport_cmd_to(focus.window, egui::ViewportCommand::Focus);
+            // Through the bus (`pop.window.activate`, reason `command`):
+            // the registry follows, and the system is asked for the focus.
+            self.app
+                .handle()
+                .raise_viewport(focus.window, "gallery.script");
             ask_field_focus(ctx);
             if announce_on {
                 announce(&serde_json::json!({ "event": "focus_asked", "frames": frames }));
