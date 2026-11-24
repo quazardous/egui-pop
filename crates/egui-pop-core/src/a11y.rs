@@ -15,6 +15,20 @@ use serde::Serialize;
 
 use crate::state::{lock, pass, shared};
 
+/// Names the window's root node after the window's title, each pass: a
+/// screen reader says that name when the focus lands on the window itself
+/// (a dialog closed, Tab past the last stop), not a bare "frame". Run for
+/// every window by the focus plugin (`focus::install`).
+pub(crate) fn name_window(ctx: &Context) {
+    let Some(title) = ctx
+        .input(|i| i.viewport().title.clone())
+        .filter(|t| !t.is_empty())
+    else {
+        return;
+    };
+    ctx.accesskit_node_builder(egui::accesskit_root_id(), |node| node.set_label(title));
+}
+
 /// Gives a custom widget its role and accessible name.
 pub fn name(response: &Response, kind: Role, label: &str) {
     let enabled = response.enabled();

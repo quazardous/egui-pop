@@ -549,6 +549,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
         }
         let selected = s.selected.min(hits.len().saturating_sub(1));
         let mut chosen = None;
+        let mut selected_row = None;
         if ui.input(|i| i.key_pressed(Key::Enter)) {
             chosen = hits.get(selected).map(|h| h.entry.command.clone());
         }
@@ -616,6 +617,9 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                         egui_pop_core::icon::registry::record(&ctx, "palette", &h.label, name);
                     }
                     let r = r.response;
+                    if on {
+                        selected_row = Some(r.id);
+                    }
                     let part = Part {
                         rect: r.rect,
                         room: r.rect,
@@ -635,6 +639,13 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                 }
             });
         });
+        // The selected command as the field's active descendant: a screen
+        // reader reads it as the arrows move, the focus staying in the field.
+        if let Some(row) = selected_row {
+            ctx.accesskit_node_builder(edit.id, |node| {
+                node.set_active_descendant(row.accesskit_id());
+            });
+        }
         if let Some(c) = chosen {
             let spec = app.command(&c);
             let args = spec.as_ref().map(arguments).unwrap_or_default();

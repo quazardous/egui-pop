@@ -323,10 +323,12 @@ impl<'a> ListView<'a> {
         let mut hovering: Option<SelectionItem> = None;
         let drag_out = self.drag_out;
         let mut carry = state.carry.take();
+        let mut cursor_row = None;
         let (_, response, _) = rows::show(
             ui,
             id,
             &label,
+            Role::ListBox,
             &mut state.scroll,
             len,
             row_h,
@@ -338,6 +340,9 @@ impl<'a> ListView<'a> {
                     let r = ui.interact(rect, id.with(("row", &key)), rows::ROW_SENSE);
                     let selected = selection.contains(&key);
                     let cursor = focused && selection.cursor() == Some(&key);
+                    if cursor {
+                        cursor_row = Some(r.id);
+                    }
                     // Hovered here, or the same item hovered elsewhere.
                     let mut hovered = r.hovered();
                     if let Some(service) = shared {
@@ -408,6 +413,7 @@ impl<'a> ListView<'a> {
                 }
             },
         );
+        rows::active_row(ui, response.id, cursor_row);
         rows::carry(ui, &mut carry);
         state.carry = carry;
         if take_focus {

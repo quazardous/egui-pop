@@ -702,7 +702,12 @@ impl<'a> DataTable<'a> {
             .clone()
             .unwrap_or_else(|| tr(ui.ctx(), &s::TABLE));
         let response = ui.interact(inner.rect, id, Sense::focusable_noninteractive());
-        egui_pop_core::a11y::name(&response, Role::Unknown, &label);
+        egui_pop_core::a11y::name(&response, Role::Table, &label);
+        let shape = (len, self.columns.len());
+        ui.ctx().accesskit_node_builder(id, |node| {
+            node.set_row_count(shape.0);
+            node.set_column_count(shape.1);
+        });
         if response.has_focus() {
             // Its cursor row shows it.
             egui_pop_core::focus::own_ring(ui.ctx(), id);
@@ -728,7 +733,7 @@ impl<'a> DataTable<'a> {
                 .read_response(table_id.with(c.id_for(i)).with("resize"))
             {
                 let name = format!("{} ↔", self.columns[i].title);
-                r.widget_info(move || WidgetInfo::labeled(Role::Unknown, true, &name));
+                r.widget_info(move || WidgetInfo::labeled(Role::Splitter, true, &name));
             }
         }
 

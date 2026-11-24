@@ -817,6 +817,7 @@ impl egui::plugin::Plugin for FocusPlugin {
         crate::place::end_pass(ui.ctx());
         crate::ring::end_pass(ui.ctx());
         remember_holder(ui.ctx());
+        crate::a11y::name_window(ui.ctx());
     }
 }
 
