@@ -619,6 +619,7 @@ impl<'a> DataTable<'a> {
             mode: self.mode,
             len,
             focused,
+            cursor_row: None,
             proposals: &mut proposals,
             late: &mut late,
             drag_out: self.drag_out,
@@ -682,6 +683,7 @@ impl<'a> DataTable<'a> {
         let column_click = delegate.column_click.take();
         let visible_rows = delegate.visible_rows.clone();
         let page = delegate.page;
+        let cursor_row = delegate.cursor_row;
         let mut carry = delegate.carry.take();
         drop(delegate);
         rows::carry(ui, &mut carry);
@@ -708,6 +710,7 @@ impl<'a> DataTable<'a> {
             node.set_row_count(shape.0);
             node.set_column_count(shape.1);
         });
+        rows::active_row(ui, id, cursor_row);
         if response.has_focus() {
             // Its cursor row shows it.
             egui_pop_core::focus::own_ring(ui.ctx(), id);
@@ -975,6 +978,8 @@ struct Delegate<'a, K: Key> {
     header_menu: Option<HeaderMenu<'a>>,
     /// The rows in view, as `egui_table` prepared them.
     visible_rows: std::ops::Range<usize>,
+    /// The cursor row's widget, read by a screen reader as the arrows move.
+    cursor_row: Option<egui::Id>,
 }
 
 impl<K: Key> Delegate<'_, K> {
@@ -1128,6 +1133,9 @@ impl<K: Key> TableDelegate for Delegate<'_, K> {
         let r = ui.interact(rect, ui.scope_id().with("select"), sense);
         let selected = self.selection.contains(&key);
         let cursor = self.focused && self.selection.cursor() == Some(&key);
+        if cursor {
+            self.cursor_row = Some(r.id);
+        }
         let state = rows::state(selected, r.hovered(), cursor);
         if row % 2 == 1 && !selected {
             self.kit.table_stripe.paint(

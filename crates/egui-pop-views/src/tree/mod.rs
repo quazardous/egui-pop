@@ -1284,6 +1284,13 @@ impl<'a, K: Key> TreeView<'a, K> {
                             r.widget_info(move || {
                                 WidgetInfo::selected(Role::Button, true, selected, &name)
                             });
+                            // A folder says whether it is open: a screen
+                            // reader reads "expanded" or "collapsed".
+                            if node.branch {
+                                let open = model.is_open(&key);
+                                ui.ctx()
+                                    .accesskit_node_builder(r.id, |n| n.set_expanded(open));
+                            }
                             let r = if elided {
                                 item::full_label_tip(r, &node.label)
                             } else {
