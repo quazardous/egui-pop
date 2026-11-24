@@ -92,7 +92,7 @@ announcer"); the test kit's checks are **Supported** with the test kit.
 
 - The announcer and live regions: `crates/egui-pop-core/tests/core.rs`.
 - Names across components: `crates/egui-pop-views/tests/views.rs`,
-  `crates/egui-pop-api/tests/files.rs`, `status_items.rs`, `zen.rs`;
+  `crates/egui-pop-api/tests/it/files.rs`, `status_items.rs`, `zen.rs`;
   focus rings at several scales: `crates/egui-pop-test/tests/focus_ring.rs`;
   the gallery's pages: `crates/egui-pop-gallery/tests/it/inspect.rs`,
   `keyboard_walk.rs`.

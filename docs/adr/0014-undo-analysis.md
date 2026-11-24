@@ -384,7 +384,7 @@ scope and changeable by the host, the code editor's own local scope).
 1. `egui-pop-model::history` (pure types, merge rules) and the
    `History` contract with `StoreHistory`; `Host::undo` and
    `Host::redo` replaced; the veto during the user's own gesture; the
-   cap. Tests: the current `tests/undo.rs`, plus merge and veto.
+   cap. Tests: the current `tests/it/undo.rs`, plus merge and veto.
 2. Focus routing: local scopes (theme editor, settings window, code
    editor) and the active-scopes rule; the theme editor's Ctrl+Z.
 3. Steps carry their place; the context stack's stamps go.

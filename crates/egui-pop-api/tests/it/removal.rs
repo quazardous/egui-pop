@@ -12,8 +12,8 @@
 use egui_pop_model::jobs::JobEventKind;
 use std::cell::Cell;
 use std::rc::Rc;
-use std::sync::{Mutex, Once};
 
+use crate::support::log_capture::LINES;
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_api::dialogs::{Answer, Confirm, DIALOGS, DialogsPlugin, Info};
@@ -39,34 +39,8 @@ const ACT: CommandId = CommandId::from_static("doomed.act");
 const LEVEL: &str = "doomed/level";
 const MINE: &str = "user/n";
 
-/// The log lines written, for every test of this binary.
-static LINES: Mutex<Vec<(log::Level, String)>> = Mutex::new(Vec::new());
-
-struct Capture;
-
-impl log::Log for Capture {
-    fn enabled(&self, m: &log::Metadata<'_>) -> bool {
-        m.level() <= log::Level::Info
-    }
-
-    fn log(&self, r: &log::Record<'_>) {
-        if self.enabled(r.metadata()) {
-            LINES
-                .lock()
-                .unwrap()
-                .push((r.level(), r.args().to_string()));
-        }
-    }
-
-    fn flush(&self) {}
-}
-
 fn capture() {
-    static ONCE: Once = Once::new();
-    ONCE.call_once(|| {
-        log::set_logger(&Capture).unwrap();
-        log::set_max_level(log::LevelFilter::Info);
-    });
+    crate::support::log_capture::install();
 }
 
 fn logged(level: log::Level, part: &str) -> bool {

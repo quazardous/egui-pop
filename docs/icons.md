@@ -594,4 +594,4 @@ frames in `crates/egui-pop-core/tests/icon_set.rs` (a mask tinted, a
 full-colour icon drawn as it is, a size rasterised at that size, a name
 drawn from the next install and gone at once when unregistered, the
 refusal without the `svg` feature); commands drawn with their icons in
-`crates/egui-pop-api/tests/command_icons.rs`.
+`crates/egui-pop-api/tests/it/command_icons.rs`.

@@ -12,24 +12,31 @@ Two levers:
 - **Selective runs**: a change runs the tests it can affect, not the
   whole suite ([Selection](#selection)); `main` always runs everything.
 
-The integration tests are split into many small binaries
-(`crates/*/tests/*.rs`, one per feature) for that reason: a binary is a
-unit of selection, and editing one test file relinks one small binary.
-Do not merge them back into one, with one exception below.
+The integration tests are split into small binaries
+(`crates/*/tests/*.rs`, one per feature) where a binary links little: a
+binary is a unit of selection, and editing one test file relinks one
+small binary. Where every binary links the whole application stack, the
+links cost more than the selection saves: those crates have one test
+executable, `it`, and each former binary is a module of it.
 
-### One test executable: the gallery
+### One test executable: the gallery and the application layer
 
-`egui-pop-gallery`'s integration tests are one executable, `it`
-(`crates/egui-pop-gallery/tests/it/main.rs`, one module per feature:
-`gallery`, `keyboard_walk`, `mounts`...). Each of its former binaries
-linked egui, wgpu and the whole gallery: fifteen copies of the stack on
-disk and fifteen links per build. A module is still a unit of selection
+`egui-pop-gallery`'s and `egui-pop-api`'s integration tests are each one
+executable, `it` (`crates/<crate>/tests/it/main.rs`, one module per
+feature: `gallery`, `keyboard_walk`, `mounts`... in the gallery,
+`windows`, `dialogs`, `files`... in `egui-pop-api`). Each former binary
+linked egui, eframe and the whole application layer: fifteen copies of
+the stack for the gallery, 115 for `egui-pop-api` (135 MB each, 15 GB in
+all), and as many links per build. A module is still a unit of selection
 ([Selection](#selection) names it `it::mounts` and runs it alone by a
-test name filter); editing one relinks the one executable.
+test name filter); editing one relinks the one executable. Helpers
+shared by several modules live in `tests/it/support/`, a module of the
+executable declared in its `main.rs`.
 
 ```sh
 cargo nextest run -p egui-pop-gallery --test it -E 'test(/^mounts::/)'   # one module
 cargo test -p egui-pop-gallery --test it keyboard_walk:: -- --ignored     # the same, cargo test
+cargo test -p egui-pop-api --test it windows::                            # one module of egui-pop-api
 ```
 
 The test names carry their module (`gallery::snapshots_per_theme`).
@@ -37,9 +44,11 @@ Under nextest every test still has a process of its own. Under plain
 `cargo test`, every module's tests now share one process, where before
 each former binary had its own: a test leaning on process-wide state
 (an environment variable, a global installed once) may meet one from
-another module. None does today: every module passed in one `cargo test`
-process when the change was made (the `egui-pop-test-1p` box job,
-`test=it`).
+another module. A global installed once goes in `tests/it/support/` and
+is shared (the log capture of `egui-pop-api`'s `removal` and
+`window_invariants`: `log::set_logger` succeeds once per process).
+Every gallery module passed in one `cargo test` process when the change
+was made (the `egui-pop-test-1p` box job, `test=it`).
 
 ## The runner: cargo-nextest
 
@@ -176,7 +185,7 @@ The rules, per changed file:
 |---|---|
 | a crate's sources, manifest, build script, data (`crates/<crate>/...`) | every test of the crate, and of every workspace crate depending on it (dev-dependencies included), doctests too |
 | a test binary's file (`crates/<crate>/tests/<binary>.rs`) | that binary alone, unless another test file includes it as a module |
-| a module beside a binary's `main.rs` (`crates/egui-pop-gallery/tests/it/mounts.rs`) | that module alone (`it::mounts`, a test name filter on the binary `it`) |
+| a module beside a binary's `main.rs` (`crates/egui-pop-gallery/tests/it/mounts.rs`, `crates/egui-pop-api/tests/it/windows.rs`) | that module alone (`it::mounts`, a test name filter on the binary `it`) |
 | a snapshot (`crates/<crate>/tests/snapshots/...`) | the crate's tests, not its dependents |
 | a crate's `README.md` | as its sources, and `egui-pop::readme_links` |
 | documentation (`docs/**`, `*.md` at the root) | the guides' doctests (`consumer-smoke`), `egui-pop::readme_links`, `egui-pop-gallery::it::gallery_doc` and `it::hosts_doc` |
@@ -365,7 +374,7 @@ out, by platform:
   before a drive makes no path at all, and the image fails unread.
 - **Windows**: paths built by the file picker carry `\`, the tests'
   paths `/`; the tests compare paths, not text (`assert_path` in
-  `egui-pop-api`'s `tests/files.rs`), and the root of `/top` is named
+  `egui-pop-api`'s `tests/it/files.rs`), and the root of `/top` is named
   `\`.
 
 ## Time budget

@@ -283,16 +283,16 @@ in order off the publisher's thread, local listeners at their thread's
 `run_pending`, a slow listener not holding the publisher, publishes on
 other points refused by the kernel, and a relay's resume and ingest
 between two kernels (a restart and refusals included).
-`crates/egui-pop-api/tests/host_journal.rs`: egui-pop's journal on a
+`crates/egui-pop-api/tests/it/host_journal.rs`: egui-pop's journal on a
 bus offering one, its events and the application's facts in one
 sequence with no hole, a `wait` (in-process and through the bridge)
 returning the `command.done` entry among facts, a host keeping its own
 journal and a bus without one unchanged; and bus-kernel's conformance
 suite on egui-pop's application bus, bare and with a journal and relay.
-`crates/egui-pop-api/tests/bus_defer.rs`: an ask made in a panel heard after
+`crates/egui-pop-api/tests/it/bus_defer.rs`: an ask made in a panel heard after
 it in the same pass, asks made before and during exit heard, a palette
 command refused by a `pop.command.run` listener, a failing listener refusing
-on the fail-closed point. `crates/egui-pop-api/tests/app_bus.rs`: a local listener
+on the fail-closed point. `crates/egui-pop-api/tests/it/app_bus.rs`: a local listener
 on `pop.window.close` in its place, and run at the next pass when the
 request comes from a worker, and a host's journal reachable from
 `AppHandle::bus` and shown by the `bus` collector. The README's examples run as doc tests.

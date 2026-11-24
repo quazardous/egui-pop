@@ -85,7 +85,7 @@ commands that bind them follow the workbench's tier (experimental).
 
 ## Tests
 
-- `crates/egui-pop-api/tests/frame.rs` and `zen.rs` (F6 through the
+- `crates/egui-pop-api/tests/it/frame.rs` and `zen.rs` (F6 through the
   frame and in zen mode), `crates/egui-pop-test/tests/scale.rs` (at
   several scales).
 - `crates/egui-pop-gallery/tests/it/keyboard_walk.rs` and `gallery.rs`
