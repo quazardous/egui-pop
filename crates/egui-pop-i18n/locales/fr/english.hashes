@@ -553,6 +553,8 @@ command-workbench-panel-move.description 18ff408e3bea88fd
 command-workbench-panel-move.title 821ffa3ba838f766
 command-workbench-panel-open.description 203925befb40c243
 command-workbench-panel-open.title 2f1e9144da1e4a03
+command-workbench-panel-pick.description 5c96df67a5c2c713
+command-workbench-panel-pick.title 2442a42f9aa4e8bd
 command-workbench-previous-region.description b7ab3302080ad9bf
 command-workbench-previous-region.title 3e485e9867b167b6
 command-workbench-tab-next.description 97760e80916200a5
@@ -1042,6 +1044,7 @@ egui-pop-palette-no-match b35d6729c46fa10e
 egui-pop-palette-not-bool 993eb161aa18de6a
 egui-pop-palette-not-json 1bb3d16d8ae31066
 egui-pop-palette-not-number 6f78de18f695be64
+egui-pop-palette-pick-no-match 309c11f6f6ffe243
 egui-pop-palette-pin d8bdf6d07e26610b
 egui-pop-palette-recent 34d258ba4ca0ac84
 egui-pop-palette-recent-keys 07aa9f65e8fcb96a
@@ -1537,6 +1540,8 @@ egui-pop-workbench-move-window 5bf153a2dea76016
 egui-pop-workbench-new-instance 023f7abfe1852019
 egui-pop-workbench-new-window 2d42883410626b5b
 egui-pop-workbench-nothing-to-open 4320082d08ae7c06
+egui-pop-workbench-pick-hint cb6bdec17563ab79
+egui-pop-workbench-pick-title 2f1e9144da1e4a03
 egui-pop-workbench-stays-docked b822e29e5d487cff
 egui-pop-workbench-stays-out 7973c10990577019
 egui-pop-workbench-unfold 4f6622581c6e6904

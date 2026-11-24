@@ -11,6 +11,12 @@
 //! kept on every row while one of the matches has an icon, so the titles
 //! align. The icon is decorative: the title is the row's name.
 //!
+//! A **quick pick** ([`QuickPick`], [`Palette::pick_in`]) shows a list of
+//! choices instead of the commands, filtered by the same fuzzy match:
+//! each choice runs a command with its arguments, as VS Code's quick
+//! picks do. The workbench's "Open panel…" (`workbench.panel.pick`) is
+//! one: every declared panel, opened where it was.
+//!
 //! Keys: `Ctrl+Shift+P` and `F1` open and close it (through modals), the
 //! arrows move the selection, Enter runs, Escape closes (or leaves an
 //! argument prompt).
@@ -135,9 +141,91 @@ struct Prompt {
     error: Option<ArgError>,
 }
 
+/// A choice of a quick pick: shown as `label`, it runs `command` with
+/// `args`.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct PickItem {
+    /// As shown and matched, in the interface's language.
+    pub label: String,
+    /// The command it runs.
+    pub command: CommandId,
+    /// Its arguments.
+    pub args: Json,
+}
+
+impl PickItem {
+    pub fn new(label: impl Into<String>, command: CommandId, args: Json) -> Self {
+        Self {
+            label: label.into(),
+            command,
+            args,
+        }
+    }
+}
+
+/// A list of choices the palette offers in place of the commands
+/// ([`Palette::pick_in`]): typed text filters them by a fuzzy match of
+/// their labels, Enter runs the selected one's command, Escape closes.
+///
+/// ```
+/// use egui_pop_api::palette::{PickItem, QuickPick};
+/// use egui_pop_model::ids::CommandId;
+///
+/// let pick = QuickPick::new("Open panel", "Type a panel's name")
+///     .item(PickItem::new("Outline", CommandId::from_static("workbench.panel.open"),
+///         serde_json::json!({ "panel": "app.outline" })));
+/// assert_eq!(pick.items.len(), 1);
+/// ```
+///
+/// Need (dialog): a quick pick, a filtered list of choices in the palette.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
+pub struct QuickPick {
+    /// The palette's title while it shows the pick.
+    pub title: String,
+    /// The hint in its empty text field.
+    pub hint: String,
+    /// The choices, in the order shown without a query.
+    pub items: Vec<PickItem>,
+}
+
+impl QuickPick {
+    pub fn new(title: impl Into<String>, hint: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            hint: hint.into(),
+            items: Vec::new(),
+        }
+    }
+
+    /// Adds a choice.
+    pub fn item(mut self, item: PickItem) -> Self {
+        self.items.push(item);
+        self
+    }
+}
+
+/// The choices of a pick matching `query`, as (index, matched characters)
+/// best first; without a query, all of them in their order.
+pub fn rank_pick(items: &[PickItem], query: &str) -> Vec<(usize, Vec<usize>)> {
+    if query.trim().is_empty() {
+        return (0..items.len()).map(|i| (i, Vec::new())).collect();
+    }
+    let mut out: Vec<(i32, usize, Vec<usize>)> = items
+        .iter()
+        .enumerate()
+        .filter_map(|(i, it)| fuzzy::score(query, &it.label).map(|m| (m.score, i, m.positions)))
+        .collect();
+    out.sort_by_key(|(s, i, _)| (std::cmp::Reverse(*s), *i));
+    out.into_iter().map(|(_, i, p)| (i, p)).collect()
+}
+
 #[derive(Debug, Default)]
 struct State {
     open: bool,
+    /// A quick pick shown in place of the commands.
+    pick: Option<QuickPick>,
     /// The context when the palette opened: its commands are offered and
     /// run there.
     context: WhenContext,
@@ -198,6 +286,25 @@ impl Palette {
                 ..State::default()
             },
         );
+    }
+
+    /// Opens it in a window group on a quick pick: its choices in place
+    /// of the commands, run in `context`.
+    pub fn pick_in(&self, group: egui::ViewportId, context: WhenContext, pick: QuickPick) {
+        lock(&self.0).insert(
+            group,
+            State {
+                open: true,
+                context,
+                pick: Some(pick),
+                ..State::default()
+            },
+        );
+    }
+
+    /// The quick pick it shows in a window group, if any.
+    pub fn pick_of(&self, group: egui::ViewportId) -> Option<QuickPick> {
+        lock(&self.0).get(&group).and_then(|s| s.pick.clone())
     }
 
     /// Closes it in the current window group.
@@ -517,11 +624,18 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             }
             return;
         }
-        let title = ui.strong(strings::tr(&ctx, &txt::PALETTE_TITLE));
+        let (title, hint) = match &s.pick {
+            Some(pick) => (pick.title.clone(), pick.hint.clone()),
+            None => (
+                strings::tr(&ctx, &txt::PALETTE_TITLE),
+                strings::tr(&ctx, &txt::PALETTE_HINT),
+            ),
+        };
+        let title = ui.strong(title);
         let edit = ui
             .add(
                 egui::TextEdit::singleline(&mut s.query)
-                    .hint_text(strings::tr(&ctx, &txt::PALETTE_HINT))
+                    .hint_text(hint)
                     .desired_width(f32::INFINITY),
             )
             .labelled_by(title.id);
@@ -534,6 +648,36 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             close = true;
             return;
         }
+        // A quick pick: its choices, each running its command.
+        if let Some(pick) = &s.pick {
+            let rows: Vec<Row> = rank_pick(&pick.items, &s.query)
+                .into_iter()
+                .map(|(i, positions)| Row {
+                    label: pick.items[i].label.clone(),
+                    positions,
+                    icon: None,
+                    keys: String::new(),
+                    command: pick.items[i].command.clone(),
+                    args: pick.items[i].args.clone(),
+                })
+                .collect();
+            let selected = move_selection(ui, &mut s.selected, rows.len());
+            let mut chosen = ui
+                .input(|i| i.key_pressed(Key::Enter))
+                .then_some(selected)
+                .filter(|i| *i < rows.len());
+            ui.separator();
+            if let Some(i) = draw_rows(ui, &rows, selected, edit.changed()) {
+                chosen = Some(i);
+            }
+            if rows.is_empty() {
+                ui.weak(strings::tr(&ctx, &txt::PALETTE_PICK_NO_MATCH));
+            }
+            if let Some(r) = chosen.and_then(|i| rows.get(i)) {
+                run = Some((r.command.clone(), r.args.clone(), cx));
+            }
+            return;
+        }
         let hits = rank_with(
             &entries,
             &s.query,
@@ -541,100 +685,48 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             |c| app.applies(c, &cx),
             |e| shown(&ctx, e),
         );
-        if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
-            s.selected = (s.selected + 1).min(hits.len().saturating_sub(1));
-        }
-        if ui.input(|i| i.key_pressed(Key::ArrowUp)) {
-            s.selected = s.selected.saturating_sub(1);
-        }
-        let selected = s.selected.min(hits.len().saturating_sub(1));
-        let mut chosen = None;
-        if ui.input(|i| i.key_pressed(Key::Enter)) {
-            chosen = hits.get(selected).map(|h| h.entry.command.clone());
-        }
-        ui.separator();
-        ui.scroll_area(egui::ScrollArea::vertical().max_height(320.0), |ui| {
-            // Justified, left-aligned: a line without keys keeps its
-            // label at the start, as the others.
-            ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
-                let kit = Kit::of(ui.ctx());
-                let row = &kit.command_palette_row;
-                // egui's margin keeps room for its own border: kept,
-                // unseen; the kit paints the row's box under it.
-                let border = ui.visuals().widgets.inactive.bg_stroke.width;
-                // The commands' icons, and a column for them while
-                // one of the matches has one.
-                let icons: Vec<Option<(Icon, String)>> = hits
-                    .iter()
-                    .map(|h| {
-                        let declared = app.command(&h.entry.command)?.icon?;
+        let rows: Vec<Row> = hits
+            .iter()
+            .map(|h| {
+                let icon = app
+                    .command(&h.entry.command)
+                    .and_then(|c| c.icon)
+                    .map(|declared| {
                         let name =
                             crate::layout_controls::command_icon(app, &h.entry.command, &declared)
                                 .to_string();
-                        Some((IconRef::from(&name).or_placeholder("palette"), name))
-                    })
-                    .collect();
-                let side = Tokens::of(ui.ctx()).size.icon_inline;
-                let column = icons.iter().any(Option::is_some);
-                for (i, h) in hits.iter().enumerate() {
-                    let on = i == selected;
-                    let state = row_state(ui, on);
-                    let under = ui.painter().add(egui::Shape::Noop);
-                    let slot =
-                        egui::Id::unique(("egui_pop_palette_icon", h.entry.command.as_str()));
-                    let label = highlighted(row, state, &h.label, &h.positions);
-                    let mut atoms: Vec<egui::Atom<'_>> = Vec::with_capacity(2);
-                    if column {
-                        atoms.push(egui::Atom::custom(
-                            egui::IdSalt::new(slot),
-                            egui::vec2(side, side),
-                        ));
-                    }
-                    atoms.push(label.into());
-                    let mut b = egui::Button::new(egui::Atoms::from(atoms))
-                        .selected(on)
-                        .frame_when_inactive(on)
-                        .fill(Color32::TRANSPARENT)
-                        .stroke(egui::Stroke::new(border, Color32::TRANSPARENT));
-                    let mut keys = h.entry.keys.first().cloned().unwrap_or_default();
-                    if h.recent && s.query.trim().is_empty() {
-                        keys = if keys.is_empty() {
-                            strings::tr(&ctx, &txt::PALETTE_RECENT)
-                        } else {
-                            strings::tr_args(&ctx, &txt::PALETTE_RECENT_KEYS, &[("keys", &keys)])
-                        };
-                    }
-                    if !keys.is_empty() {
-                        let muted = row.style_toned(Tone::Muted, state).text;
-                        b = b.shortcut_text(egui::RichText::new(keys).color(muted));
-                    }
-                    let r = b.atom_ui(ui);
-                    if let (Some(rect), Some((icon, name))) =
-                        (r.rect(egui::IdSalt::new(slot)), &icons[i])
-                    {
-                        icon.paint(ui.painter(), rect, row.style(state).text);
-                        egui_pop_core::icon::registry::record(&ctx, "palette", &h.label, name);
-                    }
-                    let r = r.response;
-                    let part = Part {
-                        rect: r.rect,
-                        room: r.rect,
-                        state,
-                        label: None,
+                        (IconRef::from(&name).or_placeholder("palette"), name)
+                    });
+                let mut keys = h.entry.keys.first().cloned().unwrap_or_default();
+                if h.recent && s.query.trim().is_empty() {
+                    keys = if keys.is_empty() {
+                        strings::tr(&ctx, &txt::PALETTE_RECENT)
+                    } else {
+                        strings::tr_args(&ctx, &txt::PALETTE_RECENT_KEYS, &[("keys", &keys)])
                     };
-                    row.paint_under(ui, under, &part, None);
-                    if i == selected && edit.changed() {
-                        r.scroll_to_me(None);
-                    }
-                    if r.clicked() {
-                        chosen = Some(h.entry.command.clone());
-                    }
                 }
-                if hits.is_empty() {
-                    ui.weak(strings::tr(&ctx, &txt::PALETTE_NO_MATCH));
+                Row {
+                    label: h.label.clone(),
+                    positions: h.positions.clone(),
+                    icon,
+                    keys,
+                    command: h.entry.command.clone(),
+                    args: Json::Null,
                 }
-            });
-        });
+            })
+            .collect();
+        let selected = move_selection(ui, &mut s.selected, rows.len());
+        let mut chosen = None;
+        if ui.input(|i| i.key_pressed(Key::Enter)) {
+            chosen = rows.get(selected).map(|r| r.command.clone());
+        }
+        ui.separator();
+        if let Some(i) = draw_rows(ui, &rows, selected, edit.changed()) {
+            chosen = Some(rows[i].command.clone());
+        }
+        if rows.is_empty() {
+            ui.weak(strings::tr(&ctx, &txt::PALETTE_NO_MATCH));
+        }
         if let Some(c) = chosen {
             let spec = app.command(&c);
             let args = spec.as_ref().map(arguments).unwrap_or_default();
@@ -665,6 +757,99 @@ fn show(ui: &mut Ui, app: &AppHandle) {
     } else if !open {
         p.close_in(group);
     }
+}
+
+/// A line of the palette's list: a command, or a quick pick's choice.
+struct Row {
+    label: String,
+    /// The matched characters of `label`.
+    positions: Vec<usize>,
+    /// The icon and its name, for a command declaring one.
+    icon: Option<(Icon, String)>,
+    /// Shown at the end of the line: its keys, "recent".
+    keys: String,
+    command: CommandId,
+    args: Json,
+}
+
+/// The arrows move the selection; the selected line, kept in the list.
+fn move_selection(ui: &Ui, selected: &mut usize, len: usize) -> usize {
+    if ui.input(|i| i.key_pressed(Key::ArrowDown)) {
+        *selected = (*selected + 1).min(len.saturating_sub(1));
+    }
+    if ui.input(|i| i.key_pressed(Key::ArrowUp)) {
+        *selected = selected.saturating_sub(1);
+    }
+    (*selected).min(len.saturating_sub(1))
+}
+
+/// Draws the list's lines; the one clicked.
+fn draw_rows(ui: &mut Ui, rows: &[Row], selected: usize, typed: bool) -> Option<usize> {
+    let ctx = ui.ctx().clone();
+    let mut chosen = None;
+    ui.scroll_area(egui::ScrollArea::vertical().max_height(320.0), |ui| {
+        // Justified, left-aligned: a line without keys keeps its
+        // label at the start, as the others.
+        ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
+            let kit = Kit::of(ui.ctx());
+            let row = &kit.command_palette_row;
+            // egui's margin keeps room for its own border: kept,
+            // unseen; the kit paints the row's box under it.
+            let border = ui.visuals().widgets.inactive.bg_stroke.width;
+            let side = Tokens::of(ui.ctx()).size.icon_inline;
+            // A column for the icons while one of the lines has one.
+            let column = rows.iter().any(|r| r.icon.is_some());
+            for (i, h) in rows.iter().enumerate() {
+                let on = i == selected;
+                let state = row_state(ui, on);
+                let under = ui.painter().add(egui::Shape::Noop);
+                let slot = egui::Id::unique((
+                    "egui_pop_palette_icon",
+                    h.command.as_str(),
+                    h.args.to_string(),
+                ));
+                let label = highlighted(row, state, &h.label, &h.positions);
+                let mut atoms: Vec<egui::Atom<'_>> = Vec::with_capacity(2);
+                if column {
+                    atoms.push(egui::Atom::custom(
+                        egui::IdSalt::new(slot),
+                        egui::vec2(side, side),
+                    ));
+                }
+                atoms.push(label.into());
+                let mut b = egui::Button::new(egui::Atoms::from(atoms))
+                    .selected(on)
+                    .frame_when_inactive(on)
+                    .fill(Color32::TRANSPARENT)
+                    .stroke(egui::Stroke::new(border, Color32::TRANSPARENT));
+                if !h.keys.is_empty() {
+                    let muted = row.style_toned(Tone::Muted, state).text;
+                    b = b.shortcut_text(egui::RichText::new(h.keys.clone()).color(muted));
+                }
+                let r = b.atom_ui(ui);
+                if let (Some(rect), Some((icon, name))) = (r.rect(egui::IdSalt::new(slot)), &h.icon)
+                {
+                    icon.paint(ui.painter(), rect, row.style(state).text);
+                    egui_pop_core::icon::registry::record(&ctx, "palette", &h.label, name);
+                }
+                let r = r.response;
+                let part = Part {
+                    rect: r.rect,
+                    room: r.rect,
+                    state,
+                    label: None,
+                };
+                row.paint_under(ui, under, &part, None);
+                if on && typed {
+                    r.scroll_to_me(None);
+                }
+                if r.clicked() {
+                    chosen = Some(i);
+                }
+            }
+        });
+    });
+    chosen
 }
 
 /// [`POPUP_LISTENER`]: the palette's popup closed by a request (its
