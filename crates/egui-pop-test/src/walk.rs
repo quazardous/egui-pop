@@ -136,7 +136,10 @@ pub fn focused<S>(h: &Harness<'_, S>) -> Option<Stop> {
     let node = h
         .root()
         .children_recursive()
-        .find(|n| n.accesskit_node().is_focused());
+        // egui's focus, not AccessKit's: a view that holds the focus as one
+        // (a tree, a list, a table) names its cursor row as its active
+        // descendant, which AccessKit reports as focused.
+        .find(|n| n.accesskit_node().locate().0 == id.accesskit_id());
     let (role, name) = node.map_or((Role::Unknown, String::new()), |n| {
         let a = n.accesskit_node();
         // A control labelled by a text node: the name is that text's value.
