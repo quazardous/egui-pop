@@ -1152,7 +1152,7 @@ command-workbench-toggle-secondarySideBar =
     .title = Toggle secondary side bar
 
 command-workbench-zen =
-    .description = Shows the centre alone: no title, menu or status bar, no side or bottom area, no palette. Escape leaves it.
+    .description = Shows one panel alone, full size, in its window: `panel`, else the focused panel when it is a view, else the application's choice, else the centre's active tab. No title, menu or status bar, no other panel. Escape leaves it, and the layout is as it was.
     .title = Zen mode
 
 egui-pop-about-authors = Authors
@@ -3108,6 +3108,8 @@ egui-pop-workbench-stays-out = { $panel } stays out of { $area }
 egui-pop-workbench-unfold = Unfold { $area }
 
 egui-pop-workbench-window-title = { $panel } — { $application }
+
+egui-pop-workbench-zen-panel = Zen this panel
 
 egui-pop-zen-hint = Zen mode: { $keys } to leave
 

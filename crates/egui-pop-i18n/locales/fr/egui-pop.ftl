@@ -717,7 +717,7 @@ command-workbench-move-to-window =
     .title = Déplacer vers la fenêtre
 
 command-workbench-zen =
-    .description = N’affiche que le centre : ni barre de titre, de menus ou d’état, ni zone latérale ou du bas, ni palette. Échap en sort.
+    .description = Affiche un seul panneau, en grand, dans sa fenêtre : `panel`, sinon le panneau actif s’il est une vue, sinon le choix de l’application, sinon l’onglet actif du centre. Ni barre de titre, de menus ou d’état, ni autre panneau. Échap en sort, et la disposition est comme avant.
     .title = Mode zen
 
 egui-pop-admin-close = Fermer
@@ -2345,6 +2345,8 @@ egui-pop-window-exit-fullscreen = Quitter le plein écran (F11)
 egui-pop-window-placed-by-system = Sous Wayland, le système place les fenêtres : leur taille est gardée, pas leur position
 
 egui-pop-workbench-close-panel = Fermer { $panel }
+
+egui-pop-workbench-zen-panel = Mode zen sur ce panneau
 
 egui-pop-workbench-detach = Détacher dans une fenêtre
 

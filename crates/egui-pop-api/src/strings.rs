@@ -785,6 +785,9 @@ pub const WORKBENCH_DETACH: StrKey =
     StrKey::new("egui-pop-workbench-detach", "Detach into a window");
 pub const WORKBENCH_CLOSE_PANEL: StrKey =
     StrKey::new("egui-pop-workbench-close-panel", "Close { $panel }");
+/// The panel menu's entry showing the panel alone (`workbench.zen`).
+pub const WORKBENCH_ZEN_PANEL: StrKey =
+    StrKey::new("egui-pop-workbench-zen-panel", "Zen this panel");
 /// The entry opening a new instance of a panel declared with several
 /// (a tab group's menus, `workbench.panel.new`'s list).
 pub const WORKBENCH_NEW_INSTANCE: StrKey =
@@ -1971,6 +1974,7 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_STAYS_OUT,
     WORKBENCH_DETACH,
     WORKBENCH_CLOSE_PANEL,
+    WORKBENCH_ZEN_PANEL,
     WORKBENCH_NEW_INSTANCE,
     WORKBENCH_PICK_TITLE,
     WORKBENCH_PICK_HINT,

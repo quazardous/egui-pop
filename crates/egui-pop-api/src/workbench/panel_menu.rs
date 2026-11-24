@@ -17,6 +17,8 @@
 //!   their panels' titles); Move group to window ▸ (its tab group whole,
 //!   to a window or a new one);
 //! - Move to group ▸ (the docked tab groups, by their panels' titles);
+//! - Zen this panel: the panel alone, full size, in its window
+//!   (`workbench.zen` with the panel);
 //! - Close.
 //!
 //! A floating panel's menu opens through [`crate::menus::context_menu`],
@@ -102,6 +104,7 @@ const LIST_WINDOWS: &str = "workbench.panel.windows";
 const LIST_GROUP_WINDOWS: &str = "workbench.panel.group_windows";
 const LIST_GROUPS: &str = "workbench.panel.groups";
 const LIST_CLOSE: &str = "workbench.panel.close";
+const LIST_ZEN: &str = "workbench.panel.zen";
 const LIST_OPEN_HERE: &str = "workbench.group.open";
 const LIST_ADD_HERE: &str = "workbench.group.add";
 /// "New `<panel>`" for each panel declared with several instances, opening
@@ -300,6 +303,7 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
             MenuItem::submenu(MENU_PANEL, "3_group", 0, MENU_PANEL_GROUPS, "Move to group")
                 .when("args.has_groups", false),
         )?
+        .menu_item(MenuItem::list(MENU_PANEL, "8_zen", 0, LIST_ZEN))?
         .menu_item(MenuItem::list(MENU_PANEL, "9_close", 0, LIST_CLOSE))?
         .menu_item(MenuItem::list(MENU_PANEL_WINDOWS, "1", 0, LIST_WINDOWS))?
         .menu_item(MenuItem::list(
@@ -351,6 +355,15 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
             })
         })
         .list_provider(LIST_NEW_INSTANCES, |app, _| new_entries(app, None))
+        .list_provider(LIST_ZEN, |app, cx| {
+            with_panel(app, cx, |app, panel| {
+                vec![ListItem::new(
+                    &strings::tr(&app.egui(), &txt::WORKBENCH_ZEN_PANEL),
+                    super::CMD_ZEN,
+                    json!({ "panel": panel }),
+                )]
+            })
+        })
         .list_provider(LIST_CLOSE, |app, cx| {
             with_panel(app, cx, |app, panel| {
                 let ctx = app.egui();
