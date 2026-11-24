@@ -4,12 +4,10 @@
 //! sequence, agents' `wait` reads it, and egui-pop's application bus
 //! still keeps the contract (bus-kernel's conformance suite).
 
-#[path = "support/memory.rs"]
-mod memory;
-
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::support::memory;
 use bus_kernel::conformance;
 use egui_pop_api::about::{AboutPlugin, AppInfo};
 use egui_pop_api::bus::bus_contract::{Bus, Point, PointDecl, PointId, PointKind, declare_all};

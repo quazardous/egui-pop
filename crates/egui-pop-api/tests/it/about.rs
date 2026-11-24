@@ -139,7 +139,7 @@ fn the_version_info_is_copied_through_the_clipboard() {
 
 #[test]
 fn egui_s_version_follows_the_workspace() {
-    let manifest = include_str!("../../../Cargo.toml");
+    let manifest = include_str!("../../../../Cargo.toml");
     let line = manifest
         .lines()
         .find(|l| l.starts_with("egui = "))

@@ -7,9 +7,9 @@
 //! which fails a test on a broken invariant unless the test allows its
 //! rule.
 
-use std::sync::{Mutex, Once};
 use std::time::Duration;
 
+use crate::support::log_capture::LINES;
 use egui::ViewportId;
 use egui_pop_api::admin::{APP_WINDOW, AdminPlugin, CMD_OPEN};
 use egui_pop_api::bus::bus_contract::ListenOpts;
@@ -22,34 +22,8 @@ use egui_pop_api::{App, AppHandle, DefaultPlugins};
 use egui_pop_test::windows::MultiWindow;
 use serde_json::{Value as Json, json};
 
-/// The log lines written, for every test of this binary.
-static LINES: Mutex<Vec<(log::Level, String)>> = Mutex::new(Vec::new());
-
-struct Capture;
-
-impl log::Log for Capture {
-    fn enabled(&self, m: &log::Metadata<'_>) -> bool {
-        m.level() <= log::Level::Info
-    }
-
-    fn log(&self, r: &log::Record<'_>) {
-        if self.enabled(r.metadata()) {
-            LINES
-                .lock()
-                .unwrap()
-                .push((r.level(), r.args().to_string()));
-        }
-    }
-
-    fn flush(&self) {}
-}
-
 fn multi() -> MultiWindow {
-    static ONCE: Once = Once::new();
-    ONCE.call_once(|| {
-        log::set_logger(&Capture).unwrap();
-        log::set_max_level(log::LevelFilter::Info);
-    });
+    crate::support::log_capture::install();
     MultiWindow::new(|ctx| {
         App::builder()
             .plugins(DefaultPlugins)

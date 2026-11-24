@@ -180,15 +180,15 @@ between kinds of foreground layers may still gain ranks").
   return: `crates/egui-pop-core/tests/core.rs` and the module's unit
   tests; focus coming back across scales:
   `crates/egui-pop-test/tests/focus_place.rs`.
-- Overlays per window and blocking: `crates/egui-pop-api/tests/windows.rs`,
+- Overlays per window and blocking: `crates/egui-pop-api/tests/it/windows.rs`,
   `window_scope.rs`, `app_windows.rs`; flyouts held by their owner:
   `flyouts.rs`.
 - Ranks: `crates/egui-pop-core/tests/layers.rs` (the order between
   ranks and the unranked layers whatever was raised last, a rank kept
   one pass, sublayers of a base noted at its rank, `rank_from`, a layer
   outside the foreground left alone);
-  `crates/egui-pop-api/tests/layer_ranks.rs` (an application area and
+  `crates/egui-pop-api/tests/it/layer_ranks.rs` (an application area and
   an overlay stay above a panel lying over, a popup opened from it too).
 - Bands: through the movable dialogs in
-  `crates/egui-pop-api/tests/dialogs.rs`; the band has no test of its
+  `crates/egui-pop-api/tests/it/dialogs.rs`; the band has no test of its
   own yet.

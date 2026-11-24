@@ -1082,7 +1082,7 @@ fn the_side_list_is_one_stop() {
 // Enter and Space on a plain button (check 9, items 4 and 14).
 
 // Item 14 (Enter and Space with a modifier or repeated do not click a plain
-// button) needs the key dispatcher: `crates/egui-pop-api/tests/plain_clicks.rs`.
+// button) needs the key dispatcher: `crates/egui-pop-api/tests/it/plain_clicks.rs`.
 
 /// The button at rest, focused and pressed, as rendered.
 fn rendered_states() -> [image::RgbaImage; 3] {

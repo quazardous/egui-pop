@@ -316,7 +316,7 @@ From `crates/egui-pop-core` (`tab.rs`, `focus.rs`, `keys.rs`,
   answer: on a confirm, the page's command ran and the dialog never showed.
   A choice and a form close the same way; a danger stays open, on Cancel.
 - **[test, known] Alt+Up in the picker** was taken by the plain Up
-  consumed first; fixed, and the fix's test is in `tests/files.rs`. The
+  consumed first; fixed, and the fix's test is in `egui-pop-api`'s `tests/it/files.rs`. The
   trap stays for every `consume_key` in the wrong order (`widgets.rs`
   comments on it: "Shift first: the plain key takes it too").
 - **[test, known] Tab in the picker's path field** stayed there until

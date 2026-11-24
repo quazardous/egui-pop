@@ -295,7 +295,7 @@ in `Kit::problems`, logged, and drawn with the default.
 
 ## Cost
 
-Measured with `crates/egui-pop-api/tests/bench_tabs.rs` (72 tabs in three
+Measured with `crates/egui-pop-api/tests/it/bench_tabs.rs` (72 tabs in three
 areas, the interface built and tessellated without a GPU, the pointer
 sweeping the window; release build, versions run in alternation, five
 runs each, median of medians), 2026-10-18:

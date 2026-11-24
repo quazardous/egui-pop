@@ -580,7 +580,7 @@ fn notes(o: &mut String) {
 - **Tests across windows.** egui_kittest draws an immediate viewport
   inside the main one. The keys, overlays and focus of auxiliary windows
   are tested with an immediate viewport renderer of the tests' own
-  (`crates/egui-pop-api/tests/windows.rs`), each window's pass run with
+  (`crates/egui-pop-api/tests/it/windows.rs`), each window's pass run with
   its own input, but no component is mounted in a real window there:
   the cells stay `*`.
 - **Declarations can lie.** A component declared as reading keys when
