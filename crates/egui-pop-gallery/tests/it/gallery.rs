@@ -2827,6 +2827,36 @@ fn the_workbench_page_opens_moves_and_vetoes_panels() {
 }
 
 #[test]
+fn the_workbench_page_names_a_scratch_instances_title() {
+    let mut h = harness(options("pop-dark", Density::Comfortable, "workbench"));
+    h.run();
+    h.get_by_label("New Scratch").click();
+    h.run();
+    h.run();
+    let app = h.state().app.handle().clone();
+    let second = egui_pop::model::ids::PanelId::from_static("gallery.scratch#2");
+    assert!(h.query_by_label("Scratch 2 (instance 2): 0").is_some());
+    // The application names it: its tab and the instance drawn follow.
+    app.set_instance_title(&second, Some("Shopping list".into()))
+        .unwrap();
+    h.run();
+    h.run();
+    // Its tab (and the region the tab names) read the new title.
+    assert!(h.query_all_by_label("Shopping list").next().is_some());
+    assert!(h.query_by_label("Shopping list (instance 2): 0").is_some());
+    assert_eq!(
+        app.layout().instance(&second).unwrap().title.as_deref(),
+        Some("Shopping list")
+    );
+    // Back to the generated one.
+    app.set_instance_title(&second, None).unwrap();
+    h.run();
+    h.run();
+    assert!(h.query_all_by_label("Shopping list").next().is_none());
+    assert!(h.query_by_label("Scratch 2 (instance 2): 0").is_some());
+}
+
+#[test]
 fn the_layout_page_toggles_the_areas_and_opens_the_layout_menu() {
     use egui_pop::api::layout_controls::{self, MENU_LAYOUT, SideBarPosition};
     use egui_pop::model::panels::Area;

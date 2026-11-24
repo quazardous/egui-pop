@@ -20,6 +20,13 @@
 //! panel declared keeps its place, as any panel's). The journal says
 //! both: `panel.instance.opened` and `panel.instance.closed`
 //! (`{ "panel": <id>, "kind": <kind> }`).
+//!
+//! An instance's tab title is the kind's with its number ("Gallery 2")
+//! until the application names it: `pop.panel.retitle`
+//! ([`AppHandle::set_instance_title`]) keeps the title in the layout's
+//! instance entry, saved and restored with it, and `null` gives the
+//! generated one back. The journal says `panel.instance.retitled`
+//! (`{ "panel": <id>, "kind": <kind>, "title": <title or null> }`).
 
 use std::collections::BTreeSet;
 
@@ -43,7 +50,9 @@ pub struct Instance {
     pub id: PanelId,
     /// Its number, from 1.
     pub number: u32,
-    /// Its title as shown ("Gallery 2").
+    /// Its title as shown: the one the application named
+    /// ([`AppHandle::set_instance_title`]), else the generated one
+    /// ("Gallery 2").
     pub title: String,
 }
 
@@ -62,6 +71,9 @@ impl Instance {
 pub const EVENT_OPENED: &str = "panel.instance.opened";
 /// The journal's event when an instance closes (its payload dropped).
 pub const EVENT_CLOSED: &str = "panel.instance.closed";
+/// The journal's event when an instance's title changes
+/// (`pop.panel.retitle`); `title` is `null` when the generated one is back.
+pub const EVENT_RETITLED: &str = "panel.instance.retitled";
 
 /// The instances open now (`<kind>#<n>`).
 pub(crate) fn open_ids(app: &AppHandle) -> BTreeSet<PanelId> {
@@ -132,6 +144,72 @@ impl AppHandle {
         }
         self.note_layout("panel.instance.payload");
         Ok(())
+    }
+
+    /// Names the tab title of a panel instance open now (`<kind>#<n>`),
+    /// through `pop.panel.retitle`; `None` gives the generated title
+    /// back ("Gallery 2"). The title is kept in the layout's instance
+    /// entry, saved and restored with it, and read by the tab, the panel
+    /// menu, the View menu, accessibility and [`Instance::title`]. The
+    /// panel declared, a panel declared once and an instance not open are
+    /// refused with the reason, as a blank title is.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn set_instance_title(&self, id: &PanelId, title: Option<String>) -> Result<(), String> {
+        self.retitle_panel(crate::bus::PanelRetitleAsk::new(id.as_str(), title))
+            .map(|_| ())
+    }
+
+    /// The workbench's answer to `pop.panel.retitle`: keeps the title in
+    /// the instance's layout entry; whether it changed.
+    pub(crate) fn retitle_instance(
+        &self,
+        id: &PanelId,
+        title: Option<String>,
+    ) -> Result<bool, String> {
+        let title = match title {
+            Some(t) if t.trim().is_empty() => {
+                return Err(format!(
+                    "`{id}`: a title cannot be blank (null gives the generated one back)"
+                ));
+            }
+            t => t,
+        };
+        {
+            let Some(mut wb) = self.try_workbench() else {
+                return Err(format!("`{id}`: the workbench is busy"));
+            };
+            let multiple = wb
+                .spec(&id.kind())
+                .is_some_and(|s| s.instances == Instances::Multiple);
+            if !multiple {
+                return Err(format!(
+                    "`{id}` is no instance of a panel declared with several"
+                ));
+            }
+            if !id.is_instance() {
+                return Err(format!(
+                    "`{id}` is the panel declared: only its instances `<kind>#<n>` take a title"
+                ));
+            }
+            if wb.spec(id).is_none() {
+                return Err(format!("`{id}` is no open instance"));
+            }
+            if wb.layout.instance(id).and_then(|i| i.title.as_ref()) == title.as_ref() {
+                return Ok(false);
+            }
+            wb.layout.instance_mut(id).title = title.clone();
+            wb.follow_instances();
+        }
+        self.publish(
+            "egui_pop",
+            None,
+            EVENT_RETITLED,
+            json!({ "panel": id, "kind": id.kind(), "title": title }),
+        );
+        self.note_layout("panel.instance.title");
+        Ok(true)
     }
 
     /// The instances of a panel declared with several, open now, the
