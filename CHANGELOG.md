@@ -8,6 +8,77 @@ egui minor. Each crate has its own version
 names the crate it changes, and a release lists the versions it
 publishes.
 
+## 0.21.1 (2026-11-24)
+
+Published: egui-pop-core 0.18.1, egui-pop-api 0.19.1, egui-pop-viewport 0.18.1, egui-pop-i18n 0.19.1, egui-pop-agent 0.14.1, egui-pop 0.21.1.
+
+### Features
+
+- egui-pop-agent: The agent socket gains `inspect`: egui's inspection protocol
+  (`egui_inspection`, by Lucas Meurer and Emil Ernerfeldt) carried over
+  the socket to an in-process `InspectionPlugin`, with no TCP port. An
+  agent gets the full accessibility tree, a screenshot of the main window,
+  any egui event (drags, scroll deltas, clicks at a position), a resize
+  and a wait for the frame to settle. It needs the bridge on and the
+  agent's `ui` and private grants, and is refused while the user answers
+  a confirmation or a pairing. Tunnelling the protocol is the idea of
+  Rerun's `egui_mcp` and `egui_inspection_tools` (rerun-io/egui_crates).
+  `egui_pop_agent::inspect::request_to_json` and `response_from_json`
+  convert its requests and responses.
+- egui-pop-agent: The MCP server (`mcp` feature) gains the `widget_*` tools, which drive
+  the main window by pointer and pixels: `widget_tree`, `widget_get_widget`,
+  `widget_screenshot` (a PNG image item), `widget_wait_for`, `widget_click`,
+  `widget_hover`, `widget_scroll`, `widget_drag`, `widget_type_text`,
+  `widget_press_key`, `widget_resize` and `widget_batch` (several in one
+  call). They are Rerun's agent tools, `egui_inspection_tools` (by Lucas
+  Meurer and Emil Ernerfeldt, rerun-io/egui_crates, MIT OR Apache-2.0),
+  served over the socket's `inspect` through their `Transport`, so each
+  request is held like `inspect`: the bridge on, the agent's `ui` and
+  private grants, and the input lock. They are for testing by pointer and
+  pixels; `mcp::widget_tools` lists them. Until Rerun publishes
+  `egui_inspection_tools`, egui-pop-agent depends on its temporary,
+  unchanged fork, `egui-pop-inspection-tools`.
+- egui-pop, egui-pop-api, egui-pop-core, egui-pop-viewport: Escape goes to the innermost gesture first. Pressed during a drag (a
+  slider, a knob, a scrub, a viewport or graph drag), Escape cancels the
+  drag and nothing else: the focus plugin takes the press out of the pass's
+  input, so a dialog, the Settings window or a popover around the gesture
+  no longer closes on it; the next Escape does. A widget cancelling on
+  Escape reads it with the new `focus::escape_cancelled` or
+  `focus::cancel_pressed` (the key itself is gone from the input in that
+  pass). `binding::edit` rolls the value store gesture back when Escape
+  ends the drag, egui's own widgets included, and cancels a gesture whose
+  widget stops being drawn while it is open (its host closed mid-drag),
+  so no gesture is left open.
+- egui-pop, egui-pop-api: Panel instances get their kind's keys and undo scope. The context key
+  `focusedPanelKind` (`CONTEXT_FOCUSED_PANEL_KIND`) is the focused panel's
+  kind, set beside `focusedPanel`: a binding with `when:
+  "focusedPanelKind == 'app.gallery'"` fires in the panel declared and in
+  each instance `app.gallery#<n>`. A history scope whose focus target names
+  a panel kind (`ScopeInfo::focus`) is active while one of its instances is
+  drawn, and Ctrl+Z routes to it while one has the focus; a target naming
+  one panel or one instance exactly still names that one only.
+- egui-pop, egui-pop-api: The application names a panel instance's tab title: `pop.panel.retitle`
+  (`bus::PanelRetitle`, `bus::PanelRetitleAsk { panel, title }`), or
+  `AppHandle::set_instance_title(&id, Some(title))` from code; `None`
+  (`title: null`) gives the generated title ("Gallery 2") back. The title
+  is kept in the instance's layout entry, next to its payload, so it is
+  saved and restored with the layout (layouts without it load unchanged).
+  The tab, the panel menu's list of instances, the View menu,
+  accessibility and `Instance::title` read it, and the journal says
+  `panel.instance.retitled` (`{ panel, kind, title }`). Only an open
+  instance `<kind>#<n>` of a panel declared with several takes a title;
+  anything else is refused with the reason.
+- egui-pop, egui-pop-api, egui-pop-i18n: Under `Routing::Focus`, Ctrl+Z never falls back to the newest step of
+  another scope. With no view focused, it goes to the scope of the view
+  focused last in that window, shown or not, while the owner still has
+  it; with none focused yet (at start-up), it does nothing, a toast says
+  "Nothing to undo here: click a view first" (new strings
+  `egui-pop-history-nothing-focused` and `-redo`, with their French), and
+  `history.refused` is published with the kind `nothing_focused`. The
+  `pop.history.target` step names this case with the rule `none`
+  (`history::NOTHING_FOCUSED`), so a before-hook may pick a scope.
+  `Routing::Newest` is unchanged.
+
 ## 0.21.0 (2026-11-21)
 
 Published: egui-pop-model 0.14.0, egui-pop-core 0.18.0, egui-pop-api 0.19.0, egui-pop-test 0.20.0, egui-pop-viewport 0.18.0, egui-pop-i18n 0.19.0, egui-pop-agent 0.14.0, egui-pop-editors 0.19.0, egui-pop-platform 0.19.0, egui-pop-views 0.20.0, egui-pop-imaging 0.19.0, egui-pop 0.21.0.
