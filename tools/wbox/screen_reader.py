@@ -86,11 +86,6 @@ QUIET = 0.8
 # How long a key may take to be announced (a software renderer is slow).
 STEP_TIMEOUT = 6.0
 
-# What a focus that reached a tree, a table, ... looks like.
-TREE_ROLES = ["tree", "tree item", "tree table", "list item", "list", "table row"]
-TABLE_ROLES = ["table", "table cell", "table row", "column header", "row header",
-               "tree table", "list item"]
-
 WALKS: dict[str, dict] = {
     "palette": {"page": "overview", "steps": [
         {"key": "ctrl+shift+p"},
@@ -109,7 +104,7 @@ WALKS: dict[str, dict] = {
         {"key": "Tab"},
     ]},
     "tree": {"page": "tree", "steps": [
-        {"key": "Tab", "until": {"roles": TREE_ROLES}, "max": 40},
+        {"key": "Tab", "until": {"name": "Files"}, "max": 40},
         {"key": "Down"},
         {"key": "Down"},
         {"key": "Right"},
@@ -118,7 +113,7 @@ WALKS: dict[str, dict] = {
         {"key": "shift+Tab"},
     ]},
     "table": {"page": "table", "steps": [
-        {"key": "Tab", "until": {"roles": TABLE_ROLES}, "max": 40},
+        {"key": "Tab", "until": {"name": "Photos"}, "max": 40},
         {"key": "Down"},
         {"key": "Down"},
         {"key": "Up"},
@@ -403,6 +398,8 @@ def walk(cfg: dict, name: str, spec: dict, out: Path, use_orca: bool) -> tuple[s
         if orca_tail:
             orca_tail.read()
 
+        # The node with the focus: a key that moves nothing leaves it there.
+        current = None
         for i, step in enumerate(spec["steps"], 1):
             label = f"{name}.{i} {step['key']}"
             record: dict = {"step": label}
@@ -414,6 +411,8 @@ def walk(cfg: dict, name: str, spec: dict, out: Path, use_orca: bool) -> tuple[s
                     record["error"] = f"key: {pressed['error']}"
                     break
                 said, node = listen(orca_tail, focus, wait_speech=mode == "orca")
+                current = node or current
+                node = current
                 if "until" not in step or matches(node, step["until"]):
                     record["node"] = node
                     if mode == "orca":
@@ -457,7 +456,9 @@ def check(record: dict, expected: dict | None, mode: str) -> tuple[bool, str]:
     node = record.get("node")
     speech = record.get("speech", "")
     if node is None:
-        return False, "the focus never moved"
+        return False, "nothing has the focus"
+    if mode == "orca" and not speech:
+        return False, "Orca said nothing"
     if not node.get("name"):
         return False, f"a {node.get('role')} without a name (fix it in egui-pop)"
     if UNLABELLED.search(speech):
