@@ -77,7 +77,8 @@ pub const MENU_GROUP_ADD: MenuId = MenuId::from_static("workbench.group.add");
 pub const CMD_PANEL_OPEN: CommandId = CommandId::from_static("workbench.panel.open");
 /// Docks a panel in an area (`panel`, `area`).
 pub const CMD_PANEL_MOVE: CommandId = CommandId::from_static("workbench.panel.move");
-/// Floats a docked panel, where its area is (`panel`).
+/// Floats a docked panel, where its area is (`panel`; `group`: its tab
+/// group whole).
 pub const CMD_PANEL_FLOAT: CommandId = CommandId::from_static("workbench.panel.float");
 /// Moves a panel into a window of its own (`panel`; `group`: its tab
 /// group whole).
@@ -97,6 +98,7 @@ const LIST_WINDOWS: &str = "workbench.panel.windows";
 const LIST_GROUP_WINDOWS: &str = "workbench.panel.group_windows";
 const LIST_GROUPS: &str = "workbench.panel.groups";
 const LIST_CLOSE: &str = "workbench.panel.close";
+const LIST_FLOAT_GROUP: &str = "workbench.group.float";
 const LIST_OPEN_HERE: &str = "workbench.group.open";
 const LIST_ADD_HERE: &str = "workbench.group.add";
 /// "New `<panel>`" for each panel declared with several instances, opening
@@ -172,7 +174,7 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
     )?
     .command(
         CommandSpec::new(CMD_PANEL_FLOAT, "Float panel", "View")
-            .description("Floats the focused panel, or `panel`, over the interface, where its area is.")
+            .description("Floats the focused panel, or `panel`, over the interface, where its area is; with `group`, its docked tab group whole, as one floating group of tabs (Dock back puts it back).")
             .when("!modalOpen")
             .hidden()
             .args(example.clone()),
@@ -189,7 +191,20 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
                 let off = at - wb.content.min;
                 [off.x + 24.0, off.y + 24.0]
             };
-            run(call.app, Change::Float(panel, pos))
+            // `group`: true, or a panel of the group (the group menu's
+            // own argument, which its entries' arguments give way to).
+            let group = matches!(
+                call.args.get("group"),
+                Some(Json::Bool(true) | Json::String(_))
+            );
+            run(
+                call.app,
+                if group {
+                    Change::FloatGroup(panel, pos)
+                } else {
+                    Change::Float(panel, pos)
+                },
+            )
         },
     )?
     .command(
@@ -290,6 +305,7 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
             MenuItem::submenu(MENU_GROUP, "1_open", 0, MENU_GROUP_OPEN, "Open panel")
                 .when("args.can_open", false),
         )?
+        .menu_item(MenuItem::list(MENU_GROUP, "2_float", 0, LIST_FLOAT_GROUP))?
         .menu_item(MenuItem::list(MENU_GROUP_OPEN, "1", 0, LIST_OPEN_HERE))?
         .menu_item(MenuItem::list(MENU_GROUP_ADD, "1", 0, LIST_ADD_HERE))?
         .menu_item(MenuItem::list(
@@ -325,6 +341,11 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
                     )
                     .disabled(),
                 ]
+            })
+        })
+        .list_provider(LIST_FLOAT_GROUP, |app, cx| {
+            with_group(app, cx, |app, group| {
+                float_group_entry(app, group).into_iter().collect()
             })
         })
         .list_provider(LIST_NEW_INSTANCES, |app, _| new_entries(app, None))
@@ -594,14 +615,71 @@ fn place_entries(app: &AppHandle, panel: &PanelId) -> Vec<ListItem> {
             }
         })
         .collect();
-    if spec.floatable {
-        out.push(ListItem::new(
-            &strings::tr(&ctx, &txt::WORKBENCH_FLOAT),
-            CMD_PANEL_FLOAT,
-            json!({ "panel": panel }),
-        ));
-    }
+    out.push(float_entry(app, &ctx, panel, &spec));
+    out.extend(float_group_entry(app, panel));
     out
+}
+
+/// Float, for a docked panel: greyed, saying why, when it may not float
+/// (its spec opts out, or the setting lets only palettes float).
+fn float_entry(
+    app: &AppHandle,
+    ctx: &egui::Context,
+    panel: &PanelId,
+    spec: &egui_pop_model::panels::PanelSpec,
+) -> ListItem {
+    let args = json!({ "panel": panel });
+    if spec
+        .refuses(&crate::mounts::panel_host(Place::Floating))
+        .is_some()
+    {
+        let title = app.panel_title(ctx, panel);
+        let label = strings::tr_args(ctx, &txt::WORKBENCH_FLOAT_REFUSED, &[("panel", &title)]);
+        return ListItem::new(&label, CMD_PANEL_FLOAT, args).disabled();
+    }
+    let scope = super::float_scope(app);
+    let narrowed = {
+        let mut wb = app.workbench_mut();
+        wb.float_scope = scope;
+        wb.float_refusal(spec).is_some()
+    };
+    if narrowed {
+        let label = strings::tr(ctx, &txt::WORKBENCH_FLOAT_PALETTES_ONLY);
+        return ListItem::new(&label, CMD_PANEL_FLOAT, args).disabled();
+    }
+    ListItem::new(
+        &strings::tr(ctx, &txt::WORKBENCH_FLOAT),
+        CMD_PANEL_FLOAT,
+        args,
+    )
+}
+
+/// Float group, for a panel docked in a tab group of several, when the
+/// group menu is allowed ([`GroupHandles::MENU`](super::GroupHandles)):
+/// greyed when one of its panels may not float.
+fn float_group_entry(app: &AppHandle, panel: &PanelId) -> Option<ListItem> {
+    if !super::group_handles(app).contains(super::GroupHandles::MENU) {
+        return None;
+    }
+    let scope = super::float_scope(app);
+    let floats = {
+        let mut wb = app.workbench_mut();
+        wb.layout.area_of(panel)?;
+        let (panels, _) = wb.layout.group_of(panel)?;
+        if panels.len() < 2 {
+            return None;
+        }
+        wb.float_scope = scope;
+        panels
+            .iter()
+            .all(|p| wb.spec(p).is_some_and(|s| wb.float_refusal(s).is_none()))
+    };
+    let item = ListItem::new(
+        &strings::tr(&app.egui(), &txt::WORKBENCH_FLOAT_GROUP),
+        CMD_PANEL_FLOAT,
+        json!({ "panel": panel, "group": true }),
+    );
+    Some(if floats { item } else { item.disabled() })
 }
 
 /// Detach into a window, for a panel that may go into one and is not

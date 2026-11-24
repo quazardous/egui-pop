@@ -3,9 +3,13 @@
 //! menu a docked tab opens: Detach into a window, Move to group (the
 //! docked tab groups, by their titles), Dock back (where it floated
 //! from), Close; each entry a workbench command.
+//!
+//! Every panel floats unless its spec opts out (Float greyed, saying
+//! why); a docked tab group floats whole (Float group) and docks back as
+//! it was; the user's setting can narrow floating to the palettes.
 
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable as _;
+use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_pop_api::workbench::Change;
 use egui_pop_api::{App, Ctx, Plugin, PluginError};
 use egui_pop_model::ids::{PanelId, PluginId};
@@ -16,6 +20,10 @@ const LOG: PanelId = PanelId::from_static("demo.log");
 const OUT: PanelId = PanelId::from_static("demo.out");
 const TREE: PanelId = PanelId::from_static("demo.tree");
 const NOTES: PanelId = PanelId::from_static("demo.notes");
+/// Declared without a word on floating: it floats, as every panel.
+const PLAIN: PanelId = PanelId::from_static("demo.plain");
+/// Opted out of floating.
+const DOC: PanelId = PanelId::from_static("demo.doc");
 
 struct Demo;
 
@@ -47,6 +55,15 @@ impl Plugin for Demo {
             PanelSpec::new(NOTES, "Notes", Area::EndSide).floatable(true),
             |ui, _| {
                 ui.label("notes body");
+            },
+        )?
+        .panel(PanelSpec::new(PLAIN, "Plain", Area::StartSide), |ui, _| {
+            ui.label("plain body");
+        })?
+        .panel(
+            PanelSpec::new(DOC, "Document", Area::Center).floatable(false),
+            |ui, _| {
+                ui.label("doc body");
             },
         )?;
         Ok(())
@@ -244,4 +261,146 @@ fn a_docked_tab_opens_the_same_menu() {
     pick_in_submenu(&mut h, "Move to group", "Output, Log");
     let layout = h.state().handle().layout();
     assert_eq!(layout.area_of(&TREE), Some(Area::Bottom));
+}
+
+/// Opens a docked tab's menu by a right click on its tab.
+fn tab_menu(h: &mut Harness<'static, App>, tab: &str) {
+    h.get_by_role_and_label(egui::accesskit::Role::Tab, tab)
+        .click_secondary();
+    h.run();
+}
+
+/// Sets the setting `id` to `value`, as the user would.
+fn set_setting(h: &mut Harness<'static, App>, id: &str, value: egui_pop_model::values::Value) {
+    egui_pop_core::lock(&h.state().handle().store())
+        .set(egui_pop_model::values::Set::new(
+            &format!("settings/{id}"),
+            egui_pop_model::values::Change::To(value),
+            egui_pop_model::commands::Origin::User,
+        ))
+        .unwrap();
+    h.run();
+    h.run();
+}
+
+#[test]
+fn a_panel_declared_without_a_word_floats_from_its_menu() {
+    let mut h = harness();
+    tab_menu(&mut h, "Plain");
+    h.get_by_label("Float").click();
+    h.run();
+    h.run();
+    let layout = h.state().handle().layout();
+    assert!(layout.floating_of(&PLAIN).is_some(), "Plain floats");
+    assert_eq!(layout.area_of(&PLAIN), None);
+}
+
+#[test]
+fn a_panel_that_opts_out_shows_float_greyed_with_its_reason() {
+    let mut h = harness();
+    tab_menu(&mut h, "Document");
+    let entry = h.get_by_label("Float (Document cannot float)");
+    assert!(entry.accesskit_node().is_disabled(), "greyed, not hidden");
+    assert!(h.query_by_label("Float").is_none());
+    let app = h.state().handle().clone();
+    let out = app.change_workbench(Change::Float(DOC, [100.0, 100.0]));
+    assert!(!out.unwrap().ok(), "the step refuses it too");
+    assert!(app.layout().floating_of(&DOC).is_none());
+}
+
+#[test]
+fn float_group_floats_the_whole_tab_group_and_dock_back_restores_it() {
+    let mut h = harness();
+    let app = h.state().handle().clone();
+    let (before, shown) = app.layout().group_of(&TREE).unwrap();
+    assert_eq!(before, vec![TREE, NOTES]);
+    tab_menu(&mut h, "Tree");
+    h.get_by_label("Float group").click();
+    h.run();
+    h.run();
+    let layout = app.layout();
+    let g = layout.floating_of(&TREE).expect("the group floats");
+    assert_eq!(g.panels().cloned().collect::<Vec<_>>(), before);
+    assert_eq!(g.arrangement, egui_pop_model::layout::Arrangement::Tabs);
+    assert_eq!(g.shown(), &before[shown], "its shown tab kept");
+    assert_eq!(layout.area_of(&NOTES), None);
+    assert!(app.change_workbench(Change::DockBack(NOTES)).unwrap().ok());
+    h.run();
+    let layout = app.layout();
+    assert!(layout.floating_of(&TREE).is_none());
+    assert_eq!(layout.area_of(&TREE), Some(Area::EndSide));
+    assert_eq!(
+        layout.group_of(&TREE),
+        Some((before, shown)),
+        "the group back as it was"
+    );
+}
+
+#[test]
+fn the_group_menu_floats_the_group() {
+    let mut h = harness();
+    // A right click on the empty part of the bottom tab bar, after Log.
+    let tab = h
+        .get_by_role_and_label(egui::accesskit::Role::Tab, "Log")
+        .rect();
+    let at = egui::pos2(tab.right() + 120.0, tab.center().y);
+    let button = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Secondary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    h.input_mut().events.push(egui::Event::PointerMoved(at));
+    h.run();
+    h.input_mut().events.push(button(true));
+    h.input_mut().events.push(button(false));
+    h.run();
+    h.get_by_label("Float group").click();
+    h.run();
+    h.run();
+    let layout = h.state().handle().layout();
+    let g = layout.floating_of(&LOG).expect("the bottom group floats");
+    assert!(g.holds(&OUT) && g.holds(&LOG));
+}
+
+#[test]
+fn the_setting_narrows_floating_to_the_palettes() {
+    use egui_pop_api::workbench::SETTING_FLOAT_PANELS;
+    use egui_pop_model::values::Value;
+    let mut h = harness();
+    set_setting(
+        &mut h,
+        SETTING_FLOAT_PANELS.as_str(),
+        Value::Choice("palettes".into()),
+    );
+    tab_menu(&mut h, "Plain");
+    assert!(
+        h.get_by_label("Float (only palettes float)")
+            .accesskit_node()
+            .is_disabled()
+    );
+    h.key_press(egui::Key::Escape);
+    h.run();
+    let app = h.state().handle().clone();
+    assert!(
+        !app.change_workbench(Change::Float(PLAIN, [100.0, 100.0]))
+            .unwrap()
+            .ok()
+    );
+    assert!(
+        !app.change_workbench(Change::FloatGroup(TREE, [100.0, 100.0]))
+            .unwrap()
+            .ok()
+    );
+    // Back to any: it floats again.
+    set_setting(
+        &mut h,
+        SETTING_FLOAT_PANELS.as_str(),
+        Value::Choice("any".into()),
+    );
+    assert!(
+        app.change_workbench(Change::Float(PLAIN, [100.0, 100.0]))
+            .unwrap()
+            .ok()
+    );
 }

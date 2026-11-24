@@ -119,7 +119,8 @@ pub struct PanelSpec {
     /// A palette: it floats over the interface when it opens (a
     /// toolbox, a navigator); it may still be docked in its areas.
     pub palette: bool,
-    /// Whether it may float over the interface (a palette always may).
+    /// Whether it may float over the interface: every panel may unless
+    /// it opts out ([`PanelSpec::floatable`]); a palette always may.
     pub floatable: bool,
     /// What its content needs (ADR 0013): checked against each host it
     /// is put in. `None`: a plain widget, any host of a panel.
@@ -164,7 +165,7 @@ impl PanelSpec {
             bare: false,
             open: true,
             palette: false,
-            floatable: false,
+            floatable: true,
             content: None,
             kind: PanelKind::View,
             instances: Instances::Single,
@@ -246,7 +247,9 @@ impl PanelSpec {
         self
     }
 
-    /// Whether it may float over the interface.
+    /// Whether it may float over the interface: on unless turned off
+    /// here (a view that would leave its area empty, the centre's
+    /// document); a palette always may.
     pub fn floatable(mut self, on: bool) -> Self {
         self.floatable = on || self.palette;
         self
@@ -399,6 +402,7 @@ mod tests {
         let id = PanelId::new("demo.log").unwrap();
         let spec = PanelSpec::new(id, "Log", Area::Bottom)
             .only_in(&[Area::Center])
+            .floatable(false)
             .detachable(false);
         assert_eq!(spec.refuses(&host(Place::Area(Area::Bottom))), None);
         assert_eq!(
@@ -413,6 +417,20 @@ mod tests {
             spec.refuses(&host(Place::Window)).as_deref(),
             Some("Log cannot be detached")
         );
+    }
+
+    #[test]
+    fn a_panel_floats_unless_it_opts_out() {
+        let id = PanelId::new("demo.log").unwrap();
+        let spec = PanelSpec::new(id, "Log", Area::Bottom);
+        assert_eq!(spec.refuses(&host(Place::Floating)), None);
+        let spec = spec.floatable(false);
+        assert_eq!(
+            spec.refuses(&host(Place::Floating)).as_deref(),
+            Some("Log cannot float")
+        );
+        // A palette always may.
+        assert!(spec.palette().floatable(false).floatable);
     }
 
     #[test]

@@ -914,8 +914,12 @@ acts on), never a palette.
 
 **One model, two placements.** A palette is a panel declared with
 `PanelSpec::palette()`: it opens floating over the workbench, and its
-area is where it docks. Any panel declared `floatable(true)` may float
-too. The layout keeps floating panels next to the docked and detached
+area is where it docks. Every other panel may float too, unless its
+spec opts out (`floatable(false)`: a view that would leave its area
+empty, such as the centre's document). The user's "Floating panels"
+setting (`workbench.float_panels`) narrows that to the palettes
+(`palettes`) or leaves it (`any`, the default); it never widens what a
+spec allows. The layout keeps floating panels next to the docked and detached
 ones (`Layout::floating`: place, size, rolled up, pinned), saved and repaired
 with them.
 
@@ -960,8 +964,15 @@ assert!(app.handle().layout().floating_of(&TOOLS).is_some());
   edges and to the other palettes within the `palette.magnet` token.
   Dropped on a side bar or the bottom panel (or a closed one's edge)
   with the dock keys held, with the drop hint the tabs use, it docks
-  there. A docked floatable panel floats again from its tab menu
-  (Float).
+  there. A docked panel floats from its tab menu (Float); where it may
+  not, Float is greyed and says why ("Float (Document cannot float)",
+  "Float (only palettes float)"). Float group, in the tab menu and the
+  group menu (the empty part of the tab bar, its grip), floats the
+  docked tab group whole as one floating group of tabs, in order, its
+  shown tab shown (`workbench.panel.float` with `group`); Dock back on
+  any of its tabs puts the whole group back where it was. Float group
+  is offered while the tab menu's group entries are allowed (the
+  `MENU` group handle and its setting).
 - **Moving or docking** (decided on 2026-11-17,
   [design](design/drag-move-vs-dock.md)). A plain drag of a floating
   palette (its band, a member's band, a floating tab) only moves it:

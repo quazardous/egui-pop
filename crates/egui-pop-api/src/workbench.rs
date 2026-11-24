@@ -458,6 +458,52 @@ pub const SETTING_GROUP_MOVE_WINDOW: egui_pop_model::ids::SettingId =
 /// [`float_move`]).
 pub const SETTING_FLOAT_MOVE: egui_pop_model::ids::SettingId =
     egui_pop_model::ids::SettingId::from_static("workbench.float_move");
+/// The setting: which panels may float over the interface (see
+/// [`FloatScope`]); it only narrows what each panel's spec allows.
+pub const SETTING_FLOAT_PANELS: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.float_panels");
+
+/// Which panels may float ([`SETTING_FLOAT_PANELS`]): it narrows what
+/// each panel declares ([`PanelSpec::floatable`]), never widens it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FloatScope {
+    /// Every panel its spec lets float (the default).
+    #[default]
+    Any,
+    /// Only the palettes (panels that open floating, [`PanelSpec::palette`]).
+    Palettes,
+}
+
+impl FloatScope {
+    /// The setting's choices, in order.
+    pub const CHOICES: [&'static str; 2] = ["any", "palettes"];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FloatScope::Any => "any",
+            FloatScope::Palettes => "palettes",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<FloatScope> {
+        [FloatScope::Any, FloatScope::Palettes]
+            .into_iter()
+            .find(|m| m.as_str() == s)
+    }
+
+    /// Whether it lets a panel float, its spec allowing it.
+    pub fn allows(self, spec: &PanelSpec) -> bool {
+        self == FloatScope::Any || spec.palette
+    }
+}
+
+/// Which panels may float, as the setting says now.
+pub fn float_scope(app: &AppHandle) -> FloatScope {
+    setting_value(app, &SETTING_FLOAT_PANELS, |v| {
+        v.as_choice().and_then(FloatScope::parse)
+    })
+    .unwrap_or_default()
+}
 
 /// The group handles an application allows unless it says otherwise
 /// ([`AppBuilder::group_handles`](crate::AppBuilder::group_handles)):
@@ -584,6 +630,17 @@ pub(crate) fn register_group_settings(
             ),
         )?;
     }
+    ctx.setting(
+        SETTING_FLOAT_PANELS,
+        Descriptor::choice(
+            "Floating panels",
+            &FloatScope::CHOICES,
+            FloatScope::default().as_str(),
+        )
+        .description(
+            "Which panels may float over the interface: any panel that allows it (any), or only the palettes, the panels that open floating (palettes).",
+        ),
+    )?;
     Ok(())
 }
 
@@ -1024,6 +1081,10 @@ pub enum Change {
     /// A panel floats over the interface, its top-left at a place (in
     /// points from the workbench's top-left).
     Float(PanelId, [f32; 2]),
+    /// The docked tab group holding a panel floats whole, its top-left at
+    /// a place: one floating group of tabs, in order; Dock back puts it
+    /// back as it was (`palette.float` with `group`).
+    FloatGroup(PanelId, [f32; 2]),
     /// A floating panel docks in an area (taken out of its group).
     Dock(PanelId, Area),
     /// Every member of a floating panel's group docks in an area, as
@@ -1185,6 +1246,10 @@ impl Change {
                 crate::palettes::STEP_FLOAT,
                 json!({ "panel": p, "pos": pos }),
             ),
+            Change::FloatGroup(p, pos) => (
+                crate::palettes::STEP_FLOAT,
+                json!({ "panel": p, "pos": pos, "group": true }),
+            ),
             Change::Dock(p, a) => (
                 crate::palettes::STEP_DOCK,
                 json!({ "panel": p, "area": area_name(*a) }),
@@ -1245,7 +1310,7 @@ impl Change {
     pub(crate) fn event(&self) -> Option<&'static str> {
         Some(match self {
             Change::OpenPalette(_) => "palette.opened",
-            Change::Float(..) => "palette.floated",
+            Change::Float(..) | Change::FloatGroup(..) => "palette.floated",
             Change::Dock(..) | Change::DockGroup(..) => "palette.docked",
             Change::Group(..) => "palette.grouped",
             Change::Ungroup(..) | Change::UngroupTabs(..) => "palette.ungrouped",
@@ -1319,6 +1384,7 @@ impl Change {
         let flag_off = |key: &str| args.get(key).and_then(Json::as_bool).unwrap_or(false);
         Ok(match step.as_str() {
             "palette.open" => Change::OpenPalette(panel),
+            "palette.float" if flag_off("group") => Change::FloatGroup(panel, pos_of(args)?),
             "palette.float" => Change::Float(panel, pos_of(args)?),
             "palette.move" => Change::MovePalette(panel, pos_of(args)?),
             "palette.resize" => match (size_of(args)?, args.get("pos")) {
@@ -1555,6 +1621,9 @@ pub(crate) struct Workbench {
     /// Where each floating panel was docked when it floated (its area,
     /// among which tabs): where Dock back puts it (`workbench.dock_back`).
     floated_from: BTreeMap<PanelId, egui_pop_model::layout::DormantPlace>,
+    /// Which panels may float, as the user's setting says
+    /// ([`SETTING_FLOAT_PANELS`]); read before each change.
+    pub(crate) float_scope: FloatScope,
     /// The panel the keys obey: see [`Workbench::follow_focus`].
     pub focused: Option<PanelId>,
     /// The last panel to be `focused` that lives in the layout proper: where
@@ -1639,6 +1708,7 @@ impl Default for Workbench {
             closed_windows: BTreeMap::new(),
             window_asks: BTreeMap::new(),
             floated_from: BTreeMap::new(),
+            float_scope: FloatScope::Any,
             hint: None,
             focused: None,
             settled: None,
@@ -2102,6 +2172,55 @@ impl Workbench {
         Ok(json!({ "panel": p, "shown": true, "area": area_name(area) }))
     }
 
+    /// Why a panel may not float, if it may not: its spec refuses it
+    /// ([`PanelSpec::floatable`], its content), or the user's setting
+    /// lets only palettes float ([`SETTING_FLOAT_PANELS`]).
+    pub fn float_refusal(&self, spec: &PanelSpec) -> Option<String> {
+        spec.refuses(&crate::mounts::panel_host(Place::Floating))
+            .or_else(|| {
+                (!self.float_scope.allows(spec))
+                    .then(|| format!("{} cannot float: only palettes float", spec.title))
+            })
+    }
+
+    /// Docks back a floating group of tabs that floated whole from one
+    /// area ([`Change::FloatGroup`]): every tab where it was, in order,
+    /// its shown tab shown. `None`: the panel does not float in such a
+    /// group (it docks back alone).
+    fn dock_back_tabs(&mut self, p: &PanelId) -> Option<Json> {
+        use egui_pop_model::layout::{Arrangement as Tabs, DormantPlace};
+        let g = self.layout.floating_of(p)?;
+        if g.arrangement != Tabs::Tabs || g.is_lone() {
+            return None;
+        }
+        let panels: Vec<PanelId> = g.panels().cloned().collect();
+        let shown = g.shown().clone();
+        let area = match self.floated_from.get(&panels[0]) {
+            Some(DormantPlace::Docked { area, .. }) => *area,
+            _ => return None,
+        };
+        let same = panels.iter().all(|q| {
+            matches!(self.floated_from.get(q), Some(DormantPlace::Docked { area: a, .. }) if *a == area)
+                && self.spec(q).is_some_and(|s| {
+                    s.refuses(&crate::mounts::panel_host(Place::Area(area)))
+                        .is_none()
+                })
+        });
+        if !same {
+            return None;
+        }
+        let first = self.floated_from.remove(&panels[0])?;
+        self.layout.dock_at(&panels[0], &first);
+        for q in &panels[1..] {
+            self.floated_from.remove(q);
+            if self.layout.join_tabs(q, &panels[0]).is_err() {
+                self.layout.place(q, area);
+            }
+        }
+        self.layout.activate(&shown);
+        Some(json!({ "panel": p, "area": area_name(area), "panels": panels }))
+    }
+
     /// Applies a change; refused when the panel's rules do not allow it.
     /// Anchors a floating panel to the workbench edges its new place lies
     /// on (`palettes::anchor_of`), or to none: dropped against an edge,
@@ -2413,7 +2532,7 @@ impl Workbench {
                     if self.layout.last_place(p).is_some() {
                         // Back where it was, floating or not.
                         self.reopen(&spec);
-                    } else if spec.floatable {
+                    } else if self.float_refusal(&spec).is_none() {
                         let n = self.layout.floating.len();
                         self.layout.float(p, FloatingGroup::cascade(n));
                     } else {
@@ -2426,7 +2545,7 @@ impl Workbench {
             }
             Change::Float(p, pos) => {
                 let spec = spec_of(p)?;
-                if let Some(why) = spec.refuses(&crate::mounts::panel_host(Place::Floating)) {
+                if let Some(why) = self.float_refusal(&spec) {
                     return Err(why);
                 }
                 // Docked until now: where Dock back puts it.
@@ -2442,6 +2561,29 @@ impl Workbench {
                 self.layout.float(p, *pos);
                 self.anchor_palette(p, false);
                 json!({ "panel": p, "pos": pos })
+            }
+            Change::FloatGroup(p, pos) => {
+                let (panels, _) = self
+                    .layout
+                    .group_of(p)
+                    .filter(|_| self.layout.area_of(p).is_some())
+                    .ok_or_else(|| format!("`{p}` is not docked in a tab group"))?;
+                // The group floats whole, or not at all.
+                for q in &panels {
+                    if let Some(why) = self.float_refusal(&spec_of(q)?) {
+                        return Err(why);
+                    }
+                }
+                // Where Dock back puts each one.
+                for q in &panels {
+                    match self.layout.docked_place(q) {
+                        Some(place) => self.floated_from.insert(q.clone(), place),
+                        None => self.floated_from.remove(q),
+                    };
+                }
+                let floated = self.layout.float_tabs(p, *pos)?;
+                self.anchor_palette(p, false);
+                json!({ "panel": p, "pos": pos, "group": true, "panels": floated })
             }
             Change::JoinGroup(p, into) => {
                 let spec = spec_of(p)?;
@@ -2466,23 +2608,29 @@ impl Workbench {
                 if self.layout.window_of(p).is_some() {
                     self.keep_closed_window(p);
                 }
-                let place = self.floated_from.remove(p).filter(|place| match place {
-                    egui_pop_model::layout::DormantPlace::Docked { area, .. } => spec
-                        .refuses(&crate::mounts::panel_host(Place::Area(*area)))
-                        .is_none(),
-                    _ => false,
-                });
-                let area = match &place {
-                    Some(place) => {
-                        self.layout.dock_at(p, place);
-                        self.layout.area_of(p).unwrap_or(spec.area)
-                    }
+                // A group of tabs floated whole goes back whole.
+                match self.dock_back_tabs(p) {
+                    Some(out) => out,
                     None => {
-                        self.layout.place(p, spec.area);
-                        spec.area
+                        let place = self.floated_from.remove(p).filter(|place| match place {
+                            egui_pop_model::layout::DormantPlace::Docked { area, .. } => spec
+                                .refuses(&crate::mounts::panel_host(Place::Area(*area)))
+                                .is_none(),
+                            _ => false,
+                        });
+                        let area = match &place {
+                            Some(place) => {
+                                self.layout.dock_at(p, place);
+                                self.layout.area_of(p).unwrap_or(spec.area)
+                            }
+                            None => {
+                                self.layout.place(p, spec.area);
+                                spec.area
+                            }
+                        };
+                        json!({ "panel": p, "area": area_name(area) })
                     }
-                };
-                json!({ "panel": p, "area": area_name(area) })
+                }
             }
             Change::DockGroup(p, area) => {
                 let panels: Vec<PanelId> = match self.layout.floating_of(p) {

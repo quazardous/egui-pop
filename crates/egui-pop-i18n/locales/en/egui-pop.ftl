@@ -1108,7 +1108,7 @@ command-workbench-panel-dock-back =
     .title = Dock panel back
 
 command-workbench-panel-float =
-    .description = Floats the focused panel, or `panel`, over the interface, where its area is.
+    .description = Floats the focused panel, or `panel`, over the interface, where its area is; with `group`, its docked tab group whole, as one floating group of tabs (Dock back puts it back).
     .title = Float panel
 
 command-workbench-panel-move =
@@ -3075,6 +3075,12 @@ egui-pop-workbench-eject-group = Eject group
 
 egui-pop-workbench-float = Float
 
+egui-pop-workbench-float-group = Float group
+
+egui-pop-workbench-float-palettes-only = Float (only palettes float)
+
+egui-pop-workbench-float-refused = Float ({ $panel } cannot float)
+
 egui-pop-workbench-flyout-pin = Pin { $panel }
 
 egui-pop-workbench-fold = Fold { $area }
@@ -3543,6 +3549,14 @@ setting-workbench-float-move =
 setting-workbench-float-move-choice-dock = dock
 
 setting-workbench-float-move-choice-move = move
+
+setting-workbench-float-panels =
+    .description = Which panels may float over the interface: any panel that allows it (any), or only the palettes, the panels that open floating (palettes).
+    .label = Floating panels
+
+setting-workbench-float-panels-choice-any = any
+
+setting-workbench-float-panels-choice-palettes = palettes
 
 setting-workbench-group-drag-modifier =
     .description = The key held while dragging a tab to move its whole group of tabs: shift, ctrl (cmd on macOS) or alt.

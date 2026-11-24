@@ -3283,6 +3283,9 @@ impl AppHandle {
             // layout; any other window the change made or ended is asked
             // once it is done.
             let before = app.workbench_mut().layout.auxiliary.clone();
+            // Which panels may float, as the user's setting says now.
+            let scope = crate::workbench::float_scope(app);
+            app.workbench_mut().float_scope = scope;
             let done = match crate::bus::panels::ask(app, &c) {
                 Some(done) => done,
                 None => app.workbench_mut().apply(&c),
