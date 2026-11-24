@@ -30,8 +30,8 @@ the stack for the gallery, 115 for `egui-pop-api` (135 MB each, 15 GB in
 all), and as many links per build. A module is still a unit of selection
 ([Selection](#selection) names it `it::mounts` and runs it alone by a
 test name filter); editing one relinks the one executable. Helpers
-shared by several modules live in `tests/it/support/` and are reached by
-`crate::support::...`.
+shared by several modules live in `tests/it/support/`, a module of the
+executable declared in its `main.rs`.
 
 ```sh
 cargo nextest run -p egui-pop-gallery --test it -E 'test(/^mounts::/)'   # one module
