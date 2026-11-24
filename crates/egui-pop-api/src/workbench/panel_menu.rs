@@ -75,6 +75,11 @@ pub const MENU_GROUP_ADD: MenuId = MenuId::from_static("workbench.group.add");
 /// default, `here` or an area's name; `group`: a panel of the tab group
 /// `here` means, else the focused panel's).
 pub const CMD_PANEL_OPEN: CommandId = CommandId::from_static("workbench.panel.open");
+/// "Open panel…": a quick pick in the command palette of every declared
+/// panel (and "New `<panel>`" for those declared with several), the
+/// chosen one opened where it was (`workbench.panel.open`, `place:
+/// "last"`). `Ctrl+Shift+O`.
+pub const CMD_PANEL_PICK: CommandId = CommandId::from_static("workbench.panel.pick");
 /// Docks a panel in an area (`panel`, `area`).
 pub const CMD_PANEL_MOVE: CommandId = CommandId::from_static("workbench.panel.move");
 /// Floats a docked panel, where its area is (`panel`).
@@ -143,6 +148,24 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
                 }
             }
             Ok(out)
+        },
+    )?
+    .command(
+        CommandSpec::new(CMD_PANEL_PICK, "Open panel…", "View")
+            .description("Lists every panel in the command palette; the one chosen opens where it was when it closed (`workbench.panel.open`, `place: last`).")
+            .icon("layout")
+            .when("!modalOpen")
+            .key("Ctrl+Shift+O"),
+        |call| {
+            let p = call
+                .app
+                .service(&crate::palette::PALETTE)
+                .ok_or("no palette")?;
+            let pick = panel_pick(call.app);
+            let count = pick.items.len();
+            let group = call.app.current_window_group();
+            p.pick_in(group, call.app.when_context(), pick);
+            Ok(json!({ "open": true, "items": count }))
         },
     )?
     .command(
@@ -480,6 +503,44 @@ fn open_entries(app: &AppHandle, group: &PanelId, closed: bool) -> Vec<ListItem>
     let mut entries = new_entries(app, Some(group));
     entries.extend(out.into_iter().map(|(_, item)| item));
     entries
+}
+
+/// "Open panel…"'s quick pick: "New `<panel>`" for each panel declared
+/// with several instances, then every declared panel by title, each
+/// opening where it was.
+pub fn panel_pick(app: &AppHandle) -> crate::palette::QuickPick {
+    let ctx = app.egui();
+    let panels: Vec<PanelId> = app
+        .workbench_mut()
+        .specs
+        .iter()
+        .filter(|s| !s.bare && !s.id.is_instance())
+        .map(|s| s.id.clone())
+        .collect();
+    let mut named: Vec<(String, PanelId)> = panels
+        .into_iter()
+        .map(|p| (app.panel_title(&ctx, &p), p))
+        .collect();
+    named.sort_by_key(|(title, _)| title.to_lowercase());
+    let mut pick = crate::palette::QuickPick::new(
+        strings::tr(&ctx, &txt::WORKBENCH_PICK_TITLE),
+        strings::tr(&ctx, &txt::WORKBENCH_PICK_HINT),
+    );
+    for item in new_entries(app, None) {
+        pick = pick.item(crate::palette::PickItem::new(
+            item.label,
+            item.command,
+            item.args,
+        ));
+    }
+    for (title, p) in named {
+        pick = pick.item(crate::palette::PickItem::new(
+            title,
+            CMD_PANEL_OPEN,
+            json!({ "panel": p, "place": "last" }),
+        ));
+    }
+    pick
 }
 
 /// "New `<panel>`" for each panel declared with several instances, by

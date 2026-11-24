@@ -1580,6 +1580,7 @@ egui-pop-palette-group-menu = Menu de { $palette }
 egui-pop-palette-hint = Tapez une commande
 
 egui-pop-palette-no-match = Aucune commande ne correspond.
+egui-pop-palette-pick-no-match = Rien ne correspond.
 
 egui-pop-palette-not-bool = `{ $input }` n’est ni true ni false
 
@@ -2373,6 +2374,8 @@ egui-pop-workbench-nothing-to-open = Aucun panneau fermé ne peut s’ouvrir ici
 egui-pop-workbench-move-window = Déplacer la fenêtre
 
 egui-pop-workbench-new-instance = Nouveau : { $panel }
+egui-pop-workbench-pick-title = Ouvrir un panneau
+egui-pop-workbench-pick-hint = Tapez le nom d’un panneau
 
 egui-pop-workbench-new-window = Nouvelle fenêtre
 
@@ -3506,6 +3509,9 @@ menu-workbench-group-open =
 command-workbench-panel-open =
     .description = Ouvre `panel` par `pop.panel.open` : là où il était quand il a été fermé (`place` : `last`, par défaut ; cette place disparue, dans le groupe d’onglets du panneau actif si ses zones l’y autorisent, sinon dans sa propre zone), `here` (le groupe d’onglets qui contient `group`, sinon celui du panneau actif) ou dans une zone (`center`, `start_side`, `end_side`, `bottom`). Pour un panneau déclaré en plusieurs instances, `instance` : `new` ouvre une nouvelle instance (son id dans `instance`), l’id d’une instance ouvre celle-là.
     .title = Ouvrir un panneau
+command-workbench-panel-pick =
+    .description = Liste tous les panneaux dans la palette de commandes ; celui choisi s’ouvre là où il était quand il a été fermé (`workbench.panel.open`, `place` : `last`).
+    .title = Ouvrir un panneau…
 command-workbench-panel-move =
     .description = Ancre le panneau actif, ou `panel`, dans une zone (`area` : `center`, `start_side`, `end_side` ou `bottom`).
     .title = Déplacer le panneau vers une zone
