@@ -205,7 +205,8 @@ pub const STEP_JOIN_GROUP: StepId = StepId::from_static("workbench.join_group");
 pub const STEP_DOCK_BACK: StepId = StepId::from_static("workbench.dock_back");
 
 /// Toggles zen mode: one panel alone, full size, in its window (`panel`,
-/// else the panel that matters now: see [`zen_target`]); the centre
+/// else the panel that matters now: see
+/// [`AppHandle::zen_target`](crate::AppHandle::zen_target)); the centre
 /// whole when there is none.
 pub const CMD_ZEN: egui_pop_model::ids::CommandId =
     egui_pop_model::ids::CommandId::from_static("workbench.zen");
