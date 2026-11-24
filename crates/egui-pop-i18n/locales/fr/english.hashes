@@ -567,7 +567,7 @@ command-workbench-toggle-primarySideBar.description 6abebaff6edb9c44
 command-workbench-toggle-primarySideBar.title 12ad1d9930347243
 command-workbench-toggle-secondarySideBar.description 1135c31c9a8e5988
 command-workbench-toggle-secondarySideBar.title 7d25f4b21647c51f
-command-workbench-zen.description a38941bcc516bbed
+command-workbench-zen.description 94763b1247a5dbb1
 command-workbench-zen.title 3abce81ef922131d
 egui-pop-about-authors e6912a24e9c67317
 egui-pop-about-copied 6a1af6540e3f5739
@@ -1546,6 +1546,7 @@ egui-pop-workbench-stays-docked b822e29e5d487cff
 egui-pop-workbench-stays-out 7973c10990577019
 egui-pop-workbench-unfold 4f6622581c6e6904
 egui-pop-workbench-window-title 2fb186786f7fdced
+egui-pop-workbench-zen-panel 1e144bdf2b9bef2e
 egui-pop-zen-hint b4f57ce4d2e085df
 egui-pop-zen-hint-no-key bbeec89f8dc28736
 menu-app-menu-edit.label 329d5a4f3eb93fa9

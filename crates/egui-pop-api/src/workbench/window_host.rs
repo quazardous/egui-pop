@@ -302,10 +302,13 @@ impl ViewportHost for PanelWindows<'_> {
                     json!({ "viewport": panel, "from": from, "to": to }),
                 );
             }
+            // Zen mode on a panel of this window: that panel alone, no
+            // title bar and no tabs, the layout left as it is.
+            let alone = app.workbench_mut().zen_in_window(&panel);
             // In full screen, the title bar as the main window's: kept
             // unless the setting says otherwise.
             let full_screen = egui_pop_core::frame::full_screen(&vctx);
-            if own && (!full_screen || crate::frame::bar_in_fullscreen(app)) {
+            if alone.is_none() && own && (!full_screen || crate::frame::bar_in_fullscreen(app)) {
                 egui_pop_core::frame::resize_edges(&vctx);
                 // Its edge: a line that tells it from the window under it
                 // (embedded in the main window, that window's is drawn).
@@ -332,7 +335,13 @@ impl ViewportHost for PanelWindows<'_> {
                     None => {}
                 }
             }
-            body(ui);
+            match &alone {
+                Some(shown) => {
+                    super::show_alone(app, ui, shown);
+                    crate::zen::show_in(app, &vctx);
+                }
+                None => body(ui),
+            }
             if own_window {
                 app.show_zone(ui, &crate::zones::WINDOW_OVERLAYS);
                 // Files dropped on this window: its `pop.files.drop`.

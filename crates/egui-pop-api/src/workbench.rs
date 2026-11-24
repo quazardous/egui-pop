@@ -127,10 +127,14 @@
 //! with their marks for agents, as the `workbench` collector does.
 //!
 //! **Zen mode** (the `workbench.zen` command, a toggle on `Shift+F11`
-//! that an application may rebind) leaves only the centre: the title bar, the
-//! menu and status bars, the activity bar, the side and bottom areas and
-//! the floating panels are hidden, and Escape (`workbench.leave_zen`)
-//! brings them back. The way out stays in sight: a strip at the top
+//! that an application may rebind) leaves one panel alone, full size, in
+//! the window holding it: the one named (`panel`, the panel menu's "Zen
+//! this panel"), else the focused view or mixed panel, else the
+//! application's choice (`pop.zen.panel`), else the centre's active tab
+//! (with none, the centre whole). The title bar, the menu and status
+//! bars, the activity bar, every other panel and the floating panels are
+//! hidden, and Escape (`workbench.leave_zen`) brings them back: zen mode
+//! changes only what is drawn, never the layout. The way out stays in sight: a strip at the top
 //! centre says how to leave, with a "Leave zen mode" button, for a few
 //! seconds on entering, and again whenever the pointer reaches the top
 //! edge. It is a state of the session, not of the layout: never saved,
@@ -200,7 +204,9 @@ pub const STEP_ARRANGE: StepId = StepId::from_static("workbench.arrange");
 pub const STEP_JOIN_GROUP: StepId = StepId::from_static("workbench.join_group");
 pub const STEP_DOCK_BACK: StepId = StepId::from_static("workbench.dock_back");
 
-/// Toggles zen mode: only the centre is shown.
+/// Toggles zen mode: one panel alone, full size, in its window (`panel`,
+/// else the panel that matters now: see [`zen_target`]); the centre
+/// whole when there is none.
 pub const CMD_ZEN: egui_pop_model::ids::CommandId =
     egui_pop_model::ids::CommandId::from_static("workbench.zen");
 /// Leaves zen mode (Escape while in it).
@@ -813,9 +819,9 @@ pub(crate) fn steps() -> Vec<crate::steps::StepSpec> {
         .args(json!({ "panel": "app.outline" })),
         StepSpec::new(
             STEP_ZEN,
-            "Zen mode starts (`zen`: true: only the centre is shown) or ends (false).",
+            "Zen mode starts (`zen`: true: `panel` alone, full size, in the window holding it; without `panel`, the centre whole) or ends (false). The layout is left as it is.",
         )
-        .args(json!({ "zen": true })),
+        .args(json!({ "zen": true, "panel": "app.viewer" })),
     ]
 }
 
@@ -1583,9 +1589,13 @@ pub(crate) struct Workbench {
     /// Where the dragged palettes would join a group, while dragged over
     /// another palette.
     pub group_hint: Option<crate::palettes::GroupHint>,
-    /// Zen mode: only the centre is drawn. Not part of the layout, so
-    /// never saved.
+    /// Zen mode: only the centre is drawn, or only [`Self::zen_panel`].
+    /// Not part of the layout, so never saved.
     pub zen: bool,
+    /// The panel zen mode draws alone, full size, in the window holding
+    /// it (none: the centre whole). A draw override: the layout is left
+    /// as it is, so leaving zen mode draws it unchanged.
+    pub zen_panel: Option<PanelId>,
     /// The panel shown as a flyout out of its folded side area's strip:
     /// the session's state, never saved.
     pub flyout: Option<PanelId>,
@@ -1652,6 +1662,7 @@ impl Default for Workbench {
             member_rects: BTreeMap::new(),
             group_hint: None,
             zen: false,
+            zen_panel: None,
             flyout: None,
             flyout_rect: None,
             flyout_held: None,
@@ -2236,6 +2247,60 @@ impl Workbench {
         ripe
     }
 
+    /// Zen mode on, `panel` alone (none: the centre whole), or off: the
+    /// session's state, the layout left as it is. The result names the
+    /// panel and the window drawing it (`main`, or `panel:<window>` for a
+    /// detached one).
+    pub(crate) fn apply_zen(&mut self, on: bool, panel: Option<PanelId>) -> Result<Json, String> {
+        if let Some(p) = panel.as_ref().filter(|_| on) {
+            if self.spec(p).is_none() && !p.is_instance() {
+                return Err(format!("no panel `{p}`"));
+            }
+            if !self.layout.shows(p) {
+                return Err(format!("`{p}` is not open: zen mode shows an open panel"));
+            }
+        }
+        self.zen = on;
+        self.zen_panel = if on { panel } else { None };
+        let window = self.zen_panel.as_ref().map(|p| self.zen_window(p));
+        Ok(json!({ "zen": on, "panel": self.zen_panel, "window": window }))
+    }
+
+    /// The window drawing a panel zen mode shows: `main`, or
+    /// `panel:<window>` for a detached window (as the bus names it).
+    fn zen_window(&self, panel: &PanelId) -> String {
+        match self.layout.window_of(panel) {
+            Some(aux) => format!("panel:{}", aux.panel),
+            None => "main".to_owned(),
+        }
+    }
+
+    /// Whether zen mode changes what the main window draws: on, for the
+    /// centre or a panel of the main window (a detached window's panel
+    /// leaves the main window as it is).
+    pub(crate) fn main_zen(&self) -> bool {
+        self.zen
+            && self
+                .zen_panel
+                .as_ref()
+                .is_none_or(|p| self.layout.window_of(p).is_none())
+    }
+
+    /// The panel zen mode draws alone in the detached window `window`
+    /// (by its panel), if any.
+    pub(crate) fn zen_in_window(&self, window: &PanelId) -> Option<PanelId> {
+        let panel = self.zen_panel.as_ref().filter(|_| self.zen)?;
+        let aux = self.layout.window_of(panel)?;
+        (aux.panel == *window && self.layout.shows(panel)).then(|| panel.clone())
+    }
+
+    /// The panel zen mode draws alone in the main window, if any (open,
+    /// and not in a detached window).
+    pub(crate) fn zen_in_main(&self) -> Option<PanelId> {
+        let panel = self.zen_panel.as_ref().filter(|_| self.main_zen())?;
+        self.layout.shows(panel).then(|| panel.clone())
+    }
+
     pub fn apply(&mut self, change: &Change) -> Result<Json, String> {
         self.read_back();
         let spec_of = |p: &PanelId| {
@@ -2633,11 +2698,7 @@ impl Workbench {
                 self.layout.flyouts.insert(p.clone(), *width);
                 return Ok(json!({ "panel": p, "width": width }));
             }
-            Change::Zen(on) => {
-                // The session's state: the layout is left as it is.
-                self.zen = *on;
-                return Ok(json!({ "zen": on }));
-            }
+            Change::Zen(on) => return self.apply_zen(*on, None),
             Change::Place(area, placement) => {
                 if !matches!(area, Area::StartSide | Area::EndSide) {
                     return Err(format!(
@@ -3350,10 +3411,10 @@ fn drop_into_area(app: &AppHandle, ctx: &egui::Context, dragged: &Dragged, area:
 fn area_under(wb: &Workbench, at: Pos2) -> Option<Area> {
     let closed = [Area::StartSide, Area::EndSide, Area::Bottom]
         .into_iter()
-        .filter(|a| wb.panels_in(*a).is_empty() && !wb.zen)
+        .filter(|a| wb.panels_in(*a).is_empty() && !wb.main_zen())
         .find(|a| wb.edge_rect(*a).contains(at));
     let drawn = (wb.rects.iter())
-        .filter(|(a, _)| **a == Area::Center || !wb.zen)
+        .filter(|(a, _)| **a == Area::Center || !wb.main_zen())
         .find(|(_, r)| r.contains(at))
         .map(|(a, _)| *a);
     closed
@@ -3997,6 +4058,22 @@ fn chain(vertical: bool, mut children: Vec<(Node, f32)>) -> Option<Node> {
 /// targets too. A tab dropped in another area is then moved through the
 /// `workbench.move` step.
 pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
+    // Zen mode on a panel of the main window: that panel alone, the
+    // layout not drawn (and not changed).
+    let alone = app.workbench_mut().zen_in_main();
+    if let Some(panel) = alone {
+        {
+            let mut wb = app.workbench_mut();
+            wb.content = ui.max_rect();
+            wb.rects.clear();
+            wb.bars.clear();
+            wb.bare.clear();
+        }
+        app.set_drawing_areas(true);
+        show_alone(app, ui, &panel);
+        app.set_drawing_areas(false);
+        return;
+    }
     let ctx = ui.ctx().clone();
     let across = ui.max_rect().width();
     let bounds = app.shell_bounds();
@@ -4053,7 +4130,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     let zen = {
         let mut wb = app.workbench_mut();
         wb.flipped = flipped;
-        wb.zen
+        wb.main_zen()
     };
     app.set_drawing_areas(true);
     // The activity bar: a zone of the layout, beside the primary side bar
@@ -5100,7 +5177,7 @@ pub struct StripIcon {
 pub fn strip(app: &AppHandle) -> Vec<StripIcon> {
     let (layout, zen, flyout) = {
         let mut wb = app.workbench_mut();
-        (wb.layout(), wb.zen, wb.flyout.clone())
+        (wb.layout(), wb.main_zen(), wb.flyout.clone())
     };
     if zen {
         return Vec::new();
@@ -5559,6 +5636,27 @@ fn flyout_body(
         || draw_flyout(app, ui, kit, panel, &title),
     )
     .is_some()
+}
+
+/// Draws the panel zen mode shows alone, over the whole of `ui`: in the
+/// main window, or in its detached window.
+pub(crate) fn show_alone(app: &AppHandle, ui: &mut Ui, panel: &PanelId) {
+    let kit = Kit::of(ui.ctx());
+    let side = &kit.side_area;
+    let pad = egui::vec2(side.data.padding_x, side.data.padding_y);
+    let rect = ui.max_rect();
+    ui.painter().rect_filled(rect, 0.0, ui.visuals().panel_fill);
+    let body = rect.shrink2(pad);
+    let mut inner = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt(("egui_pop.zen.panel", panel.as_str()))
+            .max_rect(body),
+    );
+    inner.set_clip_rect(body);
+    inner.set_min_size(inner.available_size());
+    let region = focus::Region::new("region.zen", RANK_CENTER);
+    focus::region(&mut inner, &region, |inner| app.show_panel(inner, panel));
+    ui.expand_to_include_rect(rect);
 }
 
 /// Draws an open flyout's content (`flyout_body`): its band, its panel.
