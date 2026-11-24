@@ -124,3 +124,52 @@ fn a_saved_arrangement_is_repaired_when_switched_to() {
     let repaired = out.result().unwrap().as_ref().unwrap()["repaired"].clone();
     assert!(repaired.to_string().contains("gone.panel"), "{repaired}");
 }
+
+/// The layout menu's "save as" entry and the save dialog, as an
+/// application words them or as egui-pop does.
+fn save_texts(words: Option<arrangements::ArrangementStrings>) -> (String, bool, bool) {
+    use egui_kittest::kittest::Queryable as _;
+    let mut b = App::builder().plugins(DefaultPlugins).plugin(Demo);
+    if let Some(w) = words {
+        b = b.arrangement_strings(w);
+    }
+    let app = b.build(&egui::Context::default()).unwrap();
+    let cx = egui_pop_model::when::WhenContext::default();
+    let entry = app
+        .handle()
+        .list_items("workbench.layout.save", &cx)
+        .first()
+        .map(|i| i.label.clone())
+        .unwrap_or_default();
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(1000.0, 700.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    assert!(arrangements::ask_name(h.state().handle()));
+    h.run_steps(3);
+    let studio = h
+        .query_by_label_contains("Save the Studio layout")
+        .is_some();
+    let default = h
+        .query_by_label_contains("Save the current arrangement")
+        .is_some();
+    (entry, studio, default)
+}
+
+#[test]
+fn an_application_words_the_arrangements_its_own_way() {
+    use egui_pop_core::strings::StrKey;
+    let studio = arrangements::ArrangementStrings::new(
+        StrKey::new("app-studio-save-as", "Save the Studio layout as…"),
+        StrKey::new("app-studio-save-title", "Save the Studio layout"),
+        StrKey::new("app-studio-save-verb", "Save the layout"),
+        StrKey::new("app-studio-suggested", "Studio layout { $n }"),
+    );
+    let (entry, ours, theirs) = save_texts(Some(studio));
+    assert_eq!(entry, "Save the Studio layout as…");
+    assert!(ours && !theirs, "the dialog says the application's words");
+    // Without them, egui-pop's own.
+    let (entry, ours, theirs) = save_texts(None);
+    assert_eq!(entry, "Save the current arrangement as…");
+    assert!(!ours && theirs, "the dialog says egui-pop's words");
+}

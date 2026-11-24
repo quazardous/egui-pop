@@ -562,7 +562,7 @@ pub(crate) fn declare(ctx: &mut crate::Ctx<'_>) -> Result<(), crate::CtxError> {
             if app.command(&arrangements::CMD_SAVE).is_none() {
                 return Vec::new();
             }
-            let label = strings::tr(&app.egui(), &txt::LAYOUT_SAVE_AS);
+            let label = strings::tr(&app.egui(), &app.arrangement_strings().save_as);
             vec![ListItem::new(
                 &label,
                 arrangements::CMD_SAVE,

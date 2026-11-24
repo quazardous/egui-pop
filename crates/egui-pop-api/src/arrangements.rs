@@ -40,6 +40,7 @@
 use std::collections::BTreeMap;
 
 use egui_pop_core::lock;
+use egui_pop_core::strings::StrKey;
 use egui_pop_model::commands::{CommandSpec, Origin};
 use egui_pop_model::ids::{CommandId, OwnerId, PluginId, StepId};
 use egui_pop_model::layout::{self, Layout};
@@ -291,6 +292,68 @@ pub fn delete(app: &AppHandle, name: &str) -> Outcome {
     })
 }
 
+/// The texts that name an arrangement, which an application may word its
+/// own way (`AppBuilder::arrangement_strings`): "Save the current
+/// arrangement as…" in the layout menu, the save dialog's title and
+/// button, and the name it suggests (`{ $n }`: one more than the saved
+/// ones). Whole strings, not a word put into egui-pop's sentences, so
+/// each language keeps its grammar. By default egui-pop's own.
+///
+/// ```
+/// use egui_pop_api::arrangements::ArrangementStrings;
+/// use egui_pop_core::strings::StrKey;
+///
+/// let studio = ArrangementStrings::new(
+///     StrKey::new("app-studio-save-as", "Save the Studio layout as…"),
+///     StrKey::new("app-studio-save-title", "Save the Studio layout"),
+///     StrKey::new("app-studio-save-verb", "Save the layout"),
+///     StrKey::new("app-studio-suggested", "Studio layout { $n }"),
+/// );
+/// assert_ne!(studio, ArrangementStrings::default());
+/// ```
+///
+/// <div class="warning">Experimental: may change in any release
+/// (docs/stability.md).</div>
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ArrangementStrings {
+    /// The layout menu's entry saving the current arrangement.
+    pub save_as: StrKey,
+    /// The save dialog's title.
+    pub save_title: StrKey,
+    /// The save dialog's button.
+    pub save_verb: StrKey,
+    /// The name the dialog suggests, with `{ $n }`.
+    pub suggested: StrKey,
+}
+
+impl ArrangementStrings {
+    pub const fn new(
+        save_as: StrKey,
+        save_title: StrKey,
+        save_verb: StrKey,
+        suggested: StrKey,
+    ) -> Self {
+        Self {
+            save_as,
+            save_title,
+            save_verb,
+            suggested,
+        }
+    }
+}
+
+impl Default for ArrangementStrings {
+    fn default() -> Self {
+        Self::new(
+            txt::LAYOUT_SAVE_AS,
+            txt::ARRANGEMENT_SAVE_TITLE,
+            txt::ARRANGEMENT_SAVE_VERB,
+            txt::ARRANGEMENT_SUGGESTED,
+        )
+    }
+}
+
 /// Asks for the name to save the current arrangement under, in a form
 /// that runs `workbench.arrangement.save` with it; `false` without the
 /// dialogs plugin.
@@ -300,22 +363,17 @@ pub fn ask_name(app: &AppHandle) -> bool {
     };
     let ctx = app.egui();
     let tr = |key| egui_pop_core::strings::tr(&ctx, key);
+    let words = app.arrangement_strings();
     let taken = names(app);
     let suggested = (saved(app).len() + 1..)
-        .map(|n| {
-            egui_pop_core::strings::tr_with(&ctx, &txt::ARRANGEMENT_SUGGESTED, &[("n", n.into())])
-        })
+        .map(|n| egui_pop_core::strings::tr_with(&ctx, &words.suggested, &[("n", n.into())]))
         .find(|n| !taken.contains(n))
         .unwrap_or_default();
-    let mut form = crate::dialogs::Form::new(
-        &tr(&txt::ARRANGEMENT_SAVE_TITLE),
-        &tr(&txt::ARRANGEMENT_SAVE_VERB),
-        CMD_SAVE,
-    )
-    .field(
-        "name",
-        Descriptor::text(&tr(&txt::ARRANGEMENT_NAME), &suggested),
-    );
+    let mut form =
+        crate::dialogs::Form::new(&tr(&words.save_title), &tr(&words.save_verb), CMD_SAVE).field(
+            "name",
+            Descriptor::text(&tr(&txt::ARRANGEMENT_NAME), &suggested),
+        );
     // Answered, the save runs with the name, empty or not: never asked
     // again.
     form.args = json!({ "asked": true });

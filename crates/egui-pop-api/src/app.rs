@@ -797,6 +797,8 @@ pub(crate) struct Shared {
     pub(crate) group_handles: std::cell::Cell<crate::workbench::GroupHandles>,
     /// The docks' controls (`AppBuilder::dock_controls`).
     pub(crate) dock_controls: std::cell::Cell<crate::workbench::DockControls>,
+    /// The texts naming an arrangement (`AppBuilder::arrangement_strings`).
+    arrangement_strings: std::cell::Cell<crate::arrangements::ArrangementStrings>,
     /// The layout's changes egui_stack said on the bus
     /// (`stack.layout.changed`) and the shell has not read yet.
     pub(crate) stack_changes: RefCell<Vec<egui_stack::bus::LayoutChange>>,
@@ -975,6 +977,7 @@ impl AppHandle {
             toast_corner: std::cell::Cell::default(),
             group_handles: std::cell::Cell::new(crate::workbench::DEFAULT_GROUP_HANDLES),
             dock_controls: std::cell::Cell::default(),
+            arrangement_strings: std::cell::Cell::default(),
             stack_changes: RefCell::new(Vec::new()),
             menu_bar: std::cell::Cell::new(true),
             system_file_chooser: std::cell::Cell::new(false),
@@ -1431,6 +1434,15 @@ impl AppHandle {
         let mut all = self.0.panel_commands.borrow_mut();
         Arc::make_mut(&mut all).extend(entries);
         strings::set_panel_commands(&self.egui(), all.clone());
+    }
+
+    /// The texts naming an arrangement of the panels, the application's
+    /// (`AppBuilder::arrangement_strings`) or egui-pop's.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn arrangement_strings(&self) -> crate::arrangements::ArrangementStrings {
+        self.0.arrangement_strings.get()
     }
 
     /// The application's name (`AppBuilder::name`); empty when none was
@@ -3575,6 +3587,7 @@ pub struct AppBuilder {
     toast_corner: crate::toasts::Corner,
     group_handles: crate::workbench::GroupHandles,
     dock_controls: crate::workbench::DockControls,
+    arrangement_strings: crate::arrangements::ArrangementStrings,
     pointer_profile: String,
     dock_drag: Option<egui_pop_model::pointer::DockDrag>,
     kits: Vec<KitSource>,
@@ -3684,6 +3697,7 @@ impl AppBuilder {
             toast_corner: crate::toasts::Corner::default(),
             group_handles: crate::workbench::DEFAULT_GROUP_HANDLES,
             dock_controls: crate::workbench::DockControls::default(),
+            arrangement_strings: crate::arrangements::ArrangementStrings::default(),
             pointer_profile: egui_pop_model::pointer::DEFAULT_PROFILE.into(),
             dock_drag: None,
             kits: Vec::new(),
@@ -3735,6 +3749,20 @@ impl AppBuilder {
     /// (docs/stability.md).</div>
     pub fn dock_controls(mut self, controls: crate::workbench::DockControls) -> Self {
         self.dock_controls = controls;
+        self
+    }
+
+    /// The application's own texts naming an arrangement of the panels
+    /// ([`ArrangementStrings`](crate::arrangements::ArrangementStrings)):
+    /// the layout menu's "Save the current arrangement as…", the save
+    /// dialog's title and button, the name it suggests. Whole strings
+    /// under the application's keys, translated by its catalogues; by
+    /// default egui-pop's.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn arrangement_strings(mut self, words: crate::arrangements::ArrangementStrings) -> Self {
+        self.arrangement_strings = words;
         self
     }
 
@@ -4416,6 +4444,10 @@ impl AppBuilder {
         app.handle.0.toast_corner.set(self.toast_corner);
         app.handle.0.group_handles.set(self.group_handles);
         app.handle.0.dock_controls.set(self.dock_controls);
+        app.handle
+            .0
+            .arrangement_strings
+            .set(self.arrangement_strings);
         app.handle.0.menu_bar.set(self.menu_bar);
         app.handle
             .0
