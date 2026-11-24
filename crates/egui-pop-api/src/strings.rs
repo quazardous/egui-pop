@@ -67,6 +67,9 @@ pub const PALETTE_RECENT_KEYS: StrKey =
     StrKey::new("egui-pop-palette-recent-keys", "recent  { $keys }");
 pub const PALETTE_NO_MATCH: StrKey =
     StrKey::new("egui-pop-palette-no-match", "No command matches.");
+/// A quick pick none of whose choices matches what is typed.
+pub const PALETTE_PICK_NO_MATCH: StrKey =
+    StrKey::new("egui-pop-palette-pick-no-match", "Nothing matches.");
 /// An argument's prompt: the command's title and the argument's name.
 pub const PALETTE_ARGUMENT_TITLE: StrKey = StrKey::new(
     "egui-pop-palette-argument-title",
@@ -782,10 +785,17 @@ pub const WORKBENCH_DETACH: StrKey =
     StrKey::new("egui-pop-workbench-detach", "Detach into a window");
 pub const WORKBENCH_CLOSE_PANEL: StrKey =
     StrKey::new("egui-pop-workbench-close-panel", "Close { $panel }");
+/// The panel menu's entry showing the panel alone (`workbench.zen`).
+pub const WORKBENCH_ZEN_PANEL: StrKey =
+    StrKey::new("egui-pop-workbench-zen-panel", "Zen this panel");
 /// The entry opening a new instance of a panel declared with several
 /// (a tab group's menus, `workbench.panel.new`'s list).
 pub const WORKBENCH_NEW_INSTANCE: StrKey =
     StrKey::new("egui-pop-workbench-new-instance", "New { $panel }");
+/// "Open panel…"'s quick pick: its title and the hint in its field.
+pub const WORKBENCH_PICK_TITLE: StrKey = StrKey::new("egui-pop-workbench-pick-title", "Open panel");
+pub const WORKBENCH_PICK_HINT: StrKey =
+    StrKey::new("egui-pop-workbench-pick-hint", "Type a panel's name");
 /// The "Move group to window" submenu's entry opening a new window.
 pub const WORKBENCH_NEW_WINDOW: StrKey = StrKey::new("egui-pop-workbench-new-window", "New window");
 /// The grip at the end of a tab bar, which moves the whole tab group,
@@ -1658,6 +1668,7 @@ pub const ALL: &[StrKey] = &[
     PALETTE_RECENT,
     PALETTE_RECENT_KEYS,
     PALETTE_NO_MATCH,
+    PALETTE_PICK_NO_MATCH,
     PALETTE_ARGUMENT_TITLE,
     PALETTE_ARGUMENT_HELP,
     PALETTE_NOT_BOOL,
@@ -1978,7 +1989,10 @@ pub const ALL: &[StrKey] = &[
     WORKBENCH_STAYS_OUT,
     WORKBENCH_DETACH,
     WORKBENCH_CLOSE_PANEL,
+    WORKBENCH_ZEN_PANEL,
     WORKBENCH_NEW_INSTANCE,
+    WORKBENCH_PICK_TITLE,
+    WORKBENCH_PICK_HINT,
     WORKBENCH_NEW_WINDOW,
     WORKBENCH_MOVE_GROUP,
     WORKBENCH_EJECT_GROUP,

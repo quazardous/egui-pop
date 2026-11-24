@@ -1123,6 +1123,10 @@ command-workbench-panel-open =
     .description = Opens `panel` through `pop.panel.open`: where it was when it closed (`place`: `last`, the default; that place gone, in the focused panel's tab group when its areas allow it, else its own area), `here` (the tab group holding `group`, else the focused panel's) or in an area (`center`, `start_side`, `end_side`, `bottom`). For a panel declared with several, `instance`: `new` opens a new instance (its id in `instance`), an instance's id opens that one.
     .title = Open panel
 
+command-workbench-panel-pick =
+    .description = Lists every panel in the command palette; the one chosen opens where it was when it closed (`workbench.panel.open`, `place: last`).
+    .title = Open panel…
+
 command-workbench-previous-region =
     .description = Moves the keyboard to the previous part of the window.
     .title = Go to the previous region
@@ -1148,7 +1152,7 @@ command-workbench-toggle-secondarySideBar =
     .title = Toggle secondary side bar
 
 command-workbench-zen =
-    .description = Shows the centre alone: no title, menu or status bar, no side or bottom area, no palette. Escape leaves it.
+    .description = Shows one panel alone, full size, in its window: `panel`, else the focused panel when it is a view, else the application's choice, else the centre's active tab. No title, menu or status bar, no other panel. Escape leaves it, and the layout is as it was.
     .title = Zen mode
 
 egui-pop-about-authors = Authors
@@ -2100,6 +2104,8 @@ egui-pop-palette-not-bool = `{ $input }` is not true or false
 egui-pop-palette-not-json = not JSON: { $error }
 
 egui-pop-palette-not-number = `{ $input }` is not a number
+
+egui-pop-palette-pick-no-match = Nothing matches.
 
 egui-pop-palette-pin = Pin { $palette }
 
@@ -3097,6 +3103,10 @@ egui-pop-workbench-new-window = New window
 
 egui-pop-workbench-nothing-to-open = No closed panel can open here
 
+egui-pop-workbench-pick-hint = Type a panel's name
+
+egui-pop-workbench-pick-title = Open panel
+
 egui-pop-workbench-stays-docked = { $panel } cannot go into a window
 
 egui-pop-workbench-stays-out = { $panel } stays out of { $area }
@@ -3104,6 +3114,8 @@ egui-pop-workbench-stays-out = { $panel } stays out of { $area }
 egui-pop-workbench-unfold = Unfold { $area }
 
 egui-pop-workbench-window-title = { $panel } — { $application }
+
+egui-pop-workbench-zen-panel = Zen this panel
 
 egui-pop-zen-hint = Zen mode: { $keys } to leave
 

@@ -124,3 +124,4 @@ mod window_wake;
 mod windows;
 mod workbench;
 mod zen;
+mod zen_panel;

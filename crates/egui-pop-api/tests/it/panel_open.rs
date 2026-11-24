@@ -346,3 +346,64 @@ fn the_panel_open_point_is_declared_with_its_listener() {
         );
     }
 }
+
+fn harness_with_palette() -> Harness<'static, App> {
+    let app = App::builder()
+        .plugin(egui_pop_api::palette::PalettePlugin)
+        .plugin(Demo)
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1000.0, 700.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    h
+}
+
+#[test]
+fn open_panel_lists_every_panel_in_the_palette_and_opens_the_chosen_one_where_it_was() {
+    let mut h = harness_with_palette();
+    let app = h.state().handle().clone();
+    change(&mut h, Change::Hide(LOG));
+    change(&mut h, Change::Hide(TREE));
+    // Its key opens the pick: every declared panel, by title.
+    h.key_press_modifiers(
+        egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+        egui::Key::O,
+    );
+    h.run();
+    h.run();
+    let p = app.service(&egui_pop_api::palette::PALETTE).unwrap();
+    let pick = p.pick_of(egui::ViewportId::ROOT).expect("the pick is open");
+    let titles: Vec<&str> = pick.items.iter().map(|i| i.label.as_str()).collect();
+    assert_eq!(
+        titles,
+        ["Console", "Dock", "Log", "Notes", "Output", "Tree"]
+    );
+    // Typed and Enter: the closed panel opens among its tabs, at its index.
+    h.get_by_label("Open panel").type_text("log");
+    h.run();
+    h.key_press(egui::Key::Enter);
+    for _ in 0..4 {
+        h.run();
+    }
+    assert!(!p.is_open_in(egui::ViewportId::ROOT));
+    let (tabs, _) = app.layout().group_of(&LOG).unwrap();
+    assert_eq!(tabs, vec![OUT, LOG, CON, DOCK]);
+    // Clicked: the other one opens back in its area.
+    run(&mut h, "workbench.panel.pick", Json::Null).unwrap();
+    assert!(
+        p.is_open_in(egui::ViewportId::ROOT),
+        "the pick is open again"
+    );
+    h.get_by_label("Tree").click_accesskit();
+    for _ in 0..4 {
+        h.run();
+    }
+    assert!(
+        !p.is_open_in(egui::ViewportId::ROOT),
+        "the click closed the pick"
+    );
+    assert!(app.layout().shows(&TREE), "{:?}", app.history().last());
+    assert_eq!(app.layout().area_of(&TREE), Some(Area::EndSide));
+}
