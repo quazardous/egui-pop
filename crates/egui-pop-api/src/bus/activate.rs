@@ -205,11 +205,21 @@ impl AppHandle {
             .map(|r| (r.id.clone(), r.kind))
     }
 
-    /// Asks a window to the front (`pop.window.activate`, reason `command`):
-    /// the window a viewport draws.
-    pub(crate) fn raise_viewport(&self, v: ViewportId, owner: &str) {
-        if let Some((id, kind)) = self.registry_window_at(v) {
-            self.request_window_activate(WindowRequest::new(id, kind, owner, Reason::Command));
+    /// Asks the window a viewport draws (the main window, a detached
+    /// panel's, an application window's) to the front: `pop.window.activate`
+    /// with the reason `command`, as [`Self::request_window_activate`] does
+    /// for a registry id. Use it rather than `ViewportCommand::Focus`, which
+    /// would leave the registry's active window behind. Whether it ran:
+    /// `false` for a viewport no window of the registry draws.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn raise_viewport(&self, v: ViewportId, owner: &str) -> bool {
+        match self.registry_window_at(v) {
+            Some((id, kind)) => {
+                self.request_window_activate(WindowRequest::new(id, kind, owner, Reason::Command))
+            }
+            None => false,
         }
     }
 

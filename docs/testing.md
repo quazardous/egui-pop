@@ -317,12 +317,35 @@ platform bug to look at, not a broken `next`.
 | Real window | `tools/window-smoke.py` | `tools/window-smoke.py` |
 
 The window's smoke run starts the debug gallery with a scripted run:
-`--quit-after 240 --detach gallery.notes --resize-to 800x600`. The
-gallery opens its window, detaches the notes panel into a second one,
-asks for a new size halfway, and closes by itself; the script checks its
-JSON lines (`ready` with the panel detached, `resize`, `quit` after every
-frame; the first line of each counts) and its exit code, within four minutes. The size the window had
-when it closed is printed, not checked: a window manager may refuse it.
+`--quit-after 360 --detach gallery.notes --page workbench
+--focus-detached --type "smoke 42" --resize-to 800x600`. The gallery
+opens its window and detaches the notes panel into a second one. A
+quarter of the way through it asks the system to focus that window and
+gives the window's field the keys (the field shows only in this run),
+then types the text into that window's input once the window says it
+has the focus; it asks for a new size halfway and closes by itself.
+The script checks its JSON lines (the first line of each counts) and
+prints one line per check:
+
+| Check | What it proves |
+|---|---|
+| detach | `ready` says the panel is in its own window |
+| focus | the detached window got the system's focus (`focus`) |
+| keys | the text typed into that window reached its field (`windows`, `field`): egui-pop's per-window key routing ([upstream.md](upstream.md), the focus plugin's workaround) |
+| scale | each window has its own pixels per point, the system's times the zoom; `--scale main=1.5` checks a factor |
+| resize | the new size was asked (`resize`) |
+| quit | `quit` after every frame, exit code 0, within five minutes |
+
+The size the window had when it closed is printed, not checked: a
+window manager may refuse it. On GitHub's runners nothing outside the
+gallery can type, so the gallery types into its own window's input; on
+Linux the bench box's `egui-pop-window-smoke` job runs the same checks
+in a headless labwc (`tools/wbox/window_smoke.py`), as a Wayland client
+and as an X11 one through Xwayland, with the keys typed by the
+compositor and a scale set by the system (the output's scale 2 changed
+while the gallery runs on Wayland, `WINIT_X11_SCALE_FACTOR=1.5` on
+X11). That job is a pre-release check, run by hand, not on CI
+([releasing](releasing.md)).
 
 Each job's summary says whether the tests and the smoke run passed, and
 names the failed tests; a failed job also leaves an error annotation on

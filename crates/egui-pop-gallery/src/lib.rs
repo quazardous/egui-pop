@@ -576,6 +576,50 @@ pub struct Gallery {
     persists: bool,
     /// Built transparent for rounded corners: cleared to transparent.
     transparent: bool,
+    /// The detached panel of a scripted run (`--detach`), reported on
+    /// quitting with the main window.
+    detached: Option<egui_pop::model::ids::PanelId>,
+    /// `--focus-detached`: the scripted focus and typing in that window.
+    focus: Option<ScriptFocus>,
+}
+
+/// A scripted run's focus and keys in a detached window
+/// (`--focus-detached`, `--type`): the system is asked to focus the
+/// window a quarter of the way through, the run says when the window has
+/// it, then types into the window's field.
+#[derive(Debug)]
+struct ScriptFocus {
+    window: egui::ViewportId,
+    /// The frame the window first said it had the focus.
+    focused_at: Option<u64>,
+    /// The text still to type; typed once.
+    text: Option<String>,
+    /// Handed to [`TypeInto`] for the window's next pass.
+    pending: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+}
+
+/// Types a scripted run's text into a window: the text joins the input
+/// of that window's next pass, as typed keys would, so it goes through
+/// egui-pop's per-window focus and key routing (docs/upstream.md, the
+/// focus plugin's workaround) to the window's focused field.
+struct TypeInto {
+    window: egui::ViewportId,
+    pending: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+}
+
+impl egui::Plugin for TypeInto {
+    fn debug_name(&self) -> &'static str {
+        "gallery.type_into"
+    }
+
+    fn input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
+        if input.viewport_id != self.window {
+            return;
+        }
+        if let Some(text) = egui_pop::core::lock(&self.pending).take() {
+            input.events.push(egui::Event::Text(text));
+        }
+    }
 }
 
 impl Gallery {
@@ -696,6 +740,34 @@ impl Gallery {
                 None => Err(format!("no panel `{panel}`")),
             }
         });
+        // The detached window's focus and keys, scripted.
+        let detached_panel = match &detached {
+            Some(Ok(p)) => egui_pop::model::ids::PanelId::new(p).ok(),
+            _ => None,
+        };
+        let focus = detached_panel
+            .as_ref()
+            .filter(|_| options.focus_detached)
+            .map(|panel| {
+                let window = egui_pop::api::workbench::window_id(panel);
+                let pending = std::sync::Arc::new(std::sync::Mutex::new(None));
+                ctx.add_plugin(TypeInto {
+                    window,
+                    pending: pending.clone(),
+                });
+                ctx.data_mut(|d| {
+                    d.insert_temp(
+                        pages::workbench::notes_field_id(),
+                        pages::workbench::NotesField::default(),
+                    )
+                });
+                ScriptFocus {
+                    window,
+                    focused_at: None,
+                    text: options.type_text.clone(),
+                    pending,
+                }
+            });
         if options.announce {
             let spec = app.handle().theme().spec();
             announce(&serde_json::json!({
@@ -727,6 +799,107 @@ impl Gallery {
             dump_debug: options.dump_debug,
             persists,
             transparent: options.rounded_windows,
+            detached: detached_panel,
+            focus,
+        })
+    }
+
+    /// The scripted focus and typing of `--focus-detached`, each frame.
+    fn script_focus(&mut self, ctx: &egui::Context, limit: u64) {
+        let frames = self.frames;
+        let announce_on = self.announce;
+        let Some(focus) = self.focus.as_mut() else {
+            return;
+        };
+        let ask_at = limit / 4;
+        if frames < ask_at {
+            return;
+        }
+        // The window draws while the run watches it: its focus, its
+        // field, the text typed and its scale are read from its passes.
+        ctx.request_repaint_of(focus.window);
+        if frames == ask_at {
+            // Through the bus (`pop.window.activate`, reason `command`):
+            // the registry follows, and the system is asked for the focus.
+            self.app
+                .handle()
+                .raise_viewport(focus.window, "gallery.script");
+            ask_field_focus(ctx);
+            if announce_on {
+                announce(&serde_json::json!({ "event": "focus_asked", "frames": frames }));
+            }
+        }
+        if focus.focused_at.is_none()
+            && ctx.input_for(focus.window, |i| i.viewport().focused) == Some(true)
+        {
+            focus.focused_at = Some(frames);
+            // Given by the system now: the field takes the keys again.
+            ask_field_focus(ctx);
+            if announce_on {
+                let main = ctx.input_for(egui::ViewportId::ROOT, |i| i.viewport().focused);
+                announce(&serde_json::json!({
+                    "event": "focus",
+                    "frames": frames,
+                    "window": window_name(self.detached.as_ref()),
+                    "focused": true,
+                    "main_focused": main,
+                }));
+            }
+        }
+        // Typed a few frames after the focus came, for the field to have
+        // taken the keys; without the focus, late in the run all the same
+        // (the keys check then says whether they still reached the field).
+        let due = match focus.focused_at {
+            Some(at) => frames >= at + 10,
+            None => frames >= limit * 3 / 4,
+        };
+        if due && let Some(text) = focus.text.take() {
+            *egui_pop::core::lock(&focus.pending) = Some(text.clone());
+            if announce_on {
+                announce(&serde_json::json!({
+                    "event": "type",
+                    "frames": frames,
+                    "text": text,
+                    "after_focus": focus.focused_at.is_some(),
+                }));
+            }
+        }
+    }
+
+    /// Each window of a scripted run as it is when the run ends: its
+    /// focus, its scale (pixels per point, the system's and the zoom),
+    /// and the detached window's field.
+    fn windows_line(&self, ctx: &egui::Context) -> serde_json::Value {
+        let zoom = ctx.zoom_factor();
+        let window = |name: &str, id: egui::ViewportId| {
+            ctx.input_for(id, |i| {
+                serde_json::json!({
+                    "window": name,
+                    "focused": i.viewport().focused,
+                    "pixels_per_point": i.pixels_per_point,
+                    "native_pixels_per_point": i.viewport().native_pixels_per_point,
+                    "inner_size": i.viewport().inner_rect.map(|r| [r.width(), r.height()]),
+                })
+            })
+        };
+        let mut windows = vec![window("main", egui::ViewportId::ROOT)];
+        if let Some(panel) = &self.detached {
+            windows.push(window(
+                panel.as_str(),
+                egui_pop::api::workbench::window_id(panel),
+            ));
+        }
+        let field = ctx
+            .data(|d| {
+                d.get_temp::<pages::workbench::NotesField>(pages::workbench::notes_field_id())
+            })
+            .map(|f| f.text);
+        serde_json::json!({
+            "event": "windows",
+            "frames": self.frames,
+            "zoom_factor": zoom,
+            "windows": windows,
+            "field": field,
         })
     }
 
@@ -762,8 +935,12 @@ impl Gallery {
                     );
                 }
             }
+            self.script_focus(ctx, limit);
             if self.frames >= limit {
                 self.quitting = true;
+                if self.announce {
+                    announce(&self.windows_line(ctx));
+                }
                 if self.dump_debug {
                     announce(&serde_json::json!({
                         "event": "debug",
@@ -785,6 +962,21 @@ impl Gallery {
             }
         }
     }
+}
+
+/// The detached field takes the keys the next time it is drawn.
+fn ask_field_focus(ctx: &egui::Context) {
+    ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<pages::workbench::NotesField>(
+            pages::workbench::notes_field_id(),
+        )
+        .focus_asked = true;
+    });
+}
+
+/// A window's name in the JSON lines: its panel's id.
+fn window_name(panel: Option<&egui_pop::model::ids::PanelId>) -> String {
+    panel.map(|p| p.to_string()).unwrap_or_default()
 }
 
 fn announce(line: &serde_json::Value) {

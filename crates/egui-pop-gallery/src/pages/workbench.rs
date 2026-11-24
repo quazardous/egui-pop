@@ -169,6 +169,23 @@ impl Plugin for WorkbenchPage {
     }
 }
 
+/// The notes' field of a scripted run with real windows
+/// (`--focus-detached`): shown only then, in egui's memory under
+/// [`notes_field_id`], so a run can give it the keys and read back what
+/// was typed into the detached window (`tools/window-smoke.py`).
+#[derive(Clone, Debug, Default)]
+pub struct NotesField {
+    /// What was typed.
+    pub text: String,
+    /// The field takes the keys the next time it is drawn.
+    pub focus_asked: bool,
+}
+
+/// Where the notes' field of a scripted run lives in egui's memory.
+pub fn notes_field_id() -> egui::Id {
+    egui::Id::unique("gallery.notes.field")
+}
+
 /// The notes: detached, their window takes its own key (Ctrl+Shift+Delete)
 /// and shows their dialog over it, the main window waiting meanwhile.
 fn notes(ui: &mut Ui, app: &AppHandle) {
@@ -179,6 +196,17 @@ fn notes(ui: &mut Ui, app: &AppHandle) {
     }
     if ui.button("Clear the notes…").clicked() {
         ask_clear(app);
+    }
+    let id = notes_field_id();
+    if let Some(mut field) = ui.data(|d| d.get_temp::<NotesField>(id)) {
+        let label = ui.label("Typed in this window");
+        let edit = ui
+            .add(egui::TextEdit::singleline(&mut field.text).id(id.with("edit")))
+            .labelled_by(label.id);
+        if std::mem::take(&mut field.focus_asked) {
+            edit.request_focus();
+        }
+        ui.data_mut(|d| d.insert_temp(id, field));
     }
 }
 
