@@ -3376,6 +3376,13 @@ impl AppHandle {
         wb.zen_panel.clone().filter(|_| wb.zen)
     }
 
+    /// Whether `panel` is the one panel docked in the centre.
+    pub(crate) fn centre_holds_only(&self, panel: &PanelId) -> bool {
+        let wb = self.workbench_mut();
+        let centre = wb.panels_in(Area::Center);
+        centre.len() == 1 && centre[0] == *panel
+    }
+
     /// Whether zen mode changes what the main window draws (on, and not
     /// on a detached window's panel).
     pub(crate) fn main_zen(&self) -> bool {
@@ -5185,6 +5192,12 @@ impl App {
                     return zen_result(call.app.set_zen(false), false);
                 }
                 match named.or_else(|| call.app.zen_target()) {
+                    // The centre's only panel: the centre whole shows it
+                    // alone already, drawn where it was, so the widget
+                    // holding the keyboard keeps it.
+                    Some(p) if call.app.centre_holds_only(&p) => {
+                        zen_result(call.app.set_zen(true), true)
+                    }
                     Some(p) => zen_result(call.app.set_zen_panel(&p), true),
                     None => zen_result(call.app.set_zen(true), true),
                 }

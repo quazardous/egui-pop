@@ -828,7 +828,9 @@ and the frame publishes no caption. Which panel, in this order:
    image viewer answers with the surface a double click reaches;
 4. the centre's active tab;
 
-and with none of them open, the centre whole. `AppHandle::zen_target`
+and with none of them open, the centre whole. The centre's only panel
+is shown as the centre whole: drawn where it was, the widget holding
+the keyboard keeps it. `AppHandle::zen_target`
 says which it would be, `AppHandle::set_zen_panel` zens a panel,
 `AppHandle::zen_panel` says which one is shown. A panel in a detached
 window is zenned in that window: the window draws it alone, without its
