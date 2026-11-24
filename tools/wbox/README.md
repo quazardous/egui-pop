@@ -71,6 +71,20 @@ exits with 1 when a run failed; screenshots of each run go to
 headless compositor) and a release build, as `cargo xtask screenshots`
 does.
 
+## A screen reader
+
+`screen_reader.py` walks five gallery pages with real keys while Orca
+listens, and compares what Orca says, and the node the accessibility bus
+says has the focus, with `screen_reader.json` (docs/testing.md, "Screen
+readers"). It needs Orca, at-spi2, speech-dispatcher and pyatspi
+(`python3-pyatspi`, run by the system's Python through
+`atspi_focus.py`); every bus is private to the run.
+
+```sh
+cargo build --release -p egui-pop-gallery
+$WBOX_PYTHON tools/wbox/screen_reader.py            # --only tree, --record FILE, --no-orca
+```
+
 ## GNOME: a headless mutter
 
 Some bugs show only on GNOME. wbox (0.14 and later) runs them in a
