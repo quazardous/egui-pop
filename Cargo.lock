@@ -1452,7 +1452,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop"
-version = "0.21.0"
+version = "0.21.1"
 dependencies = [
  "egui",
  "egui-pop-api",
@@ -1473,7 +1473,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-agent"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "base64 0.22.1",
  "egui",
@@ -1498,7 +1498,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-api"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "bus-contract",
  "bus-contract-crossing",
@@ -1540,7 +1540,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-core"
-version = "0.18.0"
+version = "0.18.1"
 dependencies = [
  "egui",
  "egui-pop-model",
@@ -1623,7 +1623,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-i18n"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "egui",
  "egui-pop-agent",
@@ -1758,7 +1758,7 @@ dependencies = [
 
 [[package]]
 name = "egui-pop-viewport"
-version = "0.18.0"
+version = "0.18.1"
 dependencies = [
  "eframe",
  "egui",
