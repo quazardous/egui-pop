@@ -1,0 +1,202 @@
+{
+  "palette.1 ctrl+shift+p": {
+    "role": "toggle button",
+    "name": "Clipboard: Copy from an endpoint",
+    "states": [
+      "pressed"
+    ],
+    "speech": "dialog | Clipboard: Copy from an endpoint | toggle button pressed."
+  },
+  "palette.2 Down": {
+    "role": "toggle button",
+    "name": "Clipboard: Paste into an endpoint",
+    "states": [
+      "pressed"
+    ],
+    "speech": "not pressed | Clipboard: Paste into an endpoint | toggle button pressed."
+  },
+  "palette.3 Down": {
+    "role": "toggle button",
+    "name": "Clipboard: Read the clipboard",
+    "states": [
+      "pressed"
+    ],
+    "speech": "Clipboard: Copy from an endpoint | toggle button not pressed. | Clipboard: Read the clipboard | toggle button pressed."
+  },
+  "palette.4 Up": {
+    "role": "toggle button",
+    "name": "Clipboard: Paste into an endpoint",
+    "states": [
+      "pressed"
+    ],
+    "speech": "Clipboard: Paste into an endpoint | toggle button pressed."
+  },
+  "palette.5 Escape": {
+    "role": "frame",
+    "name": "egui-pop gallery",
+    "states": [],
+    "speech": "egui-pop gallery"
+  },
+  "settings.1 Tab": {
+    "role": "button",
+    "name": "File",
+    "states": [],
+    "speech": "menu | File | button."
+  },
+  "settings.2 Tab": {
+    "role": "button",
+    "name": "Edit",
+    "states": [],
+    "speech": "Edit | button."
+  },
+  "settings.3 Tab": {
+    "role": "button",
+    "name": "View",
+    "states": [],
+    "speech": "View | button."
+  },
+  "settings.4 Tab": {
+    "role": "button",
+    "name": "Help",
+    "states": [],
+    "speech": "Help | button."
+  },
+  "settings.5 shift+Tab": {
+    "role": "button",
+    "name": "View",
+    "states": [],
+    "speech": "View | button."
+  },
+  "settings.6 F6": {
+    "role": "button",
+    "name": "Toolbox",
+    "states": [],
+    "speech": "the activity bar | panel | Toolbox | button."
+  },
+  "settings.7 Tab": {
+    "role": "entry",
+    "name": "Filter pages",
+    "states": [
+      "editable"
+    ],
+    "speech": "the start side bar | panel | Filter pages | entry."
+  },
+  "tree.1 Tab": {
+    "role": "tree",
+    "name": "Files",
+    "states": [],
+    "speech": "Files | tree."
+  },
+  "tree.2 Down": {
+    "role": "toggle button",
+    "name": "Photos",
+    "states": [
+      "pressed"
+    ],
+    "speech": "Photos | toggle button pressed."
+  },
+  "tree.3 Down": {
+    "role": "toggle button",
+    "name": "Documents",
+    "states": [
+      "pressed"
+    ],
+    "speech": "Documents | toggle button pressed."
+  },
+  "tree.4 Right": {
+    "role": "toggle button",
+    "name": "Documents",
+    "states": [
+      "pressed"
+    ],
+    "speech": ""
+  },
+  "tree.5 Left": {
+    "role": "toggle button",
+    "name": "Documents",
+    "states": [
+      "pressed"
+    ],
+    "speech": ""
+  },
+  "tree.6 Up": {
+    "role": "toggle button",
+    "name": "Photos",
+    "states": [
+      "pressed"
+    ],
+    "speech": "Photos | toggle button pressed."
+  },
+  "tree.7 shift+Tab": {
+    "role": "button",
+    "name": "Lock Offline drive",
+    "states": [],
+    "speech": "Lock Offline drive | button."
+  },
+  "table.1 Tab": {
+    "role": "table",
+    "name": "Photos",
+    "states": [],
+    "speech": "Photos."
+  },
+  "table.2 Down": {
+    "role": "toggle button",
+    "name": "IMG_00000.raw",
+    "states": [
+      "pressed"
+    ],
+    "speech": "IMG_00000.raw | toggle button pressed."
+  },
+  "table.3 Down": {
+    "role": "toggle button",
+    "name": "IMG_00001.raw",
+    "states": [
+      "pressed"
+    ],
+    "speech": "IMG_00001.raw | toggle button pressed."
+  },
+  "table.4 Up": {
+    "role": "toggle button",
+    "name": "IMG_00000.raw",
+    "states": [
+      "pressed"
+    ],
+    "speech": "IMG_00000.raw | toggle button pressed."
+  },
+  "table.5 Tab": {
+    "role": "list box",
+    "name": "Keywords",
+    "states": [],
+    "speech": "Keywords. | list box"
+  },
+  "dialog.1 Tab": {
+    "role": "button",
+    "name": "Confirm an export",
+    "states": [],
+    "speech": "the centre Confirmations named by their verb, a dangerous one, a form from descriptors with a path picker, a choice, a notice, a close button, movable dialogs, a clear backdrop and an error whose Copy button copies its details. Each button opens a dialog. Enter accepts (except a danger), Escape cancels. Each dialog's Copy button (its bottom left corner) copies its title and text, and its details when it has some: shown under Details on the error, hidden on the others. A movable dialog is dragged by its header band (a double click centres it); Alt+F7 moves it with the arrow keys. The levels dialog comes back where it was left. Sent by the last accepted dialog | panel | Confirm an export | button."
+  },
+  "dialog.2 Return": {
+    "role": "button",
+    "name": "Export",
+    "states": [],
+    "speech": "egui-pop gallery | frame | dialog | Export the page? A PNG of the page goes next to the document. | Export | button."
+  },
+  "dialog.3 Tab": {
+    "role": "button",
+    "name": "Cancel",
+    "states": [],
+    "speech": "Cancel | button."
+  },
+  "dialog.4 shift+Tab": {
+    "role": "button",
+    "name": "Export",
+    "states": [],
+    "speech": "Export | button."
+  },
+  "dialog.5 Escape": {
+    "role": "button",
+    "name": "Confirm an export",
+    "states": [],
+    "speech": "egui-pop gallery | the centre Confirmations named by their verb, a dangerous one, a form from descriptors with a path picker, a choice, a notice, a close button, movable dialogs, a clear backdrop and an error whose Copy button copies its details. Each button opens a dialog. Enter accepts (except a danger), Escape cancels. Each dialog's Copy button (its bottom left corner) copies its title and text, and its details when it has some: shown under Details on the error, hidden on the others. A movable dialog is dragged by its header band (a double click centres it); Alt+F7 moves it with the arrow keys. The levels dialog comes back where it was left. Sent by the last accepted dialog | panel | Confirm an export | button."
+  }
+}

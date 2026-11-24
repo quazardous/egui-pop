@@ -107,8 +107,10 @@ WALKS: dict[str, dict] = {
         {"key": "Tab", "until": {"name": "Files"}, "max": 40},
         {"key": "Down"},
         {"key": "Down"},
-        {"key": "Right"},
-        {"key": "Left"},
+        # upstream: AccessKit's AT-SPI adapter has no expanded state
+        # (docs/upstream.md): opening and closing a folder says nothing.
+        {"key": "Right", "silent": True},
+        {"key": "Left", "silent": True},
         {"key": "Up"},
         {"key": "shift+Tab"},
     ]},
@@ -403,6 +405,8 @@ def walk(cfg: dict, name: str, spec: dict, out: Path, use_orca: bool) -> tuple[s
         for i, step in enumerate(spec["steps"], 1):
             label = f"{name}.{i} {step['key']}"
             record: dict = {"step": label}
+            if step.get("silent"):
+                record["silent"] = True
             presses = 0
             while True:
                 pressed = comp.key(step["key"])
@@ -457,7 +461,7 @@ def check(record: dict, expected: dict | None, mode: str) -> tuple[bool, str]:
     speech = record.get("speech", "")
     if node is None:
         return False, "nothing has the focus"
-    if mode == "orca" and not speech:
+    if mode == "orca" and not speech and not record.get("silent"):
         return False, "Orca said nothing"
     if not node.get("name"):
         return False, f"a {node.get('role')} without a name (fix it in egui-pop)"

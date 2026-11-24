@@ -244,6 +244,19 @@ limit.
 - **Remove when**: egui applies the layer's transform to the bounds it
   reports.
 
+## AccessKit: no expanded state on Linux
+
+- **Not compensated**: AccessKit's AT-SPI adapter (`accesskit_atspi_common`
+  0.21) maps no expanded or expandable state: a tree's folder says whether
+  it is open on Windows and macOS, never to Orca, and Right or Left on a
+  folder is silent there.
+- **Upstream**: not filed yet.
+- **Workaround**: none in egui-pop: the tree view sets the state
+  (`set_expanded`) for the platforms that read it, and the screen reader
+  pass's walk marks those two steps silent (`tools/wbox/screen_reader.py`).
+- **Remove when**: the AT-SPI adapter maps the state; then the two steps
+  say "expanded" and "collapsed", recorded again.
+
 ## egui: the focus cannot be given back as a modal closes
 
 - **Compensated**: a widget drawn under the top modal layer gives up the

@@ -397,7 +397,10 @@ step waits for Orca's line:
 Each step prints one line (`tree.3 Down: PASS: ...`). A step fails when
 the focused node has no name or Orca says "unlabelled" (fix the widget in
 egui-pop, never the expectations), or when the node or Orca's line differs
-from `tools/wbox/screen_reader.json`: both are printed as a diff. After a
+from `tools/wbox/screen_reader.json`: both are printed as a diff. A step
+marked silent in the walk may say nothing: opening and closing a folder,
+which AccessKit's AT-SPI adapter does not report ([upstream](upstream.md),
+"AccessKit: no expanded state on Linux"). After a
 reviewed change, `record=yes` writes what the run heard to
 `out/screen_reader.json`, to copy over the checked-in file; `walk=<name>`
 runs one walk. Orca's log, the focus lines and a screenshot of each walk
