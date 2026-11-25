@@ -1035,7 +1035,11 @@ impl DropHint {
 }
 
 /// A change of the workbench, as a step runs it.
+///
+/// New kinds of change come with new features: a `match` on it keeps a
+/// `_` arm.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Change {
     Move(PanelId, Area),
     /// A panel is shown: closed, back where it was (`pop.panel.open`'s
