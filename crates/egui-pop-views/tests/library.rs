@@ -9,7 +9,7 @@ use egui_pop_api::steps::Before;
 use egui_pop_api::{App, Ctx, Plugin, PluginError};
 use egui_pop_model::commands::Origin;
 use egui_pop_model::ids::PluginId;
-use egui_pop_views::library::filter::{SearchField, SearchState};
+use egui_pop_views::library::filter::{AppChip, SearchEvent, SearchField, SearchState, Suggestion};
 use egui_pop_views::library::grid::{
     Badge, LibraryItems, LibraryState, Signal, Stack, Thumb, ThumbGrid, ThumbSource,
 };
@@ -594,6 +594,170 @@ fn a_search_field_with_whole_text_leaves_the_typing_to_the_application() {
     h.run();
     assert!(h.query_by_label("Rating ≥ 3").is_none(), "no chip");
     assert_eq!(h.state().0.text(), "(label:red OR #beach) rating>=3");
+}
+
+/// An application reading the text itself: key suggestions for the word
+/// being typed, its own chips, the events seen.
+#[derive(Default)]
+struct Hooked {
+    state: SearchState,
+    chips: Vec<AppChip>,
+    events: Vec<SearchEvent>,
+}
+
+fn hooked(chips: &[(&str, &str)]) -> Harness<'static, Hooked> {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(700.0, 300.0))
+        .build_ui_state(
+            |ui, app: &mut Hooked| {
+                let text = app.state.text().to_string();
+                let start = text.rfind(' ').map_or(0, |i| i + 1);
+                let word = &text[start..];
+                let rows: Vec<Suggestion> = if word.is_empty() {
+                    Vec::new()
+                } else {
+                    ["camera", "caption", "rating"]
+                        .iter()
+                        .filter(|k| k.starts_with(word) && **k != word)
+                        .map(|k| Suggestion::new(*k, format!("{}{k}:", &text[..start])).kind("key"))
+                        .collect()
+                };
+                let _ = SearchField::new("shoot")
+                    .whole_text(true)
+                    .suggestions(&rows)
+                    .chips(&app.chips)
+                    .show(ui, &mut app.state);
+                for e in app.state.take_events() {
+                    if let SearchEvent::ChipRemoved(id) = &e {
+                        app.chips.retain(|c| &c.id != id);
+                    }
+                    app.events.push(e);
+                }
+            },
+            Hooked {
+                chips: chips.iter().map(|(id, w)| AppChip::new(*id, *w)).collect(),
+                ..Hooked::default()
+            },
+        );
+    h.run();
+    h.get_by_role_and_label(Role::TextInput, "Search").click();
+    h.run();
+    h
+}
+
+#[test]
+fn a_search_field_takes_the_application_s_suggestions() {
+    let mut h = hooked(&[]);
+    h.event(egui::Event::Text("ca".into()));
+    h.run();
+    h.run();
+    h.get_by_role_and_label(Role::ListBox, "Suggestions");
+    for name in ["camera", "caption"] {
+        h.get_by_role_and_label(Role::ListBoxOption, name);
+    }
+    assert!(
+        h.query_by_role_and_label(Role::ListBoxOption, "rating")
+            .is_none()
+    );
+    assert_eq!(h.state().state.highlight(), None);
+    h.key_press(Key::ArrowDown);
+    h.run();
+    h.key_press(Key::ArrowDown);
+    h.run();
+    h.key_press(Key::ArrowUp);
+    h.run();
+    assert_eq!(h.state().state.highlight(), Some(0));
+    h.key_press(Key::Enter);
+    h.run();
+    assert_eq!(h.state().state.text(), "camera:");
+    assert_eq!(h.state().events, [SearchEvent::Picked(0)]);
+    assert!(!h.state().state.list_open());
+    assert!(
+        h.query_by_role_and_label(Role::ListBox, "Suggestions")
+            .is_none()
+    );
+    // Typing goes on at the end of the inserted text.
+    h.event(egui::Event::Text("Z".into()));
+    h.run();
+    assert_eq!(h.state().state.text(), "camera:Z");
+}
+
+#[test]
+fn escape_closes_the_suggestions_then_clears_then_leaves() {
+    let mut h = hooked(&[]);
+    h.event(egui::Event::Text("ca".into()));
+    h.run();
+    h.run();
+    assert!(h.state().state.list_open());
+    h.key_press(Key::Escape);
+    h.run();
+    assert!(
+        h.query_by_role_and_label(Role::ListBox, "Suggestions")
+            .is_none()
+    );
+    assert_eq!(h.state().state.text(), "ca");
+    h.key_press(Key::Escape);
+    h.run();
+    assert_eq!(h.state().state.text(), "");
+    assert!(
+        h.get_by_role_and_label(Role::TextInput, "Search")
+            .is_focused()
+    );
+    h.key_press(Key::Escape);
+    h.run();
+    assert!(
+        !h.get_by_role_and_label(Role::TextInput, "Search")
+            .is_focused()
+    );
+    assert_eq!(
+        h.state().events,
+        [
+            SearchEvent::ListClosed,
+            SearchEvent::Cleared,
+            SearchEvent::Left
+        ]
+    );
+}
+
+#[test]
+fn the_application_s_chips_are_removed_by_button_and_backspace() {
+    let mut h = hooked(&[
+        ("a", "camera is Z 8"),
+        ("b", "rating is at least 3"),
+        ("c", "label is red"),
+        ("d", "not flag is reject"),
+    ]);
+    h.get_by_role_and_label(Role::Button, "Remove camera is Z 8")
+        .click();
+    h.run();
+    assert_eq!(h.state().events, [SearchEvent::ChipRemoved("a".into())]);
+    h.get_by_role_and_label(Role::TextInput, "Search").click();
+    h.run();
+    // Backspace selects the last chip, a second press removes it.
+    h.key_press(Key::Backspace);
+    h.run();
+    assert_eq!(h.state().chips.len(), 3);
+    h.key_press(Key::Backspace);
+    h.run();
+    assert_eq!(
+        h.state().events.last(),
+        Some(&SearchEvent::ChipRemoved("d".into()))
+    );
+    // Ctrl+Backspace removes the last one at once.
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Backspace);
+    h.run();
+    assert_eq!(
+        h.state().events.last(),
+        Some(&SearchEvent::ChipRemoved("c".into()))
+    );
+    assert_eq!(h.state().chips.len(), 1);
+    // With text typed, Backspace is the text's.
+    h.event(egui::Event::Text("x".into()));
+    h.run();
+    h.key_press(Key::Backspace);
+    h.run();
+    assert_eq!(h.state().state.text(), "");
+    assert_eq!(h.state().chips.len(), 1);
 }
 
 #[test]

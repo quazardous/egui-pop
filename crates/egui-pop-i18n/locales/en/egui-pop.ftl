@@ -2881,6 +2881,8 @@ egui-pop-views-sorted-down = { $column }, sorted descending
 
 egui-pop-views-sorted-up = { $column }, sorted ascending
 
+egui-pop-views-suggestions = Suggestions
+
 egui-pop-views-table = Table
 
 egui-pop-views-text-log = Text log

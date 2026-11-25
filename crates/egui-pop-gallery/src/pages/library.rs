@@ -16,7 +16,9 @@ use egui_pop::api::{AppHandle, Ctx, Plugin, PluginError};
 use egui_pop::core::widgets;
 use egui_pop::model::ids::{PluginId, StoryId};
 use egui_pop::views::library::compare::{CompareState, CompareView, Intent, Pane};
-use egui_pop::views::library::filter::{Candidate, Filter, SearchField, SearchState};
+use egui_pop::views::library::filter::{
+    AppChip, Candidate, Filter, SearchEvent, SearchField, SearchState, Suggestion,
+};
 use egui_pop::views::library::grid::{GridResize, Zoom};
 use egui_pop::views::library::marks::{ColorLabels, EmptyStars, FlagToggle, RatingStars};
 use egui_pop::views::library::tags::{TagInput, TagInputState};
@@ -216,6 +218,8 @@ pub struct PageState {
     revision: u64,
     state: LibraryState<u32>,
     search: SearchState,
+    /// The search read by the page itself (its keys, its chips).
+    keyed: SearchState,
     tags: TagInputState,
     compare: CompareState,
     comparing: bool,
@@ -257,6 +261,7 @@ impl Default for PageState {
             revision: 0,
             state: LibraryState::new(LIBRARY),
             search: SearchState::new(),
+            keyed: SearchState::new(),
             tags: TagInputState::default(),
             compare: CompareState::new(),
             comparing: false,
@@ -458,6 +463,63 @@ fn show(ui: &mut Ui, app: &AppHandle, p: &mut PageState) {
     let skip = p.log.len().saturating_sub(3);
     for line in &p.log[skip..] {
         ui.monospace(line);
+    }
+    keyed_search(ui, p);
+}
+
+/// The keys the page's own search grammar knows.
+const SEARCH_KEYS: [&str; 4] = ["camera", "caption", "rating", "label"];
+
+/// A search field whose text the page reads itself: it suggests its keys
+/// for the word typed and draws each `key:value` word as a chip.
+fn keyed_search(ui: &mut Ui, p: &mut PageState) {
+    section(ui, "Search read by the application");
+    ui.label("Type \"ca\": the page suggests its keys (Up, Down, Enter). Each key:value typed becomes the page's chip; Backspace in the empty field selects the last chip, a second press removes it. Escape closes the list, clears, then leaves.");
+    let text = p.keyed.text().to_string();
+    let start = text.rfind(' ').map_or(0, |i| i + 1);
+    let word = &text[start..];
+    let rows: Vec<Suggestion> = if word.is_empty() || word.contains(':') {
+        Vec::new()
+    } else {
+        SEARCH_KEYS
+            .iter()
+            .filter(|k| k.starts_with(word))
+            .map(|k| Suggestion::new(*k, format!("{}{k}:", &text[..start])).kind("key"))
+            .collect()
+    };
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let chips: Vec<AppChip> = words
+        .iter()
+        .enumerate()
+        .filter_map(|(i, w)| {
+            // A whole `key:value` word, not the one still being typed.
+            let done = i + 1 < words.len() || text.ends_with(' ');
+            let (k, v) = w.split_once(':')?;
+            (done && !v.is_empty()).then(|| AppChip::new(i.to_string(), format!("{k} is {v}")))
+        })
+        .collect();
+    let _ = SearchField::new("gallery.keyed")
+        .label("Search by keys")
+        .whole_text(true)
+        .suggestions(&rows)
+        .chips(&chips)
+        .width(220.0)
+        .show(ui, &mut p.keyed);
+    for e in p.keyed.take_events() {
+        if let SearchEvent::ChipRemoved(id) = &e {
+            let kept: Vec<&str> = words
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| &i.to_string() != id)
+                .map(|(_, w)| *w)
+                .collect();
+            let mut t = kept.join(" ");
+            if !t.is_empty() {
+                t.push(' ');
+            }
+            p.keyed.set_text(t);
+        }
+        p.log.push(format!("search: {e:?}"));
     }
 }
 

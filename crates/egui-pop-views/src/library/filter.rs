@@ -299,6 +299,78 @@ impl FilterChip {
     }
 }
 
+/// A suggestion the application offers under the field
+/// ([`SearchField::suggestions`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Suggestion {
+    /// What the row shows, and its accessible name.
+    pub label: String,
+    /// What kind of suggestion it is (a key, a value, a recent search),
+    /// shown muted beside the label; empty for none.
+    pub kind: String,
+    /// The field's whole text once the suggestion is taken.
+    pub insert: String,
+}
+
+impl Suggestion {
+    /// A row showing `label` that sets the field's text to `insert`.
+    pub fn new(label: impl Into<String>, insert: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            kind: String::new(),
+            insert: insert.into(),
+        }
+    }
+
+    /// Its kind, shown muted beside the label.
+    pub fn kind(mut self, kind: impl Into<String>) -> Self {
+        self.kind = kind.into();
+        self
+    }
+}
+
+/// A chip the application draws in the field ([`SearchField::chips`]):
+/// a part of its own reading of the text, in words.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct AppChip {
+    /// The application's id for it, given back when it is removed.
+    pub id: String,
+    /// What the chip shows.
+    pub words: String,
+}
+
+impl AppChip {
+    pub fn new(id: impl Into<String>, words: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            words: words.into(),
+        }
+    }
+}
+
+/// What the application hooks did in a pass
+/// ([`SearchState::take_events`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SearchEvent {
+    /// The suggestion at this index was taken: the text is now its
+    /// `insert`.
+    Picked(usize),
+    /// The application chip with this id was asked away (its remove
+    /// button, Backspace twice or Ctrl+Backspace in the empty field): the
+    /// application drops it from its text.
+    ChipRemoved(String),
+    /// Escape closed the suggestion list.
+    ListClosed,
+    /// Escape cleared the text typed (the list already closed).
+    Cleared,
+    /// Escape in the empty field, the list closed: the field let go of the
+    /// keyboard (back to the grid).
+    Left,
+}
+
 /// A search field's state between passes: the chips, the text typed,
 /// the filter last given.
 #[derive(Clone, Debug, Default)]
@@ -306,6 +378,17 @@ pub struct SearchState {
     chips: Filter,
     text: String,
     last: Filter,
+    /// The suggestion list is open.
+    list_open: bool,
+    /// The suggestion highlighted.
+    highlight: Option<usize>,
+    /// The pointer is over the suggestion list.
+    list_hovered: bool,
+    /// The application chip Backspace selected (a second press removes it).
+    chip_selected: Option<usize>,
+    /// The text had the keyboard at the end of the last pass.
+    had_focus: bool,
+    events: Vec<SearchEvent>,
 }
 
 impl SearchState {
@@ -321,6 +404,29 @@ impl SearchState {
     /// The text typed.
     pub fn text(&self) -> &str {
         &self.text
+    }
+
+    /// Sets the text typed (the application rewriting it, a chip of its
+    /// own removed). The filter follows at the next pass.
+    pub fn set_text(&mut self, text: impl Into<String>) {
+        self.text = text.into();
+    }
+
+    /// The suggestion list is open (shown while the field has the keyboard
+    /// and the application gives suggestions).
+    pub fn list_open(&self) -> bool {
+        self.list_open
+    }
+
+    /// The suggestion highlighted, by index.
+    pub fn highlight(&self) -> Option<usize> {
+        self.highlight
+    }
+
+    /// What the application hooks did since the last call: suggestions
+    /// taken, application chips removed, the Escape sequence.
+    pub fn take_events(&mut self) -> Vec<SearchEvent> {
+        std::mem::take(&mut self.events)
     }
 
     /// Sets the filter without running a step (its criteria as chips,
@@ -365,6 +471,8 @@ pub struct SearchField<'a> {
     width: Option<f32>,
     label: Option<String>,
     whole_text: bool,
+    suggestions: Option<&'a [Suggestion]>,
+    app_chips: &'a [AppChip],
 }
 
 impl<'a> SearchField<'a> {
@@ -377,7 +485,33 @@ impl<'a> SearchField<'a> {
             width: None,
             label: None,
             whole_text: false,
+            suggestions: None,
+            app_chips: &[],
         }
+    }
+
+    /// The application's suggestions for the text typed, given each pass
+    /// (meant with [`Self::whole_text`]). They show in a list under the
+    /// field once something is typed, or on Down: Up and Down move the
+    /// highlight, Enter or a click takes the highlighted one (the text
+    /// becomes its [`Suggestion::insert`], [`SearchEvent::Picked`]).
+    /// Escape closes the list, then clears the text, then leaves the
+    /// field, each reported ([`SearchState::take_events`]).
+    pub fn suggestions(mut self, suggestions: &'a [Suggestion]) -> Self {
+        self.suggestions = Some(suggestions);
+        self
+    }
+
+    /// The application's chips, drawn in the field after the field's own
+    /// (meant with [`Self::whole_text`]: the application's reading of the
+    /// text, in words). Each has its remove button; in the empty field,
+    /// Backspace selects the last one and removes it at a second press,
+    /// Ctrl+Backspace removes it at once. A removal is reported
+    /// ([`SearchEvent::ChipRemoved`]): the application drops the chip
+    /// from its text.
+    pub fn chips(mut self, chips: &'a [AppChip]) -> Self {
+        self.app_chips = chips;
+        self
     }
 
     /// The application reads the text typed with its own grammar: the
@@ -429,6 +563,88 @@ impl<'a> SearchField<'a> {
             proposed = Some(f);
         }
         let focused = ui.memory(|m| m.has_focus(text_id));
+        let rows = self.suggestions.unwrap_or(&[]);
+        if state.highlight.is_some_and(|h| h >= rows.len()) {
+            state.highlight = None;
+        }
+        if state
+            .chip_selected
+            .is_some_and(|c| c >= self.app_chips.len())
+        {
+            state.chip_selected = None;
+        }
+        let mut picked: Option<usize> = None;
+        // egui takes the focus off on Escape before the field is drawn:
+        // the field that had it last pass still answers that Escape.
+        let escaped = self.suggestions.is_some()
+            && !focused
+            && state.had_focus
+            && ui.input(|i| i.key_pressed(EKey::Escape));
+        if (focused || escaped) && self.suggestions.is_some() {
+            let shown = state.list_open && !rows.is_empty();
+            let (down, up, escape) = ui.input_mut(|i| {
+                (
+                    !rows.is_empty() && i.consume_key(Modifiers::NONE, EKey::ArrowDown),
+                    shown && i.consume_key(Modifiers::NONE, EKey::ArrowUp),
+                    i.consume_key(Modifiers::NONE, EKey::Escape) || escaped,
+                )
+            });
+            let n = rows.len();
+            if down {
+                state.highlight = Some(match (shown, state.highlight) {
+                    (true, Some(h)) => (h + 1) % n,
+                    _ => 0,
+                });
+                state.list_open = true;
+            }
+            if up {
+                state.highlight = Some(match state.highlight {
+                    Some(h) => (h + n - 1) % n,
+                    None => n - 1,
+                });
+            }
+            if escape {
+                // The field keeps the focus until the last step.
+                ui.memory_mut(|m| m.request_focus(text_id));
+                if shown {
+                    state.list_open = false;
+                    state.highlight = None;
+                    state.events.push(SearchEvent::ListClosed);
+                } else if !state.text.is_empty() {
+                    state.text.clear();
+                    state.events.push(SearchEvent::Cleared);
+                } else {
+                    ui.memory_mut(|m| m.surrender_focus(text_id));
+                    state.events.push(SearchEvent::Left);
+                }
+            }
+            if shown
+                && let Some(h) = state.highlight
+                && ui.input_mut(|i| i.consume_key(Modifiers::NONE, EKey::Enter))
+            {
+                picked = Some(h);
+            }
+        }
+        if focused && !self.app_chips.is_empty() && state.text.is_empty() {
+            let (now, back) = ui.input_mut(|i| {
+                (
+                    i.consume_key(Modifiers::COMMAND, EKey::Backspace),
+                    i.consume_key(Modifiers::NONE, EKey::Backspace),
+                )
+            });
+            let last = self.app_chips.len() - 1;
+            if now || (back && state.chip_selected == Some(last)) {
+                state.chip_selected = None;
+                state
+                    .events
+                    .push(SearchEvent::ChipRemoved(self.app_chips[last].id.clone()));
+            } else if back {
+                state.chip_selected = Some(last);
+            }
+        }
+        if let Some(k) = picked {
+            take_suggestion(ui.ctx(), text_id, state, rows, k);
+        }
         if focused {
             let (enter, back) = ui.input_mut(|i| {
                 (
@@ -473,6 +689,20 @@ impl<'a> SearchField<'a> {
                             state.chips.remove(&chip);
                         }
                     }
+                    for (k, chip) in self.app_chips.iter().enumerate() {
+                        let name = tr_args(&ctx, &s::REMOVE, &[("item", &chip.words)]);
+                        if TagChip::new(chip.words.clone())
+                            .removable(true)
+                            .selected(state.chip_selected == Some(k))
+                            .remove_label(name)
+                            .show(ui)
+                            .removed
+                        {
+                            state.chip_selected = None;
+                            state.events.push(SearchEvent::ChipRemoved(chip.id.clone()));
+                        }
+                    }
+                    let before = state.text.clone();
                     let field = ui.add(
                         TextEdit::singleline(&mut state.text)
                             .id(text_id)
@@ -481,6 +711,14 @@ impl<'a> SearchField<'a> {
                             .desired_width(self.width.unwrap_or(180.0)),
                     );
                     egui_pop_core::a11y::name(&field, Role::TextInput, &label);
+                    if state.text != before && self.suggestions.is_some() {
+                        // Typing opens the list on what the application
+                        // offers for the new text (at the next pass).
+                        state.list_open = true;
+                        state.highlight = None;
+                        state.chip_selected = None;
+                        ui.ctx().request_repaint();
+                    }
                     // Each button's name is its tooltip too.
                     let add = ui.menu_button("+", |ui| add_menu(ui, &mut state.chips));
                     egui_pop_core::overlay::follow_menu(&add.response, "add filter menu");
@@ -502,6 +740,11 @@ impl<'a> SearchField<'a> {
                 .inner
             });
         let response = inner.inner;
+        state.had_focus = ui.memory(|m| m.has_focus(text_id));
+        if self.suggestions.is_some() {
+            let box_rect = inner.response.rect;
+            suggestion_list(ui, text_id, box_rect, state, rows);
+        }
         let now = proposed.unwrap_or_else(|| state.effective(self.whole_text));
         let mut changed = None;
         let mut vetoed = None;
@@ -540,6 +783,109 @@ impl<'a> SearchField<'a> {
             vetoed,
         }
     }
+}
+
+/// Takes suggestion `k`: the text becomes its insert, the cursor at its
+/// end.
+fn take_suggestion(
+    ctx: &egui::Context,
+    text_id: egui::Id,
+    state: &mut SearchState,
+    rows: &[Suggestion],
+    k: usize,
+) {
+    let Some(row) = rows.get(k) else {
+        return;
+    };
+    state.text = row.insert.clone();
+    state.list_open = false;
+    state.highlight = None;
+    state.events.push(SearchEvent::Picked(k));
+    let mut te = egui::text_edit::TextEditState::load(ctx, text_id).unwrap_or_default();
+    let end = egui::text::CCursor::new(state.text.chars().count());
+    te.cursor
+        .set_char_range(Some(egui::text::CCursorRange::one(end)));
+    te.store(ctx, text_id);
+    ctx.request_repaint();
+}
+
+/// The application's suggestions under the field's box: a list box of
+/// options, the highlighted one selected.
+fn suggestion_list(
+    ui: &mut Ui,
+    text_id: egui::Id,
+    below: egui::Rect,
+    state: &mut SearchState,
+    rows: &[Suggestion],
+) {
+    let ctx = ui.ctx().clone();
+    let focused = ctx.memory(|m| m.has_focus(text_id));
+    if !focused && !state.list_hovered {
+        state.list_open = false;
+        state.highlight = None;
+    }
+    let list_id = text_id.with("suggestions");
+    let visible = state.list_open && !rows.is_empty();
+    let mut hovered = false;
+    if visible {
+        let name = tr(&ctx, &s::SUGGESTIONS);
+        let mut clicked = None;
+        let area = egui::Area::new(list_id)
+            .order(egui::Order::Foreground)
+            .fixed_pos(below.left_bottom())
+            .show(&ctx, |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.scope_builder(
+                        egui::UiBuilder::new()
+                            .accessibility_role(egui::accesskit::Role::ListBox)
+                            .accessibility_label(name.clone()),
+                        |ui| {
+                            for (k, row) in rows.iter().enumerate() {
+                                let on = state.highlight == Some(k);
+                                ui.horizontal(|ui| {
+                                    let r = egui_pop_core::widgets::selectable_label(
+                                        ui,
+                                        on,
+                                        row.label.as_str(),
+                                    );
+                                    let label = row.label.clone();
+                                    r.widget_info(|| {
+                                        egui::WidgetInfo::selected(
+                                            Role::ListBoxOption,
+                                            true,
+                                            on,
+                                            &label,
+                                        )
+                                    });
+                                    if on {
+                                        r.scroll_to_me(None);
+                                    }
+                                    if !row.kind.is_empty() {
+                                        ui.weak(row.kind.as_str());
+                                    }
+                                    if r.clicked() {
+                                        clicked = Some(k);
+                                    }
+                                });
+                            }
+                        },
+                    );
+                });
+            });
+        hovered = area.response.contains_pointer();
+        if let Some(k) = clicked {
+            take_suggestion(&ctx, text_id, state, rows, k);
+            ctx.memory_mut(|m| m.request_focus(text_id));
+        }
+    }
+    state.list_hovered = hovered;
+    egui_pop_core::overlay::follow_popup(
+        &ctx,
+        list_id,
+        "search suggestions",
+        state.list_open && !rows.is_empty(),
+        None,
+    );
 }
 
 /// The menu adding a criterion.

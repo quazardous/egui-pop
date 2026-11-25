@@ -2201,6 +2201,7 @@ egui-pop-views-add-tag = Ajouter un mot-clé
 egui-pop-views-blue = Bleu
 
 egui-pop-views-clear-filters = Effacer la recherche
+egui-pop-views-suggestions = Suggestions
 
 egui-pop-views-collapse-stack = Replier la pile de { $count }
 
