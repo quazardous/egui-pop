@@ -496,7 +496,9 @@ impl<'a> SearchField<'a> {
     /// highlight, Enter or a click takes the highlighted one (the text
     /// becomes its [`Suggestion::insert`], [`SearchEvent::Picked`]).
     /// Escape closes the list, then clears the text, then leaves the
-    /// field, each reported ([`SearchState::take_events`]).
+    /// field, each reported ([`SearchState::take_events`]); the field
+    /// keeps the keyboard until the last step, the focus plugin installed
+    /// (an application's window) or not.
     pub fn suggestions(mut self, suggestions: &'a [Suggestion]) -> Self {
         self.suggestions = Some(suggestions);
         self
@@ -580,6 +582,17 @@ impl<'a> SearchField<'a> {
             && !focused
             && state.had_focus
             && ui.input(|i| i.key_pressed(EKey::Escape));
+        // The focus plugin took the press that left the field: the last
+        // step of the sequence, done ([`egui_pop_core::focus::escape_left`]).
+        if self.suggestions.is_some()
+            && !focused
+            && state.had_focus
+            && egui_pop_core::focus::escape_left(&ctx, text_id)
+        {
+            state.list_open = false;
+            state.highlight = None;
+            state.events.push(SearchEvent::Left);
+        }
         if (focused || escaped) && self.suggestions.is_some() {
             let shown = state.list_open && !rows.is_empty();
             let (down, up, escape) = ui.input_mut(|i| {
@@ -741,6 +754,16 @@ impl<'a> SearchField<'a> {
             });
         let response = inner.inner;
         state.had_focus = ui.memory(|m| m.has_focus(text_id));
+        if self.suggestions.is_some()
+            && state.had_focus
+            && ((state.list_open && !rows.is_empty()) || !state.text.is_empty())
+        {
+            // Escape has a step of the sequence to do: the focus plugin
+            // lets it through to the field instead of making the field let
+            // go of the keyboard, and the key dispatcher leaves it alone.
+            egui_pop_core::focus::escape_passes(&ctx, text_id);
+            egui_pop_core::focus::claim_keyboard(&ctx, text_id);
+        }
         if self.suggestions.is_some() {
             let box_rect = inner.response.rect;
             suggestion_list(ui, text_id, box_rect, state, rows);
