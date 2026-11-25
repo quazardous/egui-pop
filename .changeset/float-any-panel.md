@@ -1,8 +1,14 @@
 ---
 egui-pop-model: minor
-egui-pop-api: minor
-egui-pop-i18n: minor
-egui-pop: minor
+egui-pop-api: major
+egui-pop-i18n: major
+egui-pop-agent: major
+egui-pop-editors: major
+egui-pop-imaging: major
+egui-pop-platform: major
+egui-pop-test: major
+egui-pop-views: major
+egui-pop: major
 ---
 
 Every panel may float unless its spec opts out (`PanelSpec::floatable(false)`):
@@ -14,3 +20,6 @@ group whole, as one floating group of tabs (`Change::FloatGroup`,
 the whole group back where it was. The new setting "Floating panels"
 (`workbench.float_panels`: `any` or `palettes`) narrows which panels may
 float.
+
+To move: `Change::FloatGroup` is a new variant of `workbench::Change`;
+an exhaustive `match` on it takes an arm for it.
