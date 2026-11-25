@@ -15,7 +15,8 @@ use egui_pop_views::library::grid::{
 };
 use egui_pop_views::library::marks::{ColorLabel, CullKeymap, Flag, Marks};
 use egui_pop_views::library::plugin::{
-    CMD_RATE, CMD_SELECT, INBOX, LIBRARIES, LIBRARY_FLAG, LIBRARY_RATE, LibraryPlugin,
+    CMD_FILTER, CMD_RATE, CMD_SELECT, INBOX, LIBRARIES, LIBRARY_FILTER, LIBRARY_FLAG, LIBRARY_RATE,
+    LibraryPlugin,
 };
 use egui_pop_views::library::tags::{TagInput, TagInputState};
 use serde_json::json;
@@ -1288,7 +1289,10 @@ mod library_grid_mode {
 /// The search field of [`hooked`] in a block of an application's window,
 /// drawn by `App::show` with the default plugins (the focus plugin, the key
 /// dispatcher, the overlays), as an application hosts it.
-struct InApp(std::rc::Rc<std::cell::RefCell<Hooked>>);
+struct InApp(
+    std::rc::Rc<std::cell::RefCell<Hooked>>,
+    std::rc::Rc<std::cell::RefCell<Vec<String>>>,
+);
 
 impl Plugin for InApp {
     fn id(&self) -> PluginId {
@@ -1297,6 +1301,12 @@ impl Plugin for InApp {
 
     fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
         let shared = self.0.clone();
+        let steps = self.1.clone();
+        ctx.before(LIBRARY_FILTER, move |_, args| {
+            let text = args["filter"]["text"].as_str().unwrap_or_default();
+            steps.borrow_mut().push(text.to_string());
+            Before::Go
+        });
         ctx.block(
             egui_pop_api::zones::MAIN,
             egui_pop_api::zones::Block::add(
@@ -1321,7 +1331,14 @@ impl Plugin for InApp {
                         .chips(chips)
                         .app(app)
                         .show(ui, state);
-                    events.extend(state.take_events());
+                    for e in state.take_events() {
+                        match &e {
+                            SearchEvent::ChipRemoved(id) => chips.retain(|c| &c.id != id),
+                            SearchEvent::FilterSet => chips.clear(),
+                            _ => {}
+                        }
+                        events.push(e);
+                    }
                 },
             ),
         );
@@ -1329,15 +1346,32 @@ impl Plugin for InApp {
     }
 }
 
+type Steps = std::rc::Rc<std::cell::RefCell<Vec<String>>>;
+
 fn hooked_in_app() -> (
     Harness<'static, App>,
     std::rc::Rc<std::cell::RefCell<Hooked>>,
 ) {
-    let shared = std::rc::Rc::new(std::cell::RefCell::new(Hooked::default()));
+    let (h, shared, _) = hooked_in_app_with(&[]);
+    (h, shared)
+}
+
+fn hooked_in_app_with(
+    chips: &[AppChip],
+) -> (
+    Harness<'static, App>,
+    std::rc::Rc<std::cell::RefCell<Hooked>>,
+    Steps,
+) {
+    let shared = std::rc::Rc::new(std::cell::RefCell::new(Hooked {
+        chips: chips.to_vec(),
+        ..Hooked::default()
+    }));
+    let steps = Steps::default();
     let app = App::builder()
         .plugins(egui_pop_api::DefaultPlugins)
         .plugin(LibraryPlugin)
-        .plugin(InApp(shared.clone()))
+        .plugin(InApp(shared.clone(), steps.clone()))
         .build(&egui::Context::default())
         .unwrap();
     let mut h = Harness::builder()
@@ -1346,7 +1380,7 @@ fn hooked_in_app() -> (
     h.run();
     h.get_by_role_and_label(Role::TextInput, "Search").click();
     h.run();
-    (h, shared)
+    (h, shared, steps)
 }
 
 /// In an application's window, whose focus plugin makes a focused text
@@ -1389,4 +1423,52 @@ fn escape_closes_the_suggestions_then_clears_then_leaves_in_an_application() {
             SearchEvent::Left
         ]
     );
+}
+
+/// The application's chips stand for terms of its search text: the
+/// `library.filter` step, its hooks and the filter a command reads see the
+/// whole search (the chips' terms, then the text typed), not only what is
+/// typed. A filter a command sets is typed whole, the chips dropped.
+#[test]
+fn the_application_s_chips_terms_are_part_of_the_filter() {
+    let (mut h, shared, steps) =
+        hooked_in_app_with(&[AppChip::new("a", "camera is R5").term("camera:R5")]);
+    h.event(egui::Event::Text("beach".into()));
+    h.run();
+    h.run();
+    assert_eq!(steps.borrow().last().unwrap(), "camera:R5 beach");
+    assert_eq!(shared.borrow().state.filter().text, "camera:R5 beach");
+    let libraries = h.state().handle().service(&LIBRARIES).unwrap();
+    assert_eq!(
+        libraries.describe()["libraries"]["shoot"]["filter"]["text"],
+        "camera:R5 beach"
+    );
+
+    // The chip removed: the term leaves the filter.
+    h.get_by_role_and_label(Role::Button, "Remove camera is R5")
+        .click();
+    h.run();
+    h.run();
+    assert_eq!(steps.borrow().last().unwrap(), "beach");
+
+    // A command sets it whole: typed, the chips told to go.
+    shared.borrow_mut().chips = vec![AppChip::new("b", "label is red").term("label:red")];
+    h.run();
+    assert_eq!(steps.borrow().last().unwrap(), "label:red beach");
+    h.state_mut()
+        .run(
+            &CMD_FILTER,
+            json!({ "library": "shoot", "filter": { "text": "camera:Z sea" } }),
+            Origin::Agent("t".into()),
+        )
+        .now()
+        .unwrap()
+        .unwrap();
+    h.run();
+    h.run();
+    let s = shared.borrow();
+    assert_eq!(s.state.text(), "camera:Z sea");
+    assert!(s.chips.is_empty());
+    assert!(s.events.contains(&SearchEvent::FilterSet));
+    assert_eq!(s.state.filter().text, "camera:Z sea");
 }
