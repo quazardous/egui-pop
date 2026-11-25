@@ -161,6 +161,13 @@ Publishing is the owner's call, and stays a manual step.
    Every `check` line of both sessions must say `PASS`; Windows and
    macOS get the same checks from the platforms workflow on `next`.
 
+   Next to it, the **screen reader** pass ([testing](testing.md),
+   "Screen readers"): the bench box's `egui-pop-screen-reader` job
+   (`egui_pop=<the release branch>`) walks five gallery pages with Orca
+   and compares what it says with `tools/wbox/screen_reader.json`; every
+   step must say `PASS`. Then walk the same pages with NVDA on Windows,
+   by hand, with that section's checklist.
+
 2. **Review**: push the branch, open a pull request titled like the
    commit, read the changelog and the versions. Merge it: on `next`,
    CI's semver job checks the new versions against crates.io (the

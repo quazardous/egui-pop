@@ -31,13 +31,15 @@ pub(crate) struct Visible<'a> {
 }
 
 /// Draws `count` rows `row_h` high, building only those in view; the
-/// whole is one focusable widget (`id`), named `label`. Returns what
+/// whole is one focusable widget (`id`) of role `role` (a tree, a list
+/// box), named `label`. Returns what
 /// `rows` returned, the view's response and its visible rectangle.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn show<R>(
     ui: &mut Ui,
     id: Id,
     label: &str,
+    role: egui::Role,
     scroll: &mut Scroll,
     count: usize,
     row_h: f32,
@@ -95,7 +97,7 @@ pub(crate) fn show<R>(
     scroll.offset = out.state.clamped_offset().y;
     scroll.height = out.inner_rect.height();
     let response = ui.interact(out.inner_rect, id, Sense::focusable_noninteractive());
-    egui_pop_core::a11y::name(&response, egui::Role::Unknown, label);
+    egui_pop_core::a11y::name(&response, role, label);
     if response.has_focus() {
         ui.memory_mut(|m| {
             m.set_focus_lock_filter(
@@ -113,6 +115,17 @@ pub(crate) fn show<R>(
     }
     paint_view(ui, &kit, out.inner_rect, response.has_focus());
     (out.inner, response, out.inner_rect)
+}
+
+/// The cursor row as the view's active descendant: the focus stays on the
+/// view while the arrows move the cursor, and a screen reader reads the
+/// row the cursor is on.
+pub(crate) fn active_row(ui: &Ui, view: Id, row: Option<Id>) {
+    if let Some(row) = row {
+        ui.ctx().accesskit_node_builder(view, |node| {
+            node.set_active_descendant(row.accesskit_id());
+        });
+    }
 }
 
 /// How many rows a page holds.

@@ -377,6 +377,69 @@ out, by platform:
   `egui-pop-api`'s `tests/it/files.rs`), and the root of `/top` is named
   `\`.
 
+## Screen readers
+
+The test kit checks that every interactive node has a name
+(`egui_pop_test::assert_all_named`) and dumps the AccessKit tree; neither
+says what a screen reader announces. Two passes do, before a release
+([releasing](releasing.md)).
+
+**Orca on Linux, on the bench box.** The `egui-pop-screen-reader` job
+(Helios's `tools/bench/Benchfile`) runs `tools/wbox/screen_reader.py`
+after a release build of the gallery. Each walk gets its own D-Bus session
+and accessibility bus (at-spi2, switched on as a desktop does for a screen
+reader), the gallery as a Wayland client in a headless labwc, Orca with
+its debug log (each `SPEECH OUTPUT` line is what it would say; speech goes
+to speech-dispatcher's dummy module), and `tools/wbox/atspi_focus.py`,
+which notes the node that takes the focus (role, name, states, value) as
+the accessibility bus reports it. The compositor types real keys and each
+step waits for Orca's line:
+
+| Walk | Page | Keys |
+|---|---|---|
+| `palette` | overview | Ctrl+Shift+P, Down, Down, Up, Escape |
+| `settings` | settings | Tab ×4, Shift+Tab, F6, Tab |
+| `tree` | tree | Tab to the tree, Down, Down, Right, Left, Up, Shift+Tab |
+| `table` | table | Tab to the table, Down, Down, Up, Tab |
+| `dialog` | dialogs | Tab to "Confirm an export", Enter, Tab, Shift+Tab, Escape |
+
+Each step prints one line (`tree.3 Down: PASS: ...`). A step fails when
+the focused node has no name or Orca says "unlabelled" (fix the widget in
+egui-pop, never the expectations), or when the node or Orca's line differs
+from `tools/wbox/screen_reader.json`: both are printed as a diff. A step
+marked silent in the walk may say nothing: opening and closing a folder,
+which AccessKit's AT-SPI adapter does not report ([upstream](upstream.md),
+"AccessKit: no expanded state on Linux"). After a
+reviewed change, `record=yes` writes what the run heard to
+`out/screen_reader.json`, to copy over the checked-in file; `walk=<name>`
+runs one walk. Orca's log, the focus lines and a screenshot of each walk
+are in the job's `out/`. When Orca cannot start, the run says so and
+compares the nodes alone (`orca=no` forces that): what Orca would read,
+without its words.
+
+**NVDA on Windows, by hand.** Before a release, on a Windows machine with
+NVDA (its default settings, speech viewer on: NVDA menu, Tools, Speech
+viewer), start a release build of the gallery and walk the same five
+places with the keys of the table above. At each step:
+
+- NVDA says a name for what has the focus, never "unlabelled" or a bare
+  role ("button", "check box" alone);
+- the role is the right one (a check box is a check box, a slider a
+  slider) and states are spoken: checked, expanded or collapsed, selected,
+  a slider's value;
+- the palette: its field is announced with its name, and the selected
+  entry follows the arrows;
+- the tree: each row's name and whether it is expanded; Right opens a
+  folder, Left closes it;
+- the table: the cell's text and its column's header;
+- the dialog: its title and text when it opens, its buttons on Tab, and
+  Escape gives the focus back to "Confirm an export";
+- F6 moves to the next region and NVDA names where the focus lands.
+
+Note in the release's pull request where NVDA's words differ from Orca's
+in `tools/wbox/screen_reader.json`. VoiceOver is not covered: there is no
+macOS box.
+
 ## Time budget
 
 The budget (decided 2026-10-20): a pull request's CI under 10 minutes on

@@ -1037,10 +1037,12 @@ impl<'a, K: Key> TreeView<'a, K> {
         let mut take_focus = false;
         let shared = self.shared;
         let mut hovering: Option<SelectionItem> = None;
+        let mut cursor_row = None;
         let (_, response, inner) = rows::show(
             ui,
             id,
             &label,
+            Role::Tree,
             scroll,
             shown,
             row_h,
@@ -1106,6 +1108,9 @@ impl<'a, K: Key> TreeView<'a, K> {
                             let selected = selection.contains(&key);
                             let cursor = (focused && selection.cursor() == Some(&key))
                                 || r.context_menu_opened();
+                            if focused && selection.cursor() == Some(&key) {
+                                cursor_row = Some(r.id);
+                            }
                             let mut hovered = r.contains_pointer() && drag.is_none();
                             // Hovered here, or the same item hovered elsewhere.
                             if let Some(service) = shared {
@@ -1279,6 +1284,13 @@ impl<'a, K: Key> TreeView<'a, K> {
                             r.widget_info(move || {
                                 WidgetInfo::selected(Role::Button, true, selected, &name)
                             });
+                            // A folder says whether it is open: a screen
+                            // reader reads "expanded" or "collapsed".
+                            if node.branch {
+                                let open = model.is_open(&key);
+                                ui.ctx()
+                                    .accesskit_node_builder(r.id, |n| n.set_expanded(open));
+                            }
                             let r = if elided {
                                 item::full_label_tip(r, &node.label)
                             } else {
@@ -1378,6 +1390,7 @@ impl<'a, K: Key> TreeView<'a, K> {
                 }
             },
         );
+        rows::active_row(ui, response.id, cursor_row);
         // The cursor's actions, after the tree in the Tab order: Tab from
         // the tree reaches them, Tab from the last leaves the tree.
         if let Some((key, row, row_state, row_actions, shown, spots)) = late {

@@ -667,7 +667,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
                 .then_some(selected)
                 .filter(|i| *i < rows.len());
             ui.separator();
-            if let Some(i) = draw_rows(ui, &rows, selected, edit.changed()) {
+            if let Some(i) = draw_rows(ui, &rows, selected, edit.changed(), edit.id) {
                 chosen = Some(i);
             }
             if rows.is_empty() {
@@ -721,7 +721,7 @@ fn show(ui: &mut Ui, app: &AppHandle) {
             chosen = rows.get(selected).map(|r| r.command.clone());
         }
         ui.separator();
-        if let Some(i) = draw_rows(ui, &rows, selected, edit.changed()) {
+        if let Some(i) = draw_rows(ui, &rows, selected, edit.changed(), edit.id) {
             chosen = Some(rows[i].command.clone());
         }
         if rows.is_empty() {
@@ -783,10 +783,18 @@ fn move_selection(ui: &Ui, selected: &mut usize, len: usize) -> usize {
     (*selected).min(len.saturating_sub(1))
 }
 
-/// Draws the list's lines; the one clicked.
-fn draw_rows(ui: &mut Ui, rows: &[Row], selected: usize, typed: bool) -> Option<usize> {
+/// Draws the list's lines; the one clicked. The selected line is the
+/// `field`'s active descendant.
+fn draw_rows(
+    ui: &mut Ui,
+    rows: &[Row],
+    selected: usize,
+    typed: bool,
+    field: egui::Id,
+) -> Option<usize> {
     let ctx = ui.ctx().clone();
     let mut chosen = None;
+    let mut selected_row = None;
     ui.scroll_area(egui::ScrollArea::vertical().max_height(320.0), |ui| {
         // Justified, left-aligned: a line without keys keeps its
         // label at the start, as the others.
@@ -833,6 +841,9 @@ fn draw_rows(ui: &mut Ui, rows: &[Row], selected: usize, typed: bool) -> Option<
                     egui_pop_core::icon::registry::record(&ctx, "palette", &h.label, name);
                 }
                 let r = r.response;
+                if on {
+                    selected_row = Some(r.id);
+                }
                 let part = Part {
                     rect: r.rect,
                     room: r.rect,
@@ -849,6 +860,13 @@ fn draw_rows(ui: &mut Ui, rows: &[Row], selected: usize, typed: bool) -> Option<
             }
         });
     });
+    // The selected line as the field's active descendant: a screen reader
+    // reads it as the arrows move, the focus staying in the field.
+    if let Some(row) = selected_row {
+        ctx.accesskit_node_builder(field, |node| {
+            node.set_active_descendant(row.accesskit_id());
+        });
+    }
     chosen
 }
 
