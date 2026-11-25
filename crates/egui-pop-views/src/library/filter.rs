@@ -339,6 +339,9 @@ pub struct AppChip {
     pub id: String,
     /// What the chip shows.
     pub words: String,
+    /// The part of the search text it stands for (`camera:R5`), empty
+    /// for none ([`Self::term`]).
+    pub term: String,
 }
 
 impl AppChip {
@@ -346,7 +349,18 @@ impl AppChip {
         Self {
             id: id.into(),
             words: words.into(),
+            term: String::new(),
         }
+    }
+
+    /// The part of the search text the chip stands for, in the
+    /// application's grammar: with [`SearchField::whole_text`], the
+    /// filter's text is the chips' terms, in order, then the text typed.
+    /// So the `library.filter` step, its hooks and the filter a command
+    /// reads see the whole search, not only what is typed.
+    pub fn term(mut self, term: impl Into<String>) -> Self {
+        self.term = term.into();
+        self
     }
 }
 
@@ -369,6 +383,12 @@ pub enum SearchEvent {
     /// Escape in the empty field, the list closed: the field let go of the
     /// keyboard (back to the grid).
     Left,
+    /// The filter was set whole, by a command (`library.filter`) or by a
+    /// hook redirecting or refusing a change: its text, the chips' terms
+    /// included, is now the text typed. The application's chips no
+    /// longer stand for anything: it drops them (or makes them again from
+    /// the text).
+    FilterSet,
 }
 
 /// A search field's state between passes: the chips, the text typed,
@@ -440,10 +460,17 @@ impl SearchState {
         self.last = filter;
     }
 
-    fn effective(&self, whole_text: bool) -> Filter {
+    fn effective(&self, whole_text: bool, app_chips: &[AppChip]) -> Filter {
         if whole_text {
+            let text = app_chips
+                .iter()
+                .map(|c| c.term.trim())
+                .chain(Some(self.text.trim()))
+                .filter(|t| !t.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
             return self.chips.merged(&Filter {
-                text: self.text.trim().to_string(),
+                text,
                 ..Filter::default()
             });
         }
@@ -496,7 +523,9 @@ impl<'a> SearchField<'a> {
     /// highlight, Enter or a click takes the highlighted one (the text
     /// becomes its [`Suggestion::insert`], [`SearchEvent::Picked`]).
     /// Escape closes the list, then clears the text, then leaves the
-    /// field, each reported ([`SearchState::take_events`]).
+    /// field, each reported ([`SearchState::take_events`]); the field
+    /// keeps the keyboard until the last step, the focus plugin installed
+    /// (an application's window) or not.
     pub fn suggestions(mut self, suggestions: &'a [Suggestion]) -> Self {
         self.suggestions = Some(suggestions);
         self
@@ -560,6 +589,9 @@ impl<'a> SearchField<'a> {
                 ..f.clone()
             };
             state.text = f.text.clone();
+            if !self.app_chips.is_empty() {
+                state.events.push(SearchEvent::FilterSet);
+            }
             proposed = Some(f);
         }
         let focused = ui.memory(|m| m.has_focus(text_id));
@@ -580,6 +612,17 @@ impl<'a> SearchField<'a> {
             && !focused
             && state.had_focus
             && ui.input(|i| i.key_pressed(EKey::Escape));
+        // The focus plugin took the press that left the field: the last
+        // step of the sequence, done ([`egui_pop_core::focus::escape_left`]).
+        if self.suggestions.is_some()
+            && !focused
+            && state.had_focus
+            && egui_pop_core::focus::escape_left(&ctx, text_id)
+        {
+            state.list_open = false;
+            state.highlight = None;
+            state.events.push(SearchEvent::Left);
+        }
         if (focused || escaped) && self.suggestions.is_some() {
             let shown = state.list_open && !rows.is_empty();
             let (down, up, escape) = ui.input_mut(|i| {
@@ -741,11 +784,21 @@ impl<'a> SearchField<'a> {
             });
         let response = inner.inner;
         state.had_focus = ui.memory(|m| m.has_focus(text_id));
+        if self.suggestions.is_some()
+            && state.had_focus
+            && ((state.list_open && !rows.is_empty()) || !state.text.is_empty())
+        {
+            // Escape has a step of the sequence to do: the focus plugin
+            // lets it through to the field instead of making the field let
+            // go of the keyboard, and the key dispatcher leaves it alone.
+            egui_pop_core::focus::escape_passes(&ctx, text_id);
+            egui_pop_core::focus::claim_keyboard(&ctx, text_id);
+        }
         if self.suggestions.is_some() {
             let box_rect = inner.response.rect;
             suggestion_list(ui, text_id, box_rect, state, rows);
         }
-        let now = proposed.unwrap_or_else(|| state.effective(self.whole_text));
+        let now = proposed.unwrap_or_else(|| state.effective(self.whole_text, self.app_chips));
         let mut changed = None;
         let mut vetoed = None;
         if now != state.last {
@@ -755,7 +808,11 @@ impl<'a> SearchField<'a> {
                     let done: Filter =
                         lib::parse(&ran["filter"], "filter").unwrap_or_else(|_| now.clone());
                     if done != now {
+                        // A hook redirected it: its whole text is typed.
                         state.set_filter(done.clone());
+                        if !self.app_chips.is_empty() {
+                            state.events.push(SearchEvent::FilterSet);
+                        }
                     }
                     state.last = done.clone();
                     changed = Some(done);
@@ -764,6 +821,9 @@ impl<'a> SearchField<'a> {
                     // Back to the filter in force.
                     let last = state.last.clone();
                     state.set_filter(last);
+                    if !self.app_chips.is_empty() {
+                        state.events.push(SearchEvent::FilterSet);
+                    }
                     vetoed = Some(reason);
                 }
             }

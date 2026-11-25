@@ -15,7 +15,8 @@ use egui_pop_views::library::grid::{
 };
 use egui_pop_views::library::marks::{ColorLabel, CullKeymap, Flag, Marks};
 use egui_pop_views::library::plugin::{
-    CMD_RATE, CMD_SELECT, INBOX, LIBRARIES, LIBRARY_FLAG, LIBRARY_RATE, LibraryPlugin,
+    CMD_FILTER, CMD_RATE, CMD_SELECT, INBOX, LIBRARIES, LIBRARY_FILTER, LIBRARY_FLAG, LIBRARY_RATE,
+    LibraryPlugin,
 };
 use egui_pop_views::library::tags::{TagInput, TagInputState};
 use serde_json::json;
@@ -1283,4 +1284,191 @@ mod library_grid_mode {
             None
         );
     }
+}
+
+/// The search field of [`hooked`] in a block of an application's window,
+/// drawn by `App::show` with the default plugins (the focus plugin, the key
+/// dispatcher, the overlays), as an application hosts it.
+struct InApp(
+    std::rc::Rc<std::cell::RefCell<Hooked>>,
+    std::rc::Rc<std::cell::RefCell<Vec<String>>>,
+);
+
+impl Plugin for InApp {
+    fn id(&self) -> PluginId {
+        PluginId::from_static("in_app")
+    }
+
+    fn connect(&mut self, ctx: &mut Ctx<'_>) -> Result<(), PluginError> {
+        let shared = self.0.clone();
+        let steps = self.1.clone();
+        ctx.before(LIBRARY_FILTER, move |_, args| {
+            let text = args["filter"]["text"].as_str().unwrap_or_default();
+            steps.borrow_mut().push(text.to_string());
+            Before::Go
+        });
+        ctx.block(
+            egui_pop_api::zones::MAIN,
+            egui_pop_api::zones::Block::add(
+                egui_pop_model::ids::BlockId::from_static("in_app.search"),
+                0,
+                move |ui, app| {
+                    let mut s = shared.borrow_mut();
+                    let Hooked {
+                        state,
+                        chips,
+                        events,
+                    } = &mut *s;
+                    let text = state.text().to_string();
+                    let rows: Vec<Suggestion> = ["camera", "caption"]
+                        .iter()
+                        .filter(|k| !text.is_empty() && k.starts_with(text.as_str()))
+                        .map(|k| Suggestion::new(*k, format!("{k}:")))
+                        .collect();
+                    let _ = SearchField::new("shoot")
+                        .whole_text(true)
+                        .suggestions(&rows)
+                        .chips(chips)
+                        .app(app)
+                        .show(ui, state);
+                    for e in state.take_events() {
+                        match &e {
+                            SearchEvent::ChipRemoved(id) => chips.retain(|c| &c.id != id),
+                            SearchEvent::FilterSet => chips.clear(),
+                            _ => {}
+                        }
+                        events.push(e);
+                    }
+                },
+            ),
+        );
+        Ok(())
+    }
+}
+
+type Steps = std::rc::Rc<std::cell::RefCell<Vec<String>>>;
+
+fn hooked_in_app() -> (
+    Harness<'static, App>,
+    std::rc::Rc<std::cell::RefCell<Hooked>>,
+) {
+    let (h, shared, _) = hooked_in_app_with(&[]);
+    (h, shared)
+}
+
+fn hooked_in_app_with(
+    chips: &[AppChip],
+) -> (
+    Harness<'static, App>,
+    std::rc::Rc<std::cell::RefCell<Hooked>>,
+    Steps,
+) {
+    let shared = std::rc::Rc::new(std::cell::RefCell::new(Hooked {
+        chips: chips.to_vec(),
+        ..Hooked::default()
+    }));
+    let steps = Steps::default();
+    let app = App::builder()
+        .plugins(egui_pop_api::DefaultPlugins)
+        .plugin(LibraryPlugin)
+        .plugin(InApp(shared.clone(), steps.clone()))
+        .build(&egui::Context::default())
+        .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(700.0, 400.0))
+        .build_ui_state(|ui, app: &mut App| app.show(ui), app);
+    h.run();
+    h.get_by_role_and_label(Role::TextInput, "Search").click();
+    h.run();
+    (h, shared, steps)
+}
+
+/// In an application's window, whose focus plugin makes a focused text
+/// input let go of the keyboard on Escape: the field with suggestions
+/// keeps it until the last step of its Escape sequence.
+#[test]
+fn escape_closes_the_suggestions_then_clears_then_leaves_in_an_application() {
+    let (mut h, shared) = hooked_in_app();
+    let focused = |h: &Harness<'static, App>| {
+        h.get_by_role_and_label(Role::TextInput, "Search")
+            .is_focused()
+    };
+    h.event(egui::Event::Text("ca".into()));
+    h.run();
+    h.run();
+    assert!(shared.borrow().state.list_open());
+    h.key_press(Key::Escape);
+    h.run();
+    assert!(
+        h.query_by_role_and_label(Role::ListBox, "Suggestions")
+            .is_none()
+    );
+    assert_eq!(shared.borrow().state.text(), "ca");
+    assert!(focused(&h), "the list closed, the field keeps the keyboard");
+    h.key_press(Key::Escape);
+    h.run();
+    assert_eq!(shared.borrow().state.text(), "");
+    assert!(
+        focused(&h),
+        "the text cleared, the field keeps the keyboard"
+    );
+    h.key_press(Key::Escape);
+    h.run();
+    assert!(!focused(&h), "left");
+    assert_eq!(
+        shared.borrow().events,
+        [
+            SearchEvent::ListClosed,
+            SearchEvent::Cleared,
+            SearchEvent::Left
+        ]
+    );
+}
+
+/// The application's chips stand for terms of its search text: the
+/// `library.filter` step, its hooks and the filter a command reads see the
+/// whole search (the chips' terms, then the text typed), not only what is
+/// typed. A filter a command sets is typed whole, the chips dropped.
+#[test]
+fn the_application_s_chips_terms_are_part_of_the_filter() {
+    let (mut h, shared, steps) =
+        hooked_in_app_with(&[AppChip::new("a", "camera is R5").term("camera:R5")]);
+    h.event(egui::Event::Text("beach".into()));
+    h.run();
+    h.run();
+    assert_eq!(steps.borrow().last().unwrap(), "camera:R5 beach");
+    assert_eq!(shared.borrow().state.filter().text, "camera:R5 beach");
+    let libraries = h.state().handle().service(&LIBRARIES).unwrap();
+    assert_eq!(
+        libraries.describe()["libraries"]["shoot"]["filter"]["text"],
+        "camera:R5 beach"
+    );
+
+    // The chip removed: the term leaves the filter.
+    h.get_by_role_and_label(Role::Button, "Remove camera is R5")
+        .click();
+    h.run();
+    h.run();
+    assert_eq!(steps.borrow().last().unwrap(), "beach");
+
+    // A command sets it whole: typed, the chips told to go.
+    shared.borrow_mut().chips = vec![AppChip::new("b", "label is red").term("label:red")];
+    h.run();
+    assert_eq!(steps.borrow().last().unwrap(), "label:red beach");
+    h.state_mut()
+        .run(
+            &CMD_FILTER,
+            json!({ "library": "shoot", "filter": { "text": "camera:Z sea" } }),
+            Origin::Agent("t".into()),
+        )
+        .now()
+        .unwrap()
+        .unwrap();
+    h.run();
+    h.run();
+    let s = shared.borrow();
+    assert_eq!(s.state.text(), "camera:Z sea");
+    assert!(s.chips.is_empty());
+    assert!(s.events.contains(&SearchEvent::FilterSet));
+    assert_eq!(s.state.filter().text, "camera:Z sea");
 }
