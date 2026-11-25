@@ -134,6 +134,8 @@ pub const SEARCH: StrKey = StrKey::new("egui-pop-views-search", "Search");
 pub const ADD_FILTER: StrKey = StrKey::new("egui-pop-views-add-filter", "Add a filter");
 /// The search field's clear button.
 pub const CLEAR_FILTERS: StrKey = StrKey::new("egui-pop-views-clear-filters", "Clear the search");
+/// The search field's list of the application's suggestions.
+pub const SUGGESTIONS: StrKey = StrKey::new("egui-pop-views-suggestions", "Suggestions");
 /// The filter chips.
 pub const FILTER_RATING: StrKey =
     StrKey::new("egui-pop-views-filter-rating", "Rating ≥ { $rating }");
@@ -459,6 +461,7 @@ pub const ALL: &[StrKey] = &[
     SEARCH,
     ADD_FILTER,
     CLEAR_FILTERS,
+    SUGGESTIONS,
     FILTER_RATING,
     FILTER_LABEL,
     FILTER_FLAG,
