@@ -3,7 +3,7 @@ in a nested compositor, where a dialog blocks the other windows and the
 command palette opens.
 
 kittest draws a detached panel inside the main window, and the tests of
-`crates/egui-pop-api/tests/windows.rs` run each window's pass through an
+`crates/egui-pop-api/tests/it/windows.rs` run each window's pass through an
 immediate viewport renderer of their own: this scenario checks the same
 with real windows, a real window manager and real focus.
 

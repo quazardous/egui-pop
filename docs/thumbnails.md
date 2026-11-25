@@ -91,4 +91,4 @@ their grid (`egui_pop_core::thumbnail`, re-exported by
   caption and sign inside; aspect kept.
 - `crates/egui-pop-core/tests/wheel.rs`: the grid keeps the wheel at its
   end.
-- The file picker's thumbnails: `crates/egui-pop-api/tests/files.rs`.
+- The file picker's thumbnails: `crates/egui-pop-api/tests/it/files.rs`.

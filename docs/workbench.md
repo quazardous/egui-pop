@@ -814,10 +814,29 @@ such a bar, keeping room at its end.
 
 ## Zen mode
 
-`workbench.zen` (View > Zen mode) toggles a view of the centre alone:
-the title bar, the menu and status bars, the activity bar, the side and
-bottom areas and the floating palettes are hidden, and the frame
-publishes no caption. `Shift+F11` toggles it (Sublime Text's
+`workbench.zen` (View > Zen mode) toggles a view of the panel that
+matters alone, full size: the title bar, the menu and status bars, the
+activity bar, every other panel and the floating palettes are hidden,
+and the frame publishes no caption. Which panel, in this order:
+
+1. the one named: `panel` in the command's arguments, which the panel
+   menu's "Zen this panel" passes (a tab's, a floating panel's);
+2. the focused panel, when it is a view or a mixed one
+   (`PanelSpec::kind`; zen on a control panel makes no sense);
+3. the application's choice, asked on the bus as `pop.zen.panel`
+   (`bus::ZenPanel`, an alter point egui-pop does not answer itself): an
+   image viewer answers with the surface a double click reaches;
+4. the centre's active tab;
+
+and with none of them open, the centre whole. The centre's only panel
+is shown as the centre whole: drawn where it was, the widget holding
+the keyboard keeps it. `AppHandle::zen_target`
+says which it would be, `AppHandle::set_zen_panel` zens a panel,
+`AppHandle::zen_panel` says which one is shown. A panel in a detached
+window is zenned in that window: the window draws it alone, without its
+title bar and tabs, and the main window stays as it is. Zen mode only
+changes what is drawn, never the layout: leaving it draws the layout as
+it was. `Shift+F11` toggles it (Sublime Text's
 distraction free mode; VS Code's `Ctrl+K Z` is left out, since it would
 make `Ctrl+K` a prefix everywhere while it deletes to the line's end in
 a text field). An application binds its own key in its defaults, and
@@ -841,7 +860,8 @@ edge brings the strip back, as the menu bar of a full screen window on
 macOS, until it leaves the strip. The command palette (`Ctrl+Shift+P`)
 still opens in zen mode and offers "Leave zen mode". In full screen,
 zen's strip stands in for full screen's own. The change is the
-`workbench.zen` step (`{ "zen": bool }`,
+`workbench.zen` step (`{ "zen": bool, "panel"? }`, its result naming the
+panel and its window,
 `AppHandle::set_zen`, `AppHandle::zen`, the `workbenchZen` context
 key): a plugin may veto it, and the journal records it. Zen mode is a
 state of the session, not of the layout: it is never saved, and the
@@ -914,8 +934,12 @@ acts on), never a palette.
 
 **One model, two placements.** A palette is a panel declared with
 `PanelSpec::palette()`: it opens floating over the workbench, and its
-area is where it docks. Any panel declared `floatable(true)` may float
-too. The layout keeps floating panels next to the docked and detached
+area is where it docks. Every other panel may float too, unless its
+spec opts out (`floatable(false)`: a view that would leave its area
+empty, such as the centre's document). The user's "Floating panels"
+setting (`workbench.float_panels`) narrows that to the palettes
+(`palettes`) or leaves it (`any`, the default); it never widens what a
+spec allows. The layout keeps floating panels next to the docked and detached
 ones (`Layout::floating`: place, size, rolled up, pinned), saved and repaired
 with them.
 
@@ -960,8 +984,15 @@ assert!(app.handle().layout().floating_of(&TOOLS).is_some());
   edges and to the other palettes within the `palette.magnet` token.
   Dropped on a side bar or the bottom panel (or a closed one's edge)
   with the dock keys held, with the drop hint the tabs use, it docks
-  there. A docked floatable panel floats again from its tab menu
-  (Float).
+  there. A docked panel floats from its tab menu (Float); where it may
+  not, Float is greyed and says why ("Float (Document cannot float)",
+  "Float (only palettes float)"). Float group, in the tab menu and the
+  group menu (the empty part of the tab bar, its grip), floats the
+  docked tab group whole as one floating group of tabs, in order, its
+  shown tab shown (`workbench.panel.float` with `group`); Dock back on
+  any of its tabs puts the whole group back where it was. Float group
+  is offered while the tab menu's group entries are allowed (the
+  `MENU` group handle and its setting).
 - **Moving or docking** (decided on 2026-11-17,
   [design](design/drag-move-vs-dock.md)). A plain drag of a floating
   palette (its band, a member's band, a floating tab) only moves it:

@@ -127,10 +127,14 @@
 //! with their marks for agents, as the `workbench` collector does.
 //!
 //! **Zen mode** (the `workbench.zen` command, a toggle on `Shift+F11`
-//! that an application may rebind) leaves only the centre: the title bar, the
-//! menu and status bars, the activity bar, the side and bottom areas and
-//! the floating panels are hidden, and Escape (`workbench.leave_zen`)
-//! brings them back. The way out stays in sight: a strip at the top
+//! that an application may rebind) leaves one panel alone, full size, in
+//! the window holding it: the one named (`panel`, the panel menu's "Zen
+//! this panel"), else the focused view or mixed panel, else the
+//! application's choice (`pop.zen.panel`), else the centre's active tab
+//! (with none, the centre whole). The title bar, the menu and status
+//! bars, the activity bar, every other panel and the floating panels are
+//! hidden, and Escape (`workbench.leave_zen`) brings them back: zen mode
+//! changes only what is drawn, never the layout. The way out stays in sight: a strip at the top
 //! centre says how to leave, with a "Leave zen mode" button, for a few
 //! seconds on entering, and again whenever the pointer reaches the top
 //! edge. It is a state of the session, not of the layout: never saved,
@@ -200,7 +204,10 @@ pub const STEP_ARRANGE: StepId = StepId::from_static("workbench.arrange");
 pub const STEP_JOIN_GROUP: StepId = StepId::from_static("workbench.join_group");
 pub const STEP_DOCK_BACK: StepId = StepId::from_static("workbench.dock_back");
 
-/// Toggles zen mode: only the centre is shown.
+/// Toggles zen mode: one panel alone, full size, in its window (`panel`,
+/// else the panel that matters now: see
+/// [`AppHandle::zen_target`](crate::AppHandle::zen_target)); the centre
+/// whole when there is none.
 pub const CMD_ZEN: egui_pop_model::ids::CommandId =
     egui_pop_model::ids::CommandId::from_static("workbench.zen");
 /// Leaves zen mode (Escape while in it).
@@ -458,6 +465,52 @@ pub const SETTING_GROUP_MOVE_WINDOW: egui_pop_model::ids::SettingId =
 /// [`float_move`]).
 pub const SETTING_FLOAT_MOVE: egui_pop_model::ids::SettingId =
     egui_pop_model::ids::SettingId::from_static("workbench.float_move");
+/// The setting: which panels may float over the interface (see
+/// [`FloatScope`]); it only narrows what each panel's spec allows.
+pub const SETTING_FLOAT_PANELS: egui_pop_model::ids::SettingId =
+    egui_pop_model::ids::SettingId::from_static("workbench.float_panels");
+
+/// Which panels may float ([`SETTING_FLOAT_PANELS`]): it narrows what
+/// each panel declares ([`PanelSpec::floatable`]), never widens it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FloatScope {
+    /// Every panel its spec lets float (the default).
+    #[default]
+    Any,
+    /// Only the palettes (panels that open floating, [`PanelSpec::palette`]).
+    Palettes,
+}
+
+impl FloatScope {
+    /// The setting's choices, in order.
+    pub const CHOICES: [&'static str; 2] = ["any", "palettes"];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FloatScope::Any => "any",
+            FloatScope::Palettes => "palettes",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<FloatScope> {
+        [FloatScope::Any, FloatScope::Palettes]
+            .into_iter()
+            .find(|m| m.as_str() == s)
+    }
+
+    /// Whether it lets a panel float, its spec allowing it.
+    pub fn allows(self, spec: &PanelSpec) -> bool {
+        self == FloatScope::Any || spec.palette
+    }
+}
+
+/// Which panels may float, as the setting says now.
+pub fn float_scope(app: &AppHandle) -> FloatScope {
+    setting_value(app, &SETTING_FLOAT_PANELS, |v| {
+        v.as_choice().and_then(FloatScope::parse)
+    })
+    .unwrap_or_default()
+}
 
 /// The group handles an application allows unless it says otherwise
 /// ([`AppBuilder::group_handles`](crate::AppBuilder::group_handles)):
@@ -584,6 +637,17 @@ pub(crate) fn register_group_settings(
             ),
         )?;
     }
+    ctx.setting(
+        SETTING_FLOAT_PANELS,
+        Descriptor::choice(
+            "Floating panels",
+            &FloatScope::CHOICES,
+            FloatScope::default().as_str(),
+        )
+        .description(
+            "Which panels may float over the interface: any panel that allows it (any), or only the palettes, the panels that open floating (palettes).",
+        ),
+    )?;
     Ok(())
 }
 
@@ -813,9 +877,9 @@ pub(crate) fn steps() -> Vec<crate::steps::StepSpec> {
         .args(json!({ "panel": "app.outline" })),
         StepSpec::new(
             STEP_ZEN,
-            "Zen mode starts (`zen`: true: only the centre is shown) or ends (false).",
+            "Zen mode starts (`zen`: true: `panel` alone, full size, in the window holding it; without `panel`, the centre whole) or ends (false). The layout is left as it is.",
         )
-        .args(json!({ "zen": true })),
+        .args(json!({ "zen": true, "panel": "app.viewer" })),
     ]
 }
 
@@ -1024,6 +1088,10 @@ pub enum Change {
     /// A panel floats over the interface, its top-left at a place (in
     /// points from the workbench's top-left).
     Float(PanelId, [f32; 2]),
+    /// The docked tab group holding a panel floats whole, its top-left at
+    /// a place: one floating group of tabs, in order; Dock back puts it
+    /// back as it was (`palette.float` with `group`).
+    FloatGroup(PanelId, [f32; 2]),
     /// A floating panel docks in an area (taken out of its group).
     Dock(PanelId, Area),
     /// Every member of a floating panel's group docks in an area, as
@@ -1185,6 +1253,10 @@ impl Change {
                 crate::palettes::STEP_FLOAT,
                 json!({ "panel": p, "pos": pos }),
             ),
+            Change::FloatGroup(p, pos) => (
+                crate::palettes::STEP_FLOAT,
+                json!({ "panel": p, "pos": pos, "group": true }),
+            ),
             Change::Dock(p, a) => (
                 crate::palettes::STEP_DOCK,
                 json!({ "panel": p, "area": area_name(*a) }),
@@ -1245,7 +1317,7 @@ impl Change {
     pub(crate) fn event(&self) -> Option<&'static str> {
         Some(match self {
             Change::OpenPalette(_) => "palette.opened",
-            Change::Float(..) => "palette.floated",
+            Change::Float(..) | Change::FloatGroup(..) => "palette.floated",
             Change::Dock(..) | Change::DockGroup(..) => "palette.docked",
             Change::Group(..) => "palette.grouped",
             Change::Ungroup(..) | Change::UngroupTabs(..) => "palette.ungrouped",
@@ -1319,6 +1391,7 @@ impl Change {
         let flag_off = |key: &str| args.get(key).and_then(Json::as_bool).unwrap_or(false);
         Ok(match step.as_str() {
             "palette.open" => Change::OpenPalette(panel),
+            "palette.float" if flag_off("group") => Change::FloatGroup(panel, pos_of(args)?),
             "palette.float" => Change::Float(panel, pos_of(args)?),
             "palette.move" => Change::MovePalette(panel, pos_of(args)?),
             "palette.resize" => match (size_of(args)?, args.get("pos")) {
@@ -1555,6 +1628,9 @@ pub(crate) struct Workbench {
     /// Where each floating panel was docked when it floated (its area,
     /// among which tabs): where Dock back puts it (`workbench.dock_back`).
     floated_from: BTreeMap<PanelId, egui_pop_model::layout::DormantPlace>,
+    /// Which panels may float, as the user's setting says
+    /// ([`SETTING_FLOAT_PANELS`]); read before each change.
+    pub(crate) float_scope: FloatScope,
     /// The panel the keys obey: see [`Workbench::follow_focus`].
     pub focused: Option<PanelId>,
     /// The last panel to be `focused` that lives in the layout proper: where
@@ -1583,9 +1659,13 @@ pub(crate) struct Workbench {
     /// Where the dragged palettes would join a group, while dragged over
     /// another palette.
     pub group_hint: Option<crate::palettes::GroupHint>,
-    /// Zen mode: only the centre is drawn. Not part of the layout, so
-    /// never saved.
+    /// Zen mode: only the centre is drawn, or only [`Self::zen_panel`].
+    /// Not part of the layout, so never saved.
     pub zen: bool,
+    /// The panel zen mode draws alone, full size, in the window holding
+    /// it (none: the centre whole). A draw override: the layout is left
+    /// as it is, so leaving zen mode draws it unchanged.
+    pub zen_panel: Option<PanelId>,
     /// The panel shown as a flyout out of its folded side area's strip:
     /// the session's state, never saved.
     pub flyout: Option<PanelId>,
@@ -1639,6 +1719,7 @@ impl Default for Workbench {
             closed_windows: BTreeMap::new(),
             window_asks: BTreeMap::new(),
             floated_from: BTreeMap::new(),
+            float_scope: FloatScope::Any,
             hint: None,
             focused: None,
             settled: None,
@@ -1652,6 +1733,7 @@ impl Default for Workbench {
             member_rects: BTreeMap::new(),
             group_hint: None,
             zen: false,
+            zen_panel: None,
             flyout: None,
             flyout_rect: None,
             flyout_held: None,
@@ -2102,6 +2184,55 @@ impl Workbench {
         Ok(json!({ "panel": p, "shown": true, "area": area_name(area) }))
     }
 
+    /// Why a panel may not float, if it may not: its spec refuses it
+    /// ([`PanelSpec::floatable`], its content), or the user's setting
+    /// lets only palettes float ([`SETTING_FLOAT_PANELS`]).
+    pub fn float_refusal(&self, spec: &PanelSpec) -> Option<String> {
+        spec.refuses(&crate::mounts::panel_host(Place::Floating))
+            .or_else(|| {
+                (!self.float_scope.allows(spec))
+                    .then(|| format!("{} cannot float: only palettes float", spec.title))
+            })
+    }
+
+    /// Docks back a floating group of tabs that floated whole from one
+    /// area ([`Change::FloatGroup`]): every tab where it was, in order,
+    /// its shown tab shown. `None`: the panel does not float in such a
+    /// group (it docks back alone).
+    fn dock_back_tabs(&mut self, p: &PanelId) -> Option<Json> {
+        use egui_pop_model::layout::{Arrangement as Tabs, DormantPlace};
+        let g = self.layout.floating_of(p)?;
+        if g.arrangement != Tabs::Tabs || g.is_lone() {
+            return None;
+        }
+        let panels: Vec<PanelId> = g.panels().cloned().collect();
+        let shown = g.shown().clone();
+        let area = match self.floated_from.get(&panels[0]) {
+            Some(DormantPlace::Docked { area, .. }) => *area,
+            _ => return None,
+        };
+        let same = panels.iter().all(|q| {
+            matches!(self.floated_from.get(q), Some(DormantPlace::Docked { area: a, .. }) if *a == area)
+                && self.spec(q).is_some_and(|s| {
+                    s.refuses(&crate::mounts::panel_host(Place::Area(area)))
+                        .is_none()
+                })
+        });
+        if !same {
+            return None;
+        }
+        let first = self.floated_from.remove(&panels[0])?;
+        self.layout.dock_at(&panels[0], &first);
+        for q in &panels[1..] {
+            self.floated_from.remove(q);
+            if self.layout.join_tabs(q, &panels[0]).is_err() {
+                self.layout.place(q, area);
+            }
+        }
+        self.layout.activate(&shown);
+        Some(json!({ "panel": p, "area": area_name(area), "panels": panels }))
+    }
+
     /// Applies a change; refused when the panel's rules do not allow it.
     /// Anchors a floating panel to the workbench edges its new place lies
     /// on (`palettes::anchor_of`), or to none: dropped against an edge,
@@ -2234,6 +2365,60 @@ impl Workbench {
             self.focus_request = None;
         }
         ripe
+    }
+
+    /// Zen mode on, `panel` alone (none: the centre whole), or off: the
+    /// session's state, the layout left as it is. The result names the
+    /// panel and the window drawing it (`main`, or `panel:<window>` for a
+    /// detached one).
+    pub(crate) fn apply_zen(&mut self, on: bool, panel: Option<PanelId>) -> Result<Json, String> {
+        if let Some(p) = panel.as_ref().filter(|_| on) {
+            if self.spec(p).is_none() && !p.is_instance() {
+                return Err(format!("no panel `{p}`"));
+            }
+            if !self.layout.shows(p) {
+                return Err(format!("`{p}` is not open: zen mode shows an open panel"));
+            }
+        }
+        self.zen = on;
+        self.zen_panel = if on { panel } else { None };
+        let window = self.zen_panel.as_ref().map(|p| self.zen_window(p));
+        Ok(json!({ "zen": on, "panel": self.zen_panel, "window": window }))
+    }
+
+    /// The window drawing a panel zen mode shows: `main`, or
+    /// `panel:<window>` for a detached window (as the bus names it).
+    fn zen_window(&self, panel: &PanelId) -> String {
+        match self.layout.window_of(panel) {
+            Some(aux) => format!("panel:{}", aux.panel),
+            None => "main".to_owned(),
+        }
+    }
+
+    /// Whether zen mode changes what the main window draws: on, for the
+    /// centre or a panel of the main window (a detached window's panel
+    /// leaves the main window as it is).
+    pub(crate) fn main_zen(&self) -> bool {
+        self.zen
+            && self
+                .zen_panel
+                .as_ref()
+                .is_none_or(|p| self.layout.window_of(p).is_none())
+    }
+
+    /// The panel zen mode draws alone in the detached window `window`
+    /// (by its panel), if any.
+    pub(crate) fn zen_in_window(&self, window: &PanelId) -> Option<PanelId> {
+        let panel = self.zen_panel.as_ref().filter(|_| self.zen)?;
+        let aux = self.layout.window_of(panel)?;
+        (aux.panel == *window && self.layout.shows(panel)).then(|| panel.clone())
+    }
+
+    /// The panel zen mode draws alone in the main window, if any (open,
+    /// and not in a detached window).
+    pub(crate) fn zen_in_main(&self) -> Option<PanelId> {
+        let panel = self.zen_panel.as_ref().filter(|_| self.main_zen())?;
+        self.layout.shows(panel).then(|| panel.clone())
     }
 
     pub fn apply(&mut self, change: &Change) -> Result<Json, String> {
@@ -2413,7 +2598,7 @@ impl Workbench {
                     if self.layout.last_place(p).is_some() {
                         // Back where it was, floating or not.
                         self.reopen(&spec);
-                    } else if spec.floatable {
+                    } else if self.float_refusal(&spec).is_none() {
                         let n = self.layout.floating.len();
                         self.layout.float(p, FloatingGroup::cascade(n));
                     } else {
@@ -2426,7 +2611,7 @@ impl Workbench {
             }
             Change::Float(p, pos) => {
                 let spec = spec_of(p)?;
-                if let Some(why) = spec.refuses(&crate::mounts::panel_host(Place::Floating)) {
+                if let Some(why) = self.float_refusal(&spec) {
                     return Err(why);
                 }
                 // Docked until now: where Dock back puts it.
@@ -2442,6 +2627,29 @@ impl Workbench {
                 self.layout.float(p, *pos);
                 self.anchor_palette(p, false);
                 json!({ "panel": p, "pos": pos })
+            }
+            Change::FloatGroup(p, pos) => {
+                let (panels, _) = self
+                    .layout
+                    .group_of(p)
+                    .filter(|_| self.layout.area_of(p).is_some())
+                    .ok_or_else(|| format!("`{p}` is not docked in a tab group"))?;
+                // The group floats whole, or not at all.
+                for q in &panels {
+                    if let Some(why) = self.float_refusal(&spec_of(q)?) {
+                        return Err(why);
+                    }
+                }
+                // Where Dock back puts each one.
+                for q in &panels {
+                    match self.layout.docked_place(q) {
+                        Some(place) => self.floated_from.insert(q.clone(), place),
+                        None => self.floated_from.remove(q),
+                    };
+                }
+                let floated = self.layout.float_tabs(p, *pos)?;
+                self.anchor_palette(p, false);
+                json!({ "panel": p, "pos": pos, "group": true, "panels": floated })
             }
             Change::JoinGroup(p, into) => {
                 let spec = spec_of(p)?;
@@ -2466,23 +2674,29 @@ impl Workbench {
                 if self.layout.window_of(p).is_some() {
                     self.keep_closed_window(p);
                 }
-                let place = self.floated_from.remove(p).filter(|place| match place {
-                    egui_pop_model::layout::DormantPlace::Docked { area, .. } => spec
-                        .refuses(&crate::mounts::panel_host(Place::Area(*area)))
-                        .is_none(),
-                    _ => false,
-                });
-                let area = match &place {
-                    Some(place) => {
-                        self.layout.dock_at(p, place);
-                        self.layout.area_of(p).unwrap_or(spec.area)
-                    }
+                // A group of tabs floated whole goes back whole.
+                match self.dock_back_tabs(p) {
+                    Some(out) => out,
                     None => {
-                        self.layout.place(p, spec.area);
-                        spec.area
+                        let place = self.floated_from.remove(p).filter(|place| match place {
+                            egui_pop_model::layout::DormantPlace::Docked { area, .. } => spec
+                                .refuses(&crate::mounts::panel_host(Place::Area(*area)))
+                                .is_none(),
+                            _ => false,
+                        });
+                        let area = match &place {
+                            Some(place) => {
+                                self.layout.dock_at(p, place);
+                                self.layout.area_of(p).unwrap_or(spec.area)
+                            }
+                            None => {
+                                self.layout.place(p, spec.area);
+                                spec.area
+                            }
+                        };
+                        json!({ "panel": p, "area": area_name(area) })
                     }
-                };
-                json!({ "panel": p, "area": area_name(area) })
+                }
             }
             Change::DockGroup(p, area) => {
                 let panels: Vec<PanelId> = match self.layout.floating_of(p) {
@@ -2633,11 +2847,7 @@ impl Workbench {
                 self.layout.flyouts.insert(p.clone(), *width);
                 return Ok(json!({ "panel": p, "width": width }));
             }
-            Change::Zen(on) => {
-                // The session's state: the layout is left as it is.
-                self.zen = *on;
-                return Ok(json!({ "zen": on }));
-            }
+            Change::Zen(on) => return self.apply_zen(*on, None),
             Change::Place(area, placement) => {
                 if !matches!(area, Area::StartSide | Area::EndSide) {
                     return Err(format!(
@@ -3350,10 +3560,10 @@ fn drop_into_area(app: &AppHandle, ctx: &egui::Context, dragged: &Dragged, area:
 fn area_under(wb: &Workbench, at: Pos2) -> Option<Area> {
     let closed = [Area::StartSide, Area::EndSide, Area::Bottom]
         .into_iter()
-        .filter(|a| wb.panels_in(*a).is_empty() && !wb.zen)
+        .filter(|a| wb.panels_in(*a).is_empty() && !wb.main_zen())
         .find(|a| wb.edge_rect(*a).contains(at));
     let drawn = (wb.rects.iter())
-        .filter(|(a, _)| **a == Area::Center || !wb.zen)
+        .filter(|(a, _)| **a == Area::Center || !wb.main_zen())
         .find(|(_, r)| r.contains(at))
         .map(|(a, _)| *a);
     closed
@@ -3997,6 +4207,22 @@ fn chain(vertical: bool, mut children: Vec<(Node, f32)>) -> Option<Node> {
 /// targets too. A tab dropped in another area is then moved through the
 /// `workbench.move` step.
 pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
+    // Zen mode on a panel of the main window: that panel alone, the
+    // layout not drawn (and not changed).
+    let alone = app.workbench_mut().zen_in_main();
+    if let Some(panel) = alone {
+        {
+            let mut wb = app.workbench_mut();
+            wb.content = ui.max_rect();
+            wb.rects.clear();
+            wb.bars.clear();
+            wb.bare.clear();
+        }
+        app.set_drawing_areas(true);
+        show_alone(app, ui, &panel);
+        app.set_drawing_areas(false);
+        return;
+    }
     let ctx = ui.ctx().clone();
     let across = ui.max_rect().width();
     let bounds = app.shell_bounds();
@@ -4053,7 +4279,7 @@ pub(crate) fn show(app: &AppHandle, ui: &mut Ui) {
     let zen = {
         let mut wb = app.workbench_mut();
         wb.flipped = flipped;
-        wb.zen
+        wb.main_zen()
     };
     app.set_drawing_areas(true);
     // The activity bar: a zone of the layout, beside the primary side bar
@@ -5100,7 +5326,7 @@ pub struct StripIcon {
 pub fn strip(app: &AppHandle) -> Vec<StripIcon> {
     let (layout, zen, flyout) = {
         let mut wb = app.workbench_mut();
-        (wb.layout(), wb.zen, wb.flyout.clone())
+        (wb.layout(), wb.main_zen(), wb.flyout.clone())
     };
     if zen {
         return Vec::new();
@@ -5559,6 +5785,27 @@ fn flyout_body(
         || draw_flyout(app, ui, kit, panel, &title),
     )
     .is_some()
+}
+
+/// Draws the panel zen mode shows alone, over the whole of `ui`: in the
+/// main window, or in its detached window.
+pub(crate) fn show_alone(app: &AppHandle, ui: &mut Ui, panel: &PanelId) {
+    let kit = Kit::of(ui.ctx());
+    let side = &kit.side_area;
+    let pad = egui::vec2(side.data.padding_x, side.data.padding_y);
+    let rect = ui.max_rect();
+    ui.painter().rect_filled(rect, 0.0, ui.visuals().panel_fill);
+    let body = rect.shrink2(pad);
+    let mut inner = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt(("egui_pop.zen.panel", panel.as_str()))
+            .max_rect(body),
+    );
+    inner.set_clip_rect(body);
+    inner.set_min_size(inner.available_size());
+    let region = focus::Region::new("region.zen", RANK_CENTER);
+    focus::region(&mut inner, &region, |inner| app.show_panel(inner, panel));
+    ui.expand_to_include_rect(rect);
 }
 
 /// Draws an open flyout's content (`flyout_body`): its band, its panel.

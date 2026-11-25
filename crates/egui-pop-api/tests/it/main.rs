@@ -1,0 +1,127 @@
+//! egui-pop-api's integration tests, one test executable: each module was
+//! a test target of its own, each linking egui, eframe and the whole
+//! application layer (about 135 MB apiece, 115 of them). Linked once, they
+//! build in a fraction of the time and the disk.
+//!
+//! One module alone: `cargo nextest run -p egui-pop-api --test it -E
+//! 'test(/^windows::/)'`, or `cargo test -p egui-pop-api --test it
+//! windows::`. Under plain `cargo test` every module's tests share one
+//! process (docs/testing.md, "One test executable").
+
+mod support;
+
+mod about;
+mod admin;
+mod admin_focus;
+mod admin_quick;
+mod admin_transfer;
+mod admin_window;
+mod admin_wizard;
+mod agent_actions;
+mod api;
+mod app_bus;
+mod app_windows;
+mod areas;
+mod arrangements;
+mod auxiliary;
+mod bench_tabs;
+mod bridge_modes;
+mod bus_defer;
+mod busy;
+mod chord_windows;
+mod clipboard;
+mod command_icons;
+mod contexts;
+mod ctx;
+mod custom_dialog;
+mod devtools;
+mod dialog_copy;
+mod dialog_windows;
+mod dialogs;
+mod dispatch_guard;
+mod dock_space;
+mod drag_back;
+mod drag_windows;
+mod empty_area;
+mod escape_gesture;
+mod file_browser;
+mod files;
+mod files_drop;
+mod flyouts;
+mod frame;
+mod group;
+mod history;
+mod history_outside;
+mod history_routing;
+mod history_view;
+mod host;
+mod host_journal;
+mod icons;
+mod jobs;
+mod jobs_bus;
+mod key_scopes;
+mod keys;
+mod kits;
+mod layer_ranks;
+mod layout_bus;
+mod layout_controls;
+mod menu_gutter;
+mod menus;
+mod mounts;
+mod origins;
+mod overlay_bus;
+mod paint_guard;
+mod palettes;
+mod panel_focus;
+mod panel_instance_routing;
+mod panel_instances;
+mod panel_kinds;
+mod panel_menu;
+mod panel_open;
+mod panel_state;
+mod panel_windows;
+mod places;
+mod plain_clicks;
+mod pointer;
+mod removal;
+mod report;
+mod sash_line;
+mod scoped_popups;
+mod screens_bus;
+mod scroll_bars;
+mod selection;
+mod settings_bus;
+mod settings_pages;
+mod settings_window;
+mod shell_hooks;
+mod shell_windows;
+mod sliders;
+mod status_context;
+mod status_icons;
+mod status_items;
+mod steps;
+mod strings;
+mod strips;
+mod tab_groups;
+mod text;
+mod theme_editor;
+mod theme_pairs;
+mod tips;
+mod toasts;
+mod toolbars;
+mod undo;
+mod wait;
+mod window;
+mod window_activate;
+mod window_bus;
+mod window_close_pass;
+mod window_guard;
+mod window_invariants;
+mod window_places;
+mod window_scope;
+mod window_size_loop;
+mod window_wake;
+mod windows;
+mod workbench;
+mod zen;
+mod zen_panel;

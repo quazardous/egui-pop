@@ -797,6 +797,8 @@ pub(crate) struct Shared {
     pub(crate) group_handles: std::cell::Cell<crate::workbench::GroupHandles>,
     /// The docks' controls (`AppBuilder::dock_controls`).
     pub(crate) dock_controls: std::cell::Cell<crate::workbench::DockControls>,
+    /// The texts naming an arrangement (`AppBuilder::arrangement_strings`).
+    arrangement_strings: std::cell::Cell<crate::arrangements::ArrangementStrings>,
     /// The layout's changes egui_stack said on the bus
     /// (`stack.layout.changed`) and the shell has not read yet.
     pub(crate) stack_changes: RefCell<Vec<egui_stack::bus::LayoutChange>>,
@@ -975,6 +977,7 @@ impl AppHandle {
             toast_corner: std::cell::Cell::default(),
             group_handles: std::cell::Cell::new(crate::workbench::DEFAULT_GROUP_HANDLES),
             dock_controls: std::cell::Cell::default(),
+            arrangement_strings: std::cell::Cell::default(),
             stack_changes: RefCell::new(Vec::new()),
             menu_bar: std::cell::Cell::new(true),
             system_file_chooser: std::cell::Cell::new(false),
@@ -1431,6 +1434,15 @@ impl AppHandle {
         let mut all = self.0.panel_commands.borrow_mut();
         Arc::make_mut(&mut all).extend(entries);
         strings::set_panel_commands(&self.egui(), all.clone());
+    }
+
+    /// The texts naming an arrangement of the panels, the application's
+    /// (`AppBuilder::arrangement_strings`) or egui-pop's.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn arrangement_strings(&self) -> crate::arrangements::ArrangementStrings {
+        self.0.arrangement_strings.get()
     }
 
     /// The application's name (`AppBuilder::name`); empty when none was
@@ -3278,11 +3290,23 @@ impl AppHandle {
         let instances = crate::workbench::instances::open_ids(self);
         let out = self.step(&step, args, move |app, args| {
             let c = crate::workbench::Change::from_args(&id, args)?;
+            // Zen mode on one panel (`panel`, as a plugin may have
+            // redirected it): a draw override, the layout untouched.
+            if let crate::workbench::Change::Zen(on) = c {
+                let panel = match args.get("panel").and_then(Json::as_str) {
+                    Some(p) => Some(PanelId::new(p).map_err(|e| e.to_string())?),
+                    None => None,
+                };
+                return app.workbench_mut().apply_zen(on, panel);
+            }
             // A detached panel's window opened, docked back or closed is
             // its request on the bus, whose workbench listener changes the
             // layout; any other window the change made or ended is asked
             // once it is done.
             let before = app.workbench_mut().layout.auxiliary.clone();
+            // Which panels may float, as the user's setting says now.
+            let scope = crate::workbench::float_scope(app);
+            app.workbench_mut().float_scope = scope;
             let done = match crate::bus::panels::ask(app, &c) {
                 Some(done) => done,
                 None => app.workbench_mut().apply(&c),
@@ -3315,9 +3339,98 @@ impl AppHandle {
         self.change_workbench(crate::workbench::Change::Zen(on))
     }
 
+    /// Starts zen mode on one panel (`workbench.zen` with `panel`): the
+    /// panel alone, full size, in the window holding it, a detached
+    /// window's included; the layout is left as it is, so leaving zen
+    /// mode ([`Self::set_zen`] with `false`) draws it unchanged. A panel
+    /// that is not open is refused. `None` when asked while the areas
+    /// are drawn: it runs at the frame's end.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn set_zen_panel(&self, panel: &PanelId) -> Option<Outcome> {
+        let args = json!({ "zen": true, "panel": panel });
+        if self.0.drawing_areas.get() {
+            self.push_request(Request::Run {
+                command: crate::workbench::CMD_ZEN,
+                args: json!({ "panel": panel }),
+                origin: Origin::User,
+            });
+            return None;
+        }
+        let step = crate::workbench::STEP_ZEN;
+        let id = step.clone();
+        let out = self.step(&step, args, move |app, args| {
+            let c = crate::workbench::Change::from_args(&id, args)?;
+            let crate::workbench::Change::Zen(on) = c else {
+                return Err("not a zen mode change".into());
+            };
+            let panel = match args.get("panel").and_then(Json::as_str) {
+                Some(p) => Some(PanelId::new(p).map_err(|e| e.to_string())?),
+                None => None,
+            };
+            app.workbench_mut().apply_zen(on, panel)
+        });
+        self.follow_zen();
+        self.egui().request_repaint();
+        Some(out)
+    }
+
     /// Whether zen mode is on.
     pub fn zen(&self) -> bool {
         self.workbench_mut().zen
+    }
+
+    /// The panel zen mode shows alone, while it shows one (none: off, or
+    /// the centre whole).
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn zen_panel(&self) -> Option<PanelId> {
+        let wb = self.workbench_mut();
+        wb.zen_panel.clone().filter(|_| wb.zen)
+    }
+
+    /// Whether `panel` is the one panel docked in the centre.
+    pub(crate) fn centre_holds_only(&self, panel: &PanelId) -> bool {
+        let wb = self.workbench_mut();
+        let centre = wb.panels_in(Area::Center);
+        centre.len() == 1 && centre[0] == *panel
+    }
+
+    /// Whether zen mode changes what the main window draws (on, and not
+    /// on a detached window's panel).
+    pub(crate) fn main_zen(&self) -> bool {
+        self.workbench_mut().main_zen()
+    }
+
+    /// The panel zen mode would show now, without one named: the focused
+    /// panel when it is a view or mixed one, else the application's
+    /// choice (`pop.zen.panel`), else the centre's active tab; each one
+    /// open. `None`: the centre whole.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn zen_target(&self) -> Option<PanelId> {
+        use egui_pop_model::panels::PanelKind;
+        let shows = |p: &PanelId| self.workbench_mut().layout.shows(p);
+        if let Some(p) = self.focused_panel().filter(|p| {
+            shows(p) && matches!(self.panel_kind(p), PanelKind::View | PanelKind::Mixed)
+        }) {
+            return Some(p);
+        }
+        if let Some(p) = self
+            .zen_choice()
+            .and_then(|p| PanelId::new(&p).ok())
+            .filter(|p| shows(p))
+        {
+            return Some(p);
+        }
+        let wb = self.workbench_mut();
+        wb.layout
+            .active_in(egui_pop_model::panels::Area::Center)
+            .first()
+            .map(|p| (*p).clone())
     }
 
     /// Keeps the `workbenchZen` context key in line with zen mode.
@@ -3575,6 +3688,7 @@ pub struct AppBuilder {
     toast_corner: crate::toasts::Corner,
     group_handles: crate::workbench::GroupHandles,
     dock_controls: crate::workbench::DockControls,
+    arrangement_strings: crate::arrangements::ArrangementStrings,
     pointer_profile: String,
     dock_drag: Option<egui_pop_model::pointer::DockDrag>,
     kits: Vec<KitSource>,
@@ -3684,6 +3798,7 @@ impl AppBuilder {
             toast_corner: crate::toasts::Corner::default(),
             group_handles: crate::workbench::DEFAULT_GROUP_HANDLES,
             dock_controls: crate::workbench::DockControls::default(),
+            arrangement_strings: crate::arrangements::ArrangementStrings::default(),
             pointer_profile: egui_pop_model::pointer::DEFAULT_PROFILE.into(),
             dock_drag: None,
             kits: Vec::new(),
@@ -3735,6 +3850,20 @@ impl AppBuilder {
     /// (docs/stability.md).</div>
     pub fn dock_controls(mut self, controls: crate::workbench::DockControls) -> Self {
         self.dock_controls = controls;
+        self
+    }
+
+    /// The application's own texts naming an arrangement of the panels
+    /// ([`ArrangementStrings`](crate::arrangements::ArrangementStrings)):
+    /// the layout menu's "Save the current arrangement as…", the save
+    /// dialog's title and button, the name it suggests. Whole strings
+    /// under the application's keys, translated by its catalogues; by
+    /// default egui-pop's.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn arrangement_strings(mut self, words: crate::arrangements::ArrangementStrings) -> Self {
+        self.arrangement_strings = words;
         self
     }
 
@@ -4416,6 +4545,10 @@ impl AppBuilder {
         app.handle.0.toast_corner.set(self.toast_corner);
         app.handle.0.group_handles.set(self.group_handles);
         app.handle.0.dock_controls.set(self.dock_controls);
+        app.handle
+            .0
+            .arrangement_strings
+            .set(self.arrangement_strings);
         app.handle.0.menu_bar.set(self.menu_bar);
         app.handle
             .0
@@ -5077,13 +5210,32 @@ impl App {
         // Escape leaves it, unless an overlay or a pushed mode wants it.
         ctx.command(
             CommandSpec::new(crate::workbench::CMD_ZEN, "Zen mode", "View")
-                .description("Shows the centre alone: no title, menu or status bar, no side or bottom area, no palette. Escape leaves it.")
+                .description("Shows one panel alone, full size, in its window: `panel`, else the focused panel when it is a view, else the application's choice, else the centre's active tab. No title, menu or status bar, no other panel. Escape leaves it, and the layout is as it was.")
                 .key("Shift+F11")
                 .checked("workbenchZen")
-                .menu(MENU_VIEW, "9_window", 2),
+                .menu(MENU_VIEW, "9_window", 2)
+                .args(json!({ "panel": "app.viewer" })),
             |call| {
-                let on = !call.app.zen();
-                zen_result(call.app.set_zen(on), on)
+                let named = match call.args.get("panel").and_then(Json::as_str) {
+                    Some(p) => Some(PanelId::new(p).map_err(|e| e.to_string())?),
+                    None => None,
+                };
+                // A toggle; a panel named while another is zenned moves
+                // zen mode to it.
+                let current = call.app.zen_panel();
+                if call.app.zen() && (named.is_none() || named == current) {
+                    return zen_result(call.app.set_zen(false), false);
+                }
+                match named.or_else(|| call.app.zen_target()) {
+                    // The centre's only panel: the centre whole shows it
+                    // alone already, drawn where it was, so the widget
+                    // holding the keyboard keeps it.
+                    Some(p) if call.app.centre_holds_only(&p) => {
+                        zen_result(call.app.set_zen(true), true)
+                    }
+                    Some(p) => zen_result(call.app.set_zen_panel(&p), true),
+                    None => zen_result(call.app.set_zen(true), true),
+                }
             },
         )?
         .command(
@@ -7931,7 +8083,7 @@ impl App {
         let h = self.handle.clone();
         h.follow_zen();
         crate::zen::show(&h, ui.ctx());
-        if h.zen() {
+        if h.main_zen() {
             // Zen mode: the centre alone, and no caption published.
             h.mark_shell_start(ui);
             egui_pop_core::frame::hide_title_bar(ui.ctx());

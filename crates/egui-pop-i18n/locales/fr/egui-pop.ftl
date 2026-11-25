@@ -717,7 +717,7 @@ command-workbench-move-to-window =
     .title = Déplacer vers la fenêtre
 
 command-workbench-zen =
-    .description = N’affiche que le centre : ni barre de titre, de menus ou d’état, ni zone latérale ou du bas, ni palette. Échap en sort.
+    .description = Affiche un seul panneau, en grand, dans sa fenêtre : `panel`, sinon le panneau actif s’il est une vue, sinon le choix de l’application, sinon l’onglet actif du centre. Ni barre de titre, de menus ou d’état, ni autre panneau. Échap en sort, et la disposition est comme avant.
     .title = Mode zen
 
 egui-pop-admin-close = Fermer
@@ -1580,6 +1580,7 @@ egui-pop-palette-group-menu = Menu de { $palette }
 egui-pop-palette-hint = Tapez une commande
 
 egui-pop-palette-no-match = Aucune commande ne correspond.
+egui-pop-palette-pick-no-match = Rien ne correspond.
 
 egui-pop-palette-not-bool = `{ $input }` n’est ni true ni false
 
@@ -2345,9 +2346,14 @@ egui-pop-window-placed-by-system = Sous Wayland, le système place les fenêtres
 
 egui-pop-workbench-close-panel = Fermer { $panel }
 
+egui-pop-workbench-zen-panel = Mode zen sur ce panneau
+
 egui-pop-workbench-detach = Détacher dans une fenêtre
 
 egui-pop-workbench-float = Faire flotter
+egui-pop-workbench-float-refused = Faire flotter ({ $panel } ne peut pas flotter)
+egui-pop-workbench-float-palettes-only = Faire flotter (seules les palettes flottent)
+egui-pop-workbench-float-group = Faire flotter le groupe
 egui-pop-workbench-dock-back = Réancrer
 
 egui-pop-workbench-dock-in = Ancrer dans { $area }
@@ -2373,6 +2379,8 @@ egui-pop-workbench-nothing-to-open = Aucun panneau fermé ne peut s’ouvrir ici
 egui-pop-workbench-move-window = Déplacer la fenêtre
 
 egui-pop-workbench-new-instance = Nouveau : { $panel }
+egui-pop-workbench-pick-title = Ouvrir un panneau
+egui-pop-workbench-pick-hint = Tapez le nom d’un panneau
 
 egui-pop-workbench-new-window = Nouvelle fenêtre
 
@@ -2733,6 +2741,14 @@ setting-workbench-float-move =
 setting-workbench-float-move-choice-dock = ancrer
 
 setting-workbench-float-move-choice-move = déplacer
+
+setting-workbench-float-panels =
+    .description = Quels panneaux peuvent flotter au-dessus de l’interface : tout panneau qui le permet (tous), ou seulement les palettes, les panneaux qui s’ouvrent flottants (palettes).
+    .label = Panneaux flottants
+
+setting-workbench-float-panels-choice-any = tous
+
+setting-workbench-float-panels-choice-palettes = palettes
 
 setting-workbench-group-drag-modifier =
     .description = La touche maintenue en faisant glisser un onglet pour déplacer tout son groupe d’onglets : shift, ctrl (cmd sur macOS) ou alt.
@@ -3506,11 +3522,14 @@ menu-workbench-group-open =
 command-workbench-panel-open =
     .description = Ouvre `panel` par `pop.panel.open` : là où il était quand il a été fermé (`place` : `last`, par défaut ; cette place disparue, dans le groupe d’onglets du panneau actif si ses zones l’y autorisent, sinon dans sa propre zone), `here` (le groupe d’onglets qui contient `group`, sinon celui du panneau actif) ou dans une zone (`center`, `start_side`, `end_side`, `bottom`). Pour un panneau déclaré en plusieurs instances, `instance` : `new` ouvre une nouvelle instance (son id dans `instance`), l’id d’une instance ouvre celle-là.
     .title = Ouvrir un panneau
+command-workbench-panel-pick =
+    .description = Liste tous les panneaux dans la palette de commandes ; celui choisi s’ouvre là où il était quand il a été fermé (`workbench.panel.open`, `place` : `last`).
+    .title = Ouvrir un panneau…
 command-workbench-panel-move =
     .description = Ancre le panneau actif, ou `panel`, dans une zone (`area` : `center`, `start_side`, `end_side` ou `bottom`).
     .title = Déplacer le panneau vers une zone
 command-workbench-panel-float =
-    .description = Fait flotter le panneau actif, ou `panel`, au-dessus de l’interface, là où est sa zone.
+    .description = Fait flotter le panneau actif, ou `panel`, au-dessus de l’interface, là où est sa zone ; avec `group`, tout son groupe d’onglets ancré, en un seul groupe d’onglets flottant (Réancrer le remet en place).
     .title = Faire flotter le panneau
 command-workbench-panel-detach =
     .description = Déplace le panneau actif, ou `panel`, dans une fenêtre à lui ; avec `group`, son groupe d’onglets entier.

@@ -1108,7 +1108,7 @@ command-workbench-panel-dock-back =
     .title = Dock panel back
 
 command-workbench-panel-float =
-    .description = Floats the focused panel, or `panel`, over the interface, where its area is.
+    .description = Floats the focused panel, or `panel`, over the interface, where its area is; with `group`, its docked tab group whole, as one floating group of tabs (Dock back puts it back).
     .title = Float panel
 
 command-workbench-panel-move =
@@ -1122,6 +1122,10 @@ command-workbench-panel-move-to-group =
 command-workbench-panel-open =
     .description = Opens `panel` through `pop.panel.open`: where it was when it closed (`place`: `last`, the default; that place gone, in the focused panel's tab group when its areas allow it, else its own area), `here` (the tab group holding `group`, else the focused panel's) or in an area (`center`, `start_side`, `end_side`, `bottom`). For a panel declared with several, `instance`: `new` opens a new instance (its id in `instance`), an instance's id opens that one.
     .title = Open panel
+
+command-workbench-panel-pick =
+    .description = Lists every panel in the command palette; the one chosen opens where it was when it closed (`workbench.panel.open`, `place: last`).
+    .title = Open panel…
 
 command-workbench-previous-region =
     .description = Moves the keyboard to the previous part of the window.
@@ -1148,7 +1152,7 @@ command-workbench-toggle-secondarySideBar =
     .title = Toggle secondary side bar
 
 command-workbench-zen =
-    .description = Shows the centre alone: no title, menu or status bar, no side or bottom area, no palette. Escape leaves it.
+    .description = Shows one panel alone, full size, in its window: `panel`, else the focused panel when it is a view, else the application's choice, else the centre's active tab. No title, menu or status bar, no other panel. Escape leaves it, and the layout is as it was.
     .title = Zen mode
 
 egui-pop-about-authors = Authors
@@ -2100,6 +2104,8 @@ egui-pop-palette-not-bool = `{ $input }` is not true or false
 egui-pop-palette-not-json = not JSON: { $error }
 
 egui-pop-palette-not-number = `{ $input }` is not a number
+
+egui-pop-palette-pick-no-match = Nothing matches.
 
 egui-pop-palette-pin = Pin { $palette }
 
@@ -3075,6 +3081,12 @@ egui-pop-workbench-eject-group = Eject group
 
 egui-pop-workbench-float = Float
 
+egui-pop-workbench-float-group = Float group
+
+egui-pop-workbench-float-palettes-only = Float (only palettes float)
+
+egui-pop-workbench-float-refused = Float ({ $panel } cannot float)
+
 egui-pop-workbench-flyout-pin = Pin { $panel }
 
 egui-pop-workbench-fold = Fold { $area }
@@ -3091,6 +3103,10 @@ egui-pop-workbench-new-window = New window
 
 egui-pop-workbench-nothing-to-open = No closed panel can open here
 
+egui-pop-workbench-pick-hint = Type a panel's name
+
+egui-pop-workbench-pick-title = Open panel
+
 egui-pop-workbench-stays-docked = { $panel } cannot go into a window
 
 egui-pop-workbench-stays-out = { $panel } stays out of { $area }
@@ -3098,6 +3114,8 @@ egui-pop-workbench-stays-out = { $panel } stays out of { $area }
 egui-pop-workbench-unfold = Unfold { $area }
 
 egui-pop-workbench-window-title = { $panel } — { $application }
+
+egui-pop-workbench-zen-panel = Zen this panel
 
 egui-pop-zen-hint = Zen mode: { $keys } to leave
 
@@ -3543,6 +3561,14 @@ setting-workbench-float-move =
 setting-workbench-float-move-choice-dock = dock
 
 setting-workbench-float-move-choice-move = move
+
+setting-workbench-float-panels =
+    .description = Which panels may float over the interface: any panel that allows it (any), or only the palettes, the panels that open floating (palettes).
+    .label = Floating panels
+
+setting-workbench-float-panels-choice-any = any
+
+setting-workbench-float-panels-choice-palettes = palettes
 
 setting-workbench-group-drag-modifier =
     .description = The key held while dragging a tab to move its whole group of tabs: shift, ctrl (cmd on macOS) or alt.

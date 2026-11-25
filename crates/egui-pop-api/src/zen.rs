@@ -38,13 +38,21 @@ const SINCE: Slot<f64> = Slot::new("api.zen.since");
 const HELD: Slot<bool> = Slot::new("api.zen.held");
 
 /// Draws the way out while zen mode is on; forgets it once off. Called
-/// on each pass of the main window.
+/// on each pass of the main window, which draws it unless zen mode shows
+/// a detached window's panel ([`show_in`] draws it there).
 pub(crate) fn show(app: &AppHandle, ctx: &Context) {
     if !app.zen() {
         SINCE.remove(ctx);
         HELD.remove(ctx);
         return;
     }
+    if app.main_zen() {
+        show_in(app, ctx);
+    }
+}
+
+/// Draws the way out in the window of `ctx`, zen mode on.
+pub(crate) fn show_in(app: &AppHandle, ctx: &Context) {
     let now = motion::now(ctx);
     let since = match SINCE.get(ctx) {
         Some(s) => s,

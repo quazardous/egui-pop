@@ -545,7 +545,7 @@ command-workbench-panel-detach.description 0f0707e5a4791ac7
 command-workbench-panel-detach.title 38be3b2072b6494b
 command-workbench-panel-dock-back.description d233097e56dce525
 command-workbench-panel-dock-back.title c2030f77e12b60b7
-command-workbench-panel-float.description 9b95c492528fdfdf
+command-workbench-panel-float.description 1dc4309438ec7e5f
 command-workbench-panel-float.title a61536b054e169bf
 command-workbench-panel-move-to-group.description 4134c94ff1638e57
 command-workbench-panel-move-to-group.title 0a6dd08c8ab4e0e6
@@ -553,6 +553,8 @@ command-workbench-panel-move.description 18ff408e3bea88fd
 command-workbench-panel-move.title 821ffa3ba838f766
 command-workbench-panel-open.description 203925befb40c243
 command-workbench-panel-open.title 2f1e9144da1e4a03
+command-workbench-panel-pick.description 5c96df67a5c2c713
+command-workbench-panel-pick.title 2442a42f9aa4e8bd
 command-workbench-previous-region.description b7ab3302080ad9bf
 command-workbench-previous-region.title 3e485e9867b167b6
 command-workbench-tab-next.description 97760e80916200a5
@@ -565,7 +567,7 @@ command-workbench-toggle-primarySideBar.description 6abebaff6edb9c44
 command-workbench-toggle-primarySideBar.title 12ad1d9930347243
 command-workbench-toggle-secondarySideBar.description 1135c31c9a8e5988
 command-workbench-toggle-secondarySideBar.title 7d25f4b21647c51f
-command-workbench-zen.description a38941bcc516bbed
+command-workbench-zen.description 94763b1247a5dbb1
 command-workbench-zen.title 3abce81ef922131d
 egui-pop-about-authors e6912a24e9c67317
 egui-pop-about-copied 6a1af6540e3f5739
@@ -1042,6 +1044,7 @@ egui-pop-palette-no-match b35d6729c46fa10e
 egui-pop-palette-not-bool 993eb161aa18de6a
 egui-pop-palette-not-json 1bb3d16d8ae31066
 egui-pop-palette-not-number 6f78de18f695be64
+egui-pop-palette-pick-no-match 309c11f6f6ffe243
 egui-pop-palette-pin d8bdf6d07e26610b
 egui-pop-palette-recent 34d258ba4ca0ac84
 egui-pop-palette-recent-keys 07aa9f65e8fcb96a
@@ -1529,6 +1532,9 @@ egui-pop-workbench-dock-title 4a631eac61b5404a
 egui-pop-workbench-drop-here ddcc0be031326169
 egui-pop-workbench-eject-group 577cb6edcb4b9a15
 egui-pop-workbench-float eb7e945b1415bcc5
+egui-pop-workbench-float-group 9bbd26987ae148dc
+egui-pop-workbench-float-palettes-only f2742c535ceaa4f0
+egui-pop-workbench-float-refused 5d83ff6aea5130cb
 egui-pop-workbench-flyout-pin 4ebe2494b850fd48
 egui-pop-workbench-fold 873472b4101d195d
 egui-pop-workbench-move-group d00b55a2baca3ba7
@@ -1537,10 +1543,13 @@ egui-pop-workbench-move-window 5bf153a2dea76016
 egui-pop-workbench-new-instance 023f7abfe1852019
 egui-pop-workbench-new-window 2d42883410626b5b
 egui-pop-workbench-nothing-to-open 4320082d08ae7c06
+egui-pop-workbench-pick-hint cb6bdec17563ab79
+egui-pop-workbench-pick-title 2f1e9144da1e4a03
 egui-pop-workbench-stays-docked b822e29e5d487cff
 egui-pop-workbench-stays-out 7973c10990577019
 egui-pop-workbench-unfold 4f6622581c6e6904
 egui-pop-workbench-window-title 2fb186786f7fdced
+egui-pop-workbench-zen-panel 1e144bdf2b9bef2e
 egui-pop-zen-hint b4f57ce4d2e085df
 egui-pop-zen-hint-no-key bbeec89f8dc28736
 menu-app-menu-edit.label 329d5a4f3eb93fa9
@@ -1738,6 +1747,10 @@ setting-workbench-float-move-choice-dock e564cffbcd352828
 setting-workbench-float-move-choice-move 9690d109eab0a7b2
 setting-workbench-float-move.description f5a5babbc0e06f53
 setting-workbench-float-move.label b13f368a9769f26e
+setting-workbench-float-panels-choice-any 19e401a3808dea0d
+setting-workbench-float-panels-choice-palettes a413758968905e41
+setting-workbench-float-panels.description fad743e2af29058f
+setting-workbench-float-panels.label 77566b9a9f52f6ec
 setting-workbench-group-drag-modifier-choice-alt 07dceda37624e53a
 setting-workbench-group-drag-modifier-choice-ctrl 8e9b12a800b5be72
 setting-workbench-group-drag-modifier-choice-shift 0e75a56da8f0f9bf

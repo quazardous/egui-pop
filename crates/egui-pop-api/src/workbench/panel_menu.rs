@@ -17,6 +17,8 @@
 //!   their panels' titles); Move group to window ▸ (its tab group whole,
 //!   to a window or a new one);
 //! - Move to group ▸ (the docked tab groups, by their panels' titles);
+//! - Zen this panel: the panel alone, full size, in its window
+//!   (`workbench.zen` with the panel);
 //! - Close.
 //!
 //! A floating panel's menu opens through [`crate::menus::context_menu`],
@@ -75,9 +77,15 @@ pub const MENU_GROUP_ADD: MenuId = MenuId::from_static("workbench.group.add");
 /// default, `here` or an area's name; `group`: a panel of the tab group
 /// `here` means, else the focused panel's).
 pub const CMD_PANEL_OPEN: CommandId = CommandId::from_static("workbench.panel.open");
+/// "Open panel…": a quick pick in the command palette of every declared
+/// panel (and "New `<panel>`" for those declared with several), the
+/// chosen one opened where it was (`workbench.panel.open`, `place:
+/// "last"`). `Ctrl+Shift+O`.
+pub const CMD_PANEL_PICK: CommandId = CommandId::from_static("workbench.panel.pick");
 /// Docks a panel in an area (`panel`, `area`).
 pub const CMD_PANEL_MOVE: CommandId = CommandId::from_static("workbench.panel.move");
-/// Floats a docked panel, where its area is (`panel`).
+/// Floats a docked panel, where its area is (`panel`; `group`: its tab
+/// group whole).
 pub const CMD_PANEL_FLOAT: CommandId = CommandId::from_static("workbench.panel.float");
 /// Moves a panel into a window of its own (`panel`; `group`: its tab
 /// group whole).
@@ -97,6 +105,8 @@ const LIST_WINDOWS: &str = "workbench.panel.windows";
 const LIST_GROUP_WINDOWS: &str = "workbench.panel.group_windows";
 const LIST_GROUPS: &str = "workbench.panel.groups";
 const LIST_CLOSE: &str = "workbench.panel.close";
+const LIST_FLOAT_GROUP: &str = "workbench.group.float";
+const LIST_ZEN: &str = "workbench.panel.zen";
 const LIST_OPEN_HERE: &str = "workbench.group.open";
 const LIST_ADD_HERE: &str = "workbench.group.add";
 /// "New `<panel>`" for each panel declared with several instances, opening
@@ -146,6 +156,24 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
         },
     )?
     .command(
+        CommandSpec::new(CMD_PANEL_PICK, "Open panel…", "View")
+            .description("Lists every panel in the command palette; the one chosen opens where it was when it closed (`workbench.panel.open`, `place: last`).")
+            .icon("layout")
+            .when("!modalOpen")
+            .key("Ctrl+Shift+O"),
+        |call| {
+            let p = call
+                .app
+                .service(&crate::palette::PALETTE)
+                .ok_or("no palette")?;
+            let pick = panel_pick(call.app);
+            let count = pick.items.len();
+            let group = call.app.current_window_group();
+            p.pick_in(group, call.app.when_context(), pick);
+            Ok(json!({ "open": true, "items": count }))
+        },
+    )?
+    .command(
         CommandSpec::new(CMD_PANEL_MOVE, "Move panel to area", "View")
             .description("Docks the focused panel, or `panel`, in an area (`area`: `center`, `start_side`, `end_side` or `bottom`).")
             .when("!modalOpen")
@@ -172,7 +200,7 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
     )?
     .command(
         CommandSpec::new(CMD_PANEL_FLOAT, "Float panel", "View")
-            .description("Floats the focused panel, or `panel`, over the interface, where its area is.")
+            .description("Floats the focused panel, or `panel`, over the interface, where its area is; with `group`, its docked tab group whole, as one floating group of tabs (Dock back puts it back).")
             .when("!modalOpen")
             .hidden()
             .args(example.clone()),
@@ -189,7 +217,20 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
                 let off = at - wb.content.min;
                 [off.x + 24.0, off.y + 24.0]
             };
-            run(call.app, Change::Float(panel, pos))
+            // `group`: true, or a panel of the group (the group menu's
+            // own argument, which its entries' arguments give way to).
+            let group = matches!(
+                call.args.get("group"),
+                Some(Json::Bool(true) | Json::String(_))
+            );
+            run(
+                call.app,
+                if group {
+                    Change::FloatGroup(panel, pos)
+                } else {
+                    Change::Float(panel, pos)
+                },
+            )
         },
     )?
     .command(
@@ -277,6 +318,7 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
             MenuItem::submenu(MENU_PANEL, "3_group", 0, MENU_PANEL_GROUPS, "Move to group")
                 .when("args.has_groups", false),
         )?
+        .menu_item(MenuItem::list(MENU_PANEL, "8_zen", 0, LIST_ZEN))?
         .menu_item(MenuItem::list(MENU_PANEL, "9_close", 0, LIST_CLOSE))?
         .menu_item(MenuItem::list(MENU_PANEL_WINDOWS, "1", 0, LIST_WINDOWS))?
         .menu_item(MenuItem::list(
@@ -290,6 +332,7 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
             MenuItem::submenu(MENU_GROUP, "1_open", 0, MENU_GROUP_OPEN, "Open panel")
                 .when("args.can_open", false),
         )?
+        .menu_item(MenuItem::list(MENU_GROUP, "2_float", 0, LIST_FLOAT_GROUP))?
         .menu_item(MenuItem::list(MENU_GROUP_OPEN, "1", 0, LIST_OPEN_HERE))?
         .menu_item(MenuItem::list(MENU_GROUP_ADD, "1", 0, LIST_ADD_HERE))?
         .menu_item(MenuItem::list(
@@ -327,7 +370,21 @@ pub(crate) fn declare(ctx: &mut Ctx<'_>) -> Result<(), CtxError> {
                 ]
             })
         })
+        .list_provider(LIST_FLOAT_GROUP, |app, cx| {
+            with_group(app, cx, |app, group| {
+                float_group_entry(app, group).into_iter().collect()
+            })
+        })
         .list_provider(LIST_NEW_INSTANCES, |app, _| new_entries(app, None))
+        .list_provider(LIST_ZEN, |app, cx| {
+            with_panel(app, cx, |app, panel| {
+                vec![ListItem::new(
+                    &strings::tr(&app.egui(), &txt::WORKBENCH_ZEN_PANEL),
+                    super::CMD_ZEN,
+                    json!({ "panel": panel }),
+                )]
+            })
+        })
         .list_provider(LIST_CLOSE, |app, cx| {
             with_panel(app, cx, |app, panel| {
                 let ctx = app.egui();
@@ -482,6 +539,44 @@ fn open_entries(app: &AppHandle, group: &PanelId, closed: bool) -> Vec<ListItem>
     entries
 }
 
+/// "Open panel…"'s quick pick: "New `<panel>`" for each panel declared
+/// with several instances, then every declared panel by title, each
+/// opening where it was.
+pub fn panel_pick(app: &AppHandle) -> crate::palette::QuickPick {
+    let ctx = app.egui();
+    let panels: Vec<PanelId> = app
+        .workbench_mut()
+        .specs
+        .iter()
+        .filter(|s| !s.bare && !s.id.is_instance())
+        .map(|s| s.id.clone())
+        .collect();
+    let mut named: Vec<(String, PanelId)> = panels
+        .into_iter()
+        .map(|p| (app.panel_title(&ctx, &p), p))
+        .collect();
+    named.sort_by_key(|(title, _)| title.to_lowercase());
+    let mut pick = crate::palette::QuickPick::new(
+        strings::tr(&ctx, &txt::WORKBENCH_PICK_TITLE),
+        strings::tr(&ctx, &txt::WORKBENCH_PICK_HINT),
+    );
+    for item in new_entries(app, None) {
+        pick = pick.item(crate::palette::PickItem::new(
+            item.label,
+            item.command,
+            item.args,
+        ));
+    }
+    for (title, p) in named {
+        pick = pick.item(crate::palette::PickItem::new(
+            title,
+            CMD_PANEL_OPEN,
+            json!({ "panel": p, "place": "last" }),
+        ));
+    }
+    pick
+}
+
 /// "New `<panel>`" for each panel declared with several instances, by
 /// title: in the tab group holding `group` (those its place allows), else
 /// in the panel's own area.
@@ -594,14 +689,71 @@ fn place_entries(app: &AppHandle, panel: &PanelId) -> Vec<ListItem> {
             }
         })
         .collect();
-    if spec.floatable {
-        out.push(ListItem::new(
-            &strings::tr(&ctx, &txt::WORKBENCH_FLOAT),
-            CMD_PANEL_FLOAT,
-            json!({ "panel": panel }),
-        ));
-    }
+    out.push(float_entry(app, &ctx, panel, &spec));
+    out.extend(float_group_entry(app, panel));
     out
+}
+
+/// Float, for a docked panel: greyed, saying why, when it may not float
+/// (its spec opts out, or the setting lets only palettes float).
+fn float_entry(
+    app: &AppHandle,
+    ctx: &egui::Context,
+    panel: &PanelId,
+    spec: &egui_pop_model::panels::PanelSpec,
+) -> ListItem {
+    let args = json!({ "panel": panel });
+    if spec
+        .refuses(&crate::mounts::panel_host(Place::Floating))
+        .is_some()
+    {
+        let title = app.panel_title(ctx, panel);
+        let label = strings::tr_args(ctx, &txt::WORKBENCH_FLOAT_REFUSED, &[("panel", &title)]);
+        return ListItem::new(&label, CMD_PANEL_FLOAT, args).disabled();
+    }
+    let scope = super::float_scope(app);
+    let narrowed = {
+        let mut wb = app.workbench_mut();
+        wb.float_scope = scope;
+        wb.float_refusal(spec).is_some()
+    };
+    if narrowed {
+        let label = strings::tr(ctx, &txt::WORKBENCH_FLOAT_PALETTES_ONLY);
+        return ListItem::new(&label, CMD_PANEL_FLOAT, args).disabled();
+    }
+    ListItem::new(
+        &strings::tr(ctx, &txt::WORKBENCH_FLOAT),
+        CMD_PANEL_FLOAT,
+        args,
+    )
+}
+
+/// Float group, for a panel docked in a tab group of several, when the
+/// group menu is allowed ([`GroupHandles::MENU`](super::GroupHandles)):
+/// greyed when one of its panels may not float.
+fn float_group_entry(app: &AppHandle, panel: &PanelId) -> Option<ListItem> {
+    if !super::group_handles(app).contains(super::GroupHandles::MENU) {
+        return None;
+    }
+    let scope = super::float_scope(app);
+    let floats = {
+        let mut wb = app.workbench_mut();
+        wb.layout.area_of(panel)?;
+        let (panels, _) = wb.layout.group_of(panel)?;
+        if panels.len() < 2 {
+            return None;
+        }
+        wb.float_scope = scope;
+        panels
+            .iter()
+            .all(|p| wb.spec(p).is_some_and(|s| wb.float_refusal(s).is_none()))
+    };
+    let item = ListItem::new(
+        &strings::tr(&app.egui(), &txt::WORKBENCH_FLOAT_GROUP),
+        CMD_PANEL_FLOAT,
+        json!({ "panel": panel, "group": true }),
+    );
+    Some(if floats { item } else { item.disabled() })
 }
 
 /// Detach into a window, for a panel that may go into one and is not

@@ -77,7 +77,7 @@ host (ADR 0013), a custom dialog's body.
 Each line is a gap between the code of 2026-11-15 (egui-pop `next`,
 when this was written) and the decision above, small enough to be its
 own change with its frame test. **All nine are closed (2026-11-15)**;
-the frame tests are in `crates/egui-pop-api/tests/removal.rs`.
+the frame tests are in `crates/egui-pop-api/tests/it/removal.rs`.
 
 - **No trace of the disconnection itself.** `App::disconnect` emits
   `Lifecycle::Disconnected` to handlers only: no journal event, no log

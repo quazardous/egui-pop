@@ -103,7 +103,7 @@ No modifier is read. A palette snapped to the window's edge sits within
 the magnet's width of a closed area's edge, which is where `dock_at`
 docks: the very spot the snap brings it to. The test
 `a_palette_is_dragged_by_its_band_snaps_and_docks_on_an_area`
-(`crates/egui-pop-api/tests/palettes.rs`) asserts that a plain drag
+(`crates/egui-pop-api/tests/it/palettes.rs`) asserts that a plain drag
 over the bottom area docks.
 
 **A docked tab** (egui_stack's `DockArea` in the workbench's
@@ -261,7 +261,7 @@ Ctrl docks**.
    changeset (`egui-pop-api` and `egui-pop-model`, minor: the default
    drag behaviour changes).
 
-**Headless test** (kittest, `crates/egui-pop-api/tests/palettes.rs`,
+**Headless test** (kittest, `crates/egui-pop-api/tests/it/palettes.rs`,
 default features):
 
 - mode A, default: a palette's band dragged over the bottom area and

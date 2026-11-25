@@ -163,7 +163,7 @@ settings pages follow the settings window.
 
 ## Tests
 
-`crates/egui-pop-api/tests/`: `dialogs.rs` (kinds, rules, queue,
+`crates/egui-pop-api/tests/it/`: `dialogs.rs` (kinds, rules, queue,
 windows, moving), `custom_dialog.rs` (custom bodies, claimed keys),
 `dialog_copy.rs` (Copy and details), `settings_window.rs`,
 `settings_pages.rs`, and the settings' history in `history.rs` and
