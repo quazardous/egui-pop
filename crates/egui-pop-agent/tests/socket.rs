@@ -1610,7 +1610,8 @@ fn the_agents_page_lists_a_paired_agent_sets_its_access_live_and_revokes_it() {
     );
     let refused_write = run(&mut h, &WRITE, Json::Null, bot.clone()).unwrap_err();
     assert!(refused_write.contains("read-only"), "{refused_write}");
-    // A default too.
+    // A default too; the preset keeps its private switch, off by
+    // default for unpaired clients.
     run(
         &mut h,
         &CMD_GRANT,
@@ -1620,7 +1621,7 @@ fn the_agents_page_lists_a_paired_agent_sets_its_access_live_and_revokes_it() {
     .unwrap();
     assert_eq!(
         egui_pop_agent::grants::grants(h.state().handle()).unpaired,
-        Grant::full()
+        Grant::full().private(false)
     );
 
     // Revoked by the user: its connection closes, its token no longer
@@ -1670,7 +1671,65 @@ fn private_data_is_refused_or_left_out_for_an_agent_whose_grant_withholds_it() {
         h.state_mut().run(id, args, origin).now().unwrap()
     };
 
-    // By default every preset reads private data.
+    // By default an unpaired agent reads no private data: the private
+    // read is refused with the reason naming the grant, the mixed one
+    // leaves its places out.
+    let refused = run(&mut h, &PLACES, Json::Null, unpaired.clone()).unwrap_err();
+    assert!(
+        refused.contains("refused by `pop.agent.grants`")
+            && refused.contains("does not read private data: `test.places`")
+            && refused.contains("a grant with `private`"),
+        "{refused}"
+    );
+    assert_eq!(
+        run(&mut h, &PHOTOS, Json::Null, unpaired.clone()).unwrap(),
+        json!([{ "id": 1 }])
+    );
+
+    // A paired agent (the paired default, the editor preset) reads it,
+    // through the socket.
+    let app_handle = h.state().handle().clone();
+    let token = "egp_a-pre-issued-runner-token-for-the-test";
+    egui_pop_agent::pairing::pre_issue(&app_handle, "runner", token, None).unwrap();
+    let p = path.clone();
+    let (hello, places) = with_client(&mut h, move || {
+        let mut c = Client::connect(&p);
+        (
+            c.result("hello", json!({ "name": "Runner", "token": token })),
+            c.result("call", run_call("test.places", Json::Null)),
+        )
+    });
+    assert_eq!(hello["agent"], "runner", "{hello}");
+    assert_eq!(places["ok"], true, "{places}");
+    let start = Instant::now();
+    let read = loop {
+        h.step();
+        let done = done_runs(&h, "test.places");
+        if let Some(run) = done.iter().find(|e| e.source == "agent:runner") {
+            break run.data["result"].clone();
+        }
+        assert!(start.elapsed() < Duration::from_secs(10), "never ran");
+        std::thread::sleep(Duration::from_millis(2));
+    };
+    assert_eq!(read, json!({ "places": ["48.85,2.35"] }), "{read}");
+    let runner = Origin::Agent("runner".into());
+    assert!(egui_pop_agent::grants::reads_private(&app_handle, &runner));
+    assert_eq!(
+        run(&mut h, &PHOTOS, Json::Null, runner).unwrap()[0]["gps"],
+        "48.85,2.35"
+    );
+
+    // An explicit grant unlocks it for unpaired clients, on the Agents
+    // page.
+    let set = run(
+        &mut h,
+        &CMD_GRANT,
+        json!({ "default": "unpaired", "private": true }),
+        Origin::User,
+    )
+    .unwrap();
+    assert_eq!(set["preset"], "read-only", "{set}");
+    assert_eq!(set["private"], true, "{set}");
     assert_eq!(
         run(&mut h, &PLACES, Json::Null, unpaired.clone()).unwrap(),
         json!({ "places": ["48.85,2.35"] })
@@ -1691,7 +1750,6 @@ fn private_data_is_refused_or_left_out_for_an_agent_whose_grant_withholds_it() {
     .unwrap();
     assert_eq!(set["preset"], "read-only", "{set}");
     assert_eq!(set["private"], false, "{set}");
-    let app_handle = h.state().handle().clone();
     assert_eq!(
         egui_pop_agent::grants::grants(&app_handle).unpaired,
         Grant::read_only().private(false)
@@ -1715,6 +1773,7 @@ fn private_data_is_refused_or_left_out_for_an_agent_whose_grant_withholds_it() {
     // Through the socket: the private read is refused at once, the mixed
     // one answers without its places; `describe` says which is private.
     let ran = done_runs(&h, "test.places").len();
+    let refused_before = refused_runs(&h, "test.places").len();
     let p = path.clone();
     let (describe, places) = with_client(&mut h, move || {
         let mut c = Client::connect(&p);
@@ -1736,9 +1795,10 @@ fn private_data_is_refused_or_left_out_for_an_agent_whose_grant_withholds_it() {
         "{places}"
     );
     let refused = refused_runs(&h, "test.places");
-    assert_eq!(refused.len(), 1, "{refused:?}");
-    assert_eq!(refused[0].data["by"], "pop.agent.grants");
-    assert_eq!(refused[0].source, "agent:agent-socket");
+    assert_eq!(refused.len(), refused_before + 1, "{refused:?}");
+    let last = refused.last().unwrap();
+    assert_eq!(last.data["by"], "pop.agent.grants");
+    assert_eq!(last.source, "agent:agent-socket");
     h.step();
     assert_eq!(
         done_runs(&h, "test.places").len(),
@@ -1750,7 +1810,7 @@ fn private_data_is_refused_or_left_out_for_an_agent_whose_grant_withholds_it() {
     // leaves the places out.
     assert_eq!(
         run(&mut h, &PLACES, Json::Null, unpaired.clone()).unwrap_err(),
-        "refused by `pop.agent.grants`: the agent does not read private data: `test.places` gives places, people or file paths"
+        "refused by `pop.agent.grants`: the agent does not read private data: `test.places` gives places, people or file paths; pairing, or a grant with `private`, unlocks it"
     );
     assert_eq!(
         run(&mut h, &PHOTOS, Json::Null, unpaired.clone()).unwrap(),
@@ -1835,8 +1895,13 @@ fn a_private_commands_args_result_and_error_are_redacted_for_an_agent_without_pr
     assert_eq!(done[0].data["private"], true);
     assert_eq!(done_runs(&h, "test.photos")[0].data.get("private"), None);
 
-    // An agent shown private data (every preset by default) reads them in
-    // clear.
+    // An agent shown private data (every preset; the unpaired default
+    // withholds it, so the user shows it) reads them in clear.
+    let app_handle = h.state().handle().clone();
+    egui_pop_agent::grants::set_grants(
+        &app_handle,
+        egui_pop_agent::grants::AgentGrants::new().unpaired(Grant::read_only()),
+    );
     let (journal, since, commands, failed) = read_private_runs(&path, &mut h);
     for read in [&journal, &since, &commands, &failed] {
         assert!(read.to_string().contains(SECRET), "{read}");
@@ -1847,7 +1912,6 @@ fn a_private_commands_args_result_and_error_are_redacted_for_an_agent_without_pr
     );
 
     // Withheld: every read says `<private>` instead, and nothing else.
-    let app_handle = h.state().handle().clone();
     egui_pop_agent::grants::set_grants(
         &app_handle,
         egui_pop_agent::grants::AgentGrants::new().unpaired(Grant::read_only().private(false)),

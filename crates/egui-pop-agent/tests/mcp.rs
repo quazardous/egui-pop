@@ -518,8 +518,9 @@ fn user_runs_home(h: &mut Harness<'static, App>) {
 fn a_granted_agent_reads_a_private_commands_result_over_mcp() {
     let dir = private_dir("private-granted");
     let path = dir.join("app.sock");
-    // The default grants show private data.
-    let mut h = app(&path);
+    // The unpaired default withholds private data: an explicit grant
+    // shows it.
+    let mut h = app_with(&path, AgentGrants::new().unpaired(Grant::read_only()));
     user_runs_home(&mut h);
     with_mcp(&mut h, &path, |mut c| async move {
         // Queued, then read back from the journal's `command.done`.

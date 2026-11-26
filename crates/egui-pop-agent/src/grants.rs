@@ -10,7 +10,9 @@
 //! [`AgentGrants`] gives one to each agent:
 //!
 //! - a connection that said no `hello` (`Origin::Agent("agent-socket")`)
-//!   gets [`AgentGrants::unpaired`], read-only by default;
+//!   gets [`AgentGrants::unpaired`], read-only without private data by
+//!   default: an agent is an actor, not an implicit admin, so pairing
+//!   (or an explicit grant) unlocks private data;
 //! - a paired agent gets its own ([`AgentGrants::agent`]), else, when
 //!   it was paired in advance with one (`pairing::PreIssue::grant`),
 //!   that one, else [`AgentGrants::paired`], the editor preset by default;
@@ -91,7 +93,8 @@ pub struct Grant {
     /// absolute file paths. Without it, a command declared
     /// `CommandSpec::private` is refused to it, and a command whose
     /// result only partly is private leaves those parts out
-    /// ([`reads_private`]). On in every preset.
+    /// ([`reads_private`]). On in every preset; off in the unpaired
+    /// default ([`AgentGrants::unpaired`]).
     pub private: bool,
 }
 
@@ -161,7 +164,10 @@ impl Grant {
     /// data (`CommandSpec::private`); `None` when it allows it.
     pub fn private_refusal(&self, command: &str, private: bool) -> Option<String> {
         (private && !self.private).then(|| {
-            format!("the agent does not read private data: `{command}` gives places, people or file paths")
+            format!(
+                "the agent does not read private data: `{command}` gives places, people or file paths; \
+                 pairing, or a grant with `private`, unlocks it"
+            )
         })
     }
 
@@ -202,8 +208,8 @@ fn matches_any(patterns: &[String], id: &str) -> bool {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct AgentGrants {
-    /// A connection that said no `hello`: [`Grant::read_only`] by
-    /// default.
+    /// A connection that said no `hello`: [`Grant::read_only`] without
+    /// private data by default (`Grant::read_only().private(false)`).
     pub unpaired: Grant,
     /// A paired agent with no grant of its own: [`Grant::editor`] by
     /// default.
@@ -215,7 +221,7 @@ pub struct AgentGrants {
 impl Default for AgentGrants {
     fn default() -> Self {
         Self {
-            unpaired: Grant::read_only(),
+            unpaired: Grant::read_only().private(false),
             paired: Grant::editor(),
             agents: BTreeMap::new(),
         }
@@ -223,7 +229,8 @@ impl Default for AgentGrants {
 }
 
 impl AgentGrants {
-    /// The defaults: unpaired read-only, paired editor.
+    /// The defaults: unpaired read-only without private data, paired
+    /// editor.
     pub fn new() -> Self {
         Self::default()
     }
@@ -546,8 +553,10 @@ mod tests {
     #[test]
     fn defaults_and_the_escape_hatch() {
         let d = AgentGrants::new();
-        assert_eq!(d.unpaired, Grant::read_only());
+        assert_eq!(d.unpaired, Grant::read_only().private(false));
+        assert!(d.unpaired.private_refusal("photo.places", true).is_some());
         assert_eq!(d.paired, Grant::editor());
+        assert!(d.paired.private);
         assert_eq!(
             AgentGrants::new().allow_unpaired_writes().unpaired,
             Grant::full()
