@@ -436,13 +436,20 @@ impl<'a> Toolbar<'a> {
                 _ => row::Tool::button(id, label),
             },
         };
+        // The application's live tooltip (`pop.command.label`), else the
+        // title.
+        let action = tr
+            .command
+            .as_ref()
+            .and_then(|c| self.app.command_text(c).tooltip)
+            .unwrap_or_else(|| tr.label.clone());
         let tip = match &tr.keys {
             Some(keys) => strings::tr_args(
                 ctx,
                 &txt::TOOLBAR_WITH_KEY,
-                &[("action", &tr.label), ("keys", keys)],
+                &[("action", &action), ("keys", keys)],
             ),
-            None => tr.label.clone(),
+            None => action,
         };
         let tip = match (&tr.why, &tool.failed) {
             (Some(why), _) => format!("{tip}\n{why}"),

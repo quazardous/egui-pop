@@ -374,8 +374,10 @@ pub fn show(ui: &mut Ui, app: &AppHandle) {
                     let Some(command) = toggle_command(area) else {
                         continue;
                     };
-                    let english = app.command(&command).map(|c| c.title).unwrap_or_default();
-                    let name = strings::command_title(&ctx, command.as_str(), &english);
+                    let name = app.command_text(&command).title.unwrap_or_else(|| {
+                        let english = app.command(&command).map(|c| c.title).unwrap_or_default();
+                        strings::command_title(&ctx, command.as_str(), &english)
+                    });
                     let tip = match app.keys_for(&command).first() {
                         Some(keys) => strings::tr_args(
                             &ctx,

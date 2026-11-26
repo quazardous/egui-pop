@@ -1655,9 +1655,14 @@ impl AppHandle {
     }
 
     /// A command's title as menus show it now, in the interface's
-    /// language: undo and redo name what they would do ("Undo exposure
-    /// change").
+    /// language: the application's live title when it gives one on
+    /// `pop.command.label` ([`command_text`](Self::command_text)); else
+    /// the declared title, undo and redo naming what they would do
+    /// ("Undo exposure change").
     pub fn command_title(&self, spec: &CommandSpec) -> String {
+        if let Some(t) = self.command_text(&spec.id).title {
+            return t;
+        }
         let ctx = self.egui();
         let title = strings::command_title(&ctx, spec.id.as_str(), &spec.title);
         let label = if spec.id == CMD_UNDO {
@@ -1674,6 +1679,17 @@ impl AppHandle {
                 &[("title", &title), ("change", &l)],
             ),
             None => title,
+        }
+    }
+
+    /// A command's tooltip as menus show it now: the application's live
+    /// tooltip when it gives one on `pop.command.label`
+    /// ([`command_text`](Self::command_text)), else the declared
+    /// description, translated (empty stays empty).
+    pub fn command_tooltip(&self, spec: &CommandSpec) -> String {
+        match self.command_text(&spec.id).tooltip {
+            Some(t) => t,
+            None => strings::command_description(&self.egui(), spec.id.as_str(), &spec.description),
         }
     }
 
