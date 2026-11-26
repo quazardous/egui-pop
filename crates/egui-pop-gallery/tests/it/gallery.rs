@@ -6525,7 +6525,7 @@ fn the_library_page_culls_filters_and_compares() {
     let mut h = harness(options("pop-dark", Density::Comfortable, "library"));
     h.run();
     assert_eq!(
-        h.query_all_by_label("DSC_00000").count(),
+        h.query_all_by_label(&library_cell(0)).count(),
         2,
         "in the grid and the filmstrip"
     );
@@ -6770,18 +6770,31 @@ fn a_kit_restyles_the_library() {
     h.page_shot("library-kit");
 }
 
+/// A library page cell's accessible name: the image's name, then its
+/// badges (the page badges RAW every 7th image and HDR every 23rd).
+fn library_cell(i: usize) -> String {
+    let mut name = format!("DSC_{i:05}");
+    if i.is_multiple_of(7) {
+        name.push_str(" · RAW");
+    }
+    if i.is_multiple_of(23) {
+        name.push_str(" · HDR");
+    }
+    name
+}
+
 /// How many cells the library grid's first row holds: the cells level
 /// with the first image's (the filmstrip lies below).
 fn library_first_row(h: &Harness<'static, Gallery>) -> usize {
     let top = h
-        .query_all_by_label("DSC_00000")
+        .query_all_by_label(&library_cell(0))
         .next()
         .unwrap()
         .rect()
         .top();
     (0..64)
         .filter(|i| {
-            h.query_all_by_label(&format!("DSC_{i:05}"))
+            h.query_all_by_label(&library_cell(*i))
                 .next()
                 .is_some_and(|n| (n.rect().top() - top).abs() < 1.0)
         })
