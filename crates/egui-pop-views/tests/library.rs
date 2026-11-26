@@ -52,6 +52,8 @@ impl LibraryItems<u32> for Shoot {
                 Badge::new("RAW"),
                 Badge::new("HDR").tone(egui_pop_core::kit::Tone::Info),
             ]
+        } else if i == 2 {
+            vec![Badge::icon("phosphor:plugs", "offline").tone(egui_pop_core::kit::Tone::Warning)]
         } else {
             Vec::new()
         }
@@ -211,10 +213,15 @@ fn cursor(h: &Harness<'_, Lib>) -> Option<u32> {
     h.state().state.selection().cursor().copied()
 }
 
-/// A cell by its image's number (the label leaks: kittest borrows it
-/// for as long as the node).
+/// A cell by its image's number, said with its badges (the label leaks:
+/// kittest borrows it for as long as the node).
 fn cell<'h>(h: &'h Harness<'_, Lib>, i: u32) -> egui_kittest::Node<'h> {
-    let label: &'static str = Box::leak(format!("IMG_{i:05}").into_boxed_str());
+    let said = match i {
+        1 => " · RAW · HDR",
+        2 => " · offline",
+        _ => "",
+    };
+    let label: &'static str = Box::leak(format!("IMG_{i:05}{said}").into_boxed_str());
     h.get_by_label(label)
 }
 
@@ -1100,7 +1107,11 @@ fn badges_are_indicators_in_the_bottom_right_corner_of_their_cell() {
     let ids: Vec<&str> = drawn.iter().map(|r| r.id.as_str()).collect();
     assert_eq!(
         ids,
-        ["library.badge:IMG_00001:HDR", "library.badge:IMG_00001:RAW"]
+        [
+            "library.badge:IMG_00001:HDR",
+            "library.badge:IMG_00001:RAW",
+            "library.badge:IMG_00002:offline"
+        ]
     );
     assert_eq!(drawn[0].tone, egui_pop_core::kit::Tone::Info);
     let cell = cell(&h, 1).rect();
@@ -1471,4 +1482,26 @@ fn the_application_s_chips_terms_are_part_of_the_filter() {
     assert!(s.chips.is_empty());
     assert!(s.events.contains(&SearchEvent::FilterSet));
     assert_eq!(s.state.filter().text, "camera:Z sea");
+}
+
+#[test]
+fn a_cell_says_its_badges_after_its_name_and_an_icon_badge_by_its_name() {
+    let mut h = harness(12, false, false, CullKeymap::lightroom());
+    h.run();
+    // Text badges are said as they read, an icon badge by its name.
+    assert!(h.query_by_label("IMG_00001 · RAW · HDR").is_some());
+    assert!(h.query_by_label("IMG_00002 · offline").is_some());
+    // A cell without badges keeps its bare name.
+    assert!(h.query_by_label("IMG_00003").is_some());
+    let offline = egui_pop_core::indicator::drawn(&h.ctx)
+        .into_iter()
+        .find(|r| r.id == "library.badge:IMG_00002:offline")
+        .expect("the icon badge is drawn");
+    assert_eq!(offline.tone, egui_pop_core::kit::Tone::Warning);
+    let cell = cell(&h, 2).rect();
+    let r = offline.rect;
+    assert!(
+        r[0] >= cell.left() && r[0] + r[2] <= cell.right() && r[1] + r[3] <= cell.bottom(),
+        "{r:?} in {cell:?}"
+    );
 }
