@@ -81,7 +81,12 @@ impl From<&ThumbState> for Thumb {
 /// draws its badges.
 impl From<Badge> for MarkChip {
     fn from(badge: Badge) -> MarkChip {
-        MarkChip::text(badge.text.clone(), badge.text).tone(badge.tone)
+        let name = badge.said().to_owned();
+        match badge.icon {
+            Some(icon) => MarkChip::icon(icon, name),
+            None => MarkChip::text(badge.text, name),
+        }
+        .tone(badge.tone)
     }
 }
 
@@ -224,6 +229,17 @@ mod tests {
     fn a_badge_is_a_bottom_right_chip_of_its_tone() {
         let chip = MarkChip::from(Badge::new("RAW").tone(Tone::Info));
         assert_eq!(chip, MarkChip::text("RAW", "RAW").tone(Tone::Info));
+    }
+
+    #[test]
+    fn an_icon_badge_is_a_top_right_chip_under_its_name() {
+        let chip = MarkChip::from(Badge::icon("phosphor:plugs", "offline").tone(Tone::Warning));
+        assert_eq!(
+            chip,
+            MarkChip::icon("phosphor:plugs", "offline").tone(Tone::Warning)
+        );
+        let pair = MarkChip::from(Badge::new("R+J").named("RAW+JPG"));
+        assert_eq!(pair, MarkChip::text("R+J", "RAW+JPG"));
     }
 
     #[test]

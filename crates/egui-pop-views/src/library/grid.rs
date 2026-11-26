@@ -254,18 +254,39 @@ pub struct Stack<K> {
 /// (neutral) box.
 pub use egui_pop_core::kit::Tone;
 
-/// A short text in a corner of a cell: `RAW`, `HDR`, `2×`, an edit mark.
+/// A badge in a corner of a cell: a short text (`RAW`, `HDR`, `2×`) or
+/// an icon of the icon registry (`phosphor:plugs` for "offline"). Its
+/// name is said after the cell's name and is its tooltip.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Badge {
+    /// The short text drawn without an icon.
     pub text: String,
     pub tone: Tone,
+    /// An icon of the icon registry, drawn instead of the text.
+    pub icon: Option<String>,
+    /// What it means, in words: its accessible name and its tooltip.
+    /// Empty: the text.
+    pub name: String,
 }
 
 impl Badge {
+    /// A short text, said as it reads.
     pub fn new(text: impl Into<String>) -> Badge {
         Badge {
             text: text.into(),
             tone: Tone::Neutral,
+            icon: None,
+            name: String::new(),
+        }
+    }
+
+    /// An icon (`phosphor:plugs`) named `name` ("offline").
+    pub fn icon(icon: impl Into<String>, name: impl Into<String>) -> Badge {
+        Badge {
+            text: String::new(),
+            tone: Tone::Neutral,
+            icon: Some(icon.into()),
+            name: name.into(),
         }
     }
 
@@ -274,6 +295,41 @@ impl Badge {
         self.tone = tone;
         self
     }
+
+    /// What it means in words, when its text says too little ("R+J"
+    /// named "RAW+JPG").
+    #[must_use]
+    pub fn named(mut self, name: impl Into<String>) -> Badge {
+        self.name = name.into();
+        self
+    }
+
+    /// What a screen reader says of it: its name, else its text.
+    pub fn said(&self) -> &str {
+        if self.name.is_empty() {
+            &self.text
+        } else {
+            &self.name
+        }
+    }
+}
+
+/// A cell's accessible name: the image's name, then what its badges
+/// mean, each once, as the file browser says its entries' marks
+/// (`IMG_0001.CR3 · offline · 3 versions`).
+fn cell_label(name: &str, badges: &[Badge]) -> String {
+    let mut label = name.to_owned();
+    let mut said: Vec<&str> = Vec::new();
+    for b in badges {
+        let s = b.said();
+        if s.is_empty() || said.contains(&s) {
+            continue;
+        }
+        said.push(s);
+        label.push_str(" · ");
+        label.push_str(s);
+    }
+    label
 }
 
 /// The images a library shows; the application owns them.
@@ -1055,6 +1111,7 @@ impl<'a> ThumbGrid<'a> {
                     let marks = items.marks(i);
                     let stack = items.stack(i);
                     let name = items.label(i);
+                    let badges = items.badges(i);
                     // The cell's box (its outline and the cursor's ring
                     // too: nothing of the content overlaps them), then
                     // its image. A selected cell is not hovered.
@@ -1159,7 +1216,7 @@ impl<'a> ThumbGrid<'a> {
                             hot || self.empty_stars == EmptyStars::Always,
                             star,
                         );
-                        paint_badges(ui, &name, image.shrink(t.space.xs), &items.badges(i));
+                        paint_badges(ui, &name, image.shrink(t.space.xs), &badges);
                         let stars = RatingStars::new(marks.rating)
                             .id(id.with(("stars", &key)))
                             .focusable(false)
@@ -1214,7 +1271,7 @@ impl<'a> ThumbGrid<'a> {
                             }
                         }
                     }
-                    let a11y_name = name.clone();
+                    let a11y_name = cell_label(&name, &badges);
                     r.widget_info(move || {
                         WidgetInfo::selected(Role::Button, true, selected, &a11y_name)
                     });
@@ -1834,14 +1891,23 @@ pub(super) fn overlay(
     }
 }
 
-/// A badge as an indicator: its text, of its tone, under an id agents
-/// read (`library.badge:<image>:<text>`), as the file browser draws its
-/// marks.
+/// A badge as an indicator: its icon or its text, of its tone, under an
+/// id agents read (`library.badge:<image>:<text>`, the name for an
+/// icon), as the file browser draws its marks.
 fn badge_indicator(image: &str, badge: &Badge) -> Indicator {
-    Indicator::text(badge.text.as_str())
+    let (base, said) = match &badge.icon {
+        Some(icon) => (Indicator::icon(icon.as_str()), badge.said()),
+        None => (Indicator::text(badge.text.as_str()), badge.text.as_str()),
+    };
+    let base = base
         .tone(badge.tone)
         .overhang(false)
-        .id(format!("library.badge:{image}:{}", badge.text))
+        .id(format!("library.badge:{image}:{said}"));
+    if badge.name.is_empty() {
+        base
+    } else {
+        base.tooltip(badge.name.clone())
+    }
 }
 
 /// A cell's badges from the bottom end of `host`, the last at the end,

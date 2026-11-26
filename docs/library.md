@@ -162,10 +162,13 @@ Over each thumbnail (from 64 points up): the flag (a pennant, or a
 cross, the image dimmed when rejected) in the top left corner, the
 labels in the top right one, the stars in the bottom left one (empty
 stars as outlines under the pointer, or on every cell with
-`ThumbGrid::empty_stars(EmptyStars::Always)`), the badges (`Badge::new("RAW")`, toned with
+`ThumbGrid::empty_stars(EmptyStars::Always)`), the badges (a short text, `Badge::new("RAW")`, or an icon
+of the registry, `Badge::icon("phosphor:plugs", "offline")`, toned with
 `Tone`) in the bottom right one, drawn as indicators the way the file
 browser draws its marks (`MarkChip::from(badge)` gives the browser's
-chip; agents read them as `library.badge:<image>:<text>`). Colour labels are same-shape
+chip; agents read them as `library.badge:<image>:<text>`, an icon badge
+by its name). A cell's accessible name says its badges after the image's
+name (`IMG_0001.CR3 · offline`); `Badge::named` names a terse text. Colour labels are same-shape
 swatches, as in Lightroom and darktable; `LabelStyle::Shape` gives them
 a shape each (circle, triangle, square, diamond, hexagon), so they
 never read by colour alone, for colour-blind users. The application's
