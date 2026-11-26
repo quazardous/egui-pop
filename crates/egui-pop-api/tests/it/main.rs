@@ -31,6 +31,7 @@ mod busy;
 mod chord_windows;
 mod clipboard;
 mod command_icons;
+mod command_label;
 mod contexts;
 mod ctx;
 mod custom_dialog;

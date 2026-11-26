@@ -150,6 +150,9 @@
 //! Which panel zen mode shows when none is named and the focused panel
 //! is not a view is the application's, asked on `pop.zen.panel`
 //! ([`ZenPanel`]).
+//! A command's live title and tooltip, for a command whose text follows
+//! the application's state, are the application's, asked on
+//! `pop.command.label` ([`CommandLabel`], a [`CommandText`]).
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -182,8 +185,10 @@ pub use activate::raise_main_window;
 pub(crate) mod areas;
 pub use areas::{AREA_POINTS, AREA_REGISTRY, UiAreas};
 pub(crate) mod budget;
+mod command_label;
 mod commands;
 pub(crate) mod journal;
+pub use command_label::{COMMAND_LABEL_POINTS, CommandLabel, CommandText};
 pub use commands::{ARGS_VALIDATOR, COMMAND_POINTS, CommandAsk, CommandRun};
 pub(crate) use commands::{args_refusal, ask as ask_command_run, reason as command_refusal};
 pub use journal::{HOST_JOURNAL, HostEvent, HostEvents};
@@ -658,8 +663,9 @@ pub const PLUGIN_POINTS: [&str; 2] = [PluginConnect::ID.as_str(), PluginDisconne
 
 /// Every point egui-pop declares: the window, job, plugin, files,
 /// settings, drag, screen, panel state, layout, panel description and
-/// command, area, panel opening and panel retitling points.
-pub const POINTS: [&str; 27] = [
+/// command, area, panel opening, panel retitling, zen and command
+/// label points.
+pub const POINTS: [&str; 28] = [
     WindowOpen::ID.as_str(),
     WindowClose::ID.as_str(),
     WindowReparent::ID.as_str(),
@@ -687,6 +693,7 @@ pub const POINTS: [&str; 27] = [
     PanelOpen::ID.as_str(),
     PanelRetitle::ID.as_str(),
     ZenPanel::ID.as_str(),
+    CommandLabel::ID.as_str(),
 ];
 
 /// egui-pop's contract table (ADR 0030): every point it declares on the
@@ -757,6 +764,9 @@ pub const CONTRACT: &[PointDecl] = &[
     ),
     PointDecl::of::<ZenPanel>(
         "Zen mode asks which panel matters now, when it starts without a panel named and the focused panel is not a view: the application answers with an open panel's id (the surface a double click reaches, an image viewer); none, and the centre's active tab is shown; asked on the interface's thread.",
+    ),
+    PointDecl::of::<CommandLabel>(
+        "A command's live title and tooltip are asked, by its id, each time a menu item, a toolbar button or a shortcut tooltip naming it is drawn: the application answers for the commands whose text follows its state (\"Zen: Compare\"), in the interface's language; none, and the declared title and description are shown, translated; asked on the interface's thread.",
     ),
     PointDecl::of::<UiAreas>(
         "The interactive areas are listed, each window's last pass: each one's kind (display, navigate or edit), for an edit area the control it writes, its value and path, its panel, its grips, and whether it is inert (its panel's state not current); asked on the interface's thread.",
@@ -1622,6 +1632,15 @@ impl AppHandle {
     /// (docs/stability.md).</div>
     pub fn zen_choice(&self) -> Option<String> {
         emit_with::<ZenPanel>(self, (), None)
+    }
+
+    /// What the application says of a command's title and tooltip now
+    /// (`pop.command.label`): empty while no listener answers.
+    ///
+    /// <div class="warning">Experimental: may change in any release
+    /// (docs/stability.md).</div>
+    pub fn command_text(&self, command: &egui_pop_model::ids::CommandId) -> CommandText {
+        emit_with::<CommandLabel>(self, command.clone(), CommandText::default())
     }
 
     /// A panel's state as last asked (`pop.panel.state`): ready when never

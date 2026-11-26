@@ -470,18 +470,23 @@ pub fn bar_end(ui: &mut Ui, app: &AppHandle, menu: &MenuId) -> f32 {
         // From the end: the last item first, so they read in order.
         for (id, args, label, checked, checkable) in items.iter().rev() {
             let spec = app.command(id);
-            let english = label
-                .clone()
-                .or_else(|| spec.as_ref().map(|c| c.title.clone()))
-                .unwrap_or_else(|| id.to_string());
-            let name = strings::command_title(&ctx, id.as_str(), &english);
+            // The application's live text (`pop.command.label`) first.
+            let live = app.command_text(id);
+            let name = live.title.unwrap_or_else(|| {
+                let english = label
+                    .clone()
+                    .or_else(|| spec.as_ref().map(|c| c.title.clone()))
+                    .unwrap_or_else(|| id.to_string());
+                strings::command_title(&ctx, id.as_str(), &english)
+            });
+            let action = live.tooltip.unwrap_or_else(|| name.clone());
             let tip = match app.keys_for(id).first() {
                 Some(keys) => strings::tr_args(
                     &ctx,
                     &txt::TOOLBAR_WITH_KEY,
-                    &[("action", &name), ("keys", keys)],
+                    &[("action", &action), ("keys", keys)],
                 ),
-                None => name.clone(),
+                None => action,
             };
             let icon = spec
                 .as_ref()
@@ -1599,12 +1604,11 @@ fn app_command_row(
             &txt::MENU_LAST_RUN_FAILED,
             &[("error", &e)],
         ));
-    } else if let Some(s) = spec.filter(|s| !s.description.is_empty()) {
-        response = response.on_hover_text(strings::command_description(
-            &ctx,
-            s.id.as_str(),
-            &s.description,
-        ));
+    } else if let Some(tip) = spec
+        .map(|s| app.command_tooltip(&s))
+        .filter(|t| !t.is_empty())
+    {
+        response = response.on_hover_text(tip);
     }
     response.clicked()
 }

@@ -252,6 +252,13 @@ assert!(report.failures.is_empty());
   commands run as before. A run whose arguments do not match its
   command's JSON Schema is refused before the point is asked
   (`by: "pop.command.args"`, `bus::ARGS_VALIDATOR`).
+- **A command's live text**: `pop.command.label` (`bus::CommandLabel`,
+  an alter point egui-pop does not answer itself) asks the application
+  for a command's title and tooltip (`bus::CommandText`) each time a
+  menu item, a toolbar button, the menu bar's end or a layout control
+  naming it is drawn: "Zen: Compare" for the panel zen would show.
+  `AppHandle::command_title` and `AppHandle::command_tooltip` read it;
+  with nobody answering, the declared title and description are shown.
 
 ## Accessibility
 
