@@ -11,7 +11,7 @@
 //!
 //! Every row starts with the **gutter** (`docs/icons.md`, section 5): a
 //! column of fixed width ([`Kit::menu_gutter`], scaled by the density)
-//! holding the command's icon ([`CommandSpec::icon`], or `icon_on` while
+//! holding the command's icon ([`CommandSpec::icon`](egui_pop_model::commands::CommandSpec::icon), or `icon_on` while
 //! checked), the tick of a checked item without an icon, the dot of a
 //! chosen radio item, or the spinner of a running command; a checked
 //! command with an icon shows it framed (`menu-item-gutter`'s `selected`
@@ -86,7 +86,6 @@ const CONTEXT_MENU: Slot<Option<(WhenContext, Json)>> = Slot::new("api.menus.con
 /// and list.
 const LIST: Slot<(u64, Vec<ListItem>)> = Slot::new("api.menus.list");
 use egui_pop_core::theme::{ScopedTheme, Tokens};
-use egui_pop_model::commands::CommandSpec;
 use egui_pop_model::ids::{CommandId, MenuId, OwnerId, SettingId, StepId};
 use egui_pop_model::menus::{Item, Shown, show_items};
 use egui_pop_model::when::{When, WhenContext};
@@ -1585,10 +1584,9 @@ fn app_command_row(
     );
     let mut response = r.response;
     if checkable {
-        let (on, name) = (
-            why.is_none(),
-            label.unwrap_or_else(|| title_of(&ctx, &spec, id)),
-        );
+        // Named by the text it shows, as a plain row: the application's
+        // live title (`pop.command.label`) when it gives one.
+        let (on, name) = (why.is_none(), title.clone());
         let kind = if radio {
             egui::Role::RadioButton
         } else {
@@ -1684,18 +1682,6 @@ fn paint_item(ui: &Ui, item: &Component, slot: egui::layers::ShapeIdx, rect: Rec
         },
         None,
     );
-}
-
-/// A command's title as shown, without undo's label nor the hint of its
-/// arguments.
-fn title_of(ctx: &Context, spec: &Option<CommandSpec>, id: &CommandId) -> String {
-    spec.as_ref().map_or_else(
-        || id.to_string(),
-        |s| {
-            strings::without_argument_hint(&strings::command_title(ctx, s.id.as_str(), &s.title))
-                .to_string()
-        },
-    )
 }
 
 /// A command row in a menu drawn by hand (a popup or context menu built

@@ -18,6 +18,7 @@ use serde_json::Value as Json;
 
 const ZEN: CommandId = CommandId::from_static("demo.zen");
 const SAVE: CommandId = CommandId::from_static("demo.save");
+const RULERS: CommandId = CommandId::from_static("demo.rulers");
 const MENU: MenuId = MenuId::from_static("demo.menu");
 
 struct Demo;
@@ -41,6 +42,13 @@ impl Plugin for Demo {
             )?;
             ctx.menu_item(MenuItem::command(MENU, "1", i as i32, id))?;
         }
+        // A toggle: a checkable row.
+        ctx.command(
+            CommandSpec::new(RULERS, "Rulers", "Demo")
+                .checked("demoRulers")
+                .menu(MENU, "1", 2),
+            |_| Ok(Json::Null),
+        )?;
         Ok(())
     }
 }
@@ -117,6 +125,42 @@ fn the_applications_answer_names_the_menu_item_and_its_tooltip() {
     // Live: asked each time it is drawn.
     *target.lock().unwrap() = "Viewer".into();
     assert!(tooltip_of(&mut h, "Zen: Viewer", "Shows Viewer alone."));
+}
+
+/// Opens the menu and says whether a checkable row named `name` (its
+/// AccessKit name, as screen readers and agents read it) is drawn.
+fn checkable_row_named(h: &mut Harness<'static, App>, name: &str) -> bool {
+    let app = h.state().handle().clone();
+    assert!(menus::popup_at(&app, &MENU, egui::pos2(100.0, 120.0)));
+    for _ in 0..3 {
+        h.run();
+    }
+    let seen = h
+        .query_all_by_role_and_label(egui::accesskit::Role::CheckBox, name)
+        .next()
+        .is_some();
+    h.key_press(egui::Key::Escape);
+    h.run();
+    seen
+}
+
+#[test]
+fn a_checkable_row_is_named_by_the_applications_answer() {
+    let mut h = harness();
+    // Without an answer: the declared title.
+    assert!(checkable_row_named(&mut h, "Rulers"));
+    let app = h.state().handle().clone();
+    app.bus()
+        .listen::<CommandLabel>("demo.rulers.label", ListenOpts::new(), |id, text| {
+            if *id == RULERS {
+                *text = CommandText::default().title("Rulers: Pixels");
+            }
+            Ok(())
+        })
+        .unwrap();
+    // With one: the answer, shown and read alike.
+    assert!(checkable_row_named(&mut h, "Rulers: Pixels"));
+    assert!(!checkable_row_named(&mut h, "Rulers"));
 }
 
 #[test]
