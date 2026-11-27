@@ -9430,6 +9430,10 @@ fn the_places_page_shows_a_focused_chosen_item_filled_and_outlined() {
     for theme in ["pop-dark", "pop-light"] {
         let mut h = harness(options(theme, Density::Comfortable, "places"));
         h.run();
+        // Studio sits below the Cameras section, past the window's foot:
+        // brought into view first, so the click lands on it.
+        h.get_by_label("Studio, !").scroll_to_me();
+        h.run();
         // Studio, chosen by a click (the pointer stays on it), then given
         // the keyboard.
         h.get_by_label("Studio, !").click();
