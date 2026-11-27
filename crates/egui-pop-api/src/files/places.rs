@@ -177,6 +177,10 @@ pub struct PlaceItem {
     pub path: Option<PathBuf>,
     /// An icon of the icon registry (`phosphor:sd-card`), before its name.
     pub icon: Option<String>,
+    /// An image in the icon's place (a detected camera's photo), drawn at
+    /// the icon's size; the icon stands in while it loads or if it fails
+    /// ([`PlaceItem::image`]).
+    pub image: Option<PlaceImage>,
     /// A line about it, in its tip (a card's free space); its path when none.
     pub detail: Option<String>,
     /// A short mark after its name (a count, "new"), said with it.
@@ -207,6 +211,25 @@ pub struct PlaceItem {
     /// choosable, its detail still in its tip.
     pub dimmed: bool,
 }
+
+/// The image of a [`PlaceItem`] ([`PlaceItem::image`]): an egui image
+/// source, two of them equal when egui would load them as one (the same
+/// URI, or the same texture at the same size).
+#[derive(Clone, Debug)]
+pub struct PlaceImage(pub egui::ImageSource<'static>);
+
+impl PartialEq for PlaceImage {
+    fn eq(&self, other: &Self) -> bool {
+        match (&self.0, &other.0) {
+            (egui::ImageSource::Texture(a), egui::ImageSource::Texture(b)) => {
+                a.id == b.id && a.size == b.size
+            }
+            (a, b) => a.uri().is_some() && a.uri() == b.uri(),
+        }
+    }
+}
+
+impl Eq for PlaceImage {}
 
 /// A toggle at the end of a [`PlaceItem`] (a pin for the favourites): an
 /// icon on or off, named for assistive technology. The application owns
@@ -241,6 +264,7 @@ impl PlaceItem {
             name: name.into(),
             path: None,
             icon: None,
+            image: None,
             detail: None,
             badge: None,
             badge_tone: None,
@@ -271,6 +295,20 @@ impl PlaceItem {
     #[must_use]
     pub fn icon(mut self, icon: impl Into<String>) -> Self {
         self.icon = Some(icon.into());
+        self
+    }
+
+    /// An image in the icon's place: a texture the application loaded
+    /// (`egui::load::SizedTexture`), or a URI egui's image loaders read
+    /// (`file://`, `bytes://`, `https://`). It fills the icon's square,
+    /// cropped to its middle and rounded as the theme rounds widgets; the
+    /// item's [`icon`](PlaceItem::icon) is drawn while it loads or if it
+    /// fails. The item is still said by its name.
+    ///
+    /// Need (image): a place shown by its picture (a camera's photo) in a places list.
+    #[must_use]
+    pub fn image(mut self, image: impl Into<egui::ImageSource<'static>>) -> Self {
+        self.image = Some(PlaceImage(image.into()));
         self
     }
 
@@ -503,6 +541,45 @@ impl PlaceProviders {
     }
 }
 
+/// Paints a place's image in `square`, filling it: cropped to its middle,
+/// rounded as the theme rounds widgets (a quarter of its side at most),
+/// faded when `muted`. False while it loads or when it fails: the caller
+/// draws the icon instead.
+fn paint_image(ui: &Ui, image: &PlaceImage, square: egui::Rect, muted: bool) -> bool {
+    let poll = egui::Image::new(image.0.clone()).load_for_size(ui.ctx(), square.size());
+    let Ok(egui::load::TexturePoll::Ready { texture }) = poll else {
+        return false;
+    };
+    let t = Tokens::of(ui.ctx());
+    let radius = t.radius.widget.min(square.width() / 4.0).max(0.0);
+    let tint = if muted {
+        egui::Color32::WHITE.gamma_multiply(0.5)
+    } else {
+        egui::Color32::WHITE
+    };
+    egui::Image::from_texture(texture)
+        .uv(cover_uv(texture.size))
+        .corner_radius(egui::CornerRadius::same(radius.round() as u8))
+        .tint(tint)
+        .paint_at(ui, square);
+    true
+}
+
+/// The part of an image of `size` that fills a square: its middle, the
+/// longer side cropped.
+fn cover_uv(size: egui::Vec2) -> egui::Rect {
+    let full = egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0));
+    if size.x <= 0.0 || size.y <= 0.0 {
+        return full;
+    }
+    let (w, h) = if size.x > size.y {
+        (size.y / size.x, 1.0)
+    } else {
+        (1.0, size.x / size.y)
+    };
+    egui::Rect::from_center_size(egui::pos2(0.5, 0.5), egui::vec2(w, h))
+}
+
 /// A section's title, said as a heading.
 pub(crate) fn section_title(ui: &mut Ui, title: &str) -> egui::Response {
     let r = ui.weak(title);
@@ -530,23 +607,25 @@ pub(crate) fn place_row(ui: &mut Ui, item: &PlaceItem, selected: bool) -> egui::
         ),
         None => widgets::selectable_label(ui, selected, item.name.as_str()),
     };
-    let r = match icon {
-        Some(icon) => {
-            ui.horizontal(|ui| {
-                let side = ui.spacing().interact_size.y;
-                let (rect, _) =
-                    ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::hover());
-                let colour = ui.visuals().text_color();
-                icon.unwrap_or(egui_pop_core::icon::PLACEHOLDER).paint(
-                    ui.painter(),
-                    rect.shrink(side * 0.2),
-                    colour,
-                );
-                row(ui)
-            })
-            .inner
-        }
-        None => row(ui),
+    let r = if icon.is_some() || item.image.is_some() {
+        ui.horizontal(|ui| {
+            let side = ui.spacing().interact_size.y;
+            let (rect, _) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::hover());
+            let colour = ui.visuals().text_color();
+            let at = rect.shrink(side * 0.2);
+            let drawn = item
+                .image
+                .as_ref()
+                .is_some_and(|image| paint_image(ui, image, at, false));
+            if !drawn && let Some(icon) = icon {
+                icon.unwrap_or(egui_pop_core::icon::PLACEHOLDER)
+                    .paint(ui.painter(), at, colour);
+            }
+            row(ui)
+        })
+        .inner
+    } else {
+        row(ui)
     };
     let tip = item
         .detail
@@ -978,15 +1057,21 @@ fn item_row(ui: &mut Ui, item: &PlaceItem, selected: bool) -> (egui::Response, b
         let right = toggle_rect.map_or(rect.right() - pad.x, |_| {
             rect.right() - pad.x - toggle_side - gap
         });
-        if let Some(name) = &item.icon {
+        if item.icon.is_some() || item.image.is_some() {
             let side = ui.spacing().interact_size.y;
             let at = egui::Rect::from_min_size(
                 egui::pos2(left, rect.center().y - side / 2.0),
                 egui::Vec2::splat(side),
             );
-            egui_pop_core::icon::registry::resolve(name, "files.places")
-                .unwrap_or(egui_pop_core::icon::PLACEHOLDER)
-                .paint(&painter, at.shrink(side * 0.2), text);
+            let drawn = item
+                .image
+                .as_ref()
+                .is_some_and(|image| paint_image(ui, image, at.shrink(side * 0.2), muted));
+            if !drawn && let Some(name) = &item.icon {
+                egui_pop_core::icon::registry::resolve(name, "files.places")
+                    .unwrap_or(egui_pop_core::icon::PLACEHOLDER)
+                    .paint(&painter, at.shrink(side * 0.2), text);
+            }
             left = at.right() + gap;
         }
         let one_line = |s: &str, font: egui::FontId, colour: egui::Color32, max: f32| {
@@ -1197,6 +1282,58 @@ fn drives() -> Vec<Volume> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_image_that_does_not_load_leaves_the_icon_to_draw() {
+        let ctx = egui::Context::default();
+        let square = egui::Rect::from_min_size(egui::pos2(4.0, 4.0), egui::Vec2::splat(16.0));
+        let mut drawn = (true, false);
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            // No loader reads this URI: the image fails, the icon stands in.
+            let missing = PlaceImage(egui::ImageSource::Uri("bytes://missing.png".into()));
+            drawn.0 = paint_image(ui, &missing, square, false);
+            let texture = ui.ctx().load_texture(
+                "places.test",
+                egui::ColorImage::filled([8, 4], egui::Color32::RED),
+                egui::TextureOptions::LINEAR,
+            );
+            let loaded = PlaceImage(egui::ImageSource::Texture((&texture).into()));
+            drawn.1 = paint_image(ui, &loaded, square, false);
+        });
+        out.textures_delta.clear();
+        assert_eq!(drawn, (false, true));
+    }
+
+    #[test]
+    fn an_image_fills_its_square_cropped_to_its_middle() {
+        let wide = cover_uv(egui::vec2(200.0, 100.0));
+        assert_eq!(
+            wide,
+            egui::Rect::from_min_max(egui::pos2(0.25, 0.0), egui::pos2(0.75, 1.0))
+        );
+        let tall = cover_uv(egui::vec2(100.0, 400.0));
+        assert_eq!(
+            tall,
+            egui::Rect::from_min_max(egui::pos2(0.0, 0.375), egui::pos2(1.0, 0.625))
+        );
+        assert_eq!(
+            cover_uv(egui::Vec2::ZERO),
+            egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0))
+        );
+    }
+
+    #[test]
+    fn two_images_are_equal_when_egui_loads_them_as_one() {
+        let a = PlaceItem::new("cam", "Camera")
+            .icon("phosphor:camera")
+            .image("bytes://camera.png");
+        let b = PlaceItem::new("cam", "Camera")
+            .icon("phosphor:camera")
+            .image("bytes://camera.png");
+        assert_eq!(a, b);
+        assert_ne!(a, b.clone().image("bytes://other.png"));
+        assert_ne!(a, PlaceItem::new("cam", "Camera").icon("phosphor:camera"));
+    }
 
     #[test]
     fn user_dirs_read_home_relative_and_absolute_and_skip_home_itself() {

@@ -6,7 +6,9 @@
 //! each item's end adds it to Favourites, the chosen account shows its
 //! albums under it, and History's past imports sit under the section,
 //! each with "Import again". History's fold is kept by the page, the
-//! others by egui's memory. The playground shows what the panel last
+//! others by egui's memory. A detected camera shows its photo in its
+//! icon's place (an in-memory PNG behind a `bytes://` URI), its icon
+//! drawn while the photo loads. The playground shows what the panel last
 //! reported.
 //!
 //! Beside it, a Library's sources on the same panel: Folders and Keywords
@@ -111,6 +113,41 @@ fn accounts(state: &State) -> Vec<PlaceItem> {
     ]
 }
 
+/// The camera's photo: a small landscape encoded once as a PNG, given
+/// to egui behind a `bytes://` URI as an application would hand over a
+/// photo it read.
+fn camera_photo() -> egui::ImageSource<'static> {
+    static PNG: std::sync::OnceLock<std::sync::Arc<[u8]>> = std::sync::OnceLock::new();
+    let bytes = PNG.get_or_init(|| {
+        let (w, h) = (48u32, 32u32);
+        let image = image::RgbaImage::from_fn(w, h, |x, y| {
+            if y < h / 2 {
+                // A sky, lighter towards the horizon, and a sun.
+                let d = (x as f32 - 34.0).hypot(y as f32 - 8.0);
+                if d < 5.0 {
+                    image::Rgba([0xF6, 0xD3, 0x6B, 0xFF])
+                } else {
+                    let l = (y * 6) as u8;
+                    image::Rgba([0x4A + l, 0x86 + l, 0xC8, 0xFF])
+                }
+            } else {
+                // A field.
+                let l = ((y - h / 2) * 4) as u8;
+                image::Rgba([0x3B + l, 0x8C - l, 0x3E, 0xFF])
+            }
+        });
+        let mut png = Vec::new();
+        image
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .expect("a PNG in memory");
+        png.into()
+    });
+    egui::ImageSource::Bytes {
+        uri: "bytes://gallery/places/camera.png".into(),
+        bytes: egui::load::Bytes::Shared(bytes.clone()),
+    }
+}
+
 /// The sections, from the page's state.
 fn sections(state: &State) -> Vec<PlaceSection> {
     let folders: Vec<PlaceItem> = FOLDERS.iter().map(|(n, p)| folder(state, n, p)).collect();
@@ -134,6 +171,13 @@ fn sections(state: &State) -> Vec<PlaceSection> {
         PlaceSection::new("cards", "Cards and cameras")
             .foldable(true)
             .empty("No cards"),
+        PlaceSection::new("cameras", "Cameras").foldable(true).item(
+            PlaceItem::new("camera", "EOS R6")
+                .icon("phosphor:camera")
+                .image(camera_photo())
+                .line("412 photos")
+                .toggle(pin(state, "camera")),
+        ),
         PlaceSection::new("services", "Services")
             .foldable(true)
             .items(accounts(state)),

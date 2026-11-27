@@ -9567,6 +9567,47 @@ fn the_places_page_pins_folds_and_gives_the_app_its_room() {
     assert!(h.query_by_label("Last: folded history").is_some());
 }
 
+/// A detected camera shows its photo in its icon's place: an in-memory
+/// PNG behind a `bytes://` URI, decoded by the image loaders, the item
+/// still named by its name and described by its line.
+#[test]
+fn the_places_page_shows_a_camera_by_its_photo() {
+    use egui::accesskit::Role;
+    let mut h = harness(options("pop-dark", Density::Comfortable, "places"));
+    h.run();
+    // The loaders may decode on a thread: frames until the photo is in.
+    let uri = "bytes://gallery/places/camera.png";
+    let loaded = |h: &Harness<'_, Gallery>| {
+        matches!(
+            h.ctx.try_load_texture(
+                uri,
+                egui::TextureOptions::default(),
+                egui::SizeHint::default()
+            ),
+            Ok(egui::load::TexturePoll::Ready { .. })
+        )
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !loaded(&h) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the camera's photo loads"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        h.run();
+    }
+    h.run();
+    let camera = h.get_by_label("EOS R6");
+    assert_eq!(camera.accesskit_node().role(), Role::Button);
+    assert_eq!(
+        camera.accesskit_node().data().description(),
+        Some("412 photos")
+    );
+    let rect = camera.rect().expand(4.0);
+    let mut results = egui_kittest::SnapshotResults::new();
+    results.add(h.try_shot_of("places-camera-photo", rect));
+}
+
 /// The debug page's notice, placed by the application on the kit's
 /// popover surface (`ui.popover`): its own area, outside the overlay
 /// stack, so Escape and a click outside leave it alone.
